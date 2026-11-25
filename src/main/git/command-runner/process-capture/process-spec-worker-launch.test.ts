@@ -87,7 +87,16 @@ describe.skipIf(process.platform === 'win32')('launchPlainProcessSpecOnPosixWork
     expect(
       launchPlainProcessSpecOnPosixWorker({
         program: process.execPath,
-        terminationBarrier: true
+        terminationBarrier: 'wait-for-posix-group'
+      })
+    ).toBeNull()
+    expect(
+      launchPlainProcessSpecOnPosixWorker({
+        program: process.execPath,
+        terminationBarrier: {
+          signal: async () => true,
+          force: async () => true
+        }
       })
     ).toBeNull()
     expect(
@@ -102,6 +111,61 @@ describe.skipIf(process.platform === 'win32')('launchPlainProcessSpecOnPosixWork
         detached: true
       })
     ).toBeNull()
+  })
+
+  it('runs terminationBarrier: true on the worker and kills its POSIX process group on abort', async () => {
+    const setup = createInProcessWorkerHost()
+    closeHost = setup.close
+    workerMock.host = setup.host
+    workerMock.readyNow = true
+    expect(await setup.host.whenReady()).toBe(true)
+
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
+    const abort = new AbortController()
+    let stderrBuf = ''
+    const result = await runProcess({
+      program: process.execPath,
+      args: [
+        '-e',
+        'const { spawn } = require("node:child_process"); const g = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" }); process.stderr.write(g.pid + "\\n"); setInterval(() => {}, 1000)'
+      ],
+      terminationBarrier: true,
+      signal: abort.signal,
+      onStderr: (chunk) => {
+        stderrBuf += chunk.toString()
+        if (stderrBuf.includes('\n')) {
+          abort.abort()
+        }
+      },
+      timeoutMs: 10_000
+    })
+
+    const grandchildPid = Number(stderrBuf.trim())
+    expect(Number.isInteger(grandchildPid) && grandchildPid > 1).toBe(true)
+    expect(result.timedOut).toBe(false)
+    // The worker's POSIX process-group stop must have killed the grandchild too.
+    expect(() => process.kill(grandchildPid, 0)).toThrow()
+  })
+
+  it('stops an overflowing terminationBarrier: true probe on the worker (readAgentCliVersion shape)', async () => {
+    const setup = createInProcessWorkerHost()
+    closeHost = setup.close
+    workerMock.host = setup.host
+    workerMock.readyNow = true
+    expect(await setup.host.whenReady()).toBe(true)
+
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
+    const result = await runProcess({
+      program: process.execPath,
+      args: ['-e', 'process.stdout.write("x".repeat(8192)); setInterval(() => {}, 1000)'],
+      terminationBarrier: true,
+      maxOutputBytes: 64,
+      killOnOutputLimit: true,
+      timeoutMs: 5_000
+    })
+
+    expect(result).toMatchObject({ outputTruncated: true, timedOut: false })
+    expect(result.stdout.length).toBe(64)
   })
 
   it('preserves tail capture past maxOutputBytes on the worker', async () => {

@@ -36,6 +36,8 @@ export type WorkerThreadChildEvent =
   // Posted in the same turn the process is created, so a worker lost after that still reported the pid.
   | { type: 'spawn'; id: number; pid: number | undefined }
   | { type: 'group-terminated'; id: number }
+  // Emitted when a worker-owned group stop finishes without proving every member exited.
+  | { type: 'group-stop-unverified'; id: number }
   // Structured clone turns a Buffer into a plain Uint8Array.
   | { type: 'stdout' | 'stderr'; id: number; chunk: Uint8Array }
   // 'spawn-error': process creation threw, so no exit or close will follow.
