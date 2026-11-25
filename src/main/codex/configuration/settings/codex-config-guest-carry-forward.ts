@@ -1,10 +1,6 @@
 import { join } from 'node:path'
 import { writeFileAtomicallyIfUnchanged } from '../../../filesystem/atomic-file-publication'
 import type { CodexRegistrationPromotion } from './config-plugin-registration-promotion'
-import {
-  readCodexRegistrationEntries,
-  readCodexRegistrationRootsDefinedOutsideTables
-} from '../toml/config-toml-plugin-registration-tables'
 import { writeCodexSettingsBaseline, type CodexSettingsBaseline } from './config-settings-baseline'
 
 const CODEX_GUEST_CARRY_FORWARD_MARKER = '# orca: tab edit kept from before the update'
@@ -43,7 +39,6 @@ export function isGuestCarryForwardEmpty(carry: CodexGuestCarryForward): boolean
 export function migrateGuestCarryForward(
   runtimeHomePath: string,
   runtimeConfig: string,
-  systemConfig: string | null,
   baseline: CodexSettingsBaseline,
   carry: CodexGuestCarryForward
 ): void {
@@ -64,11 +59,8 @@ export function migrateGuestCarryForward(
   const registrations = new Map(baseline.registrations)
   for (const { promotion, system } of carry.registrations) {
     if (promotion.kind === 'append') {
-      // Untracked, so the table the distro lacks counts as a tab addition again; never beside a
-      // definition the distro made another way, which a second table would redefine.
-      if (systemConfig !== null && canAppendRegistration(promotion.key, systemConfig)) {
-        registrations.delete(promotion.key)
-      }
+      // Untracked, so a table the distro lacks counts as a tab addition again.
+      registrations.delete(promotion.key)
     } else if (promotion.field === 'enabled') {
       const fields = new Map(registrations.get(promotion.key))
       if (system === null) {
@@ -85,15 +77,6 @@ export function migrateGuestCarryForward(
     registrations,
     guestCarryForward: undefined
   })
-}
-
-function canAppendRegistration(key: string, systemConfig: string): boolean {
-  const definedOutsideTables = readCodexRegistrationRootsDefinedOutsideTables(systemConfig)
-  return (
-    !readCodexRegistrationEntries(systemConfig).has(key) &&
-    !definedOutsideTables.has(key) &&
-    !definedOutsideTables.has(key.slice(0, key.indexOf(':')))
-  )
 }
 
 function stripCarryForwardMarkers(config: string): string {

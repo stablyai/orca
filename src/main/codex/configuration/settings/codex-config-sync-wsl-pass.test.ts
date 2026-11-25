@@ -120,6 +120,21 @@ describe.skipIf(process.platform === 'win32')('WSL Codex settings sync inside th
     expect(baselineFile()).not.toHaveProperty('guestCarryForward')
   })
 
+  it('never appends a plugin table beside a plugin the distro defines inline', () => {
+    const distro = 'model = "gpt-a"\nplugins = { "docs@market" = { enabled = true } }\n'
+    writeFileSync(join(systemHome, 'config.toml'), distro)
+    writeFileSync(
+      join(runtimeHome, 'config.toml'),
+      'model = "gpt-a"\n\n[plugins."docs@market"]\nenabled = false\n'
+    )
+    writeBaseline({})
+
+    sync()
+
+    // A second definition would leave the user's config unparseable.
+    expect(systemToml()).toBe(distro)
+  })
+
   it('refuses paths outside the guest home and drive mounts', () => {
     expect(() =>
       runCodexConfigSyncWslPass([

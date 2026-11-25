@@ -190,11 +190,9 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   const baseline = baselineObservation.kind === 'present' ? baselineObservation.baseline : null
   if (baseline?.guestCarryForward && !isGuestCarryForwardEmpty(baseline.guestCarryForward)) {
     // Redo the pass on the files this just rewrote; the next one finds nothing left to carry.
-    const source = observeAgentStateFile(systemTomlPath)
     migrateGuestCarryForward(
       runtimeHomePath,
       runtimeTomlObservation.value,
-      source.kind === 'present' ? source.value : source.kind === 'absent' ? '' : null,
       baseline,
       baseline.guestCarryForward
     )
