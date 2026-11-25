@@ -19,9 +19,10 @@ const sizes = { bounds: 600, palette: 200, boundsHeight: 400, paletteHeight: 38 
 const controls: {
   setMinTop: (top: number) => void
   saved: AnnotatePalettePosition
+  left: number | null
   top: number
   shownY: number
-} = { setMinTop: () => {}, saved: { x: 0, y: 0 }, top: 0, shownY: 0 }
+} = { setMinTop: () => {}, saved: { x: 0, y: 0 }, left: null, top: 0, shownY: 0 }
 
 function Harness({
   initial,
@@ -43,6 +44,7 @@ function Harness({
   })
   controls.setMinTop = setMinTop
   controls.saved = position
+  controls.left = drag.left
   controls.top = drag.top
   controls.shownY = drag.shownPosition.y
   return (
@@ -143,5 +145,27 @@ describe('annotate palette resting place', () => {
     expect.soft(controls.saved).toEqual({ x: 0.5, y: 0.5 })
     expect.soft(controls.top).toBe(162)
     expect.soft(controls.shownY).toBe(shownY)
+  })
+
+  it('keeps a pinned horizontal place through a diagonal drag that moves the palette down', () => {
+    // A 200px palette fills a 216px page across (no horizontal travel); the saved .53 is kept for a wider page.
+    sizes.bounds = 216
+    const grip = mount({ x: 0.53, y: 0 }, 8)
+    expect(controls.left).toBe(8)
+    fireEvent.pointerDown(grip, { button: 0, pointerId: 1, clientX: 100, clientY: 50 })
+    fireEvent.pointerMove(grip, { pointerId: 1, clientX: 140, clientY: 110, buttons: 1 })
+    fireEvent.pointerUp(grip, { pointerId: 1, clientX: 140, clientY: 110 })
+
+    // The free axis moves: 60px down of 346.
+    expect.soft(controls.top).toBe(68)
+    expect.soft(controls.saved.y).toBeCloseTo(60 / 346, 10)
+    expect.soft(controls.shownY).toBeCloseTo(60 / 346, 10)
+    // The pinned one keeps its place, unsnapped…
+    expect.soft(controls.saved.x).toBe(0.53)
+    expect.soft(controls.left).toBe(8)
+    // …and a wider page shows it: 8 + (600 - 200 - 16) * .53.
+    sizes.bounds = 600
+    act(() => notifyResize?.())
+    expect.soft(controls.left).toBeCloseTo(211.52, 10)
   })
 })

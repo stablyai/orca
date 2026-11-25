@@ -187,9 +187,9 @@ export type PaletteDragStart = {
 /**
  * Where a drag comes to rest and what it saves. `released` is null for a cancelled drag; on each axis it holds the
  * pointer's unclamped end (null where the pointer didn't move), clamped here against the limits current at release:
- * a find bar can close between the last move and the release. Only an axis the pointer moved is written: an unmoved
- * one keeps its saved fraction (reading it back from an anchored or pinned edge would drift it), so a press that
- * never moved saves nothing.
+ * a find bar can close between the last move and the release. Only an axis the pointer moved and that has room to
+ * move is written: any other keeps its saved fraction (reading it back from an anchored or pinned edge would drift
+ * it), so a press that never moved saves nothing.
  */
 export function paletteDragRest(
   start: PaletteDragStart,
@@ -197,10 +197,14 @@ export function paletteDragRest(
   topMin: number
 ): { left: number; top: number; save: AnnotatePalettePosition | null; snapped: boolean } {
   const { boundsWidth, boundsHeight, paletteWidth, paletteHeight, saved } = start
-  const rawLeft = released?.left ?? null
+  // An axis with no room to move is out of the drag whatever the pointer does: snapping or saving it would replace
+  // the place it is kept for (a wider page later) with where the palette is pinned now.
+  const canMoveX = boundsWidth - paletteWidth - PALETTE_EDGE_INSET_PX * 2 > 0
+  const canMoveY = boundsHeight - paletteHeight - PALETTE_EDGE_INSET_PX - topMin > 0
+  const rawLeft = canMoveX ? (released?.left ?? null) : null
   const releasedLeft =
     rawLeft === null ? null : clampPaletteOffset(rawLeft, boundsWidth, paletteWidth)
-  const releasedTop = released?.top ?? null
+  const releasedTop = canMoveY ? (released?.top ?? null) : null
   const rawX =
     releasedLeft === null
       ? saved.x
