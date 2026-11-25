@@ -131,6 +131,7 @@ export function MobileBotItemPage({
   // A reply already on its way answers the question, before the host's read says so.
   const replying = pending.shown.some(({ failed }) => !failed)
   const { askOpen, askShown, ...ask } = useMobileBotItemAskSlot({
+    itemKey,
     ask: view.item ? botItemOpenAsk(view.item, view.events) : null,
     online: online && !view.failed,
     replying,

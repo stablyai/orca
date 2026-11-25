@@ -17,6 +17,12 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatAsk } from '../../session/native-chat/input/prompts/MobileNativeChatAsk'
 import type { MobileNativeChatCollapsedPrompt } from '../../session/native-chat/input/prompts/MobileNativeChatPromptStrip'
 import { BotItemCommentMicContext } from './bot-item-comment-mic'
+import {
+  botItemAskCardDraftKey,
+  clearBotItemAskCardDraft,
+  readBotItemAskCardDraft,
+  saveBotItemAskCardDraft
+} from './bot-item-ask-card-drafts'
 
 type OpenAsk = { askId: string; shape: BotItemQuestionShape; open: number[] }
 
@@ -83,6 +89,7 @@ function answerOf(
 }
 
 export function useMobileBotItemAskSlot({
+  itemKey,
   ask,
   online,
   replying,
@@ -90,6 +97,8 @@ export function useMobileBotItemAskSlot({
   onOpenWithCard,
   send
 }: {
+  /** The item on its host, whose card keeps its unsent picks and words when the page closes. */
+  itemKey: string
   /** Null while nothing waits. */
   ask: OpenAsk | null
   online: boolean
@@ -139,6 +148,7 @@ export function useMobileBotItemAskSlot({
     return { card: null, askOpen, askShown, strip: null, fold }
   }
   const first = ask.shape.decisions[ask.open[0]!]!
+  const draftKey = botItemAskCardDraftKey(itemKey, ask.askId)
   return {
     askOpen,
     askShown,
@@ -154,6 +164,10 @@ export function useMobileBotItemAskSlot({
         key={ask.askId}
         prompt={askPrompt(ask)}
         questionKeys={ask.open.map(String)}
+        drafts={{
+          saved: readBotItemAskCardDraft(draftKey),
+          onChange: (question, draft) => saveBotItemAskCardDraft(draftKey, question, draft)
+        }}
         answerPending={!online}
         onAnswer={async (selections) => {
           const { text, skipped } = answerOf(ask, selections)
@@ -161,6 +175,8 @@ export function useMobileBotItemAskSlot({
             return false
           }
           send(text, { askId: ask.askId, skipped })
+          // The pending reply holds the words now; a refused one goes back to the comment box.
+          clearBotItemAskCardDraft(draftKey)
           return true
         }}
         onCancel={async () => {
