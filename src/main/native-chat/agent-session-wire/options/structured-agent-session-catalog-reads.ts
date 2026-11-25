@@ -2,7 +2,6 @@ import type { AgentModelCatalogReadParams } from '../../agent-model-catalog/agen
 import { withinAgentModelCatalogRead } from '../../agent-model-catalog/agent-model-catalog-operation'
 import { resolveAgentModelCatalogReadRecords } from '../../agent-model-catalog/agent-model-catalog-running-account'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
-import { agentSessionAccountHomesEqual } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -29,7 +28,7 @@ export function structuredAgentSessionCatalogScopeOwned(
 /** Named external reads acquire once, after capture and before nonacquiring preparation. */
 export function createStructuredAgentSessionCatalogReads(
   context: () => {
-    deps: Pick<StructuredAgentSessionHostDeps, 'modelCatalog'>
+    deps: StructuredAgentSessionHostDeps
     serialize: <T>(id: string, task: () => Promise<T>) => Promise<T>
     scopeOwned: (
       params: AgentModelCatalogReadParams
@@ -44,15 +43,14 @@ export function createStructuredAgentSessionCatalogReads(
     }
     const operation = catalog.captureRead(params)
     const id = params.sessionId
-    const readScope = () =>
+    const records =
       id === undefined
         ? undefined
-        : withinAgentModelCatalogRead(operation, () =>
+        : await withinAgentModelCatalogRead(operation, () =>
             serialize(id, () =>
               operation.current() ? scopeOwned({ ...params, operation }) : Promise.resolve(null)
             ).catch(() => null)
           )
-    const records = await readScope()
     if (
       !operation.current() ||
       records === null ||
@@ -61,19 +59,9 @@ export function createStructuredAgentSessionCatalogReads(
       return { origin: 'unknown' }
     }
     const request = { ...params, records, operation, deadline: operation.deadline }
-    if (!params.savedOnly && !params.waitForListing && !params.confirmSignIn) {
+    if (!params.savedOnly && !params.waitForListing) {
       void catalog.demand(request)
     }
-    const result = await catalog.read(request)
-    if (!result.signInConfirmed) {
-      return result
-    }
-    const expected = records?.scoped?.accountHome
-    const current = (await readScope())?.scoped?.accountHome
-    if (expected && current && agentSessionAccountHomesEqual(expected, current)) {
-      return result
-    }
-    const { signInConfirmed: _confirmation, ...inconclusive } = result
-    return inconclusive
+    return catalog.read(request)
   }
 }

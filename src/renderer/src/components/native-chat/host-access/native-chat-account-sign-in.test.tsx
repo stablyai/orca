@@ -204,87 +204,53 @@ it('offers Check again after a failed account lookup and recovers on retry', asy
   expect(terminal.open).not.toHaveBeenCalled()
 })
 
-it.each([
-  ['an unsupported host', false, undefined],
-  ['an unconfirmed result', true, { origin: 'probe', models: [] }]
-])(
-  'stays silent after a terminal sign-in on %s and keeps the launch Retry reachable',
-  async (_case, supported, catalog) => {
-    hostSupports.mockResolvedValue(supported)
-    modelCatalog.mockResolvedValue(catalog)
-    const terminal = fakeTerminal()
-    const signedIn = vi.fn()
-    const { result } = renderHook(() =>
-      useNativeChatSignIn(input({ onSignInRechecked: signedIn }), terminal)
-    )
-    await act(async () => result.current.signIn?.signIn())
-    expect(terminal.open).toHaveBeenCalledOnce()
-    expect(result.current.signIn).toMatchObject({
-      signingIn: false,
-      unconfirmed: true
-    })
-    // A repeat press returns to the open login terminal instead of opening another.
-    await act(async () => result.current.signIn?.signIn())
-    expect(terminal.show).toHaveBeenCalledWith('login-1')
-    expect(terminal.open).toHaveBeenCalledOnce()
-    await act(async () => closeTab('login-1'))
-    await act(async () => {})
-    expect(result.current.resolved).toBe(false)
-    expect(result.current.announcement).toBe('')
-    expect(result.current.signIn).toMatchObject({
-      signedIn: false,
-      unconfirmed: true
-    })
-    expect(signedIn).not.toHaveBeenCalled()
-    // Once that terminal is gone, Sign in opens a fresh one.
-    await act(async () => result.current.signIn?.signIn())
-    expect(terminal.open).toHaveBeenCalledTimes(2)
-  }
-)
-
-it('says Signed in only when the host confirms the terminal sign-in', async () => {
-  modelCatalog.mockResolvedValue({
-    origin: 'probe',
-    models: [],
-    signInConfirmed: true
-  })
+it('keeps a terminal sign-in neutral and returns to its open login terminal', async () => {
+  // Even a host that could confirm is never asked: a terminal login never claims success.
+  modelCatalog.mockResolvedValue({ origin: 'probe', models: [], signInConfirmed: true })
   const terminal = fakeTerminal()
   const signedIn = vi.fn()
   const { result } = renderHook(() =>
     useNativeChatSignIn(input({ onSignInRechecked: signedIn }), terminal)
   )
   await act(async () => result.current.signIn?.signIn())
-  await act(async () => closeTab('login-1'))
-  await waitFor(() => expect(result.current.resolved).toBe(true))
-  expect(modelCatalog).toHaveBeenCalledWith({ kind: 'local' }, 'agentSession.modelCatalog', {
-    agent: 'codex',
-    sessionId: 'chat',
-    confirmSignIn: true
-  })
-  expect(result.current.announcement).toBe('Signed in.')
-  expect(result.current.signIn).not.toHaveProperty('unconfirmed')
-  expect(signedIn).toHaveBeenCalledOnce()
-})
-
-it('ignores another tab closing while its own login terminal is open', async () => {
-  modelCatalog.mockResolvedValue({
-    origin: 'probe',
-    models: [],
-    signInConfirmed: true
-  })
-  const terminal = fakeTerminal()
-  const { result } = renderHook(() => useNativeChatSignIn(input(), terminal))
+  expect(terminal.open).toHaveBeenCalledOnce()
+  expect(result.current.signIn).toMatchObject({ signingIn: false, unconfirmed: true })
+  // A repeat press returns to the open login terminal instead of opening another.
   await act(async () => result.current.signIn?.signIn())
-  await act(async () => {
-    const state = store.get()
-    store.set({
-      tabsByWorktree: {
-        folder: [...(state.tabsByWorktree.folder ?? []), { id: 'other' }]
-      },
-      ptyIdsByTabId: { ...state.ptyIdsByTabId, other: ['pty-other'] }
-    })
-  })
-  await act(async () => closeTab('other'))
+  expect(terminal.show).toHaveBeenCalledWith('login-1')
+  expect(terminal.open).toHaveBeenCalledOnce()
+  await act(async () => closeTab('login-1'))
+  await act(async () => window.dispatchEvent(new Event('focus')))
+  expect(hostSupports).not.toHaveBeenCalled()
   expect(modelCatalog).not.toHaveBeenCalled()
   expect(result.current.resolved).toBe(false)
+  expect(result.current.announcement).toBe('')
+  expect(result.current.signIn).toMatchObject({ signedIn: false, unconfirmed: true })
+  expect(signedIn).not.toHaveBeenCalled()
+  // Once that terminal is gone, Sign in opens a fresh one.
+  await act(async () => result.current.signIn?.signIn())
+  expect(terminal.open).toHaveBeenCalledTimes(2)
+})
+
+it('keeps Sign in after the provider rejects a managed sign-in', async () => {
+  const lookup = vi.fn(async () => 'chat-account')
+  const login = vi.fn(async () => {
+    throw new Error('Fixture provider rejected the account')
+  })
+  Object.assign(window, {
+    api: { codexAccounts: { chatSignInAccount: lookup, reauthenticate: login } }
+  })
+  const signedIn = vi.fn()
+  const { result } = renderHook(() =>
+    useNativeChatSignIn(input({ account: 'managed', onSignInRechecked: signedIn }), null)
+  )
+  await waitFor(() => expect(result.current.signIn?.signIn).toBeTypeOf('function'))
+  await act(async () => result.current.signIn?.signIn())
+  expect(login).toHaveBeenCalledOnce()
+  expect(result.current.announcement).toBe('Sign-in cancelled or failed. Try again.')
+  await waitFor(() => expect(result.current.signIn).toMatchObject({ signingIn: false }))
+  expect(result.current.resolved).toBe(false)
+  expect(result.current.signIn).toMatchObject({ signedIn: false })
+  expect(result.current.signIn).not.toHaveProperty('unconfirmed')
+  expect(signedIn).not.toHaveBeenCalled()
 })

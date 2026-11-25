@@ -1,8 +1,6 @@
 import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
-import type {
-  AgentModelCatalogLaunch,
-  AgentModelCatalogServiceDeps
-} from './agent-model-catalog-service-contract'
+import type { AgentModelCatalogServiceDeps } from './agent-model-catalog-service-contract'
+import type { AgentModelCatalogLaunch } from './agent-model-catalog-refresh'
 import { recordCatalogKey } from './agent-model-catalog-fingerprint'
 import { newChatCatalogKey } from './agent-model-catalog-prewarm'
 import { catalogFolder, sessionWorkspacePath } from './agent-model-catalog-workspace'

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
 import { NativeChatPromptSlotNotices } from '@/components/native-chat/composer/controls/NativeChatComposerNotices'
@@ -7,53 +7,28 @@ import {
   NativeChatTranscriptSignInNotice
 } from '@/components/native-chat/host-access/NativeChatSignInRow'
 import { NativeChatSetupButton } from '@/components/native-chat/host-access/NativeChatSetupButton'
-import { nativeChatSignInContext } from '@/components/native-chat/host-access/native-chat-sign-in-account'
-import { nativeChatSignInNoticeView } from '@/components/native-chat/host-access/native-chat-sign-in-notice'
-import { createNativeChatSignInVisibility } from '@/components/native-chat/host-access/native-chat-sign-in-visibility'
-import { useNativeChatSignIn } from '@/components/native-chat/host-access/use-native-chat-account-sign-in'
-import { useNativeChatSignInVisibility } from '@/components/native-chat/host-access/use-native-chat-sign-in-visibility'
-import { structuredSessionNotices } from '@/components/native-chat/messages/notices/native-chat-structured-session-notices'
+import {
+  useNativeChatStructuredPaneNotices,
+  type NativeChatStructuredPaneNoticesInput
+} from '@/components/native-chat/messages/notices/use-native-chat-structured-pane-notices'
 import type { StructuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { NativeChatQueuedMessageCard } from '@/components/native-chat/queue/NativeChatQueuedMessageCard'
-import { agentSessionUnresolvedFailureRows } from '../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { AGENT_SESSION_MODEL_CATALOG_CONFIRM_SIGN_IN_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 
-const target = { kind: 'local' } as const
-const rowId = 'fixture-auth-failure'
-const managedFailure = agentSessionFailureFact('notSignedIn', { account: 'managed' })
-const systemFailure = agentSessionFailureFact('notSignedIn', { account: 'system' })
-const olderRow: AgentJournalRenderItem = {
-  itemId: rowId,
-  sequence: 1,
-  revision: 1,
-  observedAt: 1,
-  body: {
-    kind: 'status',
-    tone: 'error',
-    ...agentSessionFailureWords(managedFailure, { surface: 'row', agentName: 'Codex' })
-  }
-}
-const latest = nativeChatSignInContext({
-  unavailable: null,
-  launchDetails: null,
-  items: [olderRow],
-  latestSubmission: {
-    clientMessageId: 'fixture-later-send',
-    dispatchState: 'rejected',
-    rejection: { kind: 'cliMissing' },
-    submittedSequence: 2,
-    resolvedAt: 2
-  }
-})
-const unresolved = new Set(agentSessionUnresolvedFailureRows([olderRow], { sentMessages: false }))
+// The chat pane's own notice wiring (banner ownership, filtering, the setup context) drives every
+// surface here; only the host, the provider and the account lookup are simulated.
+const WORKTREE = 'fixture-folder'
 const params = new URLSearchParams(location.search)
 const surface = params.get('surface')
 const older = surface === 'older'
 const queue = surface === 'queue' || surface === 'queue-clipped'
 const launch = surface === 'launch'
+const systemFailure = agentSessionFailureFact('notSignedIn', { account: 'system' })
 const launchFailure: StructuredLaunchFailure = {
   kind: 'refused',
   code: 'agent_session_operation_invalid',
@@ -63,14 +38,45 @@ let launchRetries = 0
 const retryLaunch = () => {
   launchRetries += 1
 }
+const demandModelCatalog = () => {}
 const lookups: PromiseWithResolvers<string | null>[] = []
-const probes: PromiseWithResolvers<{
-  ok: true
-  result: { origin: 'unknown'; signInConfirmed?: true; freshProbe?: true }
-}>[] = []
-let openTerminals = 0
-let shownTerminals = 0
-let releaseReauthentication: (() => void) | undefined
+let reauthentication: { resolve: () => void; reject: (error: Error) => void } | null = null
+
+function failureRow(id: string, sequence: number, account: 'managed' | 'system') {
+  const fact = agentSessionFailureFact('notSignedIn', { account })
+  const row: AgentJournalRenderItem = {
+    itemId: id,
+    sequence,
+    revision: 1,
+    observedAt: sequence,
+    body: {
+      kind: 'status',
+      tone: 'error',
+      ...agentSessionFailureWords(fact, { surface: 'row', agentName: 'Codex' })
+    }
+  }
+  return row
+}
+
+function rejectedSend(
+  id: string,
+  sequence: number,
+  rejection: AgentJournalSubmission['rejection']
+) {
+  const submission: AgentJournalSubmission = {
+    clientMessageId: id,
+    fence: 1,
+    payloadFingerprint: id,
+    dispatchState: 'rejected',
+    providerItemId: null,
+    reason: null,
+    rejection,
+    submittedAt: sequence,
+    resolvedAt: sequence,
+    submittedSequence: sequence
+  }
+  return submission
+}
 
 Object.defineProperty(window, 'api', {
   configurable: true,
@@ -82,39 +88,15 @@ Object.defineProperty(window, 'api', {
         return pending.promise
       },
       reauthenticate: () =>
-        new Promise<void>((resolve) => {
-          releaseReauthentication = resolve
+        new Promise<void>((resolve, reject) => {
+          reauthentication = { resolve, reject }
         })
-    },
-    runtime: {
-      getStatus: async () => ({
-        capabilities: [AGENT_SESSION_MODEL_CATALOG_CONFIRM_SIGN_IN_RUNTIME_CAPABILITY]
-      }),
-      call: () => {
-        const pending = Promise.withResolvers<Awaited<(typeof probes)[number]['promise']>>()
-        probes.push(pending)
-        return pending.promise
-      }
     }
   }
 })
 useAppStore.setState({ fetchSettings: async () => {} })
 
-const terminal = {
-  opening: false,
-  async open() {
-    const id = `fixture-login-${++openTerminals}`
-    useAppStore.setState({
-      ptyIdsByTabId: { [id]: ['fixture-login-pty'], unrelated: ['fixture-other-pty'] }
-    })
-    return { tabId: id }
-  },
-  show(tabId: string) {
-    const open = Boolean(useAppStore.getState().ptyIdsByTabId[tabId]?.length)
-    shownTerminals += Number(open)
-    return open
-  }
-}
+const loginTabs = () => (useAppStore.getState().tabsByWorktree[WORKTREE] ?? []).map((tab) => tab.id)
 
 const observerCallbacks = new Map<IntersectionObserver, IntersectionObserverCallback>()
 const NativeObserver = window.IntersectionObserver
@@ -134,29 +116,18 @@ window.IntersectionObserver = class extends NativeObserver {
 
 const controls = {
   pending: () => ({
-    probes: probes.length,
     lookups: lookups.length,
-    openTerminals,
-    shownTerminals,
+    openTerminals: loginTabs().length,
+    reauthentications: reauthentication ? 1 : 0,
     launchRetries
   }),
   resolveLookup: (account: string | null) => lookups.shift()?.resolve(account),
   rejectLookup: () => lookups.shift()?.reject(new Error('Fixture discovery unavailable')),
-  finishManaged: () => releaseReauthentication?.(),
-  finishProbe: (result: 'confirmed' | 'legacy' | 'unknown') =>
-    probes.shift()?.resolve({
-      ok: true,
-      result: {
-        origin: 'unknown',
-        ...(result === 'confirmed' ? { signInConfirmed: true } : {}),
-        ...(result === 'legacy' ? { freshProbe: true } : {})
-      }
-    }),
-  leaveTerminal: () => useAppStore.setState({ ptyIdsByTabId: {} }),
-  leaveUnrelated: () =>
-    useAppStore.setState((s) => ({
-      ptyIdsByTabId: { ...s.ptyIdsByTabId, unrelated: [] }
-    })),
+  finishManaged: () => reauthentication?.resolve(),
+  rejectManaged: () => reauthentication?.reject(new Error('Fixture provider rejected the account')),
+  // The user closes the login terminal.
+  leaveTerminal: () =>
+    useAppStore.setState((s) => ({ tabsByWorktree: { ...s.tabsByWorktree, [WORKTREE]: [] } })),
   batch: () =>
     observerCallbacks.forEach((callback, observer) => {
       const bounds = new DOMRectReadOnly()
@@ -174,76 +145,99 @@ const controls = {
 }
 Object.defineProperty(window, 'signInFixture', { value: controls })
 
-function Pane({ managed, failure, send }: { managed: boolean; failure: number; send: () => void }) {
-  const [visibility] = useState(createNativeChatSignInVisibility)
-  useEffect(() => () => visibility.dispose(), [visibility])
-  const { signIn, resolved, announcement } = useNativeChatSignIn(
-    {
+function paneInput(
+  failure: number,
+  managed: boolean
+): Omit<NativeChatStructuredPaneNoticesInput, 'controller'> & {
+  journalItems: AgentJournalRenderItem[]
+  submissions: AgentJournalSubmission[]
+} {
+  const journalItems = older
+    ? [failureRow('fixture-auth-failure', 1, 'managed')]
+    : queue || launch
+      ? []
+      : [failureRow(`fixture-auth-failure-${failure}`, failure, managed ? 'managed' : 'system')]
+  const submissions = older
+    ? [rejectedSend('fixture-later-send', 2, { kind: 'cliMissing' })]
+    : queue
+      ? [rejectedSend('fixture-held', failure, systemFailure)]
+      : []
+  return {
+    journalItems,
+    submissions,
+    props: {
       agent: 'codex',
-      target,
-      worktreeId: 'fixture-folder',
+      target: { kind: 'local' },
       sessionId: 'fixture-chat',
-      needsSignIn: older ? latest.failure !== null : true,
-      account: older ? latest.account : managed ? 'managed' : 'system',
-      failureKey: older ? latest.failure?.key : `fixture-${failure}`,
-      failure: null,
-      startFailures: [],
-      journalItems: older ? [olderRow] : [],
-      onRechecked: () => {}
+      isVisible: true
     },
-    terminal
-  )
-  const setup = {
-    signIn,
-    resolved,
-    announcement,
-    visibility,
-    install: null,
-    unresolvedFailureRows: older ? unresolved : undefined,
-    transcriptFailureId: older ? latest.failure?.rowId : queue ? undefined : rowId
+    ownerWorktreeId: WORKTREE,
+    provisionalLaunch: launch
+      ? { lifecycle: 'failed', failure: launchFailure }
+      : { lifecycle: null, failure: null },
+    submits: { retryLaunch },
+    startFailures: [],
+    continuation: {
+      view: { wslDistro: null, remoteHost: false, hostLabel: null },
+      continueError: null
+    },
+    deliveryNotices: undefined,
+    agentLabel: 'Codex',
+    viewState: { kind: 'ready' },
+    readFailure: null,
+    composerError: null,
+    install: { slot: { kind: 'none' }, signIn: null, antigravityAuth: null },
+    hostSendGate: { notice: null },
+    hostNotice: null
   }
-  const { banner } = useNativeChatSignInVisibility(setup)
-  const bannerView = nativeChatSignInNoticeView({ kind: 'notSignedIn', agent: 'Codex', setup })
-  const showBanner = banner && !older && bannerView !== null && !resolved
-  // The launch notice comes from the production notice builder, Retry included.
-  const launchNotices = launch
-    ? structuredSessionNotices({
-        launch: {
-          lifecycle: 'failed',
-          failure: launchFailure,
-          retry: retryLaunch
-        },
-        agentLabel: 'Codex',
-        sessionError: null,
-        composerError: null,
-        setup
-      })
-    : []
+}
+
+function Pane({ managed, failure, send }: { managed: boolean; failure: number; send: () => void }) {
+  const { journalItems, submissions, ...input } = useMemo(
+    () => paneInput(failure, managed),
+    [failure, managed]
+  )
+  const { setup, notices } = useNativeChatStructuredPaneNotices({
+    ...input,
+    controller: {
+      unavailable: null,
+      submissions,
+      journalItems,
+      error: null,
+      readRefusal: undefined,
+      optionSurface: { demandModelCatalog }
+    }
+  })
+  const [held, setHeld] = useState<'held' | 'editing' | 'deleted'>('held')
+  const [draft, setDraft] = useState('Keep the unrelated draft.')
+  const rowId = journalItems.at(-1)?.itemId
   return (
-    <NativeChatHostSetupProvider value={{ ...setup, signInInComposer: showBanner }}>
+    <NativeChatHostSetupProvider value={setup}>
       <div aria-label="Transcript" className="overflow-y-auto" style={{ height: 220 }}>
         {surface === 'queue-clipped' && <div style={{ height: 190 }} />}
         {launch ? null : queue ? (
-          <ul>
-            <NativeChatQueuedMessageCard
-              card={{
-                messageId: 'fixture-held',
-                position: 1,
-                text: 'Keep the original message.',
-                state: 'returned',
-                hold: 'returned',
-                returnedRejection: systemFailure
-              }}
-              pending={null}
-              chatWorktreeId={null}
-              agentName="Codex"
-              showsSteerShortcut={false}
-              agentWorking={false}
-              onSteer={send}
-              onEdit={() => {}}
-              onDelete={() => {}}
-            />
-          </ul>
+          held === 'deleted' ? null : (
+            <ul>
+              <NativeChatQueuedMessageCard
+                card={{
+                  messageId: 'fixture-held',
+                  position: 1,
+                  text: 'Keep the original message.',
+                  state: 'returned',
+                  hold: 'returned',
+                  returnedRejection: systemFailure
+                }}
+                pending={null}
+                chatWorktreeId={null}
+                agentName="Codex"
+                showsSteerShortcut={false}
+                agentWorking={false}
+                onSteer={send}
+                onEdit={() => setHeld('editing')}
+                onDelete={() => setHeld('deleted')}
+              />
+            </ul>
+          )
         ) : (
           <section aria-label="Failure">
             <NativeChatTranscriptSignInNotice
@@ -262,25 +256,15 @@ function Pane({ managed, failure, send }: { managed: boolean; failure: number; s
         )}
         <div style={{ height: 480 }} />
       </div>
+      <output aria-label="Held message">{held}</output>
       <section aria-label="Composer notice">
-        <NativeChatPromptSlotNotices
-          notices={
-            launch
-              ? launchNotices
-              : showBanner
-                ? [
-                    {
-                      key: 'fixture-auth',
-                      kind: 'error',
-                      text: "Codex isn't signed in.",
-                      signIn: bannerView
-                    }
-                  ]
-                : []
-          }
-        />
+        <NativeChatPromptSlotNotices notices={notices} />
       </section>
-      <textarea aria-label="Draft" defaultValue="Keep the unrelated draft." />
+      <textarea
+        aria-label="Draft"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+      />
     </NativeChatHostSetupProvider>
   )
 }

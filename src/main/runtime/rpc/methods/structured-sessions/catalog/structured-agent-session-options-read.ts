@@ -105,7 +105,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         }
         // A floating chat runs in the folder it was created in, not the floating setting's current one.
         const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
-        const waits = !params.savedOnly && (params.waitForListing || params.confirmSignIn)
+        const waits = !params.savedOnly && params.waitForListing === true
         const deadline = Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
         // Only a floating folder touches the filesystem; a read that doesn't wait never waits on it.
         const resolving =

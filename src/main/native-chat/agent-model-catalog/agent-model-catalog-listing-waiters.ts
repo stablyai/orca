@@ -4,7 +4,6 @@ import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
 import type { AgentModelCatalogRefresh } from './agent-model-catalog-refresh'
-import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
 
 export const AGENT_MODEL_CATALOG_PICKER_WAIT_MS = 30_000
 
@@ -91,32 +90,6 @@ export function waitWithinAgentModelCatalogRead(
 }
 
 const noop = (): void => {}
-
-export function holdAgentModelCatalogRefresh(
-  readers: Set<AbortSignal>,
-  refresh: AbortSignal,
-  reader: AgentModelCatalogReadOperation
-): AbortSignal | undefined {
-  if (reader.signal.aborted) {
-    return
-  }
-  const released = new AbortController()
-  const timer =
-    reader.deadline === undefined
-      ? undefined
-      : setTimeout(() => released.abort(), Math.max(0, reader.deadline - Date.now()))
-  const holder = AbortSignal.any([refresh, reader.signal, released.signal])
-  readers.add(holder)
-  holder.addEventListener(
-    'abort',
-    () => {
-      clearTimeout(timer)
-      readers.delete(holder)
-    },
-    { once: true }
-  )
-  return holder
-}
 
 /** A waiting read follows the refresh it joined, then the listing its scope names. */
 export async function waitForAgentModelCatalogRead(input: {

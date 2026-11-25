@@ -32,6 +32,46 @@ import type { AgentSessionFailureFact } from '../../../../../../shared/agent-ses
 import { inSendOrder } from '../../../../../../shared/native-chat/transcript/pending-sends/native-chat-send-order'
 import { useTranslate } from '../../../../i18n/use-translate'
 
+/** Only what the notices read, so a test or fixture can drive the production wiring. */
+export type NativeChatStructuredPaneNoticesInput = {
+  props: Pick<
+    Omit<NativeChatStructuredViewProps, 'mode'>,
+    'agent' | 'target' | 'groupId' | 'sessionId' | 'isVisible'
+  >
+  ownerWorktreeId: string | null
+  provisionalLaunch: Pick<
+    ReturnType<typeof useNativeChatProvisionalLaunch>,
+    'lifecycle' | 'failure'
+  >
+  submits: Pick<ReturnType<typeof useStructuredNativeChatSubmitReveal>, 'retryLaunch'>
+  startFailures: readonly AgentSessionFailureFact[]
+  controller: Pick<
+    ReturnType<typeof useStructuredAgentSession>,
+    'unavailable' | 'submissions' | 'journalItems' | 'error' | 'readRefusal'
+  > & {
+    optionSurface: Pick<
+      ReturnType<typeof useStructuredAgentSession>['optionSurface'],
+      'demandModelCatalog'
+    >
+  }
+  continuation: {
+    view: Pick<NativeChatInterruptedContinuation['view'], 'wslDistro' | 'remoteHost' | 'hostLabel'>
+    continueError: NativeChatInterruptedContinuation['continueError']
+  }
+  deliveryNotices: Parameters<typeof useNativeChatAvailabilityNotice>[0]['deliveryNotices']
+  agentLabel: string
+  viewState: Pick<NativeChatViewState, 'kind'>
+  readFailure: StructuredAgentSessionReadFailureNotice | null
+  composerError: Parameters<typeof structuredSessionNotices>[0]['composerError']
+  install: Pick<ReturnType<typeof useNativeChatInstallSlot>, 'antigravityAuth' | 'signIn'> & {
+    slot: Pick<ReturnType<typeof useNativeChatInstallSlot>['slot'], 'kind'>
+  }
+  hostSendGate: Pick<ReturnType<typeof useNativeChatHostSendGate>, 'notice'>
+  /** The account a new bot's refused kickoff needs signed in, which its setup card offers. */
+  kickoffSignIn?: { account?: AgentSessionAccountKind } | null
+  hostNotice: NativeChatComposerNotice | null
+}
+
 export function useNativeChatStructuredPaneNotices({
   props,
   ownerWorktreeId,
@@ -49,25 +89,7 @@ export function useNativeChatStructuredPaneNotices({
   hostSendGate,
   hostNotice,
   kickoffSignIn
-}: {
-  props: Omit<NativeChatStructuredViewProps, 'mode'>
-  ownerWorktreeId: string | null
-  provisionalLaunch: ReturnType<typeof useNativeChatProvisionalLaunch>
-  submits: ReturnType<typeof useStructuredNativeChatSubmitReveal>
-  startFailures: readonly AgentSessionFailureFact[]
-  controller: ReturnType<typeof useStructuredAgentSession>
-  continuation: NativeChatInterruptedContinuation
-  deliveryNotices: Parameters<typeof useNativeChatAvailabilityNotice>[0]['deliveryNotices']
-  agentLabel: string
-  viewState: NativeChatViewState
-  readFailure: StructuredAgentSessionReadFailureNotice | null
-  composerError: Parameters<typeof structuredSessionNotices>[0]['composerError']
-  install: ReturnType<typeof useNativeChatInstallSlot>
-  hostSendGate: ReturnType<typeof useNativeChatHostSendGate>
-  /** The account a new bot's refused kickoff needs signed in, which its setup card offers. */
-  kickoffSignIn?: { account?: AgentSessionAccountKind } | null
-  hostNotice: NativeChatComposerNotice | null
-}) {
+}: NativeChatStructuredPaneNoticesInput) {
   const t = useTranslate()
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
   const kickoffOwed = kickoffSignIn != null

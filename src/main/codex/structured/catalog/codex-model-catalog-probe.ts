@@ -135,8 +135,7 @@ export function createCodexModelCatalogProbe(
         const run = deps.runSession ?? runCodexAppServerSession
         const successFromListing = (
           listing: Awaited<ReturnType<typeof fetchCodexModelCatalogListing>>,
-          unavailable: AgentModelCatalogSuccess['unavailable'],
-          signedIn = false
+          unavailable: AgentModelCatalogSuccess['unavailable']
         ): AgentModelCatalogSuccess => {
           return {
             models: cwd
@@ -148,11 +147,10 @@ export function createCodexModelCatalogProbe(
             complete: listing.complete !== false,
             ...(cwd && listing.configured ? { configured: listing.configured } : {}),
             origin: 'probe',
-            ...(signedIn ? { signedIn: true } : {}),
             ...(unavailable ? { unavailable } : {})
           }
         }
-        const { listing, unavailable, signedIn } = await run(
+        const { listing, unavailable } = await run(
           {
             command,
             args,
@@ -165,7 +163,6 @@ export function createCodexModelCatalogProbe(
           async (rpc) => {
             let latest: Awaited<ReturnType<typeof fetchCodexModelCatalogListing>> | undefined
             let accountKnown = false
-            let signedIn = false
             let unavailable: AgentModelCatalogSuccess['unavailable']
             const observe = (next: NonNullable<typeof latest>) => {
               assertStructuredAgentResolutionCurrent(runOperation)
@@ -184,13 +181,6 @@ export function createCodexModelCatalogProbe(
                   'account' in response
                 ) {
                   accountKnown = true
-                  const observed = response.account
-                  // A configured API key is not a sign-in the provider verified; only its own login counts.
-                  signedIn =
-                    typeof observed === 'object' &&
-                    observed !== null &&
-                    'type' in observed &&
-                    observed.type === 'chatgpt'
                   if (
                     'requiresOpenaiAuth' in response &&
                     response.requiresOpenaiAuth === true &&
@@ -220,7 +210,7 @@ export function createCodexModelCatalogProbe(
             })
             observe(listing)
             await account
-            return { listing, unavailable, signedIn }
+            return { listing, unavailable }
           }
         ).catch((error: unknown) => {
           if (isMissingProviderExecutable(error, command)) {
@@ -235,7 +225,7 @@ export function createCodexModelCatalogProbe(
           }
           throw new Error('codex app-server listed no models')
         }
-        return successFromListing(listing, unavailable, signedIn)
+        return successFromListing(listing, unavailable)
       }
     }
   }

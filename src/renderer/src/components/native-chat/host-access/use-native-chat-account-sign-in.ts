@@ -5,10 +5,6 @@ import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views
 import { translate } from '@/i18n/i18n'
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
-import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
-import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
-import { AGENT_SESSION_MODEL_CATALOG_CONFIRM_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
-import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -20,10 +16,6 @@ import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/
 import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import type { NativeChatHostCommandTerminal } from './native-chat-host-command-terminal'
 import { useNativeChatCodexRecoveryAccount } from './use-native-chat-codex-recovery-account'
-import {
-  useNativeChatTerminalSignInRecheck,
-  type NativeChatTerminalSignIn
-} from './use-native-chat-terminal-sign-in-recheck'
 export type NativeChatHostSetupInput = {
   agent: string
   target: RuntimeClientTarget
@@ -125,7 +117,10 @@ export function useNativeChatSignIn(
     setState({ identity, busy: false, resolved: false, unconfirmed: false, announcement: '' })
   }
   const inFlight = useRef(false)
-  const [terminalSignIn, setTerminalSignIn] = useState<NativeChatTerminalSignIn | null>(null)
+  // The login terminal this chat opened, so a repeat press returns to it instead of opening another.
+  const [terminalSignIn, setTerminalSignIn] = useState<{ identity: string; tabId: string } | null>(
+    null
+  )
   const attempt = useRef(0)
   useLayoutEffect(
     () => () => {
@@ -136,38 +131,13 @@ export function useNativeChatSignIn(
   )
   const resolved = state.identity === identity && state.resolved
   const busy = state.identity === identity && state.busy
-  const recheck = useCallback(
-    async (ticket: number) => {
-      if (!sessionId || ticket !== attempt.current) {
-        return false
-      }
-      const supportsSignInCheck = await structuredAgentSessionHostSupports(
-        target,
-        AGENT_SESSION_MODEL_CATALOG_CONFIRM_SIGN_IN_RUNTIME_CAPABILITY
-      )
-      if (!supportsSignInCheck || ticket !== attempt.current) {
-        return false
-      }
-      const result = await callStructuredAgentSession<AgentSessionModelCatalogResult>(
-        target,
-        'agentSession.modelCatalog',
-        { agent, sessionId, confirmSignIn: true }
-      ).catch(() => null)
-      return ticket === attempt.current && result?.signInConfirmed === true
-    },
-    [agent, sessionId, target]
-  )
+  /** Only a managed account's own sign-in reports success; a terminal login stays unconfirmed. */
   const finish = useCallback(
-    (ticket: number, signedIn: boolean) => {
+    (ticket: number) => {
       if (ticket !== attempt.current) {
         return
       }
       inFlight.current = false
-      if (!signedIn) {
-        // Many hosts and agents can't confirm a terminal login; claim neither success nor failure.
-        setState((current) => ({ ...current, busy: false, unconfirmed: true }))
-        return
-      }
       setState({
         identity,
         busy: false,
@@ -182,16 +152,6 @@ export function useNativeChatSignIn(
   if (terminalSignIn && terminalSignIn.identity !== identity) {
     setTerminalSignIn(null)
   }
-  useNativeChatTerminalSignInRecheck(
-    terminalSignIn,
-    input.isVisible,
-    recheck,
-    (ticket, signedIn) => {
-      setTerminalSignIn((signIn) => (signIn?.ticket === ticket ? null : signIn))
-      finish(ticket, signedIn)
-    }
-  )
-  const { worktreeId } = input
   const signIn = useCallback(() => {
     if (inFlight.current) {
       return
@@ -224,7 +184,7 @@ export function useNativeChatSignIn(
           throw new Error('Sign-in terminal did not open')
         }
         if (ticket === attempt.current) {
-          setTerminalSignIn({ identity, ticket, worktreeId, tabId: opened.tabId })
+          setTerminalSignIn(opened.tabId ? { identity, tabId: opened.tabId } : null)
           inFlight.current = false
           setState((current) => ({ ...current, busy: false, unconfirmed: true }))
         }
@@ -232,7 +192,7 @@ export function useNativeChatSignIn(
       } else {
         throw new Error('Sign-in unavailable')
       }
-      finish(ticket, true)
+      finish(ticket)
     })().catch(() => {
       if (ticket !== attempt.current) {
         return
@@ -261,7 +221,6 @@ export function useNativeChatSignIn(
     command,
     terminal,
     terminalAllowed,
-    worktreeId,
     terminalSignIn,
     retryCodexLookup,
     finish
