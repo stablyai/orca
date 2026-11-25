@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentMcpServerMergeKey } from '../../../shared/mcp/agent-mcp-config-entry'
-import { discoverAgentMcpServers } from './agent-mcp-config-read'
+import { agentMcpConfigServersIn, discoverAgentMcpServers } from './agent-mcp-config-read'
 import { AgentMcpConfigEditError, removeAgentMcpServerEntries } from './agent-mcp-config-removal'
 import {
   listAgentMcpServers,
@@ -27,7 +27,7 @@ const CLAUDE_JSON = `{
     "playwright": { "type": "stdio", "command": "npx", "args": ["@playwright/mcp"] }
   },
   "projects": {
-    "/work/orca": { "mcpServers": { "db": { "command": "pg-mcp", "args": [] } } },
+    "/work/orca": { "mcpServers": { "db": { "command": "pg-mcp", "args": [] } }, "disabledMcpServers": ["db"] },
     "/elsewhere": { "mcpServers": { "lost": { "command": "lost-mcp" } } },
     "/orca-data/bot-tool-sign-in/b1": { "mcpServers": { "bot": { "type": "http", "url": "https://bot.dev/mcp" } } }
   }
@@ -99,7 +99,7 @@ describe('agent MCP config discovery and move', () => {
     ).toEqual([
       ['github', 'claude,codex', false],
       ['playwright', 'claude', false],
-      ['db', 'claude', false],
+      ['db', 'claude', true],
       ['lost', 'claude', false],
       ['linear', 'codex', false],
       ['oc1', 'opencode', true],
@@ -156,7 +156,7 @@ describe('agent MCP config discovery and move', () => {
       ],
       [
         { name: 'db', command: 'pg-mcp', args: [] },
-        { workspaces: { later: false, on: ['repo-1'], off: [] }, agentsOff: [] }
+        { workspaces: { later: false, on: ['repo-1'], off: [] }, agentsOff: ['claude'] }
       ],
       [
         { name: 'grk', command: 'grk', args: ['a'] },
@@ -167,8 +167,8 @@ describe('agent MCP config discovery and move', () => {
     expect(read('.grok/config.toml')).toBe('theme = "dark"\n')
     expect(read('.claude.json')).toBe(
       CLAUDE_JSON.replace(`\n    "github": { "type": "http", "url": "${GITHUB}" },`, '').replace(
-        `\n    "/work/orca": { "mcpServers": { "db": { "command": "pg-mcp", "args": [] } } },`,
-        `\n    "/work/orca": { "mcpServers": { } },`
+        `\n    "/work/orca": { "mcpServers": { "db": { "command": "pg-mcp", "args": [] } }, "disabledMcpServers": ["db"] },`,
+        `\n    "/work/orca": { "mcpServers": { }, "disabledMcpServers": ["db"] },`
       )
     )
     expect(read('.codex/config.toml')).toBe(
@@ -177,6 +177,22 @@ describe('agent MCP config discovery and move', () => {
     expect(read('.codex/config.toml.bak')).toBe(CODEX_TOML)
     expect(read('orca-data/claude-profiles/same/home/.claude.json')).not.toContain('github')
     expect(read('orca-data/claude-profiles/edited/home/.claude.json')).toContain('github')
+  })
+
+  it('reads Grok’s file-wide disable list and leaves servers with tool limits in Grok', () => {
+    const grok = {
+      agent: 'grok' as const,
+      path: '/g/config.toml',
+      format: 'toml' as const,
+      scope: 'user' as const
+    }
+    const found = agentMcpConfigServersIn(
+      grok,
+      'disabled_mcp_servers = ["a"]\n\n[mcp_servers.a]\ncommand = "a"\n\n[mcp_servers.b]\ncommand = "b"\n\n[disabled_mcp_tools]\nb = ["delete_repository"]\n'
+    )
+    expect(found?.map((server) => [server.configName, server.source.disabled])).toEqual([
+      ['a', true]
+    ])
   })
 
   it('refuses a file whose entry changed since it was listed', async () => {

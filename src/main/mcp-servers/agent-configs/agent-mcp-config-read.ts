@@ -82,14 +82,14 @@ export function agentMcpConfigServersIn(
   return agentMcpServerBlocks(location, parsed, skipProject).flatMap((block) =>
     Object.entries(record(valueAtKeyPath(parsed, block.path)) ?? {}).flatMap(([name, raw]) => {
       const entry = agentMcpConfigEntry(name, raw, block.dialect)
-      if (!entry || isOrcaOwnedAgentMcpServer(entry.server)) {
+      if (!entry || isOrcaOwnedAgentMcpServer(entry.server) || block.restrictedNames?.has(name)) {
         return []
       }
       const source: AgentMcpConfigSource = {
         ...location,
         keyPath: [...block.path, name],
         ...(block.projectPath ? { projectPath: block.projectPath } : {}),
-        disabled: entry.disabled
+        disabled: entry.disabled || (block.disabledNames?.has(name) ?? false)
       }
       return [{ ...entry, source }]
     })

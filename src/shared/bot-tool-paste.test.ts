@@ -107,6 +107,11 @@ describe('parseMcpServersPaste', () => {
     expect(() =>
       paste('claude mcp add --client-id abc --transport http x https://x.dev/mcp')
     ).toThrow(/OAuth/)
+    expect(() =>
+      paste(
+        'claude mcp add --transport http gh https://x.dev/mcp -H "Authorization: Bearer $GITHUB_PAT"'
+      )
+    ).toThrow(/\$VARIABLES/)
     expect(() => paste('{"mcpServers": ')).toThrow(/doesn’t parse/)
     expect(() => paste('claude mcp add onlyname')).toThrow(/mcp add command/)
   })

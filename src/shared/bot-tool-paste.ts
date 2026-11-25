@@ -96,6 +96,20 @@ function pastedConfigServers(text: string): AgentMcpConfigEntry[] | null {
   })
 }
 
+/** A `$NAME` the shell would fill in: anywhere but inside single quotes. */
+function expandsVariable(line: string): boolean {
+  let quoted = false
+  for (let index = 0; index < line.length; index++) {
+    const char = line[index]
+    if (char === "'") {
+      quoted = !quoted
+    } else if (!quoted && char === '$' && /[A-Za-z_]/.test(line[index + 1] ?? '')) {
+      return true
+    }
+  }
+  return false
+}
+
 function pastedLineServer(
   line: string,
   platform: NodeJS.Platform,
@@ -106,11 +120,11 @@ function pastedLineServer(
   if (!parsed.ok || kind === null) {
     return parseBotToolPaste(line, platform, t)
   }
-  if (parsed.spans.some((span) => span.divergesFromShell)) {
+  if (parsed.spans.some((span) => span.divergesFromShell) || expandsVariable(line)) {
     throw new Error(
       t(
         'mcpServers.paste.badCommand',
-        'Use plain quoted words in the mcp add command. Shell expressions are not supported.'
+        'Put the values themselves in the mcp add command: Orca can’t fill in $VARIABLES or other shell expressions.'
       )
     )
   }
@@ -152,8 +166,8 @@ export function parseMcpServersPaste(
     servers = read.map((entry) => entry.server)
   } else {
     servers = text
-      // Shell line continuations join one command written over several lines.
-      .replace(/\\\r?\n/g, ' ')
+      // A shell line continuation joins the lines exactly where it sits.
+      .replace(/\\\r?\n/g, '')
       .split(/\r?\n/)
       .map((line) => line.trim().replace(/^\$\s+/, ''))
       .filter((line) => line !== '' && !line.startsWith('#'))

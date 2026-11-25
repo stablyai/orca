@@ -193,10 +193,18 @@ export async function moveAgentMcpServer<T>(
   const configName = found.sources[0]!.keyPath.at(-1)!
   const mergeKey = agentMcpServerMergeKey(configName, found.server)
   await removeAgentMcpServerEntries(found.sources, mergeKey)
-  // A profile entry the user changed in that account is theirs to keep.
-  await removeAgentMcpServerEntries(await claudeProfileCopies(host, found.sources), mergeKey, {
-    differing: 'skip'
-  })
+  try {
+    // A profile entry the user changed in that account is theirs to keep.
+    await removeAgentMcpServerEntries(await claudeProfileCopies(host, found.sources), mergeKey, {
+      differing: 'skip'
+    })
+  } catch (error) {
+    // The move itself is done; an account profile that keeps its copy only shadows it there.
+    console.warn(
+      '[mcp-servers] Couldn’t remove a moved server from a Claude account profile:',
+      error
+    )
+  }
   return added
 }
 

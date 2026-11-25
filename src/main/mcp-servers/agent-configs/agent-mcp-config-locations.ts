@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentMcpConfigDialect } from '../../../shared/mcp/agent-mcp-config-entry'
 import { resolveClaudeGlobalConfigFile } from '../../claude/configuration/claude-folder-trust-file'
+import { readUserClaudeConfigDir } from '../../claude-accounts/profiles/claude-profile-paths'
 import { hasCustomCodexHomeOverride } from '../../codex/configuration/homes/codex-real-home-path'
 
 /** The agents whose own MCP config Orca reads, in the order merged rows name them. */
@@ -53,7 +54,11 @@ function userFiles(agent: McpConfigAgent, context: AgentMcpConfigContext): strin
     case 'claude':
       return [
         resolveClaudeGlobalConfigFile({
-          env: { CLAUDE_CONFIG_DIR: envDir(env, 'CLAUDE_CONFIG_DIR') },
+          // A config dir Orca injected for a managed account is not the user's own.
+          env: {
+            CLAUDE_CONFIG_DIR: readUserClaudeConfigDir(env),
+            CLAUDE_CODE_CUSTOM_OAUTH_URL: env.CLAUDE_CODE_CUSTOM_OAUTH_URL
+          },
           homeDir,
           style: context.platform === 'win32' ? 'win32' : 'posix',
           exists: existsSync
@@ -139,7 +144,14 @@ export type AgentMcpServerBlock = {
   dialect: AgentMcpConfigDialect
   /** Claude's per-project (local scope) servers in its user file. */
   projectPath?: string
+  /** Names the agent keeps switched off here (Claude's `/mcp disable` list, Grok's file-wide one). */
+  disabledNames?: ReadonlySet<string>
+  /** Names with tool limits kept outside the entry (Grok's `disabled_mcp_tools`): never imported. */
+  restrictedNames?: ReadonlySet<string>
 }
+
+const nameSet = (value: unknown): Set<string> =>
+  new Set(Array.isArray(value) ? value.filter((name) => typeof name === 'string') : [])
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -161,17 +173,28 @@ export function agentMcpServerBlocks(
       }
       const projects = Object.keys(record(parsed.projects) ?? {})
         .filter((projectPath) => !skipProject(projectPath))
-        .map((projectPath) => ({
-          path: ['projects', projectPath, 'mcpServers'],
-          dialect: 'mcp-json' as const,
-          projectPath
-        }))
+        .map((projectPath) => {
+          const project = record(record(parsed.projects)?.[projectPath])
+          return {
+            path: ['projects', projectPath, 'mcpServers'],
+            dialect: 'mcp-json' as const,
+            projectPath,
+            disabledNames: nameSet(project?.disabledMcpServers)
+          }
+        })
       return [user, ...projects]
     }
     case 'codex':
       return [{ path: ['mcp_servers'], dialect: 'codex-toml' }]
     case 'grok':
-      return [{ path: ['mcp_servers'], dialect: 'grok-toml' }]
+      return [
+        {
+          path: ['mcp_servers'],
+          dialect: 'grok-toml',
+          disabledNames: nameSet(parsed.disabled_mcp_servers),
+          restrictedNames: new Set(Object.keys(record(parsed.disabled_mcp_tools) ?? {}))
+        }
+      ]
     case 'gemini':
       return [{ path: ['mcpServers'], dialect: 'gemini' }]
     case 'opencode': {

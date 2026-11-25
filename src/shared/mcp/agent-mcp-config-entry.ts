@@ -138,10 +138,10 @@ function carriesEveryKey(entry: Record<string, unknown>, dialect: AgentMcpConfig
 }
 
 // Values the agent fills in from its environment or a command when it starts: `${VAR}` (Claude,
-// Cursor's `${env:VAR}`, Pi), OpenCode's `{env:VAR}`, Gemini's `$VAR`, Pi's `!command`.
+// Cursor's `${env:VAR}`, Pi), OpenCode's `{env:VAR}` / `{file:path}`, Gemini's `$VAR`, Pi's `!command`.
 function substitutes(value: string, dialect: AgentMcpConfigDialect): boolean {
   return (
-    /\$\{[^}]*\}|\{env:[^}]*\}/.test(value) ||
+    /\$\{[^}]*\}|\{(env|file):[^}]*\}/.test(value) ||
     (dialect === 'gemini' && /\$[A-Za-z_]/.test(value)) ||
     (dialect === 'mcp-json' && value.startsWith('!'))
   )
