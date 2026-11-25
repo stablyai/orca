@@ -125,7 +125,13 @@ describe('System default lanes', () => {
   })
 
   it('keeps the system identity when noting the WSL reset', () => {
-    const identity = { authKind: 'oauth' as const, email: 'you@example.com' }
+    const identity = {
+      hasAuth: true,
+      authKind: 'oauth' as const,
+      email: 'you@example.com',
+      providerAccountId: null,
+      workspaceLabel: null
+    }
     expect(getCodexSystemDefaultSubtitle(identity, 'server', undefined, true)).toBe(
       'you@example.com · including WSL'
     )
