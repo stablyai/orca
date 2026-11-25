@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setImmediate } from 'node:timers/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as appEnvironment from '../../../../../shared/app-lifecycle/app-environment'
 import { encodePairingOffer } from '../../../../../shared/remote-runtime/pairing/pairing'
@@ -72,7 +73,7 @@ function rows() {
 }
 
 beforeEach(() => {
-  vi.useFakeTimers()
+  vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-11-20T20:00:00Z'))
   root = mkdtempSync(join(tmpdir(), 'orca-placement-registry-'))
   vi.spyOn(appEnvironment, 'getAppEnvironment').mockReturnValue({
@@ -125,20 +126,21 @@ it.each(['record', 'links', 'unidentified record', 'invalid file', 'missing file
       rmSync(storePath)
     }
     notify()
-    await vi.advanceTimersByTimeAsync(0)
     if (failure === 'invalid file') {
       await expect(owner.discover()).rejects.toMatchObject({ code: 'runtime_error' })
     } else {
       expect(await owner.discover()).toEqual([])
     }
+    // Let the saved-registry read queued by reconciliation finish before restoring the file.
+    await setImmediate()
     expect(rows()).toEqual(retained)
     writeFileSync(storePath, saved)
     rmSync(getRuntimeEnvironmentSidecarPath(root), { force: true })
     notify()
-    await vi.advanceTimersByTimeAsync(0)
+    expect(await owner.discover()).toMatchObject([{ status: 'fresh', observedAt: 1795204800000 }])
     expect(rows()).toEqual(retained)
     db.close()
-    await vi.advanceTimersByTimeAsync(30_001)
+    vi.setSystemTime(Date.now() + 30_001)
     open(true)
     expect(await owner.discover()).toMatchObject([
       {
@@ -165,8 +167,7 @@ it.each(['removed', 're-paired'])(
       })
     }
     notify()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(rows()).toEqual([])
+    await vi.waitFor(() => expect(rows()).toEqual([]))
     db.close()
     open(true)
     expect(await owner.discover(environmentId)).toMatchObject([
