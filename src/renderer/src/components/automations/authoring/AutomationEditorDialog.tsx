@@ -67,6 +67,7 @@ export type AutomationDraft = {
   baseBranch: string
   setupDecision?: Extract<SetupDecision, 'run' | 'skip'>
   reuseSession: boolean
+  updateCodexBeforeRun?: boolean
   precheckCommand: string
   precheckTimeoutSeconds: string
   preset: AutomationSchedulePreset

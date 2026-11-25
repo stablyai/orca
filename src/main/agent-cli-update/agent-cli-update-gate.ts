@@ -40,7 +40,9 @@ export async function updateThroughGate<T>(
   update: () => Promise<T>
 ): Promise<T> {
   const gate = gateFor(agent)
-  const running = Promise.allSettled(gate.checks).then(update)
+  const running = Promise.allSettled(
+    gate.update ? [...gate.checks, gate.update] : gate.checks
+  ).then(update)
   gate.update = running
   try {
     return await running

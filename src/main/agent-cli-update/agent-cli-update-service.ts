@@ -91,6 +91,26 @@ function planCommand(cli: OwnAgentCli, plan: AgentCliUpdatePlan): string {
   return plan.runnable ? [cli.command, ...plan.args].join(' ') : plan.command
 }
 
+export function runAgentCliUpdatePlan(
+  cli: OwnAgentCli,
+  plan: Extract<AgentCliUpdatePlan, { runnable: true }>,
+  signal?: AbortSignal
+) {
+  return runProcess(
+    {
+      program: cli.program,
+      args: plan.args,
+      cwd: homedir(),
+      env: cli.env,
+      signal,
+      timeoutMs: UPDATE_TIMEOUT_MS,
+      maxOutputBytes: UPDATE_OUTPUT_BYTES,
+      terminationBarrier: signal ? 'wait-for-posix-group' : true
+    },
+    'tail'
+  )
+}
+
 function latestRelease(agent: AgentCliUpdateAgent, installed: string): Promise<string | null> {
   return latestAgentCliRelease(agentCliUpdateDefinition(agent).latest(installed))
 }
@@ -216,18 +236,7 @@ async function updateAgentCli(
   const command = planCommand(cli, plan)
   let result: Awaited<ReturnType<typeof runProcess>>
   try {
-    result = await runProcess(
-      {
-        program: cli.program,
-        args: [...plan.args],
-        cwd: homedir(),
-        env: cli.env,
-        timeoutMs: UPDATE_TIMEOUT_MS,
-        maxOutputBytes: UPDATE_OUTPUT_BYTES,
-        terminationBarrier: true
-      },
-      'tail'
-    )
+    result = await runAgentCliUpdatePlan(cli, plan)
   } catch (error) {
     return { ok: false, output: error instanceof Error ? error.message : String(error), command }
   }

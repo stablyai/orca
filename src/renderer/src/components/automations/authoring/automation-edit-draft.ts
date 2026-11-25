@@ -38,6 +38,7 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
       persistedSetupDecision: automation.setupDecision
     }),
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession,
+    updateCodexBeforeRun: automation.updateCodexBeforeRun === true,
     precheckCommand: automation.precheck?.command ?? '',
     precheckTimeoutSeconds: String(automation.precheck?.timeoutSeconds ?? 60),
     preset: schedule?.preset ?? (hasCustomSchedule ? 'custom' : 'weekdays'),

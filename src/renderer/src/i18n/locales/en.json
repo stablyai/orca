@@ -27156,7 +27156,11 @@
     "webhooksOff": "Won’t run: Orca Cloud doesn’t support webhooks yet",
     "webhooksOffScheduled": "Runs on its schedule only: Orca Cloud doesn’t support webhooks yet",
     "openConnectors": "Open connectors",
-    "hostUnreachable": "Couldn't reach {{host}}. Try again once it's back."
+    "hostUnreachable": "Couldn't reach {{host}}. Try again once it's back.",
+    "updateCodex": {
+      "label": "Update Codex before running",
+      "help": "Check for updates and start a fresh Codex session for each run."
+    }
   },
   "codeHost": {
     "errors": {

@@ -29,6 +29,7 @@ import {
 } from './terminal-retention/run-terminal-workspace-session'
 import { automationRunSetupSkip } from './launch/automation-run-setup-skip'
 import { automationSystemSettled } from './dispatch/automation-wake-settle'
+import { prepareAutomationCodexLaunch } from './launch/automation-codex-launch'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -164,6 +165,8 @@ export function createRuntimeAutomationService(input: {
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
     allowRemoteHostScheduling: input.allowRemoteHostScheduling,
     ...botAutomationServiceOptions(runtime),
+    prepareCodexRun: (automation, target, signal) =>
+      prepareAutomationCodexLaunch(runtime, store, automation, target, signal),
     chatDispatcher: async (request) => {
       const { terminalHandle, ...launched } = await launchAutomationChatAgent(runtime, {
         ...request,

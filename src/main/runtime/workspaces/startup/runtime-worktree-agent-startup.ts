@@ -29,6 +29,7 @@ import { detectAgentsOnHost } from '../../../preflight/workspace-agent-detection
 import { agentCommandOverrideDetectionOptions } from '../../../preflight/installed-agent-detection'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
+import { assertVerifiedCodexTerminalHost } from '../../terminal/launch/verified-codex-terminal-host'
 
 export type WorktreeStartupDraftPaste = { agent: TuiAgent; content: string }
 export type WorktreeStartupFollowup = { agent: TuiAgent; prompt: string }
@@ -50,6 +51,7 @@ type StartupEnvironment = {
   extraAgentArgs?: string
   /** Orca, not a user, types into this agent once it starts. */
   suppressStartupUpdatePrompt?: boolean
+  verifiedCodexProgram?: string
   /** Caller-supplied telemetry attribution, validated leniently at the host boundary. */
   launchSource?: string
 }
@@ -193,6 +195,13 @@ export async function buildWorktreeStartupForAgent(
     throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
   }
   const { platform, shell, launchRuntime } = environment.getLaunchRuntime(agent)
+  assertVerifiedCodexTerminalHost(
+    environment.verifiedCodexProgram,
+    agent,
+    launchRuntime,
+    repoIsRemote(repo),
+    settings
+  )
   const resolvedInputs = resolveAgentStartupPlanInputs({
     agent,
     settings,
@@ -202,6 +211,7 @@ export async function buildWorktreeStartupForAgent(
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
     ...(environment.extraAgentArgs ? { extraAgentArgs: environment.extraAgentArgs } : {}),
     ...(environment.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
+    verifiedCodexProgram: environment.verifiedCodexProgram,
     sessionOptions:
       environment.sessionOptions ?? environment.toSessionOptions(environment.launchPreferences)
   })
@@ -267,6 +277,7 @@ export async function resolveWorktreeCreateAgentStartup(
       sessionOptions?: Readonly<Record<string, SessionOptionValue>>
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
+      verifiedCodexProgram?: string
       launchSource?: string
       onPromptCarry?: (carried: boolean) => void
     }
@@ -292,6 +303,7 @@ export async function resolveWorktreeCreateAgentStartup(
     ...(args.startupSessionOptions ? { sessionOptions: args.startupSessionOptions } : {}),
     ...(args.startupExtraAgentArgs ? { extraAgentArgs: args.startupExtraAgentArgs } : {}),
     ...(args.startupSuppressUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
+    ...(args.verifiedCodexProgram ? { verifiedCodexProgram: args.verifiedCodexProgram } : {}),
     ...(args.startupLaunchSource ? { launchSource: args.startupLaunchSource } : {}),
     ...(args.onStartupPromptCarry ? { onPromptCarry: args.onStartupPromptCarry } : {})
   })

@@ -24,6 +24,9 @@ export type AutomationLaunchContext<Target extends RunTarget = RunTarget> = {
   run: AutomationRun
   target: Target
   dispatcher: AutomationMainLauncher<Target>
+  prepareLaunch?: () =>
+    | Parameters<AutomationMainLauncher<Target>>[0]
+    | Promise<Parameters<AutomationMainLauncher<Target>>[0]>
   /** Write only while this dispatch still owns a dispatching run; throws AutomationDispatchCancelledError once the service or automation is gone. */
   transition: (result: Omit<AutomationDispatchResult, 'runId'>) => {
     applied: boolean
@@ -67,9 +70,13 @@ export async function runAutomationLaunch<Target extends RunTarget>(
   }
   let launch: AutomationLaunch
   // The agent can finish before launch returns.
-  const dispatchedAt = Date.now()
+  let dispatchedAt: number | undefined
   try {
-    launch = await ctx.dispatcher({ automation, run, target })
+    const prepared = ctx.prepareLaunch?.()
+    const request =
+      prepared instanceof Promise ? await prepared : (prepared ?? { automation, run, target })
+    dispatchedAt = Date.now()
+    launch = await ctx.dispatcher(request)
   } catch (error) {
     const refusal =
       error instanceof AutomationDispatchRefusedError
@@ -84,7 +91,9 @@ export async function runAutomationLaunch<Target extends RunTarget>(
       ...(error instanceof AutomationRunLaunchError && openedAgent(error.target)
         ? { launchedAt: dispatchedAt }
         : {}),
-      ...(automation.surface === 'chat' ? { dispatchedAt, precheckResult } : {}),
+      ...(automation.surface === 'chat' && dispatchedAt !== undefined
+        ? { dispatchedAt, precheckResult }
+        : {}),
       ...(refusal ?? { error: describeDispatchError(error) })
     }).run
   }

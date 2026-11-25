@@ -47,6 +47,7 @@ export type TerminalCreateOptions = {
   extraAgentArgs?: string
   /** Main-internal: Orca, not a user, types into this `startupAgent` once it starts. */
   suppressStartupUpdatePrompt?: boolean
+  verifiedCodexProgram?: string
   /** Host-only runtime fact used to quote this launch; spawn must take its shell from that same fact, never client input. */
   launchRuntime?: AgentLaunchRuntime
   /** Account routing env merged over `startupAgent`'s plan env; an input to that plan, like

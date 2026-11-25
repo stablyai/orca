@@ -5,7 +5,11 @@ import {
   agentLaunchPermissionSettings,
   resolveTuiAgentLaunchEnv
 } from '../choices/tui-agent-launch-defaults'
-import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
+import {
+  quoteStartupArg,
+  resolveStartupShell,
+  type AgentStartupShell
+} from './tui-agent-startup-shell'
 import { terminalSessionOptionInputs } from './tui-agent-launch-command'
 import { resolveLocalWindowsAgentStartupShell } from '../../shell/launch/windows-terminal-shell'
 
@@ -53,6 +57,8 @@ export function resolveAgentStartupPlanInputs(args: {
   sessionOptionsYieldToAgentArgs?: boolean
   /** Orca types into this launch after start (worker, automation, handoff), not a user. */
   suppressStartupUpdatePrompt?: boolean
+  /** Absolute program already selected and verified by the execution host. */
+  verifiedCodexProgram?: string
 }): AgentStartupPlanInputs {
   const { agent, platform, isRemote, sessionOptions } = args
   const settings = agentLaunchPermissionSettings(agent, args.settings, sessionOptions)
@@ -73,9 +79,15 @@ export function resolveAgentStartupPlanInputs(args: {
     extraAgentArgs: args.extraAgentArgs,
     shell: resolveStartupShell(platform, shell)
   })
+  const cmdOverrides = args.verifiedCodexProgram
+    ? {
+        ...settings.agentCmdOverrides,
+        codex: quoteStartupArg(args.verifiedCodexProgram, resolveStartupShell(platform, shell))
+      }
+    : (settings.agentCmdOverrides ?? {})
   return {
     agent,
-    cmdOverrides: settings.agentCmdOverrides ?? {},
+    cmdOverrides,
     agentArgs: options.agentArgs ?? null,
     agentEnv: resolveTuiAgentLaunchEnv(agent, settings, platform),
     platform,

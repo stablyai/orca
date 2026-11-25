@@ -104,6 +104,8 @@ export function createAutomation(
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
   const setup = applyAutomationLaunchSetupPatch(input)
   const extraAgentArgs = storedExtraAgentArgs(setup.extraAgentArgs)
+  const updateCodexBeforeRun =
+    input.agentId === 'codex' && !input.bot && input.updateCodexBeforeRun === true
   const automation: Automation = {
     id: options?.id ?? randomUUID(),
     ...automationCreateIdentity(input),
@@ -117,6 +119,7 @@ export function createAutomation(
       : {}),
     ...(setup.agentArgs !== undefined ? { agentArgs: setup.agentArgs } : {}),
     ...(extraAgentArgs !== undefined ? { extraAgentArgs } : {}),
+    ...(updateCodexBeforeRun ? { updateCodexBeforeRun: true } : {}),
     // Prefer authority-local contexts; client-assigned runtime IDs cannot identify this store's host.
     runContext: contexts.runContext ?? input.runContext ?? null,
     sourceContext: contexts.sourceContext ?? input.sourceContext ?? null,
@@ -131,7 +134,8 @@ export function createAutomation(
       input.workspaceMode,
       input.setupDecision
     ),
-    reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
+    reuseSession:
+      input.workspaceMode === 'existing' && !updateCodexBeforeRun && input.reuseSession === true,
     timezone: input.timezone,
     rrule: input.rrule,
     dtstart: input.dtstart,

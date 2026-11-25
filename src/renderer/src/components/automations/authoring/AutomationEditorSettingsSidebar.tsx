@@ -1,3 +1,5 @@
+import { useId } from 'react'
+import { Switch } from '@/components/ui/switch'
 import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import { AutomationAgentLaunchPicker } from './AutomationAgentLaunchPicker'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
@@ -85,6 +87,7 @@ export function AutomationEditorSettingsSidebar({
   onClose
 }: AutomationEditorSettingsSidebarProps): React.JSX.Element {
   const t = useTranslate()
+  const updateCodexId = useId()
   const botTarget = draft.bot
   // Edit drafts carry no botHostId, so they match by id alone.
   const targetBot = botTarget
@@ -115,7 +118,8 @@ export function AutomationEditorSettingsSidebar({
       projectId: '',
       workspaceMode: 'existing',
       workspaceId: '',
-      reuseSession: false
+      reuseSession: false,
+      updateCodexBeforeRun: false
     }))
   }
   // A saved automation cannot move between a bot and a project, so an edit offers only its own kind.
@@ -249,6 +253,33 @@ export function AutomationEditorSettingsSidebar({
               onDraftChange={onDraftChange}
             />
           </Field>
+          {draft.agentId === 'codex' && (
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-1">
+                <label htmlFor={updateCodexId} className="text-sm font-medium">
+                  {t('automations.updateCodex.label', 'Update Codex before running')}
+                </label>
+                <p id={`${updateCodexId}-help`} className="text-xs text-muted-foreground">
+                  {t(
+                    'automations.updateCodex.help',
+                    'Check for updates and start a fresh Codex session for each run.'
+                  )}
+                </p>
+              </div>
+              <Switch
+                id={updateCodexId}
+                aria-describedby={`${updateCodexId}-help`}
+                checked={draft.updateCodexBeforeRun === true}
+                onCheckedChange={(updateCodexBeforeRun) =>
+                  onDraftChange((current) => ({
+                    ...current,
+                    updateCodexBeforeRun,
+                    ...(updateCodexBeforeRun ? { reuseSession: false } : {})
+                  }))
+                }
+              />
+            </div>
+          )}
         </div>
         {destination ? (
           <div className="mb-4">

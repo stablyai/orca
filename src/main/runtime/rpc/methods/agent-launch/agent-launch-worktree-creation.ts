@@ -34,7 +34,8 @@ const STRUCTURED_SETUP_WAIT_TIMEOUT_MS = 60_000
 
 export function agentLaunchWorkspaceFactory(
   context: RpcContext,
-  agent: TuiAgent
+  agent: TuiAgent,
+  verifiedCodexProgram?: string
 ): AgentLaunchWorkspaceFactory {
   return {
     createFolderWorkspace: agentLaunchFolderWorkspaceCreator(context, agent),
@@ -98,6 +99,9 @@ export function agentLaunchWorkspaceFactory(
             context
           ),
           ...(agentArgs !== undefined ? { startupAgentArgs: agentArgs } : {}),
+          ...(startupAgent && verifiedCodexProgram
+            ? { verifiedCodexProgram, startupSuppressUpdatePrompt: true }
+            : {}),
           ...(startupPrompt
             ? {
                 onStartupPromptCarry: (carried: boolean) => {

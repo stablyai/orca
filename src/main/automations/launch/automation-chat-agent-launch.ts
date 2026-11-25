@@ -4,6 +4,7 @@ import type { Automation } from '../../../shared/automations/automation-definiti
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { launchAgentOnHost } from '../../runtime/rpc/methods/agent-launch/agent-launch'
+import { AgentLaunchExecutionError } from '../../runtime/rpc/methods/agent-launch/agent-launch-execution-outcome'
 import { reuseAutomationChat } from './automation-chat-session-reuse'
 import { buildHeadlessAutomationWorkspaceName } from './automation-workspace-create'
 import type { AutomationRepoRunTarget } from '../ownership/run-target-resolution'
@@ -16,6 +17,7 @@ import {
 import { automationRunOperationId, AUTOMATION_AGENT_CALLER } from './automation-run-operation'
 import { createAutomationDispatchToken } from '../ownership/dispatch-tokens'
 import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { CodexAutomationUpdateError } from '../../agent-cli-update/codex-automation-update'
 
 export type AutomationChatAgentLaunch = AutomationLaunch & {
   terminalHandle: string | null
@@ -26,6 +28,7 @@ export type AutomationChatLaunchRequest = {
   run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'createdAt'>
   target: AutomationRepoRunTarget
   runs: readonly AutomationRun[]
+  verifiedCodexProgram?: string
 }
 
 export async function launchAutomationChatAgent(
@@ -35,7 +38,7 @@ export async function launchAutomationChatAgent(
   try {
     return await enrichAutomationRunTarget(runtime, await launchChat(runtime, request))
   } catch (error) {
-    if (error instanceof AutomationRunLaunchError) {
+    if (error instanceof AutomationRunLaunchError || error instanceof CodexAutomationUpdateError) {
       throw error
     }
     console.error('[automations] chat launch failed:', error)
@@ -49,9 +52,9 @@ async function launchChat(
   runtime: OrcaRuntimeService,
   request: AutomationChatLaunchRequest
 ): Promise<AutomationChatAgentLaunch> {
-  const { automation, run, target } = request
+  const { automation, run, target, verifiedCodexProgram } = request
   let published: AutomationChatAgentLaunch | undefined
-  if (automation.reuseSession && automation.workspaceId) {
+  if (!verifiedCodexProgram && automation.reuseSession && automation.workspaceId) {
     const reused = await reuseAutomationChat(runtime, request)
     if (reused) {
       return reused
@@ -98,6 +101,7 @@ async function launchChat(
       },
       { runtime, caller: AUTOMATION_AGENT_CALLER },
       {
+        ...(verifiedCodexProgram ? { verifiedCodexProgram } : {}),
         onSurfacePublished: (surface) => {
           published = publishedLaunchTarget(runtime, surface)
         }
@@ -111,6 +115,15 @@ async function launchChat(
     }
     return publishedLaunchTarget(runtime, result)
   } catch (error) {
+    if (error instanceof CodexAutomationUpdateError) {
+      throw error
+    }
+    if (
+      error instanceof AgentLaunchExecutionError &&
+      error.cause instanceof CodexAutomationUpdateError
+    ) {
+      throw error.cause
+    }
     if (
       error instanceof Error &&
       ('code' in error

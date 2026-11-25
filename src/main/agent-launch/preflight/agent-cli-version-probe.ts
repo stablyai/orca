@@ -25,6 +25,8 @@ export type AgentCliVersionInput = Pick<ProcessSpec, 'program' | 'cwd' | 'env'> 
   operation?: StructuredAgentResolutionOperation
   timeoutMs?: number | null
   prefixArgs?: readonly string[]
+  /** Use a fixed caller-owned diagnostic instead of logging the program and its output. */
+  quiet?: boolean
 }
 
 export type AgentCliVersionReader = (
@@ -57,7 +59,7 @@ export async function readAgentCliVersion(
   input: AgentCliVersionInput,
   parseVersion: typeof parseCliVersion = parseCliVersion
 ): Promise<{ version: string | null; started?: false }> {
-  const { prefixArgs = [], operation, timeoutMs = 5_000, ...launch } = input
+  const { prefixArgs = [], operation, timeoutMs = 5_000, quiet, ...launch } = input
   assertStructuredAgentResolutionCurrent(operation)
   let result
   try {
@@ -81,7 +83,9 @@ export async function readAgentCliVersion(
     })
   } catch (error) {
     assertStructuredAgentResolutionCurrent(operation)
-    warnRefused(input.program, `did not start (${String(error)})`)
+    if (!quiet) {
+      warnRefused(input.program, `did not start (${String(error)})`)
+    }
     return { version: null, started: false }
   }
   assertStructuredAgentResolutionCurrent(operation)
@@ -92,11 +96,13 @@ export async function readAgentCliVersion(
       : result.outputTruncated
         ? 'printed too much'
         : `exited ${result.code ?? result.signal}`
-    warnRefused(input.program, why, output)
+    if (!quiet) {
+      warnRefused(input.program, why, output)
+    }
     return { version: null }
   }
   const version = parseVersion(output)
-  if (version === null) {
+  if (version === null && !quiet) {
     warnRefused(input.program, 'printed no version', output)
     return { version: null }
   }

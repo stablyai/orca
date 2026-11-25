@@ -21,10 +21,7 @@ import { writeAutomationRunUsage } from './run-history/run-usage-collection'
 import type * as Launch from './launch/automation-launch'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { clearAutomationDispatchTokens } from './ownership/dispatch-tokens'
-import {
-  AutomationRunCompletionWatcher,
-  type AutomationRunTerminalObserver
-} from './observation/run-completion-watcher'
+import { AutomationRunCompletionWatcher } from './observation/run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './run-history/run-writer'
 import { reportAutomationScheduleDrift } from './dispatch/schedule-drift-report'
 import {
@@ -47,6 +44,7 @@ import {
   type EventRunOptions
 } from './automation-trigger-runs'
 import { runDueAutomations } from './automation-due-runs'
+import type { AutomationServiceOptions } from './automation-service-options'
 
 const DEFAULT_TICK_MS = 60 * 1000
 
@@ -56,7 +54,7 @@ export class AutomationService {
   private timer: ReturnType<typeof setInterval> | null = null
   private evaluating = false
   private stopped = false
-  private dispatchGeneration = 0
+  private dispatchAbort = new AbortController()
   private readonly claudeUsage: AutomationUsageClient | null
   private readonly codexUsage: AutomationUsageClient | null
   private readonly allowRemoteHostScheduling: boolean
@@ -73,28 +71,13 @@ export class AutomationService {
   onTick: (() => void) | null = null
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
+  private readonly prepareCodexRun: AutomationServiceOptions['prepareCodexRun']
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
   /** Desktop automation traffic holds this lease to defer queued external probes. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
   readonly wakeGate = new AutomationWakeGate()
 
-  constructor(
-    store: Store,
-    opts: {
-      tickMs?: number
-      claudeUsage?: AutomationUsageClient
-      codexUsage?: AutomationUsageClient
-      allowRemoteHostScheduling?: boolean
-      terminalLauncher?: Launch.AutomationTerminalLauncher
-      botDispatcher?: Launch.AutomationBotLauncher
-      onRunRefused?: (automation: Automation, error: string) => void
-      chatDispatcher?: Launch.AutomationLauncher
-      terminalObserver?: AutomationRunTerminalObserver
-      isHostQuitting?: () => boolean
-      onAutomationsChanged?: PublishAutomationsChanged
-      runTerminalRetention?: (service: AutomationService) => RunTerminalRetention
-    } = {}
-  ) {
+  constructor(store: Store, opts: AutomationServiceOptions = {}) {
     this.store = store
     this.tickMs = opts.tickMs ?? DEFAULT_TICK_MS
     this.claudeUsage = opts.claudeUsage ?? null
@@ -104,6 +87,7 @@ export class AutomationService {
     this.botDispatcher = opts.botDispatcher ?? null
     this.onRunRefused = opts.onRunRefused ?? null
     this.chatDispatcher = opts.chatDispatcher ?? null
+    this.prepareCodexRun = opts.prepareCodexRun
     this.publish = opts.onAutomationsChanged ?? null
     this.runs = createAutomationRunWriter(store, this.publish)
     this.completionWatcher = opts.terminalObserver
@@ -142,14 +126,17 @@ export class AutomationService {
 
   stop(): void {
     this.stopped = true
-    this.dispatchGeneration += 1
+    this.dispatchAbort.abort(
+      new AutomationDispatchCancelledError('Orca stopped before this automation could launch.')
+    )
+    this.dispatchAbort = new AbortController()
     this.completionWatcher?.dispose()
     clearInterval(this.timer ?? undefined)
     this.timer = null
   }
 
   async runNow(automationId: string): Promise<AutomationRun> {
-    const generation = this.dispatchGeneration
+    const signal = this.dispatchAbort.signal
     const listed = this.store.listAutomations().find((entry) => entry.id === automationId)
     if (!listed) {
       throw new Error('Automation not found.')
@@ -159,7 +146,7 @@ export class AutomationService {
     const event = latestAutomationEvent(this.store, automation)
     const run = await this.runs.createRun(automation, Date.now(), 'manual', event)
     // The saved pending row is the acknowledgement; the lane owns execution behind earlier launches.
-    this.launchInLane(automation, run, target, generation)
+    this.launchInLane(automation, run, target, signal)
     return run
   }
 
@@ -168,25 +155,25 @@ export class AutomationService {
     automation: Automation,
     run: AutomationRun,
     target: AutomationRunTargetResult,
-    generation: number,
+    signal: AbortSignal,
     afterCreate?: () => Promise<unknown>
   ): void {
     void (async () => {
       // A blocked lane must not defer the schedule advance.
       await afterCreate?.()
-      await this.requestDispatch(automation, run, target, generation)
+      await this.requestDispatch(automation, run, target, signal)
     })()
-      .catch((error: unknown) => this.recordFailedLaunch(run, generation, error))
+      .catch((error: unknown) => this.recordFailedLaunch(run, signal, error))
       .catch((writeError: unknown) =>
         console.error('[automations] could not record a failed launch', writeError)
       )
   }
 
   /** Only an unlaunched run of this generation fails; a flush error after launch is not a launch failure. */
-  private async recordFailedLaunch(run: AutomationRun, generation: number, error: unknown) {
+  private async recordFailedLaunch(run: AutomationRun, signal: AbortSignal, error: unknown) {
     const current = this.store.listAutomationRuns(run.automationId).find((r) => r.id === run.id)
     const unlaunched = current?.status === 'pending' || current?.status === 'dispatching'
-    const active = !this.stopped && generation === this.dispatchGeneration
+    const active = !this.stopped && !signal.aborted
     if (unlaunched && active && !(error instanceof AutomationDispatchCancelledError)) {
       const message = error instanceof Error ? error.message : String(error)
       await this.markDispatchResult({ runId: run.id, status: 'dispatch_failed', error: message })
@@ -245,7 +232,7 @@ export class AutomationService {
       return
     }
     this.evaluating = true
-    const generation = this.dispatchGeneration
+    const signal = this.dispatchAbort.signal
     if (this.availableLauncher()) {
       this.completionWatcher?.markTerminalSurfaceReady()
     }
@@ -254,7 +241,7 @@ export class AutomationService {
       await runDueAutomations({
         ctx: this.triggerRunContext(this.wakeGate.takeDelayMs(now, this.tickMs)),
         now,
-        isActive: () => !this.stopped && generation === this.dispatchGeneration,
+        isActive: () => !this.stopped && !signal.aborted,
         captureTarget: (listed) =>
           captureLegacyRunTarget(this.store, listed, this.allowRemoteHostScheduling)
       })
@@ -263,9 +250,9 @@ export class AutomationService {
     }
   }
 
-  /** Captures the dispatch generation, so a stop() while it waits cancels the launch. */
+  /** Captures the dispatch signal, so a stop() while it waits cancels the launch. */
   private triggerRunContext(wakeGateDelayMs = 0): AutomationTriggerRunContext {
-    const generation = this.dispatchGeneration
+    const signal = this.dispatchAbort.signal
     return {
       store: this.store,
       runs: this.runs,
@@ -279,10 +266,9 @@ export class AutomationService {
         return describeScheduledTickRefusal(this.store, { target, canDispatch })
       },
       resolveTarget: (automation) => this.resolveTarget(automation),
-      dispatch: (automation, run, target) =>
-        this.requestDispatch(automation, run, target, generation),
+      dispatch: (automation, run, target) => this.requestDispatch(automation, run, target, signal),
       launch: (automation, run, target, afterCreate) =>
-        this.launchInLane(automation, run, target, generation, afterCreate),
+        this.launchInLane(automation, run, target, signal, afterCreate),
       once: this.once
     }
   }
@@ -307,16 +293,18 @@ export class AutomationService {
     automation: Automation,
     run: AutomationRun,
     target: AutomationRunTargetResult,
-    generation: number
+    signal: AbortSignal
   ): Promise<AutomationRun> {
     return this.runInAutomationLane(automation.id, () =>
       requestAutomationDispatch(
         {
           store: this.store,
           runs: this.runs,
-          isActive: () => !this.stopped && generation === this.dispatchGeneration,
+          isActive: () => !this.stopped && !signal.aborted,
           launcher: () => this.availableLauncher(),
           botDispatcher: this.botDispatcher,
+          prepareCodexRun: this.prepareCodexRun,
+          signal,
           chatDispatcher:
             this.allowRemoteHostScheduling || this.availableLauncher() ? this.chatDispatcher : null,
           resolveTarget: (current) => this.resolveTarget(current),

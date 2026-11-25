@@ -177,6 +177,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       sessionOptions?: Parameters<typeof buildWorktreeStartupForAgent>[0]['sessionOptions']
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
+      verifiedCodexProgram?: string
       launchSource?: string
       onPromptCarry?: (carried: boolean) => void
       /** The existing workspace it starts in; absent is a new workspace of `repo`. */
@@ -195,6 +196,9 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       ...(launchInputs?.sessionOptions ? { sessionOptions: launchInputs.sessionOptions } : {}),
       ...(launchInputs?.extraAgentArgs ? { extraAgentArgs: launchInputs.extraAgentArgs } : {}),
       ...(launchInputs?.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
+      ...(launchInputs?.verifiedCodexProgram
+        ? { verifiedCodexProgram: launchInputs.verifiedCodexProgram }
+        : {}),
       ...(launchInputs?.launchSource ? { launchSource: launchInputs.launchSource } : {}),
       ...(launchInputs?.onPromptCarry ? { onPromptCarry: launchInputs.onPromptCarry } : {}),
       settings: this.store.getSettings(),

@@ -122,6 +122,23 @@ export function automationDraftLaunchSetup(
       : {}
 }
 
+export function automationLaunchSettingEdits(
+  draft: AutomationDraft,
+  current: Automation | null,
+  launchSetup: ReturnType<typeof automationDraftLaunchSetup>,
+  edited: (key: keyof AutomationDraft) => boolean
+): AutomationUpdateInput {
+  return {
+    ...(edited('agentId') ? { agentId: draft.agentId } : {}),
+    ...(edited('updateCodexBeforeRun')
+      ? { updateCodexBeforeRun: draft.agentId === 'codex' && draft.updateCodexBeforeRun === true }
+      : {}),
+    ...(!current || draft.launchSetupPatch || edited('surface') || edited('extraAgentArgs')
+      ? launchSetup
+      : {})
+  }
+}
+
 export function automationCopyLaunchSetup(
   current: Automation | null,
   updates: AutomationUpdateInput,

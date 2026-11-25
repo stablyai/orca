@@ -168,6 +168,7 @@ export class RuntimeAutomationController {
           prompt: input.prompt,
           precheck: input.precheck,
           agentId: bot ? botAutomationAgent(botTarget, bot) : input.agentId,
+          updateCodexBeforeRun: input.updateCodexBeforeRun,
           extraAgentArgs: input.extraAgentArgs,
           launchSetupPatch: input.launchSetupPatch,
           runContext: input.runContext,

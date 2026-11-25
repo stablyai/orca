@@ -191,6 +191,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       sessionOptions?: Readonly<Record<string, SessionOptionValue>>
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
+      verifiedCodexProgram?: string
       /** Run now is the user's act; a scheduled run is background and a stopped WSL distro holds it. */
       wslUserAct?: true
       surfaceOwner?: false
@@ -221,6 +222,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
         startupPromptCarry: 'force-line',
         startupPromptDelivery: 'auto-submit',
         ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
+        ...(opts.verifiedCodexProgram ? { verifiedCodexProgram: opts.verifiedCodexProgram } : {}),
         title: opts.title,
         ...(opts.wslUserAct ? { wslUserAct: true } : {}),
         ...ownerSurfacing(opts.surfaceOwner !== false)

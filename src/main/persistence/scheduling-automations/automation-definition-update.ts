@@ -207,6 +207,11 @@ export function mergeAutomationUpdate(
   if (retainContexts && !Object.hasOwn(current, 'sourceContext')) {
     delete merged.sourceContext
   }
+  if (merged.agentId !== 'codex' || merged.bot || merged.updateCodexBeforeRun !== true) {
+    delete merged.updateCodexBeforeRun
+  } else {
+    merged.reuseSession = false
+  }
   applyAutomationSetupTrust(merged, definedUpdates, current)
   delete merged.launchSetup
   for (const key of ['surface', 'launchPreferences', 'agentArgs', 'extraAgentArgs'] as const) {
