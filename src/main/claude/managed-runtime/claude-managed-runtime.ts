@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { getMainHttpClient } from '../../network/http-client'
+import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import type { ManagedRuntime, ManagedRuntimePin } from '../../node-runtime/managed-runtime-release'
 import { followLatestRelease } from '../../node-runtime/managed-runtime-latest-release'
 import { requireRuntimeAnswersVersion } from '../../node-runtime/managed-runtime-version-check'
@@ -39,15 +40,18 @@ export function claudeManagedPlatform(
   return platform === 'linux' ? `linux-${arch}${musl ? '-musl' : ''}` : null
 }
 
+const CLAUDE_UPDATE_CHANNELS = ['latest', 'stable'] as const
+type ClaudeUpdateChannel = (typeof CLAUDE_UPDATE_CHANNELS)[number]
+
 const channelSettingsSchema = z.object({
-  autoUpdatesChannel: z.enum(['latest', 'stable']).optional()
+  autoUpdatesChannel: z.enum(CLAUDE_UPDATE_CHANNELS).optional()
 })
 
 /** Claude's own `autoUpdatesChannel`; managed settings win over the user's, and Claude defaults to latest. */
 export async function claudeUpdateChannel(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
-): Promise<'latest' | 'stable'> {
+): Promise<ClaudeUpdateChannel> {
   const configDir = env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
   const managed =
     platform === 'darwin'
@@ -68,17 +72,25 @@ export async function claudeUpdateChannel(
   return channels.findLast((channel) => channel !== undefined) ?? 'latest'
 }
 
+export async function fetchClaudeChannelVersion(
+  channel: ClaudeUpdateChannel,
+  signal?: AbortSignal
+): Promise<string> {
+  const response = await getMainHttpClient().fetch(`${RELEASES}/${channel}`, { signal })
+  if (!response.ok) {
+    await cancelUnreadResponseBody(response)
+    throw new Error(`Claude release lookup failed (${response.status})`)
+  }
+  return (await response.text()).trim()
+}
+
 async function fetchLatestPin(signal?: AbortSignal): Promise<ManagedRuntimePin | null> {
   const platform = claudeManagedPlatform()
   if (!platform) {
     return null
   }
   const { fetch } = getMainHttpClient()
-  const versionResponse = await fetch(`${RELEASES}/${await claudeUpdateChannel()}`, { signal })
-  if (!versionResponse.ok) {
-    throw new Error(`Claude release lookup failed (${versionResponse.status})`)
-  }
-  const version = (await versionResponse.text()).trim()
+  const version = await fetchClaudeChannelVersion(await claudeUpdateChannel(), signal)
   const manifestResponse = await fetch(`${RELEASES}/${encodeURIComponent(version)}/manifest.json`, {
     signal
   })

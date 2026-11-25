@@ -2,11 +2,15 @@
 
 import { z } from 'zod'
 import { getMainHttpClient } from '../network/http-client'
-import { CLAUDE_MANAGED_RUNTIME } from '../claude/managed-runtime/claude-managed-runtime'
+import {
+  CLAUDE_MANAGED_RUNTIME,
+  fetchClaudeChannelVersion
+} from '../claude/managed-runtime/claude-managed-runtime'
 
 /** Where an agent publishes the release its own update command installs. */
 export type AgentCliReleaseSource =
-  | { kind: 'claude' }
+  /** Without `channel`, the channel the user's Claude follows. */
+  | { kind: 'claude'; channel?: 'stable' }
   | { kind: 'npm'; package: string }
   | { kind: 'github'; repo: string; tagPrefix: string }
   | { kind: 'acp-registry'; id: string }
@@ -111,10 +115,25 @@ async function refreshClaudeLatest(): Promise<string | null> {
   return CLAUDE_MANAGED_RUNTIME.pin()?.version ?? null
 }
 
+async function claudeChannelLatest(channel: 'stable'): Promise<string> {
+  const version = await fetchClaudeChannelVersion(
+    channel,
+    AbortSignal.timeout(RELEASE_LOOKUP_TIMEOUT_MS)
+  )
+  if (!VERSION.test(version)) {
+    throw new Error(`Claude's ${channel} channel serves an unexpected version ${version}`)
+  }
+  return version
+}
+
 export async function latestAgentCliRelease(source: AgentCliReleaseSource): Promise<string | null> {
   switch (source.kind) {
-    case 'claude':
-      return refreshClaudeLatest()
+    case 'claude': {
+      const { channel } = source
+      return channel
+        ? lookUpVersion(`Claude ${channel}`, () => claudeChannelLatest(channel))
+        : refreshClaudeLatest()
+    }
     case 'npm':
       return lookUpVersion(`npm ${source.package}`, () => npmLatest(source.package))
     case 'github':

@@ -21,7 +21,11 @@ import {
 } from './agent-cli-own-install'
 import { latestAgentCliRelease } from './agent-cli-latest-release'
 import { readModelsNeedingCliUpdate } from './agent-cli-model-requirements'
-import { agentCliUpdateDefinition, type AgentCliUpdatePlan } from './agent-cli-update-agents'
+import {
+  agentCliUpdateDefinition,
+  agentCliUpdatePlan,
+  type AgentCliUpdatePlan
+} from './agent-cli-update-agents'
 import { checkThroughGate, updateThroughGate } from './agent-cli-update-gate'
 import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
 
@@ -83,16 +87,16 @@ async function installedVersion(
   return version
 }
 
-function updatePlan(agent: AgentCliUpdateAgent, cli: OwnAgentCli, version: string) {
-  return agentCliUpdateDefinition(agent).plan(version, cli.realPath)
-}
-
 function planCommand(cli: OwnAgentCli, plan: AgentCliUpdatePlan): string {
   return plan.runnable ? [cli.command, ...plan.args].join(' ') : plan.command
 }
 
-function latestRelease(agent: AgentCliUpdateAgent, installed: string): Promise<string | null> {
-  return latestAgentCliRelease(agentCliUpdateDefinition(agent).latest(installed))
+function latestRelease(
+  agent: AgentCliUpdateAgent,
+  installed: string,
+  installPath: string
+): Promise<string | null> {
+  return latestAgentCliRelease(agentCliUpdateDefinition(agent).latest(installed, installPath))
 }
 
 async function behindRelease(
@@ -102,7 +106,7 @@ async function behindRelease(
 ): Promise<{ version: string; latest: string } | null> {
   const version = await installedVersion(agent, cli, recheck)
   // Which release line is latest can depend on the installed major.
-  const latest = version ? await latestRelease(agent, version) : null
+  const latest = version ? await latestRelease(agent, version, cli.installPath) : null
   return version && latest && compareAppVersions(version, latest) < 0 ? { version, latest } : null
 }
 
@@ -123,7 +127,7 @@ async function readAgentCliUpdate(
     return null
   }
   const { version, latest } = behind
-  const plan = updatePlan(agent, cli, version)
+  const plan = agentCliUpdatePlan(agent, version, cli.installPath)
   const models = await readModelsNeedingCliUpdate(agent, version, latest)
   return {
     agent,
@@ -209,7 +213,7 @@ async function updateAgentCli(
   }
   const version = await installedVersion(agent, cli)
   // An unread version compares equal to every gate, so the agent's own update still runs.
-  const plan = updatePlan(agent, cli, version ?? '')
+  const plan = agentCliUpdatePlan(agent, version ?? '', cli.installPath)
   if (!plan.runnable) {
     return { ok: false, output: `Run this to update:\n${plan.command}` }
   }
@@ -242,7 +246,7 @@ async function updateAgentCli(
     .map((text) => text.trim())
     .filter(Boolean)
     .join('\n')
-  const latest = after ? await latestRelease(agent, after) : null
+  const latest = after ? await latestRelease(agent, after, updated.installPath) : null
   // The version decides when readable: a failed run that leaves the CLI at the latest release is done
   // (e.g. a wrapper around a desktop app's CLI), and a clean exit still behind it (e.g. Homebrew) is not.
   const current =

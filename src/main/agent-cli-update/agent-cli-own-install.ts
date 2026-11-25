@@ -14,14 +14,15 @@ import {
 } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
+import { packageShimTarget } from './agent-cli-package-install'
 
 export type AgentCliUpdateSettings = LaunchEnvironmentSettings &
   Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>>
 
 export type OwnAgentCli = {
   program: string
-  /** The installed file behind any PATH link, which says how it was installed. */
-  realPath: string
+  /** The installed file behind any PATH link or package manager's shim, which says how it was installed. */
+  installPath: string
   env: Record<string, string>
   /** The command name the user types. */
   command: string
@@ -68,7 +69,7 @@ export async function findOwnAgentCli(
   }
   return {
     program,
-    realPath,
+    installPath: (await packageShimTarget(realPath)) ?? realPath,
     env,
     command,
     version: { prefixArgs: spec?.versionArgs ?? [], env: { ...env, ...spec?.env } }
