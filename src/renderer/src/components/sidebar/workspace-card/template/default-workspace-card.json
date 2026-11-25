@@ -54,7 +54,7 @@
               "children": [
                 {
                   "el": "RepoChip",
-                  "when": "vars.pinnedRepo",
+                  "when": "vars.pinnedRepo || vars.inlineRepo",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
                 {
@@ -65,11 +65,6 @@
                 {
                   "el": "RuntimeHostMark",
                   "when": "host.kind == 'runtime' && place.lineHostLabel == null"
-                },
-                {
-                  "el": "RepoChip",
-                  "when": "vars.inlineRepo",
-                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
                 { "el": "LineAgents", "when": "place.compactLine" },
                 { "el": "LineAgentMore", "when": "place.compactLine" },

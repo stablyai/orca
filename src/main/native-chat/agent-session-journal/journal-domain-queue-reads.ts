@@ -23,6 +23,41 @@ function liveCards(db: Database.Database, target: Target): QueuedMessageRow[] {
     .map((row) => readJournalDomainQueueRow(target.sessionId, row).card)
 }
 
+/** A card a failed send returned, with whether an editor holds it and when its send was taken. */
+export type JournalReturnedCard = {
+  card: QueuedMessageRow
+  editHeld: boolean
+  /** Absent on a card whose send attempt is gone. */
+  submittedAt?: number
+}
+
+/** The returned cards in queue order, in one read on the queue's order index. */
+export function readJournalDomainReturnedCards(
+  db: Database.Database,
+  target: Target,
+  now: number
+): JournalReturnedCard[] {
+  return db
+    .prepare(`SELECT card.message_id, card.revision, card.state, card.position, card.payload_json,
+      EXISTS(SELECT 1 FROM journal_edit_leases AS lease
+        WHERE lease.session_id=card.session_id AND lease.epoch=card.epoch
+          AND lease.message_id=card.message_id AND lease.card_revision=card.revision
+          AND lease.expires_at>?) AS edit_held,
+      (SELECT attempt.submitted_at FROM journal_submission_attempts AS attempt
+        WHERE attempt.session_id=card.session_id AND attempt.epoch=card.epoch
+          AND attempt.message_id=card.message_id AND attempt.current=1) AS submitted_at
+    FROM journal_queue_cards AS card INDEXED BY journal_queue_order
+    WHERE card.session_id=? AND card.epoch=? AND card.state IN ('waiting','returned')
+      AND card.state='returned'
+    ORDER BY card.position, card.message_id`)
+    .all(now, target.sessionId, target.epoch)
+    .map((row) => ({
+      card: readJournalDomainQueueRow(target.sessionId, row).card,
+      editHeld: Boolean(row.edit_held),
+      ...(typeof row.submitted_at === 'number' ? { submittedAt: row.submitted_at } : {})
+    }))
+}
+
 /** Dispatched cards whose current attempt is still owed delivery, from the finite recovery index. */
 function owedDispatchedCards(
   db: Database.Database,

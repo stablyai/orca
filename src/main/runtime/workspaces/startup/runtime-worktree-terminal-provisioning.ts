@@ -61,7 +61,7 @@ export type WorktreeTerminalProvisioningArgs = TerminalSurfacing & {
   setupCommandPlatform: 'windows' | 'posix'
   observeSetupCompletion?: boolean
   // Why: setup and startup must use the same wrapper when startup waits for setup.
-  wrappedSetupCommand?: string
+  wrappedSetup?: { command: string; completionToken?: string }
 }
 
 export async function createWorktreeDefaultTabTerminals(
@@ -236,18 +236,23 @@ export async function provisionWorktreeTerminals(
       await host.createTerminal(args.worktreeSelector, surfacing)
     }
     if (args.setup) {
-      const completionToken =
-        args.observeSetupCompletion && !args.wrappedSetupCommand ? randomUUID() : null
-      const observed = completionToken
-        ? buildObservedSetupCommand(
-            args.setup.runnerScriptPath,
-            args.setupCommandPlatform,
-            completionToken,
-            args.setup.shell
-          )
-        : null
+      // A wrapped setup prints the token its wrapper was built with.
+      const completionToken = !args.observeSetupCompletion
+        ? null
+        : args.wrappedSetup
+          ? (args.wrappedSetup.completionToken ?? null)
+          : randomUUID()
+      const observed =
+        completionToken && !args.wrappedSetup
+          ? buildObservedSetupCommand(
+              args.setup.runnerScriptPath,
+              args.setupCommandPlatform,
+              completionToken,
+              args.setup.shell
+            )
+          : null
       const command =
-        args.wrappedSetupCommand ??
+        args.wrappedSetup?.command ??
         observed?.command ??
         buildSetupRunnerCommand(
           args.setup.runnerScriptPath,

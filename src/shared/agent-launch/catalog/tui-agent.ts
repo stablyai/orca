@@ -12,7 +12,6 @@ export type TuiAgent =
   | 'omp' // OMP (omp.sh)
   | 'qoder'
   | 'qoder-cn' // Qoder CLI China
-  | 'gemini'
   | 'antigravity'
   | 'aider'
   | 'goose'

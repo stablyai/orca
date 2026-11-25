@@ -166,14 +166,6 @@ export function buildSkillDiscoverySources(
     ...providerHomeSources(home, pathApi, providerRootOverrides, !args.pathApi),
     // Why: discovery-only agent folders; installs for these agents go to the canonical root.
     source(
-      'home-gemini',
-      'Gemini CLI home',
-      pathApi.join(home, '.gemini', 'skills'),
-      'home',
-      ['agent-skills'],
-      'gemini'
-    ),
-    source(
       'home-opencode',
       'OpenCode home',
       pathApi.join(home, '.config', 'opencode', 'skills'),
@@ -239,6 +231,15 @@ export function buildSkillDiscoverySources(
       'bundled',
       ['agent-skills'],
       'cursor'
+    ),
+    // Why: agy reads `~/.gemini/skills` too (chat homes link it), so skills there stay manageable.
+    source(
+      'home-gemini',
+      'Antigravity home',
+      pathApi.join(home, '.gemini', 'skills'),
+      'home',
+      ['agent-skills'],
+      'antigravity'
     ),
     // Why: Antigravity also reads its CLI's skill folder beside the `config/skills` install root.
     source(

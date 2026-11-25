@@ -1213,7 +1213,7 @@
       "pairingInvalid": "配對已失效，請重新與電腦配對",
       "rePairDetail": "重新與電腦配對",
       "reconnecting": "正在重新連線…",
-      "relayAccessExpired": "{{host}} 的 Relay 存取權已到期",
+      "relayAccessRefused": "Relay 拒絕了對 {{host}} 的存取",
       "relayConnectFailed": "無法透過 Relay 連線",
       "relayUnreachable": "無法連上 Relay",
       "signInDetail": "在電腦上登入 Orca 即可重新連線",
@@ -5114,7 +5114,13 @@
         "github": "議題和 PR 中的提及與事件",
         "slack": "訊息和提及",
         "linear": "指派的議題和提及",
-        "google": "以你的身分使用 Gmail、日曆和雲端硬碟"
+        "google": "以你的身分使用 Gmail、日曆和雲端硬碟",
+        "clickup": "管理任務、清單和文件",
+        "airtable": "查詢及編輯 Base、資料表和記錄",
+        "todoist": "新增、排序和完成任務",
+        "zapier": "在你於 Zapier 設定的應用程式中執行動作",
+        "granola": "搜尋會議筆記和逐字稿",
+        "intercom": "搜尋對話、聯絡人和文章"
       },
       "composioLine": {
         "outlook": "郵件、行事曆和聯絡人",

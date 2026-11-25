@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { useRouter } from 'expo-router'
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpResult
@@ -21,6 +22,8 @@ export type MobileStructuredMcpPanel = {
   request: AgentSessionMcpRequest
   /** Changes when `/mcp` runs again or the agent starts or stops, so the tray re-reads. */
   refreshKey: string
+  /** Opens the host's MCP servers page; null on a host without one. */
+  manage: (() => void) | null
 }
 
 type McpCommands = Pick<StructuredAgentSessionComposerOptions, 'openMcpPanel'>
@@ -29,7 +32,7 @@ type McpCommands = Pick<StructuredAgentSessionComposerOptions, 'openMcpPanel'>
 export function useMobileStructuredMcpPanel<TCommands extends object>(
   session: Pick<
     MobileStructuredAgentSessionArgs,
-    'client' | 'sessionId' | 'agent' | 'hostSupport' | 'enabled'
+    'client' | 'sessionId' | 'agent' | 'hostSupport' | 'enabled' | 'hostId'
   >,
   sessionKey: string,
   commands: TCommands
@@ -70,6 +73,14 @@ export function useMobileStructuredMcpPanel<TCommands extends object>(
     setOpens((count) => count + 1)
   }, [sessionKey])
   const close = useCallback(() => setOpenFor(null), [])
+  const router = useRouter()
+  const { hostId } = session
+  // Only a host whose MCP servers are on has a page for them.
+  const hostListsServers = session.hostSupport?.mcpServers === true
+  const manage = useCallback(() => {
+    setOpenFor(null)
+    router.push(`/h/${encodeURIComponent(hostId ?? '')}/mcp`)
+  }, [hostId, router])
   const request = useCallback(
     async (operation: AgentSessionMcpOperation): Promise<AgentSessionMcpResult> => {
       if (!client || !sessionId) {
@@ -87,9 +98,11 @@ export function useMobileStructuredMcpPanel<TCommands extends object>(
     [client, sessionId]
   )
   const refreshKey = `${opens}:${phase}`
+  const canManage = hostListsServers && !!hostId
   const mcpPanel = useMemo(
-    () => (offered ? { open, close, request, refreshKey } : null),
-    [close, offered, open, refreshKey, request]
+    () =>
+      offered ? { open, close, request, refreshKey, manage: canManage ? manage : null } : null,
+    [canManage, close, manage, offered, open, refreshKey, request]
   )
   const mcpCommands = useMemo(
     () => ({ ...commands, openMcpPanel: offered ? show : undefined }),
