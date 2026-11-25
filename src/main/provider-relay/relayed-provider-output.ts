@@ -54,6 +54,8 @@ export class RelayedProviderOutput {
   private keptFrom: number | null = null
   /** A forced ack released lines through here; a floor at or below it was already given up. */
   private releasedThrough = 0
+  /** The floor gave up an open item; held until an ack carrying the cut succeeds. */
+  private pendingCut = false
   /** Requests already handed on, so a replay or reattach never asks the user twice. */
   private readonly deliveredPending = new Set<number>()
   private preambleArrived: (() => void) | null = null
@@ -302,14 +304,15 @@ export class RelayedProviderOutput {
           return
         }
         // Giving up an open kept span: the next attach must know its replay starts inside an item.
-        const floorCut = this.options.ackFloor?.tookCut?.() === true
-        const cut = floorCut || (force && keepFrom === null && this.keptFrom !== null)
+        this.pendingCut ||= this.options.ackFloor?.tookCut?.() === true
+        const cut = this.pendingCut || (force && keepFrom === null && this.keptFrom !== null)
         await (cut
           ? this.options.ack(target, keepFrom ?? undefined, true)
           : keepFrom !== null
             ? this.options.ack(target, keepFrom)
             : this.options.ack(target))
         this.ackedSeq = Math.max(this.ackedSeq, target)
+        this.pendingCut = false
         this.keptFrom = keepFrom
         if (force && keepFrom === null) {
           this.releasedThrough = Math.max(this.releasedThrough, target)

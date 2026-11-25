@@ -112,6 +112,39 @@ describe('relayed provider output', () => {
     expect(acks).toEqual(['12 keep 11', '12 cut'])
   })
 
+  it('keeps a cut the ack floor reported until an ack carrying it succeeds', async () => {
+    const sent: string[] = []
+    let fail = true
+    let cutOnce = true
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      durable: async () => true,
+      ackFloor: {
+        observe: () => {},
+        floor: () => 2,
+        tookCut: () => {
+          const took = cutOnce
+          cutOnce = false
+          return took
+        }
+      },
+      ack: async (seq, keepFrom, cut) => {
+        sent.push(`${seq} keep ${keepFrom}${cut ? ' cut' : ''}`)
+        if (fail) {
+          fail = false
+          throw new Error('daemon busy')
+        }
+      }
+    })
+    output.restartAt(0)
+    output.line('relayData', 1, 'one')
+    output.line('relayData', 2, 'two')
+    await output.settle()
+    output.line('relayData', 3, 'three')
+    await output.settle()
+    expect(sent).toEqual(['2 keep 2 cut', '3 keep 2 cut'])
+  })
+
   it('never acks a line whose streamed text is only in memory, unless the ask saved it first', async () => {
     const { output, acks, releaseDurable, journal } = rig()
     output.restartAt(0)
