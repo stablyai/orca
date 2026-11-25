@@ -4,18 +4,24 @@
 // the first open line. Answers, picked or
 // typed, are held on this device (the app's draft store, keyed by `heldScope`) and post as one comment
 // when the last line is answered, so the agent wakes once, or with "send anyway", which skips the
-// lines still unanswered: they close, and the agent's mail names them. An
-// answer with files or skills, and any other comment sent sooner, posts the held answers with it, so
-// none is left only on this device.
+// lines still unanswered: they close, and the agent's mail names them. A held answer keeps the photos,
+// files and skills it was sent with (./bot-item-held-answers); any other comment sent sooner posts the
+// held answers with it, so none is left only on this device.
 import type * as React from 'react'
 import type { BotItem, BotItemCommentSkill, BotItemEvent } from './bot-items'
 import type { BotItemQuestionShape } from './bot-item-ask'
+import { botItemAnswerWords, botItemNamedAnswers } from './bot-item-answer-lines'
 import {
-  botItemAnswersText,
-  botItemAnswerWords,
-  botItemHeldAnswersText,
-  botItemNamedAnswers
-} from './bot-item-answer-lines'
+  botItemHeldAnswer,
+  botItemHeldAnswersComment,
+  botItemHeldAnswersOverLimit,
+  readBotItemHeldAnswers,
+  writeBotItemHeldAnswers,
+  type BotItemHeldAnswer,
+  type BotItemHeldAnswers,
+  type BotItemHeldAnswersLimit,
+  type BotItemHeldComment
+} from './bot-item-held-answers'
 import {
   botItemAskLine,
   botItemWaitingAsk,
@@ -83,7 +89,7 @@ export type BotItemQuestionSteps = {
   askId: string
   shape: BotItemQuestionShape
   /** Per line, the answer held here until the set posts. */
-  held: readonly (string | null)[]
+  held: BotItemHeldAnswers
   /** The line shown, by its index in the ask. */
   current: number
   /** The lines to step through: those no comment answered yet, or only by order while held here. */
@@ -148,13 +154,14 @@ export type BotItemQuestionStepsState = {
    *  when its event isn't read yet, and the lines it leaves unanswered, closing them. */
   quick: (text: string, answering?: { askId: string; skipped: readonly number[] }) => void
   /** The comment box's send: it answers only the question its "Replying to" names; with none named
-   *  (its × closed), the comment answers nothing. */
+   *  (its × closed), the comment answers nothing. A limit the held answers would pass together
+   *  refuses it, and the box keeps it. */
   fromBox: (
     text: string,
     paths: readonly string[],
     replyingTo: string | null,
     skills?: readonly BotItemCommentSkill[]
-  ) => void
+  ) => BotItemHeldAnswersLimit | null
   /** What the comment box replies to: with several questions, the line the step is on. */
   waitingLine: BotItemWaitingLine | null
 }
@@ -184,15 +191,15 @@ export function createBotItemQuestionStepsHooks(
     return useCallback((...args: A) => latest.current(...args), [])
   }
 
-  /** An ask's answers held on this device, per question line, stored as the comment they post as. */
+  /** An ask's answers held on this device, per question line. */
   function useBotItemHeldAnswers(
     scopeKey: string,
     shape: BotItemQuestionShape
-  ): { held: (string | null)[]; hold: (answers: readonly (string | null)[]) => void } {
+  ): { held: (BotItemHeldAnswer | null)[]; hold: (answers: BotItemHeldAnswers) => void } {
     const { draft, setDraft } = useHeldDraft(scopeKey)
-    const held = useMemo(() => botItemNamedAnswers(shape, draft), [shape, draft])
+    const held = useMemo(() => readBotItemHeldAnswers(shape, draft), [shape, draft])
     const hold = useCallback(
-      (answers: readonly (string | null)[]) => setDraft(botItemHeldAnswersText(shape, answers)),
+      (answers: BotItemHeldAnswers) => setDraft(writeBotItemHeldAnswers(shape, answers)),
       [setDraft, shape]
     )
     return { held, hold }
@@ -241,63 +248,68 @@ export function createBotItemQuestionStepsHooks(
     // A line another client answered meanwhile keeps that answer; its held one is dropped.
     const kept = shape.decisions.map((_, at) => (lines.includes(at) ? (held[at] ?? null) : null))
     const post = (
-      answers: (string | null)[],
-      text: string,
-      paths: readonly string[],
-      skills?: readonly BotItemCommentSkill[],
+      { text, paths, skills, answers, rideAlongText }: BotItemHeldComment,
       skipped?: readonly number[]
     ): void => {
       hold([])
-      const intent = { askId, shape, answers }
+      const intent = { askId, shape, answers, rideAlongText }
       setSent({ askId, text, answers, intent })
       send(text, paths, askId, undefined, skills, skipped, intent)
     }
-    // Typed words wait like a quick reply; files and skills aren't held here, so they post the answers so far.
-    const settle = (
-      index: number,
-      words: string,
-      fromBoxPaths?: readonly string[],
-      skills?: readonly BotItemCommentSkill[]
-    ): void => {
-      const next = kept.map((held_, at) => (at === index ? words : held_))
-      setChosen(null)
-      if (
-        (fromBoxPaths?.length ?? 0) > 0 ||
-        (skills?.length ?? 0) > 0 ||
-        lines.every((at) => next[at])
-      ) {
-        post(next, botItemAnswersText(shape, next), fromBoxPaths ?? [], skills)
-        return
+    // An answer waits like a quick reply, its photos, files and skills too, until the last line has
+    // one; what one comment can't carry with the rest is refused.
+    const settle = (index: number, answer: BotItemHeldAnswer): BotItemHeldAnswersLimit | null => {
+      const next = kept.map((held_, at) => (at === index ? answer : held_))
+      const over = botItemHeldAnswersOverLimit(next)
+      if (over) {
+        return over
       }
-      hold(next)
+      setChosen(null)
+      if (lines.every((at) => next[at])) {
+        post(botItemHeldAnswersComment(shape, next))
+      } else {
+        hold(next)
+      }
+      return null
     }
-    const answer = useLatest((index: number, words: string) => settle(index, words))
+    const answer = useLatest((index: number, words: string) => {
+      settle(index, botItemHeldAnswer(words))
+    })
     const fromBox = useLatest(
       (
         text: string,
         paths: readonly string[],
         replyingTo: string | null,
         skills?: readonly BotItemCommentSkill[]
-      ) => {
-        target.release()
+      ): BotItemHeldAnswersLimit | null => {
         const line = lines.find((index) => replyingTo === `${askId}:${index}`)
+        const answer = botItemHeldAnswer(text, paths, skills)
         if (!waiting) {
+          target.release()
           // Naming the question it answers, so a reply that lands after the agent asked anew is
           // refused; else a comment of its own, never left for the host to take as an answer.
           const answers =
             oneLine !== null && replyingTo === oneLine.id ? oneLine.eventId : undefined
           send(text, paths, answers, answers === undefined, skills)
         } else if (line !== undefined) {
-          settle(line, text, paths, skills)
-        } else {
-          // Held answers name their lines; the comment rides along answering none.
-          const answered = botItemAnswersText(shape, kept)
-          if (answered) {
-            post(kept, `${answered}\n${text}`, paths, skills)
-          } else {
-            send(text, paths, undefined, true, skills)
+          const over = settle(line, answer)
+          if (!over) {
+            target.release()
           }
+          return over
+        } else if (kept.some(Boolean)) {
+          // Held answers name their lines; the comment rides along answering none.
+          const over = botItemHeldAnswersOverLimit([...kept, answer])
+          if (over) {
+            return over
+          }
+          target.release()
+          post(botItemHeldAnswersComment(shape, kept, answer))
+        } else {
+          target.release()
+          send(text, paths, undefined, true, skills)
         }
+        return null
       }
     )
     const go = useLatest((index: number) => {
@@ -309,14 +321,10 @@ export function createBotItemQuestionStepsHooks(
     })
     const heldCount = kept.filter(Boolean).length
     const sendHeld = useLatest(() => {
-      const answered = botItemAnswersText(shape, kept)
-      if (answered) {
+      if (kept.some(Boolean)) {
         setChosen(null)
         post(
-          kept,
-          answered,
-          [],
-          undefined,
+          botItemHeldAnswersComment(shape, kept),
           lines.filter((at) => !kept[at])
         )
       }

@@ -242,31 +242,9 @@ export function botItemWaitEntryKey(
   return last?.kind === 'event' && last.event.data.to === 'waiting' ? last.key : null
 }
 
-/** The open question, or the status entry that put the item in Needs you. */
 /** The ask the item waits on now, as its comment entry: where a replaced ask leads. */
 export function botItemLiveAskKey(entries: readonly BotItemActivityEntry[]): string | null {
   return (
     entries.find((entry) => entry.kind === 'comment' && entry.waiting && !entry.onAsk)?.key ?? null
   )
-}
-
-export function botItemNeedsYouEntryKey(
-  item: Pick<BotItem, 'question' | 'waitingAsk'>,
-  entries: readonly BotItemActivityEntry[]
-): string | null {
-  const questionId = item.waitingAsk ?? item.question?.eventId
-  if (questionId !== undefined) {
-    return (
-      entries.find((entry) => entry.key === questionId && entry.kind === 'comment' && !entry.onAsk)
-        ?.key ?? null
-    )
-  }
-  const target = entries.findLast(
-    (entry) =>
-      (entry.kind === 'comment' && entry.waiting && !entry.onAsk) ||
-      (entry.kind === 'event' &&
-        ((entry.event.kind === 'status' && entry.event.data.to === 'needs_you') ||
-          (entry.event.kind === 'made' && entry.event.data.status === 'needs_you')))
-  )
-  return target?.key ?? null
 }

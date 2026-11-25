@@ -952,6 +952,11 @@
       "keywordDelay": "délai",
       "keywordCooldown": "attente",
       "keywordSecurity": "sécurité"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "Bloqué par les paramètres Claude de votre organisation"
+      }
     }
   },
   "menu": {
@@ -25779,10 +25784,7 @@
         "lastItem": "Dernier élément",
         "previous": "Élément précédent",
         "next": "Élément suivant",
-        "linkCount": "{{count}} liens",
-        "reply": "Répondre",
-        "replyAbove": "Répondre, plus haut",
-        "replyBelow": "Répondre, plus bas"
+        "subWhere": "Élément {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "a lié {{links}}",
@@ -25820,7 +25822,9 @@
         "notSentYet": "pas encore envoyée",
         "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez.",
         "replacedByNewer": "Remplacée par une question plus récente",
-        "skipped": "Ignorées"
+        "skipped": "Ignorées",
+        "heldImagesLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} images. Envoyez d’abord les réponses gardées jusqu’ici, ou retirez-en quelques-unes.",
+        "heldSkillsLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} skills. Envoyez d’abord les réponses gardées jusqu’ici, ou retirez-en quelques-uns."
       },
       "readMoreClosedFailed": "Impossible de lire plus d’éléments fermés"
     },

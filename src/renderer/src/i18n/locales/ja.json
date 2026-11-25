@@ -388,7 +388,7 @@
         "importInvalid": "読み取れない行 {{count}} 件",
         "importUndecryptable": "{{count}} 件はブラウザで保護されているため、そのブラウザから CSV をエクスポートしてください",
         "imported": "{{count}} 件のパスワードをインポートしました",
-        "deleteAllConfirmDescription": "{{profile}} プロファイルに保存されているすべてのパスワードが完全に削除されます。この操作は元に戻せません。",
+        "deleteAllConfirmDescription": "{{profile}} プロファイルの保存済みパスワード、メモ、保存しないサイトがすべて完全に削除されます。この操作は元に戻せません。",
         "deletedAll": "パスワードデータを削除しました",
         "form": {
           "invalidSite": "example.com のようなウェブサイトのアドレスを入力してください。",
@@ -658,6 +658,7 @@
           "spaces": "スペース",
           "link": "リンク",
           "tabs": "タブ",
+          "tab_characters": "タブ文字",
           "trim": "トリム",
           "root": "ルート",
           "word_wrap": "行の折り返し",
@@ -932,6 +933,11 @@
     },
     "artifacts": {
       "teamDisabled": "アーティファクトの共有はチームによってオフにされています。"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "組織の Claude 設定によりブロックされています"
+      }
     }
   },
   "menu": {
@@ -26342,10 +26348,7 @@
         "lastItem": "最後の項目",
         "previous": "前の項目",
         "next": "次の項目",
-        "linkCount": "リンク{{count}}件",
-        "reply": "返信",
-        "replyAbove": "上の質問に返信",
-        "replyBelow": "下の質問に返信"
+        "subWhere": "項目 {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "が {{links}} をリンクしました",
@@ -26383,7 +26386,9 @@
         "notSentYet": "まだ送信されていません",
         "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
         "replacedByNewer": "新しい質問に置き換えられました",
-        "skipped": "スキップ済み"
+        "skipped": "スキップ済み",
+        "heldImagesLimit": "回答は1件のコメントとして送信され、画像は{{max}}枚までです。保留中の回答を先に送信するか、いくつか削除してください。",
+        "heldSkillsLimit": "回答は1件のコメントとして送信され、スキルは{{max}}個までです。保留中の回答を先に送信するか、いくつか削除してください。"
       },
       "readMoreClosedFailed": "クローズ済みの項目をさらに読み込めませんでした"
     },
