@@ -7,6 +7,7 @@ import {
   isSharedBotNewChatId,
   newSharedBotChatId,
   SHARED_BOT_HOST_ERRORS,
+  SHARED_HOSTS_HOLD_WHILE_AWAY,
   type SharedBotHeldState,
   type SharedBotHeldView
 } from '../../../shared/bots/shared-bot-hosts'
@@ -183,7 +184,10 @@ export class SharedBotHeldSends {
     if (method === 'bots.session.start') {
       // A start naming a placeholder is its swap to the real chat: only the host answers it, so a
       // link that dropped meanwhile leaves that placeholder in place rather than minting another.
-      return link !== 'live' && entry.hostKey && !NewChatParams.safeParse(params).success
+      return SHARED_HOSTS_HOLD_WHILE_AWAY &&
+        link !== 'live' &&
+        entry.hostKey &&
+        !NewChatParams.safeParse(params).success
         ? {
             id: method,
             ok: true,

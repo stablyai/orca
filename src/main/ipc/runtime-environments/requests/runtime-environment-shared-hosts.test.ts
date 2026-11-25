@@ -4,7 +4,10 @@ import type { DocumentDeliveryEndpoint } from '../../../../shared/backend/docume
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SharedBotHostView } from '../../../../shared/bots/shared-bot-hosts'
+import {
+  SHARED_HOSTS_HOLD_WHILE_AWAY,
+  type SharedBotHostView
+} from '../../../../shared/bots/shared-bot-hosts'
 import {
   newSharedBotHostEntry,
   SharedBotHostStore
@@ -38,6 +41,9 @@ import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { registerRuntimeEnvironmentPassiveHandlers } from '../connectivity/runtime-environment-connectivity-handlers'
 import { subscribeRuntimeEnvironmentForDocument } from '../subscriptions/runtime-environment-document-subscription'
 import type { RetainedRemoteRuntimeSubscription } from '../subscriptions/runtime-environment-subscription-setup'
+
+// Held sends are off while SHARED_HOSTS_HOLD_WHILE_AWAY is: their tests run again when it is on.
+const heldIt = it.skipIf(!SHARED_HOSTS_HOLD_WHILE_AWAY)
 
 const SHARED = 'shared-env'
 const PAIRED = 'paired-env'
@@ -228,33 +234,41 @@ describe('a shared agent’s host status, as a paired server’s', () => {
   const offline = { id: 'status.get', ok: false, error: { code: 'offline', message: '' } } as const
 
   // The owner's computer away since this Orca launched: no live answer this run.
-  it('answers verified and ready while its owner is away and messages are held, with no earlier answer', async () => {
-    views = [{ ...view, link: 'offline' }]
-    hosts.call.mockResolvedValue(offline)
-    expect(await windowGetStatus(SHARED)).toMatchObject({ ok: true })
-    expect(sharedHostStatusSnapshots()[0]).toMatchObject({
-      transport: 'ready',
-      verification: 'verified'
-    })
-    hosts.call.mockImplementation(async (_environmentId: string, method: string) => answer(method))
-  })
+  heldIt(
+    'answers verified and ready while its owner is away and messages are held, with no earlier answer',
+    async () => {
+      views = [{ ...view, link: 'offline' }]
+      hosts.call.mockResolvedValue(offline)
+      expect(await windowGetStatus(SHARED)).toMatchObject({ ok: true })
+      expect(sharedHostStatusSnapshots()[0]).toMatchObject({
+        transport: 'ready',
+        verification: 'verified'
+      })
+      hosts.call.mockImplementation(async (_environmentId: string, method: string) =>
+        answer(method)
+      )
+    }
+  )
 
-  it('keeps the host’s last answer with its share, so it still reads that way after a restart', async () => {
-    await windowGetStatus(SHARED)
-    await store.flushed()
-    store = new SharedBotHostStore(storeDir)
-    await store.load()
-    routeSharedHostsThrough({
-      hosts,
-      methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }
-    })
-    views = [{ ...view, link: 'offline' }]
-    hosts.call.mockResolvedValueOnce(offline)
-    expect(await windowGetStatus(SHARED)).toMatchObject({
-      ok: true,
-      result: { runtimeId: SHARED }
-    })
-  })
+  heldIt(
+    'keeps the host’s last answer with its share, so it still reads that way after a restart',
+    async () => {
+      await windowGetStatus(SHARED)
+      await store.flushed()
+      store = new SharedBotHostStore(storeDir)
+      await store.load()
+      routeSharedHostsThrough({
+        hosts,
+        methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }
+      })
+      views = [{ ...view, link: 'offline' }]
+      hosts.call.mockResolvedValueOnce(offline)
+      expect(await windowGetStatus(SHARED)).toMatchObject({
+        ok: true,
+        result: { runtimeId: SHARED }
+      })
+    }
+  )
 
   it('reads disconnected with no held messages, and retires when the share goes', async () => {
     views = [{ ...view, link: 'offline', holds: false }]

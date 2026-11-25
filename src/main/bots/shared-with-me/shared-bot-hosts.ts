@@ -2,6 +2,7 @@
 // the window as hosts of their own. A message to a host that is away is held in Orca Cloud.
 import {
   SHARED_BOT_HOST_ERRORS,
+  SHARED_HOSTS_HOLD_WHILE_AWAY,
   type SharedBotHostsState
 } from '../../../shared/bots/shared-bot-hosts'
 import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/client/relay-client-platform'
@@ -108,8 +109,8 @@ export class SharedBotHosts {
               ownerName: entry.ownerName,
               homeWorkspaceId: entry.homeWorkspaceId ?? null,
               link: this.linkFor(entry).current(),
-              holds: entry.hostKey !== undefined,
-              held: this.held.views(entry)
+              holds: SHARED_HOSTS_HOLD_WHILE_AWAY && entry.hostKey !== undefined,
+              held: SHARED_HOSTS_HOLD_WHILE_AWAY ? this.held.views(entry) : []
             }
           ]
         : []
