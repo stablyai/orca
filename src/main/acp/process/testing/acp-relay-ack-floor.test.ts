@@ -173,6 +173,29 @@ describe('ACP relay ack floor', () => {
     expect(cutKeys.at(-1)).toEqual([JSON.stringify(['s', 'n0'])])
   })
 
+  it('keeps a message that streams between many others held, by when it last streamed', async () => {
+    const { acks, send, prompt } = rig()
+    prompt()
+    // Text resumes between 16 reasoning blocks: it streamed last, so an older block goes first.
+    for (let at = 0; at < 16; at += 1) {
+      await send(chunk('t', 'm1'), chunk('r', `m1:reasoning:${at}`))
+    }
+    expect(acks).toEqual([])
+  })
+
+  it('names the latest-streamed cut messages within the cap, however many cuts a prompt takes', async () => {
+    const { output, cutKeys, send, prompt } = rig()
+    prompt()
+    for (let at = 0; at < 40; at += 1) {
+      await send(chunk('t', `n${at}`))
+      await output.settle(true)
+    }
+    const named = cutKeys.at(-1) as string[]
+    expect(named).toHaveLength(16)
+    expect(named).toContain(JSON.stringify(['s', 'n39']))
+    expect(named).not.toContain(JSON.stringify(['s', 'n0']))
+  })
+
   it('acks every line handed on at a hand-off, saving streamed text first', async () => {
     // Streamed text is saved only on a forced flush; a plain settle can't ack past it.
     const { output, acks, send } = rig(async (force) => force)

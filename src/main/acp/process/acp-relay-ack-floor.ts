@@ -1,4 +1,5 @@
 import type { ProviderRelayAckFloor } from '../../provider-relay/relayed-provider-output'
+import { RELAY_CUT_KEYS_MAX } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import {
   ACP_MESSAGE_BOUNDARIES,
   ACP_MESSAGE_CHUNKS,
@@ -70,6 +71,8 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   private readonly superseded = new Map<string, Item & { seq: number }>()
   /** How far acks may have reached: past this, a line may not replay again. */
   private ackable = 0
+  /** Message ids by their latest chunk, least recent first: the ones streamed last are kept. */
+  private readonly recency = new Map<string, number>()
   /** Per session, the message its latest chunk named: only a new one ends the others. */
   private readonly current = new Map<string | undefined, string>()
 
@@ -104,6 +107,11 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
         this.numbered = true
       } else {
         this.givesIds = true
+        this.recency.delete(id)
+        this.recency.set(id, seq)
+        if (this.recency.size > 4 * MAX_OPEN_ITEMS) {
+          this.recency.delete(this.recency.keys().next().value ?? '')
+        }
         // Another message started: earlier ones of its session pause. One resuming its id after a
         // call or another message is held whole again, or cut once acks passed its start.
         if (this.current.get(session) !== id) {
@@ -193,17 +201,28 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
    *  continuation's re-keyed id names its original): the cut ones and, for a release through
    *  `through`, those open there. A reattach moves exactly these. */
   cutKeys(through?: number): string[] {
-    const keys = new Set<string>()
-    const name = (id: string, item: Item) =>
-      keys.add(JSON.stringify([item.session, id.replace(CONTINUED_ID, '')]))
-    this.cutMessages.forEach((item, id) => name(id, item))
-    this.pausedCuts.forEach((item, id) => name(id, item))
+    const named: [string, Item][] = [...this.cutMessages, ...this.pausedCuts]
     for (const [id, item] of this.messages) {
       if (through !== undefined && item.seq <= through) {
-        name(id, item)
+        named.push([id, item])
+      }
+    }
+    // Only a session's latest few can resume, so those streamed last are named, within the cap.
+    named.sort(([a], [b]) => this.lastChunk(b) - this.lastChunk(a))
+    const keys = new Set<string>()
+    const perSession = new Map<string | undefined, number>()
+    for (const [id, item] of named) {
+      const count = perSession.get(item.session) ?? 0
+      if (keys.size < RELAY_CUT_KEYS_MAX && count < HELD_PER_SESSION) {
+        perSession.set(item.session, count + 1)
+        keys.add(JSON.stringify([item.session, id.replace(CONTINUED_ID, '')]))
       }
     }
     return [...keys]
+  }
+
+  private lastChunk(id: string): number {
+    return this.recency.get(id) ?? this.messages.get(id)?.seq ?? 0
   }
 
   /** The call reported its final status. */
@@ -239,7 +258,7 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
       const held = [...this.messages].filter(
         ([id, item]) => id !== except && item.session === session
       )
-      held.sort(([, a], [, b]) => a.seq - b.seq)
+      held.sort(([a], [b]) => this.lastChunk(a) - this.lastChunk(b))
       for (const [id, item] of held.slice(0, Math.max(0, held.length - HELD_PER_SESSION + 1))) {
         this.messages.delete(id)
         if (this.superseded.size >= MAX_OPEN_ITEMS) {
