@@ -329,6 +329,30 @@ describe('the share guard', () => {
     expect(errorCode(await read(join(directory, 'elsewhere.png')))).toBe('not_found')
   })
 
+  // A composer chip's thumbnail reads the file back before any message claims it.
+  it('previews an unsent upload to the teammate’s own chat it was made for, and no one else’s', async () => {
+    const store = new AgentSessionAttachmentStore(join(directory, 'attachments'), {
+      hasSession: () => true,
+      claimingSessions: async () => []
+    })
+    setAgentSessionAttachmentStore(store, async () => {})
+    const stored = async (sessionId: string): Promise<string> => {
+      const callerKey = 'caller'
+      const { uploadId } = await store.startUpload({
+        callerKey,
+        sessionId,
+        name: 'a.png',
+        byteLength: 1
+      })
+      await store.appendChunk({ callerKey, uploadId, offset: 0, contentBase64: 'AA==' })
+      return (await store.commitUpload({ callerKey, uploadId })).path
+    }
+    const read = (path: string) => call('agentSessionAttachment.read', { path })
+    expect(errorCode(await read(await stored(ids.alicesChat)))).toBeNull()
+    expect(errorCode(await read(await stored(ids.ownersChat)))).toBe('not_found')
+    expect(errorCode(await read(await stored(ids.bobsChat)))).toBe('not_found')
+  })
+
   it('lets New chat reopen only an empty chat of the asker’s own', () => {
     const forOwner = emptyChatReusableBy(runtime, null)
     const forAlice = emptyChatReusableBy(runtime, SCOPE)

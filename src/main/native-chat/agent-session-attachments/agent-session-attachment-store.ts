@@ -27,6 +27,8 @@ import {
 const UPLOAD_MAX_CONCURRENT = 8
 const UPLOAD_IDLE_TTL_MS = 5 * 60 * 1000
 const NOT_FOUND = 'Attachment upload was not found'
+// Uploads whose chat is remembered until a message claims them; the oldest go first past this.
+const UPLOADED_FOR_KEPT = 256
 const NOT_AN_IMAGE = 'Not an attachment image'
 const PREVIEW_TOO_LARGE = 'file_too_large'
 
@@ -38,6 +40,7 @@ type InFlightUpload = {
   callerKey: string
   uploadDir: string
   name: string
+  sessionId: string
   expectedLength: number
   receivedLength: number
   writing: boolean
@@ -61,6 +64,9 @@ export class AgentSessionAttachmentStore {
   // Latest content write per folder, and pending writes by file so a re-send queues nothing.
   private readonly contentWrites = new Map<string, Promise<void>>()
   private readonly pendingContent = new Set<string>()
+  // The chat each upload this launch was made for: it reads its file back before any message claims it
+  // (a composer chip's thumbnail), which a shared agent's guard asks the claims for.
+  private readonly uploadedFor = new Map<string, string>()
 
   constructor(
     readonly rootDir: string,
@@ -85,6 +91,7 @@ export class AgentSessionAttachmentStore {
       callerKey: args.callerKey,
       uploadDir: join(this.rootDir, id),
       name,
+      sessionId: args.sessionId,
       expectedLength: args.byteLength,
       receivedLength: 0,
       writing: false
@@ -147,6 +154,13 @@ export class AgentSessionAttachmentStore {
         join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE),
         finalPath
       )
+      this.uploadedFor.set(args.uploadId, upload.sessionId)
+      for (const oldest of this.uploadedFor.keys()) {
+        if (this.uploadedFor.size <= UPLOADED_FOR_KEPT) {
+          break
+        }
+        this.uploadedFor.delete(oldest)
+      }
       return { path: finalPath, name: upload.name, byteLength: upload.receivedLength }
     } catch (error) {
       await removeQuietly(upload.uploadDir)
@@ -237,10 +251,16 @@ export class AgentSessionAttachmentStore {
     return readAttachmentTextChunk(this.rootDir, request, maxContentBytes)
   }
 
-  /** The chats whose messages claim the stored file at `filePath`; none for a path outside the store. */
+  /** The chats whose messages claim the stored file at `filePath`, and the one it was uploaded for this
+   *  launch; none for a path outside the store. */
   async claimingSessions(filePath: string): Promise<readonly string[]> {
     const stored = parseAgentSessionAttachmentStorePath(this.rootDir, filePath)
-    return stored ? ((await this.options.claimingSessions?.(stored.uploadId)) ?? []) : []
+    if (!stored) {
+      return []
+    }
+    const claimed = (await this.options.claimingSessions?.(stored.uploadId)) ?? []
+    const uploader = this.uploadedFor.get(stored.uploadId)
+    return uploader && !claimed.includes(uploader) ? [...claimed, uploader] : claimed
   }
 
   async readPreview(filePath: string, maxContentBytes?: number): Promise<RuntimeFilePreviewResult> {
