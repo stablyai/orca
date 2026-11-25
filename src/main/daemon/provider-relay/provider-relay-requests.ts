@@ -57,8 +57,9 @@ export function answerProviderRelayRequest(
       relays.write(clientId, relayId, payload.data)
       return Promise.resolve({})
     case 'relayAck':
-      relays.ack(clientId, relayId, payload.seq, payload.keepFrom, payload.cut)
-      return Promise.resolve({})
+      return Promise.resolve({
+        ackedThrough: relays.ack(clientId, relayId, payload.seq, payload.keepFrom, payload)
+      })
     case 'relayClose':
       return relays.close(relayId, payload.grace).then(() => ({}))
     case 'relayList':

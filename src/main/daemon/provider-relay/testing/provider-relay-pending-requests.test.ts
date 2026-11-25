@@ -101,14 +101,14 @@ describe('provider relay pending requests', () => {
       undefined
     )
     // The client gives up its kept span (the daemon's ask at the file cap): the cursor moves past it.
-    relay.ack(3, undefined, true)
+    relay.ack(3, undefined, { cut: true })
     await relay.detach()
     expect(relay.info().ackedSeq).toBe(3)
     expect((await relay.attach('app-3', stream, 3)).truncatedThrough).toBe(3)
     // A floor that rose past an open item's start on purpose: the cut is just before what it keeps.
     stdout.write('d\ne\nf\n')
     await tick()
-    relay.ack(6, 5, true)
+    relay.ack(6, 5, { cut: true })
     await relay.detach()
     expect((await relay.attach('app-4', stream, relay.info().ackedSeq)).truncatedThrough).toBe(4)
     await relay.dispose()

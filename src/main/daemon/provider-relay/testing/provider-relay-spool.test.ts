@@ -135,7 +135,7 @@ describe('provider relay spool', () => {
     await spool.dispose()
   })
 
-  it('keeps lines from keepFrom on for a later attach even when the ack passes them, past the memory cap', async () => {
+  it('keeps a held replay from keepFrom on for a later attach even when the ack passes it, past the memory cap', async () => {
     const path = join(dir, 'r.ndjson')
     const delivered: number[] = []
     const spool = new ProviderRelaySpool({
@@ -148,11 +148,11 @@ describe('provider relay spool', () => {
     for (let i = 0; i < 20; i++) {
       spool.append('x'.repeat(500))
     }
-    spool.ack(20, 5)
+    spool.ack(20, 5, true)
     for (let i = 0; i < 20; i++) {
       spool.append('y'.repeat(500))
     }
-    spool.ack(40, 5)
+    spool.ack(40, 5, true)
     await spool.detach()
     expect(spool.ackedSeq).toBe(4)
     delivered.length = 0
@@ -272,7 +272,28 @@ describe('provider relay spool', () => {
     await spool.dispose()
   })
 
-  it('names the kept lines it dropped at the file cap, and a later attach replays only what is left', async () => {
+  it('releases a live keep as a cut at the memory cap, writing nothing to disk', async () => {
+    const path = join(dir, 'r.ndjson')
+    const spool = new ProviderRelaySpool({
+      path,
+      deliver: () => {},
+      onPressureChanged: () => {},
+      memoryCapBytes: 2048
+    })
+    await spool.attach(0)
+    spool.append('{"method":"item/started"}')
+    spool.ack(1, 1)
+    for (let i = 0; i < 30; i++) {
+      spool.append('x'.repeat(100))
+    }
+    expect(spool.ack(31, 1)).toBe(31)
+    expect(spool.truncatedThrough).toBe(31)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(existsSync(path)).toBe(false)
+    await spool.dispose()
+  })
+
+  it('names the held lines it dropped at the file cap, and a later attach replays only what is left', async () => {
     const delivered: number[] = []
     const spool = new ProviderRelaySpool({
       path: join(dir, 'r.ndjson'),
@@ -284,11 +305,11 @@ describe('provider relay spool', () => {
     })
     await spool.attach(0)
     spool.append('{"method":"item/started"}')
-    spool.ack(1, 1)
+    spool.ack(1, 1, true)
     for (let i = 0; i < 10; i++) {
       spool.append('x'.repeat(100))
     }
-    spool.ack(11, 1)
+    spool.ack(11, 1, true)
     // Under the cap, nothing kept is dropped.
     expect([spool.ackedSeq, spool.truncatedThrough]).toEqual([0, 0])
     for (let i = 0; i < 20; i++) {
@@ -296,7 +317,7 @@ describe('provider relay spool', () => {
     }
     // Once its writes start, the kept span alone holds the agent paused at the cap, so the
     // client's own acks release it.
-    spool.ack(31, 1)
+    spool.ack(31, 1, true)
     await vi.waitFor(() => expect([spool.ackedSeq, spool.truncatedThrough]).toEqual([31, 31]))
     spool.append('after')
     await spool.detach()

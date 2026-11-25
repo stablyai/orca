@@ -233,11 +233,12 @@ export class ProviderRelay {
     })
   }
 
-  ack(seq: number, keepFrom?: number, cut = false): void {
+  /** How far the spool released; past `keepFrom` once its file cap let a held replay go. */
+  ack(seq: number, keepFrom?: number, { cut = false, held = false } = {}): number {
     // Kept from `keepFrom` on, the cut is before it: a replay from there starts inside the item.
     const cutAt = keepFrom === undefined ? seq : keepFrom - 1
     this.cutThrough = cut ? Math.max(this.cutThrough, cutAt) : this.cutThrough
-    this.spool.ack(seq, keepFrom)
+    return this.spool.ack(seq, keepFrom, held)
   }
 
   stopIdle(): Promise<unknown> {

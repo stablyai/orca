@@ -89,7 +89,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.pid = options.pid
     this.output = new RelayedProviderOutput({
       stdout: this.stdout,
-      ack: (seq, keepFrom, cut) => options.channel.ack(options.relayId, seq, keepFrom, cut),
+      ack: (seq, keepFrom, flags) => options.channel.ack(options.relayId, seq, keepFrom, flags),
       ...(options.durable ? { durable: options.durable } : {}),
       ...(options.passWhileHeld ? { passWhileHeld: options.passWhileHeld } : {}),
       ...(options.ackFloor ? { ackFloor: options.ackFloor } : {})
