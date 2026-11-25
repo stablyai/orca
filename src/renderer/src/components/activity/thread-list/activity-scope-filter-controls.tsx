@@ -124,14 +124,14 @@ function ActivityAgentFilterMenu(): React.JSX.Element {
   const agentTypes = useAppStore((s) => s.agentsFilterAgentTypes)
   const setAgentTypes = useAppStore((s) => s.setAgentsFilterAgentTypes)
   const { allThreads } = useAllAgentPaneThreads()
-  const [showFullCatalog, setShowFullCatalog] = React.useState(false)
+  const [showTypesWithoutActivity, setShowTypesWithoutActivity] = React.useState(false)
   const catalog = getAgentCatalog()
   const availableTypes = new Set<string>(agentTypes)
   for (const thread of allThreads) {
     availableTypes.add(thread.agentType)
   }
   const activityAgents = catalog.filter((agent) => availableTypes.has(agent.id))
-  const agents = showFullCatalog ? catalog : activityAgents
+  const agents = showTypesWithoutActivity ? catalog : activityAgents
   const allAgentsLabel = t('auto.components.skills.filter.allAgents', 'All agents')
   const visibilityLabel =
     agentTypes.length === 0
@@ -144,10 +144,10 @@ function ActivityAgentFilterMenu(): React.JSX.Element {
           })
 
   return (
-    <DropdownMenuSub onOpenChange={(open) => !open && setShowFullCatalog(false)}>
+    <DropdownMenuSub onOpenChange={(open) => !open && setShowTypesWithoutActivity(false)}>
       <DropdownMenuSubTrigger>
         <span className="flex flex-1 items-center justify-between gap-3">
-          <span>{t('auto.components.activity.ActivityPrototypePage.f6396e1f85', 'Agent')}</span>
+          <span>{t('auto.components.activity.ActivityScopeFilterControls.agents', 'Agents')}</span>
           <span className="min-w-0 truncate text-2xs font-medium text-muted-foreground">
             {visibilityLabel}
           </span>
@@ -163,13 +163,13 @@ function ActivityAgentFilterMenu(): React.JSX.Element {
         </DropdownMenuCheckboxItem>
         {activityAgents.length < catalog.length ? (
           <DropdownMenuCheckboxItem
-            checked={showFullCatalog}
-            onCheckedChange={(checked) => setShowFullCatalog(checked === true)}
+            checked={showTypesWithoutActivity}
+            onCheckedChange={(checked) => setShowTypesWithoutActivity(checked === true)}
             onSelect={(event) => event.preventDefault()}
           >
             {t(
-              'auto.components.activity.ActivityScopeFilterControls.showFullCatalog',
-              'Show full catalog'
+              'auto.components.activity.ActivityScopeFilterControls.showTypesWithoutActivity',
+              'Show types with no activity'
             )}
           </DropdownMenuCheckboxItem>
         ) : null}

@@ -160,6 +160,7 @@ export function useAgentPaneThreads(args: {
     return scopeVisibleThreads.filter((thread) => {
       if (
         agentsFilterAgentTypes.length > 0 &&
+        thread.paneKey !== effectiveSelectedPaneKey &&
         !agentsFilterAgentTypes.some((type) => type === thread.agentType)
       ) {
         return false

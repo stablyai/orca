@@ -44,7 +44,7 @@ export function hydrateAgentsViewPreferences(
   }
 }
 
-/** Agents-view preferences; each setter persists immediately and stays separate from workspace-nav state. */
+/** Agents-view preferences stay separate from workspace-nav state. */
 export function createAgentsViewPreferenceActions(set: UISliceSet): Partial<UISlice> {
   return {
     agentsVisibleHostIds: null,
@@ -59,11 +59,8 @@ export function createAgentsViewPreferenceActions(set: UISliceSet): Partial<UISl
       window.api.ui.set({ agentsFilterRepoIds: [...ids] }).catch(console.error)
     },
     agentsFilterAgentTypes: [],
-    setAgentsFilterAgentTypes: (types) => {
-      const agentsFilterAgentTypes = normalizeActivityAgentTypes(types)
-      set({ agentsFilterAgentTypes })
-      window.api.ui.set({ agentsFilterAgentTypes }).catch(console.error)
-    },
+    setAgentsFilterAgentTypes: (types) =>
+      set({ agentsFilterAgentTypes: normalizeActivityAgentTypes(types) }),
     agentsHideWorkspacesFromOtherDevices: false,
     setAgentsHideWorkspacesFromOtherDevices: (v) => {
       set({ agentsHideWorkspacesFromOtherDevices: v })
