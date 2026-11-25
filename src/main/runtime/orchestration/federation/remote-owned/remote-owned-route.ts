@@ -126,8 +126,12 @@ async function routeServerCall(
   ctx: RpcContext,
   on: string
 ): Promise<Routed> {
-  // A chat named by its session ID is refused by the ordinary start before any server is asked.
-  if (!SERVER_CALLS.has(request.method) || isSessionAddress(values.terminal)) {
+  // A chat named by its session ID, or a bot item's start, is refused by the ordinary start before any server is asked.
+  if (
+    !SERVER_CALLS.has(request.method) ||
+    isSessionAddress(values.terminal) ||
+    stringField(values, 'origin') !== undefined
+  ) {
     return LOCAL
   }
   checkDeclaredOrchestrationAccess(access, values, ctx)
