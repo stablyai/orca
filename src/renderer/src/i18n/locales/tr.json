@@ -22749,7 +22749,7 @@
         "task": "Görev",
         "workerCount_one": "{{count}} çalışan",
         "workerCount_other": "{{count}} çalışan",
-        "stoppedByYou": "Sizin tarafınızdan durduruldu",
+        "stopped": "Durduruldu",
         "finished": "Tamamlandı",
         "failedCount": "{{count}} başarısız",
         "needsYouCount": "{{count}} sizi bekliyor",

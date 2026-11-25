@@ -20800,7 +20800,7 @@
         "monitor": "モニター",
         "task": "タスク",
         "workerCount_other": "{{count}} 件のワーカー",
-        "stoppedByYou": "手動で停止しました",
+        "stopped": "停止済み",
         "finished": "完了",
         "failedCount": "失敗 {{count}} 件",
         "needsYouCount": "対応待ち {{count}} 件",

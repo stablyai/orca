@@ -21451,7 +21451,7 @@
         "workerCount_few": "{{count}} исполнителя",
         "workerCount_many": "{{count}} исполнителей",
         "workerCount_other": "{{count}} исполнителя",
-        "stoppedByYou": "Остановлено вами",
+        "stopped": "Остановлен",
         "finished": "Завершено",
         "failedCount": "С ошибками: {{count}}",
         "needsYouCount": "Ждут вашего ответа: {{count}}",
