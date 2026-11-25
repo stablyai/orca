@@ -55,6 +55,7 @@ const workerSchema = z.looseObject({
   settledAt: salvagedOptional('settledAt', z.number()),
   settledUndated: salvagedOptional('settledUndated', z.literal(true)),
   worktreeId: salvagedOptional('worktreeId', z.string()),
+  placedWorktreeId: salvagedOptional('placedWorktreeId', z.string()),
   paneKey: salvagedOptional('paneKey', z.string()),
   note: salvagedOptional('note', z.enum(WORKER_NOTES)),
   waitsOnBackground: salvagedOptional('waitsOnBackground', z.literal(true)),

@@ -37,6 +37,9 @@ export type OlderBotChatHolds<T> = {
   heldSessionIds: ReadonlySet<string>
   /** Workspaces held wherever they sit, by id: live, waiting on the owner, open, revealed. */
   heldLineIds: ReadonlySet<string>
+  /** Every chat of the read, listed or not (no tab, closed): their shown workers are claims and host
+   *  evidence for a shared workspace id. Holds only ever apply to the listed chats. */
+  readChats: readonly BotChatTreeChat[]
   /** Every workspace of the bot, not only the paged ones shown, and the chat each sits under. */
   workspaces: readonly T[]
   workspaceChats: Readonly<Record<string, string>>
@@ -80,20 +83,24 @@ export function botSidebarChatFoldTimes<T extends { id: string }>(
   }
   // An id two physical workspaces share (twins on two hosts) maps to the one chat that ran there last,
   // so which chat owns which twin can't be told. Two hosts are seen either as two listed workspaces or as
-  // the read's workers naming the id on two hosts. Then every chat that claims the id holds: the one it
-  // maps to, and every chat with a worker the read shows there. One workspace reused by several chats
-  // (one host) is not ambiguous: the earlier chats may fold.
+  // the read's workers naming the id on two hosts, any chat's (one with no row of its own too). Then
+  // every chat that claims the id holds: the one it maps to, and every chat with a worker the read shows
+  // there, a row whose record couldn't be read included (it claims, but names no host). One workspace
+  // reused by several chats (one host) is not ambiguous: the earlier chats may fold.
   const lineIdentitiesById = new Map<string, Set<string>>()
   for (const [identity, line] of lines) {
     addTo(lineIdentitiesById, line.id, identity)
   }
   const workerHostsById = new Map<string, Set<string>>()
   const claimants = new Map<string, Set<string>>()
-  for (const chat of chats) {
+  for (const chat of holds.readChats) {
     for (const worker of [...chat.running, ...chat.finished]) {
       if (worker.worktreeId) {
         addTo(workerHostsById, worker.worktreeId, workerHost(worker))
-        addTo(claimants, worker.worktreeId, chat.chatId)
+      }
+      const claimed = worker.worktreeId ?? worker.placedWorktreeId
+      if (claimed) {
+        addTo(claimants, claimed, chat.chatId)
       }
     }
   }

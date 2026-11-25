@@ -233,6 +233,7 @@ export function botChatTreeDispatchWorker(
       startedAt: dispatch.at,
       ...(dispatch.settled ? { settledAt: dispatch.at } : {}),
       ...(dispatch.settled && dispatch.undated ? { settledUndated: true as const } : {}),
+      ...(dispatch.worktreeId ? { placedWorktreeId: dispatch.worktreeId } : {}),
       ...(note ? { note } : {}),
       dispatchId: dispatch.id
     }
