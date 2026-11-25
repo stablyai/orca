@@ -26,6 +26,7 @@ import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/m
 import { startMcpAgentFileSync } from '../mcp-servers/agent-files/mcp-agent-file-sync'
 import { shouldInstallManagedHooks } from '../startup/configure-process'
 import { installFirstWorkRenameHookSubscription } from '../agent-hooks/first-work/first-work-rename-hook-subscription'
+import { installAgentTurnWorktreeActivity } from '../agent-hooks/runtime/agent-turn-worktree-activity'
 import { firstWorkRenameDeps } from '../agent-hooks/first-work/first-work-rename-runtime'
 import { initializeMainProcessAccountServices } from '../startup/agent-accounts/main-process-account-services'
 import {
@@ -275,6 +276,7 @@ export async function composeDesktopCore(
     isPackaged: paths.isPackaged
   })
   installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
+  installAgentTurnWorktreeActivity()
   await initializeMainProcessPlugins(core, store)
   scheduleStalePluginGitTempSweep()
   core.starNag = new StarNagService(store, core.stats!)
