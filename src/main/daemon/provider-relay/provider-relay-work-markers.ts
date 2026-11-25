@@ -233,6 +233,11 @@ export class ProviderRelayOpenWork {
     return this.ended.size > 0 ? ended : null
   }
 
+  /** More work than it can count, or lines it never saw: the open work is unknown. */
+  get unaccounted(): boolean {
+    return this.overflowed
+  }
+
   /** Work the daemon can't account for; the agent is never idle-stopped after it. */
   overflow(): void {
     this.overflowed = true

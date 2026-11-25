@@ -5,7 +5,7 @@ import type {
 } from '../provider-process/managed-provider-process'
 import type { ProviderProcessCloseResult } from '../provider-process/provider-process-close'
 import type { ProviderRelayFailure } from '../daemon/protocol/daemon-provider-relay-protocol'
-import type { RelayedProviderChild } from './relayed-provider-child'
+import { RELAYED_CHILD_HANDED_OFF, type RelayedProviderChild } from './relayed-provider-child'
 
 /** Past the daemon's own stdin-end, SIGTERM and SIGKILL ladder. */
 const RELAY_CLOSE_WAIT_MS = 15_000
@@ -56,6 +56,7 @@ export function relayedManagedProcess(child: RelayedProviderChild): ManagedProvi
     () => child.exited === null && !child.handedOff
   )
   child.once('close', releaseAgentMemory)
+  child.once(RELAYED_CHILD_HANDED_OFF, releaseAgentMemory)
 
   const stderrTail = (): string => {
     const exit = child.exited

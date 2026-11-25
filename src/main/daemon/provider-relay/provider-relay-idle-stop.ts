@@ -25,7 +25,7 @@ type IdleStopHost = {
   stop: () => void
   /** Output no app has taken yet: the next launch shows it, so the agent isn't idle-stopped. */
   unread?: () => boolean
-  /** Idle, held only by output no app took: the detached cap starts counting for it. */
+  /** Idle but for output no app took, or with work it lost count of: the detached cap counts it. */
   idleUnread?: () => void
   log?: (event: string, details?: Record<string, unknown>) => void
 }
@@ -93,9 +93,12 @@ export class ProviderRelayIdleStop {
     })
   }
 
-  /** Armed by a detach that said what is open; a detach without (work unknown) is never idle-stopped. */
+  /**
+   * Armed by a detach that said what is open; a detach without (work unknown) is never idle-stopped.
+   * Work it lost count of is unknown too, so the detached cap bounds it.
+   */
   get tracking(): boolean {
-    return this.armed
+    return this.armed && this.work?.unaccounted !== true
   }
 
   get unread(): boolean {
@@ -239,6 +242,10 @@ export class ProviderRelayIdleStop {
     }
     if (this.work.busy || this.host.pendingCount() > 0) {
       this.waitingForLine = true
+      if (this.work.unaccounted) {
+        // Counted from now by the detached cap, as unknown work is.
+        this.host.idleUnread?.()
+      }
       return
     }
     // Only an attach takes it; the detached cap bounds how long it waits.

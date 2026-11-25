@@ -44,6 +44,9 @@ export type RelayedProviderChildOptions = {
  * An agent the terminal daemon owns, seen through the relay as a child process: stdout is the
  * agent's lines in seq order (unanswered requests first), stdin goes out as `relayWrite`s.
  */
+/** Emitted once the agent is the daemon's: this app no longer owns its process. */
+export const RELAYED_CHILD_HANDED_OFF = 'handedOff'
+
 export class RelayedProviderChild extends EventEmitter implements ProviderChild {
   readonly pid: number
   readonly stdout: Readable & { relayRecords: ProviderRelayRecordTaking } = Object.assign(
@@ -148,6 +151,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     try {
       const result = await this.options.channel.attach(this.relayId, fromSeq, this.options.policy())
       await this.output.awaitPreamble(result.initializeResultSent, result.pending, PREAMBLE_WAIT_MS)
+      this.output.deliveredPending.forgetSettled(fromSeq, result.pending)
       this.attachResult = result
       const { continuation } = this.options
       if (continuation) {
@@ -161,6 +165,12 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(String(error))
       this.rejectReady(failure)
+      if (this.output.holding) {
+        // A reattach that never opened lets go of the relay: its output stays the daemon's, unacked.
+        this.output.stop()
+        this.unbind?.()
+        this.unbind = null
+      }
       this.end({ code: null, signal: null }, true)
       throw failure
     }
@@ -223,6 +233,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     await this.settle(true, waitMs)
     this.state = 'detached'
     this.output.stop()
+    this.emit(RELAYED_CHILD_HANDED_OFF)
     await this.options.channel.detach(this.relayId, policy)
   }
 
@@ -268,6 +279,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       this.output.stop()
       this.unbind?.()
       this.unbind = null
+      this.emit(RELAYED_CHILD_HANDED_OFF)
       return
     }
     this.state = 'reattaching'
@@ -279,11 +291,9 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       if (this.options.channel.daemonPid !== daemonPid) {
         throw new Error('A different terminal host answered')
       }
-      await this.options.channel.attach(
-        this.relayId,
-        this.output.restartAt(),
-        this.options.policy()
-      )
+      const fromSeq = this.output.restartAt()
+      const result = await this.options.channel.attach(this.relayId, fromSeq, this.options.policy())
+      this.output.deliveredPending.forgetSettled(fromSeq, result.pending)
       if (this.state === 'reattaching') {
         this.state = 'attached'
       }

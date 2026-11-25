@@ -3,6 +3,7 @@ import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import type { ProviderRelayDataEvent } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RelayedProviderHeldOutput } from './relayed-provider-held-output'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
+import { RelayedProviderDeliveredRequests } from './relayed-provider-delivered-requests'
 import { boundedCutKeys } from './relayed-provider-cut-keys'
 import type { RelayedProviderContinuation } from './relayed-provider-continuation'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
@@ -89,8 +90,8 @@ export class RelayedProviderOutput {
   private askedThrough = 0
   /** The floor gave up an open item; held until an ack carrying the cut succeeds. */
   private pendingCut = false
-  /** Requests already handed on, so a replay or reattach never asks the user twice. */
-  private readonly deliveredPending = new Set<number>()
+  /** Requests already handed on; an attach forgets those the daemon no longer holds. */
+  readonly deliveredPending = new RelayedProviderDeliveredRequests()
   private preambleArrived: (() => void) | null = null
   /** Until the slices of a held replay reach the end, it stays held. */
   private held: RelayedProviderHeldOutput | null
@@ -106,6 +107,8 @@ export class RelayedProviderOutput {
   readonly recordTaking = this.consumption.taking
   private cancelAck: (() => void) | null = null
   private acking: Promise<void> = Promise.resolve()
+  /** The one ack waiting behind the running one: later asks join it (it reads state when it runs). */
+  private nextAck: { force: boolean; done: Promise<void> } | null = null
   private stopped = false
 
   constructor(private readonly options: OutputOptions) {
@@ -313,77 +316,91 @@ export class RelayedProviderOutput {
   }
 
   private ack(force = false): Promise<void> {
-    this.acking = this.acking.then(async () => {
-      // Only what the chat's reader took: a paused reader's lines are replayed after a crash.
-      // Held for an opening chat, lines are received but not taken; the open waits on the agent,
-      // which the daemon pauses at its cap until an ack, so its ask is answered by keeping them.
-      const heldFrom = force ? (this.held?.firstAfter(this.releasedThrough) ?? null) : null
-      const target = Math.max(
-        this.consumption.upTo(this.pushedSeq),
-        heldFrom === null ? 0 : this.deliveredSeq
-      )
-      // Lines from the floor on (a streamed item still open) stay kept, so a reattach rewrites the
-      // item whole. The daemon's ask while keeping (its file cap) releases them, and the forced
-      // save keeps the text; an ask before any keep (its memory cap) starts keeping instead.
-      const floor = this.options.ackFloor?.floor(target, this.releasedThrough) ?? null
-      const usable = floor !== null && floor > this.releasedThrough && floor <= target
-      const keepAt = usable ? Math.min(floor, heldFrom ?? floor) : heldFrom
-      // Held lines the journal hasn't saved are never let go; the daemon spools them instead.
-      const releasing = force && this.keptFrom !== null && heldFrom === null
-      const keepFrom = keepAt !== null && !releasing ? keepAt : null
-      if (
-        (target <= this.ackedSeq && keepFrom === this.keptFrom && !this.pendingCut) ||
-        this.stopped
-      ) {
+    if (this.nextAck) {
+      this.nextAck.force ||= force
+      return this.nextAck.done
+    }
+    const next = { force, done: Promise.resolve() }
+    next.done = this.acking.then(() => {
+      if (this.nextAck === next) {
+        this.nextAck = null
+      }
+      return this.ackNow(next.force)
+    })
+    this.nextAck = next
+    this.acking = next.done
+    return next.done
+  }
+
+  private async ackNow(force: boolean): Promise<void> {
+    // Only what the chat's reader took: a paused reader's lines are replayed after a crash.
+    // Held for an opening chat, lines are received but not taken; the open waits on the agent,
+    // which the daemon pauses at its cap until an ack, so its ask is answered by keeping them.
+    const heldFrom = force ? (this.held?.firstAfter(this.releasedThrough) ?? null) : null
+    const target = Math.max(
+      this.consumption.upTo(this.pushedSeq),
+      heldFrom === null ? 0 : this.deliveredSeq
+    )
+    // Lines from the floor on (a streamed item still open) stay kept, so a reattach rewrites the
+    // item whole. The daemon's ask while keeping (its file cap) releases them, and the forced
+    // save keeps the text; an ask before any keep (its memory cap) starts keeping instead.
+    const floor = this.options.ackFloor?.floor(target, this.releasedThrough) ?? null
+    const usable = floor !== null && floor > this.releasedThrough && floor <= target
+    const keepAt = usable ? Math.min(floor, heldFrom ?? floor) : heldFrom
+    // Held lines the journal hasn't saved are never let go; the daemon spools them instead.
+    const releasing = force && this.keptFrom !== null && heldFrom === null
+    const keepFrom = keepAt !== null && !releasing ? keepAt : null
+    if (
+      (target <= this.ackedSeq && keepFrom === this.keptFrom && !this.pendingCut) ||
+      this.stopped
+    ) {
+      return
+    }
+    // Wait one turn so records just parsed reach the journal before its barrier is taken.
+    await new Promise((resolve) => setImmediate(resolve))
+    try {
+      // Unsaved streamed text is only in a kept item, which a reattach replays whole.
+      const owed = force || this.ackedSeq < this.askedThrough
+      const unsaved = (await this.options.durable?.(owed)) === false
+      if (unsaved && keepFrom === null) {
         return
       }
-      // Wait one turn so records just parsed reach the journal before its barrier is taken.
-      await new Promise((resolve) => setImmediate(resolve))
-      try {
-        // Unsaved streamed text is only in a kept item, which a reattach replays whole.
-        const owed = force || this.ackedSeq < this.askedThrough
-        const unsaved = (await this.options.durable?.(owed)) === false
-        if (unsaved && keepFrom === null) {
-          return
-        }
-        // Giving up an open kept span: the next attach must know its replay starts inside an item.
-        this.pendingCut ||= this.options.ackFloor?.tookCut?.() === true
-        const cut = this.pendingCut || (force && keepFrom === null && this.keptFrom !== null)
-        // Named on each try: a retry after a failed ack may carry a different cut.
-        const cutKeys = cut
-          ? boundedCutKeys(this.options.ackFloor, keepFrom === null ? target : undefined)
-          : null
-        const flags = {
-          ...(cut ? { cut: true as const } : {}),
-          // Kept but not yet saved: the daemon spools it rather than let it go at its memory cap.
-          ...(heldFrom !== null || unsaved ? { held: true as const } : {}),
-          ...(cutKeys ? { cutKeys } : {})
-        }
-        const reply = await (keepFrom === null && !cut
-          ? this.options.ack(target)
-          : this.options.ack(target, keepFrom ?? undefined, flags))
-        this.ackedSeq = Math.max(this.ackedSeq, target)
-        this.pendingCut = false
-        this.keptFrom = keepFrom
-        if (force && keepFrom === null) {
-          this.releasedThrough = Math.max(this.releasedThrough, target)
-        }
-        // The daemon let kept lines go at a cap: they are given up, as a cut it records.
-        const acked = seqOf(jsonProperty(reply, 'ackedThrough'))
-        const truncated = seqOf(jsonProperty(reply, 'truncatedThrough'))
-        const released = Math.max(keepFrom !== null && acked >= keepFrom ? acked : 0, truncated)
-        if (released > this.releasedThrough) {
-          // keptFrom stays: the daemon still keeps, so the next ack without a floor must reach it.
-          this.releasedThrough = released
-          // The next ack records it as a cut naming exactly what it split, maybe nothing.
-          this.pendingCut = true
-          this.scheduleAck()
-        }
-      } catch {
-        // Unacked output is replayed on the next attach; a later ack covers it.
+      // Giving up an open kept span: the next attach must know its replay starts inside an item.
+      this.pendingCut ||= this.options.ackFloor?.tookCut?.() === true
+      const cut = this.pendingCut || (force && keepFrom === null && this.keptFrom !== null)
+      // Named on each try: a retry after a failed ack may carry a different cut.
+      const cutKeys = cut
+        ? boundedCutKeys(this.options.ackFloor, keepFrom === null ? target : undefined)
+        : null
+      const flags = {
+        ...(cut ? { cut: true as const } : {}),
+        // Kept but not yet saved: the daemon spools it rather than let it go at its memory cap.
+        ...(heldFrom !== null || unsaved ? { held: true as const } : {}),
+        ...(cutKeys ? { cutKeys } : {})
       }
-    })
-    return this.acking
+      const reply = await (keepFrom === null && !cut
+        ? this.options.ack(target)
+        : this.options.ack(target, keepFrom ?? undefined, flags))
+      this.ackedSeq = Math.max(this.ackedSeq, target)
+      this.pendingCut = false
+      this.keptFrom = keepFrom
+      if (force && keepFrom === null) {
+        this.releasedThrough = Math.max(this.releasedThrough, target)
+      }
+      // The daemon let kept lines go at a cap: they are given up, as a cut it records.
+      const acked = seqOf(jsonProperty(reply, 'ackedThrough'))
+      const truncated = seqOf(jsonProperty(reply, 'truncatedThrough'))
+      const released = Math.max(keepFrom !== null && acked >= keepFrom ? acked : 0, truncated)
+      if (released > this.releasedThrough) {
+        // keptFrom stays: the daemon still keeps, so the next ack without a floor must reach it.
+        this.releasedThrough = released
+        // The next ack records it as a cut naming exactly what it split, maybe nothing.
+        this.pendingCut = true
+        this.scheduleAck()
+      }
+    } catch {
+      // Unacked output is replayed on the next attach; a later ack covers it.
+    }
   }
 }
 
