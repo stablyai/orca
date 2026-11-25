@@ -248,6 +248,18 @@ describe('a page frame before the phone’s shared agents are loaded', () => {
 })
 
 describe('a new chat while the shared agent’s host is away', () => {
+  it('with held sends off, starts no placeholder while the host is away and answers offline', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const desktop = computer()
+    cloud()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
+    const page = routeSharedAgentCalls(desktop.client as unknown as RpcClient, 'computer-1', agents)
+    await agents.syncComputer('computer-1', desktop.client)
+    const started = await page.sendRequest('bots.session.start', { botId: 'bot-1' }, SHARED)
+    expect(agents.views('computer-1')[0]?.holds).toBe(SHARED_HOSTS_HOLD_WHILE_AWAY)
+    expect(started.ok ? null : started.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+  })
+
   heldIt(
     'starts as a placeholder whose sends read as sent and wait, then moves to the chat its host starts',
     async () => {

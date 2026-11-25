@@ -170,14 +170,7 @@ export class PhoneSharedAgents {
     return this.store
       .list()
       .filter((entry) => entry.pairedHostId === pairedHostId)
-      .map((entry) =>
-        sharedBotHostView(entry, {
-          homeWorkspaceId: null,
-          link: this.linkFor(entry).current(),
-          holds: true,
-          held: this.held.views(entry)
-        })
-      )
+      .map((entry) => this.view(entry))
       .concat((this.awaitingKey.get(pairedHostId) ?? []).map(awaitingKeyView))
   }
 
@@ -190,15 +183,12 @@ export class PhoneSharedAgents {
 
   async call(entry: PhoneSharedAgent, method: string, params: unknown): Promise<RpcResponse> {
     const link = await this.reach(entry)
-    const here = this.held.startHere(link, method, params)
+    // Answered on the phone: a new chat's placeholder, or a send held (or refused) for the host.
+    const here =
+      this.held.startHere(this.view(entry).holds, link, method, params) ??
+      (method === 'agentSession.send' ? await this.sendHeld(entry, link, params) : null)
     if (here) {
       return here
-    }
-    if (method === 'agentSession.send') {
-      const held = await this.sendHeld(entry, link, params)
-      if (held) {
-        return held
-      }
     }
     const away = () =>
       this.kept.answer(entry.shareId, method, params) ?? sharedAgentOffline(entry, method)
@@ -283,6 +273,16 @@ export class PhoneSharedAgents {
       this.forget(entry.shareId)
     }
     return heldSendFailure(entry, result)
+  }
+
+  /** The agent as its pages show it: whether it holds (the off switch applied there) and what. */
+  private view(entry: PhoneSharedAgent): SharedBotHostView {
+    return sharedBotHostView(entry, {
+      homeWorkspaceId: null,
+      link: this.linkFor(entry).current(),
+      holds: true,
+      held: this.held.views(entry)
+    })
   }
 
   /** The link once any dial the phone can make with what it keeps has settled. */

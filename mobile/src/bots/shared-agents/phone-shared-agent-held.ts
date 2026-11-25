@@ -83,8 +83,14 @@ export class PhoneSharedAgentHeld {
    * A new chat started while the host is away: a placeholder until its first held message starts it
    * there. A start naming a placeholder is its swap to the real chat, which only the host answers.
    */
-  startHere(link: SharedHostLink, method: string, params: unknown): RpcResponse | null {
+  startHere(
+    holds: boolean,
+    link: SharedHostLink,
+    method: string,
+    params: unknown
+  ): RpcResponse | null {
     if (
+      !holds ||
       method !== 'bots.session.start' ||
       link === 'live' ||
       NewChatParams.safeParse(params).success

@@ -21,7 +21,11 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import { botSessionStart } from '../bot-sheet-operations'
 import { mobileBotAvatarSource } from '../host-bot-row-facts'
-import { MobileSharedAgentNavBar, MobileSharedAgentUnavailable } from './MobileSharedAgentChrome'
+import {
+  MobileSharedAgentNavBar,
+  MobileSharedAgentUnavailable,
+  sharedAgentOfflineText
+} from './MobileSharedAgentChrome'
 import { sharedAgentChatHref } from './MobileSharedAgentPage'
 import { sharedAgentChatTranscriptHeld } from './shared-agent-chat-held'
 import { SHARED_AGENT_CHAT_CONNECTION, useSharedAgentChat } from './use-shared-agent-chat'
@@ -156,7 +160,8 @@ export function MobileSharedAgentChat() {
               images={chat.images}
               structuredComposer={chat.structuredComposer}
               {...dictation.mic}
-              inputLockReason={null}
+              // Away with nothing held: locked as a paired server's chat is while it is away.
+              inputLockReason={page.live || view.holds ? null : 'disconnected'}
               sendErrorMessage={chat.sendError.message}
               onClearSendError={chat.sendError.clear}
               sendSurfaceId={chat.scopeKey ?? ''}
@@ -170,12 +175,8 @@ export function MobileSharedAgentChat() {
                 page.live
                   ? null
                   : {
-                      holdsSends: true,
-                      text: t(
-                        'bots.shared.offline',
-                        '{{owner}}’s computer is offline. Messages wait and send when it’s back.',
-                        { owner: view.ownerName }
-                      )
+                      ...(view.holds ? { holdsSends: true as const } : {}),
+                      text: sharedAgentOfflineText(t, view)
                     }
               }
             />

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { SharedAgentPage } from './use-shared-agent-page'
+import type { SharedBotHostView } from '../../../../src/shared/bots/shared-bot-hosts'
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -82,20 +83,33 @@ export function MobileSharedAgentNavBar({
   )
 }
 
-/** Said wherever a message to the agent would wait for its owner's computer. */
-export function MobileSharedAgentOfflineLine({ ownerName }: { ownerName: string }) {
+/** What the agent's pages say while its owner's computer is away: that messages wait only when the
+ *  view says it holds them (the held-send switch applies there). */
+export function sharedAgentOfflineText(
+  t: ReturnType<typeof useMobileTranslation>,
+  view: Pick<SharedBotHostView, 'ownerName' | 'holds'>
+): string {
+  return view.holds
+    ? t(
+        'bots.shared.offline',
+        '{{owner}}’s computer is offline. Messages wait and send when it’s back.',
+        { owner: view.ownerName }
+      )
+    : t('bots.shared.offlineNoHold', '{{owner}}’s computer is offline', { owner: view.ownerName })
+}
+
+/** Said on the agent's page while its owner's computer is away. */
+export function MobileSharedAgentOfflineLine({
+  view
+}: {
+  view: Pick<SharedBotHostView, 'ownerName' | 'holds'>
+}) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <View style={styles.offline}>
       <CloudOff size={15} color={colors.textMuted} />
-      <Text style={styles.offlineText}>
-        {t(
-          'bots.shared.offline',
-          '{{owner}}’s computer is offline. Messages wait and send when it’s back.',
-          { owner: ownerName }
-        )}
-      </Text>
+      <Text style={styles.offlineText}>{sharedAgentOfflineText(t, view)}</Text>
     </View>
   )
 }

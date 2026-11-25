@@ -7,7 +7,7 @@ import { SquarePen } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useRouteHandoff } from '../../navigation/route-handoff'
-import { colors, spacing } from '../../theme/mobile-theme'
+import { colors, feedback, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { botSessionStart } from '../bot-sheet-operations'
@@ -102,10 +102,13 @@ export function MobileSharedAgentPage() {
         labeledBack
       />
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}>
-        {page.live ? null : <MobileSharedAgentOfflineLine ownerName={view.ownerName} />}
+        {page.live ? null : <MobileSharedAgentOfflineLine view={view} />}
         <Pressable
           accessibilityRole="button"
-          style={styles.newChat}
+          // Away, a new chat can only wait for the host when its messages are held.
+          disabled={!page.live && !view.holds}
+          accessibilityState={{ disabled: !page.live && !view.holds }}
+          style={[styles.newChat, !page.live && !view.holds ? styles.newChatDisabled : null]}
           onPress={() => void startChat().catch(() => {})}
         >
           <SquarePen size={18} color={colors.accentBlue} />
@@ -147,5 +150,6 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel
   },
   newChatText: { fontSize: 16, color: colors.accentBlue },
+  newChatDisabled: { opacity: feedback.disabledOpacity },
   chats: { marginHorizontal: spacing.lg }
 }))
