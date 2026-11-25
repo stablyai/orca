@@ -20,7 +20,8 @@ const GIT_CONFLICT_KIND = [
   'deleted_by_us',
   'deleted_by_them'
 ] as const
-const GIT_CONFLICT_OPERATION = ['merge', 'rebase', 'cherry-pick', 'unknown'] as const
+// Revert reaches the phone because it advertises GIT_REVERT_CONFLICT_CLIENT_CAPABILITY.
+const GIT_CONFLICT_OPERATION = ['merge', 'rebase', 'cherry-pick', 'revert', 'unknown'] as const
 
 const gitConflictOperationSchema = z.enum(GIT_CONFLICT_OPERATION)
 

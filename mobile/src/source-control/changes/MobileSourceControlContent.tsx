@@ -75,6 +75,8 @@ export function MobileSourceControlContent({
     commitFailureRecoveryAction,
     openBranchPicker,
     abortConflictOperation,
+    continueSequencerOperation,
+    setSequencerAbortTarget,
     sections,
     shouldShowBranchCompareSection,
     branchEntries,
@@ -86,7 +88,8 @@ export function MobileSourceControlContent({
     openDiffForFile,
     resolveConflict,
     runGitAction,
-    setDiscardTarget
+    setDiscardTarget,
+    setDiscardAllTarget
   } = state
   const header = useMemo(
     () => (
@@ -97,7 +100,9 @@ export function MobileSourceControlContent({
           branchCompareResult,
           busyAction,
           openBranchPicker,
-          abortConflictOperation
+          abortConflictOperation,
+          continueSequencerOperation,
+          setSequencerAbortTarget
         }}
         onOpenCommits={onOpenCommits}
       />
@@ -107,8 +112,10 @@ export function MobileSourceControlContent({
       branchCompareResult,
       branchLabel,
       busyAction,
+      continueSequencerOperation,
       onOpenCommits,
       openBranchPicker,
+      setSequencerAbortTarget,
       status
     ]
   )
@@ -130,7 +137,8 @@ export function MobileSourceControlContent({
           openDiffForFile,
           resolveConflict,
           runGitAction,
-          setDiscardTarget
+          setDiscardTarget,
+          setDiscardAllTarget
         }}
         header={header}
         bottomInset={bottomInset + spacing.lg}
@@ -149,6 +157,7 @@ export function MobileSourceControlContent({
       resolveConflict,
       runGitAction,
       sections,
+      setDiscardAllTarget,
       setDiscardTarget,
       shouldShowBranchCompareSection,
       stageAll,

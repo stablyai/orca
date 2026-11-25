@@ -28,6 +28,8 @@ import {
   getUnstageablePaths
 } from './changes/mobile-git-status'
 import type { MobileGitStatusEntry } from './git/git-status-reply-schema'
+import type { GitCommitAction } from '../../../src/shared/git/commands/git-commit-action'
+import type { DiscardAllArea } from '../../../src/shared/source-control/listing/source-control-discard-all-sequence'
 import { getMobileCommitFailureStagedEntries } from './commits/mobile-commit-failure-recovery'
 import { useMobileSourceControlCommitFailure } from './commits/use-mobile-source-control-commit-failure'
 import { useMobileSourceControlAiEnabled } from './commits/use-mobile-source-control-ai-enabled'
@@ -36,6 +38,9 @@ import {
   formatBranchLabel,
   type MobileBranchEntryView
 } from './changes/mobile-source-control-screen-state'
+
+/** A section's Discard all waiting on its confirm; the paths are the ones the user saw. */
+export type MobileDiscardAllTarget = { area: DiscardAllArea; paths: readonly string[] }
 
 export type MobileSourceControlStateParams = {
   hostId: string
@@ -64,6 +69,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const [createdPrUrl, setCreatedPrUrl] = useState<string | null>(null)
   const [createdPrWarning, setCreatedPrWarning] = useState<string | null>(null)
   const [discardTarget, setDiscardTarget] = useState<MobileGitStatusEntry | null>(null)
+  const [discardAllTarget, setDiscardAllTarget] = useState<MobileDiscardAllTarget | null>(null)
+  const [sequencerAbortTarget, setSequencerAbortTarget] = useState<GitCommitAction | null>(null)
   const [showActionSheet, setShowActionSheet] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const keyboardLift = useMobileSourceControlKeyboardLift()
@@ -239,6 +246,10 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     setCreatedPrWarning,
     discardTarget,
     setDiscardTarget,
+    discardAllTarget,
+    setDiscardAllTarget,
+    sequencerAbortTarget,
+    setSequencerAbortTarget,
     showActionSheet,
     setShowActionSheet,
     actionError,

@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, SectionList, Text, View } from 'react-nat
 import { SectionHeader } from '../../components/list/ListGroup'
 import { colors } from '../../theme/mobile-theme'
 import { BranchFileRow, ChangeFileRow, type FileRowState } from './MobileSourceControlFileRows'
+import { getDiscardAllSectionPaths } from './mobile-git-status'
 import type {
   MobileBranchEntryView,
   MobileGitStatusEntryView
@@ -38,6 +39,7 @@ export type FileListState = FileRowState &
     | 'unstageablePaths'
     | 'stageAll'
     | 'unstageAll'
+    | 'setDiscardAllTarget'
   >
 
 export function MobileSourceControlFileList({
@@ -59,7 +61,12 @@ export function MobileSourceControlFileList({
   const merging = state.status?.conflictOperation === 'merge'
   // A capped all-staged prefix can hide unstaged rows.
   const canStageAll = state.stageablePaths.length > 0 || state.status?.didHitLimit === true
-  const sectionAction = (label: string, onPress: () => void, enabled: boolean) => (
+  const sectionAction = (
+    label: string,
+    onPress: () => void,
+    enabled: boolean,
+    destructive = false
+  ) => (
     <Pressable
       onPress={onPress}
       disabled={busy || !enabled}
@@ -70,9 +77,24 @@ export function MobileSourceControlFileList({
         pressed && styles.sectionActionPressed
       ]}
     >
-      <Text style={styles.sectionAction}>{label}</Text>
+      <Text style={[styles.sectionAction, destructive && styles.sectionActionDestructive]}>
+        {label}
+      </Text>
     </Pressable>
   )
+  // Like desktop's header; hidden when the section has nothing discardable, and on merge results.
+  const discardAllAction = (section: (typeof state.sections)[number]) => {
+    const paths = getDiscardAllSectionPaths(section)
+    if (paths.length === 0 || (merging && section.id === 'staged')) {
+      return null
+    }
+    return sectionAction(
+      t('sourceControl.fileList.discardAll', 'Discard all'),
+      () => state.setDiscardAllTarget({ area: section.area, paths }),
+      true,
+      true
+    )
+  }
   // A capped listing can hide every unstaged file behind a staged prefix; keep Stage all reachable.
   const cappedWithoutUnstaged =
     state.status?.didHitLimit === true &&
@@ -96,10 +118,16 @@ export function MobileSourceControlFileList({
       key: section.id,
       title: `${title} ${section.data.length}`,
       trailing:
-        section.id === 'unstaged' || (section.id === 'conflicts' && stageAllOnConflicts) ? (
+        section.id === 'unstaged' ? (
+          <View style={styles.sectionActions}>
+            {discardAllAction(section)}
+            {stageAllAction}
+          </View>
+        ) : section.id === 'conflicts' && stageAllOnConflicts ? (
           stageAllAction
         ) : section.id === 'staged' ? (
           <View style={styles.sectionActions}>
+            {discardAllAction(section)}
             {stageAllOnStaged ? stageAllAction : null}
             {merging
               ? null

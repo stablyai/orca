@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import type { GitCommitAction } from '../../../../src/shared/git/commands/git-commit-action'
 import type { ConflictResolution } from '../../../../src/shared/source-control/listing/source-control-entry-actions'
 import { isMobileGitUnavailable } from '../changes/mobile-git-status'
 import { translate } from '../../i18n/mobile-i18n'
@@ -13,10 +14,14 @@ type SendGitRequest = (method: string, params?: Record<string, unknown>) => Prom
 type Params = {
   sendGitRequest: SendGitRequest
   runGitAction: (actionId: string, method: string, p: Record<string, unknown>) => Promise<boolean>
-  runGitWorkflow: (actionId: string, runner: () => Promise<void>) => Promise<boolean>
+  runGitWorkflow: (
+    actionId: string,
+    runner: () => Promise<void>,
+    options?: { refreshOnError?: boolean }
+  ) => Promise<boolean>
 }
 
-/** Abort, resolve and complete a paused merge through the host ops desktop uses. */
+/** Abort, resolve and finish a paused merge, cherry-pick or revert through the host ops desktop uses. */
 export function useMobileConflictRunners({ sendGitRequest, runGitAction, runGitWorkflow }: Params) {
   // Hosts older than these ops refuse them; say what to do instead of echoing the raw refusal.
   const sendConflictRequest = useCallback(
@@ -37,8 +42,30 @@ export function useMobileConflictRunners({ sendGitRequest, runGitAction, runGitW
     [sendGitRequest]
   )
 
+  // Desktop's SequencerRecoveryControls: the host runs git cherry-pick/revert --continue or --abort.
+  const runSequencerRecovery = useCallback(
+    async (action: 'abort' | 'continue', operation: GitCommitAction) => {
+      await runGitWorkflow(
+        `${action}-${operation}`,
+        async () => {
+          await sendConflictRequest(
+            action === 'abort' ? 'git.sequencerAbort' : 'git.sequencerContinue',
+            { operation }
+          )
+        },
+        // A failed continue may still have landed commits and stopped on new conflicts.
+        { refreshOnError: true }
+      )
+    },
+    [runGitWorkflow, sendConflictRequest]
+  )
+
   const abortConflictOperation = useCallback(
     async (operation: string) => {
+      if (operation === 'cherry-pick' || operation === 'revert') {
+        await runSequencerRecovery('abort', operation)
+        return
+      }
       const method =
         operation === 'merge' ? 'git.abortMerge' : operation === 'rebase' ? 'git.abortRebase' : null
       if (!method) {
@@ -46,7 +73,14 @@ export function useMobileConflictRunners({ sendGitRequest, runGitAction, runGitW
       }
       await runGitAction(`abort-${operation}`, method, {})
     },
-    [runGitAction]
+    [runGitAction, runSequencerRecovery]
+  )
+
+  const continueSequencerOperation = useCallback(
+    async (operation: GitCommitAction) => {
+      await runSequencerRecovery('continue', operation)
+    },
+    [runSequencerRecovery]
   )
 
   const resolveConflict = useCallback(
@@ -74,7 +108,7 @@ export function useMobileConflictRunners({ sendGitRequest, runGitAction, runGitW
     })
   }, [runGitWorkflow, sendConflictRequest])
 
-  return { abortConflictOperation, resolveConflict, completeMerge }
+  return { abortConflictOperation, continueSequencerOperation, resolveConflict, completeMerge }
 }
 
 function readCompleteMergeFailure(result: unknown): string | null {

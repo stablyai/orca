@@ -7,6 +7,7 @@ import { useMobileCommitMessageGeneration } from '../commits/use-mobile-commit-m
 import { useMobileSourceControlCommitRunners } from '../commits/use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
 import { useMobileStageAllRunner } from './use-mobile-stage-all-runner'
+import { useMobileDiscardAllRunner } from './use-mobile-discard-all-runner'
 import { useMobileConflictRunners } from '../conflicts/use-mobile-conflict-runners'
 import type { RuntimeGitLocalBranches } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { MobileGitStatusHostPayload as MobileGitStatusResult } from '../git/git-status-reply-schema'
@@ -176,6 +177,8 @@ export function useMobileSourceControlRunners(params: Params) {
     sendGitRequest
   })
 
+  const discardAll = useMobileDiscardAllRunner({ runGitWorkflow, sendGitRequest })
+
   const unstageAll = useCallback(async () => {
     if (unstageablePaths.length === 0) {
       return
@@ -308,6 +311,7 @@ export function useMobileSourceControlRunners(params: Params) {
     runGitAction,
     stageAll,
     unstageAll,
+    discardAll,
     commit,
     generateCommitMessage,
     cancelGenerateCommitMessage,

@@ -42,7 +42,11 @@ function readStagingArea(value: unknown): MobileGitStagingArea | null {
 }
 
 function readConflictOperation(value: unknown): MobileGitStatusResult['conflictOperation'] {
-  return value === 'merge' || value === 'rebase' || value === 'cherry-pick' || value === 'unknown'
+  return value === 'merge' ||
+    value === 'rebase' ||
+    value === 'cherry-pick' ||
+    value === 'revert' ||
+    value === 'unknown'
     ? value
     : 'unknown'
 }
