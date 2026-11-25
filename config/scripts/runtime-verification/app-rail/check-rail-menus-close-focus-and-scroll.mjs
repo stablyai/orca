@@ -310,14 +310,16 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
     assert.equal(hit, name, `the point hits ${name}`)
     const checked = await row.getAttribute('aria-checked')
     const flipped = checked === 'true' ? 'false' : 'true'
+    const rowNode = await row.elementHandle()
+    const menuNode = await menu.elementHandle()
     await page.mouse.click(point.x, point.y)
-    // The named row, still in this menu, must reach the opposite state; a row that vanished doesn't count.
+    // The same row node, still connected inside the same menu, must reach exactly the opposite state.
     await page.waitForFunction(
-      ({ name, flipped }) =>
-        Array.from(document.querySelectorAll('[role=menu] [role=menuitemcheckbox]'))
-          .find((element) => element.textContent?.trim() === name)
-          ?.getAttribute('aria-checked') === flipped,
-      { name, flipped },
+      ([node, surface, expected]) =>
+        node.isConnected &&
+        surface.contains(node) &&
+        node.getAttribute('aria-checked') === expected,
+      [rowNode, menuNode, flipped],
       { polling: 50 }
     )
     return `${name} ${checked} → ${await row.getAttribute('aria-checked')}`
@@ -329,6 +331,7 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
     // The page's left margin, beside the fixture frame: never under a menu.
     await page.mouse.move(2, (page.viewportSize()?.height ?? 100) - 2)
     await menu.getByRole('menuitemcheckbox', { name: ROW_NAMES[0], exact: true }).focus()
+    const surface = await menu.elementHandle()
     const log = []
     for (const [index, name] of ROW_NAMES.entries()) {
       const state = await page.evaluate(() => {
@@ -348,12 +351,13 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
       const flipped = state.checked === 'true' ? 'false' : 'true'
       for (const expected of [flipped, state.checked]) {
         await page.keyboard.press(' ')
-        // The same row, still focused, reaches the expected state.
+        // The same named row, still focused inside the same menu, reaches exactly the expected state.
         await page.waitForFunction(
-          ({ name, checked }) =>
-            document.activeElement?.textContent?.trim() === name &&
+          ([menuNode, rowName, checked]) =>
+            menuNode.contains(document.activeElement) &&
+            document.activeElement?.textContent?.trim() === rowName &&
             document.activeElement.getAttribute('aria-checked') === checked,
-          { name, checked: expected },
+          [surface, name, expected],
           { polling: 50 }
         )
         await page.waitForTimeout(1100)

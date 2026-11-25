@@ -1,252 +1,353 @@
-// Shared setup for the app-rail runtime proofs: a fixture server, a driver browser, and teardown of whatever this
-// invocation started. A fixture server that was already running (shared with fixtures-shot or the fixtures MCP) is
-// reused and left running; one this invocation started is stopped before it exits, on success, on an assertion
-// failure, on a driver-launch failure, and on SIGINT/SIGTERM/SIGHUP.
+// Session for the app-rail runtime proofs. Each invocation owns everything it uses: its own in-process Vite server for
+// the component fixtures (its own port and dependency cache) and a driver browser it launches. It never contacts,
+// adopts, stops or signals the shared fixture server that fixtures-shot and the fixtures MCP use.
 //
-// Env:
-//   ORCA_RAIL_PROOF_BROWSER  executable for the driver browser (default: Playwright's headless shell). A path that
-//                            does not exist exercises the launch-failure teardown.
-//   ORCA_RAIL_PROOF_FAIL     `assert` throws an assertion failure once the session is up, to exercise that teardown.
-import { execFileSync } from 'node:child_process'
+// Teardown is one promise, shared by the normal path and signal handlers. It waits for acquisitions still in flight,
+// closes each resource with a deadline, escalates only through live handles (the driver's own process group while its
+// leader is unreaped, children this process spawned), takes an inventory of what is left, and fails the run if anything
+// is unresolved, including an inventory that could not be taken. The exit has one owner: once a signal arrives, the
+// signal path decides; otherwise the normal path does. Later signals only wait for the same teardown.
+//
+// Unix only (process groups and pgrep), like the rest of the fixture tooling's process handling.
+//
+// Env (test hooks for the teardown checks; unset in ordinary runs):
+//   ORCA_RAIL_PROOF_BROWSER   driver executable (default: Playwright's headless shell); a missing path fails the launch.
+//   ORCA_RAIL_PROOF_FAIL      `assert`: fail once the session is up.
+//   ORCA_RAIL_PROOF_HOLD      `server` | `driver` (while that acquisition is in flight), `body`, `teardown`: print
+//                             "holding at <stage>" and wait there until a signal arrives.
+//   ORCA_RAIL_PROOF_SACRIFICE `1`: also start an owned process group (a parent and a child, both ignoring SIGTERM),
+//                             so teardown must escalate to SIGKILL and account for a descendant.
+//   ORCA_RAIL_PROOF_HANG      `vite-close`: Vite's close never settles, to show the deadline and the failing status.
+//   ORCA_RAIL_PROOF_PGREP     inventory command (default: pgrep); a missing one shows an inventory failure fails the run.
+import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { chromium } from 'playwright-core'
-import {
-  callFixtureServer,
-  ensureFixtureServer
-} from '../../component-fixtures/fixture-server-client.mjs'
-import { repoRoot, serverStatePath } from '../../component-fixtures/fixture-paths.mjs'
+import { createServer as createViteServer } from 'vite'
 
-const PLAYWRIGHT_VERSION = JSON.parse(
-  readFileSync(path.join(repoRoot, 'node_modules/playwright-core/package.json'), 'utf8')
-).version
+const repoRoot = path.resolve(import.meta.dirname, '../../../..')
+const SIGNAL_CODES = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }
+const ACQUIRE_SETTLE_MS = 180_000
+const CLOSE_MS = 10_000
+const KILL_WAIT_MS = 10_000
 
 function log(line) {
   console.log(`[rail-proof] ${line}`)
 }
 
-function isAlive(pid) {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
-  }
+// Why: writes to a piped stdout are asynchronous, so exiting at once can drop the last log lines.
+function exitAfterFlush(code) {
+  process.exitCode = code
+  process.stdout.write('', () => process.stderr.write('', () => process.exit(code)))
 }
 
-async function waitForExit(pid, timeoutMs) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    if (!isAlive(pid)) {
-      return true
-    }
-    await delay(100)
-  }
-  return !isAlive(pid)
-}
-
-function readServerState() {
-  try {
-    return JSON.parse(readFileSync(serverStatePath, 'utf8'))
-  } catch {
-    return null
-  }
-}
-
-// The fixture server's own processes (its headless Chromium); empty where pgrep is unavailable.
-function childPids(pid) {
-  try {
-    return execFileSync('pgrep', ['-P', String(pid)], { encoding: 'utf8' })
-      .split('\n')
-      .filter(Boolean)
-      .map(Number)
-  } catch {
-    return []
-  }
-}
-
-/** Stops a process: SIGTERM, then SIGKILL, waiting for each; true once it is gone. */
-async function terminate(pid, graceMs) {
-  if (await waitForExit(pid, graceMs)) {
-    return true
-  }
-  for (const signal of ['SIGTERM', 'SIGKILL']) {
-    try {
-      process.kill(pid, signal)
-    } catch {
-      return true
-    }
-    if (await waitForExit(pid, 10_000)) {
-      return true
-    }
-  }
-  return !isAlive(pid)
+async function sha256File(file) {
+  return createHash('sha256')
+    .update(await readFile(file))
+    .digest('hex')
 }
 
 function sha256(text) {
   return createHash('sha256').update(text).digest('hex')
 }
 
+/** The promise's outcome, or `'timed out'` once `ms` pass; never rejects. */
+function settleWithin(promise, ms) {
+  return Promise.race([
+    promise.then(
+      () => 'done',
+      (error) => `failed: ${String(error?.message ?? error).split('\n')[0]}`
+    ),
+    delay(ms).then(() => 'timed out')
+  ])
+}
+
+function hasExited(child) {
+  return child.exitCode !== null || child.signalCode !== null
+}
+
+/** Waits for a child this process spawned (a live handle, so its pid cannot be reused while unreaped). */
+function waitForChildExit(child, ms) {
+  if (hasExited(child)) {
+    return Promise.resolve(true)
+  }
+  return Promise.race([
+    new Promise((resolve) => child.once('exit', () => resolve(true))),
+    delay(ms).then(() => hasExited(child))
+  ])
+}
+
+/** Pids from pgrep; throws when the inventory itself fails, so a failure never reads as "none left". */
+function pgrep(args, what) {
+  return new Promise((resolve, reject) => {
+    execFile(process.env.ORCA_RAIL_PROOF_PGREP || 'pgrep', args, (error, stdout) => {
+      if (!error || error.code === 1) {
+        resolve(String(stdout).split('\n').filter(Boolean).map(Number))
+      } else {
+        reject(new Error(`inventory of ${what} failed: ${error.message}`))
+      }
+    })
+  })
+}
+
 /**
- * Starts (or reuses) the fixture server and launches the driver browser, then runs `body`. Always tears down what it
- * started and sets the exit status: 0 when `body` resolves, 1 otherwise.
+ * Signals an owned process group and waits until it is empty. Only called while the group's leader is a live child
+ * handle of this process or the group still has members, so the group id cannot belong to anyone else.
+ */
+async function stopProcessGroup(label, pgid, leader) {
+  const steps = []
+  try {
+    for (const signal of ['SIGTERM', 'SIGKILL']) {
+      const members = await pgrep(['-g', String(pgid)], `process group ${pgid}`)
+      if (members.length === 0 && hasExited(leader)) {
+        break
+      }
+      try {
+        process.kill(-pgid, signal)
+      } catch (error) {
+        if (error.code !== 'ESRCH') {
+          throw error
+        }
+      }
+      steps.push(`${signal} to [${members.join(', ')}]`)
+      const deadline = Date.now() + KILL_WAIT_MS
+      while (Date.now() < deadline) {
+        await delay(200)
+        if ((await pgrep(['-g', String(pgid)], `process group ${pgid}`)).length === 0) {
+          break
+        }
+      }
+    }
+    const left = await pgrep(['-g', String(pgid)], `process group ${pgid}`)
+    const after = steps.length ? ` after ${steps.join(', ')}` : ''
+    log(
+      `teardown: ${label} group ${pgid}: ${left.length ? `STILL RUNNING [${left.join(', ')}]` : 'empty'}${after}`
+    )
+    return left.length === 0
+  } catch (error) {
+    log(`teardown: ${label} group ${pgid}: ${error.message}`)
+    return false
+  }
+}
+
+// A parent and a child in their own process group, both ignoring SIGTERM: escalation and descendants must be handled.
+function sacrificialGroup() {
+  const grandchild = "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"
+  const script = `process.on('SIGTERM', () => {}); require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore' }); setInterval(() => {}, 1000)`
+  return spawn(process.execPath, ['-e', script], { detached: true, stdio: 'ignore' })
+}
+
+/**
+ * Runs `body({ page, url, served })` against this invocation's own fixture server and driver browser, tears both down,
+ * and exits: 0 when the body passed and teardown was complete, 1 when either failed, 128 + n after a signal.
  */
 export async function runRailProof(name, body) {
-  const owned = { server: null, driver: null, browser: null }
-  // The server this run spawned, known before it publishes its state, so a start that is interrupted, fails or times
-  // out is still stopped.
-  let spawnedPid = null
-  // One teardown for every caller: a signal that lands while `finally` is tearing down waits for the same cleanup.
+  process.chdir(repoRoot)
+  const owned = { vite: null, cacheDir: null, driver: null, browser: null, sacrifice: null }
+  const inFlight = new Set()
+  let signalName = null
+  let releaseHolds = () => {}
+  const cancelled = new Promise((resolve) => {
+    releaseHolds = resolve
+  })
+  const holdAt = async (stage) => {
+    if (process.env.ORCA_RAIL_PROOF_HOLD === stage) {
+      log(`holding at ${stage}`)
+      await cancelled
+    }
+  }
+  const fence = () => {
+    if (signalName) {
+      throw new Error(`cancelled by ${signalName}`)
+    }
+  }
+  const acquire = (promise) => {
+    inFlight.add(promise)
+    promise.then(
+      () => inFlight.delete(promise),
+      () => inFlight.delete(promise)
+    )
+    return promise
+  }
+
+  const runTeardown = async () => {
+    let complete = true
+    if (inFlight.size > 0) {
+      const pending = inFlight.size
+      const outcome = await settleWithin(Promise.allSettled(inFlight), ACQUIRE_SETTLE_MS)
+      log(`teardown: waited for ${pending} in-flight acquisition(s): ${outcome}`)
+      complete &&= outcome === 'done'
+    }
+    await holdAt('teardown')
+    if (owned.browser) {
+      log(
+        `teardown: driver connection close: ${await settleWithin(owned.browser.close(), CLOSE_MS)}`
+      )
+    }
+    if (owned.driver) {
+      const leader = owned.driver.process()
+      const pgid = leader.pid
+      log(`teardown: driver close: ${await settleWithin(owned.driver.close(), CLOSE_MS)}`)
+      if (!hasExited(leader)) {
+        log(`teardown: driver kill: ${await settleWithin(owned.driver.kill(), CLOSE_MS)}`)
+      }
+      const leaderGone = await waitForChildExit(leader, KILL_WAIT_MS)
+      // Helpers can outlive the leader; the group id stays ours while any of them remain.
+      const groupEmpty = await stopProcessGroup('driver browser', pgid, leader)
+      complete &&= leaderGone && groupEmpty
+      log(`teardown: driver browser pid ${pgid} ${leaderGone ? 'exited' : 'STILL RUNNING'}`)
+    }
+    if (owned.sacrifice) {
+      complete &&= await stopProcessGroup('sacrificial', owned.sacrifice.pid, owned.sacrifice)
+    }
+    if (owned.vite) {
+      const closing =
+        process.env.ORCA_RAIL_PROOF_HANG === 'vite-close'
+          ? new Promise(() => {})
+          : owned.vite.close()
+      const outcome = await settleWithin(closing, CLOSE_MS)
+      log(`teardown: fixture server (in this process) close: ${outcome}`)
+      complete &&= outcome === 'done'
+    }
+    if (owned.cacheDir) {
+      await rm(owned.cacheDir, { recursive: true, force: true }).catch(() => {})
+    }
+    // Anything else this process spawned (none expected) is reported and fails the run, never guessed at.
+    try {
+      const own = await pgrep(['-P', String(process.pid)], "this process's children")
+      log(`teardown: other children of this process still running: [${own.join(', ')}]`)
+      complete &&= own.length === 0
+    } catch (error) {
+      log(`teardown: ${error.message}`)
+      complete = false
+    }
+    log(`teardown: ${complete ? 'complete' : 'INCOMPLETE'}`)
+    return complete
+  }
   let teardownPromise = null
   const teardown = () => {
     teardownPromise ??= runTeardown()
     return teardownPromise
   }
-  /** Stops what this run started; false if anything it owns is still running afterwards. */
-  const runTeardown = async () => {
-    let complete = true
-    if (owned.browser) {
-      await owned.browser.close().catch(() => {})
-    }
-    if (owned.driver) {
-      const pid = owned.driver.process()?.pid
-      await owned.driver.close().catch(() => {})
-      const gone = pid ? await terminate(pid, 5000) : true
-      complete &&= gone
-      log(`teardown: driver browser pid ${pid} ${gone ? 'exited' : 'STILL RUNNING'}`)
-    }
-    if (!owned.server && spawnedPid !== null && isAlive(spawnedPid)) {
-      const state = readServerState()
-      owned.server = {
-        pid: spawnedPid,
-        url: state?.pid === spawnedPid ? state.url : null,
-        children: childPids(spawnedPid)
-      }
-    }
-    if (owned.server) {
-      const { pid, url, children } = owned.server
-      // Ask first, but never wait on a server that accepts the request and then hangs.
-      if (url) {
-        await Promise.race([callFixtureServer(url, 'stop', {}).catch(() => {}), delay(5000)])
-      }
-      // The server stops its own browser on stop; an unresponsive one is signalled so nothing outlives this run.
-      const serverGone = await terminate(pid, 10_000)
-      const childrenGone = (
-        await Promise.all(children.map((child) => terminate(child, 5000)))
-      ).every(Boolean)
-      complete &&= serverGone && childrenGone
-      log(
-        `teardown: fixture server children [${children.join(', ')}] ${childrenGone ? 'exited' : 'STILL RUNNING'}`
-      )
-      log(
-        `teardown: fixture server pid ${String(pid)} (started by this run) ${serverGone ? 'stopped' : 'STILL RUNNING'}`
-      )
-    }
-    return complete
-  }
+
+  // One owner for the exit: the first signal takes it; the normal path exits only if no signal ever arrived.
   const onSignal = (signal) => {
+    if (signalName) {
+      log(`received ${signal} again; still tearing down`)
+      return
+    }
+    signalName = signal
     log(`received ${signal}; tearing down`)
-    // The conventional 128 + signal number.
-    const code = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }[signal] ?? 1
-    void teardown().then(
-      (complete) => process.exit(complete ? code : 1),
-      () => process.exit(1)
-    )
+    releaseHolds()
+    void teardown().then((complete) => {
+      log(`exit status ${complete ? SIGNAL_CODES[signal] : 1}`)
+      exitAfterFlush(complete ? SIGNAL_CODES[signal] : 1)
+    })
   }
-  const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP']
-  for (const signal of SIGNALS) {
-    process.once(signal, onSignal)
+  for (const signal of Object.keys(SIGNAL_CODES)) {
+    process.on(signal, onSignal)
   }
 
-  log(`${name}: node pid ${process.pid}, playwright-core ${PLAYWRIGHT_VERSION}`)
+  const versionOf = async (pkg) =>
+    JSON.parse(await readFile(path.join(repoRoot, 'node_modules', pkg, 'package.json'), 'utf8'))
+      .version
+  log(
+    `${name}: node pid ${process.pid}, playwright-core ${await versionOf('playwright-core')}, vite ${await versionOf('vite')}, session sha256 ${(await sha256File(import.meta.filename)).slice(0, 16)}, proof sha256 ${(await sha256File(process.argv[1])).slice(0, 16)}`
+  )
+  let passed = false
   try {
-    const { url, started } = await ensureFixtureServer({
-      onStart: (pid) => {
-        spawnedPid = pid ?? null
-      }
-    })
-    const state = readServerState()
-    const children = childPids(state.pid)
-    if (started) {
-      owned.server = { pid: state.pid, url, children }
+    if (process.env.ORCA_RAIL_PROOF_SACRIFICE === '1') {
+      owned.sacrifice = sacrificialGroup()
+      log(`sacrificial process group ${owned.sacrifice.pid} (ignores SIGTERM, has a child)`)
     }
-    log(
-      `fixture server pid ${state.pid} (children [${children.join(', ')}]) at ${url} (${started ? 'started by this run; will stop it' : 'preexisting; left running'})`
+    owned.cacheDir = await mkdtemp(path.join(os.tmpdir(), 'orca-rail-proof-vite-'))
+    const starting = acquire(
+      (async () => {
+        const vite = await createViteServer({
+          configFile: path.join(repoRoot, 'config/vite.fixtures.config.ts'),
+          cacheDir: owned.cacheDir,
+          clearScreen: false,
+          logLevel: 'warn',
+          server: { host: '127.0.0.1', port: 0, open: false, hmr: false }
+        })
+        owned.vite = vite
+        await vite.listen()
+      })()
     )
+    await Promise.all([starting, holdAt('server')])
+    fence()
+    const address = owned.vite.httpServer?.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('the fixture server has no TCP address')
+    }
+    const url = `http://127.0.0.1:${address.port}`
+    log(`fixture server: in this process at ${url}, dependency cache ${owned.cacheDir}`)
+
     const executablePath = process.env.ORCA_RAIL_PROOF_BROWSER || undefined
-    // Why: Playwright's own signal handlers exit the process before this run's async teardown can stop the server.
-    owned.driver = await chromium.launchServer({
-      headless: true,
-      executablePath,
-      handleSIGINT: false,
-      handleSIGTERM: false,
-      handleSIGHUP: false
-    })
-    owned.browser = await chromium.connect(owned.driver.wsEndpoint())
+    const launching = acquire(
+      (async () => {
+        // Why: Playwright's own signal handlers would exit the process before this teardown runs.
+        owned.driver = await chromium.launchServer({
+          headless: true,
+          executablePath,
+          handleSIGINT: false,
+          handleSIGTERM: false,
+          handleSIGHUP: false
+        })
+        owned.browser = await chromium.connect(owned.driver.wsEndpoint())
+      })()
+    )
+    await Promise.all([launching, holdAt('driver')])
+    fence()
     log(
-      `driver browser pid ${owned.driver.process()?.pid}, ${executablePath ?? 'playwright chromium-headless-shell'} ${owned.browser.version()}`
+      `driver browser pid ${owned.driver.process().pid} (its own process group), ${executablePath ?? 'playwright chromium-headless-shell'} ${owned.browser.version()}`
     )
     if (process.env.ORCA_RAIL_PROOF_FAIL === 'assert') {
       throw new Error('forced assertion failure (ORCA_RAIL_PROOF_FAIL=assert)')
     }
+    await holdAt('body')
+    fence()
     const page = await owned.browser.newPage({ viewport: { width: 800, height: 600 } })
     page.setDefaultTimeout(120_000)
     page.on('pageerror', (error) => console.error(`[page error] ${error.message}`))
     await body({ page, url, served: (paths) => servedSources(url, paths) })
+    passed = true
     log(`${name}: PASS`)
-    process.exitCode = 0
   } catch (error) {
-    console.error(error instanceof Error ? (error.stack ?? error.message) : error)
+    console.error(error instanceof Error ? (error.stack ?? error.message) : String(error))
     log(`${name}: FAIL`)
-    process.exitCode = 1
-  } finally {
-    if (!(await teardown())) {
-      log('teardown left a process this run started; failing the run')
-      process.exitCode = 1
-    }
-    for (const signal of SIGNALS) {
-      process.off(signal, onSignal)
-    }
-    log(`exit status ${process.exitCode}`)
   }
-}
-
-// A loaded host can drop a connection while Vite transforms; a few retries tell that apart from a dead server.
-async function fetchWithRetry(target) {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await fetch(target, { signal: AbortSignal.timeout(60_000) })
-    } catch (error) {
-      if (attempt === 4) {
-        throw error
-      }
-      await delay(2000 * attempt)
-    }
+  const complete = await teardown()
+  if (signalName) {
+    // The signal path owns the exit.
+    return
   }
+  const code = passed && complete ? 0 : 1
+  log(`exit status ${code}`)
+  exitAfterFlush(code)
 }
 
 /**
- * What the fixture server actually serves for these sources, so a result is bound to the code under test rather than
- * to a checkout: the hash of each on-disk file and of the module the server transforms from it, plus marker checks.
+ * What this invocation's fixture server serves for these sources, so a result is bound to the code under test: the
+ * hash of each on-disk file and of the module the server transforms from it.
  */
 async function servedSources(url, paths) {
   const lines = []
-  const modules = {}
   for (const relativePath of paths) {
-    const disk = readFileSync(path.join(repoRoot, 'src/renderer', relativePath), 'utf8')
-    const response = await fetchWithRetry(`${url}/${relativePath}`)
+    const disk = await readFile(path.join(repoRoot, 'src/renderer', relativePath), 'utf8')
+    const response = await fetch(`${url}/${relativePath}`, { signal: AbortSignal.timeout(120_000) })
     const served = await response.text()
     if (!response.ok) {
       throw new Error(`fixture server could not serve ${relativePath}: ${response.status}`)
     }
-    modules[relativePath] = served
     lines.push(
       `${relativePath}: disk sha256 ${sha256(disk).slice(0, 16)}, served sha256 ${sha256(served).slice(0, 16)} (${served.length} bytes)`
     )
   }
-  return { lines, modules }
+  return { lines }
 }
 
 /** Two animation frames: enough for React to commit and Radix to position. */

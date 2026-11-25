@@ -94,21 +94,17 @@ export async function ensureFixtureServer({ onStart } = {}) {
   }
   await mkdir(fixtureCacheDir, { recursive: true })
   let exited = false
-  // Only the caller that won the start lock started the server; one that finds it already starting did not.
-  const startedHere = tryAcquireStartLock()
-  if (startedHere) {
-    const child = startServerProcess()
-    child.once('exit', () => {
+  if (tryAcquireStartLock()) {
+    onStart?.()
+    startServerProcess().once('exit', () => {
       exited = true
     })
-    // The pid before the server publishes its state, so a caller interrupted during startup can still stop it.
-    onStart?.(child.pid)
   }
   const deadline = Date.now() + STARTUP_TIMEOUT_MS
   while (Date.now() < deadline) {
     const state = readServerState()
     if (state && state.pid !== existing?.pid && (await probeServer(state))) {
-      return { url: state.url, started: startedHere }
+      return { url: state.url, started: true }
     }
     if (exited) {
       throw new Error(`Fixture server exited during startup:\n${readLogTail()}`)
