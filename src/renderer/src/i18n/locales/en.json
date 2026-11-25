@@ -24202,6 +24202,15 @@
       "label": "Jira project",
       "all": "All Jira projects"
     },
+    "RepositoryGitHubIssueSection": {
+      "title": "Default GitHub issue repository",
+      "description": "Use this repository when linking a GitHub issue by number. Leave blank to use the project repository.",
+      "placeholder": "owner/repo",
+      "save": "Save",
+      "invalid": "Enter a GitHub repository in owner/repo format.",
+      "runtimeUpdate": "Update this runtime to save a default GitHub issue repository.",
+      "saveFailed": "Could not save the default GitHub issue repository."
+    },
     "RepositoryJiraProjectSection": {
       "saveFailed": "Could not save the default Jira project.",
       "runtimeUpdate": "Update this runtime to save a default Jira project.",

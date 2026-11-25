@@ -43,6 +43,7 @@ import { RepositoryWindowsRuntimeSection } from './runtime/RepositoryWindowsRunt
 import { matchesRepositoryIdentitySearch } from './identity/repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './worktrees/RepositoryWorktreeDefaultsSection'
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
+import { RepositoryGitHubIssueSection } from './RepositoryGitHubIssueSection'
 import { RepositoryWorkspaceCleanupSection } from './workspace-cleanup/RepositoryWorkspaceCleanupSection'
 import { getProjectRuntimeSessionSummary } from './runtime/repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
@@ -141,6 +142,11 @@ export function RepositoryPane({
   const isMountedRef = useRef(false)
   // Project-name search navigates to the project; it must not hide child controls that omit the name.
   const forceFullPaneForRepoMatch = matchesRepositoryIdentitySearch(searchQuery, repo)
+  const repoSettingProps = {
+    repo,
+    updateRepo: updateSelectedRepo,
+    forceVisible: forceFullPaneForRepoMatch
+  }
 
   const clearCopiedTemplateResetTimer = useCallback((): void => {
     if (copiedTemplateResetTimerRef.current !== null) {
@@ -286,24 +292,18 @@ export function RepositoryPane({
           <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
         </SearchableSetting>
 
-        <RepositoryJiraProjectSection
-          key={`${selectedHostId}:${repo.id}`}
-          repo={repo}
-          updateRepo={updateSelectedRepo}
-          forceVisible={forceFullPaneForRepoMatch}
-        />
+        <RepositoryJiraProjectSection key={`${selectedHostId}:${repo.id}`} {...repoSettingProps} />
 
-        <RepositoryAgentTrustSection
-          repo={repo}
-          updateRepo={updateSelectedRepo}
-          forceVisible={forceFullPaneForRepoMatch}
-        />
+        {!isFolder ? (
+          <RepositoryGitHubIssueSection
+            key={`${selectedHostId}:${repo.id}:github-issues`}
+            {...repoSettingProps}
+          />
+        ) : null}
 
-        <RepositoryBrowserProfileSection
-          repo={repo}
-          updateRepo={updateSelectedRepo}
-          forceVisible={forceFullPaneForRepoMatch}
-        />
+        <RepositoryAgentTrustSection {...repoSettingProps} />
+
+        <RepositoryBrowserProfileSection {...repoSettingProps} />
 
         {!isFolder ? (
           <>

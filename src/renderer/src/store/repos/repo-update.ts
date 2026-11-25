@@ -151,6 +151,9 @@ export function createRepoUpdateActions(
                     { timeoutMs: 15_000 }
                   )
                 ).repo
+          if (!updatedRepo && sanitizedUpdates.defaultIssueRepository !== undefined) {
+            return false
+          }
           if (
             sanitizedUpdates.projectGroupOrder !== undefined &&
             (!updatedRepo ||

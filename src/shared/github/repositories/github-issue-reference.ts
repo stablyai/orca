@@ -1,6 +1,6 @@
 import { buildGitHubRepoUrl, parseGitHubIssueOrPRLink, type RepoSlug } from './links'
 
-type IssueRepository = Pick<RepoSlug, 'owner' | 'repo'>
+export type IssueRepository = Pick<RepoSlug, 'owner' | 'repo'>
 type BareIssueReference = { kind: 'bare'; number: number }
 type ShorthandIssueReference = IssueRepository & { kind: 'shorthand'; number: number }
 type IssueUrl = IssueRepository & { kind: 'url'; host: string; number: number; url: string }
@@ -28,6 +28,23 @@ function isIssueRepository(owner: string, repo: string): boolean {
     repo !== '.' &&
     repo !== '..'
   )
+}
+
+export function parseIssueRepository(input: string): IssueRepository | undefined {
+  const [owner, repo, ...rest] = input.trim().split('/')
+  return repo && rest.length === 0 && isIssueRepository(owner, repo) ? { owner, repo } : undefined
+}
+
+export function normalizeIssueRepository(value: unknown): IssueRepository | null | undefined {
+  if (value === null) {
+    return null
+  }
+  if (!value || typeof value !== 'object' || !('owner' in value) || !('repo' in value)) {
+    return undefined
+  }
+  const owner = typeof value.owner === 'string' ? value.owner.trim() : ''
+  const repo = typeof value.repo === 'string' ? value.repo.trim() : ''
+  return isIssueRepository(owner, repo) ? { owner, repo } : undefined
 }
 
 export function parseGitHubIssueReference(input: string): IssueReference | null {

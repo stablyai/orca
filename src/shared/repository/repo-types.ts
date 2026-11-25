@@ -2,6 +2,7 @@ import type { DictationTerm } from '../speech/dictation/dictation-dictionary'
 import type { RepoIcon } from './appearance/repo-icon'
 import type { GhAccountBinding } from '../github/accounts/account-binding'
 import type { GitHubRepositoryIdentity } from '../github/repositories/repository-identity'
+import type { IssueRepository } from '../github/repositories/github-issue-reference'
 import type { RepoHookSettings } from '../workspace-setup/orca-yaml-hook-types'
 import type { ForkSyncMode } from '../git/remotes/git-fork-sync'
 import type { GitRemoteIdentity } from '../git/remotes/git-remote-identity'
@@ -65,6 +66,8 @@ export type Repo = {
   executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}` | null
   /** Absent means auto; writers omit on creation for persisted-record compatibility. */
   issueSourcePreference?: IssueSourcePreference
+  /** Default for bare GitHub issue numbers, on this repo's GitHub host. */
+  defaultIssueRepository?: IssueRepository | null
   /** Host-owned Jira project default; users can override it in each composer. */
   defaultJiraProject?: JiraProjectReference | null
   /** Bind host/login only; resolve a short-lived gh token at spawn and inject into that child’s environment. */

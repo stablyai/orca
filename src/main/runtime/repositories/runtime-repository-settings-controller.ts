@@ -47,6 +47,7 @@ type RepositoryUpdates = Partial<
     | 'symlinkPaths'
     | 'dictationTerms'
     | 'issueSourcePreference'
+    | 'defaultIssueRepository'
     | 'defaultJiraProject'
     | 'externalWorktreeVisibility'
     | 'externalWorktreeVisibilityPromptDismissedAt'
