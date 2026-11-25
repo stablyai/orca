@@ -277,7 +277,7 @@ export function BotPanelHeader({
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setSharing('copy')}>
               <Share2 />
-              {t('bots.share.shareCopy', 'Share a copy…')}
+              {t('bots.share.shareCopy', 'Send a copy…')}
             </DropdownMenuItem>
             {folderPath ? (
               <>

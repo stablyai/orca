@@ -1,16 +1,5 @@
 // The Share dialog's rows: one per person with access, and the Add field's suggestions.
-import {
-  CircleCheck,
-  CircleX,
-  Clock,
-  Ellipsis,
-  Mail,
-  Search,
-  Trash2,
-  UserPlus,
-  X,
-  type LucideIcon
-} from 'lucide-react'
+import { Ellipsis, Mail, Search, Trash2, UserPlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -28,13 +17,12 @@ import { BotOwnerAvatar } from '../bot-connector-people'
 import {
   teamSharePersonName,
   type TeamShareLinkSource,
-  type TeamShareAnswer,
   type TeamShareOwner,
   type TeamSharePerson,
   type TeamShareSuggestion
 } from './bot-team-share-people'
 
-const LINK_ICONS = { slack: SlackIcon, github: GitHubIcon, linear: LinearIcon } as const
+export const LINK_ICONS = { slack: SlackIcon, github: GitHubIcon, linear: LinearIcon } as const
 const LINK_NAMES = { slack: 'Slack', github: 'GitHub', linear: 'Linear' } as const
 
 function LinkIcons({ links }: { links: readonly TeamShareLinkSource[] }): React.JSX.Element {
@@ -85,53 +73,26 @@ function PersonAvatar({
   )
 }
 
-// Where a person stands, on the row's second line: color only on its icon.
-const ANSWER_ICONS: Record<TeamShareAnswer, { icon: LucideIcon; className: string }> = {
-  accepted: { icon: CircleCheck, className: 'text-status-success' },
-  pending: { icon: Clock, className: 'text-status-warning' },
-  declined: { icon: CircleX, className: 'text-destructive' }
-}
-
-function StateLine({
-  icon: Icon,
-  className,
-  text
-}: {
-  icon: LucideIcon
-  className?: string
-  text: string
-}): React.JSX.Element {
+/** Whether the row is greyed out: someone asked who hasn't accepted, or who declined. */
+function isWaiting(person: TeamSharePerson): boolean {
   return (
-    <div className="flex min-w-0 items-center gap-1 text-xs leading-4 text-muted-foreground">
-      <Icon className={cn('size-3 shrink-0', className)} aria-hidden />
-      <span className="min-w-0 truncate">{text}</span>
-    </div>
+    person.kind === 'invite' ||
+    (person.kind === 'account' && person.answer !== undefined && person.answer !== 'accepted')
   )
 }
 
-function useSubline(person: TeamSharePerson): React.ReactNode {
+function useSubline(person: TeamSharePerson): string {
   const t = useTranslate()
   switch (person.kind) {
-    case 'account': {
-      const answer = person.answer ?? 'accepted'
-      const words = {
-        accepted: t('bots.teamShare.hasAccess', 'Has access'),
-        pending: t('bots.teamShare.waitingToAccept', 'Waiting to accept'),
-        declined: t('bots.teamShare.declined', 'Declined')
-      }[answer]
-      return <StateLine {...ANSWER_ICONS[answer]} text={`${words} · ${person.email}`} />
-    }
+    case 'account':
+      // Someone with access shows their email; anyone else, only where they stand.
+      return person.answer === 'declined'
+        ? t('bots.teamShare.declined', 'Declined')
+        : person.answer === 'pending'
+          ? t('bots.teamShare.invited', 'Invited')
+          : person.email
     case 'invite':
-      return (
-        <StateLine
-          icon={Mail}
-          text={
-            person.emailSent
-              ? t('bots.teamShare.invited', 'Invited')
-              : t('bots.teamShare.emailNotSent', 'Email not sent yet')
-          }
-        />
-      )
+      return t('bots.teamShare.invited', 'Invited')
     case 'slack':
       return person.handle
         ? t('bots.teamShare.slackLine', '{{handle}} on Slack · {{workspace}}', {
@@ -153,27 +114,33 @@ function RowShell({
   name,
   links,
   subline,
-  trailing
+  trailing,
+  muted = false
 }: {
   avatar: React.ReactNode
   name: string
   links?: readonly TeamShareLinkSource[]
-  subline: React.ReactNode
+  subline: string
   trailing: React.ReactNode
+  /** Greyed out: asked, not in yet. */
+  muted?: boolean
 }): React.JSX.Element {
   return (
     <li className="flex min-h-12 items-center gap-3 px-6 py-1.5">
-      {avatar}
+      <span className={cn('flex shrink-0', muted && 'opacity-50')}>{avatar}</span>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[13px] leading-5 font-medium">{name}</span>
+          <span
+            className={cn(
+              'truncate text-[13px] leading-5 font-medium',
+              muted && 'text-muted-foreground'
+            )}
+          >
+            {name}
+          </span>
           {links ? <LinkIcons links={links} /> : null}
         </div>
-        {typeof subline === 'string' ? (
-          <div className="truncate text-xs leading-4 text-muted-foreground">{subline}</div>
-        ) : (
-          subline
-        )}
+        <div className="truncate text-xs leading-4 text-muted-foreground">{subline}</div>
       </div>
       <div className="flex shrink-0 items-center">{trailing}</div>
     </li>
@@ -288,6 +255,7 @@ export function TeamSharePersonRow({
       links={person.kind === 'account' ? person.links : undefined}
       subline={subline}
       trailing={trailing}
+      muted={isWaiting(person)}
     />
   )
 }

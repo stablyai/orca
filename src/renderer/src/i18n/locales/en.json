@@ -29614,7 +29614,7 @@
       "allHidden": "All bots are paused and hidden."
     },
     "share": {
-      "shareCopy": "Share a copy…",
+      "shareCopy": "Send a copy…",
       "none": "None",
       "noPurpose": "No purpose yet",
       "updatedAt": "Updated {{date}}",
@@ -30676,7 +30676,6 @@
       }
     },
     "teamShare": {
-      "add": "Add",
       "addLabel": "Add people",
       "addPlaceholder": "Email, Slack @name or GitHub login",
       "done": "Done",
@@ -30686,7 +30685,6 @@
       "githubOnly": "GitHub only",
       "invite": "Invite {{email}}",
       "inviteActions": "Invite actions for {{name}}",
-      "invited": "Invited",
       "noMatch": "No match for {{query}}",
       "orcaAccount": "Orca account",
       "owner": "Owner",
@@ -30703,11 +30701,18 @@
       "title": "Share {{name}}",
       "warning": "Anyone you share with can do anything {{name}} can on {{host}}, including using your accounts, files and chats.",
       "you": "{{name}} (you)",
-      "hasAccess": "Has access",
-      "waitingToAccept": "Waiting to accept",
       "declined": "Declined",
       "personActions": "Actions for {{name}}",
-      "shareAgain": "Share again"
+      "shareAgain": "Share again",
+      "cancel": "Cancel",
+      "shareStaged": "Share",
+      "discardOne": "{{name}} won’t get access.",
+      "discardMany": "These people won’t get access.",
+      "discard": "Discard",
+      "keepEditing": "Keep editing",
+      "discardTitleOne": "Discard invite?",
+      "discardTitleMany": "Discard {{count}} invites?",
+      "invited": "Invited"
     }
   },
   "plugins": {

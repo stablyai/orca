@@ -7438,7 +7438,7 @@
       "copyFailed": "Couldn’t copy the link",
       "previewChanged": "The preview changed. Review it before publishing.",
       "movedHere": "This link was updated somewhere else.",
-      "shareBot": "Share bot…",
+      "shareBot": "Send a copy…",
       "countOf": "{{picked}} of {{all}}",
       "removeSecret": "Remove the secret to publish",
       "title": "Share bot",

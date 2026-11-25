@@ -122,27 +122,36 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
 
   // Only this list's change goes to the host, which applies it to the people it has now, so an edit
   // made elsewhere meanwhile is kept. A failed save offers Try again, without asking again.
+  // Settles with whether the first attempt saved.
   const saveMembers = (
     updates: Pick<BotUpdateParams['updates'], 'addMembers' | 'removeMembers'>,
     failed: string,
     saved?: () => void
-  ): void => {
-    const attempt = (): void => {
+  ): Promise<boolean> => {
+    const attempt = (): Promise<boolean> => {
       setSave({ kind: 'saving' })
-      updateBot(bot, updates).then(
+      return updateBot(bot, updates).then(
         () => {
           setSave({ kind: 'idle' })
           saved?.()
+          return true
         },
-        (error: unknown) =>
-          setSave({ kind: 'failed', message: fullMessage(error) ?? failed, retry: attempt })
+        (error: unknown) => {
+          setSave({
+            kind: 'failed',
+            message: fullMessage(error) ?? failed,
+            retry: () => void attempt()
+          })
+          return false
+        }
       )
     }
-    attempt()
+    return attempt()
   }
 
   // The picker closes first, so the confirmation is the only thing on screen.
-  const add = async (picked: BotMember[], request?: HostAccessRequest): Promise<void> => {
+  /** Whether they were added: false when the confirmation is declined or the save fails. */
+  const add = async (picked: BotMember[], request?: HostAccessRequest): Promise<boolean> => {
     setPickerOpen(false)
     const confirmed = await confirmAccess(
       {
@@ -160,14 +169,14 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
       request ? () => void decideAccessRequest(request, 'declined') : undefined
     )
     if (!confirmed) {
-      return
+      return false
     }
     // A request's person is added by the host once the cloud records the grant.
     if (request) {
       await decideAccessRequest(request, 'granted')
-      return
+      return true
     }
-    saveMembers(
+    return saveMembers(
       { addMembers: newBotMembers(bot.members, picked, service) },
       t('bots.whoCanAsk.addFailed', 'Couldn’t add {{names}}.', {
         names: picked.map((member) => member.name || member.id).join(', ')
@@ -231,7 +240,7 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
   // Keep only me: everyone this list shows, and nobody another connector lets ask.
   const keepOnlyMe = (): void => {
     const gone = listed
-    saveMembers(
+    void saveMembers(
       {
         removeMembers: gone.map((member) => ({
           id: member.id,
