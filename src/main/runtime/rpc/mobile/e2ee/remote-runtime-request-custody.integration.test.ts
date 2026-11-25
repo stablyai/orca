@@ -4,14 +4,16 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { E2EEChannel } from '../../../main/runtime/rpc/mobile/e2ee/e2ee-channel'
+import { E2EEChannel } from './e2ee-channel'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { readRuntimeRpcStagedReply } from '../../../../../shared/remote-runtime/requests/runtime-rpc-staged-reply-read'
 import {
-  sendWebSocketRequest,
-  sendWebSocketRequestWithStatusPreflight
-} from './websocket-transport'
-import { replayOnlyRecipientCheck } from '../../orchestration/recovery/replay-only-recipient'
-import { configureRemoteRuntimeE2EEV2HostLatch } from '../../../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
-import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+  RUNTIME_RPC_READ_STAGED_REPLY_METHOD,
+  type RuntimeRpcStagedReplyPart
+} from '../../../../../shared/remote-runtime/rpc/runtime-rpc-staged-reply'
+import type { RuntimeRequestSelection } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { configureRemoteRuntimeE2EEV2HostLatch } from '../../../../../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
+import type { PairedRuntimeConnection } from '../../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 type Host = {
   connection: PairedRuntimeConnection
@@ -99,21 +101,23 @@ async function startHost(...modes: HostMode[]): Promise<Host> {
 }
 
 function send(host: Host) {
-  return sendWebSocketRequest(host.connection, 'orchestration.send', params, 2_000, {
+  return sendRemoteRuntimeRequestOnSocket(host.connection, 'orchestration.send', params, 2_000, {
     ...envelope,
     orchestrationContractVersion: 1
   })
 }
 
-function replay(host: Host) {
-  return sendWebSocketRequestWithStatusPreflight(
+function replay(host: Host, requestSelection: RuntimeRequestSelection) {
+  return sendRemoteRuntimeRequestOnSocket(
     host.connection,
     'orchestration.send',
     params,
     2_000,
-    () => {},
     { ...envelope, orchestrationContractVersion: 2 },
-    replayOnlyRecipientCheck(params)
+    () => {},
+    undefined,
+    [],
+    requestSelection
   )
 }
 
@@ -149,7 +153,9 @@ describe('a paired request that times out', () => {
     const error = await send(host).catch((failure: unknown) => failure)
     expect(error).toMatchObject({ code: 'runtime_timeout' })
     expect(error).not.toHaveProperty('data.requestSent')
-    await expect(replay(host)).resolves.toMatchObject({ ok: true })
+    await expect(replay(host, { paramsForStatus: () => params })).resolves.toMatchObject({
+      ok: true
+    })
 
     expect(host.frames).toMatchObject([
       { method: 'orchestration.send', params, ...envelope, orchestrationContractVersion: 1 },
@@ -162,7 +168,14 @@ describe('a paired request that times out', () => {
   it('sends only a clean status preflight to a runtime without replay support', async () => {
     const host = await startHost('old-runtime')
 
-    await expect(replay(host)).rejects.toMatchObject({ code: 'retry_not_replayable' })
+    await expect(
+      replay(host, {
+        paramsForStatus: (status) => {
+          expect(status).toMatchObject({ capabilities: [] })
+          throw new Error('Replay requires a capable runtime')
+        }
+      })
+    ).rejects.toThrow('Replay requires a capable runtime')
 
     expect(host.frames.map((frame) => frame.method)).toEqual(['status.get'])
     expect(host.frames[0]).not.toHaveProperty('orchestrationContractVersion')
@@ -173,7 +186,15 @@ describe('a paired request that times out', () => {
   it('keeps the parent possibly delivered when the staged reply read never sends', async () => {
     const host = await startHost('stage-reply', 'stall')
 
-    const error = await send(host).catch((failure: unknown) => failure)
+    const response = await send(host)
+    const error = await readRuntimeRpcStagedReply(response, (part) =>
+      sendRemoteRuntimeRequestOnSocket<RuntimeRpcStagedReplyPart>(
+        host.connection,
+        RUNTIME_RPC_READ_STAGED_REPLY_METHOD,
+        part,
+        2_000
+      )
+    ).catch((failure: unknown) => failure)
 
     expect(error).toMatchObject({ code: 'runtime_timeout' })
     expect(error).not.toHaveProperty('data.requestSent')
