@@ -27,8 +27,8 @@ export type BotItemAddInput = {
   uid?: string
   /** Made by another bot, or another chat of this one, through a bot request. */
   madeBy?: BotItemMadeBy
-  /** The teammate it is for, by Orca account (`botItemPersonOfChat`); null or absent: the owner's. */
-  actsForAccount?: string | null
+  /** The teammates it is for, by Orca account (`botItemPeopleOfChat`); null or absent: the owner's. */
+  actsForAccounts?: readonly string[] | null
   title: string
   description?: string
   doneMeans?: string
