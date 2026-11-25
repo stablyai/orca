@@ -79,7 +79,8 @@ export function NativeChatComposerField({
   goalMode,
   agent,
   launchPrompt,
-  workspaceFooter
+  workspaceFooter,
+  sideChat
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const t = useTranslate()
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
@@ -184,6 +185,7 @@ export function NativeChatComposerField({
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
   const launch = launchPrompt !== undefined
+  const card = useRef<HTMLDivElement>(null)
 
   return (
     <div
@@ -220,6 +222,8 @@ export function NativeChatComposerField({
             className="mb-1.5"
           />
           <div
+            ref={card}
+            data-native-chat-dock-pinned={launch ? undefined : ''}
             className={cn(
               // Use a constant container border so focus changes cannot flash it.
               'group/composer rounded-xl border p-1.5 shadow-xs',
@@ -254,6 +258,7 @@ export function NativeChatComposerField({
               isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
               disabled={disabled}
+              sideChat={sideChat}
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
               onBlur={editorBlur}
@@ -289,7 +294,7 @@ export function NativeChatComposerField({
                 'w-full bg-transparent px-2 py-1 text-sm outline-none',
                 launch
                   ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:mr-[-100%]'
-                  : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14',
+                  : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14 [[data-native-chat-dock-fit~=composer]_[data-native-chat-dock]:has([data-native-chat-question-card])_&]:max-h-[calc(3lh+0.5rem)]',
                 'overflow-y-auto scrollbar-sleek',
                 // Why: the editor is a contenteditable, which `:disabled` never matches.
                 '[&[contenteditable=false]]:cursor-not-allowed [&[contenteditable=false]]:opacity-50'

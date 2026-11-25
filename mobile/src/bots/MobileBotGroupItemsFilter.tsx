@@ -1,7 +1,6 @@
 // A group's Items filter, as a page in its drawer: which bots, which room (or all their work), and
 // Needs you only, as the desktop's group filter offers them.
 import { ScrollView, View } from 'react-native'
-import { Layers, MessageSquare, Users } from 'lucide-react-native'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
@@ -22,17 +21,7 @@ export function MobileBotGroupItemsFilter({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const {
-    members,
-    botIds,
-    setBotIds,
-    scopes,
-    scope,
-    setScopeKey,
-    needsYouOnly,
-    setNeedsYouOnly,
-    clearFilter
-  } = read
+  const { members, botIds, setBotIds, needsYouOnly, setNeedsYouOnly, clearFilter } = read
   return (
     <View style={styles.page}>
       <SheetHeader
@@ -53,9 +42,7 @@ export function MobileBotGroupItemsFilter({
               <ListRow
                 key={bot.id}
                 title={bot.name}
-                leading={
-                  <MobileBotAvatar avatar={mobileBotAvatarSource(bot, undefined)} size={26} />
-                }
+                leading={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={26} />}
                 {...(open ? { value: String(open) } : {})}
                 selected={on}
                 accessibilityRole="checkbox"
@@ -65,23 +52,6 @@ export function MobileBotGroupItemsFilter({
                   // Every bot, or none, is the same list: all of them.
                   setBotIds(next.length === 0 || next.length === members.length ? null : next)
                 }}
-              />
-            )
-          })}
-        </ListGroup>
-        <SectionHeader title={t('bots.items.filter.chat', 'Chat')} />
-        <ListGroup>
-          {scopes.map((entry) => {
-            const Icon =
-              entry.kind === 'group' ? Users : entry.kind === 'all' ? Layers : MessageSquare
-            return (
-              <ListRow
-                key={entry.key}
-                title={entry.name}
-                leading={<Icon size={18} color={colors.textSecondary} />}
-                selected={entry.key === scope?.key}
-                accessibilityRole="radio"
-                onPress={() => setScopeKey(entry.key)}
               />
             )
           })}

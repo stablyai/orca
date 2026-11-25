@@ -256,21 +256,24 @@ export class WorkerPlacementCatalogOwner {
         }
         const servers = this.registry!.currentServers(enumeration)
         const live = new Set(servers.map((server) => server.environmentId))
-        for (const id of this.retained.keys()) {
-          if (!live.has(id)) {
-            this.retained.delete(id)
-          }
-        }
         const rows = this.db.db
           .prepare('SELECT environment_id FROM worker_placement_catalogs')
           .all()
+        const saved = rows.some(
+          ({ environment_id }) => typeof environment_id === 'string' && !live.has(environment_id)
+        )
+          ? await this.registry!.savedEnvironmentIds(deadline)
+          : undefined
         await Promise.all(
           rows.map(async ({ environment_id }) => {
             if (typeof environment_id !== 'string') {
               return
             }
             if (!live.has(environment_id)) {
-              deleteRetainedPlacementCatalog(this.db, environment_id)
+              if (!this.stopped && this.registry!.isRemoved(saved, environment_id)) {
+                deleteRetainedPlacementCatalog(this.db, environment_id)
+                this.retained.delete(environment_id)
+              }
               return
             }
             let current = await this.registry!.resolve(environment_id, deadline)

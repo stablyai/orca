@@ -42,7 +42,7 @@ afterEach(() => {
 })
 
 /** A database last opened at `version`: v50 records who took questions; the catalog table came later. */
-function databaseAt(version: 49 | 50): string {
+function databaseAt(version: 49 | 50 | 51): string {
   // Use a real temp directory: TMPDIR is absent on Windows CI.
   const root = mkdtempSync(join(tmpdir(), 'orca-placement-migration-'))
   roots.push(root)
@@ -50,6 +50,9 @@ function databaseAt(version: 49 | 50): string {
   new OrchestrationDb(path).close()
   const raw = new Database(path)
   raw.exec('DROP TABLE worker_placement_catalogs')
+  if (version < 51) {
+    raw.exec('ALTER TABLE dispatch_contexts DROP COLUMN chat_lineage')
+  }
   if (version === 49) {
     for (const index of V50_INDEXES) {
       raw.exec(`DROP INDEX ${index}`)
@@ -64,11 +67,13 @@ function databaseAt(version: 49 | 50): string {
   return path
 }
 
-it.each([49, 50] as const)(
-  'upgrades a v%i database with both the question columns and the catalog table',
+it.each([49, 50, 51] as const)(
+  'upgrades a v%i database with question columns, chat lineage and the catalog table',
   (version) => {
     const db = new OrchestrationDb(databaseAt(version))
     try {
+      expect(db.db.pragma('user_version', { simple: true })).toBe(52)
+      expect(db.hasColumn('dispatch_contexts', 'chat_lineage')).toBe(true)
       expect(V50_COLUMNS.filter(([table, column]) => !db.hasColumn(table, column))).toEqual([])
       expect(
         db.db

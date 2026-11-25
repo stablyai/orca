@@ -1,6 +1,7 @@
 // Cursor's ACP server takes no system prompt, `_meta` or plugin rules; it reads the folder's
-// `.cursor/rules` when `session/new` runs and keeps them with the session, reopens included
-// (checked live on 2026.06.02 and 2026.11.19). So the rule exists only while a session opens.
+// `.cursor/rules` once per process, at its first `session/new` or `session/load`, and keeps them
+// for that process only (read from the 2026.09.28 bundle). So the rule exists only while a session
+// opens, and every open places it.
 
 import { createHash, randomUUID } from 'node:crypto'
 import {

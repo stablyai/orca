@@ -183,7 +183,7 @@ const workerAgentRows: [string, string, string, AgentStatusEntry['state']][] = [
   ['sweep', 'sweep-1', 'claude', 'working'],
   ['sweep', 'sweep-2', 'claude', 'working'],
   ['sweep', 'sweep-3', 'codex', 'working'],
-  ['sweep', 'sweep-4', 'gemini', 'blocked'],
+  ['sweep', 'sweep-4', 'antigravity', 'blocked'],
   ['sweep', 'sweep-5', 'grok', 'working'],
   ['pair', 'pair-1', 'claude', 'working'],
   ['pair', 'pair-2', 'codex', 'working']
@@ -230,6 +230,16 @@ const releaseRow = row(release, {
   })
 })
 
+const replyingRow = (folded?: boolean) =>
+  row(replying, {
+    home: home(replying, {
+      externalConversations: [
+        thread('slack-replying', 'slack', 'can you check the nightly?', '#bots')
+      ]
+    }),
+    fold: folded === undefined ? null : fold(folded)
+  })
+
 const CASES: [string, number, React.ReactNode][] = [
   ['Idle bot', 280, row(disk)],
   ['Working in its Chat', 280, row(triage, { isActive: true })],
@@ -245,17 +255,7 @@ const CASES: [string, number, React.ReactNode][] = [
       })
     })
   ],
-  [
-    'Slack thread, no status yet',
-    280,
-    row(replying, {
-      home: home(replying, {
-        externalConversations: [
-          thread('slack-replying', 'slack', 'can you check the nightly?', '#bots')
-        ]
-      })
-    })
-  ],
+  ['Slack thread, no status yet', 280, replyingRow()],
   ['Waiting on something', 280, row(waiting)],
   ['No activity, says its purpose', 280, row(cos, { fold: fold(false) })],
   ['Long name, no activity', 280, row(quiet)],
@@ -264,6 +264,8 @@ const CASES: [string, number, React.ReactNode][] = [
     280,
     row(release, { home: home(release, { isUnread: true }), fold: fold(true) })
   ],
+  ['Replying, workers folded', 280, replyingRow(true)],
+  ['Replying, workers unfolded', 280, replyingRow(false)],
   [
     'Workers: one agent, two kinds, five agents of four kinds',
     280,
@@ -328,6 +330,8 @@ const CASES: [string, number, React.ReactNode][] = [
       )}
       {row(release, { fold: fold(false) })}
       {row(cos, { fold: fold(false) })}
+      {replyingRow(false)}
+      {replyingRow()}
     </>
   ]
 ]

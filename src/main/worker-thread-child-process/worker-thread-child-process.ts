@@ -14,6 +14,11 @@ import type {
   WorkerThreadChildRequest,
   WorkerThreadChildSpec
 } from './worker-thread-child-process-protocol'
+import {
+  toWorkerChildError,
+  WorkerThreadChildStdin,
+  type SendWorkerChildRequest
+} from './worker-thread-child-stdin'
 
 // #27362: Windows code-integrity hashing can block CreateProcessW for seconds on the calling loop. Spawn in a worker and fail closed if unavailable (#11161).
 
@@ -24,56 +29,30 @@ const WORKER_ENTRY_FILENAME = 'worker-thread-child-process-entry.js'
 // Node reports a negative errno as the exit code of a child that never started.
 const SPAWN_FAILED_EXIT_CODE = -1
 
-/** False when the child is no longer reachable through a live worker. */
-type SendRequest = (request: WorkerThreadChildRequest) => boolean
-
-function toError(payload: WorkerThreadChildErrorPayload): Error {
-  const { message, ...fields } = payload
-  return Object.assign(new Error(message), fields)
-}
-
 /** Error code for a child whose worker died: its pipes closed with the worker, but no close event will arrive. */
 export const WORKER_CHILD_ABANDONED_CODE = 'ERR_ORCA_WORKER_CHILD_ABANDONED'
 
 export function isAbandonedWorkerChildError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error
-    ? error.code === WORKER_CHILD_ABANDONED_CODE
-    : false
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === WORKER_CHILD_ABANDONED_CODE
+  )
 }
 
 /** The worker forwards stdin pipe failures as child errors; a capture leaves those to the exit status, as main's stdin end does. */
 export function isWorkerChildStdinWriteError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'syscall' in error
-    ? error.syscall === 'write'
-    : false
-}
-
-/** Stdin pipe failures reach its 'error' listeners, as on a native pipe; without one they surface as child 'error' events. */
-class WorkerThreadChildStdin extends EventEmitter {
-  constructor(
-    private readonly id: number,
-    private readonly send: SendRequest
-  ) {
-    super()
-  }
-
-  write(data: string | Uint8Array): boolean {
-    this.send({ type: 'stdin-write', id: this.id, data })
-    return true
-  }
-
-  end(data?: string | Uint8Array): void {
-    if (data !== undefined && data.length > 0) {
-      this.write(data)
-    }
-    this.send({ type: 'stdin-end', id: this.id })
-  }
+  return (
+    typeof error === 'object' && error !== null && 'syscall' in error && error.syscall === 'write'
+  )
 }
 
 /** Main-thread stand-in for a piped ChildProcess whose real process lives on the worker. */
 export class WorkerThreadChildProcess extends EventEmitter {
   ownedGroupStopping = false
   ownedGroupTerminated = false
+  ownedGroupStopUnverified = false
   closed = false
   pid: number | undefined = undefined
   exitCode: number | null = null
@@ -84,7 +63,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
 
   constructor(
     readonly id: number,
-    private readonly send: SendRequest
+    private readonly send: SendWorkerChildRequest
   ) {
     super()
     this.stdin = new WorkerThreadChildStdin(id, send)
@@ -113,9 +92,9 @@ export class WorkerThreadChildProcess extends EventEmitter {
     }
   }
 
-  stopOwnedGroup(): void {
+  stopOwnedGroup(): boolean {
     this.ownedGroupStopping = true
-    this.send({ type: 'stop-owned-group', id: this.id })
+    return this.send({ type: 'stop-owned-group', id: this.id })
   }
 
   receive(event: Exclude<WorkerThreadChildEvent, { type: 'ready' }>): void {
@@ -124,6 +103,9 @@ export class WorkerThreadChildProcess extends EventEmitter {
         this.ownedGroupTerminated = true
         this.emit('group-terminated')
         return
+      case 'group-stop-unverified':
+        this.ownedGroupStopUnverified = true
+        return void this.emit('group-stop-unverified')
       case 'spawn':
         this.pid = event.pid
         this.emit('spawn')
@@ -141,7 +123,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
         return
       case 'error':
         if (isWorkerChildStdinWriteError(event.error) && this.stdin.listenerCount('error') > 0) {
-          this.stdin.emit('error', toError(event.error))
+          this.stdin.emit('error', toWorkerChildError(event.error))
           return
         }
         this.emitErrorIfObserved(event.error)
@@ -166,7 +148,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
   // Ignore unobserved late errors after caller detach or EventEmitter would throw fatally into main.
   private emitErrorIfObserved(payload: WorkerThreadChildErrorPayload): void {
     if (this.listenerCount('error') > 0) {
-      this.emit('error', toError(payload))
+      this.emit('error', toWorkerChildError(payload))
     }
   }
 }
@@ -291,7 +273,8 @@ export class WorkerThreadChildProcessHost {
     }
     if (
       event.type === 'spawn-error' ||
-      (child.closed && (!child.ownedGroupStopping || child.ownedGroupTerminated))
+      (child.closed &&
+        (!child.ownedGroupStopping || child.ownedGroupTerminated || child.ownedGroupStopUnverified))
     ) {
       this.forget(event.id)
     }

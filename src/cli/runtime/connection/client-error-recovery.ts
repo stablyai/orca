@@ -9,6 +9,10 @@ export function attachMutationRecovery(
   if (!requestId || !(error instanceof RuntimeClientError)) {
     return error
   }
+  // A refusal that applied nothing is final; a request id would read as an unknown outcome.
+  if (!unsent && hasNoEffects(error.data)) {
+    return error
+  }
   const data = {
     ...(error.data && typeof error.data === 'object' ? error.data : {}),
     orchestrationRequestId: requestId,
@@ -37,5 +41,14 @@ export function isRequestUnsent(error: unknown): boolean {
   const data: unknown = error instanceof RuntimeClientError ? error.data : undefined
   return (
     typeof data === 'object' && data !== null && 'requestSent' in data && data.requestSent === false
+  )
+}
+
+function hasNoEffects(data: unknown): boolean {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'effectsApplied' in data &&
+    data.effectsApplied === false
   )
 }

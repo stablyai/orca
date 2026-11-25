@@ -9,6 +9,7 @@ import {
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import { redactFailure } from './worker-turn-stop-wording'
 
 /** A worker's turn is still open but its model is not answering. Neither notice stops or settles anything. */
 export type WorkerModelWaitNotice = {
@@ -20,6 +21,8 @@ export type WorkerModelWaitNotice = {
   /** What the worker last showed: the retry's words, or its screen's status line. */
   lastSeen?: string
   waitedMs?: number
+  /** Claude's transcript shows no model request since its last tool returned, at this time. */
+  toolReturnedAt?: number
 }
 
 export const WORKER_MODEL_WAIT_MS = 10 * 60_000
@@ -45,14 +48,15 @@ export function reportWorkerModelWait(
   }
   const id = stopReportId(dispatchId, `model-${notice.kind}:${notice.stretchKey}`)
   const subject =
-    notice.kind === 'retrying'
-      ? 'Worker is retrying the model API'
-      : 'Worker is waiting on the model'
+    notice.kind === 'retrying' ? 'Worker is retrying the model API' : 'Worker has made no progress'
   const payload = {
     dispatchId,
     handle: notice.from,
     modelWait: notice.kind,
-    ...(notice.lastSeen ? { lastSeen: oneLine(notice.lastSeen) } : {})
+    ...(notice.lastSeen ? { lastSeen: modelWaitLastSeenLine(notice.lastSeen) } : {}),
+    ...(notice.toolReturnedAt !== undefined
+      ? { toolReturnedAt: new Date(notice.toolReturnedAt).toISOString() }
+      : {})
   }
   const notify = deps.notify
   try {
@@ -96,16 +100,24 @@ export function reportWorkerModelWait(
 }
 
 function describeModelWait(notice: WorkerModelWaitNotice, task: string): string {
-  const seen = notice.lastSeen ? ` Last seen: ${sentence(oneLine(notice.lastSeen))}` : ''
+  const seen = notice.lastSeen
+    ? ` Last seen: ${sentence(modelWaitLastSeenLine(notice.lastSeen))}`
+    : ''
   if (notice.kind === 'retrying') {
     return `Worker ${notice.from} is retrying a model API error on task ${task}.${seen} It is still working; nothing was stopped.`
   }
   const minutes = Math.round((notice.waitedMs ?? WORKER_MODEL_WAIT_MS) / 60_000)
-  return `Worker ${notice.from} has been waiting on the model for ${minutes} min with no reply on task ${task}.${seen} It is still running; nothing was stopped.`
+  if (notice.toolReturnedAt !== undefined) {
+    const at = new Date(notice.toolReturnedAt).toISOString()
+    return `Worker ${notice.from} has made no progress on task ${task} for ${minutes} min. Its transcript records no model request since the tool returned at ${at}, so it looks stuck after a tool call.${seen} It is still running; nothing was stopped.`
+  }
+  // Inferred from silence, so it names no cause.
+  return `Worker ${notice.from} has made no progress on task ${task} for ${minutes} min. It may be waiting on a slow reply, stuck on a tool, or the machine may be busy.${seen} It is still running; nothing was stopped.`
 }
 
-function oneLine(text: string): string {
-  const line = text.replace(/\s+/g, ' ').trim()
+/** The screen line as mail carries it: one line, capped, with no capability or credential it showed. */
+export function modelWaitLastSeenLine(text: string): string {
+  const line = redactFailure(text).replace(/\s+/g, ' ').trim()
   return line.length > LAST_SEEN_MAX_CHARS
     ? `${line.slice(0, LAST_SEEN_MAX_CHARS - 1)}\u2026`
     : line

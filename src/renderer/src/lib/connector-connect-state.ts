@@ -15,7 +15,10 @@ import {
   BOT_SLACK_DESKTOP_ERRORS,
   type BotSlackResult
 } from '../../../shared/connector-bot-slack-contract'
-import type { ConnectorConnectSource } from '../../../shared/connectors/connector-cloud-contract'
+import {
+  CONNECTOR_CONNECT_SOURCES,
+  type ConnectorConnectSource
+} from '../../../shared/connectors/connector-cloud-contract'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -75,8 +78,11 @@ function set(trip: Trip, next: ConnectorConnectView): void {
   listeners.forEach((listener) => listener())
 }
 
-function refresh(hostId: ExecutionHostId, source: ConnectorConnectSource): Promise<unknown> {
-  return source === 'linear' ? refreshBotLinear(hostId) : refreshBotGitHub(hostId)
+// What a trip's link changes on the host. A Slack sign-in only adds a link, which no host state shows.
+const REFRESH: Record<ConnectorConnectSource, (hostId: ExecutionHostId) => Promise<unknown>> = {
+  linear: refreshBotLinear,
+  github: refreshBotGitHub,
+  slack: () => Promise.resolve()
 }
 
 async function settle(
@@ -92,7 +98,7 @@ async function settle(
     }
     return
   }
-  await refresh(hostId, source)
+  await REFRESH[source](hostId)
   if (request === trip.latest) {
     set(trip, { status: 'linked', link: result.value })
   }
@@ -136,6 +142,10 @@ export async function startConnectorConnect(
     owner?: string
     /** Where the page opened, e.g. so a dialog in front of Orca's browser can step aside. */
     onOpened?: (destination: HttpLinkDestination) => void
+    /** GitHub: the trip adds access, for `workspace` if named (see ConnectorConnectStartRequest). */
+    addAccess?: { workspace?: string }
+    /** A host too old to add access: the trip is dropped before its page opens. */
+    onOlderHost?: () => void
   } = {}
 ): Promise<void> {
   const trip = tripOf(hostId, source)
@@ -143,9 +153,18 @@ export async function startConnectorConnect(
   trip.owner = options.owner ?? null
   set(trip, { status: 'waiting' })
   const calls = connectorTripCalls(hostId, source)
-  const started = await calls.start(options.switchAccount === true)
+  const started = await calls.start(options.switchAccount === true, options.addAccess)
   if (!started.ok) {
     await settle(hostId, source, request, started)
+    return
+  }
+  // A newer start replaced this one on the host meanwhile: its trip is not ours to cancel.
+  if (options.addAccess && started.value.addAccess !== true) {
+    if (request === trip.latest) {
+      void calls.cancel()
+      set(trip, IDLE)
+      options.onOlderHost?.()
+    }
     return
   }
   const opened = openBotHostPage(hostId, started.value.authorizeUrl, {
@@ -191,7 +210,7 @@ export async function connectAnotherAccount(
   trip.owner = options.owner ?? null
   set(trip, { status: 'waiting' })
   const unlinked = await unlink().catch(() => FAILED)
-  await refresh(hostId, source)
+  await REFRESH[source](hostId)
   if (request !== trip.latest) {
     return
   }
@@ -325,7 +344,7 @@ function watchSignedInAccount(): void {
       return
     }
     shownAccount = account
-    for (const source of ['linear', 'github'] as const) {
+    for (const source of CONNECTOR_CONNECT_SOURCES) {
       const trip = trips.get(tripKey(LOCAL_EXECUTION_HOST_ID, source))
       if (trip) {
         trip.latest++

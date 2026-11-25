@@ -17,6 +17,9 @@ const { adoptPackagedNativeBuildEntries } = require('./packaged-native-build-ent
 const { runtimePackageExcludeFilter } = require('./packaged-windows-only-runtime-files.cjs')
 const { missingTranscribeCppPackages } = require('./packaged-transcribe-cpp.cjs')
 const {
+  missingBareImports
+} = require('./scripts/runtime-verification/packaged-main/packaged-main-bare-imports.cjs')
+const {
   NATIVE_BUILD_PACKAGES,
   TRANSIENT_NATIVE_BUILD_ENTRY_FILTER
 } = require('./scripts/native-build/node-addons/native-build-entry.cjs')
@@ -312,19 +315,13 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
     // backslashes, and extractFile expects that same host-style path.
     const internalPath = entry.replace(/^[\\/]+/, '')
     const source = asar.extractFile(asarPath, internalPath).toString('utf8')
-    // Exclude member require/import calls but admit spread operands; missing a real import blinds the guard.
-    // Known limit: embedded source-string specifiers count too (ssh-relay-deploy’s node-pty); distinguishing them needs a parser.
-    for (const match of source.matchAll(
-      /(?:(?<![.\w])|(?<=\.\.\.))(?:require|import)\s*\(\s*(["'`])([^"'`$]+)\1\s*\)/g
-    )) {
-      const specifier = match[2]
-      if (!isPackagedExternalSpecifier(specifier)) {
-        continue
-      }
-      const packageName = packageNameFromSpecifier(specifier)
-      if (!existsSync(join(resourcesDir, 'node_modules', ...packageName.split('/')))) {
-        missing.add(packageName)
-      }
+    const isMissing = (specifier) =>
+      isPackagedExternalSpecifier(specifier) &&
+      !existsSync(
+        join(resourcesDir, 'node_modules', ...packageNameFromSpecifier(specifier).split('/'))
+      )
+    for (const specifier of missingBareImports(source, internalPath, isMissing)) {
+      missing.add(packageNameFromSpecifier(specifier))
     }
   }
 

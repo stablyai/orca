@@ -19,18 +19,21 @@ export type QuestionPartyFacts = {
   dispatchParty(dispatchId: string): string | null
 }
 
-export type QuestionKind = 'worker-ask' | 'bot'
+export type QuestionKind = 'worker-ask' | 'remote-ask' | 'bot'
 export type QuestionNotice = { messageId: string; taker: string; kind: QuestionKind }
 
 /** The question tables, worker asks first: telling one can wake a worker started for another. */
-const QUESTION_TABLES = [
-  ['worker-ask', 'question_threads'],
-  ['bot', 'bot_requests']
-] as const
+const QUESTION_TABLE: Record<QuestionKind, string> = {
+  'worker-ask': 'question_threads',
+  'remote-ask': 'remote_owned_questions',
+  bot: 'bot_requests'
+}
+const QUESTION_KINDS: readonly QuestionKind[] = ['worker-ask', 'remote-ask', 'bot']
 
 /** Writes the notice and the question's outcome, inside the decision's transaction. 'unverified'
- *  leaves the question awaiting: its asker can't be resolved yet, so a later edge tries again. */
-export type QuestionNoticeWriter = (notice: QuestionNotice) => 'told' | 'unverified'
+ *  leaves the question awaiting: its asker can't be resolved yet, so a later edge tries again.
+ *  'sending': the notice goes to a paired computer, which records the outcome once it lands. */
+export type QuestionNoticeWriter = (notice: QuestionNotice) => 'told' | 'unverified' | 'sending'
 
 // Takers that never run again: a caller with no agent behind it, or a drop.
 const NEVER_RUNS = /^(shell|reply|orca|dropped:.*)$/
@@ -82,9 +85,9 @@ export function awaitingQuestions(
   db: OrchestrationDb,
   taker: string
 ): { messageId: string; kind: QuestionKind }[] {
-  return QUESTION_TABLES.flatMap(([kind, table]) =>
+  return QUESTION_KINDS.flatMap((kind) =>
     db.db
-      .prepare(`SELECT message_id FROM ${table} WHERE awaiting = 1 AND taken_by = ?`)
+      .prepare(`SELECT message_id FROM ${QUESTION_TABLE[kind]} WHERE awaiting = 1 AND taken_by = ?`)
       .all(taker)
       .flatMap(({ message_id }) =>
         typeof message_id === 'string' ? [{ messageId: message_id, kind }] : []
@@ -97,9 +100,21 @@ export function awaitingTakers(db: OrchestrationDb): string[] {
   return db.db
     .prepare(
       `SELECT taken_by FROM question_threads WHERE awaiting = 1
+       UNION SELECT taken_by FROM remote_owned_questions WHERE awaiting = 1
        UNION SELECT taken_by FROM bot_requests WHERE awaiting = 1`
     )
     .all()
+    .flatMap(({ taken_by }) => (typeof taken_by === 'string' ? [taken_by] : []))
+}
+
+/** The takers holding a question a worker on this paired computer asked, still awaiting. */
+export function remoteAskTakers(db: OrchestrationDb, environmentId: string): string[] {
+  return db.db
+    .prepare(
+      `SELECT DISTINCT taken_by FROM remote_owned_questions
+       WHERE awaiting = 1 AND environment_id = ?`
+    )
+    .all(environmentId)
     .flatMap(({ taken_by }) => (typeof taken_by === 'string' ? [taken_by] : []))
 }
 
@@ -115,7 +130,9 @@ export function takersLinkedTo(db: OrchestrationDb, dispatchId: string): string[
        SELECT b.taken_by FROM up JOIN bot_requests b ON b.message_id = up.for_id
        WHERE b.awaiting = 1
        UNION SELECT q.taken_by FROM up JOIN question_threads q ON q.message_id = up.for_id
-       WHERE q.awaiting = 1`
+       WHERE q.awaiting = 1
+       UNION SELECT r.taken_by FROM up JOIN remote_owned_questions r ON r.message_id = up.for_id
+       WHERE r.awaiting = 1`
     )
     .all(dispatchId)
     .flatMap(({ taken_by }) => (typeof taken_by === 'string' ? [taken_by] : []))
@@ -134,7 +151,7 @@ export function reconcileQuestions(
   }
   const told: QuestionNotice[] = []
   for (const { messageId, kind } of candidates) {
-    const table = kind === 'bot' ? 'bot_requests' : 'question_threads'
+    const table = QUESTION_TABLE[kind]
     const notice = runLifecycleWriteTransaction(db.db, 'agent_question_notice', () => {
       // Decided again inside the write, so a commit that raced the reads above is seen; a worker
       // ask told just before can have woken the worker started for this one.
@@ -148,7 +165,7 @@ export function reconcileQuestions(
         return null
       }
       const decided: QuestionNotice = { messageId, taker, kind }
-      if (write(decided) === 'unverified') {
+      if (write(decided) !== 'told') {
         return null
       }
       // Every outcome writer clears it; a question with no record to tell ends here too.

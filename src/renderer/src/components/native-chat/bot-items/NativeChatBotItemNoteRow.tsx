@@ -3,7 +3,7 @@
 // is their own message, headed by the item's chip. A run of the owner's quick changes to one item
 // folds into one row that opens into each change; a line stays on one line (chips and a worker's name
 // cut short, a cut-short note opens whole), and a bulk line shows a few chips then "+N more".
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ListTodo, MessageSquare } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -19,8 +19,15 @@ import { readBots } from '@/lib/bot-catalog'
 import type { BotItemNoteItem, BotItemNoteView } from '../../../../../shared/bots/bot-item-note'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { NativeChatEventRow } from '../messages/events/NativeChatEventRow'
-import { NATIVE_CHAT_INLINE_CHIP } from '../messages/events/native-chat-inline-chip'
+import {
+  NATIVE_CHAT_INLINE_CHIP,
+  NATIVE_CHAT_ROW_SHARE
+} from '../messages/events/native-chat-inline-chip'
 import { NativeChatUserBubble } from '../messages/rows/NativeChatUserBubble'
+import {
+  NATIVE_CHAT_UNKERNED_CSS,
+  nativeChatTextHasUnkernedRun
+} from '../composer/editor/native-chat-unkerned-runs'
 import { useBotItemChipPreview } from './bot-item-chip-preview'
 import {
   botItemNoteLines,
@@ -54,7 +61,13 @@ function ChipPreview({ item }: { item: BotItemNoteItem }): React.JSX.Element {
   )
 }
 
-export function ItemChip({ item }: { item: BotItemNoteItem }): React.JSX.Element {
+export function ItemChip({
+  item,
+  className
+}: {
+  item: BotItemNoteItem
+  className?: string
+}): React.JSX.Element {
   const t = useTranslate()
   // The preview, and its live read, exist only while the tooltip is open.
   const [open, setOpen] = useState(false)
@@ -68,7 +81,7 @@ export function ItemChip({ item }: { item: BotItemNoteItem }): React.JSX.Element
             title: item.title,
             status: botItemStatusName(item.status, t)
           })}
-          className={NATIVE_CHAT_INLINE_CHIP}
+          className={cn(NATIVE_CHAT_INLINE_CHIP, className)}
           onClick={() => openChipItem(item.uid)}
         >
           <BotItemStatusIcon status={item.status} />
@@ -108,7 +121,7 @@ function ChatChip({ chat }: { chat: BotItemNoteLineChat }): React.JSX.Element {
 const CHIPS_SHOWN = 3
 
 /** A linked worker this chat started as the Started row draws it: its chip, opening the worker.
- *  Any other link's name cuts short as early as an item chip, whole on hover. */
+ *  Any other link's name cuts short as a chip does, whole on hover. */
 function LinkName({ link }: { link: BotItemNoteLineLink }): React.JSX.Element {
   const owner = useNativeChatVisualOwner()
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
@@ -135,7 +148,7 @@ function LinkName({ link }: { link: BotItemNoteLineLink }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="min-w-0 max-w-[min(16rem,100%)] truncate">{link.name}</span>
+        <span className={NATIVE_CHAT_ROW_SHARE}>{link.name}</span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         {link.name}
@@ -182,7 +195,7 @@ function LineWords({
         </button>
       ) : null}
       {line.tail || line.detail ? (
-        <span ref={detailRef} className={line.detail ? 'min-w-0 truncate' : 'shrink-0'}>
+        <span ref={detailRef} className={line.detail ? NATIVE_CHAT_ROW_SHARE : 'shrink-0'}>
           {line.tail}
           {line.detail ? <span className="text-chat-foreground">: {line.detail}</span> : null}
         </span>
@@ -273,14 +286,23 @@ function CommentRow({
   belowAnother: boolean
 }) {
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
+  const unkerned = useMemo(() => nativeChatTextHasUnkernedRun(text), [text])
   return (
-    // A message, so a full row gap (gap-5) below what the note drew above it, not the lines' gap-1.
-    <div className={cn('flex flex-col items-end gap-1', belowAnother && 'mt-4')}>
+    // A message, so a full row gap (gap-5) below what the note drew above it, not the lines' gap-1.5.
+    <div className={cn('flex flex-col items-end gap-1', belowAnother && 'mt-3.5')}>
       {line.images ? <BotItemCommentImages images={line.images} inChat /> : null}
       {/* The item heads the bubble, as on the phone. */}
       <NativeChatUserBubble className="flex flex-col items-start gap-1.5">
-        <ItemChip item={line.item} />
-        {text.trim() ? <div className="whitespace-pre-wrap">{text}</div> : null}
+        {/* A bubble's head, not a row's share: it fits the bubble instead. */}
+        <ItemChip item={line.item} className="max-w-full flex-none" />
+        {text.trim() ? (
+          <div
+            className="whitespace-pre-wrap [overflow-wrap:anywhere]"
+            style={unkerned ? NATIVE_CHAT_UNKERNED_CSS : undefined}
+          >
+            {text}
+          </div>
+        ) : null}
       </NativeChatUserBubble>
     </div>
   )
@@ -311,7 +333,7 @@ export function NativeChatBotItemNoteRow({
   const t = useTranslate()
   if (!note.run) {
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <Lines note={note} at={note.at ?? timestamp} />
       </div>
     )

@@ -96,7 +96,3 @@ export function wireWslNodeRuntimePrefetch(wiring: WslNodeRuntimePrefetchWiring)
 function scheduleAfterStartup(run: () => void): void {
   setTimeout(run, PREFETCH_DELAY_MS).unref()
 }
-
-export function resetWslNodeRuntimePrefetchForTests(): void {
-  started = null
-}

@@ -12,6 +12,7 @@ type RegistryObservation<T> = Awaited<ReturnType<typeof observeEnvironmentStoreR
 export type PairingObservation = RegistryObservation<OrchestrationWorkerServer>
 type RegistryServers = readonly { environmentId: string; name: string }[]
 type ListResult = RegistryObservation<RegistryServers | undefined> | { error: unknown }
+type SavedIds = RegistryObservation<ReadonlySet<string> | undefined>
 
 export class CatalogDeadline {
   private readonly expiresAt: number
@@ -115,6 +116,7 @@ export class CatalogOwnerRegistry {
   private readonly observations = new Map<string, PairingObservation>()
   private readonly lists = new CatalogOwnerReadSlots<ListResult>()
   private readonly pairings = new CatalogOwnerReadSlots<PairingObservation>()
+  private readonly savedIds = new CatalogOwnerReadSlots<SavedIds>()
 
   constructor(private readonly transport: OrchestrationEnvironmentTransport) {}
 
@@ -171,6 +173,23 @@ export class CatalogOwnerRegistry {
       result ? 'runtime_error' : 'runtime_timeout',
       'Worker placement registry enumeration did not complete.',
       { effectsApplied: false, reason: 'discovery_incomplete', phase: 'registry' }
+    )
+  }
+
+  savedEnvironmentIds(deadline: CatalogDeadline): Promise<SavedIds | undefined> {
+    return this.savedIds.read('saved', deadline, () =>
+      this.observe(async () => {
+        const ids = await this.transport.listSavedEnvironmentIds?.()
+        return ids === undefined ? undefined : new Set(ids)
+      })
+    )
+  }
+
+  isRemoved(observation: SavedIds | undefined, environmentId: string): boolean {
+    return (
+      !!observation?.value &&
+      this.currentProof(observation) &&
+      !observation.value.has(environmentId)
     )
   }
 

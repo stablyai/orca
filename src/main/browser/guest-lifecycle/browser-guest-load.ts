@@ -9,6 +9,7 @@ export function waitForBrowserGuestLoad(
       clearTimeout(timer)
       guest.off('did-finish-load', loaded)
       guest.off('did-fail-load', failed)
+      guest.off('did-stop-loading', loaded)
       guest.off('destroyed', destroyed)
       if (error) {
         reject(error)
@@ -45,11 +46,20 @@ export function waitForBrowserGuestLoad(
     if (start) {
       void start().then(loaded, (error: unknown) => {
         if (error && typeof error === 'object' && 'errno' in error && error.errno === -3) {
+          // Aborted: a newer load runs to its stop, while a download or a cancel has already stopped.
+          if (guest.isDestroyed() || guest.isLoadingMainFrame()) {
+            guest.on('did-stop-loading', loaded)
+          } else {
+            loaded()
+          }
           return
         }
         finish(error instanceof Error ? error : new Error('The browser page could not load'))
       })
-    } else if (!guest.isLoadingMainFrame()) {
+    } else if (guest.isLoadingMainFrame()) {
+      // isLoadingMainFrame stays true after did-finish-load until did-stop-loading, later in the same task.
+      guest.on('did-stop-loading', loaded)
+    } else {
       loaded()
     }
   })

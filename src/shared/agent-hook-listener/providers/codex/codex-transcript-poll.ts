@@ -45,7 +45,8 @@ export async function readCodexTranscriptPoll(
   const batch = new RolloutReadBatch(
     () =>
       state.codexSubagentRosterByPaneKey.get(paneKey) === roster &&
-      state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
+      state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript,
+    paneKey
   )
   try {
     const transcriptReads = transcript?.parent.filePath

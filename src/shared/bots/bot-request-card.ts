@@ -17,7 +17,10 @@ export const BotRequestCardSchema = z.object({
   /** The request's mail; absent when Orca refused to send it. */
   messageId: z.string().min(1).optional(),
   /** Why it wasn't sent: a bot-request refusal code. */
-  refusal: z.string().min(1).max(80).optional()
+  refusal: z.string().min(1).max(80).optional(),
+  /** Sent to an agent on a computer paired to this host (`send --on-client`): that computer, by its
+   *  installation id and name. An older client drops it and shows the plain line. */
+  client: z.object({ installationId: z.string().min(1), computer: z.string().max(200) }).optional()
 })
 
 export type BotRequestCard = z.infer<typeof BotRequestCardSchema>
@@ -36,12 +39,14 @@ export type BotRequestCardReading = {
 
 /** The line a client that can't draw the card shows instead. */
 export function botRequestCardText(card: BotRequestCard): string {
+  const computer = card.client ? card.client.computer.trim() || 'a paired computer' : null
+  const to = computer ? `${card.toBotName} on ${computer}` : card.toBotName
   if (!card.messageId) {
-    return `Not sent to ${card.toBotName}: ${card.subject}`
+    return `Not sent to ${to}: ${card.subject}`
   }
   return card.purpose === 'question'
-    ? `Asked ${card.toBotName}: ${card.subject}`
-    : `Handed to ${card.toBotName}: ${card.subject}`
+    ? `Asked ${to}: ${card.subject}`
+    : `Handed to ${to}: ${card.subject}`
 }
 
 export function botRequestCardBody(

@@ -34,11 +34,14 @@ import { MobileNativeChatBotIdentityContext } from '../mobile-native-chat-bot-id
 import { useMobileBotCardHost } from './bot-cards/mobile-bot-card-host'
 import { MobileNativeChatNoticePill } from './notices/MobileNativeChatNoticePill'
 import { botRunSendAgain } from '../../../bots/bot-sheet-operations'
+import { mobileBotRefusalText } from '../../../bots/mobile-bot-refusal-text'
+import { useBotPanelOpener } from '../../../bots/bot-item-open'
 import { triggerError } from '../../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   MobileAutomationRowFrame,
-  mobileAutomationRowTime as time
+  mobileAutomationRowTime as time,
+  mobileAutomationWordingTime
 } from './MobileAutomationRowFrame'
 
 /** An automation's row wording, in English: a run's as saved when it ran, or the automation's own. */
@@ -49,11 +52,16 @@ export function useMobileAutomationRowWording(
     const schedule = botAutomationWhenParts(automation).find((part) => part.kind === 'schedule')
     return {
       say: sayAutomationRunEnglish,
-      formatTime: time,
+      formatTime: (at) => mobileAutomationWordingTime(at),
       schedule:
         schedule?.kind === 'schedule' ? formatAutomationScheduleDescriptor(schedule.schedule) : ''
     }
   }, [automation])
+}
+
+/** The send's error, or why its chat was refused in chat's words; the phone's copy names no computer. */
+function startErrorText(failure: Pick<MergedRunFailure, 'error' | 'refusal'>): string {
+  return failure.refusal ? mobileBotRefusalText(failure.refusal) : failure.error
 }
 
 /** A transcript message that is an automation's run, or one no chat took, as its row. */
@@ -83,7 +91,7 @@ export function MobileAutomationRunMessage({
         text={text}
         timestamp={message.timestamp}
         {...(notStarted
-          ? { error: notStarted.error, resend: notStarted.sentAgain ? 'sent' : 'offer' }
+          ? { error: startErrorText(notStarted), resend: notStarted.sentAgain ? 'sent' : 'offer' }
           : {})}
         earlierFailures={mergedRunFailures(message)}
         fontScale={fontScale}
@@ -123,115 +131,146 @@ export function MobileNativeChatAutomationRunRow({
   const instructions = automationRunInstructions(text, run)
   const facts = automationRunFacts(run, timestamp, wording)
   const meta = scaledType(typography.metaSize, fontScale, 4)
+  const body = scaledType(typography.metaSize, fontScale)
   const { event } = run
   const access = event ? automationRunAccess(event, say) : null
   const link = event ? automationRunEventLink(event, say) : null
   const [sendError, setSendError] = useState<string | null>(null)
-  return (
-    <>
-      <MobileAutomationRowFrame
-        testID="automation-run-row"
-        mark={automationRunMark(run)}
-        lead={notStarted ? say('couldNotStart') : automationRunLabel(run, say)}
-        leadIsVerb={notStarted}
-        name={run.automation.name}
-        status={state === 'queued' ? say('queued') : null}
-        failed={notStarted}
-        timestamp={timestamp}
-        disclosureKey={`automation-run:${messageId}`}
-        action={
-          notStarted ? (
-            <MobileAutomationSendAgain
-              run={run}
-              resend={resend}
-              wording={wording}
-              metaStyle={meta}
-              onError={setSendError}
-            />
-          ) : null
+  const panel = useBotPanelOpener(useContext(MobileNativeChatBotIdentityContext)?.botId)
+  // As the desktop: a run that couldn't start opens its automation's editor, while the automation exists.
+  const automationId = run.automation.id
+  const openAutomation =
+    notStarted && panel?.automationIds.has(automationId)
+      ? () => panel.open({ automation: automationId })
+      : null
+  // A wait that couldn't start: its name, then what happened (or why Send again was refused).
+  const subtitle = notStarted
+    ? (() => {
+        const what = [say('couldNotStart'), timestamp ? time(timestamp) : null]
+          .filter(Boolean)
+          .join(' · ')
+        const refused = sendError && resend !== 'sent' ? sendError : null
+        return {
+          label: refused ?? what,
+          node: (
+            <Text
+              // Taps on it open the row's details, like its title.
+              pointerEvents="none"
+              numberOfLines={2}
+              style={[refused ? styles.sendAgainError : styles.meta, body]}
+            >
+              {refused ?? what}
+            </Text>
+          )
         }
-        fontScale={fontScale}
-      >
-        <>
-          {error ? (
-            <>
-              <Text style={[styles.heading, meta]}>{say('startError')}</Text>
-              <Text selectable style={[styles.error, meta]}>
-                {error}
-              </Text>
-            </>
-          ) : null}
-          {earlierFailures?.map((failure) => (
-            <View key={failure.id}>
-              <Text style={[styles.heading, meta]}>
-                {[say('couldNotStart'), failure.timestamp ? time(failure.timestamp) : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </Text>
-              <Text selectable style={[styles.error, meta]}>
-                {failure.error}
+      })()
+    : undefined
+  return (
+    <MobileAutomationRowFrame
+      testID="automation-run-row"
+      mark={automationRunMark(run)}
+      lead={notStarted ? say('couldNotStart') : automationRunLabel(run, say)}
+      leadIsVerb={notStarted}
+      name={run.automation.name}
+      status={state === 'queued' ? say('queued') : null}
+      failed={notStarted}
+      timestamp={timestamp}
+      disclosureKey={`automation-run:${messageId}`}
+      action={
+        notStarted ? (
+          <MobileAutomationSendAgain
+            run={run}
+            resend={resend}
+            wording={wording}
+            metaStyle={meta}
+            onError={setSendError}
+          />
+        ) : null
+      }
+      subtitle={subtitle}
+      fontScale={fontScale}
+    >
+      <>
+        {error ? (
+          <>
+            <Text style={[styles.heading, meta]}>{say('startError')}</Text>
+            <Text selectable style={[styles.error, body]}>
+              {error}
+            </Text>
+          </>
+        ) : null}
+        {earlierFailures?.map((failure) => (
+          <View key={failure.id}>
+            <Text style={[styles.heading, meta]}>
+              {[say('couldNotStart'), failure.timestamp ? time(failure.timestamp) : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+            <Text selectable style={[styles.error, body]}>
+              {startErrorText(failure)}
+            </Text>
+          </View>
+        ))}
+        {instructions ? (
+          <>
+            <Text style={[styles.heading, meta]}>{say('instructions')}</Text>
+            <MobileAutomationRunInstructions
+              messageId={messageId}
+              instructions={instructions}
+              fontScale={fontScale}
+              say={say}
+            />
+            <View style={styles.actions}>
+              <MobileSourceCopyButton
+                text={instructions}
+                accessibilityLabel={say('copyInstructions')}
+              />
+              <Text style={[styles.meta, meta]}>{say('copyInstructions')}</Text>
+            </View>
+          </>
+        ) : null}
+        {openAutomation ? (
+          <Pressable accessibilityRole="link" onPress={openAutomation} style={styles.linkRow}>
+            <Text style={[styles.link, meta]}>{say('openAutomation')}</Text>
+          </Pressable>
+        ) : null}
+        {facts || event?.text ? <Text style={[styles.heading, meta]}>{say('event')}</Text> : null}
+        {facts ? <Text style={[styles.meta, meta]}>{facts}</Text> : null}
+        {link ? (
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => openExternalLink(link.url)}
+            style={styles.linkRow}
+          >
+            <Text style={[styles.link, meta]}>{link.label}</Text>
+            <ArrowUpRight size={12} color={colors.textSecondary} />
+          </Pressable>
+        ) : null}
+        {event?.text ? (
+          <>
+            {/* Provenance first, so a long quote can't push it out of view. */}
+            <Text style={[styles.meta, meta]}>{say('external')}</Text>
+            <View style={styles.quote}>
+              <Text style={[styles.meta, meta]}>{automationRunQuoteAuthor(event, say)}</Text>
+              <Text selectable style={[styles.quoteText, scaledType(15, fontScale, 6)]}>
+                {event.text}
               </Text>
             </View>
-          ))}
-          {instructions ? (
-            <>
-              <Text style={[styles.heading, meta]}>{say('instructions')}</Text>
-              <MobileAutomationRunInstructions
-                messageId={messageId}
-                instructions={instructions}
-                fontScale={fontScale}
-                say={say}
+            {event.textShortened ? (
+              <Text style={[styles.meta, meta]}>{say('shortened')}</Text>
+            ) : null}
+            {access ? <Text style={[styles.meta, meta]}>{access}</Text> : null}
+            <View style={styles.actions}>
+              <MobileSourceCopyButton
+                text={automationRunEventCopyText(facts, event, say)}
+                accessibilityLabel={say('copyEvent')}
               />
-              <View style={styles.actions}>
-                <MobileSourceCopyButton
-                  text={instructions}
-                  accessibilityLabel={say('copyInstructions')}
-                />
-                <Text style={[styles.meta, meta]}>{say('copyInstructions')}</Text>
-              </View>
-            </>
-          ) : null}
-          {facts || event?.text ? <Text style={[styles.heading, meta]}>{say('event')}</Text> : null}
-          {facts ? <Text style={[styles.meta, meta]}>{facts}</Text> : null}
-          {link ? (
-            <Pressable
-              accessibilityRole="link"
-              onPress={() => openExternalLink(link.url)}
-              style={styles.linkRow}
-            >
-              <Text style={[styles.link, meta]}>{link.label}</Text>
-              <ArrowUpRight size={12} color={colors.textSecondary} />
-            </Pressable>
-          ) : null}
-          {event?.text ? (
-            <>
-              {/* Provenance first, so a long quote can't push it out of view. */}
-              <Text style={[styles.meta, meta]}>{say('external')}</Text>
-              <View style={styles.quote}>
-                <Text style={[styles.meta, meta]}>{automationRunQuoteAuthor(event, say)}</Text>
-                <Text selectable style={[styles.quoteText, scaledType(15, fontScale, 6)]}>
-                  {event.text}
-                </Text>
-              </View>
-              {event.textShortened ? (
-                <Text style={[styles.meta, meta]}>{say('shortened')}</Text>
-              ) : null}
-              {access ? <Text style={[styles.meta, meta]}>{access}</Text> : null}
-              <View style={styles.actions}>
-                <MobileSourceCopyButton
-                  text={automationRunEventCopyText(facts, event, say)}
-                  accessibilityLabel={say('copyEvent')}
-                />
-                <Text style={[styles.meta, meta]}>{say('copyEvent')}</Text>
-              </View>
-            </>
-          ) : null}
-        </>
-      </MobileAutomationRowFrame>
-      {sendError && resend !== 'sent' ? (
-        <Text style={[styles.sendAgainError, meta]}>{sendError}</Text>
-      ) : null}
-    </>
+              <Text style={[styles.meta, meta]}>{say('copyEvent')}</Text>
+            </View>
+          </>
+        ) : null}
+      </>
+    </MobileAutomationRowFrame>
   )
 }
 

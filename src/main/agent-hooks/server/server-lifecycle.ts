@@ -257,6 +257,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeStat
     this.transportInterference.reset()
     this.clearAllAssistantMessageRetries()
     this.hookSilenceRechecks.clear()
+    this.clearModelWaits()
     this.programStatusFacetRepublishes.clear()
     this.clearAllTranscriptPolls()
     this.claudeOwedNotificationExpiry.clearAll()

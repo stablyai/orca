@@ -90,7 +90,14 @@ export function BotConnectorPageRow({
               {props.notice}
               <RowFixOrStatus props={props} onOpen={open} />
               {props.trailing}
-              {actions ? <BotConnectorMenu name={nameText} actions={actions} alwaysShown /> : null}
+              {actions ? (
+                <BotConnectorMenu
+                  name={nameText}
+                  actions={actions}
+                  alwaysShown
+                  popover={props.menuPopover}
+                />
+              ) : null}
             </div>
           </div>
         </>

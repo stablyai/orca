@@ -1,8 +1,7 @@
 import {
   followTerminalRows,
   keepsTerminalPaneVisible,
-  withReplacedTerminalHandles,
-  type TerminalRowHandles
+  withReplacedTerminalHandles
 } from '../../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { orphanedMarkdownDraftTabs } from '../../files/session-documents/orphaned-markdown-draft-tabs'
 import {
@@ -27,6 +26,7 @@ import {
 } from './session-tab-snapshot-gate'
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { getActiveTabIdForHandle } from './terminal-tab-selection'
+import { rememberClosingTerminalHandles } from './closing-terminal-tab-handles'
 import { resolveActiveSessionTab } from './active-session-tab'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import { releaseTerminalCreateLock } from '../../terminal/session/creation/terminal-create-lock'
@@ -52,6 +52,8 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
+    closingTerminalTabsRef,
+    terminalRowHandlesRef,
     setTerminalsLoaded,
     setActiveHandle,
     setActiveSessionTabId,
@@ -75,7 +77,6 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
   } = scope
   const draftOwnershipRef = useRef<DraftTabOwnership | null>(null)
   const acceptSessionSnapshot = useSessionSnapshotGate()
-  const terminalRowHandlesRef = useRef<TerminalRowHandles>(new Map())
   const applySessionTabs = useCallback(
     (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
       const diagnostics = terminalDiagnosticsRef.current
@@ -149,6 +150,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
       const terminalRows = followTerminalRows(terminalRowHandlesRef.current, nextTabs)
       terminalRowHandlesRef.current = terminalRows.handles
+      rememberClosingTerminalHandles(closingTerminalTabsRef.current, terminalRows.handles)
       if (terminalRows.replaced.size > 0) {
         setSplitTerminalHandles((pair) => withReplacedTerminalHandles(pair, terminalRows.replaced))
       }
@@ -298,9 +300,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     },
     [hostId, worktreeId, subscribeToTerminal, unsubscribeTerminal, setSplitTerminalHandles]
   )
-  return {
-    applySessionTabs
-  }
+  return { applySessionTabs }
 }
 
 export type MobileSessionTabApplicationModel = MobileSessionTerminalListModel &

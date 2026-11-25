@@ -92,6 +92,7 @@ function complete(method: string): Promise<RuntimeRpcResponse<unknown>> {
 function transport(): OrchestrationEnvironmentTransport {
   return {
     list: async () => list,
+    listSavedEnvironmentIds: async () => list.map(({ environmentId }) => environmentId),
     resolve: async () => {
       if (!list.length) {
         throw new Error('removed')
@@ -635,19 +636,21 @@ it.each(['registry', 'generation'] as const)(
         generation++
       }
     }
-    let consumed = false
+    let preparedRequest: { evidence: string }
+    let consumed: { evidence: string } | undefined
     await prepareCatalogRequest(
       async (connection) => {
         const commit = await guard(connection)
+        preparedRequest = { evidence: invalidate ? 'before invalidation' : 'after invalidation' }
         invalidate?.()
         invalidate = undefined
         return commit
       },
       () => {
-        consumed = true
+        consumed = preparedRequest
       }
     )
-    expect(consumed).toBe(true)
+    expect(consumed).toEqual({ evidence: 'after invalidation' })
     await vi.advanceTimersByTimeAsync(15_000)
     await discovery
   }

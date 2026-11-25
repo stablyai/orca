@@ -3,6 +3,7 @@ import type { AgentHookSource } from '../../../shared/agent-hook-listener/transp
 import { PaneTimers } from './program-status/pane-timers'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
 import type { NormalizedLocalHook } from './server-types'
+import { isValidPaneKey, paneCacheKeyMatchesTab } from './server-status-identity'
 
 /** Model time, the stopwatch Claude's hooks can keep: a turn is open, no lead tool runs, no one is asked. */
 export type TerminalModelWait = {
@@ -16,17 +17,23 @@ export type TerminalModelWait = {
   stillWaiting: () => boolean
   /** The screen shows a tool running: model time can only start after it. */
   toolSeenRunning: () => void
+  /** The lead Claude's transcript, as its last hook named it. */
+  transcriptPath?: string
+  /** True once per stretch: a repeat look's notice is already in mail, so it needs no read. */
+  firstTranscriptLook: () => boolean
 }
 
 export const TERMINAL_MODEL_WAIT_MS = 10 * 60_000
 
 type PaneModelWait = {
   tools: Set<string>
-  batches: boolean
   since: number
   turnKey: string
   /** The lead's Claude session: a nested `claude -p` in its Bash tool shares the pane key. */
   session?: string
+  transcriptPath?: string
+  /** The stretch (its `since`) whose transcript was read. */
+  transcriptReadSince?: number
 }
 
 const TURN_ENDS = new Set(['Stop', 'StopFailure', 'SessionEnd'])
@@ -38,6 +45,8 @@ const TOOL_ENDS = new Set(['PostToolUse', 'PostToolUseFailure'])
 export abstract class AgentHookServerModelWait extends AgentHookServerIngestNormalization {
   private readonly modelWaits = new Map<string, PaneModelWait>()
   private readonly modelWaitTimers = new PaneTimers()
+  /** Panes whose Claude has sent PostToolBatch: an open tool there is tool time, in every turn. */
+  private readonly batchingPanes = new Set<string>()
 
   protected override normalizeLocalHookPayload(
     source: AgentHookSource,
@@ -46,11 +55,12 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
   ): NormalizedLocalHook {
     const normalized = super.normalizeLocalHookPayload(source, body, isReplay)
     const { event } = normalized
-    if (source !== 'claude' || isReplay || !event?.hookEventName) {
+    if (source !== 'claude' || !event?.hookEventName) {
       return normalized
     }
     const name = event.hookEventName
     // Only a hook the pane's status took: a nested CLI's refused Stop must not end the lead's turn.
+    // A replay after a restart counts too: a request stalled across it sends no hook of its own.
     return {
       ...normalized,
       onAccepted: () => {
@@ -68,21 +78,24 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
       return
     }
     if (lead && TURN_ENDS.has(name)) {
-      this.modelWaits.delete(paneKey)
-      this.modelWaitTimers.cancel(paneKey)
+      this.endModelWait(paneKey)
+      if (name === 'SessionEnd') {
+        this.batchingPanes.delete(paneKey)
+      }
       return
     }
     const session = event.providerSession?.id
     const now = Date.now()
-    const wait = this.modelWaits.get(paneKey) ?? {
-      tools: new Set<string>(),
-      batches: false,
-      since: now,
-      turnKey: `${paneKey}:${now}`
+    // A subagent's or background task's hook after the turn ended opens no model time.
+    if (!lead && !this.modelWaits.has(paneKey)) {
+      return
     }
-    this.modelWaits.set(paneKey, wait)
+    const wait = this.startModelWait(paneKey, now)
     wait.since = now
     wait.session = session ?? wait.session
+    if (lead) {
+      wait.transcriptPath = event.providerSession?.transcriptPath ?? wait.transcriptPath
+    }
     if (lead && name === 'UserPromptSubmit') {
       wait.tools.clear()
       wait.turnKey = `${paneKey}:${now}`
@@ -96,12 +109,90 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
       }
     } else if (lead && name === 'PostToolBatch') {
       wait.tools.clear()
-      wait.batches = true
+      this.batchingPanes.add(paneKey)
     }
-    // One timer per pane: a hook only moves `since`, and the timer finds the rest when it runs.
+  }
+
+  /** A Claude turn restored working after a restart: a request stalled across it sends no hook. */
+  protected override hydrateLastStatusFromDisk(): void {
+    super.hydrateLastStatusFromDisk()
+    const now = Date.now()
+    for (const [paneKey, row] of this.state.lastStatusByPaneKey) {
+      if (
+        row.connectionId === null &&
+        row.payload.agentType === 'claude' &&
+        row.payload.state === 'working'
+      ) {
+        // A tool begun before the restart sent its PreToolUse to the old server: the screen decides.
+        this.startModelWait(paneKey, now).tools.add('')
+      }
+    }
+  }
+
+  override transferPaneAuthority(
+    ...args: Parameters<AgentHookServerIngestNormalization['transferPaneAuthority']>
+  ): void {
+    const [fromPaneKey, toPaneKey] = args
+    // The owner the move takes the pane's state from, as the base resolves it.
+    const from = this.resolvePaneKeyAlias(fromPaneKey)
+    super.transferPaneAuthority(...args)
+    if (from === toPaneKey || !isValidPaneKey(fromPaneKey) || !isValidPaneKey(toPaneKey)) {
+      return
+    }
+    if (this.batchingPanes.delete(from)) {
+      this.batchingPanes.add(toPaneKey)
+    }
+    const wait = this.modelWaits.get(from)
+    if (!wait) {
+      return
+    }
+    this.modelWaits.delete(from)
+    this.modelWaits.set(toPaneKey, wait)
+    this.modelWaitTimers.move(from, toPaneKey)
+    // A wait whose timer already fired (its screen look still running) needs one at its new key.
+    this.modelWaitTimers.deferUnlessPending(
+      toPaneKey,
+      wait.since + TERMINAL_MODEL_WAIT_MS - Date.now(),
+      (key) => {
+        void this.modelWaitElapsed(key)
+      }
+    )
+  }
+
+  // A pane's row cleared mid-turn (a tmux republish) keeps its wait; its timer drops one at rest.
+  override dropStatusEntriesByTabPrefix(tabId: string): void {
+    for (const paneKey of [...this.modelWaits.keys(), ...this.batchingPanes]) {
+      if (paneCacheKeyMatchesTab(paneKey, tabId)) {
+        this.endModelWait(paneKey)
+        this.batchingPanes.delete(paneKey)
+      }
+    }
+    super.dropStatusEntriesByTabPrefix(tabId)
+  }
+
+  protected clearModelWaits(): void {
+    this.modelWaits.clear()
+    this.modelWaitTimers.clear()
+    this.batchingPanes.clear()
+  }
+
+  /** One timer per pane: a hook only moves `since`, and the timer finds the rest when it runs. */
+  private startModelWait(paneKey: string, now: number): PaneModelWait {
+    const wait = this.modelWaits.get(paneKey) ?? {
+      tools: new Set<string>(),
+      since: now,
+      turnKey: `${paneKey}:${now}`
+    }
+    this.modelWaits.set(paneKey, wait)
     this.modelWaitTimers.deferUnlessPending(paneKey, TERMINAL_MODEL_WAIT_MS, (key) => {
       void this.modelWaitElapsed(key)
     })
+    return wait
+  }
+
+  private endModelWait(paneKey: string): void {
+    this.modelWaits.delete(paneKey)
+    this.modelWaitTimers.cancel(paneKey)
   }
 
   private async modelWaitElapsed(paneKey: string): Promise<void> {
@@ -119,11 +210,13 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
       return
     }
     // Waiting on a person, or at rest: the next hook starts the stopwatch again.
-    if (this.state.lastStatusByPaneKey.get(paneKey)?.payload.state !== 'working') {
+    // A background task keeps the row working (monitoring) after the lead's turn is done.
+    const status = this.state.lastStatusByPaneKey.get(paneKey)?.payload
+    if (status?.state !== 'working' || status.workingMode === 'monitoring') {
       this.modelWaits.delete(paneKey)
       return
     }
-    if (wait.tools.size > 0 && wait.batches) {
+    if (wait.tools.size > 0 && this.batchingPanes.has(paneKey)) {
       rearm(TERMINAL_MODEL_WAIT_MS)
       return
     }
@@ -137,6 +230,12 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
           stillWaiting: () => this.modelWaits.get(paneKey) === wait && wait.since === since,
           toolSeenRunning: () => {
             wait.since = Date.now()
+          },
+          ...(wait.transcriptPath ? { transcriptPath: wait.transcriptPath } : {}),
+          firstTranscriptLook: () => {
+            const first = wait.transcriptReadSince !== wait.since
+            wait.transcriptReadSince = wait.since
+            return first
           }
         }).catch(() => false)
       : false

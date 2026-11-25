@@ -1,118 +1,41 @@
-import { readFileSync } from 'node:fs'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  adapterAtPublishFor,
-  fakeClaude,
-  claudeFrame,
-  identityFor,
-  recordingJournalSink,
-  PROVIDER_SESSION_ID
-} from '../claude-structured-session-test-support'
+import { describe, expect, it } from 'vitest'
+import { ClaudeSlashCommandCatalog } from '../../command-catalog/claude-slash-command-catalog'
+import type { ClaudeSession } from '../claude-structured-session-state'
+import { createClaudeInitProof } from './claude-structured-init-proof'
+import { openClaudeSession } from './claude-structured-session-startup'
 
-import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
-import type { ClaudeStructuredLaunch } from '../launch/claude-structured-launch-resolution'
-
-const owned: {
-  claude: ReturnType<typeof fakeClaude>
-  adapter: ReturnType<typeof adapterAtPublishFor>
-  opens: Promise<unknown>[]
-}[] = []
-
-const ACQUIRE = { identity: identityFor(), fence: 7, spawnToken: 'spawn-9' }
-
-const fixture = (name: string): Record<string, unknown>[] =>
-  readFileSync(new URL(`../../__fixtures__/${name}.jsonl`, import.meta.url), 'utf8')
-    .trim()
-    .split('\n')
-    .map((line) => JSON.parse(line))
-const MISSING = fixture('claude-missing-conversation')[0]!
-const errorRows = (appendItem: ReturnType<typeof vi.fn>) =>
-  appendItem.mock.calls.filter(([, body]) => body.kind === 'status' && body.tone === 'error')
-
-function adapterFor(
-  claude: ReturnType<typeof fakeClaude>,
-  launch: Partial<ClaudeStructuredLaunch> = {}
-) {
-  const events: ClaudeStructuredSessionEvent[] = []
-  const adapter = adapterAtPublishFor(claude, launch, events)
-  const opens: Promise<unknown>[] = []
-  owned.push({ claude, adapter, opens })
-  const open = adapter.open.bind(adapter)
-  adapter.open = (request) => {
-    const result = open(request)
-    void result.catch(() => {})
-    opens.push(result)
-    return result
-  }
-  return { adapter, events }
-}
-
-describe('Claude host-awaited open', () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(async () => {
-    try {
-      for (const { claude } of owned) {
-        claude.dispose()
-      }
-      for (const { adapter, opens } of owned.splice(0)) {
-        await Promise.allSettled(opens)
-        await adapter.closeAll()
-      }
-    } finally {
-      vi.useRealTimers()
-    }
+describe('openClaudeSession', () => {
+  it('fails the start when a refusal landed before the open installed onRefusal', async () => {
+    const initProof = createClaudeInitProof()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: openClaudeSession reads only these fields before it returns.
+    const session = {
+      connection: {},
+      options: new Map(),
+      reportedOptions: {},
+      confirmedOptions: new Set(),
+      capabilities: [],
+      commands: new ClaudeSlashCommandCatalog(),
+      optionMutationSequence: 0,
+      reportedModelMutation: 0
+    } as unknown as ClaudeSession
+    const late: Error[] = []
+    initProof.refuse()
+    const opened = openClaudeSession({
+      session,
+      facts: Promise.resolve({
+        init: null,
+        initProof,
+        initialization: {},
+        resumesTranscript: false,
+        requestTimeoutMs: undefined
+      }),
+      readSettings: () => new Promise(() => {}),
+      isCurrent: () => true,
+      diagnose: () => {},
+      onLateRefusal: (error) => late.push(error),
+      report: () => {}
+    })
+    await expect(opened).rejects.toThrow('claude provider session expected')
+    expect(late.map((error) => error.message)).toEqual(['claude provider session expected'])
   })
-
-  it('leaves an open Stop aborted to Stop when Claude then reports a startup failure', async () => {
-    const claude = fakeClaude({ holdInit: true, initProof: 'none' })
-    const { adapter } = adapterFor(claude)
-    const appendItem = vi.fn()
-    const acquisition = await adapter.acquire({
-      ...ACQUIRE,
-      events: { ...recordingJournalSink(), appendItem }
-    })
-    const controller = new AbortController()
-    const open = adapter.open({
-      sessionId: 'session-1',
-      fence: 7,
-      acquisitionGeneration: acquisition.acquisitionGeneration,
-      signal: controller.signal
-    })
-    controller.abort(new Error('stopped by the person'))
-    claudeFrame(claude.connections[0]!, { ...MISSING, session_id: PROVIDER_SESSION_ID })
-    await expect(open).rejects.toThrow('stopped by the person')
-    expect(errorRows(appendItem)).toHaveLength(0)
-  })
-
-  it('adds initialize descriptors to a stream catalog that arrived first', async () => {
-    const claude = fakeClaude({
-      holdInit: true,
-      initCommands: [{ name: 'pro-mode', description: 'Pro mode', argumentHint: '<task>' }]
-    })
-    const { adapter } = adapterFor(claude)
-    const acquisition = await adapter.acquire({ ...ACQUIRE, events: recordingJournalSink() })
-    const open = adapter.open({
-      sessionId: 'session-1',
-      fence: 7,
-      acquisitionGeneration: acquisition.acquisitionGeneration,
-      signal: new AbortController().signal
-    })
-    const connection = claude.connections[0]!
-    claudeFrame(connection, {
-      type: 'system',
-      subtype: 'init',
-      slash_commands: ['anthropic-skills:pro-mode'],
-      skills: ['anthropic-skills:pro-mode']
-    })
-    expect(adapter.readCommands('session-1')).toEqual([
-      { name: 'anthropic-skills:pro-mode', kind: 'skill' }
-    ])
-    connection.initialization.resolve()
-    await open
-    expect(adapter.readCommands('session-1')).toEqual([
-      { name: 'pro-mode', kind: 'skill', description: 'Pro mode', argumentHint: '<task>' }
-    ])
-  })
-
-  // SDK-typed shape; ordering constructed
 })

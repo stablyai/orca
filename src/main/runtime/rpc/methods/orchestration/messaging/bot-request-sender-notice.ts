@@ -114,7 +114,8 @@ function tellPeerSender(
       subject: `Re: ${request.subject}`,
       body,
       threadId: request.thread_id ?? request.id,
-      sender
+      sender,
+      notice: { requestId: request.id }
     })
     return true
   })

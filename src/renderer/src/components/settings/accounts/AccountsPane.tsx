@@ -21,7 +21,6 @@ import {
 import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
 import {
   getAccountsCodexSearchEntries,
-  getAccountsGeminiSearchEntries,
   getAccountsCursorSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsAntigravitySearchEntries,
@@ -62,7 +61,6 @@ import { createAccountsPaneRunners } from './accounts-pane-account-actions'
 import { renderAccountsLocationSection } from './scope/accounts-pane-location-section'
 import { renderClaudeAccountsSection } from './claude/accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './codex/accounts-pane-codex-section'
-import { renderGeminiAccountsSection } from './providers/accounts-pane-gemini-section'
 import { renderOpenCodeAccountsSection } from './providers/accounts-pane-opencode-section'
 import { MiniMaxAccountsSection } from './usage/MiniMaxAccountsSection'
 import { useUsageHostSettings } from './usage/use-usage-host-settings'
@@ -373,9 +371,6 @@ export function AccountsPane({
       : null,
     claudeSectionShown ? renderClaudeAccountsSection(model, t, intlLocale) : null,
     codexSectionShown ? renderCodexAccountsSection(model, t, intlLocale) : null,
-    matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries())
-      ? renderGeminiAccountsSection(model, t)
-      : null,
     matchesSettingsSearch(searchQuery, getAccountsAntigravitySearchEntries()) ? (
       <AntigravityAccountsSection
         key={`antigravity:${accountOwnerKey}:${accountRuntime.runtime}:${accountRuntime.wslDistro ?? ''}`}

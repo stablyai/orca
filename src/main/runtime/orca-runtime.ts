@@ -1,4 +1,6 @@
 import { agentQuestionNotices } from './rpc/methods/orchestration/messaging/agent-question-notices'
+import { announceAgentCliUpdatesFinished } from '../agent-cli-update/agent-cli-update-service'
+import { forgetPairedServerAsksOf } from './orchestration/federation/paired-server-asks/paired-server-ask-removal'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { chatMailPlace } from '../external-conversations/external-conversation-links'
 import * as botGroups from '../bots/bot-group-runtime'
@@ -93,7 +95,9 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     botGroupRemote.remoteRoomMailArrived(botGroups.runtimeBotGroups(this), groupId)
   }
 
+  // Runs only when a bot is deleted, before its workspace goes.
   protected override leaveBotGroups(botId: string): Promise<void> {
+    forgetPairedServerAsksOf(this, botId)
     return botGroups.runtimeBotGroups(this).removeBot(botId)
   }
 
@@ -140,13 +144,12 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
         hostLabelOverrides: () => getHostDisplayLabelOverrides(this.requireStore().getSettings())
       })
     : null
-  readonly repoIconDataUrls = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new RepoIconDataUrls({
-        repos: () => this.store?.getRepos() ?? [],
-        fetch: runtimeIconFetch,
-        encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
-      })
-    : null
+  // The phone's page shell loads no https image, so it draws repo icons from these.
+  readonly repoIconDataUrls = new RepoIconDataUrls({
+    repos: () => this.store?.getRepos() ?? [],
+    fetch: runtimeIconFetch,
+    encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
+  })
   readonly collapseWriteOrder = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new CollapseWriteOrder() : null
   readonly workspaceRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? new WorkspaceRowsProducer({
@@ -167,7 +170,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
             pairedServerRows: requireSwitchedOn(this.pairedServerRows),
             workspaceLifecycle: requireSwitchedOn(this.workspaceLifecycle),
             workspaceRows: requireSwitchedOn(this.workspaceRows),
-            repoIcons: requireSwitchedOn(this.repoIconDataUrls),
+            repoIcons: this.repoIconDataUrls,
             store: () => this.store,
             onClientEvent: (listener, options) => this.onClientEvent(listener, options)
           }),
@@ -208,6 +211,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     publishBotSidebarViewChanges(this.store, () => this.notifyBotsChanged({ kinds: ['bot'] }))
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
+    announceAgentCliUpdatesFinished((event) => this.emitClientEvent(event))
     this.botSessions = botSessionHooks(this)
     this.botChatTreeIndex = runtimeBotChatTreeIndex(this)
     this.automation.botChat = botGroups.withGroupRoomChats(this, this.automation.botChat)

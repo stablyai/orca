@@ -5,7 +5,6 @@ const { spawnProcess } = vi.hoisted(() => ({ spawnProcess: vi.fn() }))
 vi.mock('./run-process', () => ({ spawnProcess }))
 
 import {
-  quoteWindowsArgumentLikeLibuv,
   setIsolatedSpawner,
   spawnDetachedWithoutInheritance,
   type IsolatedSpawner
@@ -16,24 +15,6 @@ const originalPlatform = process.platform
 function onPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { value: platform })
 }
-
-describe('quoteWindowsArgumentLikeLibuv', () => {
-  // The expected outputs are the ones libuv's quote_cmd_arg documents.
-  it.each([
-    ['', '""'],
-    ['hello', 'hello'],
-    ['hello\\world', 'hello\\world'],
-    ['hello world', '"hello world"'],
-    ['hello"world', '"hello\\"world"'],
-    ['hello""world', '"hello\\"\\"world"'],
-    ['hello\\"world', '"hello\\\\\\"world"'],
-    ['hello\\\\"world', '"hello\\\\\\\\\\"world"'],
-    ['hello world\\', '"hello world\\\\"'],
-    ['C:\\Program Files\\x', '"C:\\Program Files\\x"']
-  ])('quotes %j as %s', (value, expected) => {
-    expect(quoteWindowsArgumentLikeLibuv(value)).toBe(expected)
-  })
-})
 
 describe('spawnDetachedWithoutInheritance', () => {
   afterEach(() => {

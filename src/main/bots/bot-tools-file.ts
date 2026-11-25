@@ -11,17 +11,14 @@ import {
   type BotOwnTool,
   type BotToolServer
 } from '../../shared/bot-tools'
-import type { Bot } from '../../shared/bot-types'
-import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import { BotLaunchTools } from './bot-launch-tools'
 import {
   advanceBotToolsEpoch,
   botToolsEpoch,
   botToolsRevision,
   type BotLaunchedTools
 } from './bot-tools-revision'
-import { botToolRelay, type BotToolRelay } from './tool-relay/bot-tool-relay'
 import { botToolsPath } from './bot-tools-path'
+import { botToolEntryExtras, type BotToolEntry } from './bot-tool-entry-extras'
 import {
   botToolCredentialsTransaction,
   changeBotToolCredentials,
@@ -44,7 +41,7 @@ const stale = () =>
 
 export { botToolsPath }
 
-type BotToolsSnapshot = {
+export type BotToolsSnapshot = {
   text: string | null
   file: z.infer<typeof BotToolsFile>
   servers: BotToolServer[]
@@ -100,11 +97,21 @@ const credentialsOf = (servers: readonly BotToolServer[]): Set<string> =>
     servers.flatMap((server) => ('url' in server && server.credential ? [server.credential] : []))
   )
 
-/** Writes `servers`, moving any header values into the host's credential store. */
+/** Each server with its extra keys; `file.servers` and `servers` list the same entries in order. */
+export const botToolEntries = (snapshot: BotToolsSnapshot): BotToolEntry[] =>
+  snapshot.servers.map((server, i) => ({
+    server,
+    extras: botToolEntryExtras(snapshot.file.servers[i])
+  }))
+
+/**
+ * Writes `entries`, moving any header values into the host's credential store. An entry's `extras`
+ * replaces its server's kept extra keys; without them they carry over from its previous entry.
+ */
 function writeServers(
   folder: string,
   snapshot: BotToolsSnapshot,
-  servers: readonly BotToolServer[],
+  entries: readonly BotToolChange[],
   rename?: { from: string; to: string },
   credentials: ReadonlyMap<string, BotToolNewCredential> = new Map()
 ): void {
@@ -118,13 +125,11 @@ function writeServers(
       added.set(id, credential)
     }
   }
-  const stored = servers.map((server): Record<string, unknown> => {
+  const stored = entries.map(({ server, extras }): Record<string, unknown> => {
     const previous = snapshot.file.servers.find(
       (entry) => entry.name === (rename?.to === server.name ? rename.from : server.name)
     )
-    const unknown = Object.fromEntries(
-      Object.entries(previous ?? {}).filter(([key]) => !KNOWN_KEYS.includes(key))
-    )
+    const unknown = botToolEntryExtras(extras ?? previous)
     if (!('url' in server)) {
       return { ...unknown, ...server }
     }
@@ -168,9 +173,10 @@ function writeServers(
       commitBotToolOAuth(folder, id, () => null)
     }
   }
+  // Publishes every value or throws having written none, so a refusal has nothing to roll back.
+  changeBotToolCredentials(folder, added)
   let written: boolean
   try {
-    changeBotToolCredentials(folder, added)
     for (const [id, url] of signIns) {
       const entry = commitBotToolOAuth(folder, id, (current) =>
         current ? undefined : { url, grant: 0, record: { resource: url } }
@@ -198,8 +204,6 @@ function writeServers(
   revokeBotToolSignIns(changeBotToolCredentials(folder, new Map(), removed))
 }
 
-const KNOWN_KEYS = ['name', 'url', 'transport', 'headers', 'credential', 'command', 'args', 'env']
-
 /** The file as it stands; header values an older Orca left inline move to the credential store first. */
 async function readMigratedSnapshot(folder: string): Promise<BotToolsSnapshot> {
   const snapshot = await readRawSnapshot(folder)
@@ -207,7 +211,7 @@ async function readMigratedSnapshot(folder: string): Promise<BotToolsSnapshot> {
     return snapshot
   }
   await mkdir(dirname(botToolsPath(folder)), { recursive: true })
-  writeServers(folder, snapshot, snapshot.servers)
+  writeServers(folder, snapshot, botToolEntries(snapshot))
   return readRawSnapshot(folder)
 }
 
@@ -230,14 +234,40 @@ export function changeBotToolServers(
   rename?: { from: string; to: string },
   credentials?: ReadonlyMap<string, BotToolNewCredential>
 ): Promise<void> {
+  const changeServers = (entries: BotToolEntry[]) =>
+    change(entries.map((entry) => entry.server)).map((server) => ({ server }))
+  return changeBotToolEntries(folder, changeServers, { expectedVersion, rename, credentials })
+}
+
+/** A server to write; with `extras`, they replace the ones its entry kept. */
+type BotToolChange = { server: BotToolServer; extras?: Record<string, unknown> }
+
+/** As `changeBotToolServers`; the change can also set each server's extra keys, and `topLevel`
+ *  the file's own keys beside `servers`. */
+export function changeBotToolEntries(
+  folder: string,
+  change: (entries: BotToolEntry[]) => BotToolChange[],
+  {
+    expectedVersion,
+    rename,
+    credentials,
+    topLevel
+  }: {
+    expectedVersion?: string
+    rename?: { from: string; to: string }
+    credentials?: ReadonlyMap<string, BotToolNewCredential>
+    topLevel?: (file: Readonly<Record<string, unknown>>) => Record<string, unknown>
+  } = {}
+): Promise<void> {
   return botToolCredentialsTransaction(folder, async () => {
     const snapshot = await readMigratedSnapshot(folder)
     if (expectedVersion !== undefined && expectedVersion !== snapshot.version) {
       throw stale()
     }
-    const servers = change(snapshot.servers)
+    const entries = change(botToolEntries(snapshot))
+    const file = topLevel ? { ...topLevel(snapshot.file), servers: snapshot.file.servers } : null
     await mkdir(dirname(botToolsPath(folder)), { recursive: true })
-    writeServers(folder, snapshot, servers, rename, credentials)
+    writeServers(folder, file ? { ...snapshot, file } : snapshot, entries, rename, credentials)
     advanceBotToolsEpoch(folder)
   })
 }
@@ -279,33 +309,17 @@ export function botOwnTool(server: BotToolServer, folder: string): BotOwnTool {
   }
 }
 
-/** Any agent's session in a bot's home folder gets that bot's own tools and token; any other session none.
- *  `launched` comes from the same read as the tools, so a write during launch can't look applied. */
-export async function botSessionToolServers(
-  bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[],
-  record: { provider: string; location: { workspaceId: string } },
-  launchDirectory: string,
-  relay: Pick<BotToolRelay, 'grant'> = botToolRelay
-): Promise<{ tools: BotLaunchTools; launched: BotLaunchedTools | null }> {
-  const bot = bots.find(
-    (entry) => folderWorkspaceKey(entry.folderWorkspaceId) === record.location.workspaceId
-  )
-  if (!bot) {
-    return { tools: BotLaunchTools.none, launched: null }
-  }
+/** A bot's own servers for a launch in its home folder. `launched` comes from the same read, so a
+ *  write during launch can't look applied. */
+export async function readBotLaunchServers(folder: string): Promise<{
+  servers: BotToolServer[]
+  launched: BotLaunchedTools
+}> {
   // Read before the file: a write in between makes this launch look stale, never current.
-  const epoch = botToolsEpoch(launchDirectory)
-  const snapshot = await readBotToolsSnapshot(launchDirectory)
+  const epoch = botToolsEpoch(folder)
+  const snapshot = await readBotToolsSnapshot(folder)
   return {
-    tools: await BotLaunchTools.for(
-      relay,
-      { botId: bot.id, folder: launchDirectory, agent: record.provider },
-      snapshot.servers
-    ),
-    launched: {
-      folder: launchDirectory,
-      revision: botToolsRevision(snapshot.version, epoch),
-      epoch
-    }
+    servers: snapshot.servers,
+    launched: { folder, revision: botToolsRevision(snapshot.version, epoch), epoch }
   }
 }

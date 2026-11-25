@@ -1,5 +1,6 @@
 import { watchRuntimeEnvironmentRegistry } from '../catalog/runtime-environment-preference'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
+import { readEnvironmentStoreRecords } from '../../../../shared/remote-runtime/host-store/runtime-environment-registry'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   listEnvironments,
@@ -32,6 +33,16 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
         environmentId: environment.id,
         name: environment.name
       })),
+    listSavedEnvironmentIds: async () => {
+      const records = await readEnvironmentStoreRecords(registryRoot(), { requireStoreFile: true })
+      if (records.unreadable.some((record) => record.id === undefined)) {
+        return undefined
+      }
+      return [
+        ...records.environments.map((environment) => environment.id),
+        ...records.unreadable.flatMap((record) => (record.id ? [record.id] : []))
+      ]
+    },
     hasEnvironment: async (environmentId) =>
       (await listEnvironments(registryRoot())).some(
         (environment) => environment.id === environmentId

@@ -32,12 +32,6 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     workspaceSegments: null
   },
   {
-    id: 'gemini',
-    displayName: 'Gemini CLI',
-    globalSegments: ['.gemini', 'skills'],
-    workspaceSegments: null
-  },
-  {
     id: 'droid',
     displayName: 'Droid',
     globalSegments: ['.factory', 'skills'],

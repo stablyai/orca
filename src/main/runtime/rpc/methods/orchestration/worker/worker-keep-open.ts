@@ -4,6 +4,10 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { keptOpenStopRefusal } from '../../../../orchestration/db/worker-terminal/worker-terminal-user-keep'
+import {
+  keepPaneOpen,
+  paneAutoCloseState
+} from '../../../../orchestration/db/worker-terminal/worker-bound-terminals'
 import { callFederatedWorkerShow } from './observation/worker-observation'
 import { resolveStructuredWorkerIdentityForSession } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import {
@@ -23,7 +27,9 @@ export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
     handler: (params, { runtime }) => {
       const paneKey = resolveWorkerPaneKey(runtime, params)
       return {
-        autoClose: paneKey ? runtime.getOrchestrationDb().getWorkerAutoCloseState(paneKey) : null
+        autoClose: paneKey
+          ? paneAutoCloseState(runtime.getOrchestrationDb(), runtime, paneKey)
+          : null
       }
     }
   }),
@@ -42,13 +48,13 @@ export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
       }
       const db = runtime.getOrchestrationDb()
       if (params.keep) {
-        db.keepWorkerTerminalOpen(paneKey)
+        keepPaneOpen(db, paneKey)
       } else {
         db.allowWorkerTerminalAutoClose(paneKey, (resource) =>
           runtime.isWorkerAgentInTurn(resource) ? null : Date.now()
         )
       }
-      return { autoClose: db.getWorkerAutoCloseState(paneKey) }
+      return { autoClose: paneAutoCloseState(db, runtime, paneKey) }
     }
   }),
   defineOrchestrationMethod({

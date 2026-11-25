@@ -78,6 +78,17 @@ export function latestUsageLimitContinueIdentity(snapshot: {
   )
 }
 
+/** What a Stop withdraws: the cut's automatic continue, or, with an unknown reset, the one an
+ *  account switch can still give it. A cancel of a switched cut matches by turn, so its reset
+ *  here is only a placeholder. */
+export function usageLimitStopWithdrawal(
+  cut: NativeChatUsageLimitCut | null
+): UsageLimitContinueIdentity | undefined {
+  return cut
+    ? (usageLimitContinueIdentity(cut) ?? { turnItemId: cut.turnItemId, resetsAt: 0 })
+    : undefined
+}
+
 /** A cut's automatic-continue identity, when its reset time is known. */
 export function usageLimitContinueIdentity(
   cut: NativeChatUsageLimitCut | null

@@ -32,8 +32,10 @@ export type OrchestrationEnvironmentSendOptions = {
 
 export type OrchestrationEnvironmentTransport = {
   resolve(selector: string): OrchestrationWorkerServer | Promise<OrchestrationWorkerServer>
-  /** Every server paired to this host, by id and name. */
+  /** Usable servers paired to this host, by id and name; unreadable saved entries may be omitted. */
   list?(): Promise<readonly { environmentId: string; name: string }[]>
+  /** All saved IDs, including unreadable pairings; undefined when absence cannot be established. */
+  listSavedEnvironmentIds?(): Promise<readonly string[] | undefined>
   /** False once the server is removed from this host, so its relays stop instead of retrying forever. */
   hasEnvironment?(environmentId: string): boolean | Promise<boolean>
   call(

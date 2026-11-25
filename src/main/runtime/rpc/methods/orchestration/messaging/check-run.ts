@@ -136,7 +136,9 @@ export async function checkRunMailbox(args: {
     if (params.format || params.inject) {
       return {
         ...result,
-        formatted: messages.map(formatMessageBanner).join('\n\n'),
+        formatted: messages
+          .map((message) => formatMessageBanner(message, { peerMail: db }))
+          .join('\n\n'),
         runId: run.id
       }
     }
@@ -149,12 +151,17 @@ export async function checkRunMailbox(args: {
     count: messages.length,
     acknowledged: acknowledged ?? null,
     ...(params.format || params.inject
-      ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
+      ? {
+          formatted: messages
+            .map((message) => formatMessageBanner(message, { peerMail: db }))
+            .join('\n\n')
+        }
       : {})
   })
   const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
   const result = (batch: MailboxDeliveryBatch | undefined) => {
     const receipt = deliveryReceipt({
+      db,
       mailbox: { runId: run.id },
       batch,
       acknowledged,

@@ -31,5 +31,5 @@ export function saveGroupPeerAnswer(
         : turn
     )
   })
-  groups.changed()
+  groups.changed(message.groupId)
 }

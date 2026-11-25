@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
+import { AGENT_ROW_TITLE_BESIDE_MODEL_CHIP } from '@/components/dashboard/rows/agent-row-title-floor'
 import {
   AgentStateDot,
   agentStateLabel,
@@ -44,14 +45,15 @@ export function getCompactAgentStatus(
   presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation,
   t?: Translate
 ): string | null {
+  const tr = t ?? translate
   return compactAgentStatusLine({
     entry: agent.entry,
     state: agent.state,
     presentation,
     now,
     labels: {
-      stopping: (t ?? translate)('components.native-chat.status.stopping', 'Stopping…'),
-      monitoring: agentStateLabel('monitoring')
+      stopping: tr('components.native-chat.status.stopping', 'Stopping…'),
+      monitoring: agentStateLabel('monitoring', tr)
     },
     ...(lastAssistantMessageOverride !== undefined
       ? { lastAssistantMessage: lastAssistantMessageOverride }
@@ -218,20 +220,51 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     highlighted && !isUnvisited && 'text-foreground'
   )
 
+  const modelChip =
+    showModel && model ? (
+      <span
+        className={cn(
+          'min-w-0 max-w-24 truncate font-mono text-3xs',
+          highlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
+        )}
+        title={model}
+      >
+        {model}
+      </span>
+    ) : null
+  const line = (
+    <span
+      className={cn('min-w-0 flex-1 truncate', modelChip && AGENT_ROW_TITLE_BESIDE_MODEL_CHIP)}
+      title={sendTargetDisabledReason ? undefined : rowTitle}
+    >
+      <span className={leadClassName}>{shownNode(leadingText)}</span>
+      {trailingText && (
+        <span className={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
+          {' '}
+          - {shownNode(trailingText)}
+        </span>
+      )}
+    </span>
+  )
+
   const rowBody = (
     <>
       {agent.childRow ? (
-        // Share chat-strip child content so both surfaces report the same state.
-        <AgentChildRowContent
-          row={agent.childRow}
-          now={now}
-          leadClassName={leadClassName}
-          trailClassName={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}
-          separator=" - "
-          dotTitle={sendTargetDisabledReason ? null : undefined}
-          tooltipSide="right"
-          lineTitle={!sendTargetDisabledReason}
-        />
+        <>
+          {/* Share chat-strip child content so both surfaces report the same state. */}
+          <AgentChildRowContent
+            row={agent.childRow}
+            now={now}
+            leadClassName={leadClassName}
+            trailClassName={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}
+            separator=" - "
+            dotTitle={sendTargetDisabledReason ? null : undefined}
+            tooltipSide="right"
+            lineTitle={!sendTargetDisabledReason}
+            lineClassName={modelChip ? AGENT_ROW_TITLE_BESIDE_MODEL_CHIP : undefined}
+          />
+          {modelChip}
+        </>
       ) : (
         <>
           {/* Show the actionable disabled reason over every hit area. */}
@@ -248,30 +281,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
               <AgentTypeIcon agentType={agent.agentType} size={13} />
             </span>
           )}
-          <span
-            className="min-w-0 flex-1 truncate"
-            title={sendTargetDisabledReason ? undefined : rowTitle}
-          >
-            <span className={leadClassName}>{shownNode(leadingText)}</span>
-            {trailingText && (
-              <span className={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
-                {' '}
-                - {shownNode(trailingText)}
-              </span>
-            )}
-          </span>
-        </>
-      )}
-      {showModel && model && (
-        <span
-          className={cn(
-            'min-w-0 max-w-24 truncate font-mono text-3xs',
-            highlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
+          {modelChip ? (
+            <span className="flex min-w-0 flex-1 items-center gap-1">
+              {line}
+              {modelChip}
+            </span>
+          ) : (
+            line
           )}
-          title={model}
-        >
-          {model}
-        </span>
+        </>
       )}
       {hasChildDisclosure && !childAgentsExpanded && (
         <span
@@ -318,6 +336,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
       onDragStart={(e) => e.stopPropagation()}
+      data-workspace-agent-row=""
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}

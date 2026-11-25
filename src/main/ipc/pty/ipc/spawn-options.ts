@@ -1,11 +1,8 @@
 import { isRestoreSpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { beginPtySpawnForWorktree } from '../host-env/fresh-spawn-routing'
 import { makePaneSpawnReservationKey } from '../pane/spawn-reservation'
-import {
-  assemblePtySpawnEnvDeletions,
-  assemblePtySpawnLaunchOptions,
-  seedPtySpawnSize
-} from '../spawn/spawn-options-assembly'
+import { assemblePtySpawnLaunchOptions, seedPtySpawnSize } from '../spawn/spawn-options-assembly'
+import { assemblePtySpawnEnvDeletions } from '../spawn/spawn-env-deletions'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 /** Carries deletions to provider-owned environments, including persistent older daemons. */
@@ -58,6 +55,7 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
   }
   ctx.spawnEnv = launch.env
   ctx.launchCommand = launch.launchCommand
+  ctx.terminalMcp = launch.terminalMcp
   ctx.provisionalPtySize = seedPtySpawnSize({
     sessionId: ctx.effectiveSessionId,
     sessionAppId: ctx.effectiveSessionAppId,

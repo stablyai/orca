@@ -16,12 +16,16 @@ import {
 } from '../../../../shared/bots/bot-tool-added-card-view'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatEventRow } from './messages/events/NativeChatEventRow'
+import {
+  NATIVE_CHAT_INLINE_NAME,
+  NATIVE_CHAT_ROW_SHARE
+} from './messages/events/native-chat-inline-chip'
 
 type ToolAdded = NonNullable<NativeChatMessage['toolAdded']>
 
 const COPY = BOT_TOOL_ADDED_CARD_COPY
 const PIECES: Record<keyof typeof COPY, (t: Translate) => string> = {
-  heading: (t) => t('components.native-chat.toolAdded.heading', COPY.heading),
+  added: (t) => t('components.native-chat.toolAdded.added', COPY.added),
   removed: (t) => t('components.native-chat.toolAdded.removed', COPY.removed),
   remove: (t) => t('components.native-chat.toolAdded.remove', COPY.remove)
 }
@@ -58,15 +62,13 @@ export function NativeChatToolAddedCard({
       .catch((error: unknown) => toast.error(botToolErrorMessage(error)))
       .finally(() => setBusy(false))
   }
-  const { state, present } = botToolAddedCardView(
+  const { lead, after, present } = botToolAddedCardView(
     own === null ? null : live !== undefined,
+    botToolSubtitle(tool),
     signIn.line,
     say
   )
   const title = botToolTitle(tool.name)
-  const removed = own !== null && !present
-  const lead = removed ? say('removed') : t('components.native-chat.toolAdded.added', 'Added')
-  const after = removed ? [] : [botToolSubtitle(tool), state].filter(Boolean)
   const actionClass =
     'rounded-sm text-xs font-medium text-chat-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
   return (
@@ -100,14 +102,11 @@ export function NativeChatToolAddedCard({
         }
       >
         <span className="shrink-0">{lead}</span>
-        <span
-          className="min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground"
-          title={title}
-        >
+        <span className={NATIVE_CHAT_INLINE_NAME} title={title}>
           {title}
         </span>
         {after.length > 0 ? (
-          <span className="min-w-0 max-w-max grow basis-0 truncate" title={after.join(' · ')}>
+          <span className={NATIVE_CHAT_ROW_SHARE} title={after.join(' · ')}>
             {after.map((part) => `· ${part}`).join(' ')}
           </span>
         ) : null}
