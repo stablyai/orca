@@ -9,6 +9,7 @@ import {
   savedCredentialUnreadable
 } from '../credentials/saved-credential-readability'
 import { refreshAfterCredentialChange } from '../ipc/accounts/credential-change-rate-limit-refresh'
+import { validateApiKey } from '../../shared/validation/api-key'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { CommandCodeCredentialsStatus } from '../../shared/agent-accounts/usage-credentials/command-code-credentials'
 
@@ -43,12 +44,13 @@ export async function saveCommandCodeApiKeyCredential(
   key: unknown
 ): Promise<CommandCodeCredentialsStatus> {
   // Runtime-check IPC/RPC input; compile-time types do not constrain the wire.
-  if (typeof key !== 'string') {
-    throw new Error('Command Code API key must be a string')
-  }
+  const validatedKey = validateApiKey(key, {
+    name: 'a Command Code API key',
+    maxLength: 4_096
+  })
   // Desktop IPC and remote RPC saves both run here; refuse a key sealed by another Orca app.
   await assertCommandCodeApiKeyOpensHere()
-  await saveCommandCodeApiKey(key)
+  await saveCommandCodeApiKey(validatedKey)
   refreshAfterChange(rateLimits, 'save')
   return getCommandCodeCredentialsStatus()
 }

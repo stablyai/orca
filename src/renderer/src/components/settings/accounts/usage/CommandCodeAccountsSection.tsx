@@ -194,10 +194,13 @@ export function mutationFailureCopy(
           'auto.components.settings.AccountsPane.commandCode.saveFailed',
           'Could not save the Command Code key'
         ),
-        description: t(
-          'auto.components.settings.AccountsPane.commandCode.saveFailedDescription',
-          'Check the key and try again.'
-        )
+        description:
+          error instanceof Error && error.message.trim().length > 0
+            ? error.message
+            : t(
+                'auto.components.settings.AccountsPane.commandCode.saveFailedDescription',
+                'Check the key and try again.'
+              )
       }
 }
 

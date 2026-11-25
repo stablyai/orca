@@ -48,4 +48,11 @@ describe('saveCommandCodeApiKeyCredential', () => {
     expect(mocks.saveCommandCodeApiKey).toHaveBeenCalledWith('cc-key')
     expect(status).toEqual({ apiKeyConfigured: true })
   })
+
+  it('refuses a key with an embedded newline and never stores it', async () => {
+    await expect(saveCommandCodeApiKeyCredential(null, 'cc\nkey')).rejects.toThrow(
+      /spaces or line breaks inside/
+    )
+    expect(mocks.saveCommandCodeApiKey).not.toHaveBeenCalled()
+  })
 })
