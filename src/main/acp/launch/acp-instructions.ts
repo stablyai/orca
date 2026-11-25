@@ -36,7 +36,8 @@ export type AcpInstructionsLaunch = {
   release?: () => Promise<void>
 }
 
-/** Opens a session with what `aroundSessionOpen` places there for the open. */
+/** Opens a session with what `aroundSessionOpen` places there for the open. A failed undo never
+ *  fails the open: an accepted reopen must not be replaced by a new session over it. */
 export async function withAcpSessionOpen<T>(
   launch: Pick<AcpInstructionsLaunch, 'aroundSessionOpen'>,
   cwd: string,
@@ -46,7 +47,9 @@ export async function withAcpSessionOpen<T>(
   try {
     return await open()
   } finally {
-    await undo?.()
+    await undo?.().catch((error: unknown) => {
+      console.warn('[acp] removing what a session open placed failed', error)
+    })
   }
 }
 
