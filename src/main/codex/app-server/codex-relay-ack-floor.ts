@@ -42,6 +42,8 @@ function itemKey(line: string): { key: string; running: boolean } | null {
 export function createCodexRelayAckFloor(): ProviderRelayAckFloor {
   /** Insertion order is seq order, so the first entry is the floor. */
   const open = new Map<string, number>()
+  /** Items whose end was handed on but maybe not yet taken: [start, end] by key. */
+  const ending = new Map<string, [number, number]>()
   return {
     observe: (seq, line) => {
       const { properties } = leadingJsonEnvelope(line.slice(0, ENVELOPE_SCAN_CHARS), {
@@ -56,11 +58,26 @@ export function createCodexRelayAckFloor(): ProviderRelayAckFloor {
       if (!item) {
         return
       }
+      const start = open.get(item.key)
       open.delete(item.key)
+      if (start !== undefined && method === 'item/completed' && ending.size < MAX_OPEN_ITEMS) {
+        ending.set(item.key, [start, seq])
+      }
       if (method === 'item/started' && item.running && open.size < MAX_OPEN_ITEMS) {
         open.set(item.key, seq)
       }
     },
-    floor: () => open.values().next().value ?? null
+    // An item whose end the reader hasn't taken yet still needs its start after a crash.
+    floor: (through = Number.POSITIVE_INFINITY) => {
+      let floor = open.values().next().value ?? null
+      for (const [key, [start, end]] of ending) {
+        if (end <= through) {
+          ending.delete(key)
+        } else if (floor === null || start < floor) {
+          floor = start
+        }
+      }
+      return floor
+    }
   }
 }

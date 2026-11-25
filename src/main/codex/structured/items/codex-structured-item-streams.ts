@@ -257,14 +257,6 @@ export function createCodexStructuredItemStreams(
       if (!itemId) {
         return { handled: true, admission: { accepted: true } }
       }
-      // A reattach replay can start mid-command: its saved row keeps the command, and its end
-      // carries the whole output, so output for a command never seen starting writes nothing.
-      if (
-        (type === 'commandExecution' || type === 'fileChange') &&
-        !states.get(codexStructuredItemKey(threadId, itemId))
-      ) {
-        return { handled: true, admission: { accepted: true } }
-      }
       const state = ensureState(threadId, itemId, type ?? 'reasoning', params)
       const delta = method === REASONING_PART_METHOD ? '\n' : paramsRecord.delta
       if (typeof delta === 'string') {
