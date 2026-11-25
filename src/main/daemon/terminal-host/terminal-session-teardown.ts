@@ -1,6 +1,9 @@
 import { killWithDescendantSweep } from '../../pty/process-retirement/pty-descendant-termination'
 import { excludeShellBackgroundJobs } from '../../pty/process-retirement/pty-shell-job-preservation'
-import { terminateShutdownDescendants } from '../sessions/terminal-descendant-shutdown'
+import {
+  shutdownProcessGroupsStillLive,
+  terminateShutdownDescendants
+} from '../sessions/terminal-descendant-shutdown'
 import type { Session } from '../sessions/session'
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
 
@@ -12,6 +15,10 @@ type TeardownOperation = {
   session: Session
   descendantVerification: Promise<unknown> | null
   immediatePromise: Promise<void> | null
+  /** Positive evidence only: every captured descendant verified gone, or the owned job tree ended. */
+  writersExited: boolean
+  /** POSIX process groups the scan saw; none may hold a live process once teardown settles. */
+  writerGroups: ReadonlySet<number> | null
 }
 
 /** Retain teardown ownership across descendant capture, root exit, and Session reaping. */
@@ -47,6 +54,23 @@ export class TerminalSessionTeardown {
     await operation.promise.catch(() => {})
     await operation.descendantVerification?.catch(() => {})
     await operation.rootCompletion.catch(() => {})
+  }
+
+  /** After this teardown settles, whether it proved the session's writers gone; false when none runs. */
+  writersExited(sessionId: string): Promise<boolean> {
+    const operation = this.operations.get(sessionId)
+    if (!operation) {
+      return Promise.resolve(false)
+    }
+    return this.waitForOperation(operation).then(async () => {
+      if (!operation.writersExited) {
+        return false
+      }
+      // A child forked after the scan keeps its group; any survivor withholds the proof.
+      return operation.writerGroups
+        ? (await shutdownProcessGroupsStillLive(operation.writerGroups)) === false
+        : true
+    })
   }
 
   requestImmediate(sessionId: string): Promise<void> | undefined {
@@ -120,7 +144,9 @@ export class TerminalSessionTeardown {
       rootCompletion: Promise.resolve(),
       session,
       descendantVerification: null,
-      immediatePromise: null
+      immediatePromise: null,
+      writersExited: false,
+      writerGroups: null
     }
     const operation = run(entry)
     entry.promise = operation
@@ -192,14 +218,28 @@ export class TerminalSessionTeardown {
           {
             // Captured descendants are authoritative only while this exact Session owns the live root.
             ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
-            terminateOwnedTree: () => session.terminateOwnedTree(),
+            terminateOwnedTree: () => {
+              const verdict = session.terminateOwnedTree()
+              entry.writersExited ||= verdict === 'terminated'
+              return verdict
+            },
             terminateDescendants: (snapshot) => {
+              entry.writerGroups = new Set(
+                [snapshot.rootPgid, ...snapshot.descendants.map((row) => row.pgid)].filter(
+                  (pgid): pgid is number => typeof pgid === 'number' && pgid > 0
+                )
+              )
               entry.descendantVerification = terminateShutdownDescendants(
                 session.launchAgent || entry.immediate
                   ? snapshot
                   : excludeShellBackgroundJobs(snapshot, session.shellIsRootChild),
                 session.shellIsRootChild
-              )
+              ).then((verdict) => {
+                // A live or unverifiable descendant could still be writing the transcript, and an
+                // empty list from a missing, duplicate or zombie root row proves nothing.
+                entry.writersExited ||= verdict === 'exited' && snapshot.root !== undefined
+                return verdict
+              })
               return entry.descendantVerification
             },
             awaitEscalation: () => entry.immediate

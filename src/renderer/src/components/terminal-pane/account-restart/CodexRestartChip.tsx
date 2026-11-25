@@ -5,6 +5,7 @@ import { useAppStore } from '../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { shouldFocusMobileDriverAction } from '../mobile-driver/mobile-driver-overlay-focus'
 import { awaitsCodexRestartAnswer } from './codex-restart-notice-state'
+import { withdrawCodexPaneAccountRestart } from './codex-account-restart-stop'
 
 function isInsideHiddenTree(element: HTMLElement): boolean {
   return element.closest('[aria-hidden="true"], [hidden], [inert]') !== null
@@ -13,6 +14,7 @@ function isInsideHiddenTree(element: HTMLElement): boolean {
 type RestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string
+  restartBlockedBy?: 'manual'
 }
 
 export default function CodexRestartChip({
@@ -39,6 +41,7 @@ export default function CodexRestartChip({
 
   const handleDismiss = (): void => {
     useAppStore.getState().dismissCodexRestartNotices([ptyId])
+    withdrawCodexPaneAccountRestart(ptyId)
     onReturnFocus()
     // Clear the persisted launch record too, or startup recreates this answered renderer notice.
     void window.api.codexAccounts.forgetStalePanes({ ptyIds: [ptyId] }).catch((err: unknown) => {
@@ -77,6 +80,7 @@ function LoudRestartOverlay({
   const titleId = useId()
   const bodyId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
+  const manual = restartNotice.restartBlockedBy === 'manual'
 
   // Focus only if the user is not typing elsewhere. Focus the dialog, never Restart, so Space/Enter cannot destroy an unchosen session (#10863).
   useEffect(() => {
@@ -121,9 +125,9 @@ function LoudRestartOverlay({
           onDismiss()
         }
       }}
-      className="absolute inset-0 z-50 flex items-center justify-center p-6 outline-none"
+      className="@container absolute inset-0 z-50 flex items-center justify-center px-3 py-6 outline-none"
     >
-      <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs">
+      <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs @max-[360px]:px-3">
         <div className="flex items-start gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
             <RefreshCw className="size-5 text-foreground" aria-hidden="true" />
@@ -142,20 +146,34 @@ function LoudRestartOverlay({
           </div>
         </div>
         <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
-          {t(
-            'auto.components.CodexRestartChip.9375620cc3',
-            'Restart this session to use {{value0}}. It stays on the previous account until you do.',
-            { value0: restartNotice.nextAccountLabel }
-          )}
+          {manual
+            ? // This pane's shell still carries the old account's CODEX_HOME, and after an unknown
+              // stop there may be no Codex left to exit: only a new pane is on the new account.
+              t(
+                'auto.components.CodexRestartChip.5b8e1d2f40',
+                'Close this pane and start Codex in a new one.'
+              )
+            : t('auto.components.CodexRestartChip.9375620cc3', 'Restart to use {{value0}}.', {
+                value0: restartNotice.nextAccountLabel
+              })}
         </div>
         <div className="mt-1 flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
-            {t('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
-          </Button>
-          <Button type="button" variant="default" size="sm" onClick={onRestart}>
-            <RefreshCw />
-            {t('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
-          </Button>
+          {manual ? (
+            // Restart would only be refused again on a route Orca cannot stop safely.
+            <Button type="button" variant="default" size="sm" onClick={onDismiss}>
+              {t('auto.components.CodexRestartChip.7f2e9b4c10', 'Dismiss')}
+            </Button>
+          ) : (
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
+                {t('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
+              </Button>
+              <Button type="button" variant="default" size="sm" onClick={onRestart}>
+                <RefreshCw />
+                {t('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>

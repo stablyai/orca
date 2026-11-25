@@ -1,3 +1,4 @@
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { PtySpawnSizeSeed } from '../spawn/spawn-options-assembly'
 import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup-cwd-fallback'
@@ -100,6 +101,10 @@ export type PtyIpcSpawnState = {
   provisionalPtySize: PtySpawnSizeSeed | undefined
   initiallyHidden: boolean
   preSpawnHiddenMarkId: string | null
+  /** Restores a spent account-restart intent when this spawn fails or retires before its process starts. */
+  unspendCodexAccountRestart: (() => void) | null
+  /** Account selection as read when the launch home was chosen; publication attributes the child with it. */
+  codexLaunchSettings?: GlobalSettings
 }
 
 export function createPtyIpcSpawnState(
@@ -176,6 +181,7 @@ export function createPtyIpcSpawnState(
     codexResumeHomeSelected: false,
     provisionalPtySize: undefined,
     initiallyHidden: false,
-    preSpawnHiddenMarkId: null
+    preSpawnHiddenMarkId: null,
+    unspendCodexAccountRestart: null
   }
 }

@@ -183,7 +183,13 @@ export class TerminalHost {
       sessions: this.sessions,
       pendingCreations: this.pendingCreations,
       owners: this.agentSessionOwners,
-      kill: (id, options) => this.kill(id, options)
+      kill: async (id, options) => {
+        const killed = this.kill(id, options)
+        // Read the verdict of the teardown this kill started or joined, before it is cleared.
+        const writersExited = this.sessionTeardown.writersExited(id)
+        await killed
+        return { writersExited: await writersExited }
+      }
     })
   }
 

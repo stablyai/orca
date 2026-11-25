@@ -18,6 +18,8 @@ import { markPtyEscapeBoundaryUnknown } from '../delivery/pty-escape-boundary'
 import { discardPendingPtyDataAcrossGap } from '../delivery/accept'
 import type { PtyIpcSession } from '../session'
 import { publishPtyEndpointLoss } from '../../../runtime/terminal/pty-endpoint-loss-signal'
+import { codexAccountRestartStops } from '../account-restart/codex-account-restart-stops'
+import { isRestartExitRendererLive } from '../account-restart/codex-account-restart-redelivery'
 
 export function bindProviderListeners(session: PtyIpcSession): void {
   localDataUnsub?.()
@@ -96,14 +98,25 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       // Its distro's hook relay may idle out once no bridge terminal remains.
       wslBridgePtyPresence.noteExited(payload.id)
       const syntheticExit = session.consumeSyntheticKillExit(payload.id, payload.incarnationId)
-      // Daemon restart replaces processes while their panes survive.
-      const settleRestartStop = payload.replacedByRestart
-        ? session.runtime?.intentionalPtyStops?.mark(
-            payload.id,
-            'replaced',
-            payload.incarnationId ?? null
-          )
-        : undefined
+      // Classify before any consumer: an account-restart stop delivers one logical exit per incarnation.
+      const accountRestartExit = codexAccountRestartStops.classifyExit(
+        payload.id,
+        payload.incarnationId,
+        payload.hostLost ? 'host-loss' : 'stream'
+      )
+      if (accountRestartExit === 'duplicate') {
+        return
+      }
+      const isAccountRestartExit = accountRestartExit !== 'ordinary'
+      // Daemon restart replaces processes while their panes survive; so does an account-restart stop.
+      const settleRestartStop =
+        payload.replacedByRestart || isAccountRestartExit
+          ? session.runtime?.intentionalPtyStops?.mark(
+              payload.id,
+              'replaced',
+              payload.incarnationId ?? null
+            )
+          : undefined
       try {
         if (!payload.runtimeFed) {
           const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(payload.id)
@@ -112,15 +125,21 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           if (syntheticExit) {
             session.runtime?.markPtyStopRequested(payload.id)
           }
-          session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
-            providerExitObserved: true,
-            ...(viewShown ? { viewShown } : {}),
-            ...(payload.cause ? { cause: payload.cause } : {}),
-            ...(payload.hostLost ? { hostLost: true } : {})
-          })
+          // An attach miss already told runtime about this restart exit; only the renderer is owed it.
+          if (accountRestartExit !== 'restart-renderer-only') {
+            session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
+              providerExitObserved: true,
+              ...(viewShown ? { viewShown } : {}),
+              ...(payload.cause ? { cause: payload.cause } : {}),
+              ...(payload.hostLost ? { hostLost: true } : {}),
+              // The pane's normal resume brings this conversation back, so an active Dispatch waits for it.
+              ...(isAccountRestartExit ? { paneRespawning: true } : {})
+            })
+          }
         }
         // Control replies may overtake stream data; physical exit must still retire late output.
-        if (syntheticExit) {
+        // A receipt that reached no window left this stream exit owing the renderer; still send it.
+        if (syntheticExit && accountRestartExit !== 'restart-renderer-only') {
           return
         }
         // Exit cause belongs to runtime records; preserve the renderer event contract.
@@ -129,6 +148,9 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           code: payload.code,
           ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {})
         })
+        if (isAccountRestartExit && !isRestartExitRendererLive(session)) {
+          codexAccountRestartStops.noteRendererUndelivered(payload.id, payload.incarnationId)
+        }
       } finally {
         settleRestartStop?.(true)
       }

@@ -1,7 +1,8 @@
 import type { DaemonLaunchNoteChange } from '../../daemon/protocol/daemon-launch-note-protocol'
 import type {
   PtyFencedTerminationRequest,
-  PtyFencedTerminationOutcome
+  PtyFencedTerminationOutcome,
+  PtyFencedTerminationLocalOptions
 } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { SpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -140,7 +141,11 @@ export type IPtyProvider = {
   /** Whether missing claim metadata in this PTY's process listing proves absence. */
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
   supportsFencedTermination?: (id: string) => boolean
-  killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
+  /** `beforeRequest` runs after the last local wait, right before the kill is written; false sends nothing. */
+  killFenced?: (
+    request: PtyFencedTerminationRequest,
+    options?: PtyFencedTerminationLocalOptions
+  ) => Promise<PtyFencedTerminationOutcome>
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   attach(id: string): Promise<PtySpawnResult | void>

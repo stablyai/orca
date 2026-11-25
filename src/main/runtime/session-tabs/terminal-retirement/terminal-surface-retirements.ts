@@ -17,6 +17,10 @@ import { retireTerminalSurfaceFromPersistence } from '../../terminal/surface/mob
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import { attachRetirementProofsToSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement-proof'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import {
+  codexAccountRestartPaneKey,
+  codexAccountRestartStops
+} from '../../../ipc/pty/account-restart/codex-account-restart-stops'
 
 export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntimeWithTouchMobileSessionTabsForWorktree {
   protected abstract findHandleForPtyRecord(
@@ -66,6 +70,16 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
         // The existing catch handles a missing store setter.
         this.store!.setWorkspaceSession!(next, hostId)
         accepted.push(surface)
+        if (!exit) {
+          // A closed pane can no longer resume, so its account-restart intent goes with it.
+          codexAccountRestartStops.forgetPane(
+            codexAccountRestartPaneKey({
+              worktreeId: surface.worktreeId,
+              tabId: surface.parentTabId,
+              leafId: surface.leafId
+            })
+          )
+        }
       } catch (error) {
         // The process is gone even when quit/maintenance prevents profile writes.
         console.error('[runtime] could not stage terminal retirement:', error)

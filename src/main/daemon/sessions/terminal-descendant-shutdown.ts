@@ -79,3 +79,34 @@ export async function terminateShutdownDescendants(
     shellPid: shellIsRootChild ? await findLoneLoginShellPid(snapshot) : undefined
   })
 }
+
+const PROCESS_GROUP_DRAIN_MS = 1_500
+const PROCESS_GROUP_POLL_MS = 100
+
+/**
+ * After a teardown, whether any live process remains in the session's captured process groups.
+ * Children forked after the descendant scan keep their parent's group, so this catches them; a
+ * short-lived straggler may finish within the drain window. A process that started a new session
+ * left the tree on purpose. An unreadable table proves nothing.
+ */
+export async function shutdownProcessGroupsStillLive(
+  processGroups: ReadonlySet<number>,
+  drainMs = PROCESS_GROUP_DRAIN_MS
+): Promise<boolean | 'unknown'> {
+  const deadline = Date.now() + drainMs
+  for (;;) {
+    let capture: Awaited<ReturnType<ProcessTableReader>>
+    try {
+      capture = await descendantTermination.readProcessTable(SHUTDOWN_DESCENDANT_TABLE_TIMEOUT_MS)
+    } catch {
+      return 'unknown'
+    }
+    if (!capture.rows.some((row) => processGroups.has(row.pgid) && !row.zombie)) {
+      return false
+    }
+    if (Date.now() >= deadline) {
+      return true
+    }
+    await new Promise((resolve) => setTimeout(resolve, PROCESS_GROUP_POLL_MS))
+  }
+}

@@ -1,6 +1,8 @@
 import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal/output/terminal-model-query-authority'
 import { resolvePtySpawnHostEnv } from '../host-env/spawn-host-env'
 import type { PtyIpcSpawnState } from './spawn-state'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { resolveCodexAccountRestartResume } from '../account-restart/codex-account-restart-resume-gate'
 
 export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
@@ -10,10 +12,22 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     cwd: args.cwd,
     shellOverride: ctx.effectiveShellOverride
   })
+  const restartResume = await resolveCodexAccountRestartResume({
+    launchAgent: args.launchAgent,
+    resumeProviderSession: args.resumeProviderSession,
+    worktreeId: args.worktreeId,
+    tabId: args.tabId,
+    leafId: ctx.validatedLeafId ?? args.leafId,
+    preAdopted: Boolean(ctx.preAdoptedStablePane),
+    replacesPtyId: args.replacesPtyId,
+    connectionId: args.connectionId,
+    selectionRuntime: ctx.codexSelectionTarget.runtime ?? 'host',
+    isDaemonHostSpawn: ctx.isDaemonHostSpawn
+  })
   const hostEnv = await resolvePtySpawnHostEnv({
     launchAgent: args.launchAgent,
     command: args.command,
-    resumeProviderSession: args.resumeProviderSession,
+    resumeProviderSession: restartResume.providerSession,
     env: ctx.baseEnv,
     cwd: ctx.cwd,
     shellOverride: ctx.effectiveShellOverride,
@@ -24,14 +38,18 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     sessionId: ctx.effectiveSessionId,
     callerNamedSession: args.sessionId !== undefined,
     mintedSessionId: ctx.ownsNewIncarnation,
-    resumeOnSelectedAccount: Boolean(args.replacesPtyId),
+    resumeOnSelectedAccount: Boolean(args.replacesPtyId) || restartResume.resumeOnSelectedAccount,
     emptySessionIdSkipsHostEnv: false,
     wslPassiveRestore: args.wslPassiveRestore === true,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
     provider: ctx.provider,
-    deps: ctx.deps,
+    deps: withLaunchAccountSnapshot(ctx),
     mark: (phase) => ctx.spawnTiming.mark(phase)
+  }).catch((error: unknown) => {
+    restartResume.unspend?.()
+    throw error
   })
+  ctx.unspendCodexAccountRestart = restartResume.unspend ?? null
   ctx.codexResumeLaunch = hostEnv.codexResumeLaunch
   if (hostEnv.codexResumeLaunch.droppedResumeArgv && ctx.effectiveLaunchConfig) {
     ctx.effectiveLaunchConfig = {
@@ -47,4 +65,52 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
   ctx.skipCodexHomeEnv = hostEnv.skipCodexHomeEnv
   ctx.stripInheritedOrcaCodexHome = hostEnv.stripInheritedOrcaCodexHome
   ctx.spawnTiming.mark('host_env')
+}
+
+/** Once the provider spawn is dispatched the child may run, so the intent is never restored. */
+export function noteCodexAccountRestartLaunchDispatched(ctx: PtyIpcSpawnState): void {
+  ctx.unspendCodexAccountRestart = null
+}
+
+/** A spawn that failed or retired before dispatch launched nothing; its intent returns for the next resume. */
+export function restoreUnstartedCodexAccountRestart(ctx: PtyIpcSpawnState): void {
+  const unspend = ctx.unspendCodexAccountRestart
+  ctx.unspendCodexAccountRestart = null
+  unspend?.()
+}
+
+// Attribution must name the account the child actually got, not one selected later before publication.
+function withLaunchAccountSnapshot(ctx: PtyIpcSpawnState): PtyIpcSpawnState['deps'] {
+  const select = ctx.deps.getSelectedCodexHomePath
+  if (!select) {
+    return ctx.deps
+  }
+  return {
+    ...ctx.deps,
+    getSelectedCodexHomePath: (...selectArgs: Parameters<typeof select>) => {
+      ctx.codexLaunchSettings = snapshotCodexLaunchSettings(ctx.deps.getSettings?.())
+      return select(...selectArgs)
+    }
+  }
+}
+
+function snapshotCodexLaunchSettings(
+  settings: GlobalSettings | undefined
+): GlobalSettings | undefined {
+  if (!settings) {
+    return undefined
+  }
+  return {
+    ...settings,
+    ...(settings.activeCodexManagedAccountIdsByRuntime
+      ? {
+          activeCodexManagedAccountIdsByRuntime: {
+            ...settings.activeCodexManagedAccountIdsByRuntime
+          }
+        }
+      : {}),
+    ...(settings.codexManagedAccounts
+      ? { codexManagedAccounts: [...settings.codexManagedAccounts] }
+      : {})
+  }
 }

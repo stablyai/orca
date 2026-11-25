@@ -1,3 +1,5 @@
+import { installCodexAccountRestartIpcHandlers } from './account-restart/codex-account-restart-ipc'
+import { isRestartExitRendererLive } from './account-restart/codex-account-restart-redelivery'
 import { createLocalPtyStartupPromises } from './provider/local-startup-promises'
 
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
@@ -106,6 +108,9 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:moveLeafToNewTab')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:killFenced')
+  ipcMain.removeHandler('pty:stopCodexForAccountRestart')
+  ipcMain.removeHandler('pty:withdrawCodexAccountRestart')
+  ipcMain.removeHandler('pty:releaseCodexAccountRestartPane')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
@@ -302,4 +307,9 @@ export function registerPtyHandlers(
   installPtyClaudeDiffPanelNoticeIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyNewerDaemonHoldIpcHandlers()
   installPtyKillIpcHandler(killDeps)
+  installCodexAccountRestartIpcHandlers({
+    ...killDeps,
+    getSettings,
+    isRendererLive: () => isRestartExitRendererLive(session)
+  })
 }

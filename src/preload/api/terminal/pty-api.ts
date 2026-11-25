@@ -1,3 +1,9 @@
+import type {
+  CodexAccountRestartReleaseRequest,
+  CodexAccountRestartStopRequest,
+  CodexAccountRestartStopResult,
+  CodexAccountRestartWithdrawRequest
+} from '../../../shared/agent-accounts/codex/codex-account-restart-stop'
 import type { RuntimeTerminalAttention } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../../shared/terminal/replay/painted-restore-ack'
 import type {
@@ -139,6 +145,13 @@ export type PtyApi = {
   clearBuffer: (id: string) => void
   resetInputModes: (id: string) => void
   killFenced: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
+  /** Stops one stale Codex pane for an account switch; the pane's normal resume brings it back. */
+  stopCodexForAccountRestart: (
+    request: CodexAccountRestartStopRequest
+  ) => Promise<CodexAccountRestartStopResult>
+  withdrawCodexAccountRestart: (request: CodexAccountRestartWithdrawRequest) => Promise<boolean>
+  /** The user dismissed a failed account-restart resume; the pane may start normally again. */
+  releaseCodexAccountRestartPane: (request: CodexAccountRestartReleaseRequest) => Promise<void>
   /** `replaced` stops a restarted pane's old PTY without retiring the pane. */
   kill: (id: string, opts?: { keepHistory?: boolean; replaced?: boolean }) => Promise<void>
   /** Acknowledge the pane that actually painted the restored frame. */

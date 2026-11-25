@@ -27,9 +27,15 @@ export function resolveCodexPaneLaunchAccount(args: {
   settings: CodexPaneLaunchAccountSettings
   target: CodexAccountSelectionTarget
 }): CodexPaneAccountRecord | null {
+  // The home the child actually got names its credentials (no CODEX_HOME or the system home is the
+  // default account); selection is only a fallback for a home no account owns, which the restart
+  // treats as unattributable.
+  const homeOwnerAccountId = resolveCodexHomeOwnerAccountId(args)
   const accountId = args.pinnedByResume
     ? resolveCodexHomeOwnerAccountId(args)
-    : getSelectedCodexAccountIdForTarget(args.settings, args.target)
+    : homeOwnerAccountId !== undefined
+      ? homeOwnerAccountId
+      : getSelectedCodexAccountIdForTarget(args.settings, args.target)
   if (accountId === undefined) {
     return null
   }

@@ -2119,7 +2119,7 @@
         "a4c8e1b2f7": "Codex est toujours connecté en tant que {{value0}}",
         "c72a5fb234": "Redémarrer",
         "d3e8a1f4b2": "Compte changé",
-        "9375620cc3": "Redémarrez cette session pour utiliser {{value0}}. Elle reste sur le compte précédent tant que vous ne l'avez pas fait.",
+        "9375620cc3": "Redémarrez pour utiliser {{value0}}.",
         "6133594b12": "Conserver l'ancien compte"
       },
       "FirstLaunchBanner": {

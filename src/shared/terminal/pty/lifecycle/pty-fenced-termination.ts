@@ -11,8 +11,17 @@ export type PtyFencedTerminationRequest = {
   }
 }
 
+/** Main-local hooks for a fenced stop; never sent to the daemon. */
+export type PtyFencedTerminationLocalOptions = {
+  beforeRequest?: () => boolean
+  /** Sleep semantics: keep the session's history and no kill tombstone, so the pane can wake on it. */
+  keepHistory?: boolean
+}
+
 export type PtyFencedTerminationOutcome =
-  | { outcome: 'ended' | 'already_exited' }
+  /** `writersExited`: the teardown also proved every captured descendant gone (or ended the owned job tree). */
+  | { outcome: 'ended'; writersExited?: true }
+  | { outcome: 'already_exited' }
   | {
       outcome: 'refused'
       reason: 'replaced' | 'claimed' | 'attached' | 'unsupported' | 'unverifiable'

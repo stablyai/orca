@@ -8,6 +8,7 @@ import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import { retireReplacedPaneBinding } from './pane-owner-replacement'
+import { codexAccountRestartStops } from '../account-restart/codex-account-restart-stops'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'
 
 type AbsentPaneContext = {
@@ -36,17 +37,23 @@ function releaseAbsentPaneProcess(
   runtime: OrcaRuntimeService | undefined,
   owner: AbsentPaneOwner
 ): void {
-  const settleStop = runtime?.intentionalPtyStops?.mark(
-    owner.ptyId,
-    'replaced',
-    owner.incarnationId ?? null
-  )
-  runtime?.onPtyExit(owner.ptyId, UNVERIFIED_PROCESS_EXIT_CODE, owner.incarnationId, {
-    hostExitConfirmed: true,
-    cause: HOST_LOST_EXIT_CAUSE,
-    paneRespawning: true
-  })
-  settleStop?.(true)
+  // An account-restart stop may already have delivered this process's one logical exit.
+  const exitAlreadyDelivered =
+    codexAccountRestartStops.classifyExit(owner.ptyId, owner.incarnationId, 'attach-miss') ===
+    'duplicate'
+  if (!exitAlreadyDelivered) {
+    const settleStop = runtime?.intentionalPtyStops?.mark(
+      owner.ptyId,
+      'replaced',
+      owner.incarnationId ?? null
+    )
+    runtime?.onPtyExit(owner.ptyId, UNVERIFIED_PROCESS_EXIT_CODE, owner.incarnationId, {
+      hostExitConfirmed: true,
+      cause: HOST_LOST_EXIT_CAUSE,
+      paneRespawning: true
+    })
+    settleStop?.(true)
+  }
   clearProviderPtyState(owner.ptyId)
   ptyOwnership.delete(owner.ptyId)
 }

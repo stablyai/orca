@@ -3,23 +3,26 @@ import { isTerminalSessionStateSaveFailure } from '../../../../../shared/workspa
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { appendPaneTerminalError, clearPaneTerminalError } from './terminal-error-accumulation'
 import { stripSshReconnectOwnedErrorLines } from './terminal-error-display'
+import { releaseCodexAccountRestartRefusal } from '../account-restart/codex-account-restart-stop'
 import type { TerminalPaneFoundation } from '../controller/use-terminal-pane-foundation'
 
 export function useTerminalPaneErrorCallbacks({
-  managerRef,
   paneTransportsRef,
   setSessionStateSaveFailureMessage,
   setTerminalError,
   setTerminalErrorsByPaneId,
-  sshReconnectOwnsTerminalErrorsRef
+  sshReconnectOwnsTerminalErrorsRef,
+  tabId,
+  worktreeId
 }: Pick<
   TerminalPaneFoundation,
-  | 'managerRef'
   | 'paneTransportsRef'
   | 'setSessionStateSaveFailureMessage'
   | 'setTerminalError'
   | 'setTerminalErrorsByPaneId'
   | 'sshReconnectOwnsTerminalErrorsRef'
+  | 'tabId'
+  | 'worktreeId'
 >) {
   const onPtyErrorRef = useRef((paneId: number, message: string) => {
     if (message.includes(AGENT_LAUNCH_PANE_REFUSED_CODE)) {
@@ -44,13 +47,14 @@ export function useTerminalPaneErrorCallbacks({
   const onPtyErrorClearedRef = useRef((paneId: number, message?: string) => {
     setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId, message))
   })
-  const dismissTerminalError = useCallback(() => {
-    const paneId = managerRef.current?.getActivePane()?.id ?? null
-    setTerminalError(null)
-    if (paneId !== null) {
-      setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
-      paneTransportsRef.current.get(paneId)?.notifyErrorSurfaceDismissed?.()
-    }
-  }, [managerRef, paneTransportsRef, setTerminalError, setTerminalErrorsByPaneId])
+  const dismissTerminalError = useCallback(
+    (error: string, pane: { id: number; leafId: string }) => {
+      releaseCodexAccountRestartRefusal(error, worktreeId, tabId, pane.leafId)
+      setTerminalError(null)
+      setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, pane.id))
+      paneTransportsRef.current.get(pane.id)?.notifyErrorSurfaceDismissed?.()
+    },
+    [paneTransportsRef, setTerminalError, setTerminalErrorsByPaneId, tabId, worktreeId]
+  )
   return { onPtyErrorRef, onPtyErrorClearedRef, dismissTerminalError }
 }

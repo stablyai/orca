@@ -15,7 +15,8 @@ export function beginTerminalHostFencedTermination(
     sessions: ReadonlyMap<string, Session>
     pendingCreations: ReadonlyMap<string, unknown>
     owners: ClaimedAgentPtyOwnerRegistry
-    kill: (id: string, options: { immediate: true }) => Promise<void>
+    /** Older callers resolve nothing, which never counts as writer evidence. */
+    kill: (id: string, options: { immediate: true }) => Promise<{ writersExited: boolean } | void>
   }
 ): FencedTermination {
   const session = deps.sessions.get(request.id)
@@ -40,9 +41,14 @@ export function beginTerminalHostFencedTermination(
     // kill reserves the exact Session synchronously, before its first OS probe.
     const completion = deps
       .kill(request.id, { immediate: true })
-      .then((): PtyFencedTerminationOutcome =>
-        session.isAlive ? { outcome: 'refused', reason: 'unverifiable' } : { outcome: 'ended' }
-      )
+      .then((verdict): PtyFencedTerminationOutcome => {
+        if (session.isAlive) {
+          return { outcome: 'refused', reason: 'unverifiable' }
+        }
+        return verdict?.writersExited === true
+          ? { outcome: 'ended', writersExited: true }
+          : { outcome: 'ended' }
+      })
       .catch((): PtyFencedTerminationOutcome => ({ outcome: 'refused', reason: 'unverifiable' }))
     return { accepted: true, completion }
   } catch {
