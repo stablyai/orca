@@ -14,14 +14,14 @@ const BACKLOG_TITLES = [
 ]
 
 /** Four days of failed review requests, an old chat still waiting on the owner, a failure from today. */
-function backlogDay(count: number): BotChatTreeChat[] {
+function backlogDay(count: number, withRecent = true): BotChatTreeChat[] {
   const failed = (name: string, at: number): BotChatTreeWorker => ({
     ...worker(name, 'failed'),
     startedAt: at - 60_000,
     settledAt: at
   })
-  return [
-    chat('home', 'Home Chat', 'home', {}, { tab: true, lastActiveAt: NOW - 40 * 60_000 }),
+  const home = chat('home', 'Home Chat', 'home', {}, { tab: true, lastActiveAt: NOW - 40 * 60_000 })
+  const recent = [
     chat(
       'old-asks',
       'Which retry limit should relay use?',
@@ -43,7 +43,11 @@ function backlogDay(count: number): BotChatTreeChat[] {
       'side',
       {},
       { tab: true, lastActiveAt: NOW - 24 * HOUR + 4 * 60_000 }
-    ),
+    )
+  ]
+  return [
+    home,
+    ...(withRecent ? recent : []),
     ...Array.from({ length: count }, (_, index) =>
       chat(
         `stale-${index}`,
@@ -68,7 +72,7 @@ function backlogDay(count: number): BotChatTreeChat[] {
 /** A backlog of old settled chats folds under one link; the old chat waiting on you and today's failure stay. */
 export const olderFolded = fixtureFor(backlogDay(30))
 
-/** The same backlog after "Show 30 older": every old chat listed, then Show fewer. */
+/** The same backlog after "Show 30 older": the toggle stays put as "Hide older", every old chat below it. */
 export const olderShown = defineFixture({
   ...olderFolded,
   interact: async (frame) => {
@@ -125,3 +129,9 @@ export const olderSuccessorInFront = defineFixture({
     activeGroupIdByWorktree: { [HOME_KEY]: 'group-home' }
   }
 })
+
+/** Only one old chat: a link in its place would save nothing, so it lists. */
+export const olderOnlyOne = fixtureFor(backlogDay(1))
+
+/** Nothing but old chats: Home Chat, then the toggle. */
+export const olderAll = fixtureFor(backlogDay(12, false))

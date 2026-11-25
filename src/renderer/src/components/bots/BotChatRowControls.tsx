@@ -13,7 +13,9 @@ import { flashChatPaneRim } from '@/components/terminal-pane/input/focus/focused
  *  on the row of the chat already in front, for a row whose list reads its fold. */
 export function useBotChatPress(
   bot: Pick<Bot, 'hostId' | 'id' | 'folderWorkspaceId'>,
-  chatId: string
+  chatId: string,
+  /** The session a /clear moved the chat to, whose id its tab then carries. */
+  liveSessionId?: string
 ): {
   active: boolean
   toggle: (open: boolean) => void
@@ -26,14 +28,20 @@ export function useBotChatPress(
       return false
     }
     const tab = selectFrontTab(s)
-    return tab?.contentType === 'agent-session' && tab.entityId === chatId
+    return (
+      tab?.contentType === 'agent-session' &&
+      (tab.entityId === chatId || tab.entityId === liveSessionId)
+    )
   })
   return {
     active,
     toggle: (open) => setBotChatFold(bot.hostId, bot.id, chatId, open ? 'folded' : 'open'),
     highlight: () => {
       const tab = selectFrontTab(useAppStore.getState())
-      if (tab?.contentType === 'agent-session' && tab.entityId === chatId) {
+      if (
+        tab?.contentType === 'agent-session' &&
+        (tab.entityId === chatId || tab.entityId === liveSessionId)
+      ) {
         flashChatPaneRim(tab.id)
       }
     }
@@ -130,9 +138,8 @@ export function BotChatPaging({
         className
       )}
     >
-      {/* Keyed by place, so a link whose label flips (Show N older, Show fewer) keeps keyboard focus. */}
       {links.map((link, index) => (
-        <Fragment key={index}>
+        <Fragment key={link.label}>
           {index > 0 ? <span aria-hidden>·</span> : null}
           <button
             type="button"

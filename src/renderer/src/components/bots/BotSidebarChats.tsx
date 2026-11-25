@@ -30,7 +30,8 @@ import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChat
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
-import { useBotSidebarOlderChats, useFocusWithin } from './use-bot-sidebar-older-chats'
+import { BotSidebarOlderChats } from './BotSidebarOlderChats'
+import { useBotSidebarOlderChats, useListHold } from './use-bot-sidebar-older-chats'
 
 /** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by
  *  indent; settled ones a day old fold under one "Show N older" link. */
@@ -98,7 +99,7 @@ export function BotSidebarChats({
       setBotChatFold(bot.hostId, bot.id, foldedHolder, 'open')
     }
   }, [revealNonce, foldedHolder, setBotChatFold, bot.hostId, bot.id])
-  const focus = useFocusWithin()
+  const hold = useListHold()
   const liveLineIds = useMemo(() => botLiveWorkspaceIds(chats), [chats])
   const revealHeld = useMemo(
     () =>
@@ -124,17 +125,17 @@ export function BotSidebarChats({
     activeLineId: activeLine?.id ?? null,
     reveal: revealHeld,
     stale: tree.state !== 'ready' || tree.refreshFailed,
-    interacting: focus.focused
+    interacting: hold.held
   })
-  // The link going away under focus (its last older chat listed again) hands focus to the last chat row;
+  // The toggle going away under focus (fewer than two left to fold) hands focus to the last chat row;
   // focus anywhere else is left alone.
   const listRef = useRef<HTMLDivElement>(null)
-  const pagingFocused = useRef(false)
+  const toggleFocused = useRef(false)
   useLayoutEffect(() => {
-    if (older.length > 0 || !pagingFocused.current) {
+    if (older.length > 0 || !toggleFocused.current) {
       return
     }
-    pagingFocused.current = false
+    toggleFocused.current = false
     if (document.activeElement === null || document.activeElement === document.body) {
       const rows = [
         ...(listRef.current?.querySelectorAll<HTMLElement>('[data-bot-sidebar-chat]') ?? [])
@@ -168,37 +169,27 @@ export function BotSidebarChats({
   )
 
   return (
-    // `contents`, so the rows stay the parent's flex children; it only watches focus (menus too).
-    <div ref={listRef} className="contents" {...focus.handlers}>
+    // `contents`, so the rows stay the parent's flex children; it only watches the pointer and focus.
+    <div ref={listRef} className="contents" {...hold.handlers}>
       {recent.map(chatRow)}
-      {showOlder ? older.map(chatRow) : null}
-      {/* A blur with nowhere to go (the link removed) keeps the mark for the effect above. */}
-      <div
-        className="contents"
-        onFocus={() => {
-          pagingFocused.current = true
-        }}
-        onBlur={(event) => {
-          if (event.relatedTarget !== null) {
-            pagingFocused.current = false
-          }
-        }}
-      >
-        <BotChatPaging
-          more={
-            older.length > 0 && !showOlder
-              ? [
-                  {
-                    label: t('bots.chats.older', 'Show {{count}} older', { count: older.length }),
-                    onClick: onToggleOlder
-                  }
-                ]
-              : []
-          }
-          onFewer={older.length > 0 && showOlder ? onToggleOlder : null}
-          className="pr-2 pb-1 pl-1"
-        />
-      </div>
+      {older.length > 0 ? (
+        // A blur with nowhere to go (the toggle removed) keeps the mark for the effect above.
+        <div
+          className="contents"
+          onFocus={(event) => {
+            toggleFocused.current = event.target.hasAttribute('data-bot-sidebar-older-toggle')
+          }}
+          onBlur={(event) => {
+            if (event.relatedTarget !== null) {
+              toggleFocused.current = false
+            }
+          }}
+        >
+          <BotSidebarOlderChats count={older.length} open={showOlder} onToggle={onToggleOlder}>
+            {older.map(chatRow)}
+          </BotSidebarOlderChats>
+        </div>
+      ) : null}
       {view.stray.length > 0 ? (
         <AttachedWorktreeCards
           roots={view.stray}
@@ -243,7 +234,7 @@ function BotSidebarChat({
 }): React.JSX.Element {
   const t = useTranslate()
   const { chat, foldable, open, lines, paging, steps } = view
-  const { active, toggle, highlight } = useBotChatPress(bot, chat.chatId)
+  const { active, toggle, highlight } = useBotChatPress(bot, chat.chatId, chat.liveSessionId)
   const title = chatTitle(t, chat)
   const label = useBotChatLabel(chat, title)
   const trailing = trailingText(t, view.trailing)

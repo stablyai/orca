@@ -5,6 +5,9 @@ import type { BotSidebarChatView } from './bot-sidebar-tree'
 /** A settled chat this long untouched, unfocused and unchanged, folds. */
 export const OLDER_BOT_CHAT_AGE_MS = 24 * 60 * 60 * 1000
 
+/** Fewer than this qualifying, nothing folds: a link in place of one row saves nothing. */
+const OLDER_BOT_CHATS_MIN = 2
+
 export type OlderBotSidebarChats<T> = {
   recent: BotSidebarChatView<T>[]
   older: BotSidebarChatView<T>[]
@@ -91,8 +94,8 @@ export function splitOlderBotSidebarChats<T extends { id: string }>(
     )
   }
   const older = chats.filter(isOlder)
-  if (older.length === 0) {
-    return { recent: [...chats], older }
+  if (older.length < OLDER_BOT_CHATS_MIN) {
+    return { recent: [...chats], older: [] }
   }
   const olderIds = new Set(older.map((view) => view.chat.chatId))
   return { recent: chats.filter((view) => !olderIds.has(view.chat.chatId)), older }

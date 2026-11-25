@@ -24,10 +24,16 @@ type ChatChanges = { signatures: Map<string, string>; changedAt: Map<string, num
 /** Per bot row: each chat's last seen row and when this client saw it change. Outlives virtual unmounts. */
 const changesByBot = new Map<string, ChatChanges>()
 
-export function pruneBotSidebarChatChanges(liveKeys: ReadonlySet<string>): void {
-  for (const key of changesByBot.keys()) {
-    if (!liveKeys.has(key)) {
-      changesByBot.delete(key)
+/** Per bot row: the chats folded last time it drew, so a row remounting under the pointer or on a stale
+ *  read keeps its folds instead of listing everything first. */
+const olderByBot = new Map<string, ReadonlySet<string>>()
+
+export function pruneBotSidebarOlderChats(liveKeys: ReadonlySet<string>): void {
+  for (const map of [changesByBot, olderByBot]) {
+    for (const key of map.keys()) {
+      if (!liveKeys.has(key)) {
+        map.delete(key)
+      }
     }
   }
 }
@@ -77,7 +83,7 @@ export function useBotSidebarOlderChats(input: {
   reveal: { chatId?: string; lineIds: readonly string[] } | null
   /** The read is the last good one after a failed refresh: nothing new folds on it. */
   stale: boolean
-  /** Focus is in the bot's list (a menu or inline rename included): nothing new folds under it. */
+  /** The owner is over or in the bot's list (a menu or inline rename included): nothing new folds under them. */
   interacting: boolean
 }): OlderBotSidebarChats<Worktree> {
   const homeKey = useMemo(
@@ -113,8 +119,15 @@ export function useBotSidebarOlderChats(input: {
   }, [workspaces, childrenOf])
   const statuses = useBotWorkerWorkspaceStatuses(allLineIds)
   const changedAt = useMemo(() => observeChatChanges(entryKey, chats), [entryKey, chats])
-  const [lastOlder, setLastOlder] = useState<ReadonlySet<string>>(() => new Set())
   const split = useMemo(() => {
+    // A stale read folds nothing new (none at all before any good one); a held list keeps what it showed,
+    // except on its first draw, which folds as usual.
+    const shown = olderByBot.get(entryKey)
+    const keepFoldedOnly = input.stale
+      ? (shown ?? new Set<string>())
+      : input.interacting
+        ? (shown ?? null)
+        : null
     const focusedAt = new Map<string, number>()
     for (const tab of homeTabs ?? []) {
       if (tab.contentType === 'agent-session' && tab.lastFocusedAt !== undefined) {
@@ -144,7 +157,7 @@ export function useBotSidebarOlderChats(input: {
       workspaces,
       workspaceChats: input.workspaceChats,
       childrenOf,
-      keepFoldedOnly: input.interacting || input.stale ? lastOlder : null
+      keepFoldedOnly
     })
     // Fields of `input` are listed one by one; the object itself is new each render.
   }, [
@@ -162,43 +175,46 @@ export function useBotSidebarOlderChats(input: {
     childrenOf,
     input.interacting,
     input.stale,
-    lastOlder
+    entryKey
   ])
-  const olderKey = split.older.map((view) => view.chat.chatId).join('\n')
   useEffect(() => {
-    setLastOlder((previous) =>
-      [...previous].join('\n') === olderKey
-        ? previous
-        : new Set(olderKey ? olderKey.split('\n') : [])
-    )
-  }, [olderKey])
+    olderByBot.set(entryKey, new Set(split.older.map((view) => view.chat.chatId)))
+  }, [entryKey, split])
   return split
 }
 
-/** Keeps track of whether focus is in a subtree, portals (menus) included through React's tree; a blur
- *  that focus re-enters in the same task never reads as leaving. */
-export function useFocusWithin(): {
-  focused: boolean
-  handlers: { onFocus: () => void; onBlur: () => void }
+/** Whether the owner is over or in a list: the pointer over it, or focus inside (portaled menus too,
+ *  through React's tree). A blur that focus re-enters in the same task never reads as leaving. */
+export function useListHold(): {
+  held: boolean
+  handlers: {
+    onPointerEnter: () => void
+    onPointerLeave: () => void
+    onFocus: () => void
+    onBlur: () => void
+  }
 } {
-  const [focused, setFocused] = useState(false)
+  const [pointerIn, setPointerIn] = useState(false)
+  const [focusIn, setFocusIn] = useState(false)
   const inside = useRef(false)
   const handlers = useMemo(
     () => ({
+      onPointerEnter: () => setPointerIn(true),
+      onPointerLeave: () => setPointerIn(false),
       onFocus: () => {
         inside.current = true
-        setFocused(true)
+        setFocusIn(true)
       },
       onBlur: () => {
         inside.current = false
         setTimeout(() => {
           if (!inside.current) {
-            setFocused(false)
+            setFocusIn(false)
           }
         }, 0)
       }
     }),
     []
   )
-  return { focused, handlers }
+  return { held: pointerIn || focusIn, handlers }
 }

@@ -144,9 +144,16 @@ describe('splitOlderBotSidebarChats', () => {
   })
 
   it('folds nothing new while held to the folds already shown', () => {
-    expect(split(CHATS, new Set(['failed-1', 'needs-you']))).toEqual({
-      recent: CHATS.map((each) => each.chatId).filter((id) => id !== 'failed-1'),
-      older: ['failed-1']
+    expect(split(CHATS, new Set(['failed-1', 'failed-2', 'needs-you']))).toEqual({
+      recent: CHATS.map((each) => each.chatId).filter((id) => !id.startsWith('failed-')),
+      older: ['failed-1', 'failed-2']
+    })
+  })
+
+  it('folds nothing when fewer than two qualify', () => {
+    expect(split(CHATS, new Set(['failed-1']))).toEqual({
+      recent: CHATS.map((each) => each.chatId),
+      older: []
     })
   })
 })

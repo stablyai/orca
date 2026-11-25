@@ -17,6 +17,8 @@ import {
 } from '../../../../shared/workspace/identity/workspace-scope'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { SidebarBotsSection } from './SidebarBotsSection'
+import { pruneBotSidebarPaging } from './bot-sidebar-paging'
+import { pruneBotSidebarOlderChats } from './use-bot-sidebar-older-chats'
 import { getLineageGroupKey } from '../../../../shared/sidebar-list/sections/group-keys'
 
 export const NOW = Date.now()
@@ -175,6 +177,9 @@ export function fixtureFor(
       )
     },
     setup: () => {
+      // Each fixture starts as a fresh window: no folds shown or changes seen from the one before.
+      pruneBotSidebarPaging(new Set())
+      pruneBotSidebarOlderChats(new Set())
       stubBots([BOT])
       const runtime = window.api.runtime
       const call = runtime.call.bind(runtime)
