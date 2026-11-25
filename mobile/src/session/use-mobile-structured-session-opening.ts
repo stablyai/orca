@@ -6,7 +6,7 @@ import {
   openMobileStructuredSession,
   mobileStructuredSessionHref
 } from './native-chat/agent-session/open-mobile-structured-session'
-import type { StructuredSessionOpenSource } from '../../../src/shared/open-structured-agent-session'
+import type { StructuredSessionOpenSource } from '../../../src/shared/agent-session/view/open-structured-agent-session'
 import { mobileStructuredSessionOpenMessage } from './native-chat/agent-session/mobile-structured-session-open-message'
 import { isStructuredAgentId } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { MobileSessionTab } from './tabs/mobile-session-tabs'

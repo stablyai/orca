@@ -1,8 +1,8 @@
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import {
   sanitizeCrashReportDetails,
   sanitizeCrashReportString
-} from '../../../shared/crash-report-redaction'
+} from '../../../shared/crash-reporting/crash-report-redaction'
 import {
   recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb

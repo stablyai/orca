@@ -1,9 +1,9 @@
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/structured-agent-session-command-entry'
+import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
-import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
+import { isAgentSessionContextClear } from '../../../shared/agent-session/conversation-context/agent-session-context-clear'
+import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/thread-goals/agent-session-thread-goal'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { claudeAgentRowFacts } from '../../claude/subagents/claude-subagent-journaled-identities'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
@@ -13,9 +13,9 @@ import {
   journalItemStatusMetadata
 } from './journal-item-status-metadata'
 import { lostLiveWorkJournalBody } from './item-lifecycle/journal-subagent-liveness'
-import { isUnverifiedEndAgentJournalToolCall } from '../../../shared/agent-journal-tool-call-lifecycle'
+import { isUnverifiedEndAgentJournalToolCall } from '../../../shared/agent-session/journal/agent-journal-tool-call-lifecycle'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { spelledProviderTimelineItemKey } from '../../../shared/provider-timeline-item-key'
+import { spelledProviderTimelineItemKey } from '../../../shared/agent-session/journal/provider-timeline-item-key'
 
 export function journalDomainItemLifecycleColumns(
   item: AgentJournalRenderItem

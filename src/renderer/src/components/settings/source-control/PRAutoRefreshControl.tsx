@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import { Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { PRAutoRefreshCadence } from '../../../../../shared/review-refresh-policy'
+import type { PRAutoRefreshCadence } from '../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SearchableSetting } from '../section-layout/SearchableSetting'

@@ -5,11 +5,11 @@ import {
   normalizeBrowserNavigationUrl,
   SEARCH_ENGINE_LABELS,
   type SearchEngine
-} from '../../../../../../shared/browser-url'
+} from '../../../../../../shared/browser/navigation/browser-url'
 import type {
   BrowserHistoryEntry,
   BrowserPageDocLocation
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { WorkspaceDocHistoryEntry } from '../../../../../../shared/workspace-session/workspace-doc-history'
 import {
   formatBrowserHistoryUrl,
@@ -19,7 +19,7 @@ import {
 } from '@/lib/browser/history/browser-history-match'
 import { displayableFaviconUrl } from '../../../../../../shared/browser/browser-favicon-url'
 import { formatBrowserPaletteUrl } from '@/lib/browser/palette/browser-palette-search'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard/clipboard-text'
 import { translate } from '@/i18n/i18n'
 
 export const MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS = 8

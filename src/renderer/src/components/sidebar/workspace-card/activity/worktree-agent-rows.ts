@@ -1,4 +1,4 @@
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { parseAgentStatusPaneIdentity } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import {
@@ -19,9 +19,9 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import { resolveAgentRowState } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
-import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
@@ -86,6 +86,32 @@ function markCompletedWorkerParentPaneKeysSeen(args: {
   for (const entry of args.entries) {
     markEntry(entry)
   }
+}
+
+export function buildExplicitWorktreeAgentRows(
+  entry: AgentStatusEntry,
+  tab: TerminalTab,
+  now: number,
+  hasLivePty: boolean,
+  orchestration?: Record<string, AgentStatusOrchestrationContext>
+): DashboardAgentRow[] {
+  const rowEntry = entryWithRuntimeOrchestration(entry, orchestration)
+  return [
+    {
+      paneKey: rowEntry.paneKey,
+      entry: rowEntry,
+      tab,
+      agentType: resolveRowAgentType(rowEntry, tab),
+      rowSource: 'live',
+      state: resolveAgentRowState(rowEntry, now, hasLivePty),
+      startedAt: effectiveWorktreeAgentRowStartedAt(rowEntry)
+    },
+    ...buildSubagentChildRows({
+      parentEntry: rowEntry,
+      tab,
+      parentIsFresh: isAgentStatusFresh(rowEntry, now, AGENT_STATUS_STALE_AFTER_MS)
+    })
+  ]
 }
 
 export function buildWorktreeAgentRows(args: {

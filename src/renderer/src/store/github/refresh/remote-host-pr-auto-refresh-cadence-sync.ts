@@ -1,8 +1,12 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { runtimeHostContactForEntry } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import type { AppState } from '../../types'
+import {
+  runtimeStatusSubscriptionsFor,
+  type RuntimeStatusStore
+} from '../../slices/runtime-status/views/runtime-status-subscriptions'
 import {
   beginHostPRAutoRefreshCadenceRead,
   endHostPRAutoRefreshCadenceRead,
@@ -15,7 +19,7 @@ import {
 const READ_TIMEOUT_MS = 15_000
 
 type HostStore = {
-  getState: () => Pick<AppState, 'runtimeEnvironments' | 'runtimeStatusByEnvironmentId'>
+  getState: () => Pick<AppState, 'runtimeEnvironments'> & ReturnType<RuntimeStatusStore['getState']>
   subscribe: (listener: (state: AppState, previous: AppState) => void) => () => void
 }
 
@@ -40,10 +44,6 @@ type HostRead = {
 }
 
 const inFlight = new Map<string, HostRead>()
-
-export function _hostPRAutoRefreshReadsInFlightForTests(): number {
-  return inFlight.size
-}
 
 /**
  * Ask the host for its setting. One read per host at a time; a request made while one is pending
@@ -124,7 +124,7 @@ export function installRemoteHostPRAutoRefreshCadenceSync(
 ): () => void {
   const watched = new Map<string, () => void>()
   const readIfLive = (environmentId: string): void => {
-    const entry = store.getState().runtimeStatusByEnvironmentId.get(environmentId)
+    const entry = runtimeStatusSubscriptionsFor(store).readStatuses().get(environmentId)
     if (runtimeHostContactForEntry(entry).verdict === 'live') {
       void readHostPRAutoRefreshCadence(environmentId, reader)
     }

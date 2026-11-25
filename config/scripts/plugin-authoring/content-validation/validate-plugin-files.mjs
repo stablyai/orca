@@ -23,6 +23,10 @@ const { pluginCatalogReleaseForHead } = loadPluginSchemaModule(
 const { validateDeclaredPluginArtifacts, validatePluginInstallContent } = loadPluginSchemaModule(
   '../../main/plugins/artifacts/plugin-artifact-validation.ts'
 )
+// Why shared: `orca plugin validate` runs these same host-call checks.
+const { validatePluginHostCalls } = loadPluginSchemaModule(
+  '../../main/plugins/artifacts/plugin-host-call-validation.ts'
+)
 // Why shared: `orca plugin validate` runs these same strict artifact checks.
 const { strictPluginArtifactErrors, strictPluginArtifactWarnings } = loadPluginSchemaModule(
   'authoring/plugin-strict-artifact-checks.ts'
@@ -108,10 +112,14 @@ for (const target of targets) {
       return { bytes, sha256: createHash('sha256').update(bytes).digest('hex') }
     }
     const errors = validatePluginFile(path.basename(file), raw, readCatalogFile)
+    let hostCallWarnings = []
     if (errors.length === 0 && path.basename(file) === 'orca-plugin.json') {
       const { manifest } = parsePluginManifest(raw)
       errors.push(...strictPluginArtifactErrors(manifest, readPluginText(root), englishLookup()))
       errors.push(...(await installContentErrors(root, manifest)))
+      const hostCalls = await validatePluginHostCalls(root, manifest)
+      errors.push(...hostCalls.errors)
+      hostCallWarnings = hostCalls.warnings
     }
     for (const error of errors) {
       console.error(`${file}: ${error}`)
@@ -120,7 +128,8 @@ for (const target of targets) {
       const { manifest } = parsePluginManifest(raw)
       for (const warning of [
         ...pluginManifestWarnings(raw),
-        ...strictPluginArtifactWarnings(manifest, readPluginText(root))
+        ...strictPluginArtifactWarnings(manifest, readPluginText(root)),
+        ...hostCallWarnings
       ]) {
         console.warn(`${file}: warning: ${warning}`)
       }

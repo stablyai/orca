@@ -1,14 +1,18 @@
-import { readGitCommandFailureText } from '../../git/commands/git-command-failure-text'
+import { windowsLongPathGitArgs } from '../../git/compatibility/windows-long-path-git-args'
 import { retryOnGitLockContention } from '../../git/commands/git-lock-contention'
 import { parseGitRevListAheadBehindCounts } from '../../git/refs/git-rev-list-output'
 import { isShowRefNoMatchError } from '../../git/refs/git-show-ref-no-match'
 import type { LocalBaseRefRefreshResult } from './base-ref-drift-types'
 
+type BranchUse = { reserved: boolean; ownerPath?: string; sharedCheckout?: true }
+
 /** Share one policy across local/WSL main and SSH relay. exec rejects nonzero exits with Git output attached. */
 export type LocalBaseBranchGit = {
   exec: (args: string[], cwd: string) => Promise<{ stdout: string }>
-  /** Each worktree's path and checked-out branch as a full ref, as this host reports them. */
-  listWorktrees: (repoPath: string) => Promise<readonly { path: string; branch?: string | null }[]>
+  /** Whether a rebase or bisect reserves the branch (its worktree shows a detached HEAD), else the path of the worktree that has it checked out, as this host reports it; `sharedCheckout` when no one checkout of the branch itself can be fast-forwarded (several share it, or one has the branch it aliases). `occupancyOnly` callers only need to know it is checked out. */
+  readBranchUse: (repo: string, ref: string, occupancyOnly?: boolean) => Promise<BranchUse>
+  /** Runs `update-ref args` unless the branch is in use, rechecked once admitted, just before Git starts; false when skipped. */
+  updateRefUnlessInUse: (repoPath: string, fullRef: string, args: string[]) => Promise<boolean>
 }
 
 export type LocalBaseBranchRefs = {
@@ -22,18 +26,18 @@ export type LocalBaseBranchRefs = {
 type LocalBaseRefRefreshStatus = LocalBaseRefRefreshResult['status']
 
 export type LocalBaseBranchInspection =
-  /** Nothing stale: local already matches, or does not exist yet (#15331). */
+  /** Nothing Orca may move: local matches, does not exist yet (#15331), or its checkout or a rebase/bisect owns it. */
   | { status: 'nothing_to_do' }
   | {
       status: 'behind'
       behind: number
       localOid: string
       remoteOid: string
+      /** Set when a worktree has the branch checked out; only that checkout may move it. */
       ownerWorktreePath?: string
     }
   | {
       status: Exclude<LocalBaseRefRefreshStatus, 'updated'>
-      ownerWorktreePath?: string
       shallowHistory?: true
     }
 
@@ -67,32 +71,23 @@ function ownerFastForwardArgs(branch: string, targetOid: string): string[] {
   ]
 }
 
-/** Read-only inspection of local drift and checkout readiness. */
+type InspectOptions = { skipCheckedOut?: boolean; skipShared?: boolean; occupancyOnly?: boolean }
+
+/** Read-only inspection of local drift. A checked-out branch is reported only when strictly behind, so its checkout stays silent otherwise; `skipCheckedOut` (or `skipShared`, for a branch several checkouts share) stops before walking its history; `occupancyOnly` skips locating the owner. */
 export async function inspectLocalBaseBranch(
   git: LocalBaseBranchGit,
-  refs: LocalBaseBranchRefs
+  refs: LocalBaseBranchRefs,
+  { skipCheckedOut = false, skipShared = false, occupancyOnly = false }: InspectOptions = {}
 ): Promise<LocalBaseBranchInspection> {
   const { repoPath, fullRef, remoteTrackingRef } = refs
   let localOid: string
   let remoteOid: string
-  let behind: number
   try {
     localOid = await revParseCommit(git, repoPath, fullRef)
     remoteOid = await revParseCommit(git, repoPath, remoteTrackingRef)
     if (localOid === remoteOid) {
       return { status: 'nothing_to_do' }
     }
-    const { stdout } = await git.exec(
-      ['rev-list', '--left-right', '--count', `${localOid}...${remoteOid}`],
-      repoPath
-    )
-    const counts = parseGitRevListAheadBehindCounts(stdout)
-    if (counts.status !== 'ok' || counts.ahead !== 0 || counts.behind === 0) {
-      return (await isHistoryCutByShallowClone(git, repoPath, localOid, remoteOid))
-        ? { status: 'skipped_not_fast_forward', shallowHistory: true }
-        : { status: 'skipped_not_fast_forward' }
-    }
-    behind = counts.behind
   } catch {
     // Only proven branch absence suppresses the warning; repo/transport failure cannot (#15331).
     return (await isRefProvenAbsent(git, repoPath, fullRef))
@@ -100,71 +95,111 @@ export async function inspectLocalBaseBranch(
       : { status: 'skipped_not_fast_forward' }
   }
 
+  let use: BranchUse
   try {
-    const owner = (await git.listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
-    if (!owner) {
-      return { status: 'behind', behind, localOid, remoteOid }
-    }
-    if (await hasTrackedChanges(git, owner.path)) {
-      return { status: 'skipped_dirty_worktree', ownerWorktreePath: owner.path }
-    }
-    return { status: 'behind', behind, localOid, remoteOid, ownerWorktreePath: owner.path }
+    // Git's in-use rule also counts a branch a rebase or bisect has reserved.
+    use = await git.readBranchUse(repoPath, fullRef, skipCheckedOut || occupancyOnly)
   } catch {
     return { status: 'skipped_error' }
   }
+  const owner = use.ownerPath
+  if (use.reserved || (owner && (skipCheckedOut || (skipShared && use.sharedCheckout)))) {
+    return { status: 'nothing_to_do' }
+  }
+  const ownerPath = owner ? { ownerWorktreePath: owner } : {}
+
+  let counts: ReturnType<typeof parseGitRevListAheadBehindCounts>
+  try {
+    const { stdout } = await git.exec(
+      ['rev-list', '--left-right', '--count', `${localOid}...${remoteOid}`],
+      repoPath
+    )
+    counts = parseGitRevListAheadBehindCounts(stdout)
+  } catch {
+    return owner ? { status: 'nothing_to_do' } : { status: 'skipped_not_fast_forward' }
+  }
+  if (counts.status === 'ok' && counts.ahead === 0 && counts.behind > 0) {
+    return { status: 'behind', behind: counts.behind, localOid, remoteOid, ...ownerPath }
+  }
+  if (owner) {
+    return { status: 'nothing_to_do' }
+  }
+  return (await isHistoryCutByShallowClone(git, repoPath, localOid, remoteOid))
+    ? { status: 'skipped_not_fast_forward', shallowHistory: true }
+    : { status: 'skipped_not_fast_forward' }
 }
 
-/** Fast-forward with Git’s index-lock protections in an owner checkout, or compare-and-swap update-ref for a free branch. Refuse overwritten edits/untracked files or dropped commits; never reject. */
+/** Fast-forward a branch no worktree has checked out with a compare-and-swap update-ref, never touching a working tree or index. Never rejects. */
 export async function fastForwardLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs
 ): Promise<LocalBaseBranchFastForwardOutcome> {
-  const inspection = await inspectLocalBaseBranch(git, refs)
+  // A checked-out branch is left to fastForwardCheckedOutLocalBaseBranch, after the create.
+  const inspection = await inspectLocalBaseBranch(git, refs, { skipCheckedOut: true })
   if (inspection.status !== 'behind') {
     return inspection
   }
   const { repoPath, fullRef, remoteTrackingRef } = refs
-  const { localOid, remoteOid, ownerWorktreePath } = inspection
-  const owner = ownerWorktreePath ? { ownerWorktreePath } : {}
-  const branch = fullRef.slice('refs/heads/'.length)
-  if (ownerWorktreePath && branch.includes('=')) {
-    // Why: `-c branch.<name>.mergeOptions=` splits at the first `=`, so such a name cannot be pinned.
-    return { status: 'skipped_error', ...owner }
+  const { localOid, remoteOid } = inspection
+  try {
+    // A checkout made after the last check would be stranded, so the check runs right before the write.
+    const moved = await retryOnGitLockContention(() =>
+      git.updateRefUnlessInUse(repoPath, fullRef, [
+        'update-ref',
+        '-m',
+        `orca: fast-forward to ${remoteTrackingRef}`,
+        fullRef,
+        remoteOid,
+        localOid
+      ])
+    )
+    return moved ? { status: 'updated' } : { status: 'nothing_to_do' }
+  } catch {
+    // A concurrent pull/Orca update may already have moved local; a user commit leaves it diverged.
+    try {
+      if (await isAncestor(git, repoPath, remoteOid, fullRef)) {
+        return { status: 'updated' }
+      }
+      if (!(await isAncestor(git, repoPath, fullRef, remoteOid))) {
+        return { status: 'skipped_not_fast_forward' }
+      }
+    } catch {
+      // Git could not answer; report the failure itself.
+    }
+    return { status: 'skipped_error' }
+  }
+}
+
+/** Fast-forward a checked-out branch in its own checkout when it has no tracked changes; Git refuses a held index.lock, overwritten untracked files and dropped commits. Silent; never rejects. */
+export async function fastForwardCheckedOutLocalBaseBranch(
+  git: LocalBaseBranchGit,
+  refs: LocalBaseBranchRefs
+): Promise<void> {
+  const inspection = await inspectLocalBaseBranch(git, refs, { skipShared: true })
+  if (inspection.status !== 'behind' || !inspection.ownerWorktreePath) {
+    return
+  }
+  const { ownerWorktreePath, remoteOid } = inspection
+  const branch = refs.fullRef.slice('refs/heads/'.length)
+  // Why: `-c branch.<name>.mergeOptions=` splits at the first `=`, so such a name cannot be pinned.
+  if (branch.includes('=')) {
+    return
   }
   try {
-    await retryOnGitLockContention(async () => {
-      if (!ownerWorktreePath) {
-        await git.exec(
-          [
-            'update-ref',
-            '-m',
-            `orca: fast-forward to ${remoteTrackingRef}`,
-            fullRef,
-            remoteOid,
-            localOid
-          ],
-          repoPath
-        )
-        return
-      }
-      // Recheck the owner’s branch before merging HEAD; this narrows the switch race, and post-move verification warns if it occurred.
-      const { stdout: head } = await git.exec(['symbolic-ref', '-q', 'HEAD'], ownerWorktreePath)
-      if (head.trim() !== fullRef) {
-        throw new Error(`${fullRef} is no longer checked out at ${ownerWorktreePath}`)
-      }
-      await git.exec(ownerFastForwardArgs(branch, remoteOid), ownerWorktreePath)
-    })
-    // Report updated only if local equals the target, regardless of merge settings.
-    if (ownerWorktreePath && (await revParseCommit(git, repoPath, fullRef)) !== remoteOid) {
-      return { status: 'skipped_error', ...owner }
+    if (await hasTrackedChanges(git, ownerWorktreePath)) {
+      return
     }
-    return { status: 'updated', ...owner }
-  } catch (error) {
-    // A concurrent pull/Orca update may already have moved local.
-    if (await localContains(git, repoPath, fullRef, remoteOid)) {
-      return { status: 'updated', ...owner }
+    // Recheck right before merging HEAD: the checkout may have switched branches since the listing.
+    const { stdout: head } = await git.exec(['symbolic-ref', '-q', 'HEAD'], ownerWorktreePath)
+    if (head.trim() !== refs.fullRef) {
+      return
     }
-    return { status: classifyFastForwardFailure(error), ...owner }
+    await git.exec(
+      [...windowsLongPathGitArgs(ownerWorktreePath), ...ownerFastForwardArgs(branch, remoteOid)],
+      ownerWorktreePath
+    )
+  } catch {
+    // A skipped update stays silent; the next create tries again.
   }
 }
 
@@ -184,15 +219,13 @@ export function toLocalBaseRefRefreshResult(
   }
 }
 
-function classifyFastForwardFailure(error: unknown): Exclude<LocalBaseRefRefreshStatus, 'updated'> {
-  const text = readGitCommandFailureText(error)
-  if (/would be overwritten by merge|would lose untracked files/i.test(text)) {
-    return 'skipped_dirty_worktree'
-  }
-  if (/Not possible to fast-forward/i.test(text)) {
-    return 'skipped_not_fast_forward'
-  }
-  return 'skipped_error'
+async function hasTrackedChanges(git: LocalBaseBranchGit, worktreePath: string): Promise<boolean> {
+  // Read without index.lock so inspection cannot fail the user's concurrent Git command.
+  const { stdout } = await git.exec(
+    ['--no-optional-locks', 'status', '--porcelain', '--untracked-files=no'],
+    worktreePath
+  )
+  return stdout.trim().length > 0
 }
 
 async function revParseCommit(
@@ -206,15 +239,6 @@ async function revParseCommit(
     throw new Error(`${ref} did not resolve to a commit`)
   }
   return oid
-}
-
-async function hasTrackedChanges(git: LocalBaseBranchGit, worktreePath: string): Promise<boolean> {
-  // Read without index.lock so inspection cannot fail the user’s concurrent Git command.
-  const { stdout } = await git.exec(
-    ['--no-optional-locks', 'status', '--porcelain', '--untracked-files=no'],
-    worktreePath
-  )
-  return stdout.trim().length > 0
 }
 
 // Shallow boundaries make older commits look ahead; require a missing merge base to distinguish that from divergence.
@@ -254,55 +278,20 @@ async function isRefProvenAbsent(
   }
 }
 
-async function localContains(
+async function isAncestor(
   git: LocalBaseBranchGit,
   repoPath: string,
-  fullRef: string,
-  oid: string
+  ancestor: string,
+  descendant: string
 ): Promise<boolean> {
   try {
-    await git.exec(['merge-base', '--is-ancestor', oid, fullRef], repoPath)
+    await git.exec(['merge-base', '--is-ancestor', ancestor, descendant], repoPath)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    // Only Git's silent exit 1 means "not an ancestor"; anything else is a failure to answer.
+    if (isShowRefNoMatchError(error)) {
+      return false
+    }
+    throw error
   }
-}
-
-const REFRESH_STATUSES: readonly LocalBaseRefRefreshStatus[] = [
-  'updated',
-  'skipped_dirty_worktree',
-  'skipped_not_fast_forward',
-  'skipped_error'
-]
-
-/** Reject unrecognized relay replies as errors rather than implying success. */
-export function parseLocalBaseBranchFastForwardOutcome(
-  value: unknown
-): LocalBaseBranchFastForwardOutcome {
-  if (typeof value !== 'object' || value === null || !('status' in value)) {
-    return { status: 'skipped_error' }
-  }
-  if (value.status === 'nothing_to_do') {
-    return { status: 'nothing_to_do' }
-  }
-  const status = REFRESH_STATUSES.find((candidate) => candidate === value.status)
-  if (!status) {
-    return { status: 'skipped_error' }
-  }
-  const ownerWorktreePath = 'ownerWorktreePath' in value ? value.ownerWorktreePath : undefined
-  const shallowHistory = 'shallowHistory' in value && value.shallowHistory === true
-  return {
-    status,
-    ...(typeof ownerWorktreePath === 'string' && ownerWorktreePath ? { ownerWorktreePath } : {}),
-    ...(shallowHistory ? { shallowHistory: true } : {})
-  }
-}
-
-/** How many commits a relay's inspection says local is behind, when it may be fast-forwarded. */
-export function readFastForwardableBehindCount(value: unknown): number | undefined {
-  if (typeof value !== 'object' || value === null || !('status' in value) || !('behind' in value)) {
-    return undefined
-  }
-  const { behind } = value
-  return value.status === 'behind' && typeof behind === 'number' && behind > 0 ? behind : undefined
 }

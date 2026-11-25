@@ -1,5 +1,5 @@
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   orcadMigrationOwnerMatchesScope,
   type OrcadMigrationSourceScope
@@ -38,6 +38,8 @@ export function dropOrcadMigrationTerminalBindings(fragment: WorkspaceSessionSta
     delete layout.ptyIdsByLeafId
   }
   delete fragment.remoteSessionIdsByTabId
+  delete fragment.desktopRelayOwnerByTabId
+  delete fragment.desktopRelayAdoptionVersion
   delete fragment.terminalPtyIncarnationsByPaneKey
   delete fragment.activeWorktreeIdsOnShutdown
   // Folder fences guarded relay PTYs; only repo fences migrate.

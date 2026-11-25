@@ -2,7 +2,7 @@
 
 import { isPtySessionIdOwnedByWorktree } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 /** An SSH id names its connection, never a workspace, so only a local minted id can be foreign. */

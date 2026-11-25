@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
 const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
   get disconnected() {

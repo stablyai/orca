@@ -1,7 +1,7 @@
 import type {
   RuntimeTerminalRead,
   RuntimeTerminalRowMetadata
-} from '../../../../../shared/runtime-terminal-contracts'
+} from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 const DISPATCH_CAPABILITY_PATTERN = /\bdcap_[A-Za-z0-9_-]{20,}\b/g
 const DISPATCH_CAPABILITY_REDACTION = '[dispatch capability redacted]'

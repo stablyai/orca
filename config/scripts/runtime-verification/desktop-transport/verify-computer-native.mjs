@@ -14,7 +14,7 @@ const checks = [
     enabled: process.platform === 'darwin'
   },
   {
-    name: 'Linux snapshot renderer tests',
+    name: 'Linux portal file tests',
     command: 'python3',
     args: ['native/computer-use-linux/runtime_render_test.py'],
     enabled: true
@@ -38,6 +38,12 @@ const checks = [
         'print("import-ok")'
       ].join(';')
     ],
+    enabled: process.platform === 'linux'
+  },
+  {
+    name: 'Linux accessibility bus tests',
+    command: 'python3',
+    args: ['native/computer-use-linux/runtime_accessibility_bus_test.py'],
     enabled: process.platform === 'linux'
   },
   {

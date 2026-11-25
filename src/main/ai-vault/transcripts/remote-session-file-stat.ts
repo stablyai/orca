@@ -1,4 +1,4 @@
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 export function isMissingRemoteSessionPathError(error: unknown): boolean {
   const code =

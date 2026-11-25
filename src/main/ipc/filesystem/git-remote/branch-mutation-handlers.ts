@@ -2,13 +2,17 @@ import { ipcMain } from 'electron'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { gitFastForward, gitPull, gitPush } from '../../../git/remotes/remote'
 import { gitPullRebaseFromBase } from '../../../git/remotes/remote-rebase'
+import type { RebaseFromBaseResult } from '../../../../shared/git/status/git-status-types'
 import { validateGitPushTarget } from '../../../git/remotes/push-target-validation'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
-import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from '../../worktree-remote'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
+import {
+  ipcGitWorktreeTarget,
+  materializeWorktreePushTargetRemote
+} from '../../worktrees/worktree-remote'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -146,7 +150,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
     async (
       _event,
       args: { worktreePath: string; baseRef: string; connectionId?: string }
-    ): Promise<void> => {
+    ): Promise<RebaseFromBaseResult> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -154,7 +158,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
         args.worktreePath,
         worktreePath
       )
-      await gitPullRebaseFromBase(worktreePath, args.baseRef, {
+      return gitPullRebaseFromBase(worktreePath, args.baseRef, {
         ...gitOptions,
         admissionTier: 'interactive'
       })

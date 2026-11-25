@@ -1,4 +1,3 @@
-import '../../../../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import type { KeybindingPlatform } from '../../../../../../shared/keybindings/types'
 import type { KeyboardHandlersDeps } from './terminal-keyboard-dependencies'

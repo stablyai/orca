@@ -1,6 +1,6 @@
 /** Pair with an already-running foreign build before considering update; an unpaired first deploy cannot census its terminals. */
 import type { ServeReadiness } from '../../server/serve-readiness'
-import type { OrcadManagedDeferral } from '../../../shared/orcad-managed-runtime'
+import type { OrcadManagedDeferral } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { orcadActivationFenceRefusal } from './orcad-activation-fence-hold'
 import { OrcadActiveReadinessError, probeActiveOrcadReadiness } from './orcad-active-readiness'
 import type { OrcadActivationRecord } from './orcad-activation-record'

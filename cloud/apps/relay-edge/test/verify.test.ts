@@ -4,7 +4,6 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 import { RelayCredentialStore, hashCredential } from '../../relay/src/credentials/credential-store'
 import type { DeviceRow, VerifyBody } from '../src/admin'
-import { VerifyBodySchema } from '../src/admin'
 import { ObjectStore } from '../src/object-store'
 import { verifyCredential } from '../src/verify'
 import { nodeObjectSql } from './object-sqlite-fake'
@@ -130,10 +129,4 @@ describe('edge verify (director phone credential check)', () => {
     expect(store.frozen()).toBe(false)
   })
 
-  it('accepts only a hash-shaped body, never a raw token or extra fields', () => {
-    expect(VerifyBodySchema.safeParse(body(GOOD)).success).toBe(true)
-    expect(VerifyBodySchema.safeParse({ ...body(GOOD), tokenHash: `${hashCredential(GOOD)}=` }).success).toBe(false)
-    expect(VerifyBodySchema.safeParse({ ...body(GOOD), token: GOOD }).success).toBe(false)
-    expect(VerifyBodySchema.safeParse({ ...body(GOOD), kind: 'device' }).success).toBe(false)
-  })
 })

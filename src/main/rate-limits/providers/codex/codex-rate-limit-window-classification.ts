@@ -25,6 +25,8 @@ export type CodexRateLimitWindowsSnapshot = {
     unlimited?: boolean
     balance?: string | number
   } | null
+  /** The account's plan, e.g. "pro"; older app-servers omit it. */
+  planType?: unknown
 }
 
 type MappableCodexRateWindowSnapshot = CodexRateWindowSnapshot & { usedPercent: number }

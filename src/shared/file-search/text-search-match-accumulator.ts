@@ -1,7 +1,7 @@
 import type { SearchFileResult, SearchMatch } from './code-search-types'
 import type { SearchAccumulator } from './text-search'
-import { sliceAtCodeUnitLimit } from '../surrogate-safe-text-slice'
-import { ownRetainedString } from '../own-retained-string'
+import { sliceAtCodeUnitLimit } from '../text/surrogate-safe-text-slice'
+import { ownRetainedString } from '../text/own-retained-string'
 
 // Bound repeated context so dense search results fit within the SSH message limit.
 export const MAX_LINE_CONTENT_LENGTH = 500

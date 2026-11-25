@@ -1,6 +1,6 @@
 import { lstat, readlink, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import { getGuardedOperationHeldPath } from '../../../filesystem/atomic-file-publication'
 import {
@@ -55,7 +55,7 @@ export async function readCodexLaunchPreparationInputs(
         const snapshot = await snapshotFile(filePath, facts)
         files.push(snapshot.observation)
         if (home === systemHome && leaf === 'config.toml') {
-          systemTomlPath = snapshot.realPath ?? filePath
+          systemTomlPath = snapshot.realPath
         }
         if (!isStillValid()) {
           return null
@@ -159,7 +159,7 @@ async function snapshotFile(
   facts: unknown[]
 ): Promise<{
   observation: ObservedFileContent
-  realPath: string | null
+  realPath: string
   writePath: string
   mode: number | null
 }> {
@@ -197,7 +197,8 @@ async function snapshotFile(
   observeFileDigest(filePath, digest)
   return {
     observation: { digest, aliases: [...new Set([filePath, realPath])] },
-    realPath: kind === 'absent' ? null : realPath,
+    // Absent leaves report their parent-resolved path, matching where promotion would create them.
+    realPath,
     writePath: kind.startsWith('symlink:') ? realPath : filePath,
     mode
   }

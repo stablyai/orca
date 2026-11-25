@@ -1,6 +1,6 @@
 import type { RpcRequest } from '../core'
-import '../../../../shared/orca-session-address'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../shared/orca-session-address-prefix'
+import '../../../../shared/agent-session/identity/orca-session-address'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../shared/agent-session/identity/orca-session-address-prefix'
 
 export const KEEPALIVE_INTERVAL_MS = 10_000
 

@@ -1,6 +1,6 @@
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { SessionReadTerminalScrollbackResult } from '../../../../../shared/rpc-contract/session-tabs/session-terminal-scrollback-params'
-import { SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
+import { SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { useAppStore } from '@/store/index'
 import {
   runtimeEnvironmentIdForWorkspaceOwner,
@@ -10,7 +10,7 @@ import type { OrcadDeploymentLink } from '../../../../../shared/remote-runtime/h
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { peekRuntimeEnvironmentCapability } from '../../rpc/compatibility/runtime-compatibility-cache'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { hasRegisteredRuntimeTerminalTab } from '../mounted-surfaces/mounted-terminal-tab-registry'
 
@@ -271,9 +271,4 @@ export function hostScrollbackEnvironmentId(
   const environmentId = owner.environmentId
   const environment = environments?.find((candidate) => candidate.id === environmentId)
   return environment?.orcadDeployment?.kind === 'wsl' ? environmentId : null
-}
-
-export function resetHostTerminalScrollbackReadsForTests(): void {
-  settledKeys.clear()
-  warmingByEnvironmentId.clear()
 }

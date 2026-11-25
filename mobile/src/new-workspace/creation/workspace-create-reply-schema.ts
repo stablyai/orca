@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
 
 const createText = (name: string) => salvagedOptional(name, z.string())
 
@@ -9,6 +9,9 @@ export const worktreeCreateReceiptSchema = z.looseObject({
   worktree: z.looseObject({ id: z.string(), displayName: createText('displayName') }),
   warning: createText('warning')
 })
+
+// Only `mismatch` changes what the phone says; any other status started or had nothing to run.
+export const approvedSetupRunSchema = z.looseObject({ status: z.string() })
 
 // Guarded launch receipt fields remain optional; the mode-blind caller reports missing ids as failed creation.
 export const agentLaunchCreateReceiptSchema = z.looseObject({

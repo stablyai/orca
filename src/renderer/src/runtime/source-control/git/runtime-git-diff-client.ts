@@ -5,6 +5,8 @@ import type {
 } from '../../../../../shared/git/diff/git-diff-compare-types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
+import { GIT_DIFF_TOO_LARGE_CODE } from '../../../../../shared/git/diff/git-diff-transport-budget'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 /** Showing a diff tab or its Retry: a user act that may start a stopped WSL distro. Local only. */
@@ -17,6 +19,28 @@ function localWakeArgs(
   return options?.wakeWslDistro && !context.connectionId ? { wakeWslDistro: true } : {}
 }
 
+const TOO_LARGE_FOR_CONNECTION: GitDiffResult = {
+  kind: 'binary',
+  originalContent: '',
+  modifiedContent: '',
+  originalIsBinary: true,
+  modifiedIsBinary: true,
+  tooLarge: true,
+  tooLargeForConnection: true
+}
+
+// Why: a remote host refuses a diff past its reply budget; that is a render mode, like the local read cap, not a failure.
+async function orTooLargeForConnection(read: Promise<GitDiffResult>): Promise<GitDiffResult> {
+  try {
+    return await read
+  } catch (error) {
+    if (error instanceof RuntimeRpcCallError && error.code === GIT_DIFF_TOO_LARGE_CODE) {
+      return TOO_LARGE_FOR_CONNECTION
+    }
+    throw error
+  }
+}
+
 export async function getRuntimeGitDiff(
   context: RuntimeGitContext,
   args: { filePath: string; staged: boolean; compareAgainstHead?: boolean; oldPath?: string },
@@ -24,21 +48,25 @@ export async function getRuntimeGitDiff(
 ): Promise<GitDiffResult> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
-    return window.api.git.diff({
-      worktreePath: resolveLocalWorktreePath(context),
-      filePath: args.filePath,
-      staged: args.staged,
-      compareAgainstHead: args.compareAgainstHead,
-      ...(args.oldPath ? { oldPath: args.oldPath } : {}),
-      connectionId: context.connectionId,
-      ...localWakeArgs(context, options)
-    })
+    return orTooLargeForConnection(
+      window.api.git.diff({
+        worktreePath: resolveLocalWorktreePath(context),
+        filePath: args.filePath,
+        staged: args.staged,
+        compareAgainstHead: args.compareAgainstHead,
+        ...(args.oldPath ? { oldPath: args.oldPath } : {}),
+        connectionId: context.connectionId,
+        ...localWakeArgs(context, options)
+      })
+    )
   }
-  return callRuntimeRpc<GitDiffResult>(
-    target,
-    'git.diff',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
-    { timeoutMs: 15_000 }
+  return orTooLargeForConnection(
+    callRuntimeRpc<GitDiffResult>(
+      target,
+      'git.diff',
+      { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
+      { timeoutMs: 15_000 }
+    )
   )
 }
 
@@ -99,20 +127,24 @@ export async function getRuntimeGitBranchDiff(
 ): Promise<GitDiffResult> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
-    return window.api.git.branchDiff({
-      worktreePath: resolveLocalWorktreePath(context),
-      compare: args.compare,
-      filePath: args.filePath,
-      oldPath: args.oldPath,
-      connectionId: context.connectionId,
-      ...localWakeArgs(context, options)
-    })
+    return orTooLargeForConnection(
+      window.api.git.branchDiff({
+        worktreePath: resolveLocalWorktreePath(context),
+        compare: args.compare,
+        filePath: args.filePath,
+        oldPath: args.oldPath,
+        connectionId: context.connectionId,
+        ...localWakeArgs(context, options)
+      })
+    )
   }
-  return callRuntimeRpc<GitDiffResult>(
-    target,
-    'git.branchDiff',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
-    { timeoutMs: 15_000 }
+  return orTooLargeForConnection(
+    callRuntimeRpc<GitDiffResult>(
+      target,
+      'git.branchDiff',
+      { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
+      { timeoutMs: 15_000 }
+    )
   )
 }
 
@@ -128,20 +160,24 @@ export async function getRuntimeGitCommitDiff(
 ): Promise<GitDiffResult> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
-    return window.api.git.commitDiff({
-      worktreePath: resolveLocalWorktreePath(context),
-      commitOid: args.commitOid,
-      parentOid: args.parentOid,
-      filePath: args.filePath,
-      oldPath: args.oldPath,
-      connectionId: context.connectionId,
-      ...localWakeArgs(context, options)
-    })
+    return orTooLargeForConnection(
+      window.api.git.commitDiff({
+        worktreePath: resolveLocalWorktreePath(context),
+        commitOid: args.commitOid,
+        parentOid: args.parentOid,
+        filePath: args.filePath,
+        oldPath: args.oldPath,
+        connectionId: context.connectionId,
+        ...localWakeArgs(context, options)
+      })
+    )
   }
-  return callRuntimeRpc<GitDiffResult>(
-    target,
-    'git.commitDiff',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
-    { timeoutMs: 15_000 }
+  return orTooLargeForConnection(
+    callRuntimeRpc<GitDiffResult>(
+      target,
+      'git.commitDiff',
+      { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
+      { timeoutMs: 15_000 }
+    )
   )
 }

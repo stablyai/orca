@@ -1,14 +1,17 @@
 import { build } from 'esbuild'
 import { createHash } from 'node:crypto'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
-import { ORCAD_SERVER_ENTRY_FILENAME } from '../../../../src/shared/orcad-artifacts.ts'
 
 const root = join(import.meta.dirname, '../../..', '..')
-const { turnedOnDarkBuildDefines } = createRequire(import.meta.url)(
-  '../../../dark-build-switches.cjs'
-)
+const require = createRequire(import.meta.url)
+// require avoids MODULE_TYPELESS_PACKAGE_JSON from ESM-importing TS under typeless package.json.
+const {
+  ORCAD_SERVER_ENTRY_FILENAME
+} = require('../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts')
+const { turnedOnDarkBuildDefines } = require('../../../dark-build-switches.cjs')
 
 export const ORCAD_ENTRY_POINT = 'src/main/orcad/main.ts'
 export const ORCAD_LAUNCHER_ENTRY_POINT = 'src/main/orcad/launcher.ts'
@@ -16,6 +19,8 @@ export const ORCAD_SERVER_BUILD_TARGET = 'node24'
 // Host entry points must load before Orca selects its bundled runtime.
 const ORCAD_COMPAT_BUILD_TARGET = 'node18'
 export const ORCAD_CHILD_ENTRY_POINTS = {
+  environmentStore:
+    'src/shared/remote-runtime/host-store/runtime-environment-store-worker-entry.ts',
   watcher: 'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts',
   daemon: 'src/main/daemon/daemon-entry.ts',
   writer: 'src/main/persistence/profile-state/writer/profile-state-writer-worker-entry.ts',
@@ -25,6 +30,9 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   journalSql: 'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts',
   journalSqlReader: 'src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts',
   agentIdentityWorker: 'src/main/agent-hooks/identity/agent-identity-worker-entry.ts',
+  botsDbWorker: 'src/main/bots/db-worker/bots-db-worker-entry.ts',
+  orchestrationReader:
+    'src/main/runtime/orchestration/db/reader-worker/orchestration-reader-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
   commandPathDirectoryWorker: 'src/main/ipc/command-path/command-path-directory-worker-entry.ts',
   sessionScanner: 'src/main/ai-vault/scan-service/session-scanner-service-entry.ts',
@@ -32,9 +40,16 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
     'src/main/worker-thread-child-process/worker-thread-child-process-entry.ts',
   claudeProfileSetup:
     'src/main/claude-accounts/profiles/setup/claude-profile-setup-worker-entry.ts',
+  codexHistoryDiskUsage:
+    'src/main/codex/history/disk-usage/codex-history-disk-usage-worker-entry.ts',
+  codexRolloutHistoryReferences:
+    'src/main/codex/history/cleanup/codex-rollout-history-references-worker-entry.ts',
+  codexProjectTrust: 'src/main/codex/trust/project-trust/codex-project-trust-worker-entry.ts',
   claudeConversationFork: 'src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts',
+  usageScanWorker: 'src/main/usage/scan-worker/usage-scan-worker-entry.ts',
   sttWorker: 'src/main/speech/stt-worker.ts',
-  computerSidecar: 'src/main/computer/computer-sidecar.ts'
+  computerSidecar: 'src/main/computer/computer-sidecar.ts',
+  googlePdfText: 'src/main/google/google-pdf-text-worker-entry.ts'
 }
 
 /** Each child ships flat beside orcad.js under its source basename; the runtime resolvers look there. */
@@ -75,8 +90,33 @@ const jsoncParserEsm = {
   }
 }
 
+// esbuild preserves regex literals, including the SDK's superscript Windows device-name digits.
+const claudeSdkAsciiDeviceNames = {
+  name: 'claude-sdk-ascii-device-names',
+  setup(pluginBuild) {
+    pluginBuild.onLoad(
+      { filter: /[\\/]@anthropic-ai[\\/]claude-agent-sdk[\\/]sdk\.mjs$/ },
+      async ({ path }) => {
+        const source = await readFile(path, 'utf8')
+        const regex = '/^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])$/i'
+        if (!source.includes(regex)) {
+          throw new Error(`${path} no longer contains ${regex}; update claudeSdkAsciiDeviceNames`)
+        }
+        return {
+          contents: source.replace(regex, regex.replaceAll('¹²³', '\\u00b9\\u00b2\\u00b3')),
+          resolveDir: dirname(path)
+        }
+      }
+    )
+  }
+}
+
 // Every orcad bundle (server, children, CLI) must share these, or one ships a UMD build that cannot load (#33592).
-export const ORCAD_BUNDLE_PLUGINS = [jsoncParserEsm, externalNativeAddons]
+export const ORCAD_BUNDLE_PLUGINS = [
+  jsoncParserEsm,
+  externalNativeAddons,
+  claudeSdkAsciiDeviceNames
+]
 
 // One non-ASCII character makes V8 store the ~11MB bundle as ~21MB two-byte text; esbuild escapes strings but leaves regex/tagged-template literals.
 export function findNonAsciiSource(source) {

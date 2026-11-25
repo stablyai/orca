@@ -1,20 +1,20 @@
 import { heldLaunchConfig } from '../launch/launch-evidence'
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
 import type {
   RuntimeTerminalAgentStatus,
   RuntimeTerminalInteractiveWait,
   RuntimeTerminalWaitBlockedReason
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
 import type {
   TerminalInteractiveWaitEvidence,
   TerminalWaitPermissionInputs,
   TerminalWaitStatusEvidence
 } from './terminal-wait-permission'
-import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import type { AgentLaunchScope } from '../../session-tabs/chat/structured-session-tab-restoration'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interactive-probe-budget'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
@@ -29,7 +29,7 @@ import { selectExactWorkerProviderSession } from '../../orchestration/workers/tr
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import {
   resolveStartupShell,
   type AgentStartupShell
@@ -37,7 +37,7 @@ import {
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveConfiguredWorkerAgent } from '../../orchestration/workers/launch/configured-worker-agent-selector'
 import { resolveAgentLaunchRuntime } from '../launch/agent-launch-scope-runtime'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
@@ -150,19 +150,11 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     this.pairedWorkspaceContexts = source
   }
 
-  /** The focused workspace, preferring stored selection, then the renderer graph. */
+  /** The workspace the stored session focuses; null on the start screen, never another tab's. */
   async resolveActiveWorktreeContext(): Promise<ActiveWorkspaceContext | null> {
     const session = this.store?.getWorkspaceSession?.()
     const hostId = session?.activeWorkspaceExecutionHostId ?? undefined
-    let worktreeId = activeSessionWorkspaceId(session)
-    if (!worktreeId && this.graphStatus === 'ready') {
-      for (const tab of this.tabs.values()) {
-        if (tab.activeLeafId && tab.worktreeId) {
-          worktreeId = tab.worktreeId
-          break
-        }
-      }
-    }
+    const worktreeId = activeSessionWorkspaceId(session)
     if (!worktreeId) {
       return null
     }
@@ -220,7 +212,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       launchToken,
       wslDistro,
       observedAfter,
-      statuses: this.getAgentStatusSnapshotFn?.() ?? []
+      statuses: this.publicPaneStatusFn?.(paneKey) ?? []
     })
     const launchConfig = session ? heldLaunchConfig(pty, session.agent) : undefined
     return session && launchConfig ? { ...session, launchConfig } : session

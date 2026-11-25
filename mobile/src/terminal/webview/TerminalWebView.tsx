@@ -6,6 +6,8 @@ import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-web
 import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
 import { xtermWebViewSource } from '../document/native-terminal-html'
+import { terminalBundledFontCss } from '../fonts/terminal-bundled-font-css'
+import { DEFAULT_TERMINAL_FONT_STYLE } from '../preferences/terminal-font-style'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { useTerminalWebViewController } from './use-terminal-webview-controller'
 
@@ -15,9 +17,31 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
     const t = useMobileTranslation()
     const webViewRef = useRef<WebView>(null)
+    // Seed scale/style in page source before document startup; Android injected scripts may run too late.
+    const [startFontStyle] = useState(() => props.fontStyle ?? DEFAULT_TERMINAL_FONT_STYLE)
+    const [source] = useState(() =>
+      xtermWebViewSource({
+        textScale: props.textScale ?? 1,
+        fontStyle: startFontStyle,
+        shown: props.shownAtMount ?? true
+      })
+    )
+    // No asset server here: a bundled font travels with the first command that needs it after each load.
+    const fontInDocumentRef = useRef(startFontStyle.font)
 
     const post = useCallback((command: TerminalWebViewCommand & { id: number }) => {
-      webViewRef.current?.postMessage(JSON.stringify(command))
+      const font =
+        command.type === 'set-font-style' || command.type === 'init'
+          ? command.fontStyle?.font
+          : undefined
+      const fontFaceCss =
+        font && font !== fontInDocumentRef.current ? terminalBundledFontCss(font) : undefined
+      if (font) {
+        fontInDocumentRef.current = font
+      }
+      webViewRef.current?.postMessage(
+        JSON.stringify(fontFaceCss ? { ...command, fontFaceCss } : command)
+      )
     }, [])
 
     const {
@@ -34,10 +58,10 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     })
 
     useImperativeHandle(ref, () => handle, [handle])
-    // Seed scale in page source before document startup; Android injected scripts may run too late.
-    const [source] = useState(() =>
-      xtermWebViewSource({ textScale: props.textScale ?? 1, shown: props.shownAtMount ?? true })
-    )
+    const handleLoadStart = useCallback(() => {
+      fontInDocumentRef.current = startFontStyle.font
+      resetReadiness()
+    }, [resetReadiness, startFontStyle.font])
 
     const handleMessage = useCallback(
       (event: WebViewMessageEvent) => {
@@ -78,7 +102,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
           scalesPageToFit={false}
           // Fix Android textZoom at 100 so OS font scaling cannot exceed xterm’s canvas-measured grid.
           textZoom={100}
-          onLoadStart={resetReadiness}
+          onLoadStart={handleLoadStart}
           onMessage={handleMessage}
           onError={(event) =>
             reportNativeEngineError(

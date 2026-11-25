@@ -1,7 +1,7 @@
 import {
   isSkillInstallProviderId,
   type SkillInstallProviderId
-} from '../../shared/skill-install-providers'
+} from '../../shared/skills/installation/skill-install-providers'
 
 const CANONICAL_PROVIDER_BY_SKILLS_CLI_KEY = new Map<string, SkillInstallProviderId>([
   ['claude-code', 'claude'],

@@ -1,7 +1,7 @@
 import {
   agentSessionForkSourceSavedName,
   agentSessionShownName
-} from '../../../../shared/agent-session/agent-session-fork-name'
+} from '../../../../shared/agent-session/conversation-naming/agent-session-fork-name'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 
 type NamedRecord = Pick<

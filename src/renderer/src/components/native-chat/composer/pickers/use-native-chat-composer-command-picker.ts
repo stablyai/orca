@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { prepareQueuedMessageEditText } from '../../../../../../shared/queued-message-edit-command'
+import { prepareQueuedMessageEditText } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-command'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import {
   useNativeChatPickerState,
@@ -11,6 +11,10 @@ import {
 } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 import { useNativeChatSideChatCommand } from './use-native-chat-side-chat-command'
+import { useNativeChatMentionNameMatches } from '../../native-chat-composer-room'
+import type { NativeChatComposerRoom } from '../native-chat-composer-types'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
+import { isNativeChatSideChatCommand } from '../../../../../../shared/native-chat/input/commands/native-chat-side-chat-command'
 
 type PickerArgs = Parameters<typeof useNativeChatPickerState>[0]
 type ResumeArgs = Parameters<typeof useNativeChatResumeCommand>[0]
@@ -24,6 +28,7 @@ export function useNativeChatComposerCommandPicker(
     | 'onPickerDemand'
     | 'skillsChecking'
     | 'launchWorktreeId'
+    | 'mentionNameMatches'
     | keyof ResumeArgs['editor']
   > &
     Pick<ResumeArgs, 'editor' | 'setNotice'> & {
@@ -31,36 +36,64 @@ export function useNativeChatComposerCommandPicker(
       /** An edit saves into a queued message; a launch prompt has no session to resume and
        *  lists its workspace's skills. */
       mode?: 'edit' | 'launch'
+      room: NativeChatComposerRoom | undefined
     }
-): { picker: NativeChatPickerState; orcaCommands: NativeChatResumeCommand } {
-  const { structuredTransport, editor, setNotice, mode, ...pickerArgs } = args
+): {
+  picker: NativeChatPickerState
+  orcaCommands: NativeChatResumeCommand
+  /** Send opens a `/btw` or `/side` draft as a side chat, so the editor shows it as one. */
+  sideChat: boolean
+} {
+  const { structuredTransport, editor, setNotice, mode, room, ...pickerArgs } = args
   const { agent, terminalTabId } = pickerArgs
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
   const reported = structuredTransport?.sessionCommands
   const hostSetsGoals = structuredTransport?.threadGoal !== undefined
   const hostSetsInteractionMode =
     structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
+  const opensMcpPanel = structuredTransport?.mcpPanel !== undefined
   const acceptsText = useMemo(
-    () => prepareQueuedMessageEditText(agent, reported, hostSetsGoals, hostSetsInteractionMode),
-    [agent, reported, hostSetsGoals, hostSetsInteractionMode]
+    () =>
+      prepareQueuedMessageEditText(
+        agent,
+        reported,
+        hostSetsGoals,
+        hostSetsInteractionMode,
+        opensMcpPanel
+      ),
+    [agent, reported, hostSetsGoals, hostSetsInteractionMode, opensMcpPanel]
   )
   const commandAvailable = useCallback(
     (name: string) => mode === undefined || acceptsText(`/${name}`),
     [mode, acceptsText]
   )
-  const picker = useNativeChatPickerState({
+  const listed = useNativeChatPickerState({
     ...pickerArgs,
     ...(mode === 'launch' ? { launchWorktreeId: structuredTransport?.worktreeId } : {}),
     ...editor,
     agentCommands,
     commandAvailable,
     sessionSkills,
+    mentionNameMatches: useNativeChatMentionNameMatches(room),
     onPickerDemand: structuredTransport?.setCommandsMenuOpen,
     skillsChecking: structuredTransport?.commandsChecking === true,
     ...(!structuredTransport?.setCommandsMenuOpen && structuredTransport?.refreshCommands
       ? { onPickerOpened: structuredTransport.refreshCommands }
       : {})
   })
+  const { completeItem: complete } = listed
+  const { textareaRef } = editor
+  // Tab, Enter or a click: a picked `/btw` reads as the pill, as a typed `/btw ` does.
+  const completeItem = useCallback(
+    (item: NativeChatPickerItem) => {
+      complete(item)
+      if (item.kind === 'command' && item.orcaOwned && isNativeChatSideChatCommand(item.name)) {
+        textareaRef.current?.pillSideChatCommand?.()
+      }
+    },
+    [complete, textareaRef]
+  )
+  const picker = { ...listed, completeItem }
   const resume = useNativeChatResumeCommand({
     structuredTransport,
     agent,
@@ -85,5 +118,9 @@ export function useNativeChatComposerCommandPicker(
     }),
     [resumeConsume, resumeIntercept, resumeMatches, sideConsume, sideIntercept, sideMatches]
   )
-  return { picker, orcaCommands }
+  return {
+    picker,
+    orcaCommands,
+    sideChat: mode === undefined && structuredTransport?.sideChat !== undefined
+  }
 }

@@ -1,6 +1,6 @@
 // Omit only identities their complete locator rows regenerate; older builds can remint the same keys on downgrade.
 import { isDeepStrictEqual } from 'node:util'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { canonicalWorktreeIdentity } from '../../../../shared/worktree/identity'
 import {

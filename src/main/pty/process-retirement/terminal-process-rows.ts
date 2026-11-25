@@ -1,12 +1,12 @@
 /** Limit ps to the pane's terminal so launch paste avoids whole-machine scans that take seconds on loaded hosts. */
 
 import { runProcess } from '@orca/process-host'
-import { runPsInProcess } from '../../../shared/libproc-process-table'
+import { runPsInProcess } from '../../../shared/process-observation/darwin/libproc-process-table'
 import {
   parseShellForegroundRows,
   type ProcessTableRow
-} from '../../../shared/process-table-snapshot'
-import { psLocaleEnvironment } from '../../../shared/ps-locale-environment'
+} from '../../../shared/process-observation/tables/process-table-snapshot'
+import { psLocaleEnvironment } from '../../../shared/process-observation/tables/ps-locale-environment'
 
 const PS_TIMEOUT_MS = 3_000
 const PS_MAX_OUTPUT_BYTES = 256 * 1024

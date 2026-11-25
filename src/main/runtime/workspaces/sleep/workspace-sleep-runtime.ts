@@ -8,15 +8,15 @@ import {
   type RecipeVmState,
   type VmOperation
 } from './recipe-vm-operations'
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
-import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { EphemeralVmRuntimeRecord } from '../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type {
   WorkspaceSleepNotice,
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
-} from '../../../../shared/workspace-sleep'
+} from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RemoteWorkspaceCall } from './remote-workspace-terminal-sleep'
 import {
@@ -24,6 +24,7 @@ import {
   type WorkspaceSleepDeps,
   type WorkspaceSleepQueue
 } from './workspace-sleep-execution'
+import type { WorkspaceChatStopAdmission } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-workspace-sleep'
 import type { WorkspaceSleepPlatform } from './workspace-sleep-platform'
 import type { LaunchHostRepo } from '../catalog/worktree-launch-host-repo'
 import type { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'
@@ -100,11 +101,11 @@ export class WorkspaceSleepCoordinator {
 
   constructor(private readonly runtime: WorkspaceSleepRuntime) {}
 
-  sleep(request: WorkspaceSleepRequest): Promise<WorkspaceSleepOutcome[]> {
+  sleep(request: WorkspaceSleepRequest, admit?: WorkspaceChatStopAdmission) {
     for (const { worktreeId } of request.targets) {
       this.sleepRequests.noteRequested(worktreeId)
     }
-    return sleepWorkspaces(this.deps(), this.queue(), request)
+    return sleepWorkspaces(this.deps(), this.queue(), request, admit)
   }
 
   /** A phone is answered on acceptance: it ignores the result and chat stops can outlast its request timeout. */
@@ -288,13 +289,13 @@ export class WorkspaceSleepCoordinator {
       notify: (notice) => runtime.notifyWorkspaceSleep(notice),
       sleepOwnTerminals: (worktreeId) => runtime.sleepTerminalsForWorktree(`id:${worktreeId}`),
       callEnvironment: (environmentId) => environmentCall(platform, environmentId),
-      stopOwnChats: async (worktreeId, markAsleep) => {
+      stopOwnChats: async (worktreeId, markAsleep, admit) => {
         await runtime.ensureStructuredAgentSessionHost()
         const host = getStructuredAgentSessionHost()
         if (!host) {
           throw new Error('structured_agent_session_host_unavailable')
         }
-        return host.sleepWorkspace(worktreeId, markAsleep)
+        return host.sleepWorkspace(worktreeId, markAsleep, admit)
       },
       suspendVm: platform
         ? (worktreeId, wanted) => this.queueVmSuspend(platform, worktreeId, wanted)

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { MonitorSmartphone, Server } from 'lucide-react'
+import { Server } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -8,15 +8,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../store/index'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import {
   isOwnedSshTargetId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { buildExecutionHostRegistry } from '../../../../../shared/execution-host/execution-host-registry'
 import { pickerExecutionHosts } from '../../../../../shared/execution-host/managed-orcad-execution-host'
 import {
@@ -41,22 +42,16 @@ import type { RuntimeHostBlockedRecovery } from './remote-host-connection-status
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { RuntimeRepairDialog } from '../../runtime-access/RuntimeRepairDialog'
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
-export function SshStatusSegment({
-  compact,
-  iconOnly
-}: {
-  compact: boolean
-  iconOnly: boolean
-}): React.JSX.Element | null {
+export function SshStatusSegment(): React.JSX.Element | null {
   const t = useTranslate()
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
   const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
   const setActiveView = useAppStore((s) => s.setActiveView)
@@ -214,27 +209,19 @@ export function SshStatusSegment({
             'Remote host connection status'
           )}
         >
-          {iconOnly ? (
-            <MonitorSmartphone className="size-3" />
-          ) : (
-            <>
-              <Server className="size-3" />
-              {!compact && (
-                <span className="inline-grid text-2xs tabular-nums">
-                  {/* Reserve both localized forms so count changes don't resize the bar. */}
-                  <span aria-hidden className="invisible col-start-1 row-start-1">
-                    {connectedHostCountLabel(1, t)}
-                  </span>
-                  <span aria-hidden className="invisible col-start-1 row-start-1">
-                    {connectedHostCountLabel(Math.max(99, statuses.length), t)}
-                  </span>
-                  <span className="col-start-1 row-start-1">
-                    {connectedHostCountLabel(connectedHostCount, t)}
-                  </span>
-                </span>
-              )}
-            </>
-          )}
+          <Server className="size-3" />
+          <span className="inline-grid text-2xs tabular-nums">
+            {/* Reserve both localized forms so count changes don't resize the bar. */}
+            <span aria-hidden className="invisible col-start-1 row-start-1">
+              {connectedHostCountLabel(1, t)}
+            </span>
+            <span aria-hidden className="invisible col-start-1 row-start-1">
+              {connectedHostCountLabel(Math.max(99, statuses.length), t)}
+            </span>
+            <span className="col-start-1 row-start-1">
+              {connectedHostCountLabel(connectedHostCount, t)}
+            </span>
+          </span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

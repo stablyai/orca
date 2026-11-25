@@ -187,14 +187,19 @@ export function readJournalDomainSubmissionAttempt(
 export function readJournalDomainSubmissionBody(
   db: Database.Database,
   target: JournalDomainSubmissionTarget,
-  messageId: string
+  messageId: string,
+  /** When no send has that id: the current send a queued card of that id was handed over as. */
+  family?: true
 ): AgentJournalMessageItem | null {
-  const row = db
-    .prepare(`SELECT attempt.admission_body_json, item.payload_json
+  const select = (column: 'message_id' | 'admission_family_id') =>
+    db
+      .prepare(`SELECT attempt.admission_body_json, item.payload_json
     FROM journal_submission_attempts AS attempt LEFT JOIN journal_items AS item
       ON item.session_id=attempt.session_id AND item.epoch=attempt.epoch AND item.item_id=attempt.item_id
-    WHERE attempt.session_id=? AND attempt.epoch=? AND attempt.message_id=? AND attempt.current=1`)
-    .get(target.sessionId, target.epoch, messageId)
+    WHERE attempt.session_id=? AND attempt.epoch=? AND attempt.${column}=? AND attempt.current=1
+    ORDER BY attempt.attempt_sequence DESC LIMIT 1`)
+      .get(target.sessionId, target.epoch, messageId)
+  const row = select('message_id') ?? (family ? select('admission_family_id') : undefined)
   if (row?.admission_body_json !== null && row?.admission_body_json !== undefined) {
     return JSON.parse(String(row.admission_body_json))
   }

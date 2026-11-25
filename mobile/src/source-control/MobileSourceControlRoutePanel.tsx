@@ -1,4 +1,4 @@
-import { parseWorkspaceKey } from '../../../src/shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../src/shared/workspace/identity/workspace-scope'
 import { MobileFolderSourceControlPanel } from './folder/MobileFolderSourceControlPanel'
 import {
   MobileSourceControlPanel,

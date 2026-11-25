@@ -4,8 +4,8 @@ import type {
   ComputerSnapshotData,
   ComputerSnapshotResult,
   ComputerWindowListWindow
-} from '../../shared/computer-use-runtime-types'
-import { parseComputerTreeText } from '../../shared/computer-use-tree-text'
+} from '../../shared/computer/computer-use-runtime-types'
+import { parseComputerTreeText } from '../../shared/computer/computer-use-tree-text'
 import {
   computerTreeElementsMatching,
   isComputerTreeElementDisabled,
@@ -15,7 +15,7 @@ import { cliErrorCode } from '../output/cli-error'
 import { formatGetAppState, formatListWindows } from './computer-format'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export type ComputerWaitCondition =
   | { kind: 'text'; value: string }

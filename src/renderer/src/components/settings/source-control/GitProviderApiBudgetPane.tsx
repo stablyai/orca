@@ -6,7 +6,7 @@ import { GitHubRateLimitPanel } from '../../github/github-rate-limit-display'
 import { GitLabRateLimitPanel } from '../../gitlab/gitlab-rate-limit-display'
 import { useTranslate } from '@/i18n/use-translate'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { PRAutoRefreshSetting } from './PRAutoRefreshSetting'
 import { prAutoRefreshMatchesSearch } from './pr-auto-refresh-search'
 

@@ -10,11 +10,11 @@ import {
   type CrashReportCreateInput,
   type CrashReportRecord,
   type CrashReportStatus
-} from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-reporting'
 import {
   sanitizeCrashReportBreadcrumbs,
   sanitizeCrashReportDetails
-} from '../../../shared/crash-report-redaction'
+} from '../../../shared/crash-reporting/crash-report-redaction'
 
 const MAX_REPORTS = 5
 const RELATED_CRASH_WINDOW_MS = 5_000

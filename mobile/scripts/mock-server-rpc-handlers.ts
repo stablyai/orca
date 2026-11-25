@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws'
 import {
   DESKTOP_PROTOCOL_VERSION,
   MIN_COMPATIBLE_MOBILE_VERSION
-} from '../../src/shared/protocol-version'
+} from '../../src/shared/remote-runtime/protocol/protocol-version'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation

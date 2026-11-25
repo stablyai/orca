@@ -24,7 +24,11 @@ import type {
   SwitchOrcaProfileResult,
   TransferOrcaProfileProjectArgs,
   TransferOrcaProfileProjectResult
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
+import type {
+  OrcaCloudConsoleOpenArgs,
+  OrcaCloudConsoleOpenResult
+} from '../../../shared/orca-cloud-console'
 
 export type OrcaProfileApi = {
   list: () => Promise<OrcaProfileListResult>
@@ -64,4 +68,6 @@ export type OrcaProfileApi = {
   orgMemberRemove: (
     args: OrcaProfileOrgMemberRemoveArgs
   ) => Promise<OrcaProfileOrgMemberMutationResult>
+  /** Opens a web console page in the system browser, signed in when auth issues a ticket. */
+  openCloudConsole: (args: OrcaCloudConsoleOpenArgs) => Promise<OrcaCloudConsoleOpenResult>
 }

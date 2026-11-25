@@ -1,52 +1,33 @@
-import { rateLimitSpentUntil } from '../../../../shared/rate-limit-spent-windows'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import { rateLimitSpentUntil } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
 import {
   isNativeChatUsageLimitCutSchedulable,
   NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,
   type NativeChatUsageLimitCut
-} from '../../../../shared/native-chat/native-chat-usage-limit-cut'
-import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
+} from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import {
   agentSessionAccountHomePath,
-  agentSessionAccountHomesEqual,
-  isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { usageLimitContinueIdentity as identity } from './structured-agent-session-usage-limit-chain'
-
-/** The polled usage of the account a chat continues on, as the host attributes it. */
-export type UsageLimitAccountUsage = {
-  /** Attributed home and account identity; state kept for another account never applies. */
-  key: string
-  /** The reading now, or null once it no longer describes this account. */
-  read: () => ProviderRateLimits | null
-  /** A non-forced fetch that keeps the poller's Retry-After and failure backoff; with
-   *  `notWithinMs`, at most one per account that often, however many chats ask. False when the
-   *  service started none. */
-  refresh: (notWithinMs?: number) => boolean
-}
-
-/** Where a launch would bill: a hold never outlives the scope it was taken in. */
-export type UsageLimitAccountScope = {
-  /** Canonical launch home plus billing kind. */
-  scope: string
-  /** The reading that describes this scope's account; absent when none does. */
-  account?: UsageLimitAccountUsage
-  /** Asks for a first reading while the provider has none; a due send waits for it briefly. */
-  bootstrap?: () => boolean
-}
-
-export type UsageLimitAccountVerdict = {
-  /** The latest reset the send waits for: the cut's, or a later one the account still shows spent. */
-  resetsAt: number
-  /** The account shows a spent window with no known reset; nothing is sent automatically. */
-  unknownReset: boolean
-  /** Due, but no reading taken since that reset has arrived yet. */
-  awaitingReading: boolean
-}
+import {
+  switchFreeIdentity,
+  usageLimitContinueIdentity as identity,
+  type HostUsageLimitCut,
+  type SwitchReset
+} from './structured-agent-session-usage-limit-chain'
+import {
+  attributionBinding,
+  attributionBindingHolds,
+  type UsageLimitAccountAttributionHost as AttributionHost,
+  type UsageLimitAccountScope,
+  type UsageLimitAttributionBinding,
+  type UsageLimitAccountVerdict
+} from './structured-agent-session-usage-limit-account-scope'
+import {
+  askForRoom,
+  sameAccountHome,
+  UsageLimitRelaunchedCuts,
+  usageLimitCutLaunch
+} from './structured-agent-session-usage-limit-relaunch'
 
 type Hold = {
   cut: string
@@ -61,11 +42,6 @@ type Hold = {
   bootstrapSince?: { reset: number; at: number }
 }
 
-type AttributionHost = Pick<
-  StructuredAgentSessionHostDeps,
-  'launchAccountHome' | 'usageLimitAutoContinue'
-> & { store: Pick<AgentSessionRecordStore, 'getRecord'> }
-
 const GRACE_MS = 15_000
 /** How long a due send waits for a fresh reading before it goes on the reset it has. */
 const READING_WAIT_MS = 120_000
@@ -76,20 +52,21 @@ const UNKNOWN_RESET_ASK_MS = 10 * 60_000
 export class UsageLimitAccountHolds {
   private readonly holds = new Map<string, Hold>()
   private readonly scopes = new Map<string, UsageLimitAccountScope | undefined>()
-  /** The source witness each chat's attribution was computed under. */
-  private readonly witnesses = new Map<string, string | undefined>()
+  /** What each chat's attribution was computed under. */
+  private readonly bindings = new Map<string, UsageLimitAttributionBinding>()
   /** When each chat was first seen continuing on another account than the one its cut hit. */
   private readonly movedSince = new Map<
     string,
     { cut: string; to: AgentSessionAccountHome; at: number }
   >()
+  private readonly relaunched = new UsageLimitRelaunchedCuts()
   /** Shared by every chat of a pass and keyed by source witness: work scales with accounts and
    *  their changes, not chats. */
   private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
   private readings = new Map<string, Promise<UsageLimitAccountScope | undefined>>()
 
   get size(): number {
-    return this.holds.size + this.scopes.size + this.witnesses.size
+    return this.holds.size + this.scopes.size + this.bindings.size
   }
 
   /** Launch homes and readings resolve again, once each, from here on. */
@@ -98,34 +75,41 @@ export class UsageLimitAccountHolds {
     this.readings = new Map()
   }
 
-  /** Re-attributed each pass: the account a chat continues on follows the host's selection.
-   *  `hit` names the cut and the account it hit, when known. */
+  /** Re-attributed each pass: the account a chat continues on follows the host's selection. The
+   *  account the cut hit is the one its turn's runtime launched under, when the record still names
+   *  that launch. */
   async attribute(
     id: string,
     host: AttributionHost,
-    hit?: { cut: string; home: AgentSessionAccountHome | null },
+    limited: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt' | 'fence'> & SwitchReset,
     now = Date.now()
   ): Promise<void> {
     const record = host.store.getRecord(id)
+    const hit = {
+      cut: switchFreeIdentity(limited),
+      ...usageLimitCutLaunch(record?.launchedAccount, limited.fence)
+    }
     const read = host.usageLimitAutoContinue?.accountUsage
-    const witness = record ? liveWitness(host, record.provider) : undefined
+    const binding = attributionBinding(host, record)
     let scope: UsageLimitAccountScope | undefined
     let movedTo: AgentSessionAccountHome | null = null
+    let relaunchedOn: AgentSessionAccountHome | null = null
     try {
       // WSL readings never reach this host, so a WSL launch keeps the cut's own reset.
       if (record && record.location.wslDistro === null) {
         // Off WSL a launch home follows only the provider's selection, never the chat.
-        const target = JSON.stringify([witness, record.provider])
+        const target = JSON.stringify([binding.witness, record.provider])
         let launch = this.launchHomes.get(target)
         if (!launch) {
           launch = (async () => (await host.launchAccountHome?.(record)) ?? null)()
           this.launchHomes.set(target, launch)
         }
         const home = (await launch) ?? record.accountHome
-        movedTo = hit?.home && !sameAccountHome(home, hit.home) ? home : null
+        movedTo = hit.home && !sameAccountHome(home, hit.home) ? home : null
+        relaunchedOn = hit.relaunched ? home : null
         const path = agentSessionAccountHomePath(home)
         if (read && home && path) {
-          const key = JSON.stringify([witness, record.provider, path])
+          const key = JSON.stringify([binding.witness, record.provider, path])
           let reading = this.readings.get(key)
           if (!reading) {
             reading = read(record.provider, home)
@@ -137,70 +121,107 @@ export class UsageLimitAccountHolds {
     } catch {
       // No attributable account this pass: the cut's own reset and any hold already seen decide.
     }
-    if (record && liveWitness(host, record.provider) !== witness) {
-      // Sources moved while this resolved: the result mixes them, so nothing stands for the chat.
-      this.scopes.delete(id)
-      this.witnesses.delete(id)
+    // Sources moved or the chat launched again while this resolved: the result mixes them.
+    if (record && !this.bindingHolds(id, host, binding)) {
       return
     }
     this.scopes.set(id, scope)
-    this.witnesses.set(id, witness)
+    this.bindings.set(id, binding)
     const since = this.movedSince.get(id)
-    if (!movedTo || !hit) {
+    if (!movedTo) {
       this.movedSince.delete(id)
     } else if (since?.cut !== hit.cut || !sameAccountHome(since.to, movedTo)) {
       // Each destination counts from when it was chosen, so an older reading of it never releases.
       this.movedSince.set(id, { cut: hit.cut, to: movedTo, at: now })
     }
+    this.relaunched.note(id, hit.cut, relaunchedOn, hit.launchFence, now)
   }
 
-  /** The witness the chat's attribution was computed under; a send binds to this one. */
-  attributionWitness(id: string): string | undefined {
-    return this.witnesses.get(id)
+  /** A relaunched cut with no reset is scheduled only once room is seen, so no due send asks for
+   *  that reading: the sweep asks for it here, for a cut Orca would continue. */
+  askForRelaunchRoom(id: string, cut: NativeChatUsageLimitCut): void {
+    if (cut.resetsAt === undefined && this.relaunched.waits(id, switchFreeIdentity(cut))) {
+      askForRoom(this.scopes.get(id), UNKNOWN_RESET_ASK_MS)
+    }
   }
 
-  /** Whether the sources `witness` names still hold for the chat's provider. */
-  witnessHolds(id: string, host: AttributionHost, witness: string | undefined): boolean {
+  /** What the chat's attribution was computed under; a send binds to this. */
+  attributionBinding(id: string): UsageLimitAttributionBinding | undefined {
+    return this.bindings.get(id)
+  }
+
+  bindingHolds(
+    id: string,
+    host: AttributionHost,
+    binding: UsageLimitAttributionBinding | undefined
+  ): boolean {
     const record = host.store.getRecord(id)
-    return record !== null && liveWitness(host, record.provider) === witness
+    const holds = attributionBindingHolds(host, record, binding)
+    if (!holds) {
+      this.scopes.delete(id)
+      this.bindings.delete(id)
+      this.relaunched.forget(id)
+    }
+    return holds
   }
 
-  /** Whether the chat has an attribution whose sources still hold. */
+  /** Whether the chat has an attribution whose sources and launch still hold. */
   attributionCurrent(id: string, host: AttributionHost): boolean {
-    return this.witnesses.has(id) && this.witnessHolds(id, host, this.witnesses.get(id))
+    return this.bindingHolds(id, host, this.bindings.get(id))
   }
 
   retain(shown: ReadonlySet<string>): void {
-    for (const cache of [this.holds, this.scopes, this.witnesses]) {
+    for (const cache of [this.holds, this.scopes, this.bindings, this.movedSince]) {
       for (const id of cache.keys()) {
         if (!shown.has(id)) {
           cache.delete(id)
         }
       }
     }
-    for (const id of this.movedSince.keys()) {
-      if (!shown.has(id)) {
-        this.movedSince.delete(id)
-      }
-    }
+    this.relaunched.retain(shown)
   }
 
   clear(): void {
     this.holds.clear()
     this.scopes.clear()
-    this.witnesses.clear()
+    this.bindings.clear()
     this.movedSince.clear()
+    this.relaunched.clear()
     this.beginPass()
+  }
+
+  /** A cut with no known reset, once the chat continues on an account the cut never hit: the
+   *  switch stands in for its reset, so the new account's reading decides as for any other move.
+   *  After a relaunch the account it hit is unknown, so only room on the one it starts on stands in. */
+  withSwitchReset<T extends NativeChatUsageLimitCut>(
+    id: string,
+    cut: T,
+    now = Date.now()
+  ): T & SwitchReset {
+    const key = switchFreeIdentity(cut)
+    const moved = this.movedSince.get(id)
+    const resetsAt =
+      cut.resetsAt !== undefined
+        ? undefined
+        : moved?.cut === key
+          ? moved.at
+          : this.relaunchRoomAt(id, key, now)
+    return resetsAt === undefined ? cut : { ...cut, resetsAt, resetFromSwitch: true }
+  }
+
+  private relaunchRoomAt(id: string, cut: string, now: number): number | undefined {
+    const account = this.scopes.get(id)?.account
+    return this.relaunched.roomAt(id, cut, account?.key, account?.read(), now)
   }
 
   verdict(
     id: string,
-    limited: { turnItemId: string; resetsAt: number },
+    limited: { turnItemId: string; resetsAt: number } & SwitchReset,
     now: number
   ): UsageLimitAccountVerdict {
     // The account the chat moved to never hit this cut: from the move on, only its reading holds.
     const moved = this.movedSince.get(id)
-    const movedCut = moved?.cut === identity(limited)
+    const movedCut = moved?.cut === switchFreeIdentity(limited)
     const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
     const scope = this.scopes.get(id)
     let hold = this.holds.get(id)
@@ -265,11 +286,13 @@ export class UsageLimitAccountHolds {
         hold.unknownReset = false
       }
     }
-    const resetsAt = Math.max(
+    const heldTo = Math.max(
       cut.resetsAt,
       hold.heldUntil ?? cut.resetsAt,
       (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt
     )
+    const room = this.relaunchRoomAt(id, switchFreeIdentity(limited), now)
+    const resetsAt = room !== undefined && room < heldTo && !hold.unknownReset ? room : heldTo
     let waitFrom = resetsAt + GRACE_MS
     if (!account && scope?.bootstrap && now >= waitFrom) {
       // A first reading is asked for only once a pass sees the send due, however late that is.
@@ -291,7 +314,7 @@ export class UsageLimitAccountHolds {
   /** The day Orca may still continue a cut runs from the reset it actually waits for. */
   schedulable(
     id: string,
-    cut: NativeChatUsageLimitCut,
+    cut: NativeChatUsageLimitCut & SwitchReset,
     now: number
   ): cut is NativeChatUsageLimitCut & { resetsAt: number; turnEndedAt: number } {
     // At no time at all, this checks only that the reset is known and later than the turn's end.
@@ -305,7 +328,7 @@ export class UsageLimitAccountHolds {
    *  starts one read per held reset. */
   ready(
     id: string,
-    cut: { turnItemId: string; resetsAt: number },
+    cut: { turnItemId: string; resetsAt: number } & SwitchReset,
     now: number,
     notBefore = 0
   ): boolean {
@@ -318,6 +341,9 @@ export class UsageLimitAccountHolds {
       return false
     }
     if (now < Math.max(hold.resetsAt + GRACE_MS, notBefore)) {
+      if (this.relaunched.waits(id, switchFreeIdentity(cut))) {
+        askForRoom(scope, UNKNOWN_RESET_ASK_MS)
+      }
       return false
     }
     const refresh = scope?.account?.refresh ?? scope?.bootstrap
@@ -328,20 +354,4 @@ export class UsageLimitAccountHolds {
     }
     return !hold.awaitingReading
   }
-}
-
-function sameAccountHome(left: AgentSessionAccountHome, right: AgentSessionAccountHome): boolean {
-  return isLegacyAgentSessionAccountHome(left) && isLegacyAgentSessionAccountHome(right)
-    ? left.variable === right.variable &&
-        normalizeRuntimePathForComparison(left.path) ===
-          normalizeRuntimePathForComparison(right.path)
-    : agentSessionAccountHomesEqual(left, right)
-}
-
-/** Changes whenever a source the provider's attribution reads changes. */
-function liveWitness(
-  host: AttributionHost,
-  provider: AgentSessionRecord['provider']
-): string | undefined {
-  return host.usageLimitAutoContinue?.accountWitness?.(provider)
 }

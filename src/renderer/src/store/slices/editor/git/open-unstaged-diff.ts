@@ -2,7 +2,7 @@ import { editorPlacementIntent } from '../tabs/editor-placement-intent'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
-import type { DiffSource } from '../../../../../../shared/editor-tab-view-types'
+import type { DiffSource } from '../../../../../../shared/editor/views/editor-tab-view-types'
 import { buildDiffEditorFileId, withDiffContentReloadRequest } from '../file-ids/editor-file-ids'
 import { editorOpenOwner, qualifyEditorContentId } from './editor-open-owner'
 import {

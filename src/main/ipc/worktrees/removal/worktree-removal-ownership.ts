@@ -3,14 +3,18 @@ import { getLocalPtyProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
 import type { Store } from '../../../persistence/loading-store/store'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { removeWorktreeMetaRow } from '../../../persistence/host-qualified-worktree-meta'
 import { pruneWorktreePRRefreshAliases } from '../../../github/pull-requests/refresh/pr-refresh-coordinator'
+import { dropOrcaCreatedAgentTrustForRemovedWorktree } from '../../../runtime/workspaces/removal/worktree-removal-agent-trust-cleanup'
 import {
   dropRemovedWorktreeProcessState,
   pruneRemovedWorktreeSnapshots
@@ -75,19 +79,25 @@ export function removeWorktreeMetadataAndTransientState(
   },
   worktreeId: string,
   hostId?: ExecutionHostId,
-  snapshotPruneBatchId?: string
-): void {
+  snapshotPruneBatchId?: string,
+  // Why: forget and folder removal keep the directory on disk, so only checkout deletes drop trust.
+  options: { dropAgentTrust?: boolean } = {}
+): Promise<void> {
   const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const preservesSameIdOwner = Boolean(
-    hostId &&
-    ((persistedHostId && persistedHostId !== hostId) ||
-      hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId))
-  )
+  const worktreeOwnedByOtherHost = Boolean(hostId && persistedHostId && persistedHostId !== hostId)
+  const preservesSameIdOwner =
+    worktreeOwnedByOtherHost ||
+    Boolean(hostId && hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId))
   // Path-derived IDs are reusable; retire old process state before a new workspace can inherit it.
   removeWorktreeMetaRow(store, worktreeId, hostId)
   // Status retirement is host/pane-scoped, even when another owner keeps the same workspace ID.
   agentHookServer.dropStatusEntriesForRemovedWorktree(worktreeId, hostId ?? persistedHostId)
+  // Why: trust is keyed by this path in local files; another host's repo copy doesn't use it.
+  const pretrustDrop =
+    options.dropAgentTrust && !worktreeOwnedByOtherHost
+      ? dropOrcaCreatedAgentTrustForRemovedWorktree(worktreeId)
+      : undefined
   if (!preservesSameIdOwner) {
     dropRemovedWorktreeProcessState(worktreeId)
     // Keep Electron-dependent desktop PR cleanup outside the runtime-shared drop.
@@ -100,5 +110,24 @@ export function removeWorktreeMetadataAndTransientState(
     worktreeId,
     hostId,
     snapshotPruneBatchId
+  )
+  return pretrustDrop ?? Promise.resolve()
+}
+
+/** The purge for removals that deleted the checkout; also drops the workspace trust Orca wrote for it. */
+export function removeDeletedCheckoutMetadataAndTransientState(
+  context: Parameters<typeof removeWorktreeMetadataAndTransientState>[0],
+  worktreeId: string,
+  hostId?: ExecutionHostId,
+  snapshotPruneBatchId?: string
+): Promise<void> {
+  return removeWorktreeMetadataAndTransientState(
+    context,
+    worktreeId,
+    hostId,
+    snapshotPruneBatchId,
+    {
+      dropAgentTrust: true
+    }
   )
 }

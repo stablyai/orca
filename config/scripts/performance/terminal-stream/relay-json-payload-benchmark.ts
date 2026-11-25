@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { performance } from 'node:perf_hooks'
 import { platform, release } from 'node:os'
-import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from '../../../../src/shared/relay-frame-decoder'
+import {
+  HEADER_LENGTH,
+  MAX_MESSAGE_SIZE
+} from '../../../../src/shared/remote-runtime/relay/relay-frame-decoder'
 import {
   MessageType,
   encodeFrame,

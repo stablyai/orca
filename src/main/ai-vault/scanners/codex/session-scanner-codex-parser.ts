@@ -10,7 +10,7 @@ import type {
   AiVaultSessionTitleKind
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   accumulatorSessionIdentity,
   cloneSessionAccumulator,
@@ -38,7 +38,7 @@ import {
   subtractCodexUsage
 } from '../../parsing/session-scanner-token-values'
 import { asRecord, extractGitBranch, extractModel } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
 import { extractCodexSessionMetadataTitle } from './session-scanner-codex-session-meta'

@@ -2,42 +2,87 @@
 
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
-import { ANTIGRAVITY_ACP_DIALECT } from '../acp/acp-dialects/antigravity-dialect'
-import type { StructuredAgentSessionHistory } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
+import type { AcpHostBackendInput, AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
+import type { AcpSessionModelDiscovery } from '../acp/discovery/acp-model-discovery-policy'
 import {
-  AntigravityChatAuthConfigSchema,
-  resolveAntigravityChatAuthConfig
-} from '../../shared/antigravity-chat-auth-config'
+  antigravityAgyOrcaHomeRevision,
+  antigravityChatRoute,
+  onAntigravityAgyOrcaHomeChanged
+} from './antigravity-chat-route'
+import { ORCA_ACP_CLIENT_INFO } from '../acp/launch/acp-client-info'
+import { windowsLocalAppDataBinDirectories } from '../acp/launch/acp-windows-install-directories'
+import type { Implementation } from '../acp/generated/acp-protocol.generated'
+import {
+  ANTIGRAVITY_ACP_DIALECT,
+  ANTIGRAVITY_AGY_ORCA_HOME_DIALECT
+} from '../acp/acp-dialects/antigravity-dialect'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import {
+  AGY_ORCA_HOME_MINIMUM_VERSION,
+  agyOrcaHomeArgs,
+  antigravityAgyOrcaAccount,
+  antigravityAgyOrcaAccountHome,
+  isAntigravityAgyOrcaAccountHome
+} from './antigravity-agy-orca-home'
+import {
+  resumeInvocationFromOptions,
+  type StructuredAgentSessionHistory
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
+import { ANTIGRAVITY_TRANSCRIPT_IMPORT } from './antigravity-transcript-import'
+import { resolveAntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import { deliverAntigravityInstructions } from '../acp/launch/acp-instructions'
 import { ANTIGRAVITY_ACP_COMMAND, ANTIGRAVITY_ACP_RUNTIME } from './antigravity-acp-runtime'
+import {
+  compareAppVersions,
+  isValidAppVersion
+} from '../../shared/app-lifecycle/identity/app-version'
 import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravity-acp-environment'
+import { scrubAgyOrcaHomeEnvironment } from './antigravity-agy-orca-home-environment'
 import {
   ANTIGRAVITY_LAUNCH_GATE,
   answerAntigravityChatAuth,
-  antigravityChatAccount,
-  antigravityChatSignIn
+  antigravityChatAccount
 } from './antigravity-chat-account'
-import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
-import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
 import { readAntigravitySignInLine } from './antigravity-sign-in-url'
 import { antigravityChatRulesMeta } from './antigravity-chat-rules'
+import { discardAntigravityListingSession } from './antigravity-listing-session'
+import { discardAgyListingSession } from './agy-listing-session-discard'
+import { managedRuntimeReleasesRevision } from '../node-runtime/managed-runtime-installation'
 import {
   AGY_SKIP_PERMISSIONS_FLAG,
+  antigravityHostAcpChecksRevision,
+  onAntigravityHostAcpAnswersChanged,
   ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION,
   antigravityHostAccountHome,
-  agyUsesApiKey,
-  antigravityHostAcpReady,
-  hasAgyCredential,
-  hasManagedAntigravityChatSignIn,
   isAntigravityHostAccountHome
 } from './antigravity-host-acp'
 
-// Chats cannot adopt agy's terminal conversations.
+// Chats and terminals share agy's conversation store when a chat runs the host's `agy acp`. A bare
+// `-c` is not refused: managed chats live elsewhere, so it would block agy for every Chat user.
 const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['antigravity'],
   rowSessionId: (link) => link.handle.nativeId,
-  parseResumeArgs: () => null
+  // agy parses Go flags, so a single dash and `--flag=value` spell the same option.
+  parseResumeArgs: (args) =>
+    resumeInvocationFromOptions(args, {
+      targetless: [],
+      markers: ['--conversation', '-conversation']
+    })
+}
+
+const ZED_CLIENT_INFO: Implementation = { name: 'zed', version: '0.0.0' }
+
+// Google's ACP server (still in 1.5.2) offers non-Gemini models only to allowlisted editors such
+// as Zed; named `orca`, a Google-account chat loses Claude and GPT-OSS. Its versions are not agy's.
+const managedServerClientInfo = (): Implementation => ZED_CLIENT_INFO
+
+// agy 1.5.1 and later offer every model to any client. Orca requires a newer agy, so `zed` is only
+// the fallback when agy's version is unknown.
+function agyClientInfo(version: string | null): Implementation {
+  return version && isValidAppVersion(version) && compareAppVersions(version, '1.5.1') >= 0
+    ? ORCA_ACP_CLIENT_INFO
+    : ZED_CLIENT_INFO
 }
 
 // Orca's managed ACP server keeps its own sign-in under <userData>/antigravity-chat.
@@ -50,6 +95,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   env: ANTIGRAVITY_ACP_ENV,
   scrubEnvironment: scrubAntigravityAcpEnvironment,
   dialect: ANTIGRAVITY_ACP_DIALECT,
+  clientInfo: managedServerClientInfo,
   loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
   authMethod: ({ antigravityChatAuth }) =>
     resolveAntigravityChatAuthConfig(antigravityChatAuth).method,
@@ -62,43 +108,78 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   account: antigravityChatAccount,
   installDirectories: () => [],
   managedRuntime: ANTIGRAVITY_ACP_RUNTIME,
+  managedRuntimeUpdatesAllowed: (settings) => settings.antigravityServerAutoUpdateEnabled !== false,
   // Yolo still requests questions and administrative reviews.
   permissionModeConfig: {
     values: { ask: 'default', 'accept-edits': 'auto_edit', 'full-access': 'yolo' }
   },
+  // Its server lists models only in a session, which it keeps, so Orca removes it.
   modelDiscovery: {
-    kind: 'unavailable',
-    reason: 'the Antigravity server lists its models only in a signed-in session'
+    kind: 'session',
+    listingNamesConfiguredModel: false,
+    inPrivateFolder: true,
+    // The server unpacks about 1 GB per start (29s cold here), so only a picker asking starts it.
+    listsOnDemand: true,
+    discardSession: discardAntigravityListingSession
   },
-  transcriptImport: null,
+  instructions: deliverAntigravityInstructions,
+  transcriptImport: ANTIGRAVITY_TRANSCRIPT_IMPORT,
   sessionHistory: ANTIGRAVITY_SESSION_HISTORY,
   privateTempDirectory: true,
+  // The server otherwise writes its workflow tool into every chat workspace.
+  sessionMeta: { antigravity: { disabledTools: ['run_workflow'] } },
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
   resolveSessionMeta: antigravityChatRulesMeta,
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
-// An inherited Gemini API key switches agy to key auth, which its models reject (401).
-function scrubAgyHostApiKeys(env: Record<string, string>): string[] {
-  const removed = ['GEMINI_API_KEY', 'GOOGLE_API_KEY']
+// An inherited Gemini API key switches agy to key auth, which its models reject (401);
+// alternate-case updater flags on Windows would shadow the configured uppercase entry.
+function scrubAgyHostApiKeys(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[] {
+  const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter((key) => {
+    const normalized = process.platform === 'win32' ? key.toUpperCase() : key
+    const shadowsDisableAutoUpdate =
+      process.platform === 'win32' &&
+      normalized === 'AGY_CLI_DISABLE_AUTO_UPDATE' &&
+      key !== normalized
+    return (
+      shadowsDisableAutoUpdate || normalized === 'GEMINI_API_KEY' || normalized === 'GOOGLE_API_KEY'
+    )
+  })
   for (const key of removed) {
     delete env[key]
   }
   return removed
 }
 
+const AGY_SESSION_MODEL_DISCOVERY: AcpSessionModelDiscovery = {
+  kind: 'session',
+  listingNamesConfiguredModel: false,
+  inPrivateFolder: true,
+  listsOnDemand: true,
+  discardSession: discardAgyListingSession
+}
+
 // The host's `agy acp` uses agy's own sign-in and history; Orca neither signs it in nor out.
 const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
   command: 'agy',
+  // Off, Orca's agy runs no chat: chats pinned to agy run the user's own (same ~/.gemini history),
+  // and on a host without one they get launch's cliMissing refusal.
+  managedCopyAllowed: (settings) => settings.antigravityManagedAgyEnabled !== false,
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
-  env: {},
+  clientInfo: agyClientInfo,
+  // Match terminal and quota launches: a background updater steals focus on Windows (#27390)
+  // and can replace agy mid-probe.
+  env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
   scrubEnvironment: scrubAgyHostApiKeys,
   authMethod: undefined,
   authMethodUnavailableMessage: undefined,
   signIn: undefined,
   dialect: { ...ANTIGRAVITY_ACP_DIALECT, signInAccount: 'system' },
+  // A session lists what a chat is offered; `agy models` can return a shorter fallback list.
+  modelDiscovery: AGY_SESSION_MODEL_DISCOVERY,
   account: {
     pin: antigravityChatAccount.pin,
     resolve: async ({ launchEnv }) =>
@@ -111,48 +192,78 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
     }
   },
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
-  installDirectories: ({ homePath }) => [join(homePath, '.local', 'bin')],
+  installDirectories: ({ env, homePath }) => [
+    ...(process.platform === 'win32'
+      ? windowsLocalAppDataBinDirectories(env, homePath, 'agy')
+      : []),
+    join(homePath, '.local', 'bin')
+  ],
   managedRuntime: undefined,
+  managedRuntimeUpdatesAllowed: undefined,
   resolveSessionMeta: undefined,
   // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
   permissionModeConfig: {
     values: { ask: 'default', 'accept-edits': 'accept-edits', 'full-access': 'default' },
     fullAccessAtLaunch: true
   },
-  keepsEverySession: true
+  keepsEverySession: true,
+  sessionMeta: undefined
 }
 
-// The host's agy ignores Orca's account type, so any other saved choice, a malformed one, or one
-// still being saved keeps new chats on Orca's runtime, whose sign-in honors it.
-function savedChatAuthIsPersonal(value: unknown): boolean {
-  try {
-    assertAntigravityChatAuthPublished(value)
-  } catch {
-    return false
+// agy on a home Orca owns, for Gemini API key chats: the saved method's settings.json
+// and credential, apart from agy's own login.
+const ANTIGRAVITY_AGY_ORCA_HOME_LAUNCH_SPEC: AcpLaunchSpec = {
+  ...ANTIGRAVITY_HOST_LAUNCH_SPEC,
+  readsAntigravityChatAuth: true,
+  scrubEnvironment: scrubAgyOrcaHomeEnvironment,
+  dialect: ANTIGRAVITY_AGY_ORCA_HOME_DIALECT,
+  account: antigravityAgyOrcaAccount,
+  minimumVersions: [AGY_ORCA_HOME_MINIMUM_VERSION]
+}
+
+/** The Orca-home spec for one home: agy is pointed at it on every launch. */
+function agyOrcaHomeSpec(home: AgentSessionAccountHome): AcpLaunchSpec {
+  return {
+    ...ANTIGRAVITY_AGY_ORCA_HOME_LAUNCH_SPEC,
+    args: (options) => [...ANTIGRAVITY_HOST_LAUNCH_SPEC.args(options), ...agyOrcaHomeArgs(home)]
   }
-  const parsed = AntigravityChatAuthConfigSchema.safeParse(
-    value === undefined ? { method: 'oauth-personal' } : value
-  )
-  return parsed.success && parsed.data.method === 'oauth-personal'
+}
+
+/** Where new chats run here, and what Install puts here; select and Install read the same answer. */
+export function antigravityHostChatRoute(input: AcpHostBackendInput) {
+  return antigravityChatRoute(input, ANTIGRAVITY_MANAGED_LAUNCH_SPEC)
 }
 
 export const ANTIGRAVITY_LAUNCH_SPEC = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
   hostBackend: {
     spec: ANTIGRAVITY_HOST_LAUNCH_SPEC,
-    pins: isAntigravityHostAccountHome,
-    // Someone signed in to Orca's own Chat keeps it; the host's agy needs a sign-in that serves
-    // sessions, not an API-key provider whose key the host launch drops.
-    select: async ({ command, env, envToDelete, homePath, stateDirectory, settings }) =>
-      savedChatAuthIsPersonal(settings.antigravityChatAuth) &&
-      antigravityChatSignIn.get().value.auth !== 'signedIn' &&
-      !(await hasManagedAntigravityChatSignIn(
-        join(stateDirectory, ANTIGRAVITY_CHAT_HOME_FOLDER)
-      )) &&
-      !(await agyUsesApiKey(homePath)) &&
-      (await hasAgyCredential(homePath)) &&
-      (await antigravityHostAcpReady(command, env, envToDelete))
-        ? antigravityHostAccountHome(homePath)
-        : null
+    pins: (home) => isAntigravityHostAccountHome(home) || isAntigravityAgyOrcaAccountHome(home),
+    specFor: (home) => (isAntigravityAgyOrcaAccountHome(home) ? agyOrcaHomeSpec(home) : null),
+    otherSpecs: [ANTIGRAVITY_AGY_ORCA_HOME_LAUNCH_SPEC],
+    // Unasked readers (menus, catalogs) get what a chat start would pin, from earlier answers.
+    select: async (input) => {
+      const route = await antigravityHostChatRoute(input)
+      if (route.orcaHome) {
+        return antigravityAgyOrcaAccountHome(input.stateDirectory)
+      }
+      return route.agy ? antigravityHostAccountHome(input.homePath) : null
+    },
+    installsManagedRuntime: async (input) =>
+      (await antigravityHostChatRoute(input)).installs === 'server',
+    // Installing Orca's agy, a new agy login, a changed agy answer or a key coming or going
+    // changes the route.
+    selectionRevision: () =>
+      managedRuntimeReleasesRevision() +
+      antigravityHostAcpChecksRevision() +
+      antigravityAgyOrcaHomeRevision(),
+    onSelectionChanged: (listener) => {
+      const answers = onAntigravityHostAcpAnswersChanged(listener)
+      const keys = onAntigravityAgyOrcaHomeChanged(listener)
+      return () => {
+        answers()
+        keys()
+      }
+    }
   }
 } satisfies AcpLaunchSpec

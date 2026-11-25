@@ -10,7 +10,7 @@ import {
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostQuery } from '../query/host-query'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { UNCACHED_LINKED_PR_STATE } from '../../../src/shared/runtime-worktree-contracts'
+import { UNCACHED_LINKED_PR_STATE } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 
 // Its own component so catalog updates re-render only this button, not the whole session header.
 export function MobileSourceControlButton({

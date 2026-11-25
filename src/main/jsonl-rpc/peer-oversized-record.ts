@@ -1,4 +1,4 @@
-import type { NdjsonRejectedRecord } from '../../shared/main-process-ndjson-framer'
+import type { NdjsonRejectedRecord } from '../../shared/json-stream/main-process-ndjson-framer'
 
 /** A reply over the line cap, refused for the one request that asked to survive it. */
 class JsonlRpcReplyTooLargeError extends Error {

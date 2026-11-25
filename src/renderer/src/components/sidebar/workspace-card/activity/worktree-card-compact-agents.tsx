@@ -1,11 +1,18 @@
+import type { AgentGroupSummary } from '@/store/slices/agent-status/projection/agent-row-display-model'
+import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import React, { useCallback, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
+import { IconStack } from '@/components/IconStack'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { cn } from '@/lib/class-names'
 import {
   buildSummaryAgentGroups,
+  formatAllAgentsInState,
+  formatStateCount,
+  formatSummaryStateLabel,
+  isUnreadDoneAgent,
   selectSummaryGroupIconAgents,
   summarizeAgentIdentities,
   summarizeAgents
@@ -22,7 +29,8 @@ function stopActivationKeyPropagation(e: React.KeyboardEvent): void {
 }
 
 type CompactAgentSummaryButtonProps = {
-  agents: DashboardAgentRowData[]
+  agents?: DashboardAgentRowData[]
+  groups?: readonly AgentGroupSummary[]
   subjectLabel: string
   expanded: boolean
   onToggle: () => void
@@ -73,20 +81,39 @@ export function CompactAgentExpansion({
   )
 }
 
+const EMPTY_AGENTS: NonNullable<CompactAgentSummaryButtonProps['agents']> = []
+
 export function CompactAgentSummaryButton({
-  agents,
+  agents = EMPTY_AGENTS,
+  groups: precomputedGroups,
   subjectLabel,
   expanded,
   onToggle,
   unreadByPaneKey
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const t = useTranslate()
-  const summary = summarizeAgents(agents, subjectLabel, t)
-  const groups = buildSummaryAgentGroups(
-    agents,
-    unreadByPaneKey ? (agent) => unreadByPaneKey[agent.paneKey] ?? false : undefined
-  )
-  const unreadCount = groups.find((group) => group.unread)?.agents.length ?? 0
+  const isUnread = unreadByPaneKey
+    ? (agent: DashboardAgentRowData) => unreadByPaneKey[agent.paneKey] ?? false
+    : undefined
+  const groups: readonly AgentGroupSummary[] =
+    precomputedGroups ??
+    buildSummaryAgentGroups(agents).map((group) => ({
+      state: group.state,
+      count: group.agents.length,
+      icons: selectSummaryGroupIconAgents(group.agents, 3),
+      identities: []
+    }))
+  const summary = !precomputedGroups
+    ? summarizeAgents(agents, subjectLabel, t)
+    : groups.length === 1
+      ? formatAllAgentsInState(groups[0].state, groups[0].count, t)
+      : t('sidebar.agentSummary.mixedStates', '{{subject}}: {{states}}', {
+          subject: subjectLabel,
+          states: groups.map((group) => formatStateCount(group.state, group.count, t)).join(', ')
+        })
+  const unreadCount = isUnread
+    ? agents.reduce((count, agent) => count + (isUnreadDoneAgent(agent, isUnread) ? 1 : 0), 0)
+    : 0
   const unreadSummary =
     unreadCount > 0
       ? t('auto.components.activity.ActivityTitlebarControls.unreadCount', '{{count}} unread', {
@@ -97,8 +124,21 @@ export function CompactAgentSummaryButton({
   const visibleGroups = groups.slice(0, 3)
   const hiddenGroupAgentCount = groups
     .slice(visibleGroups.length)
-    .reduce((count, group) => count + group.agents.length, 0)
-  const agentIdentitySummary = summarizeAgentIdentities(agents, t)
+    .reduce((count, group) => count + group.count, 0)
+  const agentIdentitySummary = !precomputedGroups
+    ? summarizeAgentIdentities(agents, t)
+    : groups
+        .flatMap((group) =>
+          group.identities.flatMap((identity) =>
+            Array.from({ length: identity.count }, () =>
+              t('sidebar.agentSummary.agentIdentityState', '{{agent}} {{status}}', {
+                agent: formatAgentTypeLabel(identity.agentType),
+                status: formatSummaryStateLabel(group.state, t)
+              })
+            )
+          )
+        )
+        .join('; ')
   const stopPointerPropagation = useCallback((e: React.SyntheticEvent) => {
     e.stopPropagation()
   }, [])
@@ -156,30 +196,21 @@ export function CompactAgentSummaryButton({
         <>
           <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden" aria-hidden>
             {visibleGroups.map((group) => {
-              const iconAgents = selectSummaryGroupIconAgents(group.agents, 3)
-              const hiddenIconCount = Math.max(0, group.agents.length - iconAgents.length)
+              const iconAgents = group.icons
+              const hiddenIconCount = Math.max(0, group.count - iconAgents.length)
               return (
                 <span
-                  key={group.unread ? 'unread' : group.state}
+                  key={group.state}
                   className="inline-flex min-w-0 shrink-0 items-center gap-0.5 rounded-sm bg-worktree-sidebar/70 px-1 py-0.5"
                 >
-                  <AgentStateDot
-                    state={group.state}
-                    unread={group.unread}
-                    size="sm"
-                    tooltipSide="right"
-                  />
+                  <AgentStateDot state={group.state} size="sm" tooltipSide="right" />
                   {/* Overlap identities only within the same status cluster to save width. */}
-                  <span className="inline-flex shrink-0 items-center -space-x-0.5 pl-0.5">
-                    {iconAgents.map((agent) => (
-                      <span
-                        key={agent.paneKey}
-                        className="inline-flex size-4 items-center justify-center rounded-full border border-worktree-sidebar-border/70 bg-worktree-sidebar"
-                      >
-                        <AgentTypeIcon agentType={agent.agentType} size={13} />
-                      </span>
-                    ))}
-                  </span>
+                  <IconStack
+                    items={iconAgents.map((agent) => ({
+                      key: agent.paneKey,
+                      icon: <AgentTypeIcon agentType={agent.agentType} size={13} />
+                    }))}
+                  />
                   {hiddenIconCount > 0 && (
                     <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
                       +{hiddenIconCount}

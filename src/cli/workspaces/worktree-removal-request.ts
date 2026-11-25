@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
-import type { RuntimeWorktreeRemoveResult } from '../../shared/runtime-worktree-contracts'
+import { WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+import type { RuntimeWorktreeRemoveResult } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import { worktreeRemovalReplyTimeoutMs } from '../../shared/worktree/removal/archive-hook-removal-gate'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export type WorktreeRemovalRequest = {
   worktree: string

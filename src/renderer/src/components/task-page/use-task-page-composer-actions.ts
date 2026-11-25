@@ -5,7 +5,7 @@ import type { LinearWorkspaceSelection } from '../../../../shared/linear/workspa
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 
 import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
-import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../../shared/workspace/naming/workspace-name'
 import { useAppStore } from '@/store'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/work-items/linear/linear-issue-workspace-open'
 import { toast } from 'sonner'

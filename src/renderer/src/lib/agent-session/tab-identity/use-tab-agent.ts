@@ -16,7 +16,7 @@ import {
   hasObservedTabAgentSignal,
   resolveLaunchedAgentExitEvidence,
   resolveTabAgentFromSignals
-} from '../../../../../shared/tab-agent-from-signals'
+} from '../../../../../shared/agent-status/identity/tab-agent-from-signals'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'

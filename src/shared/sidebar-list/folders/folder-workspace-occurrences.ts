@@ -1,7 +1,9 @@
 import { getFolderWorkspaceWorktree } from '../../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
+import { NO_HIDDEN_PROJECTS, type HiddenProjects } from '../../project/catalog/hidden-projects'
 import type { Worktree } from '../../worktree/types'
-import type { OccurrenceSectionPath } from '../../worktree-occurrence-plan'
+import type { OccurrenceSectionPath } from '../lineage/worktree-occurrence-plan'
+import { getVisibleLineagePlacement } from '../lineage/worktree-lineage-placement'
 import {
   compareFolderWorkspacesForDisplay,
   type RenderableFolderWorkspace
@@ -18,9 +20,64 @@ export function isFolderLaneSectionKey(key: string): boolean {
   return key.startsWith(FOLDER_LANE_SECTION_PREFIX)
 }
 
+/** Each folder-bound row's grouping root: its top listed ancestor below the folder. Hidden rows
+ * (archived, filtered) pass through, so a row under one groups by its own repo, as it would without
+ * the folder. The paired phone binds its rows the same way. */
+export function getFolderBoundGroupingRoots<Row>(args: {
+  folderIdentities: Iterable<string>
+  childrenByParentIdentity: ReadonlyMap<string, readonly Row[]>
+  identityOf: (row: Row) => string
+  listed: ReadonlySet<Row>
+  bound: ReadonlySet<Row>
+}): Map<string, Row> {
+  const roots = new Map<string, Row>()
+  const visited = new Set<string>()
+  const pending: { row: Row; top?: Row }[] = [...args.folderIdentities].flatMap((folder) =>
+    (args.childrenByParentIdentity.get(folder) ?? []).map((row) => ({ row }))
+  )
+  for (let next = pending.pop(); next; next = pending.pop()) {
+    const identity = args.identityOf(next.row)
+    if (visited.has(identity)) {
+      continue
+    }
+    visited.add(identity)
+    const top = next.top ?? (args.listed.has(next.row) ? next.row : undefined)
+    if (top && args.bound.has(next.row)) {
+      roots.set(identity, top)
+    }
+    for (const child of args.childrenByParentIdentity.get(identity) ?? []) {
+      pending.push({ row: child, top })
+    }
+  }
+  return roots
+}
+
+/** A hidden project's row is placed only below a shown folder workspace, through shown rows (#43083). */
+export function keepHiddenRowsBelowFolders<Row>(args: {
+  rows: readonly Row[]
+  folderRows: readonly Row[]
+  childrenByParentIdentity: ReadonlyMap<string, readonly Row[]>
+  identityOf: (row: Row) => string
+  isHidden: (row: Row) => boolean
+}): Row[] {
+  if (!args.rows.some(args.isHidden)) {
+    return [...args.rows]
+  }
+  const below = getVisibleLineagePlacement(
+    args.rows,
+    args.folderRows,
+    args.childrenByParentIdentity,
+    args.identityOf
+  )
+  return args.rows.filter((row) => !args.isHidden(row) || below.has(args.identityOf(row)))
+}
+
 /** Folder workspaces as occurrence rows: each keeps its own lane and order, and rows nested under one
  * follow it there. */
-export function getSidebarFolderOccurrences(renderable: readonly RenderableFolderWorkspace[]) {
+export function getSidebarFolderOccurrences(
+  renderable: readonly RenderableFolderWorkspace[],
+  hiddenProjects: HiddenProjects = NO_HIDDEN_PROJECTS
+) {
   const sorted = [...renderable].sort((left, right) =>
     compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
   )
@@ -34,11 +91,28 @@ export function getSidebarFolderOccurrences(renderable: readonly RenderableFolde
     groupIdByIdentity.set(identity, pair.projectGroup.id)
   }
   const isFolder = (row: Worktree): boolean => pairByIdentity.has(getWorktreeHostIdentity(row))
+  const folderRows = sorted.map(rowOf)
   return {
     /** Every folder row, in display order. */
-    rows: sorted.map(rowOf),
+    rows: folderRows,
     pairByIdentity,
     isFolder,
+    /** The rows the plan places, then every folder row. */
+    withPlacedRows: (
+      worktrees: readonly Worktree[],
+      childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]>
+    ): Worktree[] =>
+      keepHiddenRowsBelowFolders({
+        rows: [...worktrees, ...folderRows],
+        folderRows,
+        childrenByParentIdentity,
+        identityOf: getWorktreeHostIdentity,
+        isHidden: hiddenProjects.isRowHidden
+      }),
+    /** The rows that count in their own projects. Under project grouping a hidden project's rows
+     * never do: they show only in their folder's lane (#43083). */
+    projectRows: (rows: readonly Worktree[], projectGrouping: boolean): Worktree[] =>
+      rows.filter((row) => !isFolder(row) && !(projectGrouping && hiddenProjects.isRowHidden(row))),
     /** A lane's folder rows, already in display order. */
     rowsOf: (pairs: readonly RenderableFolderWorkspace[] | undefined): Worktree[] =>
       (pairs ?? []).map(rowOf),
@@ -66,26 +140,16 @@ export function getSidebarFolderOccurrences(renderable: readonly RenderableFolde
         bound.add(row)
         sectionItemsByGroupId.get(groupId)?.push(row)
       }
-      // A bound row groups by its top listed ancestor below the folder; hidden rows (archived, filtered)
-      // pass through, so a row under one groups by its own repo, as it would without the folder.
-      const listed = new Set(natural)
-      const visited = new Set<string>()
-      const pending: { row: Worktree; top?: Worktree }[] = [...pairByIdentity.keys()].flatMap(
-        (folder) => (childrenByParentIdentity.get(folder) ?? []).map((row) => ({ row }))
-      )
-      for (let next = pending.pop(); next; next = pending.pop()) {
-        const identity = getWorktreeHostIdentity(next.row)
-        if (visited.has(identity)) {
-          continue
-        }
-        visited.add(identity)
-        const top = next.top ?? (listed.has(next.row) ? next.row : undefined)
-        if (top && bound.has(next.row)) {
-          groupingRootByIdentity.set(identity, top)
-        }
-        for (const child of childrenByParentIdentity.get(identity) ?? []) {
-          pending.push({ row: child, top })
-        }
+      const roots = getFolderBoundGroupingRoots({
+        folderIdentities: pairByIdentity.keys(),
+        childrenByParentIdentity,
+        identityOf: getWorktreeHostIdentity,
+        // A hidden row never roots a shown row's project (#43083).
+        listed: new Set(natural.filter((row) => !hiddenProjects.isRowHidden(row))),
+        bound
+      })
+      for (const [identity, top] of roots) {
+        groupingRootByIdentity.set(identity, top)
       }
       return { bound, sectionItemsByGroupId, groupingRootByIdentity }
     }

@@ -3,7 +3,7 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../../../shared/worktree/types'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
+import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace/status/workspace-statuses'
 import { getWorktreeLineageDropTargetIdentity } from './worktree-lineage-drag-drop'
 import type { WorktreeSidebarStatusDropTarget } from './worktree-sidebar-drop-preview'
 import { NO_WORKTREE_SIDEBAR_DROP_TARGET, type WorktreeSidebarLineageDropTarget } from './row-state'

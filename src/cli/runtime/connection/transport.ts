@@ -1,18 +1,24 @@
 import { createConnection } from 'node:net'
 import { randomUUID } from 'node:crypto'
-import { findTransport, type RuntimeMetadata } from '../../../shared/runtime-bootstrap'
+import {
+  findTransport,
+  type RuntimeMetadata
+} from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type {
   ExpectedRuntimeSource,
   RuntimeOrchestrationEnvelope,
   RuntimeRequestSelection,
   RuntimeRpcResponse
-} from '../../../shared/runtime-rpc-envelope'
-import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from '../../../shared/runtime-rpc-envelope'
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import {
+  isKeepaliveFrame,
+  RuntimeRpcEnvelopeSchema
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RuntimeClientError, RuntimeRpcFailureError } from './types'
 
-import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../../shared/concurrency/timer-delay'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
-import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../../shared/local-runtime-rpc-limits'
+import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../../shared/remote-runtime/rpc/local-runtime-rpc-limits'
 import { daemonSocketDirIsTrusted } from '../../../main/daemon/endpoint/publication/daemon-socket-endpoint-path'
 
 // Agents read these; a blip must not send them to `orca open`, which raises the window.

@@ -14,7 +14,7 @@ import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-re
 import { isStableMissingGitRemoteError } from '../../git/remotes/stable-missing-git-remote-error'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { resolveGitHubProjectAccount } from '../accounts/github-project-account'
 
 export type GitHubRepoContext = {
@@ -163,9 +163,10 @@ function pruneOwnerRepoCache(now: number): void {
 
 export async function getRemoteUrlForRepo(
   context: GitHubRepoContext,
-  remoteName: string
+  remoteName: string,
+  configSignature?: string
 ): Promise<string | null> {
-  return readRemoteUrl(context, remoteName)
+  return readRemoteUrl(context, remoteName, configSignature)
 }
 
 function getOwnerRepoCacheTtl(value: OwnerRepo | null, configSignature?: string): number {
@@ -239,7 +240,7 @@ async function resolveOwnerRepoForRemote(
 ): Promise<OwnerRepo | null> {
   const now = Date.now()
   try {
-    const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
+    const remoteUrl = await getRemoteUrlForRepo(context, remoteName, configSignature)
     if (!remoteUrl) {
       if (requireVerifiedSshProbe) {
         requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))

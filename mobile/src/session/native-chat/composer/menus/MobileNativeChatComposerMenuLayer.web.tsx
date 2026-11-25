@@ -6,6 +6,7 @@ import { useKeyboardPersistingTaps } from '../../../../platform/keyboard/keyboar
 import { useMobileNativeChatLowerRegion } from '../../lower-region/mobile-native-chat-lower-region-context'
 import { useMobileNativeChatComposerAllocation } from '../field/MobileNativeChatComposerAllocation'
 import type { ComposerMenuLayerProps } from './MobileNativeChatComposerMenuLayer'
+import { useMobileNativeChatComposerMenuHost } from './MobileNativeChatComposerMenuHost'
 
 type Placement = {
   root: HTMLElement
@@ -24,6 +25,7 @@ export function MobileNativeChatComposerMenuLayer({ anchorRef, children }: Compo
   const onIntrinsic = allocation?.onIntrinsic
   const keyboard = useKeyboardOcclusion()
   const lower = useMobileNativeChatLowerRegion()
+  const screenRef = useMobileNativeChatComposerMenuHost()
   const keepKeyboard = useKeyboardPersistingTaps('always')
   const surfaceRef = useRef<HTMLElement | null>(null)
   const updateRef = useRef<(() => void) | null>(null)
@@ -57,11 +59,8 @@ export function MobileNativeChatComposerMenuLayer({ anchorRef, children }: Compo
 
   useEffect(() => {
     const anchor: unknown = anchorRef.current
-    if (!(anchor instanceof HTMLElement)) {
-      return
-    }
-    const chat = anchor.closest<HTMLElement>('[data-testid="native-chat-view"]')
-    if (!chat) {
+    const screen: unknown = screenRef?.current
+    if (!(anchor instanceof HTMLElement) || !(screen instanceof HTMLElement)) {
       return
     }
     const document = anchor.ownerDocument
@@ -83,7 +82,7 @@ export function MobileNativeChatComposerMenuLayer({ anchorRef, children }: Compo
       )
     const update = (target: EventTarget | null = document.activeElement) => {
       const moving = lower?.getContent()
-      const host = lower ? (moving instanceof HTMLElement ? moving : null) : chat
+      const host = lower ? (moving instanceof HTMLElement ? moving : null) : screen
       if (!host) {
         place(null)
         return
@@ -102,7 +101,7 @@ export function MobileNativeChatComposerMenuLayer({ anchorRef, children }: Compo
       const reserve: unknown = reserveRef?.current
       const reserved = reserve instanceof HTMLElement && reserve.offsetHeight > 0 ? reserve : null
       const rect = (reserved ?? anchor).getBoundingClientRect()
-      const bounds = chat.getBoundingClientRect()
+      const bounds = screen.getBoundingClientRect()
       const hostBounds = host.getBoundingClientRect()
       const page = window.visualViewport
       let top = Math.max(bounds.top, page?.offsetTop ?? 0)
@@ -121,7 +120,7 @@ export function MobileNativeChatComposerMenuLayer({ anchorRef, children }: Compo
       let visibleBottom = bottom
       for (
         let parent = (reserved ?? anchor).parentElement;
-        parent && parent !== chat;
+        parent && parent !== screen;
         parent = parent.parentElement
       ) {
         const style = getComputedStyle(parent)
@@ -204,7 +203,15 @@ export function MobileNativeChatComposerMenuLayer({ anchorRef, children }: Compo
       window.visualViewport?.removeEventListener('resize', geometry)
       window.visualViewport?.removeEventListener('scroll', geometry)
     }
-  }, [anchorRef, reserveRef, onActiveChange, keyboard, lower?.getContent, lower?.getViewport])
+  }, [
+    anchorRef,
+    screenRef,
+    reserveRef,
+    onActiveChange,
+    keyboard,
+    lower?.getContent,
+    lower?.getViewport
+  ])
   useLayoutEffect(() => () => onActiveChange?.(false), [onActiveChange])
   useLayoutEffect(() => {
     updateRef.current?.()

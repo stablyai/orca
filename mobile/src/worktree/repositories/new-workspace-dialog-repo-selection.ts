@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 
 type MobileNewWorkspaceDialogRepo = {
   id: string

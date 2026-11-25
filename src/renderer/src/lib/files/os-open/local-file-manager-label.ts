@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 type LocalFileManager = 'finder' | 'file-explorer' | 'file-manager'
 
@@ -33,4 +34,15 @@ export function getOpenInLocalFileManagerLabel(userAgent?: string): string {
 
 export function getOpenInLocalFileManagerPrefix(): string {
   return translate('auto.lib.local.file.manager.label.57b632c0bd', 'Open in ')
+}
+
+/** Button label for revealing a local path, keyed by `process.platform`. */
+export function getShowInFileManagerLabel(platform: string, t: Translate = translate): string {
+  if (platform === 'darwin') {
+    return t('auto.components.settings.CliSection.6f894ef9c2', 'Show in Finder')
+  }
+  if (platform === 'win32') {
+    return t('auto.components.settings.CliSection.cbe55e4d48', 'Show in Explorer')
+  }
+  return t('auto.components.settings.CliSection.71e5d9feae', 'Show in file manager')
 }

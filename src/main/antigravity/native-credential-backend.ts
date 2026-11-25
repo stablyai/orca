@@ -36,6 +36,11 @@ function hostKeyring() {
   throw new Error('Native Antigravity account switching is not supported on this host.')
 }
 
+/** agy writes this after a keyring timeout and may read its file store for a while after. */
+export function antigravityKeyringFallbackMarker(home: string): string {
+  return join(home, '.gemini', 'antigravity-cli', 'cache', 'antigravity-keyring-unavailable')
+}
+
 export function createAntigravityHostCredentialBackend(home: string): AntigravityCredentialBackend {
   if (process.platform === 'win32') {
     return createAntigravityWindowsCredentialBackend(getAntigravityWindowsHome(process.env))
@@ -49,7 +54,7 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
     return file
   }
   const keyring = hostKeyring()
-  const marker = join(root, 'cache', 'antigravity-keyring-unavailable')
+  const marker = antigravityKeyringFallbackMarker(home)
   async function read() {
     if (existsSync(marker)) {
       throw new Error(

@@ -1,6 +1,6 @@
 import { elementScroll, observeElementOffset, type Virtualizer } from '@tanstack/react-virtual'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
+import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 
 type SidebarVirtualizer = Virtualizer<HTMLDivElement, HTMLDivElement>
 type ScrollOptions = Parameters<typeof elementScroll>[1]

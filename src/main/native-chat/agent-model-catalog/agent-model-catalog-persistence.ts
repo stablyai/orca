@@ -5,10 +5,8 @@ import {
   type KeyedJsonRow
 } from '../../sqlite/row-cache/keyed-json-row-cache'
 import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
-import type {
-  AgentSessionModelOption,
-  AgentSessionOptionChoice
-} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import {
   agentModelCatalogEntry,
   serializedAgentModelCatalogListing,
@@ -81,6 +79,7 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     ...(typeof row.supportsFastMode === 'boolean'
       ? { supportsFastMode: row.supportsFastMode }
       : {}),
+    ...(typeof row.defaultFastMode === 'boolean' ? { defaultFastMode: row.defaultFastMode } : {}),
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),

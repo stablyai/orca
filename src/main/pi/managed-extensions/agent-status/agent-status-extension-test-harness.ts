@@ -11,6 +11,7 @@ export type HookContext = {
   ui?: {
     setEditorText?: (text: string) => void
     notify?: (message: string, level: string) => void
+    setStatus?: (key: string, text: string | undefined) => void
     onTerminalInput?: (handler: (data: string) => { consume?: boolean } | undefined) => () => void
   }
   isIdle?: () => boolean
@@ -195,7 +196,7 @@ export function createAgentStatusExtensionHarness(args: {
     argv: args.argv ?? ['node', '/usr/bin/orca']
   }
 
-  const context = {
+  const context: Record<string, unknown> = {
     module,
     exports: module.exports,
     require: requireMock,
@@ -210,9 +211,10 @@ export function createAgentStatusExtensionHarness(args: {
     Buffer,
     URL,
     AbortController,
+    Date,
     setTimeout,
     clearTimeout
-  } as Record<string, unknown>
+  }
   context.globalThis = context
 
   const source = getPiAgentStatusExtensionSource(args.kind)

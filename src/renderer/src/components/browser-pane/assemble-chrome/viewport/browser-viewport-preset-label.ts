@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { BrowserViewportPreset } from '../../../../../../shared/browser-viewport-presets'
+import type { BrowserViewportPreset } from '../../../../../../shared/browser/guest-lifecycle/browser-viewport-presets'
 
 export function browserViewportPresetLabel(
   preset: BrowserViewportPreset,

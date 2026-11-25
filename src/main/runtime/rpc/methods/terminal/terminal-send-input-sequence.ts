@@ -5,7 +5,7 @@ import {
   TerminalOpenInputSession,
   type TerminalSend
 } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import {
   terminalOrderedInputControls,
   terminalOrderedInputByteLength,

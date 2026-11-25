@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getWorkItemRepo, type WorkItemRepoRef } from '@/lib/work-items/work-item-repo-row'
 
 type RepoBackedProjectDialogState = {

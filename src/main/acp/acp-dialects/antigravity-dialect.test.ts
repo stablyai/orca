@@ -1,49 +1,41 @@
 import { expect, it } from 'vitest'
-import fixture from '../fixtures/antigravity-v1.4.3-options.json'
-import {
-  NewSessionResponseSchema,
-  SessionConfigOptionSchema
-} from '../generated/acp-protocol.generated'
-import { acpSelectChoices } from '../options/acp-select-choices'
-import { AcpStructuredOptions } from '../options/acp-structured-options'
-import { ANTIGRAVITY_ACP_DIALECT } from './antigravity-dialect'
+import { antigravityListedFamilySelection } from './antigravity-dialect'
+import { parseAgyModelListing } from '../../antigravity/antigravity-model-listing'
 
-it("reads other model families' efforts from the variants the session advertises", () => {
-  const options = new AcpStructuredOptions(ANTIGRAVITY_ACP_DIALECT)
-  const efforts = () =>
-    Object.fromEntries(
-      options
-        .read()
-        .models.map((model) => [
-          model.id,
-          model.effortsKnown === false
-            ? 'unknown'
-            : model.efforts.map(({ value, label }) => `${value}:${label}`)
-        ])
-    )
-  const flash = ['low:Low', 'medium:Medium', 'high:High']
-  options.adoptSession(NewSessionResponseSchema.parse(fixture.session), 'new')
-  expect(efforts()).toEqual({
-    'gemini-3.8-flash': flash,
-    'gemini-3.7-flash': flash,
-    'gemini-3.6-flash': flash,
-    'gemini-3.5-flash': flash,
-    'gemini-3.1-pro': ['low:Low', 'high:High']
+// `agy models` 1.5.14: gemini-3.5-flash is a model itself, so its levels stay their own rows.
+const LISTED = parseAgyModelListing(
+  [
+    'gemini-4-argon-high\tGemini 4 Argon (High)',
+    'gemini-4-argon-medium\tGemini 4 Argon (Medium)',
+    'gemini-4-argon-low\tGemini 4 Argon (Low)',
+    'gemini-3.5-flash-medium\tGemini 3.5 Flash (Medium)',
+    'gemini-3.5-flash\tGemini 3.5 Flash (High)',
+    'gemini-3.5-flash-low\tGemini 3.5 Flash (Low)',
+    'gpt-oss-120b-medium\tGPT-OSS 120B (Medium)'
+  ].join('\n')
+)
+
+it('folds only a level id the listing groups into its family', () => {
+  const pick = (model: string, effort?: string) =>
+    antigravityListedFamilySelection({ model, ...(effort ? { effort } : {}) }, LISTED)
+  expect(pick('gemini-4-argon-medium', 'medium')).toEqual({
+    model: 'gemini-4-argon',
+    effort: 'medium'
   })
-  // The running model's live menu outranks its family's variants, even when it withdraws a level.
-  options.adoptConfigOptions(
-    SessionConfigOptionSchema.array()
-      .parse(fixture.pro.configOptions)
-      .map((option) =>
-        option.type === 'select' && option.category === 'thought_level'
-          ? {
-              ...option,
-              currentValue: 'high',
-              options: acpSelectChoices(option).filter(({ value }) => value === 'high')
-            }
-          : option
-      )
+  expect(pick('gemini-4-argon-medium')).toEqual({ model: 'gemini-4-argon', effort: 'medium' })
+  expect(pick('gemini-4-argon-medium', 'high')).toEqual({ model: 'gemini-4-argon', effort: 'high' })
+  expect(pick('gemini-4-argon-medium', 'xhigh')).toBeNull()
+  expect(pick('gemini-3.5-flash-medium', 'medium')).toBeNull()
+  expect(pick('gpt-oss-120b-medium', 'medium')).toBeNull()
+})
+
+it('keeps a listed level id even when its family row offers that level', () => {
+  // A live ACP menu with gemini-3.5-flash current gives that row the session's level picker.
+  const argon = LISTED.find((model) => model.id === 'gemini-4-argon')
+  const live = LISTED.map((model) =>
+    model.id === 'gemini-3.5-flash' ? { ...model, efforts: argon?.efforts ?? [] } : model
   )
-  expect(efforts()['gemini-3.1-pro']).toEqual(['high:High'])
-  expect(efforts()['gemini-3.8-flash']).toEqual(flash)
+  expect(
+    antigravityListedFamilySelection({ model: 'gemini-3.5-flash-medium', effort: 'medium' }, live)
+  ).toBeNull()
 })

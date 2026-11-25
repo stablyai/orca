@@ -1,5 +1,5 @@
 import type Database from '../../../sqlite/sync-database'
-import { storageCapacityErrorCode } from '../../../../shared/storage-capacity-error'
+import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
 
 export class ProfileStateIndeterminateWriteError extends Error {
   readonly code = 'profile-state-write-indeterminate' as const

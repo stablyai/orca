@@ -3,7 +3,7 @@ import {
   REPO_ICON_PICK_FAILURE_COPY as EN,
   type RepoIconPickFailure,
   type RepoIconPickFailureCode
-} from '../../../../../../shared/repo-icon-pick-failure-copy'
+} from '../../../../../../shared/repository/appearance/repo-icon-pick-failure-copy'
 
 const COPY: Record<RepoIconPickFailureCode, () => string> = {
   notPng: () => translate('settings.repository.iconPickErrors.notPng', EN.notPng),

@@ -3,7 +3,7 @@ import type { AgentJournalApprovalSubject } from '../../../../shared/agent-sessi
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
-} from '../../../../shared/ansi-escape-sequences'
+} from '../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import type { ClaudePromptPresentation } from './claude-prompt-registry'
 
 type ClaudePermissionOptions = Parameters<CanUseTool>[2]

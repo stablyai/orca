@@ -1,6 +1,6 @@
 import type { ParsedAgentStatusPayload } from '../contracts/agent-status-types'
 import { parseAgentStatusPayload } from '../contracts/agent-status-types'
-import { ownRetainedString } from '../../own-retained-string'
+import { ownRetainedString } from '../../text/own-retained-string'
 import type { ProgramStatusFacet } from '../../program-status/facet'
 import type { AgentStatus } from '../title/agent-title-core'
 

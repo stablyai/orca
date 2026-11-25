@@ -1,4 +1,4 @@
-import type { GitLabPipelineJob } from '../../../shared/gitlab-types'
+import type { GitLabPipelineJob } from '../../../shared/gitlab/gitlab-types'
 import { encodedProject } from '../projects/project-path-encoding'
 import { gitLabRunTimes } from './gitlab-run-times'
 import {

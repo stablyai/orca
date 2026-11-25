@@ -1,7 +1,7 @@
 // What the main agent asked a subagent to do and, for Claude, the reply its spawn call returned.
 
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { codexCollabRowAgentIds } from '../../../../../shared/codex-collab-agent-tools'
+import { codexCollabRowAgentIds } from '../../../../../shared/agent-hook-listener/providers/codex/codex-collab-agent-tools'
 import {
   isSubagentBlock,
   isToolCallBlock,

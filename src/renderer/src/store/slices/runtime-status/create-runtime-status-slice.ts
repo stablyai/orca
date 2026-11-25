@@ -4,7 +4,7 @@ import type {
   RuntimeStatusStoreSetState,
   RuntimeStatusStoreState
 } from './runtime-status-types'
-import { replaceMapEntries } from '@/store/keyed-record-transitions'
+import { stageHostStatuses } from './host-status-transaction-draft'
 
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
@@ -19,7 +19,7 @@ import {
   dismissRuntimeDisconnectedToast,
   showRuntimeDisconnectedToast
 } from './runtime-environment-disconnect-toast'
-import { reconcileCatalogRows } from '../../../../../shared/catalog-row-reconcile'
+import { reconcileCatalogRows } from '../../../../../shared/collections/catalog-row-reconcile'
 import { createRuntimeStatusHydration } from './runtime-status-hydration'
 import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
 import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
@@ -120,20 +120,19 @@ export const createRuntimeStatusSlice: (
       ) {
         return s
       }
-      return {
+      const patch = {
         runtimeEnvironments: catalogUnchanged ? s.runtimeEnvironments : reconciled,
         runtimeEnvironmentCatalogHydrated: true,
         runtimeEnvironmentCatalogSettled: true,
-        ...(statusesChanged
-          ? {
-              runtimeStatusByEnvironmentId: replaceMapEntries(
-                s.runtimeStatusByEnvironmentId,
-                [...removedStatusIds].map((id) => [id, null] as const)
-              )
-            }
-          : {}),
         ...(removedChanged ? { removedRuntimeEnvironmentIds: nextRemoved } : {})
       }
+      return statusesChanged
+        ? stageHostStatuses(
+            s,
+            [...removedStatusIds].map((id) => [id, null] as const),
+            patch
+          )
+        : patch
     })
     // Prune removed environments’ agent/command caches; partial test stores may omit these slices.
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
@@ -150,6 +149,7 @@ export const createRuntimeStatusSlice: (
     if (retiredEnvironmentIds.length > 0) {
       evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(retiredEnvironmentIds)
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)
+      get().forgetAgentCliUpdateHosts?.(retiredEnvironmentIds)
       get().clearHostWorkspaceStatuses?.(retiredEnvironmentIds)
       retiredEnvironmentIds.forEach(dismissRuntimeDisconnectedToast)
     }
@@ -162,11 +162,7 @@ export const createRuntimeStatusSlice: (
   applyRuntimeHostStatusSnapshot: (snapshot) => {
     const apply = (): void =>
       applyRuntimeHostStatusSnapshot(snapshot, get(), (entry) => {
-        set((s) => ({
-          runtimeStatusByEnvironmentId: replaceMapEntries(s.runtimeStatusByEnvironmentId, [
-            [snapshot.environmentId, entry]
-          ])
-        }))
+        set((s) => stageHostStatuses(s, [[snapshot.environmentId, entry]], {}))
       })
     if (snapshotOutrunsCatalog(snapshot, get())) {
       // Applied once after the re-read; a catalog that is still behind drops it as before.
@@ -243,12 +239,8 @@ export const createRuntimeStatusSlice: (
       if (statusUnchanged && !environmentsChanged) {
         return s
       }
-      return {
-        runtimeStatusByEnvironmentId: statusUnchanged
-          ? s.runtimeStatusByEnvironmentId
-          : replaceMapEntries(s.runtimeStatusByEnvironmentId, [[environmentId, nextEntry]]),
-        ...(environmentsChanged ? { runtimeEnvironments } : {})
-      }
+      const patch = environmentsChanged ? { runtimeEnvironments } : {}
+      return statusUnchanged ? patch : stageHostStatuses(s, [[environmentId, nextEntry]], patch)
     })
     if (runtimeRestarted || contactRegained) {
       void ensureBrowserClientHostOnRuntimeContact(get(), environmentId)
@@ -264,10 +256,11 @@ export const createRuntimeStatusSlice: (
 
   ...createRuntimeEnvironmentStatusRetention(set, get),
 
-  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
+  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000, options) =>
     refreshRuntimeEnvironmentStatus(
       environmentId,
       timeoutMs,
+      options?.force === true,
       (entry) => {
         get().setRuntimeEnvironmentStatus(environmentId, entry)
         if (entry.status) {

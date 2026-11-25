@@ -2,9 +2,12 @@ import { agentNoUpdateLabel } from '../../../../../src/shared/agent-status/prese
 import { MobileForkMarkedName } from '../../../session/fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../../../session/fork/mobile-fork-marked-name'
 import { memo, type ReactNode } from 'react'
+import { Bell } from 'lucide-react-native'
+import { listedAgentVerdict } from '../../../agents/agent-list-rows'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { Pressable, Text, View } from 'react-native'
-import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/runtime-worktree-contracts'
-import { withoutNativeChatVisualDirectiveLines } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
+import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import { withoutNativeChatVisualDirectiveLines } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import { colors, spacing, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -48,6 +51,7 @@ function WorktreeAgentRowComponent({
   trailing
 }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const dotState = childRow?.displayState ?? agentDotState(agent, now)
   // Visuals render only in transcript; row keeps surrounding prose and treats visual-only reply as empty.
   const reply = agent.lastAssistantMessage
@@ -98,6 +102,14 @@ function WorktreeAgentRowComponent({
           label
         )}
       </Text>
+      {!childRow && listedAgentVerdict(agent)?.unread ? (
+        <Bell
+          size={12}
+          color={colors.statusAmber}
+          fill={colors.statusAmber}
+          accessibilityLabel={t('agents.list.unread', 'Unread')}
+        />
+      ) : null}
       {trailing}
       <Text style={styles.time}>{ts}</Text>
     </View>

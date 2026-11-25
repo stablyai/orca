@@ -43,7 +43,7 @@ type UrlLinkClickFallbackDeps = {
   getSourceOwner?: () => HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
   getLinkActionContext?: () => TerminalLinkActionContext | null
-  getActionDestinations?: () => HttpLinkActionDestinations
+  getActionDestinations?: (url: string) => HttpLinkActionDestinations
 }
 
 export type HttpLinkClickFallbackBinding = IDisposable & {
@@ -120,20 +120,23 @@ export function findHttpLinkAtTerminalMouseEvent(
     : null
 }
 
+export function isTerminalLinkAtMouseEvent(terminal: Terminal, event: MouseEvent): boolean {
+  if (isTerminalLinkifierHoverActive(terminal)) {
+    return true
+  }
+  const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+  return Boolean(
+    position &&
+    findTerminalHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
+  )
+}
+
 export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps
 ): HttpLinkClickFallbackBinding {
-  const isLinkMouseEvent = (event: MouseEvent): boolean => {
-    if (isTerminalLinkifierHoverActive(terminal)) {
-      return true
-    }
-    const position = getTerminalBufferPositionForMouseEvent(terminal, event)
-    return Boolean(
-      position &&
-      findTerminalHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
-    )
-  }
+  const isLinkMouseEvent = (event: MouseEvent): boolean =>
+    isTerminalLinkAtMouseEvent(terminal, event)
   const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(
     terminal,
     isLinkMouseEvent,
@@ -158,7 +161,7 @@ export function installHttpLinkClickFallback(
         sourceOwner: deps.getSourceOwner?.() ?? { kind: 'local' },
         requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
         linkActionContext: deps.getLinkActionContext?.(),
-        actionDestinations: deps.getActionDestinations?.()
+        actionDestinations: deps.getActionDestinations?.(url)
       })
     )
     if (handled) {

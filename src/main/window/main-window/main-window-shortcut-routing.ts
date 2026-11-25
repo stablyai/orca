@@ -3,7 +3,7 @@ import type { BrowserWindow } from 'electron'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../shared/modifier-double-tap-detector'
+} from '../../../shared/keybindings/modifier-double-tap-detector'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/effective'
 import type { KeybindingMatchOptions } from '../../../shared/keybindings/types'
 import {
@@ -13,25 +13,25 @@ import {
   resolveWindowShortcutAction,
   windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
-} from '../../../shared/window-shortcut-policy'
-import type { Store } from '../../persistence/loading-store/store'
+} from '../../../shared/keybindings/window-shortcut-policy'
+import type { NativeSettingsProjection } from '../../core-desktop/native-settings-projection'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
 import { isMacAppPasteInput } from '../editing/mac-app-paste-input'
-import { dictationShortcutMode } from '../../../shared/dictation-shortcut-mode'
+import { dictationShortcutMode } from '../../../shared/speech/dictation/dictation-shortcut-mode'
 import {
   textInputOwnsComposition,
   type TextShortcutInput
-} from '../../../shared/text-input-shortcut-policy'
+} from '../../../shared/keybindings/text-input-shortcut-policy'
 
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
   mainWindow: BrowserWindow
   opts?: CreateMainWindowOptions
-  store: Store | null
+  nativeSettings: NativeSettingsProjection | null
 }): void {
-  const { focus, mainWindow, opts, store } = args
+  const { focus, mainWindow, opts, nativeSettings } = args
   const doubleTapDetector = new ModifierDoubleTapDetector()
 
   const dispatchResolvedWindowShortcutAction = (
@@ -72,7 +72,7 @@ export function installMainWindowShortcutRouting(args: {
 
     // Hold and Auto need renderer keyup; consume only single-keydown toggles in main.
     if (action.type === 'dictationKeyDown') {
-      const voiceSettings = store?.getSettings().voice
+      const voiceSettings = nativeSettings?.getSettings().voice
       // No model still forwards: the renderer's startDictation shows the setup toast.
       if (!voiceSettings?.enabled || textInputOwnsComposition(options.input)) {
         return false
@@ -144,7 +144,7 @@ export function installMainWindowShortcutRouting(args: {
           ? 'terminal'
           : 'app',
       terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
-        store?.getSettings().terminalShortcutPolicy
+        nativeSettings?.getSettings().terminalShortcutPolicy
       )
     }
     const appShortcutContext: KeybindingMatchOptions = {
@@ -255,7 +255,7 @@ export function installMainWindowShortcutRouting(args: {
               ? 'terminal'
               : 'app',
           terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
-            store?.getSettings().terminalShortcutPolicy
+            nativeSettings?.getSettings().terminalShortcutPolicy
           )
         }
       )

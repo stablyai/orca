@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type NativeChatAccountUsageModalRequest = {
   /** The chat `/usage` was typed in; the modal reads the account that chat runs on. */

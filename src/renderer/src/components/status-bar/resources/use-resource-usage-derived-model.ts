@@ -1,9 +1,17 @@
 import { useMemo } from 'react'
 import type { AppState } from '../../../store/types'
-import type { MemorySnapshot } from '../../../../../shared/process-stats-types'
+import type { MemorySnapshot } from '../../../../../shared/diagnostics/process-stats-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { mergeSnapshotAndSessions } from './workspace-attribution/merge-snapshot-and-sessions'
+import { createResourceMergeCache } from './workspace-attribution/resource-chat-row-groups'
+import {
+  resolveResourceFolderWorkspace,
+  resolveResourceWorkspaceHost
+} from './workspace-attribution/resource-workspace-host'
 import type { RuntimeHostResourceSample } from './workspace-attribution/resource-usage-merge-types'
 import type { PtyListedSession as DaemonSession } from '../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
@@ -17,10 +25,14 @@ import {
 } from './popover/resource-manager-terminal-copy'
 import {
   getCommitPressureToneClass,
-  getResourceCommitMetricCopy,
   getResourceMemoryMetricCopy
 } from './popover/resource-memory-metric-copy'
 import { formatMemory } from './popover/resource-usage-metrics'
+import {
+  readAgentPaneKeys,
+  sharedAgentProcessUsage,
+  splitSnapshotByOwner
+} from './popover/resource-owner-split'
 import {
   findAmbiguousWorktreeIds,
   findDuplicateIds
@@ -33,7 +45,6 @@ export function useResourceUsageDerivedModel({
   runtimeHostResources,
   sessions,
   resourceSessionBindings,
-  runtimePaneTitlesByTabId,
   repos,
   allWorktrees,
   projectGroups,
@@ -41,6 +52,7 @@ export function useResourceUsageDerivedModel({
   workspaceSessionReady,
   sessionCount,
   sessionsError,
+  sessionsRereading,
   memorySnapshotError,
   snapshot,
   spaceScanReady
@@ -50,7 +62,6 @@ export function useResourceUsageDerivedModel({
   runtimeHostResources: readonly RuntimeHostResourceSample[]
   sessions: readonly DaemonSession[]
   resourceSessionBindings: ResourceSessionBindingInputs
-  runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   repos: AppState['repos']
   allWorktrees: Worktree[]
   projectGroups: AppState['projectGroups']
@@ -58,6 +69,8 @@ export function useResourceUsageDerivedModel({
   workspaceSessionReady: boolean
   sessionCount: number | null
   sessionsError: boolean
+  /** The terminal list is being read again because it was outdated; it can't back an end action. */
+  sessionsRereading: boolean
   memorySnapshotError: string | null
   snapshot: MemorySnapshot | null
   spaceScanReady: boolean
@@ -108,6 +121,8 @@ export function useResourceUsageDerivedModel({
   // Keep duplicate workspace IDs in the catalog; gate host attribution where the resource identity is ambiguous.
   const ambiguousWorktreeIds = useMemo(() => findAmbiguousWorktreeIds(allWorktrees), [allWorktrees])
 
+  // A fresh cache per open, so a closed panel holds no rows.
+  const mergeCache = useMemo(() => (open ? createResourceMergeCache() : undefined), [open])
   // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
   const unifiedRepos = useMemo(
     () =>
@@ -118,7 +133,6 @@ export function useResourceUsageDerivedModel({
             {
               // Share all binding inputs with bulk selection so deferred SSH sessions also require single-row kill confirmation.
               ...resourceSessionBindings,
-              runtimePaneTitlesByTabId,
               repoDisplayNameById,
               repoConnectionIdById,
               repoRuntimeHostIdById,
@@ -127,15 +141,16 @@ export function useResourceUsageDerivedModel({
               worktreeById,
               ambiguousWorktreeIds
             },
-            t
+            t,
+            mergeCache
           )
         : [],
     [
+      mergeCache,
       open,
       resourceSnapshot,
       sessions,
       resourceSessionBindings,
-      runtimePaneTitlesByTabId,
       repoDisplayNameById,
       repoConnectionIdById,
       repoRuntimeHostIdById,
@@ -147,13 +162,49 @@ export function useResourceUsageDerivedModel({
     ]
   )
 
+  // Why: open-only and keyed to the 2 s snapshot and daemon inventory; agent status is read here
+  // rather than subscribed because it churns many times a second.
+  const ownerSplit = useMemo(
+    () =>
+      open && resourceSnapshot
+        ? splitSnapshotByOwner(resourceSnapshot, sessions, readAgentPaneKeys())
+        : null,
+    [open, resourceSnapshot, sessions]
+  )
+
+  // Once per shown sample or host placement change; title and binding churn never rewalk it.
+  const sharedAgentUsage = useMemo(() => {
+    if (!open || !resourceSnapshot) {
+      return null
+    }
+    const hostCtx = {
+      worktreeById,
+      ambiguousWorktreeIds,
+      repoConnectionIdById,
+      repoRuntimeHostIdById
+    }
+    // The merge leaves out local samples for workspaces a paired machine hosts, chats included; those stay shared.
+    return sharedAgentProcessUsage(resourceSnapshot, (worktree) => {
+      const repoId =
+        resolveResourceFolderWorkspace(hostCtx, worktree.worktreeId)?.repoId ?? worktree.repoId
+      return !resolveResourceWorkspaceHost(hostCtx, worktree.worktreeId, repoId).runtimeHostId
+    })
+  }, [
+    open,
+    resourceSnapshot,
+    worktreeById,
+    ambiguousWorktreeIds,
+    repoConnectionIdById,
+    repoRuntimeHostIdById
+  ])
+
   // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.
   const orphanCount = useMemo(() => {
-    if (!open || !workspaceSessionReady) {
+    if (!open || !workspaceSessionReady || sessionsRereading) {
       return 0
     }
     return countUnboundDaemonSessions(sessions, resourceSessionBindings)
-  }, [open, sessions, resourceSessionBindings, workspaceSessionReady])
+  }, [open, sessions, resourceSessionBindings, workspaceSessionReady, sessionsRereading])
 
   // Share daemon inventory for open and closed counts; wake hints are bindings, not a live session count.
   const triggerSessionCount = sessionCount
@@ -162,28 +213,21 @@ export function useResourceUsageDerivedModel({
     resourceSnapshot?.processMemoryMetric ?? 'rss',
     t
   )
+  const { totalPrivateMemory, commitToneClass } = useMemo(() => {
+    const privateMemory = resourceSnapshot?.totalPrivateMemory
+    return {
+      totalPrivateMemory: privateMemory,
+      commitToneClass: getCommitPressureToneClass({
+        privateMemory,
+        hostTotalMemory: resourceSnapshot?.host.totalMemory ?? 0
+      })
+    }
+  }, [resourceSnapshot])
   // Missing commit support on Unix/older hosts means unknown, not zero committed bytes.
-  const commitMetricCopy = resourceSnapshot?.processCommitMetric
-    ? getResourceCommitMetricCopy(t)
-    : null
-  const { totalMemory, totalCpu, memBadgeLabel, totalPrivateMemory, commitToneClass } =
-    useMemo(() => {
-      const memory = resourceSnapshot?.totalMemory ?? 0
-      const cpu = resourceSnapshot?.totalCpu ?? 0
-      const privateMemory = resourceSnapshot?.totalPrivateMemory
-      return {
-        totalMemory: memory,
-        totalCpu: cpu,
-        memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—',
-        totalPrivateMemory: privateMemory,
-        commitToneClass: getCommitPressureToneClass({
-          privateMemory,
-          hostTotalMemory: resourceSnapshot?.host.totalMemory ?? 0
-        })
-      }
-    }, [resourceSnapshot])
   const commitBadgeLabel =
-    commitMetricCopy && totalPrivateMemory !== undefined ? formatMemory(totalPrivateMemory) : null
+    resourceSnapshot?.processCommitMetric && totalPrivateMemory !== undefined
+      ? formatMemory(totalPrivateMemory)
+      : null
 
   // Why: memorySnapshotError null means "succeeded" OR "never fetched"; a sessions failure before any snapshot still counts as daemon-unreachable.
   const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
@@ -191,16 +235,6 @@ export function useResourceUsageDerivedModel({
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines(
     {
-      memoryLabel: resourceSnapshot
-        ? [
-            `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`,
-            commitBadgeLabel && commitMetricCopy
-              ? `${commitBadgeLabel} ${commitMetricCopy.summaryLabel}`
-              : null
-          ]
-            .filter(Boolean)
-            .join(' · ')
-        : memBadgeLabel,
       sessionCount: triggerSessionCount,
       spaceScanReady
     },
@@ -216,13 +250,11 @@ export function useResourceUsageDerivedModel({
 
   return {
     unifiedRepos,
+    ownerSplit,
+    sharedAgentUsage,
     orphanCount,
     triggerSessionCount,
     memoryMetricCopy,
-    commitMetricCopy,
-    totalMemory,
-    totalCpu,
-    memBadgeLabel,
     commitToneClass,
     commitBadgeLabel,
     daemonUnreachable,

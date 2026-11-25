@@ -1,4 +1,4 @@
-import { removePaneKeys } from '../../slices/agent-status/agent-status-pane-keyed-records'
+import { removePaneKeys } from '../../slices/agent-status/pane-authority/agent-status-pane-keyed-records'
 import type { AppState } from '../../types'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
@@ -6,13 +6,13 @@ import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-session/launch/
 // Use store-free registry to avoid a slice-evaluation cycle through terminal-parked-tab-watchers.
 import { retireParkedTerminalTab } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { forgetNativeChatPromptDismissalsForTab } from '@/components/native-chat/prompts/native-chat-prompt-dismissals'
-import { retireAgentPaneAuthorityAliasesByOwnerTab } from '../../slices/agent-status/agent-pane-authority'
+import { retireAgentPaneAuthorityAliasesByOwnerTab } from '../../slices/agent-status/pane-authority/agent-pane-authority'
 import '../../slices/agent-status/agent-status'
 import {
   buildAgentStatusTabPrefixDropPatch,
   type AgentStatusTabPrefixDropState
-} from '../../slices/agent-status/agent-status-drop-reducer'
-import { buildPaneForegroundAgentTabPrefixClearPatch } from '../../slices/agent-status/pane-foreground-agent'
+} from '../../slices/agent-status/retirement/agent-status-drop-reducer'
+import { buildPaneForegroundAgentTabPrefixClearPatch } from '../../slices/agent-status/pane-authority/pane-foreground-agent'
 
 export type RetiredTerminalTabSweepActions = Pick<
   AppState,

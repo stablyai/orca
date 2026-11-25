@@ -1,4 +1,4 @@
-import { overlayEnvironmentVariables } from '../../shared/environment-overlay'
+import { overlayEnvironmentVariables } from '../../shared/shell/launch/environment-overlay'
 import { readMacosPythonProxyEnvironment } from '../network/macos-python-proxy-environment'
 
 const LOOPBACK = ['localhost', '127.0.0.1', '::1', '[::1]']

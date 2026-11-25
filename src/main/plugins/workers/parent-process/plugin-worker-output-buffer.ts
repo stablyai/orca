@@ -1,5 +1,5 @@
 import type { Readable } from 'node:stream'
-import { ownRetainedString } from '../../../../shared/own-retained-string'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 
 type PluginWorkerOutputSink = (level: 'info' | 'warn' | 'error', line: string) => void
 

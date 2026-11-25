@@ -4,7 +4,7 @@ import {
   agentKindSchema,
   launchSourceSchema,
   requestKindSchema
-} from '../../../../shared/telemetry-events'
+} from '../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { PtySpawnIpcArgs } from '../ipc/spawn-types'
 
 export function recordAgentStartTelemetry(

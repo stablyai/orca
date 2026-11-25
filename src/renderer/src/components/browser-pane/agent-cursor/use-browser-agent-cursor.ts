@@ -1,12 +1,12 @@
 import { useEffect, type RefObject } from 'react'
 import { createAgentCursor, type AgentCursorController } from './agent-cursor-motion'
 import { attachBrowserAgentCursorSink } from './browser-agent-activity-state'
-import { readPrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { readPrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 
 const AGENT_ACTIVE_ATTRIBUTE = 'data-agent-active'
 
 /** Whether a person could see the page right now; hidden pages take the cursor without waiting. */
-function isOnScreen(webview: Electron.WebviewTag, rect: DOMRect): boolean {
+function isOnScreen(page: HTMLElement, rect: DOMRect): boolean {
   return (
     document.visibilityState === 'visible' &&
     rect.width > 0 &&
@@ -15,17 +15,18 @@ function isOnScreen(webview: Electron.WebviewTag, rect: DOMRect): boolean {
     rect.bottom > 0 &&
     rect.left < window.innerWidth &&
     rect.top < window.innerHeight &&
-    webview.checkVisibility({ opacityProperty: true, visibilityProperty: true })
+    page.checkVisibility({ opacityProperty: true, visibilityProperty: true })
   )
 }
 
 /**
- * Draws the agent's glow and cursor over a page. The layer is created inside `getHost()`, which
- * must stack above the guest, only once an agent drives the page, so other pages cost nothing.
+ * Draws the agent's glow and cursor over a page: its webview, or the frame of a streamed page.
+ * The layer is created inside `getHost()`, which must stack above the page, only once an agent
+ * drives the page, so other pages cost nothing.
  */
 export function useBrowserAgentCursor(
   browserPageId: string,
-  webviewRef: RefObject<Electron.WebviewTag | null>,
+  pageRef: RefObject<HTMLElement | null>,
   getHost: () => HTMLElement | null
 ): void {
   useEffect(() => {
@@ -63,10 +64,10 @@ export function useBrowserAgentCursor(
 
     const detach = attachBrowserAgentCursorSink(browserPageId, {
       show: (event) => {
-        const webview = webviewRef.current
+        const pageElement = pageRef.current
         const host = getHost()
-        const page = webview?.getBoundingClientRect()
-        if (!webview || !host || !page || !isOnScreen(webview, page)) {
+        const page = pageElement?.getBoundingClientRect()
+        if (!pageElement || !host || !page || !isOnScreen(pageElement, page)) {
           // A hidden page has no box to map onto; the cursor returns at the agent's next action there.
           drawn?.cursor.setVisible(false)
           return false
@@ -105,5 +106,5 @@ export function useBrowserAgentCursor(
       detach()
       removeDrawn()
     }
-  }, [browserPageId, webviewRef, getHost])
+  }, [browserPageId, pageRef, getHost])
 }

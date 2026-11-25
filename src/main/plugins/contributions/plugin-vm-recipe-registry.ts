@@ -1,8 +1,8 @@
-import type { OrcaVmRecipe } from '../../../shared/orca-yaml-hook-types'
+import type { OrcaVmRecipe } from '../../../shared/workspace-setup/orca-yaml-hook-types'
 import { parsePluginVmRecipeArtifact } from '../../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
 import { PLUGIN_VM_RECIPE_MAX_BYTES } from '../artifacts/plugin-artifact-validation'
 import { readContainedPluginArtifactText } from '../artifacts/plugin-contained-artifact'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,

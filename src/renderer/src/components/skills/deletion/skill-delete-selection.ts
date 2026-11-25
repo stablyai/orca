@@ -1,6 +1,6 @@
-import type { DiscoveredSkill } from '../../../../../shared/skills'
-import { MAX_SKILL_DELETE_BATCH } from '../../../../../shared/skill-delete-contract'
-import { skillDeletionEligibility } from '../../../../../shared/skill-deletion-eligibility'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
+import { MAX_SKILL_DELETE_BATCH } from '../../../../../shared/skills/deletion/skill-delete-contract'
+import { skillDeletionEligibility } from '../../../../../shared/skills/deletion/skill-deletion-eligibility'
 import { skillDeleteBlockReasonLabel } from './skill-delete-copy'
 import {
   addSelectableSkillResults,

@@ -1,12 +1,13 @@
 // One task row's words for every transcript surface, so desktop and mobile report a task the same way.
 
-import type { BackgroundTaskSay } from '../../../background-task-copy'
+import type { AgentListStatus } from '../../../agent-status/presentation/agent-list-status'
+import type { BackgroundTaskSay } from '../../../agent-status/presentation/background-tasks/background-task-copy'
 import {
   backgroundTaskStateReason,
   backgroundTaskStateWord,
   formatBackgroundTaskTokens,
   resolveBackgroundTaskName
-} from '../../../background-task-roster'
+} from '../../../agent-status/presentation/background-tasks/background-task-roster'
 import {
   isSettledBackgroundTaskState,
   normalizeBackgroundTaskKind,
@@ -22,6 +23,8 @@ export function nativeChatBackgroundTaskRun(
 ) {
   const kind = normalizeBackgroundTaskKind(block.kind)
   const state = normalizeBackgroundTaskState(block.state)
+  // The durable task records a settled failure as blocked.
+  const dotState: AgentListStatus = state === 'blocked' ? 'failed' : state
   // Show fixed duration only after settlement; live time belongs to the ticking strip.
   const duration =
     isSettledBackgroundTaskState(state) &&
@@ -31,7 +34,7 @@ export function nativeChatBackgroundTaskRun(
       : null
   return {
     kind,
-    state,
+    dotState,
     // Share naming with the live strip so one task cannot appear as two different tasks.
     label: resolveBackgroundTaskName({ id: block.taskId, kind, description: block.label }, say),
     status: [

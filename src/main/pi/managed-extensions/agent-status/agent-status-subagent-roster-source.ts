@@ -1,17 +1,20 @@
 // Hold Pi completion until its observed subagents finish.
 
-import type { PiAgentKind } from '../../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { HOOK_REQUEST_MAX_BYTES } from '../../../../shared/agent-hook-listener/request-body'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH
 } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 
+export const PI_NATIVE_CHAT_SUBAGENTS_STATUS_KEY = 'orca-subagents'
+
 // Build retried/coalesced posts from the roster live at delivery.
 export function getPiSubagentSnapshotSourceLines(): string[] {
   return [
     'type SubagentDetail = { agentType?: string; description?: string; startedAt: number; workflow?: boolean; parent?: string; registration?: object }',
-    'type SubagentRoster = { active: Set<string>; exited?: Set<string>; details?: Map<string, SubagentDetail>; waiting: boolean; ownsPane?: boolean; runGeneration?: number; endedRunGeneration?: number; completionPostedGeneration?: number; parked?: Map<string, Map<string, SubagentDetail>>; onEvent?: (event: unknown, forcedStatus?: string) => void; listener?: (event: unknown) => void; onRunnerExit?: (event: unknown) => void; runnerExitListener?: (event: unknown) => void; runnerExitCheck?: ReturnType<typeof setTimeout> | null; onRunnerExitSettled?: () => void }',
+    'type SubagentRoster = { active: Set<string>; exited?: Set<string>; details?: Map<string, SubagentDetail>; waiting: boolean; ownsPane?: boolean; runGeneration?: number; endedRunGeneration?: number; completionPostedGeneration?: number; parked?: Map<string, Map<string, SubagentDetail>>; onEvent?: (event: unknown, forcedStatus?: string) => void; listener?: (event: unknown) => void; onRunnerExit?: (event: unknown) => void; runnerExitListener?: (event: unknown) => void; runnerExitCheck?: ReturnType<typeof setTimeout> | null; onRunnerExitSettled?: () => void; heldTurnRepostCheck?: ReturnType<typeof setTimeout> | null; lastChildEventAt?: number }',
     // Half the host body limit also bounds roster JSON structure tokens.
     `const HOOK_BODY_BUDGET_BYTES = ${Math.floor(HOOK_REQUEST_MAX_BYTES / 2)}`,
     'const SUBAGENTS_FIELD_BYTES = Buffer.byteLength(\',"subagents":[]\')',
@@ -48,6 +51,31 @@ export function getPiSubagentSnapshotSourceLines(): string[] {
     '  }',
     '  return subagents.length > 0 ? { subagents } : {}',
     '}',
+    '',
+    // Native chat strips the hook endpoint, so its adapter reads the whole roster from this status line.
+    'let nativeChatUi: { setStatus?: (key: string, text: string | undefined) => void } | null = null',
+    'const nativeChatEndings = new Map<string, string>()',
+    "let nativeChatRosterText = ''",
+    'let nativeChatPublishQueued = false',
+    'function captureNativeChatUi(ctx): void {',
+    '  if (process.env.ORCA_STRUCTURED_SESSION && !isOmpRuntime()) nativeChatUi = ctx?.ui ?? null',
+    '}',
+    // An exited runner leaves as unknown; its own later completion refines that ending.
+    'function nativeChatRosterChanged(): void {',
+    '  if (!nativeChatUi || nativeChatPublishQueued) return',
+    '  nativeChatPublishQueued = true',
+    '  void Promise.resolve().then(() => {',
+    '    nativeChatPublishQueued = false',
+    '    const ended = nativeChatEndings.size > 0 ? { ended: Object.fromEntries(nativeChatEndings) } : {}',
+    '    nativeChatEndings.clear()',
+    '    const text = JSON.stringify({ subagents: [], ...subagentPayload(Infinity), ...ended })',
+    '    if (text === nativeChatRosterText) return',
+    '    nativeChatRosterText = text',
+    '    try {',
+    `      nativeChatUi?.setStatus?.('${PI_NATIVE_CHAT_SUBAGENTS_STATUS_KEY}', text)`,
+    '    } catch {}',
+    '  })',
+    '}',
     ''
   ]
 }
@@ -76,10 +104,12 @@ export function getPiSubagentRosterSetupSourceLines(kind: PiAgentKind): string[]
     '  const registration = {}',
     '  function resetSubagentRoster(): void {',
     '    clearRunnerExitCheck()',
+    '    clearHeldTurnRepostCheck()',
     '    lifecycleState.active.clear()',
     '    lifecycleState.exited?.clear()',
     '    subagentDetails.clear()',
     '    lifecycleState.waiting = false',
+    '    nativeChatRosterChanged()',
     '  }',
     // Replaced Pi registrations lose their subscriptions; subscribe once per bus.
     '  if (ownsPaneRoster && piEventBus?.on && !piEventBus.__orcaPiSubagentsHeard && !busRoster?.listener) {',
@@ -99,14 +129,39 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
   return [
     // Runner exit can precede self-reported completion by ~150ms; allow that path and its wake turn first.
     '  const RUNNER_EXIT_GRACE_MS = 2000',
+    // Re-post well inside the host freshness window, so live children never look silent.
+    `  const HELD_TURN_REPOST_INTERVAL_MS = ${AGENT_STATUS_STALE_AFTER_MS / 3}`,
+    // Stop restating a hold whose children report nothing for a day (pi-subagents' stale-run bound); host freshness then decays it.
+    '  const HELD_TURN_MAX_QUIET_MS = 24 * 60 * 60 * 1000',
     '  function clearRunnerExitCheck(): void {',
     '    if (lifecycleState.runnerExitCheck != null) clearTimeout(lifecycleState.runnerExitCheck)',
     '    lifecycleState.runnerExitCheck = null',
+    '  }',
+    '  function clearHeldTurnRepostCheck(): void {',
+    '    if (lifecycleState.heldTurnRepostCheck != null) clearTimeout(lifecycleState.heldTurnRepostCheck)',
+    '    lifecycleState.heldTurnRepostCheck = null',
+    '  }',
+    // A child-held turn posts nothing of its own, so keep restating it with the live roster.
+    '  function syncHeldTurnRepostCheck(): void {',
+    '    if (!isHeldByChildren()) {',
+    '      clearHeldTurnRepostCheck()',
+    '      return',
+    '    }',
+    '    if (lifecycleState.heldTurnRepostCheck != null) return',
+    '    lifecycleState.heldTurnRepostCheck = setTimeout(() => {',
+    '      lifecycleState.heldTurnRepostCheck = null',
+    '      if (Date.now() - (lifecycleState.lastChildEventAt ??= Date.now()) >= HELD_TURN_MAX_QUIET_MS) return',
+    '      if (lifecycleState.waiting) postSubagentsUpdate()',
+    '      syncHeldTurnRepostCheck()',
+    '    }, HELD_TURN_REPOST_INTERVAL_MS)',
+    "    if (typeof lifecycleState.heldTurnRepostCheck.unref === 'function') lifecycleState.heldTurnRepostCheck.unref()",
     '  }',
     '  function forgetSubagent(id: string): void {',
     '    lifecycleState.active.delete(id)',
     '    lifecycleState.exited?.delete(id)',
     '    subagentDetails.delete(id)',
+    '    nativeChatRosterChanged()',
+    '    syncHeldTurnRepostCheck()',
     '  }',
     // Child exit may have no lead event; queued posts already read the live roster.
     '  function postSubagentsUpdate(): void {',
@@ -145,25 +200,31 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     "  const readLabel = (value: unknown): string | undefined => typeof value === 'string' && value.trim() ? value : undefined",
     '  lifecycleState.onEvent = (event: unknown, forcedStatus?: string): void => {',
     "    if (!event || typeof event !== 'object') return",
-    '    const record = event as { id?: unknown; runId?: unknown; agent?: unknown; description?: unknown; workflowKey?: unknown; mode?: unknown; parentWorkflowRunId?: unknown }',
+    '    const record = event as { id?: unknown; runId?: unknown; agent?: unknown; description?: unknown; workflowKey?: unknown; mode?: unknown; parentWorkflowRunId?: unknown; success?: unknown; state?: unknown }',
     "    const id = typeof record.id === 'string' && record.id ? record.id : typeof record.runId === 'string' ? record.runId : ''",
     '    const status = forcedStatus ?? (event as { status?: unknown }).status',
     '    if (!id) return',
     '    if (isOmpRuntime() && !lifecycleState.ownsPane) return',
+    '    lifecycleState.lastChildEventAt = Date.now()',
     "    if (status === 'started') {",
     '      lifecycleState.active.add(id)',
     // Use labels/step keys because pi-subagents redacts task prompts; keys and OMP's named ids distinguish same-agent siblings.
     "      if (!subagentDetails.has(id)) subagentDetails.set(id, { agentType: readLabel(record.agent), description: readLabel(record.description) ?? readLabel(record.workflowKey) ?? (isOmpRuntime() ? id : undefined), startedAt: Date.now(), workflow: record.mode === 'workflow', parent: readLabel(record.parentWorkflowRunId), registration })",
+    '      nativeChatRosterChanged()',
+    '      syncHeldTurnRepostCheck()',
     // Pi reopens only posted completions; earlier children must preserve the idle check.
     '      if (!isTurnInFlight() && (isOmpRuntime() || lifecycleState.runGeneration === 0 || lifecycleState.completionPostedGeneration === lifecycleState.runGeneration)) {',
     '        lifecycleState.waiting = true',
     '        lifecycleState.completionPostedGeneration = -1',
     '      }',
-    "      post('agent_start')",
+    // Only pi-subagents async starts are known detached work; an OMP lifecycle start may be a child of the cancelled turn.
+    "      post('agent_start', forcedStatus === 'started' ? { subagent_started: true } : {})",
     '      return',
     '    }',
     "    if (status !== 'completed' && status !== 'failed' && status !== 'aborted') return",
     '    let wasVisible = isVisibleSubagent(lifecycleState, id)',
+    // pi-subagents reports failed and stopped async children as complete with success false; an exited runner may already be pruned.
+    "    if (nativeChatUi) nativeChatEndings.set(id, status !== 'completed' || record.success !== false ? status : record.state === 'stopped' || record.state === 'paused' ? 'aborted' : 'failed')",
     '    forgetSubagent(id)',
     // Reload loses old runner-exit delivery; finishing their parent must retire those children.
     '    for (const [childId, detail] of subagentDetails) {',
@@ -181,9 +242,11 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '  lifecycleState.onRunnerExit = (event: unknown): void => {',
     "    const runId = event && typeof event === 'object' ? (event as { runId?: unknown }).runId : undefined",
     "    if (typeof runId !== 'string' || !lifecycleState.active.has(runId)) return",
+    '    lifecycleState.lastChildEventAt = Date.now()',
     '    if (!lifecycleState.exited) lifecycleState.exited = new Set<string>()',
     '    const wasVisible = isVisibleSubagent(lifecycleState, runId)',
     '    lifecycleState.exited.add(runId)',
+    '    nativeChatRosterChanged()',
     '    if (wasVisible) postSubagentsUpdate()',
     '    if (!lifecycleState.waiting) return',
     '    clearRunnerExitCheck()',

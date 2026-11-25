@@ -11,7 +11,7 @@ import { CrewRowMenu } from './CrewRowMenu'
 import { CrewAgentIcons } from './CrewAgentIcons'
 import type { CrewRowLook } from './CrewAgentIcons'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function IconButton({
   label,
@@ -100,11 +100,9 @@ export const CrewRowView = memo(function CrewRowView({
       </button>
       <div className="flex shrink-0 items-center">
         <IconButton
-          label={t(
-            'components.orchestrationCrew.showDetails',
-            "Show {{name}}'s task and latest message",
-            { name: row.label }
-          )}
+          label={t('components.orchestrationCrew.showDetails', "Show {{name}}'s task and reply", {
+            name: row.label
+          })}
           aria-expanded={expanded}
           onClick={toggle}
         >

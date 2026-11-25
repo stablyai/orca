@@ -1,5 +1,5 @@
 import * as path from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 
 // Minimal checkStat can miss same-size writes preserving whole-second mtime; recheck watcher paths with default stat.
 

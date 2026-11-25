@@ -11,7 +11,7 @@ import type {
   SshTargetAddResult,
   SshTargetCreateInput,
   SshTargetUpdateInput
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { FilesystemPathFlavor } from '../../../shared/file-access/filesystem-path-flavor'
 
 export type SshApi = {
@@ -43,6 +43,11 @@ export type SshApi = {
     remotePort: number
     label?: string
   }) => Promise<PortForwardEntry>
+  /** Desktop only: the forward of the host's localhost port, started on the same port here when free. */
+  ensurePortForward?: (args: {
+    targetId: string
+    remotePort: number
+  }) => Promise<{ entry: PortForwardEntry; created: boolean }>
   updatePortForward: (args: {
     id: string
     targetId: string

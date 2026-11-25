@@ -1,5 +1,5 @@
 import { Platform } from 'react-native'
-import { z } from 'zod'
+import * as z from 'zod'
 import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
 import {
   deletePairingKeychainItem,

@@ -7,7 +7,7 @@ import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { OpenFileOptions } from '@/store/slices/editor/types/editor-files-slice'
 import {

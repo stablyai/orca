@@ -1,5 +1,5 @@
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   type TaskSourceContext,
   getTaskSourceCacheScope,
@@ -8,7 +8,7 @@ import {
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   getWorkspaceAttachmentKey,
   getWorkspaceAttachmentUrlScope
@@ -34,6 +34,8 @@ export type WorkspaceReferenceDetailsMap = Readonly<
 >
 export type WorkspaceReferenceRequest = {
   admissionTier?: 'interactive' | 'status' | 'background'
+  /** A refresh timer's read: no use of an idle WSL host. */
+  background?: boolean
   knownProvider?: HostedReviewProvider
   key: string
   item: WorkspaceAttachment

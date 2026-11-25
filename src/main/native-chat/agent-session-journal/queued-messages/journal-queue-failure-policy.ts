@@ -1,5 +1,5 @@
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { isAgentSessionContextClear } from '../../../../shared/agent-session/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'

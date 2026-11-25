@@ -4,6 +4,10 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import TabBar from './TabBar'
 import type { TabBarProps } from './tab-bar-props'
+import {
+  buildBrowserPage,
+  buildWorkspaceFromPage
+} from '../../store/slices/browser/pages/browser-page-records'
 
 const WORKSPACE_ID = 'tab-width-fixture'
 const TITLES = [
@@ -20,16 +24,20 @@ function TabWidthFixture({
   browserTabs,
   clientHostedBrowserRows,
   editorFiles,
-  tabBarOrder
+  tabBarOrder,
+  initialActiveIndex = 0,
+  isGroupFocused
 }: {
   count: number
   titles?: string[]
   agentTabs?: boolean
+  initialActiveIndex?: number
+  isGroupFocused?: boolean
 } & Pick<
   TabBarProps,
   'browserTabs' | 'clientHostedBrowserRows' | 'editorFiles' | 'tabBarOrder'
 >): React.JSX.Element {
-  const [activeTabId, setActiveTabId] = useState('tab-0')
+  const [activeTabId, setActiveTabId] = useState(`tab-${initialActiveIndex}`)
   const tabs: TerminalTab[] = Array.from({ length: count }, (_, index) => ({
     id: `tab-${index}`,
     worktreeId: WORKSPACE_ID,
@@ -51,6 +59,7 @@ function TabWidthFixture({
           activeTabType="terminal"
           worktreeId={WORKSPACE_ID}
           groupId="tab-width-group"
+          isGroupFocused={isGroupFocused}
           browserTabs={browserTabs}
           clientHostedBrowserRows={clientHostedBrowserRows}
           editorFiles={editorFiles}
@@ -159,6 +168,42 @@ export const singleBrowser = defineFixture({
           loadError: null,
           createdAt: 0
         }
+      ]}
+    />
+  )
+})
+
+const audioPreview = buildBrowserPage(
+  'audio-preview',
+  WORKSPACE_ID,
+  '',
+  'HTML preview',
+  undefined,
+  'preview-page',
+  { kind: 'workspace-doc', worktreeId: WORKSPACE_ID, filePath: '/docs/audio.html' }
+)
+const audioBrowser = buildBrowserPage(
+  'audio-browser',
+  WORKSPACE_ID,
+  'https://example.com',
+  'Browser page',
+  undefined,
+  'browser-page'
+)
+
+export const documentAudioProtection = defineFixture({
+  width: 760,
+  store: {
+    browserPagesByWorkspace: { 'audio-preview': [audioPreview], 'audio-browser': [audioBrowser] },
+    browserAudiblePageIds: { 'browser-page': true },
+    browserAudioMutedTabIds: {}
+  },
+  render: () => (
+    <TabWidthFixture
+      count={0}
+      browserTabs={[
+        buildWorkspaceFromPage('audio-preview', WORKSPACE_ID, audioPreview, [audioPreview.id]),
+        buildWorkspaceFromPage('audio-browser', WORKSPACE_ID, audioBrowser, [audioBrowser.id])
       ]}
     />
   )
@@ -290,4 +335,71 @@ function AgentIdentityFixture(): React.JSX.Element {
 export const agentIdentityChanges = defineFixture({
   width: 900,
   render: () => <AgentIdentityFixture />
+})
+
+// Narrow-pane condensing: 6 tabs, the 4th active, at the widths the option-D design walks through.
+const NARROW_TITLES = [
+  'Build server',
+  'Release notes draft',
+  'Test runner',
+  'API docs review',
+  'Migration plan',
+  'Shell'
+]
+
+// Ownership is read from the store when a +N pick restores focus.
+const NARROW_STRIP_STORE = {
+  activeWorktreeId: WORKSPACE_ID,
+  activeGroupIdByWorktree: { [WORKSPACE_ID]: 'tab-width-group' }
+}
+
+function NarrowStripFixture(): React.JSX.Element {
+  return <TabWidthFixture count={6} titles={NARROW_TITLES} initialActiveIndex={3} isGroupFocused />
+}
+
+function narrowStrip(width: number): ReturnType<typeof defineFixture> {
+  return defineFixture({ width, store: NARROW_STRIP_STORE, render: () => <NarrowStripFixture /> })
+}
+
+export const narrow640 = narrowStrip(640)
+export const narrow440 = narrowStrip(440)
+export const narrow330 = narrowStrip(330)
+export const narrow280 = narrowStrip(280)
+export const narrow230 = narrowStrip(230)
+export const narrow205 = narrowStrip(205)
+export const narrowChipOnly = narrowStrip(120)
+
+async function nextFrames(count: number): Promise<void> {
+  for (let index = 0; index < count; index++) {
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+  }
+}
+
+/** Opens the "+N" list and moves keyboard focus one row, so the current row and the focused row differ. */
+async function openOverflowList(frame: HTMLElement): Promise<void> {
+  await nextFrames(4)
+  const chip = frame.querySelector('[data-tab-strip-overflow-chip]')
+  if (!chip) {
+    throw new Error('Missing tab overflow chip')
+  }
+  chip.dispatchEvent(
+    new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
+  )
+  await nextFrames(4)
+  const focused = document.activeElement
+  if (!focused?.closest('[role="menu"][data-state="open"]')) {
+    throw new Error('Tab overflow menu did not open and receive focus')
+  }
+  focused.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }))
+  await nextFrames(2)
+  if (!document.activeElement?.matches('[data-tab-strip-list-entry]:not([aria-current="true"])')) {
+    throw new Error('Keyboard focus did not move to a different tab')
+  }
+}
+
+export const narrowOverflowListOpen = defineFixture({
+  width: 280,
+  store: NARROW_STRIP_STORE,
+  render: () => <NarrowStripFixture />,
+  interact: openOverflowList
 })

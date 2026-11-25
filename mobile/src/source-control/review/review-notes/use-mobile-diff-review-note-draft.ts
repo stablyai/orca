@@ -1,5 +1,5 @@
 import { useCallback, useState, type SetStateAction } from 'react'
-import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
+import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import { useDurableDraftField } from '../../../drafts/durable-draft-fields'
 import type { ReviewSheet, ReviewSheetIntents } from '../diff-actions/mobile-diff-review-sheets'
 

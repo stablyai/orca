@@ -3,8 +3,8 @@ import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime
 import { exchangeRemotePairingTicket } from '../../../shared/remote-runtime/pairing/remote-pairing-ticket-exchange'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeClientError } from '../connection/types'
 
 // `environment add` works offline; a short probe keeps an unreachable host from stalling it.
@@ -26,6 +26,13 @@ export async function exchangeCliPairingCode(
   if (!offer) {
     // The store reports the invalid code.
     return pairingCode
+  }
+  // A phone's pairing is the phone app's alone; the host takes its calls as the person's.
+  if (offer.scope === 'mobile') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'This link grants mobile-only access. Generate a link for another Orca client.'
+    )
   }
   let status: RuntimeRpcResponse<RuntimeStatus>
   try {

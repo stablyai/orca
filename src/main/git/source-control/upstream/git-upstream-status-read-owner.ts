@@ -3,7 +3,7 @@ import type { GitPushTarget } from '../../../../shared/worktree/types'
 import {
   InFlightPromiseDedupe,
   stableInFlightKey
-} from '../../../../shared/in-flight-promise-dedupe'
+} from '../../../../shared/concurrency/in-flight-promise-dedupe'
 
 /** Fix key order for JSON.stringify and make new push-target fields fail the exhaustive type check. */
 function pushTargetKeyParts(pushTarget: GitPushTarget): readonly unknown[] {

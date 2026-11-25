@@ -1,7 +1,8 @@
 import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
+import { useLocalBrowserPageSiteDisplaySource } from './toolbar/browser-page-site-display-source'
+import { applyBrowserViewportPreset } from './viewport/browser-viewport-preset-apply'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store/index'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
 import BrowserAddressBar from './address-bar/BrowserAddressBar'
@@ -18,9 +19,8 @@ import {
   BrowserPageStateChips
 } from './address-bar/browser-address-chips'
 import { useBrowserExtensionToolbar } from './extensions/use-browser-extension-toolbar'
-import { useBrowserExtensionsTour } from '../use-browser-extensions-tour'
+import { useBrowserExtensionsTour } from './extensions/use-browser-extensions-tour'
 import { SshEgressIndicator } from './feedback/browser-egress-indicator'
-import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import {
   getShareableBrowserArtifactFile,
   readBrowserHtmlArtifactRequest
@@ -29,19 +29,20 @@ import {
   canOpenBrowserFileInWorkspaceEditor,
   openBrowserFileSource
 } from '../navigate/browser-file-editor-open'
-import type { GrabModeHook } from '../annotate/grab/useGrabMode'
 import type {
   BrowserPageConversionOrigin,
   BrowserViewportPresetId
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
 } from '@/lib/browser/history/browser-page-conversion-history'
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
-import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
-import type { BrowserChromeNoteActions } from './toolbar/browser-annotate-split-button'
+import type {
+  BrowserChromeElementTools,
+  BrowserChromeNoteActions
+} from './toolbar/browser-annotate-tool-button'
 
 /** Binds the shared browser chrome to a browsing page: an editable address bar and session tools. */
 export function BrowserPageToolbar({
@@ -71,15 +72,12 @@ export function BrowserPageToolbar({
   navigateToUrl,
   addressBarInputRef,
   dismissAddressBarSuggestionsRef,
-  grab,
-  grabIntent,
-  startGrabIntent,
+  elementTools,
+  grabIdle,
   isBlankTab,
   markupIsActive,
   markupStart,
   markupCancel,
-  grabElementShortcut,
-  browserAnnotationsLength,
   notes,
   onOpenFind,
   shareableArtifactFile,
@@ -114,25 +112,21 @@ export function BrowserPageToolbar({
   navigateToUrl: (url: string) => void
   addressBarInputRef: RefObject<HTMLInputElement | null>
   dismissAddressBarSuggestionsRef: RefObject<(() => void) | null>
-  grab: GrabModeHook
-  grabIntent: GrabIntent
-  startGrabIntent: (intent: GrabIntent) => void
+  elementTools: BrowserChromeElementTools
+  grabIdle: boolean
   isBlankTab: boolean
   markupIsActive: boolean
   markupStart: () => Promise<void>
   markupCancel: () => void
-  grabElementShortcut: string
-  browserAnnotationsLength: number
   notes: BrowserChromeNoteActions
   onOpenFind: () => void
   shareableArtifactFile: { filePath: string } | null
   currentBrowserUrl: string
   externalUrl: string | null
 }): React.JSX.Element {
-  const annotateElementShortcut = useShortcutLabel('browser.annotateElement')
-  const browserTourStep = useAppStore((state) =>
-    state.activeContextualTourId === 'browser' ? state.activeContextualTourStepIndex : null
-  )
+  const siteDisplaySource = useLocalBrowserPageSiteDisplaySource(browserPageId)
+  const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
+    applyBrowserViewportPreset(browserPageId, nextId)
   const localHtmlFilePath = getShareableBrowserArtifactFile(currentBrowserUrl)?.filePath ?? null
   // Why the URL check first: every other page skips the workspace-owner lookup on each store write.
   const canOpenSourceFile = useAppStore(
@@ -157,7 +151,6 @@ export function BrowserPageToolbar({
     <BrowserChromeToolbar
       closeTabOwner={{ worktreeId, browserPageId }}
       showTourAnchors
-      pinAnnotateLabel={browserTourStep === 0}
       controls={{
         canGoBack: canGoBack || Boolean(convertedFrom),
         canGoForward: canGoForward || Boolean(convertedTo),
@@ -201,8 +194,10 @@ export function BrowserPageToolbar({
               <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
               <BrowserPageStateChips
                 browserPageId={browserPageId}
+                siteDisplaySource={siteDisplaySource}
                 url={currentBrowserUrl}
                 viewportPresetId={viewportPresetId}
+                onApplyViewportPreset={applyViewportPreset}
                 isActive={isActive}
               />
               {openSourceFile ? <BrowserOpenSourceFileButton onOpen={openSourceFile} /> : null}
@@ -245,17 +240,10 @@ export function BrowserPageToolbar({
           />
         ))
       }
-      elementTools={{
-        activeIntent: grab.state !== 'idle' ? grabIntent : null,
-        onStartIntent: startGrabIntent,
-        disabled: isBlankTab || markupIsActive,
-        grabShortcutLabel: grabElementShortcut,
-        annotateShortcutLabel: annotateElementShortcut,
-        annotationCount: browserAnnotationsLength
-      }}
+      elementTools={elementTools}
       markup={{
         active: markupIsActive,
-        disabled: isBlankTab || grab.state !== 'idle',
+        disabled: isBlankTab || !grabIdle,
         onToggle: () => (markupIsActive ? markupCancel() : void markupStart()),
         canShowDiscoveryHint: isActive
       }}
@@ -265,9 +253,11 @@ export function BrowserPageToolbar({
           extensionDiscoveryTarget={extensionDiscoveryTarget}
           currentProfileId={sessionProfileId}
           workspaceId={workspaceId}
+          worktreeId={worktreeId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
-          onDestroyWebview={() => destroyPersistentWebview(browserPageId)}
+          onApplyViewportPreset={applyViewportPreset}
+          siteDisplaySource={siteDisplaySource}
           isActive={isActive}
           isBlankTab={isBlankTab}
           pageActions={{

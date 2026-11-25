@@ -1,5 +1,5 @@
 import type { CliErrorContext } from './cli-error-context'
-import { computerUseErrorRecoveryData } from '../../shared/computer-use-error-recovery'
+import { computerUseErrorRecoveryData } from '../../shared/computer/computer-use-error-recovery'
 import {
   matchAutomationOwnerConflict,
   stripAutomationOwnerConflictCode
@@ -10,19 +10,22 @@ import {
   ambiguousWorkspaceChoices,
   selectorAmbiguityRecovery
 } from '../workspace-selection/selector-ambiguity-recovery'
-import type { RuntimeRpcFailure } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcFailure } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { readableWslDistroCliRefusal } from '../hosts/wsl-distro-cli-refusal'
+import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
+import { linearNotConnectedRecovery } from '../linear/linear-not-connected-recovery'
 
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
 
-const STALE_HANDLE_SERVER_HINT =
-  'Terminal handles belong to the Orca server that issued them. If this handle came from a paired server (for example `orca terminal list --environment <server>`), pass the same --environment <server> to this command.'
+function staleHandleServerHint(): string {
+  return `Terminal handles belong to the Orca server that issued them. If this handle came from a paired server (for example \`${resolveInvokedCliCommand()} terminal list --environment <server>\`), pass the same --environment <server> to this command.`
+}
 
 function contextRecovery(error: unknown, context: CliErrorContext): ContextRecovery | undefined {
   const code = cliErrorCode(error)
   if (code === 'selector_not_found' && context.worktreeSelector) {
-    return worktreeSelectorRecovery(context.worktreeSelector)
+    return worktreeSelectorRecovery(context.worktreeSelector, errorData(error))
   }
   // No selector can name one of two folders sharing an id; only the error's repair step applies.
   if (code === 'selector_ambiguous' && !isDuplicateFolderIdData(errorData(error))) {
@@ -32,13 +35,16 @@ function contextRecovery(error: unknown, context: CliErrorContext): ContextRecov
       remoteServerSelected: context.remoteServerSelected
     })
   }
+  if (code === 'linear_not_connected') {
+    return linearNotConnectedRecovery(context.remoteServer)
+  }
   // A remote handle sent locally looks stale rather than missing a flag.
   if (
     code === 'terminal_handle_stale' &&
     context.commandPath?.[0] === 'terminal' &&
     context.remoteServerSelected === false
   ) {
-    return { nextSteps: [STALE_HANDLE_SERVER_HINT] }
+    return { nextSteps: [staleHandleServerHint()] }
   }
   return undefined
 }
@@ -130,10 +136,11 @@ function formatRuntimeUnavailableError(message: string, error: RuntimeClientErro
   if (nextSteps.length > 0) {
     return formatMessageWithNextSteps(message, nextSteps)
   }
+  const command = resolveInvokedCliCommand()
   if (error instanceof RuntimeRpcFailureError) {
-    return `${message}\nOrca is running but not ready for this yet. Wait a few seconds and retry; do not run 'orca open'. If it keeps failing and 'orca status --json' shows app.desktopWindowStatus "openable", Orca's window is closed: ask the user to reopen it.`
+    return `${message}\nOrca is running but not ready for this yet. Wait a few seconds and retry; do not run '${command} open'. If it keeps failing and '${command} status --json' shows app.desktopWindowStatus "openable", Orca's window is closed: ask the user to reopen it.`
   }
-  return `${message}\nOrca is not running. Run 'orca open' first.`
+  return `${message}\nOrca is not running. Run '${command} open' first.`
 }
 
 // Streaming commands print one JSON object per line with --json, so their failure is one line too.

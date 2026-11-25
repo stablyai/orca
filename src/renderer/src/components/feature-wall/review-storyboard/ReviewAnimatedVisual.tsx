@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import type { ReviewStepId } from '../../../../../shared/review-steps'
+import type { ReviewStepId } from '../../../../../shared/feature-education/explore/review-steps'
 import { PANEL_HEIGHT, PANEL_WIDTH } from './review-migration-scenario'
 import { ReviewNotesAnimatedVisual } from './ReviewNotesAnimatedVisual'
 import { ReviewPRViewAnimatedVisual } from './ReviewPRViewAnimatedVisual'

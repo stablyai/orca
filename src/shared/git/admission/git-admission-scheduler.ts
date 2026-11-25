@@ -1,4 +1,4 @@
-import { uncRouteKey } from '../../wsl-paths'
+import { uncRouteKey } from '../../file-access/wsl-paths'
 import { classifyGitCommand } from '../commands/git-command-classification'
 import { GitAdmissionWaiterQueue } from './git-admission-waiter-queue'
 import {

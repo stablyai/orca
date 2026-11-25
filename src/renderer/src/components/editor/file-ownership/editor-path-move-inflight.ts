@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison as normalizeAbsolutePathForComparison } from '../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison as normalizeAbsolutePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 
 // Track source-root delete echoes until rename and rekey settle, without a TTL that could race slow SSH moves. The coordinator verifies destinations.
 
@@ -65,12 +65,4 @@ export function isActiveMoveSourcePath(
     }
   }
   return false
-}
-
-export function __clearEditorPathMovesForTests(): void {
-  operations.clear()
-}
-
-export function __activeEditorPathMoveCountForTests(): number {
-  return operations.size
 }

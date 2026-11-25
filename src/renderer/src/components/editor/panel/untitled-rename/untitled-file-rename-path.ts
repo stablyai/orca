@@ -19,3 +19,11 @@ export function getUntitledFileRoot(file: UntitledPathFile, worktreePath?: strin
 
   return file.filePath.slice(0, rootLength)
 }
+
+// Leftmost dotted run keeps a compound plugin suffix such as `.excalidraw.svg` whole.
+const UNTITLED_EXTENSION_PATTERN = /(?:\.[^./\\\s]+)+$/
+
+export function splitUntitledFileName(fileName: string): { stem: string; extension: string } {
+  const extension = UNTITLED_EXTENSION_PATTERN.exec(fileName)?.[0] ?? ''
+  return { stem: fileName.slice(0, fileName.length - extension.length), extension }
+}

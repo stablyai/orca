@@ -1,6 +1,6 @@
 import React from 'react'
 import { Search, X } from 'lucide-react'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 import { formatKeybindingList } from '../../../../../shared/keybindings/formatting'
 import type { KeybindingDefinition } from '../../../../../shared/keybindings/types'
 import { cn } from '../../../lib/class-names'

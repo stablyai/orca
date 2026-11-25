@@ -1,4 +1,4 @@
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   classifyCodexRateLimitWindows,
   CODEX_SESSION_WINDOW_MINUTES,
@@ -29,6 +29,7 @@ export function mapCodexRpcRateLimits(wrapper: RpcRateLimitsResponse): ProviderR
   // Why: workspace seats can report only a spend cap; like Claude's spend limit, show it only when no 5h/7d window exists.
   const monthly =
     session || weekly ? null : mapCodexIndividualLimitWindow(wrapper?.rateLimits?.individualLimit)
+  const planType = wrapper?.rateLimits?.planType
   return {
     provider: 'codex',
     session,
@@ -36,6 +37,7 @@ export function mapCodexRpcRateLimits(wrapper: RpcRateLimitsResponse): ProviderR
     monthly,
     ...(credits !== undefined ? { rateLimitResetCredits: credits } : {}),
     ...(extraUsage ? { extraUsage } : {}),
+    ...(typeof planType === 'string' ? { planType } : {}),
     updatedAt: Date.now(),
     error: null,
     status: 'ok'

@@ -1,5 +1,5 @@
 import type { NativeChatMessage } from '../../native-chat-types'
-import { NATIVE_CHAT_STREAMING_ID } from '../../native-chat-streaming'
+import { NATIVE_CHAT_STREAMING_ID } from '../streaming/native-chat-streaming'
 import {
   isLaunchPromptMessageId,
   isPendingMessageId

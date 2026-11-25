@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent } from 'react'
 import {
   watchDictationSilence,
   type StopAfterSilenceSeconds
-} from '../../../src/shared/dictation-silence-stop'
+} from '../../../src/shared/speech/dictation/dictation-silence-stop'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import { nativeChatDictationCopy } from './mobile-session-native-chat-dictation-copy'
 

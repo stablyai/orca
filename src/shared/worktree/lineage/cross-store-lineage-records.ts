@@ -1,4 +1,4 @@
-import { isWorkspaceKey, type WorkspaceKey } from '../../workspace-scope'
+import { isWorkspaceKey, type WorkspaceKey } from '../../workspace/identity/workspace-scope'
 import type { CrossStoreWorkspaceLineage } from '../lineage-types'
 
 const ORIGINS: readonly unknown[] = ['orchestration', 'cli', 'manual']

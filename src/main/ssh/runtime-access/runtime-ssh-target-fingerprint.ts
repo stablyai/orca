@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 export function fingerprintRuntimeSshTarget(target: SshTarget): string {
   return createHash('sha256')

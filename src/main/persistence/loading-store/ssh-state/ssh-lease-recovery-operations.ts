@@ -1,6 +1,6 @@
 import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
-import type { SshPendingPtyKill } from '../../../../shared/ssh-pending-pty-kill'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
+import type { SshPendingPtyKill } from '../../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { PtyRetirementEvidence } from '../../../pty/process-retirement/pty-exit-proof'
 import {
   getSshRemotePtyLeases as getSshRemotePtyLeasesOperation,

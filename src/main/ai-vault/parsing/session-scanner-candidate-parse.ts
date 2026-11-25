@@ -5,7 +5,7 @@ import {
   type SessionFileChoice,
   type SessionParseResult
 } from '../session-scanner-types'
-import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import { isTextTaskRequestSession } from './text-task-request-sessions'
 import { candidateFileTime } from '../scanners/antigravity/antigravity-transcript-candidates'
 import {
@@ -16,7 +16,7 @@ import {
   type AiVaultSession
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { aiVaultScanIssueText } from '../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { ScannedSessionCollection } from './session-root-dedup'
 import type { AntigravityWorkspaceResolver } from '../scanners/antigravity/session-scanner-antigravity-history'
 import {

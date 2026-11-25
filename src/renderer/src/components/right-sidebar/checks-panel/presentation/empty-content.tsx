@@ -1,7 +1,7 @@
 import { githubCreationImageUploadAddress } from '@/components/github/github-creation-image-upload-address'
 import React from 'react'
 import { Button } from '@/components/ui/button'
-import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import { CreateHostedReviewComposer } from '../../hosted-review/creation/CreateHostedReviewComposer'
 import {
   getChecksPanelReviewState,
@@ -15,7 +15,7 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 
 export function ChecksPanelEmptyContent({
   model

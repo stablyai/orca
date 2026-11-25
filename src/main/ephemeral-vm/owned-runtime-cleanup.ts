@@ -2,10 +2,10 @@ import type { Store } from '../persistence/loading-store/store'
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
-} from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { ephemeralVmFailureFromError } from '../../shared/ephemeral-vm-failure-copy'
-import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import { ephemeralVmFailureFromError } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
+import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/catalog/runtime-environment-removal-cleanup'
 import { releaseEphemeralVmRuntimeEnvironments } from './runtime-environment-release'

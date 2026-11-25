@@ -1,6 +1,3 @@
-import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import { interactivePromptLabel } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
-import { sayNativeChatApprovalTranslated } from '../../native-chat/prompts/native-chat-interactive-prompt'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { AppState } from '@/store/types'
 import {
@@ -8,25 +5,11 @@ import {
   type DashboardCard,
   type DashboardSnapshot,
   type DashboardWorkspace
-} from '../../../../../shared/dashboard-snapshot'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
-import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import {
-  resolveDashboardCardTerminalInput,
-  type DashboardCardTerminalInputState
-} from './dashboard-card-terminal-input'
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
+import type { DashboardCardTerminalInputState } from './dashboard-card-terminal-input'
 import { readDashboardClientHost } from './dashboard-client-host'
-import { dashboardCardParentPaneKey } from '../rows/agent-row-lineage'
-import { lastEnteredDoneAt } from '../rows/agent-finished-timestamp'
 import { selectTerminalLayoutsForWorktree } from '../../sidebar/workspace-card/activity/worktree-agent-row-selectors'
-import '../../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
-import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
-import {
-  finishWorktreeAgentRowsCachePass,
-  selectWorktreeAgentRowsCached,
-  startWorktreeAgentRowsCachePass,
-  type WorktreeAgentRowsCache
-} from '../rows/worktree-agent-rows-cache'
 import { selectRuntimePaneTitlesForWorktree } from '../../sidebar/workspace-card/activity/worktree-card-status-inputs'
 import {
   resolveDashboardCardContext,
@@ -34,20 +17,21 @@ import {
 } from './dashboard-card-context'
 import {
   collectActiveDashboardWorkspaces,
-  dashboardCardMapWorkspaceMetadata
+  dashboardCardMapWorkspaceMetadata,
+  type ActiveDashboardWorkspace
 } from './dashboard-snapshot-workspaces'
-import {
-  boundedLabel,
-  boundedLabelOrUndefined,
-  nonEmpty,
-  rowConversationName,
-  rowTask
-} from './dashboard-card-labels'
+import { boundedLabel } from './dashboard-card-labels'
+import { buildDashboardSnapshotCard } from './dashboard-snapshot-card'
+import { replaceDashboardCards } from './dashboard-card-changes'
 import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
 import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
-import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
-import { dashboardRowBucketProjection, readAgentRowTurnRecords } from '../rows/dashboard-row-bucket'
 import type { Translate } from '@/i18n/use-translate'
+import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/collections/structural-value-equality'
+import {
+  dashboardSnapshotReuseInputs,
+  type DashboardSnapshotReuse,
+  type DashboardWorkspaceBuild
+} from './dashboard-snapshot-reuse'
 
 /** Keep builder inputs as a Pick so tests need only construct the store slices read here. */
 export type DashboardSnapshotState = Pick<
@@ -86,60 +70,79 @@ export function buildDashboardSnapshot(
   options: {
     includeCardDetails?: boolean
     includeFilterOptions?: boolean
-    /** Cache only row derivation; review/host/status inputs still require fresh card assembly. */
-    rowsCache?: WorktreeAgentRowsCache
-    /** Freshness token for rowsCache (agentStatusEpoch); required for the cache to be safe. */
-    rowsGeneration?: unknown
+    reuse?: DashboardSnapshotReuse
   } = {},
   t?: Translate
 ): DashboardSnapshot {
-  const cards: DashboardCard[] = []
+  const reuse = options.reuse
+  const projection = state.agentStatusByPaneKey.projection
+  const clientHost = readDashboardClientHost()
+  const inputs = [
+    ...dashboardSnapshotReuseInputs(state),
+    options.includeCardDetails,
+    options.includeFilterOptions,
+    t,
+    clientHost.platform,
+    clientHost.userAgent,
+    clientHost.osRelease
+  ]
+  const statusOnly =
+    reuse !== undefined &&
+    reuse.projection === projection &&
+    inputs.length === reuse.inputs.length &&
+    inputs.every((value, index) => value === reuse.inputs[index])
+  const changed = statusOnly ? projection.changesSince(reuse.cursor) : null
+  const dirtyWorktrees = changed ? new Set<string>() : null
+  for (const key of changed ?? []) {
+    for (const worktreeId of reuse?.owners.get(key) ?? []) {
+      dirtyWorktrees!.add(worktreeId)
+    }
+    const worktreeId = projection.rowWorktree(key)
+    if (worktreeId) {
+      dirtyWorktrees!.add(worktreeId)
+    }
+  }
+  let cards: DashboardCard[] = []
   const workspaces: DashboardWorkspace[] | undefined =
     options.includeCardDetails === false ? undefined : []
-  const clientHost = readDashboardClientHost()
-  const repoIconsByRepoId: Record<string, RepoIcon | null> = {}
+  let repoIconsByRepoId: Record<string, RepoIcon | null> = {}
   const includeCardDetails = options.includeCardDetails !== false
-  const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const showIdle = state.settings?.experimentalAgentDashboardShowIdle === true
-  const turnRecords = readAgentRowTurnRecords(state)
-  const activeWorktrees = collectActiveDashboardWorkspaces(state, includeCardDetails)
+  const activeWorktrees =
+    dirtyWorktrees && reuse
+      ? reuse.activeWorktrees
+      : collectActiveDashboardWorkspaces(state, includeCardDetails)
+  const nextWorkspaces = new Map<ActiveDashboardWorkspace, DashboardWorkspaceBuild>()
+  const rebuildWorkspaces =
+    dirtyWorktrees && reuse
+      ? Array.from(dirtyWorktrees).flatMap((id) => reuse.workspacesById.get(id) ?? [])
+      : activeWorktrees
   const filterOptions =
-    options.includeFilterOptions === false
-      ? undefined
-      : buildDashboardSnapshotFilterOptions(state, activeWorktrees)
-  const { singletonOrchestration, orchestrationByWorktree } = selectDashboardOrchestration(
-    state,
-    activeWorktrees
-  )
-  if (options.rowsCache) {
-    startWorktreeAgentRowsCachePass(options.rowsCache)
-  }
+    dirtyWorktrees && reuse
+      ? reuse.filterOptions
+      : options.includeFilterOptions === false
+        ? undefined
+        : buildDashboardSnapshotFilterOptions(state, activeWorktrees)
 
-  for (const workspace of activeWorktrees) {
+  for (const workspace of rebuildWorkspaces) {
     const { repo, worktree } = workspace
     const worktreeId = worktree.id
-    const parentWorktreeId = worktree.parentWorktreeId
+    const previous = dirtyWorktrees ? reuse?.workspaces.get(workspace) : undefined
+    const firstCard = cards.length
+    const nextRows: DashboardWorkspaceBuild['rows'] = new Map()
     const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
     const paneTitlesByTabId = selectRuntimePaneTitlesForWorktree(state, worktreeId)
 
-    const rows = selectWorktreeAgentRowsCached({
-      state,
-      worktreeId,
-      orchestration:
-        singletonOrchestration ??
-        orchestrationByWorktree?.get(worktreeId) ??
-        EMPTY_WORKTREE_AGENT_ORCHESTRATION,
-      now,
-      generation: options.rowsGeneration,
-      cache: options.rowsCache
-    })
+    const rows = state.agentStatusByPaneKey.projection.list(worktreeId)
     const subagentsByParentPaneKey = includeCardDetails
       ? groupSubagentsByParentPaneKey(rows)
       : undefined
-    const context = includeCardDetails
-      ? resolveDashboardCardContext(state, repo, worktree, t)
-      : undefined
-    if (workspaces && workspaces.length < DASHBOARD_MAX_MAP_WORKSPACES) {
+    const context = previous
+      ? previous.context
+      : includeCardDetails
+        ? resolveDashboardCardContext(state, repo, worktree, t)
+        : undefined
+    if (!previous && workspaces && workspaces.length < DASHBOARD_MAX_MAP_WORKSPACES) {
       const hostMetadata = dashboardCardMapWorkspaceMetadata(
         workspace,
         null,
@@ -151,7 +154,7 @@ export function buildDashboardSnapshot(
         worktreeId,
         repoName: boundedLabel(workspace.projectName),
         worktreeName: boundedLabel(worktree.displayName),
-        ...(parentWorktreeId ? { parentWorktreeId } : {}),
+        ...(worktree.parentWorktreeId ? { parentWorktreeId: worktree.parentWorktreeId } : {}),
         ...hostMetadata,
         workspaceStatusId: context?.workspaceStatus.id,
         workspaceStatusLabel: context?.workspaceStatus.label,
@@ -166,116 +169,142 @@ export function buildDashboardSnapshot(
       if (row.rowSource === 'subagent') {
         continue
       }
-      // Title-derived rows contain synthetic prompt/message labels, not real conversation; startedAt=0 distinguishes them.
-      const { isTitleDerived, dotState, workingMode, unseen, bucket } =
-        dashboardRowBucketProjection(row, turnRecords)
-      const routingPaneKey = row.activationPaneKey ?? row.paneKey
-      const parsed = parsePaneKey(routingPaneKey)
-      const tabId = parsed?.tabId ?? row.tab.id
-      const leafId = parsed?.leafId ?? null
-      const layoutPtyId =
-        (leafId ? terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId] : undefined) ?? null
-      // Layouts survive restarts; advertise preview PTYs only when the live ptyIdsByTabId set still contains them.
-      const ptyId =
-        layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
-          ? layoutPtyId
-          : null
-      // Only live preview-capable cards need host resolution; count-only sidebar rebuilds must skip that cost.
-      const terminalInput =
-        ptyId && includeCardDetails
-          ? resolveDashboardCardTerminalInput(state, {
-              ptyId,
-              worktreeId,
-              paneKey: routingPaneKey,
-              cwd: row.tab.startupCwd ?? worktree.path,
-              shellOverride: row.tab.shellOverride,
-              launchAgent: row.tab.launchAgent,
-              clientPlatform: clientHost.platform,
-              userAgent: clientHost.userAgent,
-              osRelease: clientHost.osRelease
-            })
-          : null
-      const finishedAt = lastEnteredDoneAt(row)
-      const hostMetadata = includeCardDetails
-        ? dashboardCardMapWorkspaceMetadata(
-            workspace,
-            ptyId,
-            terminalInput ?? undefined,
-            clientHost.platform
-          )
+      const prior = previous?.rows.get(row.paneKey)
+      const status = state.agentStatusByPaneKey.get(row.paneKey)
+      const activationStatus = row.activationPaneKey
+        ? state.agentStatusByPaneKey.get(row.activationPaneKey)
         : undefined
-      // Only repos that actually contribute a card ship their icon.
-      repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
-
-      cards.push({
-        paneKey: row.paneKey,
-        ptyId,
-        agentType: row.agentType,
-        bucket,
-        dotState,
-        verdict: agentVerdictDisplayMark(row.entry) ?? undefined,
-        ...(workingMode ? { workingMode } : {}),
-        task: isTitleDerived ? '' : rowTask(row),
-        repoId: workspace.projectId,
-        worktreeId,
-        tabId,
-        leafId,
-        repoName: boundedLabel(workspace.projectName),
-        worktreeName: boundedLabel(worktree.displayName),
-        ...(includeCardDetails
-          ? {
-              parentPaneKey: dashboardCardParentPaneKey(row),
-              ...(parentWorktreeId ? { parentWorktreeId } : {}),
-              ...hostMetadata
-            }
-          : {}),
-        workspaceStatusId: context?.workspaceStatus.id,
-        workspaceStatusLabel: context?.workspaceStatus.label,
-        workspaceStatusColor: context?.workspaceStatus.color,
-        hasReview: context ? context.hasReview || context.review !== undefined : undefined,
-        review: context?.review,
-        subagents: subagentsByParentPaneKey?.get(row.paneKey),
-        lastUserMessage: isTitleDerived ? undefined : nonEmpty(row.entry.prompt),
-        lastAgentMessage: isTitleDerived ? undefined : nonEmpty(row.entry.lastAssistantMessage),
-        startedAt: row.startedAt,
-        finishedAt,
-        stateChangedAt: row.entry.stateStartedAt || row.startedAt,
-        statusUpdatedAt: row.entry.updatedAt,
-        unseen,
-        askSummary:
-          bucket === 'attention'
-            ? interactivePromptLabel(
-                row.entry.interactivePrompt,
-                row.entry.toolName,
-                row.agentType,
-                sayNativeChatApprovalTranslated
-              )
-            : undefined,
-        conversationName: boundedLabelOrUndefined(
-          rowConversationName(
-            row,
-            generatedTitlesEnabled,
-            terminalLayoutsByTabId[row.tab.id],
-            paneTitlesByTabId[row.tab.id],
-            state.chatNames,
-            state.unifiedTabsByWorktree
-          )
-        ),
-        ...(terminalInput ? { terminalInput } : {})
+      const children = subagentsByParentPaneKey?.get(row.paneKey)
+      if (
+        prior &&
+        prior.row === row &&
+        prior.status === status &&
+        prior.activationStatus === activationStatus &&
+        !changed?.has(row.paneKey) &&
+        !changed?.has(row.activationPaneKey ?? '') &&
+        equal(children, prior.card.subagents)
+      ) {
+        cards.push(prior.card)
+        repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
+        nextRows.set(row.paneKey, prior)
+        continue
+      }
+      const card = buildDashboardSnapshotCard({
+        state,
+        workspace,
+        row,
+        includeCardDetails,
+        context,
+        subagents: children,
+        clientHost,
+        terminalLayoutsByTabId,
+        paneTitlesByTabId
       })
+      repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
+      cards.push(card)
+      nextRows.set(row.paneKey, { row, status, activationStatus, card })
     }
+    nextWorkspaces.set(workspace, {
+      start: previous?.start ?? firstCard,
+      cards: cards.slice(firstCard),
+      rows: nextRows,
+      context
+    })
+  }
+  if (reuse) {
+    if (!dirtyWorktrees) {
+      reuse.owners.clear()
+    } else {
+      for (const worktreeId of dirtyWorktrees) {
+        for (const workspace of reuse.workspacesById.get(worktreeId) ?? []) {
+          for (const [key, row] of reuse.workspaces.get(workspace)?.rows ?? []) {
+            for (const source of row.row.activationPaneKey
+              ? [key, row.row.activationPaneKey]
+              : [key]) {
+              const owners = reuse.owners.get(source)
+              owners?.delete(worktreeId)
+              if (!owners?.size) {
+                reuse.owners.delete(source)
+              }
+            }
+          }
+        }
+      }
+    }
+    if (!dirtyWorktrees) {
+      reuse.workspacesById.clear()
+      for (const workspace of activeWorktrees) {
+        const occurrences = reuse.workspacesById.get(workspace.worktree.id) ?? []
+        occurrences.push(workspace)
+        reuse.workspacesById.set(workspace.worktree.id, occurrences)
+      }
+    }
+    for (const [workspace, built] of nextWorkspaces) {
+      const worktreeId = workspace.worktree.id
+      for (const [key, row] of built.rows) {
+        for (const source of row.row.activationPaneKey ? [key, row.row.activationPaneKey] : [key]) {
+          const owners = reuse.owners.get(source) ?? new Set<string>()
+          owners.add(worktreeId)
+          reuse.owners.set(source, owners)
+        }
+      }
+    }
+    reuse.inputs = inputs
+    reuse.projection = projection
+    reuse.cursor = projection.changeCursor()
+    if (dirtyWorktrees && reuse.snapshot) {
+      const replacements = new Map<number, DashboardCard>()
+      let stablePositions = true
+      for (const [workspace, next] of nextWorkspaces) {
+        const prior = reuse.workspaces.get(workspace)!
+        if (
+          next.cards.length !== prior.cards.length ||
+          next.cards.some((card, index) => card.paneKey !== prior.cards[index].paneKey)
+        ) {
+          stablePositions = false
+        } else {
+          next.cards.forEach((card, index) => {
+            if (card !== prior.cards[index]) {
+              replacements.set(next.start + index, card)
+            }
+          })
+        }
+        reuse.workspaces.set(workspace, next)
+      }
+      if (stablePositions) {
+        cards = replaceDashboardCards(reuse.snapshot.cards, replacements)
+        repoIconsByRepoId = reuse.snapshot.repoIconsByRepoId ?? {}
+      } else {
+        cards = []
+        repoIconsByRepoId = {}
+        for (const workspace of activeWorktrees) {
+          const built = reuse.workspaces.get(workspace)!
+          built.start = cards.length
+          cards.push(...built.cards)
+          if (built.cards.length) {
+            repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
+          }
+        }
+      }
+    } else {
+      reuse.workspaces = nextWorkspaces
+    }
+    reuse.activeWorktrees = activeWorktrees
+    reuse.filterOptions = filterOptions
   }
 
-  if (options.rowsCache) {
-    finishWorktreeAgentRowsCachePass(options.rowsCache)
-  }
-
-  return {
+  const snapshot: DashboardSnapshot = {
     generatedAt: now,
     cards,
-    ...(workspaces ? { workspaces } : {}),
+    ...(workspaces
+      ? { workspaces: (dirtyWorktrees ? reuse?.snapshot?.workspaces : undefined) ?? workspaces }
+      : {}),
     showIdle,
     filterOptions,
     repoIconsByRepoId
   }
+  if (reuse) {
+    reuse.snapshot = snapshot
+  }
+  return snapshot
 }

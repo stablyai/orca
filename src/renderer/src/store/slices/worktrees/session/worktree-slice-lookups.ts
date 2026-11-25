@@ -1,7 +1,7 @@
 import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/retirement/terminal-notice-removal'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import { getTerminalActivationSpawnSuppression } from '../../../terminals/pty/terminal-activation-spawn-suppression'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
@@ -18,7 +18,10 @@ import type {
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
 import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
-import { replaceRecordEntries, replaceTabBuckets } from '../../../keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../../record-transitions/keyed-record-transitions'
 
 export function createSetRenamingWorktreeId(
   set: WorktreeSliceSet,

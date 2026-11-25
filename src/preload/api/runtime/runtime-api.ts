@@ -1,9 +1,14 @@
 import type {
+  RendererStatusPublication,
+  RendererStatusAck
+} from '../../../shared/agent-status/renderer-status-publication'
+import type {
   CrewSubscriptionAttemptArgs,
   CrewSubscriptionAttemptCallbacks,
   CrewSubscriptionSetupResult
 } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import type { ManagedOrcadPreloadApi } from './managed-orcad-api'
+import type { RuntimePortForwardsPreloadApi } from './runtime-port-forwards-api'
 import type { WslHostsPreloadApi } from '../wsl/wsl-hosts-api'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type {
@@ -11,9 +16,9 @@ import type {
   RuntimeSyncWindowGraphResult,
   RuntimeStatus,
   RuntimeTerminalDriverState
-} from '../../../shared/runtime-session-contracts'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { ClientHostedBrowserRowsEvent } from '../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import type {
   PublicKnownRuntimeEnvironment,
@@ -25,7 +30,7 @@ import type {
   BrowserPageCreationPlacement
 } from '../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
-import type { WslOrcadAccountNotAppliedEvent } from '../../../shared/wsl-orcad-account-notice'
+import type { WslOrcadAccountNotAppliedEvent } from '../../../shared/remote-runtime/wsl-hosts/wsl-orcad-account-notice'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void
@@ -34,11 +39,17 @@ export type RuntimeEnvironmentSubscriptionHandle = {
 
 export type RuntimeApi = {
   runtime: {
+    syncAgentStatus: (batch: RendererStatusPublication) => Promise<RendererStatusAck>
     syncWindowGraph: (
       graph: RuntimeRendererSyncWindowGraph
     ) => Promise<RuntimeSyncWindowGraphResult>
     getStatus: () => Promise<RuntimeStatus>
-    call: (args: { method: string; params?: unknown }) => Promise<RuntimeRpcResponse<unknown>>
+    call: (args: {
+      method: string
+      params?: unknown
+      /** An orchestration mutation's contract and idempotency key, as the CLI sends them. */
+      orchestration?: { contractVersion: number; requestId: string }
+    }) => Promise<RuntimeRpcResponse<unknown>>
     subscribe: (
       args: { method: string; params?: unknown },
       callback: (response: RuntimeRpcResponse<unknown>) => void
@@ -87,6 +98,10 @@ export type RuntimeApi = {
       callback: (event: ClientHostedBrowserRowsEvent) => void
     ) => () => void
     onSidebarInputsChanged: (callback: (event: SidebarInputsChangedEvent) => void) => () => void
+    onOrchestrationSessionWorkersChanged?: (
+      callback: (event: { sessionId: string }) => void
+    ) => () => void
+    onPeerMailReturned?: (callback: () => void) => () => void
   }
   runtimeEnvironments: {
     desktopCreatedChatIds?: () => Promise<string[]>
@@ -122,6 +137,8 @@ export type RuntimeApi = {
       selector: string
       timeoutMs?: number
       observeOnly?: true
+      /** A user-requested check that probes now even while a recent failure is backing off. */
+      force?: true
     }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
     onSharedControlDiagnostics?: (
       callback: (event: {
@@ -146,6 +163,10 @@ export type RuntimeApi = {
       timeoutMs?: number
       expectedEnvironmentPairingRevision?: number
       expectedEnvironmentRuntimeId?: string
+      /** A poll: no use of an idle WSL host, and never wakes one Orca stopped idle. */
+      background?: boolean
+      /** The user asked for it: it may wake a WSL host Orca stopped idle. */
+      wake?: boolean
     }) => Promise<RuntimeRpcResponse<unknown>>
     subscribeCrewAttempt?: (
       args: CrewSubscriptionAttemptArgs,
@@ -161,6 +182,8 @@ export type RuntimeApi = {
         timeoutMs?: number
         expectedEnvironmentPairingRevision?: number
         expectedEnvironmentRuntimeId?: string
+        background?: boolean
+        wake?: boolean
       },
       callbacks: {
         onResponse: (response: RuntimeRpcResponse<unknown>) => void
@@ -171,12 +194,16 @@ export type RuntimeApi = {
     ) => Promise<RuntimeEnvironmentSubscriptionHandle>
     // Only desktop clients deploy servers over SSH.
     managedOrcad?: ManagedOrcadPreloadApi
+    // Only desktop clients listen on their own loopback for a server's ports.
+    portForwards?: RuntimePortForwardsPreloadApi
     // Only Windows desktops (or e2e fakes) host WSL distros.
     wslHosts?: WslHostsPreloadApi
   }
   wsl: {
     isAvailable: () => Promise<boolean>
     listDistros: () => Promise<string[]>
+    /** The `\\wsl.localhost\<distro>` spelling of a path on a drive mapped to a distro share; else null. */
+    resolveMappedDrivePath: (path: string) => Promise<string | null>
   }
   pwsh: {
     isAvailable: () => Promise<boolean>

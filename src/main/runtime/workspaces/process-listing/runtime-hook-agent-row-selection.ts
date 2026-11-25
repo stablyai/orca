@@ -1,3 +1,4 @@
+import { paneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   pickHostTurnEnd,
@@ -9,12 +10,13 @@ import {
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
-import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAgentStatus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from './runtime-worktree-status-projection'
 import { mainAgentState } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 
 /** One hook-server row projected into the shape the runtime's own readers consume. */
 export type RuntimeAgentRowSnapshot = {
+  paneSleep?: AgentStatusIpcPayload['paneSleep']
   paneKey: string
   worktreeId?: string
   tabId?: string
@@ -31,8 +33,15 @@ export type RuntimeAgentRowSnapshot = {
 }
 
 function isLiveObservation(row: AgentStatusIpcPayload): boolean {
+  if (row.structuredHost) {
+    return row.restoredUnconfirmed !== true
+  }
   // Restored rows cannot prove current liveness; resume-identity rows carry no status.
-  return row.restoredUnconfirmed !== true && row.providerSessionOnly !== true
+  if (row.restoredUnconfirmed === true || row.providerSessionOnly === true) {
+    return false
+  }
+  const identity = paneAgentIdentity({ paneKey: row.paneKey, row })
+  return identity !== null && !identity.ended
 }
 
 type HookRowJoin = {
@@ -70,7 +79,8 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
     if (
       !row.state ||
       typeof row.receivedAt !== 'number' ||
-      now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS ||
+      (!row.paneSleep &&
+        now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS) ||
       !(isLiveObservation(row) || isHeldRestoredPermission(row, args))
     ) {
       continue
@@ -84,6 +94,27 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
     }
   }
   return best
+}
+
+/** The terminal's latest hook row of any age: a turn end stays true until the agent's next report. A row bound to another terminal handle is not this one's. */
+export function selectLatestAgentStatusRow(args: {
+  handles: ReadonlySet<string>
+  paneKey: string | null
+  hookRows: readonly AgentStatusIpcPayload[]
+}): AgentStatusIpcPayload | null {
+  let latest: AgentStatusIpcPayload | null = null
+  for (const row of args.hookRows) {
+    const ownsTerminal = row.terminalHandle
+      ? args.handles.has(row.terminalHandle)
+      : row.paneKey === args.paneKey
+    if (!ownsTerminal || !row.state || row.providerSessionOnly === true) {
+      continue
+    }
+    if (!latest || row.receivedAt > latest.receivedAt) {
+      latest = row
+    }
+  }
+  return latest
 }
 
 /** The freshest explicit state for a terminal, matched on its handle or its pane key. */
@@ -130,7 +161,8 @@ export function selectFreshAgentRowForMobileTab(args: {
   for (const row of args.hookRows) {
     if (
       !isLiveObservation(row) ||
-      now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS
+      (!row.paneSleep &&
+        now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS)
     ) {
       continue
     }
@@ -154,6 +186,7 @@ export function selectFreshAgentRowForMobileTab(args: {
   }
   return {
     paneKey: match.paneKey,
+    ...(match.paneSleep ? { paneSleep: match.paneSleep } : {}),
     connectionId: match.connectionId ?? null,
     ...(match.worktreeId ? { worktreeId: match.worktreeId } : {}),
     ...(match.tabId ? { tabId: match.tabId } : {}),

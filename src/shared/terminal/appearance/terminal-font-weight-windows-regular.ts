@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 import { WINDOWS_TERMINAL_FONT_WEIGHT } from './terminal-platform-defaults'
 

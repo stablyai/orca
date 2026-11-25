@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { ClaudeIcon, OpenCodeGoIcon } from '../../status-bar/accounts/provider-icons'
 

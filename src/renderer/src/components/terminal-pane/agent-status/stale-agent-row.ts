@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 
 export function dismissStaleAgentRowByKey(paneKey: string): void {
   const store = useAppStore.getState()
-  const liveExisted = paneKey in store.agentStatusByPaneKey
+  const liveExisted = store.agentStatusByPaneKey.has(paneKey)
   store.dropAgentStatus(paneKey, { paneRemoved: true })
   if (liveExisted) {
     showAgentPaneUnavailable(

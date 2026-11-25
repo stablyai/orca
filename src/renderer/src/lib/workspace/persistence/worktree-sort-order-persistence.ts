@@ -1,5 +1,5 @@
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { WorktreeRuntimeOwnerState } from '../ownership/worktree-runtime-owner-state'
 import { splitWorktreeSortOrderByHost } from './worktree-sort-order-host-split'
 

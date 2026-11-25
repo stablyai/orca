@@ -3,7 +3,7 @@ import type {
   AiVaultSession
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { aiVaultScanIssueText } from '../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 
 // The WSL rows of the last scan whose WSL roots a confirmed running list named, per scope key.
 // Map order is recency: the oldest scope is evicted past the cap, so retired scopes don't pile up.

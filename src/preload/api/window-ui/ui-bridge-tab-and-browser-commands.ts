@@ -5,8 +5,8 @@ import type {
   BrowserHistoryNavigateCommand,
   BrowserPageCommandTarget,
   BrowserPageTabShortcut
-} from '../../../shared/browser-page-command-target'
-import type { BrowserPageZoomCommand } from '../../../shared/browser-page-zoom'
+} from '../../../shared/browser/guest-lifecycle/browser-page-command-target'
+import type { BrowserPageZoomCommand } from '../../../shared/browser/site-settings/browser-page-zoom'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch

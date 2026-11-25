@@ -7,7 +7,7 @@ import {
   ORCAD_IDLE_STOP_RECORD_FILENAME,
   OrcadIdleStopRecordSchema,
   type OrcadIdleStopRecord
-} from '../../../../shared/orcad-idle-exit'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import type { OrcadIdleExitEvidence } from './orcad-idle-exit-monitor'
 import { hasErrorCode } from '../../../daemon/endpoint/identity/daemon-process-inspection'
 

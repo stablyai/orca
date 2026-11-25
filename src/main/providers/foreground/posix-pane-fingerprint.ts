@@ -2,8 +2,8 @@ import { readFile } from 'node:fs/promises'
 import {
   collectDescendantsFromIndex,
   getProcessTableIndex
-} from '../../../shared/process-table-index'
-import { parseLinuxProcStatStartTime } from '../../../shared/process-table-snapshot-reader'
+} from '../../../shared/process-observation/tables/process-table-index'
+import { parseLinuxProcStatStartTime } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 
 /** Cheap-tier job-control columns omit command/tty by design. */
 export type PaneFingerprintRow = {

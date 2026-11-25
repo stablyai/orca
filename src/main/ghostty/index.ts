@@ -1,6 +1,6 @@
 import { platform } from 'node:os'
 import type { WebContents } from 'electron'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { TerminalConfigImportPreview } from '../../shared/terminal/appearance/terminal-config-import-preview'
 import type { Store } from '../persistence/loading-store/store'
 import { translateMain } from '../i18n/main-i18n'

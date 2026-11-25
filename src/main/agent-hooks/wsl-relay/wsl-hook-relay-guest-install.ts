@@ -1,7 +1,7 @@
 import {
   WSL_HOOK_FS_METHODS,
   wslHookRelayEndpointFilePath
-} from '../../../shared/wsl-hook-relay-contract'
+} from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { WslRelayDistroState } from './wsl-hook-relay-state'
 import type { ManagedHookDetectionSettings } from '../installation/managed-hook-detection-commands'
 import type { installRemoteManagedAgentHooks } from '../installation/remote-managed-hook-installers'

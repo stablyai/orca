@@ -6,7 +6,7 @@ import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
 import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
@@ -32,6 +32,8 @@ import {
   getKiroManagedScriptPath,
   getKiroRemoteAgentsDir,
   getKiroRemoteManagedCommand,
+  getKiroRemoteStandaloneManagedCommand,
+  getKiroStandaloneManagedCommand,
   isKiroAgentConfigFileName,
   isKiroHooksConfigSupported,
   KIRO_HOOK_EVENTS,
@@ -211,7 +213,7 @@ export class KiroHookService {
       })
     }
     // V3 applies it to every agent, including the built-in default.
-    installKiroStandaloneHooks(command)
+    installKiroStandaloneHooks(getKiroStandaloneManagedCommand(scriptPath))
     return this.getStatus()
   }
 
@@ -230,7 +232,7 @@ export class KiroHookService {
       const standalone = await installKiroStandaloneHooksRemote(
         sftp,
         getKiroRemoteStandaloneHooksFilePath(remoteHome, kiroHomeDir),
-        command
+        getKiroRemoteStandaloneManagedCommand(scriptPath)
       )
       const fileNames = ((await listRemoteDirectory(sftp, agentsDir)) ?? [])
         .filter(isKiroAgentConfigFileName)

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { latestAgentSessionContextClearSequence } from '../../../../../shared/agent-session/agent-session-context-clear'
+import { latestAgentSessionContextClearSequence } from '../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentSessionLatestTurn } from '../../../../../shared/agent-session/agent-session-wire'
 import type {
   AgentJournalRenderItem,
@@ -34,6 +34,7 @@ import {
   NativeChatSubagentNeedsYouLine,
   NativeChatSubagentSheetHeader
 } from './NativeChatSubagentSheetHeader'
+import { NativeChatSubagentViewBar } from './NativeChatSubagentViewBar'
 import { NativeChatSubagentPrompt } from './NativeChatSubagentPrompt'
 import { nativeChatSubagentHandoff } from './native-chat-subagent-handoff'
 
@@ -194,6 +195,16 @@ export function useNativeChatSubagentScope({
           subagentRows={subagentRows}
           onOpen={open}
           controls={view.sheet}
+        />
+      ) : null,
+    /** Drawn above a subagent's own transcript where it opens in place (a bot group's turn). */
+    bar:
+      agentId !== null && open && !view?.sheet ? (
+        <NativeChatSubagentViewBar
+          chain={chain}
+          entries={entries}
+          subagentRows={subagentRows}
+          onOpen={open}
         />
       ) : null,
     inSheet: view?.sheet !== undefined,

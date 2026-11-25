@@ -1,5 +1,5 @@
-import type { ManagedSkillInstall } from '../../../../../shared/skill-install-contract'
-import type { DiscoveredSkill } from '../../../../../shared/skills'
+import type { ManagedSkillInstall } from '../../../../../shared/skills/installation/skill-install-contract'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 
 function skillScope(skill: DiscoveredSkill): ManagedSkillInstall['scope'] | null {
   return skill.sourceKind === 'home' ? 'global' : skill.sourceKind === 'repo' ? 'workspace' : null

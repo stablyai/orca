@@ -1,5 +1,5 @@
 import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { HostOfferRead } from './native-chat-restart-host-offer'
 
 export const RESTART_READ_RETRY_DELAYS_MS = [100, 250, 500] as const

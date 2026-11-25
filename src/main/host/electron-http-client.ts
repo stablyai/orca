@@ -2,7 +2,7 @@ import { net, session, type Session } from 'electron'
 import type { MainHttpClient } from '../network/http-client'
 import { hasElectronProxyCredentialsForSession } from '../network/electron-proxy-credentials'
 import { getProxySessionApplicationReadiness } from '../network/proxy-settings'
-import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import { fetchWithProxyLogin } from './electron-proxy-login-fetch'
 
 function isHttpUrl(url: string): boolean {

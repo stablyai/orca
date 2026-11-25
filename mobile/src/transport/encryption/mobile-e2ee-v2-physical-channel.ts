@@ -1,13 +1,13 @@
 import {
   createWsOutboundBackpressureQueue,
   type WsOutboundBackpressureQueue
-} from '../../../../src/shared/ws-outbound-backpressure-queue'
+} from '../../../../src/shared/network/websocket/ws-outbound-backpressure-queue'
 import {
   classifyPairedE2EEV2AuthReply,
   pairedE2EEV2TokenAuth
 } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import type { PairedE2EEV2ClientSession as MobileE2EEV2ClientSession } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-client-session'
-import { WsInboundMessageQueue } from '../../../../src/shared/ws-inbound-message-queue'
+import { WsInboundMessageQueue } from '../../../../src/shared/network/websocket/ws-inbound-message-queue'
 import { inflateMobileCompressedFrame } from './compressed-frame-inflate'
 
 type ChannelState = 'awaiting-ready' | 'awaiting-authenticated' | 'ready'

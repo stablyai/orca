@@ -1,3 +1,4 @@
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NativeChatComposerImageAttachment } from './native-chat-image-attachment'
 
@@ -24,14 +25,16 @@ export function useNativeChatComposerAttachmentPreviews(
   // Read by callbacks between renders; only they change it, always together with the state.
   const previewsRef = useRef(previews)
   const mountedRef = useRef(true)
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      previewsRef.current.forEach(releasePreviewUrl)
-      previewsRef.current = NO_PREVIEWS
-    }
-  }, [])
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      mountedRef.current = true
+      return () => {
+        mountedRef.current = false
+        previewsRef.current.forEach(releasePreviewUrl)
+        previewsRef.current = NO_PREVIEWS
+      }
+    }, [])
+  )
   const updatePreviews = useCallback((next: ReadonlyMap<string, string>) => {
     previewsRef.current = next
     setPreviews(next)

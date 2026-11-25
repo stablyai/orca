@@ -1,3 +1,4 @@
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
 import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
@@ -16,7 +17,7 @@ import {
   isGitHubCheckDetailsTimeout
 } from '../../../../../shared/github/checks/check-details-deadline'
 import { syncPRChecksStatus } from './github-checks'
-import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
+import { isWslDistroNotRunningRefusal } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
 import { hostedReviewOwnerIpcArgs } from '../../slices/hosted-review/hosted-review-cache-state'
 import {
@@ -56,7 +57,7 @@ export const createCheckActions = (
     )
     const repoId = options?.repoId ?? repo?.id
     const checkContract = capturePRCheckContract(
-      get,
+      readAppRuntimeStatuses,
       getGitHubSourceTarget(get(), repo, options?.sourceContext)
     )
     const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)

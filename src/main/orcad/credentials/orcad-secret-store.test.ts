@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { _resetSecretStoreForTests } from '../../../shared/secret-store'
+import { _resetSecretStoreForTests } from '../../../shared/secure-storage/secret-store'
 import type { OrcadLegacyKeyringReader } from './orcad-legacy-keyring-key'
 import { orcadSecretStateFileName } from './orcad-secret-key-record'
 import { createOrcadSecretStore } from './orcad-secret-store'

@@ -1,5 +1,5 @@
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../../../shared/orchestration/orchestration-timing-budgets'
-import type { RuntimeTerminalPromptDelivery } from '../../../../../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalPromptDelivery } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 
 /** Observed/permission prove live input handling; unsupported keeps accepted-write evidence.
@@ -13,6 +13,8 @@ export type WorkerTurnStartObservation = {
   reason?: string
   /** Held as a card in a chat's queue; it runs when the chat's current turn ends. */
   queued?: boolean
+  /** Held by a structured worker whose agent is still starting; handed over when it attaches. */
+  agentStarting?: true
 }
 
 function classifyPromptDelivery(prompt: RuntimeTerminalPromptDelivery): WorkerTurnStartVerdict {
@@ -38,6 +40,18 @@ export async function observeWorkerTurnStart(args: {
 }): Promise<WorkerTurnStartObservation> {
   if (!args.prompt) {
     return { verdict: 'unsupported' }
+  }
+  const submit = args.prompt.submit
+  if (submit && 'withheldFor' in submit) {
+    // No Enter was written, so no turn can start to observe.
+    return {
+      verdict: 'unobserved',
+      prompt: args.prompt,
+      reason:
+        submit.withheldFor === 'terminal-input'
+          ? "Orca typed the brief but did not press Enter: someone typed into the worker's terminal after the paste. Check its prompt holds only the brief, then submit it."
+          : `Orca typed the brief but did not press Enter: the screen showed a dialog (${submit.withheldFor}). Answer it in the worker's terminal, then submit the brief.`
+    }
   }
   const verdict = classifyPromptDelivery(args.prompt)
   if (verdict !== 'unobserved') {

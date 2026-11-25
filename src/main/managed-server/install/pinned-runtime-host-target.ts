@@ -6,7 +6,7 @@ import {
   type CompatServerTarget,
   type NodeRuntimeTarget,
   type ServerTarget
-} from '../../../shared/node-runtime-pin'
+} from '../../../shared/node-runtime/node-runtime-pin'
 import type { GlibcVersion } from '../../node-runtime/linux-libc-probe'
 
 /** Official linux builds of the pinned Node need glibc 2.28. */

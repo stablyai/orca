@@ -4,7 +4,7 @@ import type {
   SpeechModelManifest,
   SpeechModelState,
   VoiceSettings
-} from '../../../../../shared/speech-types'
+} from '../../../../../shared/speech/speech-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'

@@ -1,6 +1,6 @@
 // Translate old method params to pure layout commands; handlers resolve selectors/handles, apply changes and shape compatible replies.
 
-import type { RuntimeMobileSessionTabMove } from '../../runtime-session-contracts'
+import type { RuntimeMobileSessionTabMove } from '../../remote-runtime/session-graph/runtime-session-contracts'
 import { isTerminalLeafId } from '../stable-pane-id'
 import { isValidHostTerminalTabId } from '../terminal-surfaces/terminal-tab-id'
 import type { TerminalPaneSplitDirection } from '../terminal-tab-types'

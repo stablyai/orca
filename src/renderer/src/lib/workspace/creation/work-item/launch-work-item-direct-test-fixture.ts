@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type * as TuiAgentSelectionModule from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type * as TuiAgentStartupModule from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import type * as DirectAgentRoutingModule from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
 import type * as RuntimeRpcSubscribeModule from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
-import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
-import type * as WorkspaceNameModule from '../../../../../../shared/workspace-name'
+import type * as LaunchAgentKindModule from '../../../../../../shared/agent-status/identity/agent-kind'
+import type * as WorkspaceNameModule from '../../../../../../shared/workspace/naming/workspace-name'
 import type * as WorkspaceSourceModule from '../../../../../../shared/new-workspace/workspace-source'
 
 type DirectLaunchStoreActions = {
@@ -125,7 +125,7 @@ vi.mock('@/lib/workspace/creation/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32',
   getWorkspaceSeedName: ({ explicitName }: { explicitName?: string }) => explicitName ?? ''
 }))
-vi.mock('../../../../../../shared/workspace-name', async (importOriginal) => ({
+vi.mock('../../../../../../shared/workspace/naming/workspace-name', async (importOriginal) => ({
   ...(await importOriginal<typeof WorkspaceNameModule>()),
   getWorkspaceIntentName: (args: {
     workItem?: { type: 'issue' | 'pr' | 'mr'; number: number; title: string } | null
@@ -150,7 +150,7 @@ vi.mock('../../../../../../shared/new-workspace/workspace-source', async (import
 
 vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
-vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
+vi.mock('../../../../../../shared/agent-status/identity/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))

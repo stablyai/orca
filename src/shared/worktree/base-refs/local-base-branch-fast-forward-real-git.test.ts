@@ -1,12 +1,12 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseWorktreeList } from '../../git/worktrees/git-worktree-porcelain-parser'
 import {
+  fastForwardCheckedOutLocalBaseBranch,
   fastForwardLocalBaseBranch,
   type LocalBaseBranchGit
 } from './local-base-branch-fast-forward'
@@ -64,23 +64,35 @@ async function createBehindRepo(): Promise<Fixture> {
   return { repoPath, env, localOid, remoteOid, git }
 }
 
-/** Real git; `beforeMerge` runs just before the owner fast-forward, after the inspection passed. */
-function realGit(fixture: Fixture, beforeMerge?: () => Promise<void> | void) {
+/** Real git; `afterInspection` runs once the drift count returns. */
+function realGit(fixture: Fixture, afterInspection?: () => Promise<void> | void) {
   const run = (args: string[], cwd: string) =>
     new Promise<{ stdout: string }>((resolve, reject) => {
       execFile('git', args, { cwd, env: fixture.env, encoding: 'utf8' }, (error, stdout, stderr) =>
         error ? reject(Object.assign(error, { stdout, stderr })) : resolve({ stdout })
       )
     })
+  const listWorktrees = async (repoPath: string) =>
+    parseWorktreeList((await run(['worktree', 'list', '--porcelain'], repoPath)).stdout)
   const git: LocalBaseBranchGit = {
     exec: async (args, cwd) => {
-      if (args.includes('merge')) {
-        await beforeMerge?.()
+      const result = await run(args, cwd)
+      if (args[0] === 'rev-list') {
+        await afterInspection?.()
       }
-      return run(args, cwd)
+      return result
     },
-    listWorktrees: async (repoPath) =>
-      parseWorktreeList((await run(['worktree', 'list', '--porcelain'], repoPath)).stdout)
+    readBranchUse: async (repoPath, fullRef) => ({
+      reserved: false,
+      ownerPath: (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)?.path
+    }),
+    updateRefUnlessInUse: async (repoPath, fullRef, args) => {
+      if ((await listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)) {
+        return false
+      }
+      await git.exec(args, repoPath)
+      return true
+    }
   }
   return { git }
 }
@@ -98,73 +110,45 @@ afterEach(async () => {
 })
 
 describe('fastForwardLocalBaseBranch against real Git', () => {
-  it('leaves an untracked file at a path the new commit adds, and does not move main', async () => {
+  it('leaves a checked-out main, its files and its index alone', async () => {
     const fixture = await createBehindRepo()
     await writeFile(join(fixture.repoPath, 'added.txt'), 'my notes\n')
 
     const outcome = await fastForward(fixture, realGit(fixture).git)
 
-    expect(outcome.status).toBe('skipped_dirty_worktree')
+    expect(outcome).toEqual({ status: 'nothing_to_do' })
+    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.localOid)
+    expect(await readFile(join(fixture.repoPath, 'version.txt'), 'utf8')).toBe('one\n')
     expect(await readFile(join(fixture.repoPath, 'added.txt'), 'utf8')).toBe('my notes\n')
-    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.localOid)
   })
 
-  it('leaves an ignored file at a path the new commit adds, and does not move main', async () => {
+  it('leaves main alone when it is checked out after the inspection', async () => {
     const fixture = await createBehindRepo()
-    await writeFile(join(fixture.repoPath, '.git', 'info', 'exclude'), 'added.txt\n')
-    await writeFile(join(fixture.repoPath, 'added.txt'), 'SECRET=mine\n')
-
-    const outcome = await fastForward(fixture, realGit(fixture).git)
-
-    expect(outcome.status).toBe('skipped_dirty_worktree')
-    expect(await readFile(join(fixture.repoPath, 'added.txt'), 'utf8')).toBe('SECRET=mine\n')
-    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.localOid)
-  })
-
-  it('moves main without running the post-merge hook of the checkout', async () => {
-    const fixture = await createBehindRepo()
-    const marker = join(fixture.repoPath, '..', 'hook-ran')
-    const hookPath = join(fixture.repoPath, '.git', 'hooks', 'post-merge')
-    await writeFile(hookPath, `#!/bin/sh\necho ran > "${marker.replace(/\\/g, '/')}"\n`)
-    await chmod(hookPath, 0o755)
-
-    const outcome = await fastForward(fixture, realGit(fixture).git)
-
-    expect(outcome).toMatchObject({ status: 'updated' })
-    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.remoteOid)
-    expect(await readFile(join(fixture.repoPath, 'version.txt'), 'utf8')).toBe('two\n')
-    expect(existsSync(marker)).toBe(false)
-  })
-
-  it('keeps a tracked edit made after the inspection instead of overwriting it', async () => {
-    const fixture = await createBehindRepo()
-    const edited = join(fixture.repoPath, 'version.txt')
-
-    const outcome = await fastForward(
-      fixture,
-      realGit(fixture, () => writeFile(edited, 'my edit\n')).git
-    )
-
-    expect(outcome.status).not.toBe('updated')
-    expect(outcome.status).toBe('skipped_dirty_worktree')
-    expect(await readFile(edited, 'utf8')).toBe('my edit\n')
-    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.localOid)
-  })
-
-  it('keeps a commit made on main after the inspection', async () => {
-    const fixture = await createBehindRepo()
-    let userCommit = ''
-    const commitOnMain = async () => {
-      await writeFile(join(fixture.repoPath, 'local.txt'), 'local work\n')
-      fixture.git(['add', 'local.txt'])
-      fixture.git(['commit', '--quiet', '-m', 'local work'])
-      userCommit = fixture.git(['rev-parse', 'HEAD'])
+    fixture.git(['checkout', '--quiet', '-b', 'develop'])
+    const checkOutMain = () => {
+      fixture.git(['checkout', '--quiet', 'main'])
     }
 
-    const outcome = await fastForward(fixture, realGit(fixture, commitOnMain).git)
+    const outcome = await fastForward(fixture, realGit(fixture, checkOutMain).git)
 
-    expect(outcome.status).not.toBe('updated')
-    expect(outcome.status).toBe('skipped_not_fast_forward')
+    expect(outcome).toEqual({ status: 'nothing_to_do' })
+    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.localOid)
+    expect(fixture.git(['status', '--porcelain'])).toBe('')
+  })
+
+  it('keeps a move of main made after the inspection', async () => {
+    const fixture = await createBehindRepo()
+    fixture.git(['checkout', '--quiet', '-b', 'develop'])
+    let userCommit = ''
+    const moveMain = () => {
+      const tree = fixture.git(['rev-parse', `${fixture.localOid}^{tree}`])
+      userCommit = fixture.git(['commit-tree', tree, '-p', fixture.localOid, '-m', 'local work'])
+      fixture.git(['update-ref', 'refs/heads/main', userCommit])
+    }
+
+    const outcome = await fastForward(fixture, realGit(fixture, moveMain).git)
+
+    expect(outcome).toEqual({ status: 'skipped_not_fast_forward' })
     expect(fixture.git(['rev-parse', 'main'])).toBe(userCommit)
   })
 
@@ -183,6 +167,7 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
 
   it('flags a local branch hidden below a shallow boundary, and moves it once history is complete', async () => {
     const fixture = await createBehindRepo()
+    fixture.git(['checkout', '--quiet', '-b', 'develop'])
     const upstreamPath = join(fixture.repoPath, '..', 'upstream')
     fixture.git(['init', '--quiet', '--bare', upstreamPath])
     fixture.git(['push', '--quiet', upstreamPath, `${fixture.remoteOid}:refs/heads/main`])
@@ -199,5 +184,49 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
     fixture.git(['fetch', '--quiet', '--unshallow', 'origin'])
     expect(await fastForward(fixture, real.git)).toMatchObject({ status: 'updated' })
     expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.remoteOid)
+  })
+})
+
+describe('fastForwardCheckedOutLocalBaseBranch against real Git', () => {
+  const refs = (fixture: Fixture) => ({
+    repoPath: fixture.repoPath,
+    fullRef: 'refs/heads/main',
+    remoteTrackingRef: 'refs/remotes/origin/main'
+  })
+
+  it('fast-forwards a clean checked-out main and its files', async () => {
+    const fixture = await createBehindRepo()
+
+    await fastForwardCheckedOutLocalBaseBranch(realGit(fixture).git, refs(fixture))
+
+    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.remoteOid)
+    expect(await readFile(join(fixture.repoPath, 'added.txt'), 'utf8')).toBe('from upstream\n')
+    expect(fixture.git(['status', '--porcelain'])).toBe('')
+  })
+
+  it('leaves a main that several checkouts share alone', async () => {
+    const fixture = await createBehindRepo()
+    const { git } = realGit(fixture)
+    const shared: LocalBaseBranchGit = {
+      ...git,
+      readBranchUse: async (repoPath, fullRef) => ({
+        ...(await git.readBranchUse(repoPath, fullRef)),
+        sharedCheckout: true
+      })
+    }
+
+    await fastForwardCheckedOutLocalBaseBranch(shared, refs(fixture))
+
+    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.localOid)
+  })
+
+  it('leaves a checked-out main with uncommitted edits alone', async () => {
+    const fixture = await createBehindRepo()
+    await writeFile(join(fixture.repoPath, 'version.txt'), 'mine\n')
+
+    await fastForwardCheckedOutLocalBaseBranch(realGit(fixture).git, refs(fixture))
+
+    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.localOid)
+    expect(await readFile(join(fixture.repoPath, 'version.txt'), 'utf8')).toBe('mine\n')
   })
 })

@@ -9,7 +9,7 @@ import type { SparsePreset } from '../worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
 import type { WorktreeMeta } from '../worktree/meta-types'
 import type { RetiredNameRegistry } from '../worktree/naming/retired-name-registry'
-import { parseWorkspaceKey } from '../workspace-scope'
+import { parseWorkspaceKey } from '../workspace/identity/workspace-scope'
 import {
   isString,
   optionalNullableString,

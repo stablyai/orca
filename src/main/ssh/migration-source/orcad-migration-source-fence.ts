@@ -1,12 +1,12 @@
 /** Persist journal, fence, then profile flush before remote calls. Crashes may leave a non-authoritative stale journal; a fence without a journal requires destination evidence before release. */
 import { randomUUID } from 'node:crypto'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import type { OrcadMigrationBlocker } from '../../../shared/orcad-migration/orcad-migration-preflight'
 import {
   ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION,
   type OrcadMigrationSourceCutover
 } from '../../../shared/orcad-migration/orcad-migration-source-cutover'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { assertOrcadMigrationRequestFits } from '../../managed-server/migration/catalog/orcad-migration-request-budget'
 import { createOrcadMigrationManifest } from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 import {
@@ -213,14 +213,14 @@ export async function releaseUndeployedMigrationFence(args: {
   userDataPath: string
   claims: SshTargetOrcadClaims
   targetId: string
-  isDestinationRegistered: (environmentId: string) => boolean
+  isDestinationRegistered: (environmentId: string) => boolean | Promise<boolean>
   signal?: AbortSignal
 }): Promise<'released' | 'none'> {
   const cutover = findOrcadMigrationSourceCutoverForTarget(args.userDataPath, args.targetId)
   if (!cutover) {
     return 'none'
   }
-  if (args.isDestinationRegistered(cutover.destinationEnvironmentId)) {
+  if (await args.isDestinationRegistered(cutover.destinationEnvironmentId)) {
     throw new Error('orcad_migration_destination_registered')
   }
   await releaseUnstagedFence(args, cutover)

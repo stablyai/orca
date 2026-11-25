@@ -161,7 +161,7 @@ export function UsageOverviewPane(): React.JSX.Element {
 
   return (
     <div className="space-y-4" data-testid="usage-overview-pane">
-      <section className="rounded-lg border border-border/60 bg-card/30 p-4">
+      <section className="@container rounded-lg border border-border/60 bg-card/30 p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">
@@ -266,7 +266,7 @@ export function UsageOverviewPane(): React.JSX.Element {
           </div>
         ) : overview.hasAnyEnabledProvider ? (
           <>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-4 grid gap-3 @md:grid-cols-2 @4xl:grid-cols-4">
               <StatCard
                 label={t('auto.components.stats.UsageOverviewPane.3887b94ce5', 'Total tokens')}
                 value={formatUsageTokens(overview.totalTokens, intlLocale)}

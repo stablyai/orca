@@ -16,15 +16,18 @@ import {
   isMobilePreviewableImagePath
 } from './mobile-file-kind'
 import type { RuntimeFileCommandHost } from './file-command-host'
-import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { joinWorktreeRelativePath } from './paths/runtime-relative-paths'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import {
   requireRuntimeFileProvider,
   resolveFileExplorerPath,
   resolveFileExplorerPaths
 } from './file-target'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import type { FileStat } from '../../providers/filesystem/provider-contract'
 import { assertRuntimeReadWslDistroRunning } from '../integrations/git/runtime-wsl-background-read-gate'
 

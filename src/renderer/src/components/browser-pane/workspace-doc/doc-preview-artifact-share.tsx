@@ -1,8 +1,5 @@
 import type { ArtifactWriteRequest } from '../../../../../shared/artifacts/artifacts'
-import {
-  getConnectionExecutionHostId,
-  toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { DocPreviewGrantOwner } from '../../../../../preload/api/document-preview/doc-preview-api'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
@@ -13,13 +10,12 @@ import {
   type FileArtifactOwner
 } from '@/lib/files/artifacts/file-artifact-source-key'
 import { basename } from '@/lib/path'
-import { readRuntimeFilePreview } from '@/runtime/files/reads/runtime-file-read-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../../../../shared/cross-platform-path'
+} from '../../../../../shared/file-access/cross-platform-path'
 import type { RuntimeFilePreviewResult } from '../../../../../shared/file-content/runtime-file-read'
 import {
   acquireTerminalArtifactGrant,
@@ -29,26 +25,16 @@ import {
 
 /** The host a grant reads from, spelled as the editor's route for that host. */
 export function docPreviewGrantFileOwner(owner: DocPreviewGrantOwner): FileArtifactOwner {
-  return owner.kind === 'ssh'
-    ? {
-        executionHostId: getConnectionExecutionHostId(owner.connectionId),
-        runtimeEnvironmentId: null
-      }
-    : {
-        executionHostId: toRuntimeExecutionHostId(owner.environmentId),
-        runtimeEnvironmentId: owner.environmentId
-      }
+  return {
+    executionHostId: toRuntimeExecutionHostId(owner.environmentId),
+    runtimeEnvironmentId: owner.environmentId
+  }
 }
 
 async function readDocPreviewGrantFile(
   owner: DocPreviewGrantOwner,
   filePath: string
 ): Promise<RuntimeFilePreviewResult> {
-  if (owner.kind === 'ssh') {
-    // Why the connection id is kept: dropping it would read this path on this machine.
-    const context = { target: { kind: 'local' as const }, worktreeId: null, worktreePath: null }
-    return readRuntimeFilePreview({ ...context, connectionId: owner.connectionId }, filePath)
-  }
   if (owner.fileAccess === 'terminal-artifact') {
     const target = { kind: 'environment' as const, environmentId: owner.environmentId }
     const context: TerminalArtifactGrantTarget = pinTerminalArtifactGrantTarget({
@@ -128,7 +114,8 @@ export function buildDocPreviewShareControl(
   return (
     <ArtifactPublishButton
       sourceKey={sourceKey}
-      className="h-7 w-7"
+      size="icon-xs"
+      variant="muted-field-icon"
       createRequest={() => readDocPreviewArtifactRequest(location, filePath, sourceKey)}
     />
   )

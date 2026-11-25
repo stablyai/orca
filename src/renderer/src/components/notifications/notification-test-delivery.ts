@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { usesCustomNotificationSound } from '../../../../shared/notification-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { usesCustomNotificationSound } from '../../../../shared/notifications/notification-settings-types'
 import { translate } from '@/i18n/i18n'
 
 type SystemNotificationSettingsCopy = {

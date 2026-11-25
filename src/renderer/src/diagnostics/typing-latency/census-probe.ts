@@ -7,7 +7,7 @@ import type { FocusedPaneCensus } from './diagnostic-summary'
 type ProbeStoreState = {
   activeTabId?: string | null
   paneForegroundAgentByPaneKey?: Record<string, { agent?: string | null }>
-  agentStatusByPaneKey?: Record<string, { agentType?: string | null }>
+  agentStatusByPaneKey?: ReadonlyMap<string, { agentType?: string | null }>
 }
 
 export function readProbeStoreState(): (ProbeStoreState & Record<string, unknown>) | null {
@@ -36,7 +36,7 @@ export function readFocusedPaneCensus(): FocusedPaneCensus | null {
   const tabId = state?.activeTabId ?? null
   const paneKey = tabId && leafId ? `${tabId}:${leafId}` : null
   const foreground = paneKey ? state?.paneForegroundAgentByPaneKey?.[paneKey] : undefined
-  const status = paneKey ? state?.agentStatusByPaneKey?.[paneKey] : undefined
+  const status = paneKey ? state?.agentStatusByPaneKey?.get(paneKey) : undefined
   const bufferType = pane.terminal?.buffer?.active?.type
   return {
     paneId: pane.id ?? null,

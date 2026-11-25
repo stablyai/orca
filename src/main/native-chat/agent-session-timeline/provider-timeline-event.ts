@@ -3,9 +3,10 @@
 // Settled rows never regress; external Stop cancels text/prompts but leaves calls for provider settlement.
 // Each provider child gets a new generation; session.ended rejects all later events.
 
-import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type {
   AgentJournalApprovalItem,
+  AgentJournalApprovalSubject,
   AgentJournalItemBody,
   AgentJournalProducerLinkage,
   AgentJournalQuestionItem
@@ -95,6 +96,8 @@ export type ProviderTimelineEvent =
       Joined)
   /** Withdraw only unanswered requests. */
   | { type: 'request.withdrawn'; request: string }
+  /** Replace an answered approval's subject, keeping the answer; unanswered requests stay as they are. */
+  | { type: 'request.subject'; request: string; subject: AgentJournalApprovalSubject }
   /** Use the named turn, otherwise open turn, otherwise last turn. */
   | ({ type: 'context.usage'; usage: AgentSessionContextUsage } & Joined)
   | { type: 'activity'; text: string | null }

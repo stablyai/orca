@@ -4,6 +4,8 @@ import {
   agentPickerListsCliModels,
   readAgentPickerCliModelCatalog
 } from './agent-launch-picker-cli-model-catalog'
+import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
+import { AGENT_SESSION_MODEL_CATALOG_RELIST_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import {
   readModelMenuCatalog,
@@ -13,7 +15,7 @@ import { subscribeModelMenuInvalidation } from '@/runtime/native-chat/model-cata
 import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { isAgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function agentPickerModelCatalogReads(
   input: Omit<ModelMenuReadScope, 'agent' | 'target'> & {
@@ -23,7 +25,12 @@ export function agentPickerModelCatalogReads(
 ) {
   const { target, cliDiscoveryRuntime } = input
   return {
-    catalog: async (entry: AgentPickerEntry, waitForListing: boolean, signal: AbortSignal) =>
+    catalog: async (
+      entry: AgentPickerEntry,
+      waitForListing: boolean,
+      signal: AbortSignal,
+      relist = false
+    ) =>
       cliDiscoveryRuntime && agentPickerListsCliModels(entry)
         ? readAgentPickerCliModelCatalog(entry.agent, cliDiscoveryRuntime)
         : !target
@@ -35,7 +42,15 @@ export function agentPickerModelCatalogReads(
                 {
                   ...(input.worktree ? { worktree: input.worktree } : {}),
                   agent: entry.agent,
-                  ...(waitForListing ? { waitForListing } : {})
+                  ...(waitForListing ? { waitForListing } : {}),
+                  // The catalog this read answers from, on its host, lists again.
+                  ...(relist &&
+                  (await structuredAgentSessionHostSupports(
+                    target,
+                    AGENT_SESSION_MODEL_CATALOG_RELIST_RUNTIME_CAPABILITY
+                  ))
+                    ? { relist: true }
+                    : {})
                 }
               )
             : readModelMenuCatalog(

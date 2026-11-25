@@ -3,7 +3,7 @@ import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import { hasCodexTranscriptSubagents } from './providers/codex/codex-state'
 import { hasMuseSessionLog } from './providers/muse/muse-events'
-import { hasPendingCodexSubagentIdentity } from '../codex-subagent-roster'
+import { hasPendingCodexSubagentIdentity } from './providers/codex/codex-subagent-roster'
 import { parseHookEnvelope } from './hook-envelope'
 
 export function shouldPollHookTranscript(

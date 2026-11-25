@@ -1,0 +1,243 @@
+// What a Google setup card shows and which of its buttons act, from the run and where the host says
+// it's stuck. The computer's cards and the phone's draw from these, so both agree.
+import {
+  GOOGLE_CHOICE_SERVICES,
+  googleChoices,
+  GOOGLE_SERVICE_CHOICES,
+  type GoogleServiceChoice
+} from './google-scopes'
+import type { GoogleSetupAction, GoogleSetupBlocker } from './google-setup-blocker'
+import {
+  currentGoogleSetupStep,
+  GOOGLE_SETUP_STEPS,
+  googleSetupAwaitsKey,
+  googleSetupRunActive,
+  personDoesGoogleSetupStep,
+  type GoogleSetupCard,
+  type GoogleSetupRun,
+  type GoogleSetupStep,
+  type GoogleSetupStepStatus
+} from './google-setup-run'
+
+/** A choice made before the bot started in Google Cloud can still change; after, it says so in chat. */
+export function googleSetupChoiceChangeable(run: GoogleSetupRun): boolean {
+  return googleSetupRunActive(run) && (run.steps.project?.status ?? 'pending') === 'pending'
+}
+
+/** A choice card takes no clicks once answered (until reopened with Change) or once the run ended. */
+export function googleSetupChoiceLocked(
+  run: GoogleSetupRun,
+  answered: boolean,
+  reopened: boolean
+): boolean {
+  return !googleSetupRunActive(run) || (answered && !reopened)
+}
+
+/** The sign-in card still waits on the owner: not signed in, and the run under way. */
+export function googleSetupConnectOpen(run: GoogleSetupRun): boolean {
+  return run.steps.connect?.status !== 'done' && googleSetupRunActive(run)
+}
+
+/** The services the owner picked on the services card, or null before they answered. */
+export function googleSetupAnsweredServices(run: GoogleSetupRun): GoogleServiceChoice[] | null {
+  const values = run.answers.services?.values
+  if (!values) {
+    return null
+  }
+  return googleChoices(GOOGLE_SERVICE_CHOICES.filter((choice) => values.includes(choice)))
+}
+
+/** The choices an account can use now: it has each one's services and every one of them is ready. A
+ *  service this build doesn't know counts for none. */
+export function googleReadyChoices(account: {
+  services: readonly { service: string; state: string }[]
+}): GoogleServiceChoice[] {
+  return GOOGLE_SERVICE_CHOICES.filter((choice) => {
+    const entries = account.services.filter((entry) =>
+      GOOGLE_CHOICE_SERVICES[choice].some((service) => service === entry.service)
+    )
+    return entries.length > 0 && entries.every((entry) => entry.state === 'ready')
+  })
+}
+
+/** Blockers the sign-in card shows: the key, and the account once signed in. */
+export function googleSetupBlockerIsConnect(blocker: GoogleSetupBlocker): boolean {
+  return blocker.kind !== 'stopped' && blocker.kind !== 'paused' && blocker.kind !== 'needs-user'
+}
+
+/** The steps the list shows: every one not skipped. */
+export function googleSetupShownSteps(run: GoogleSetupRun): GoogleSetupStep[] {
+  return GOOGLE_SETUP_STEPS.filter((step) => run.steps[step]?.status !== 'skipped')
+}
+
+/** A step's status as the list shows it: a stopped run waits on nobody, so its open step reads as not started. */
+export function googleSetupShownStepStatus(
+  run: GoogleSetupRun,
+  step: GoogleSetupStep
+): GoogleSetupStepStatus {
+  const status = run.steps[step]?.status ?? 'pending'
+  return run.state === 'cancelled' && (status === 'active' || status === 'needs-user')
+    ? 'pending'
+    : status
+}
+
+/** How many finished steps before the open one, and untouched steps past the one after it, fold into a line each
+ *  on the phone; two or more, since one step is no shorter folded. */
+export function googleSetupFoldedSteps(
+  run: GoogleSetupRun,
+  steps: readonly GoogleSetupStep[]
+): { before: number; after: number } {
+  const status = (step: GoogleSetupStep) => run.steps[step]?.status ?? 'pending'
+  const open = steps.findIndex((step) => status(step) !== 'done')
+  const finished = open === -1 ? steps.length : open
+  // Only untouched steps fold at the end: the bot may be on, or past, a later one while one is open.
+  const lastTouched = steps.findLastIndex((step) => status(step) !== 'pending')
+  const rest = steps.length - Math.max(finished + 2, lastTouched + 1)
+  return { before: finished >= 2 ? finished : 0, after: rest >= 2 ? rest : 0 }
+}
+
+export type GoogleSetupProgressView = {
+  steps: GoogleSetupStep[]
+  state: 'working' | 'waiting' | 'done' | 'stopped' | null
+  /** The owner's Stop setup: on the newest copy while the run is under way. */
+  stop: boolean
+  /** One signed-in account is used without asking; this switches it before the bot starts in Google Cloud. */
+  switchAccount: boolean
+  /** The step the bot is doing now, which the owner may take ("Let me do this one"). */
+  letMe: GoogleSetupStep | null
+  /** Where it's stuck, when the progress card is the one to say so. */
+  panel: GoogleSetupBlocker | null
+  /** A key Orca may have missed, which the owner imports by hand. */
+  keyImport: boolean
+}
+
+/** The live step list. Only the newest copy in the chat acts: it waits for the key and shows the buttons. */
+export function googleSetupProgressView(
+  run: GoogleSetupRun,
+  blocker: GoogleSetupBlocker | null,
+  newest: boolean
+): GoogleSetupProgressView {
+  const clientStatus = run.steps.client?.status
+  // Before client is done, a missed key's recovery (Make a new key, Import a key file) shows here;
+  // the sign-in card takes over the key's blockers after.
+  const panel =
+    newest &&
+    blocker &&
+    (blocker.kind === 'stopped' ||
+      blocker.kind === 'paused' ||
+      (googleSetupAwaitsKey(run) && googleSetupBlockerIsConnect(blocker)))
+      ? blocker
+      : null
+  const current = currentGoogleSetupStep(run)
+  const steps = googleSetupShownSteps(run)
+  // The sign-in at the end is always the owner's, on its own card.
+  const waiting =
+    current === 'connect' || steps.some((step) => run.steps[step]?.status === 'needs-user')
+  const botDoing =
+    newest &&
+    googleSetupRunActive(run) &&
+    current !== null &&
+    current !== 'connect' &&
+    run.steps[current]?.status !== 'needs-user' &&
+    !personDoesGoogleSetupStep(run, current)
+  return {
+    steps,
+    state:
+      run.state === 'done'
+        ? 'done'
+        : run.state === 'cancelled'
+          ? 'stopped'
+          : waiting
+            ? 'waiting'
+            : googleSetupRunActive(run)
+              ? 'working'
+              : null,
+    stop: newest && googleSetupRunActive(run),
+    switchAccount:
+      newest &&
+      run.steps.account?.status === 'done' &&
+      (run.accounts?.length ?? 0) <= 1 &&
+      googleSetupChoiceChangeable(run),
+    letMe: botDoing ? current : null,
+    panel,
+    keyImport:
+      newest &&
+      !panel &&
+      googleSetupAwaitsKey(run) &&
+      (clientStatus === 'active' || clientStatus === 'needs-user')
+  }
+}
+
+export type GoogleSetupStepCardView = {
+  /** Its place among the shown steps, from 1. */
+  n: number
+  total: number
+  done: boolean
+  /** The bot took it back ("Take over from here"); a step handed to the person stays theirs until then. */
+  handedBack: boolean
+  /** Done and Take over act: the step is the person's, open, the run under way, and this is the newest copy. */
+  acts: boolean
+  /** Open, but the run ended or stopped: its buttons go. */
+  ended: boolean
+  /** The policy box is the person's own tick; Take over can't do it for them. */
+  takeOver: boolean
+  /** In Guide me here the bot reads the page the person clicks in. */
+  watching: boolean
+}
+
+export function googleSetupStepCardView(
+  run: GoogleSetupRun,
+  step: GoogleSetupStep,
+  newest: boolean
+): GoogleSetupStepCardView {
+  const status = run.steps[step]?.status ?? 'pending'
+  const done = status === 'done' || status === 'skipped'
+  const handedBack = !done && status !== 'needs-user' && !personDoesGoogleSetupStep(run, step)
+  const ended = !done && !googleSetupRunActive(run)
+  const acts = !done && !handedBack && !ended && newest
+  const shown = googleSetupShownSteps(run)
+  return {
+    n: shown.indexOf(step) + 1,
+    total: shown.length,
+    done,
+    handedBack,
+    acts,
+    ended,
+    takeOver: step !== 'branding',
+    watching: acts && run.mode === 'guide-here' && status === 'active'
+  }
+}
+
+/** The card answer a blocker's button records, or null for one that acts on the computer itself (a
+ *  sign-in, a key file, a page or the clipboard) or has nothing left to record. */
+export function googleSetupActionAnswer(
+  action: GoogleSetupAction,
+  run: GoogleSetupRun
+): { card: GoogleSetupCard; values: string[] } | null {
+  switch (action.id) {
+    case 'make-new-key':
+      return { card: 'step', values: ['redo', 'client'] }
+    case 'continue-without': {
+      const left = (run.services ?? []).filter((choice) => !action.services.includes(choice))
+      // The host offers it only with a service left; an answer needs at least one.
+      return left.length > 0 ? { card: 'services', values: left } : null
+    }
+    case 'keep-account':
+      return { card: 'account', values: [action.email] }
+    case 'continue':
+      return { card: 'step', values: ['resume'] }
+    case 'start-over':
+      return { card: 'step', values: ['start-over'] }
+    case 'let-me':
+      return { card: 'step', values: ['let-me', action.step] }
+    case 'done':
+      return { card: 'step', values: ['done', action.step] }
+    case 'import-key':
+    case 'allow':
+    case 'sign-in-again':
+    case 'turn-on':
+    case 'copy-for-admin':
+    case 'check-again':
+      return null
+  }
+}

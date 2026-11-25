@@ -1,3 +1,5 @@
+import { splitFontFamilyList } from '../../styles/font-family-list'
+
 // Auto-enable known ligature fonts; substring matching recognizes variants such as JetBrainsMono NF.
 const LIGATURE_FONT_TOKENS = [
   'fira code',
@@ -27,8 +29,8 @@ export function fontFamilyHasKnownLigatures(fontFamily: string | null | undefine
   if (!fontFamily) {
     return false
   }
-  // Settings hold one family, but callers may pass a full CSS stack.
-  const primary = fontFamily.split(',')[0]?.replace(/"/g, '').trim().toLowerCase() ?? ''
+  // A setting or CSS stack can list several families; only the first decides.
+  const primary = splitFontFamilyList(fontFamily)[0]?.toLowerCase() ?? ''
   if (!primary) {
     return false
   }

@@ -9,10 +9,13 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
-} from '../../shared/project-types'
-import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
-import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
+} from '../../shared/project/project-types'
+import {
+  getSshTargetIdForExecutionHost,
+  type ExecutionHostId
+} from '../../shared/execution-host/execution-host'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
   formatProjectHostSetupCreateResult,
@@ -36,7 +39,7 @@ import {
 import { findProjectSetups, resolveProjectIdSelector } from './project-selector'
 import { resolveRepoPathArgument } from './repo-path-arguments'
 import { RuntimeClientError } from '../runtime/connection/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 async function callProjectHostSetup<TResult>(
   client: HandlerContext['client'],

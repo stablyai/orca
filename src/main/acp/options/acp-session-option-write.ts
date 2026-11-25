@@ -1,4 +1,4 @@
-import { abortSignalReason } from '../../../shared/abort-signal-reason'
+import { abortSignalReason } from '../../../shared/concurrency/abort-signal-reason'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpOptionWrite, AcpStructuredOptions } from './acp-structured-options'
 

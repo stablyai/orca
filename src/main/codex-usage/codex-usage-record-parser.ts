@@ -1,4 +1,4 @@
-import { extractString } from '../../shared/trimmed-string'
+import { extractString } from '../../shared/text/trimmed-string'
 import {
   buildCodexUsageEventKey,
   normalizeRawUsage,

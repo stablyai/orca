@@ -1,13 +1,15 @@
 import type { CodexHomeLaunchContext } from '../../../ipc/pty/host-env/types'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { codexHookService } from '../../hooks/installation/hook-service'
 import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileCodexHooksForLaunch } from '../../hooks/reconciliation/codex-hook-reconcile'
 import { grantCodexSandboxReadOnManagedHome } from './codex-windows-sandbox-read-grant'
 import type { CodexLaunchConfigPreparation } from '../../hooks/installation/codex-hook-launch-preparation'
+import type { CodexSettingsPromotionHomes } from '../settings/config-settings-promotion'
+import { syncSystemConfigIntoManagedCodexHome } from '../settings/codex-config-mirror'
 
 export function createCodexRuntimeHomeLaunchPreparation(deps: {
   getRuntimeHome: () => Pick<CodexRuntimeHomeService, 'prepareForCodexLaunchAsync'> | null
@@ -22,17 +24,21 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
     if (!runtimeHome) {
       throw new Error('Codex runtime home service is not initialized')
     }
-    let syncConfig: (() => boolean) | undefined
+    let mirrorHomes: CodexSettingsPromotionHomes | undefined
     let configComplete = false
     let configResult: { value: boolean } | { error: unknown } | undefined
     const configPreparation: CodexLaunchConfigPreparation = {
+      pendingMirror: () => (mirrorHomes && !configResult ? mirrorHomes : null),
+      settle: (result) => {
+        configResult ??= result
+      },
       run: () => {
-        if (!syncConfig) {
+        if (!mirrorHomes) {
           return true
         }
         if (!configResult) {
           try {
-            configResult = { value: syncConfig() }
+            configResult = { value: syncSystemConfigIntoManagedCodexHome(mirrorHomes) }
           } catch (error) {
             configResult = { error }
           }
@@ -51,8 +57,8 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
       // Propagate home failures: null selects the system account, which could launch the wrong identity (STA-4422).
       const runtimeHomePath = await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
         unavailableManagedHomePath: launchContext?.unavailableManagedHomePath,
-        deferConfigSync: (prepare) => {
-          syncConfig = prepare
+        deferConfigSync: (homes) => {
+          mirrorHomes = homes
         }
       })
       const launchesCodex = launchContext?.launchesCodex === true
@@ -81,7 +87,7 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
           hookTarget,
           isHooksEnabled,
           launchesCodex,
-          syncConfig ? configPreparation : undefined
+          mirrorHomes ? configPreparation : undefined
         )
         if (status.state === 'error') {
           console.warn(

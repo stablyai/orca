@@ -1,5 +1,5 @@
-import { mergeDiffCommentMutation } from '../../../../../src/shared/diff-comment-mutation'
-import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
+import { mergeDiffCommentMutation } from '../../../../../src/shared/file-review/diff-comment-mutation'
+import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 
 type PendingSave = { base: DiffComment[]; next: DiffComment[] }
 

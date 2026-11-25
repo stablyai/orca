@@ -1,10 +1,11 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type {
   RuntimeOrchestrationEnvelope,
+  RuntimeRequestGuard,
   RuntimeRequestPreparation,
   RuntimeRpcResponse
-} from '../../../../shared/runtime-rpc-envelope'
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 import {
   type KnownRuntimeEnvironment,
@@ -12,7 +13,7 @@ import {
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { recordRuntimeEnvironmentUsage } from '../../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
@@ -74,7 +75,9 @@ export function shouldRouteSubscriptionBySupport(method: string): boolean {
     method === 'session.tabs.subscribeAll' ||
     method === 'accounts.subscribe' ||
     method === 'notifications.subscribe' ||
-    method === 'files.watch'
+    method === 'files.watch' ||
+    // Every remote chat holds one; share the control socket rather than open a socket per pane.
+    method === 'orchestration.workerApprovalsSubscribe'
   )
 }
 
@@ -84,11 +87,14 @@ export function executeSupportRoutedCall(args: {
   method: string
   params: unknown
   timeoutMs: number
+  responseTimeoutMs?: number
   expectedPairingRevision?: number
   expectedRuntimeId?: string
   envelope?: RuntimeOrchestrationEnvelope
   signal?: AbortSignal
   prepareRequest?: RuntimeRequestPreparation
+  prepareGuard?: RuntimeRequestGuard
+  idlePassive?: boolean
 }): Promise<RuntimeRpcResponse<unknown>> {
   return routeRuntimeEnvironmentCallBySupport({
     userDataPath: args.userDataPath,
@@ -109,7 +115,10 @@ export function executeSupportRoutedCall(args: {
             args.timeoutMs,
             args.envelope,
             args.signal,
-            args.prepareRequest
+            args.prepareRequest,
+            args.prepareGuard,
+            args.responseTimeoutMs,
+            args.idlePassive
           ),
     unsupported: (route) =>
       args.expectedRuntimeId !== undefined
@@ -122,7 +131,9 @@ export function executeSupportRoutedCall(args: {
             args.envelope,
             args.signal,
             ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-            args.prepareRequest
+            args.prepareRequest,
+            args.prepareGuard,
+            args.responseTimeoutMs
           ),
     markUsed: (environmentId, response) => {
       if (response.ok) {
@@ -236,7 +247,7 @@ export async function routeRuntimeEnvironmentCallBySupport(args: {
       }
       return response
     }
-    environment = resolveEnvironment(args.userDataPath, environment.id)
+    environment = await resolveEnvironment(args.userDataPath, environment.id)
   }
   return runtimeEnvironmentChangedFailure(environment, args.method)
 }

@@ -10,7 +10,7 @@ import {
   addBrowserPageZoomEventListener,
   publishBrowserPageSiteDisplay
 } from '../viewport/browser-page-zoom'
-import type { BrowserPageZoomCommand } from '../../../../../../shared/browser-page-zoom'
+import type { BrowserPageZoomCommand } from '../../../../../../shared/browser/site-settings/browser-page-zoom'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 /** Handle chrome chords in the renderer and guest chords through main’s IPC; focused guests own a separate WebContents. */

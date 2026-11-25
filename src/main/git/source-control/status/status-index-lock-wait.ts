@@ -1,7 +1,7 @@
 import { access, stat } from 'node:fs/promises'
 import * as path from 'node:path'
-import { BoundedMap } from '../../../../shared/bounded-map'
-import { delayUnlessAborted } from '../../../../shared/abort-aware-delay'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
+import { delayUnlessAborted } from '../../../../shared/concurrency/abort-aware-delay'
 import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 import { resolveGitDir } from '../resolve-git-dir'
 

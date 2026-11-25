@@ -1,5 +1,5 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 export const AGENT_LAUNCH_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -31,5 +31,17 @@ export const AGENT_LAUNCH_COMMAND_SPECS: CommandSpec[] = [
       'orca agent launch --agent codex --model gpt-6-astra --effort high --prompt "Write the design doc" --json',
       'orca agent launch --agent claude --worktree path:/projects/myapp --focus'
     ]
+  },
+  {
+    path: ['agent', 'installed'],
+    summary: 'List the agent CLIs installed on this host, with the IDs --agent takes',
+    usage: 'orca agent installed [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    notes: [
+      "Lists the agents Orca detects on the host that can start: ones turned off in Settings → Agents are left out, and ones set up there with a custom command are included. Each `id` is what `orca agent launch --agent` and `orca worktree create --agent` take; `default` marks the user's default agent.",
+      'This lists installed agent CLIs, not running agents; use `orca agent list` for those.',
+      '--worktree checks where that workspace runs agents, such as its SSH host or WSL distro. A stopped WSL distro is not started to check.'
+    ],
+    examples: ['orca agent installed --json', 'orca agent installed --worktree active']
   }
 ]

@@ -1,10 +1,10 @@
 import type { AgentSessionAttachmentClipboardTarget } from '../../../shared/agent-session/agent-session-attachments'
-import type { ClipboardImageThumbnail } from '../../../shared/clipboard-image'
-import type { ReadClipboardTextOptions } from '../../../shared/clipboard-text'
+import type { ClipboardImageThumbnail } from '../../../shared/clipboard/clipboard-image'
+import type { ReadClipboardTextOptions } from '../../../shared/clipboard/clipboard-text'
 import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
-} from '../../../shared/rich-markdown-context-menu'
+} from '../../../shared/editor/markdown/rich-markdown-context-menu'
 
 export type UiWindowApi = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
@@ -19,6 +19,8 @@ export type UiWindowApi = {
     forNativeChatDraft?: boolean
     /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes. */
     forStructuredChat?: boolean
+    /** Web client only: the paste event's picture, since insecure origins have no async clipboard. */
+    eventImage?: Blob
   }) => Promise<string | null>
   /** Saves paste text on the execution host so the agent can read it. */
   savePastedTextAsFile: (args: {
@@ -38,6 +40,8 @@ export type UiWindowApi = {
   readClipboardImageThumbnail: () => Promise<ClipboardImageThumbnail | null>
   writeClipboardText: (text: string) => Promise<void>
   writeTerminalClipboardText: (text: string) => Promise<void>
+  /** For a secret: cleared after a minute if it's still there; clearsLater false where that isn't promised. */
+  writeSecretClipboardText: (text: string) => Promise<{ clearsLater: boolean }>
   writeSelectionClipboardText: (text: string) => Promise<void>
   writeClipboardImage: (dataUrl: string) => Promise<void>
   performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }) => void

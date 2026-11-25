@@ -1,6 +1,6 @@
 /** Share split-prefix, BEL/ST and best-effort exit semantics across main local/SSH facts and renderer remote-runtime/kill-switch scans. */
 
-import { ownRetainedString } from '../../own-retained-string'
+import { ownRetainedString } from '../../text/own-retained-string'
 
 type OscTerminator = {
   index: number

@@ -1,5 +1,5 @@
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { DICTATION_CLEANUP_PROMPT_OPENING } from '../../../shared/dictation-cleanup'
+import { DICTATION_CLEANUP_PROMPT_OPENING } from '../../../shared/speech/dictation/dictation-cleanup'
 import { CONVERSATION_NAME_PROMPT_OPENING } from '../../../shared/source-control/ai/generation/conversation-name-generation'
 
 const MAX_TEXT_TASK_REQUEST_MESSAGES = 6

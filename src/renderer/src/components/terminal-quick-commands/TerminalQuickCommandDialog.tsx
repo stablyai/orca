@@ -3,7 +3,7 @@ import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
 } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   getTerminalQuickCommandAction,
@@ -12,7 +12,7 @@ import {
   supportsTerminalAgentQuickCommand
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { getTerminalQuickCommandBodySize } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import {
   Dialog,
   DialogContent,
@@ -53,6 +53,8 @@ type TerminalQuickCommandDialogProps = {
   onOpenChange: (open: boolean) => void
   /** Resolves whether the save landed; the dialog closes only then, so a refusal keeps the text. */
   onSave: (command: TerminalQuickCommand) => Promise<boolean> | boolean
+  /** Lets an opener whose trigger may be gone (a closed menu's row) choose where focus lands on close. */
+  onCloseAutoFocus?: (event: Event) => void
 }
 
 const EMPTY_REPOS: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[] = []
@@ -77,7 +79,8 @@ export function TerminalQuickCommandDialog({
   defaultAdvancedOpen = false,
   agentPromptMaxLength = null,
   onOpenChange,
-  onSave
+  onSave,
+  onCloseAutoFocus
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
   const t = useTranslate()
   const fallbackAgent: TuiAgent =
@@ -214,6 +217,7 @@ export function TerminalQuickCommandDialog({
       <DialogContent
         className="flex max-h-[min(90vh,52rem)] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
         showCloseButton={false}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle className="text-sm">

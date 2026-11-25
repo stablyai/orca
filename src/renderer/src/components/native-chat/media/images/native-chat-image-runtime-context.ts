@@ -10,8 +10,8 @@ import { captureDirectSshMutationExpectation } from '@/runtime/hosts/ssh/ssh-mut
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { isFloatingWorkspaceId } from '../../../../../../shared/floating-workspace-worktree'
+} from '../../../../../../shared/execution-host/execution-host'
+import { isFloatingWorkspaceId } from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { resolveNativeChatTabDirectory } from '../../pane/routing/native-chat-tab-directory'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { useMemo } from 'react'
@@ -24,7 +24,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** The transcript must not read until ownership and its path are both known. */
 export type NativeChatImageRuntimeContext = RuntimeFileOperationArgs | null

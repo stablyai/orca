@@ -1,4 +1,4 @@
-import { parseAgentSessionOperationTimestamp } from '../../../../shared/agent-session/agent-session-host-authority'
+import { parseAgentSessionOperationTimestamp } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import {
   agentSessionLedgerRefusal,
   refuseUnlessWriterAdmitted

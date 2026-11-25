@@ -1,5 +1,8 @@
 import { Replace } from 'lucide-react'
-import { getKeybindingDefinition, isKeybindingActionId } from '../../../../../shared/keybindings'
+import {
+  getKeybindingDefinition,
+  isKeybindingActionId
+} from '../../../../../shared/keybindings/definitions'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { Switch } from '../../ui/switch'

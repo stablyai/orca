@@ -5,13 +5,13 @@ import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import {
   buildOpenTabSearchBrowserPages,
   selectOpenTabSearchBrowserPageState
-} from '@/components/tab-bar/open-tab-search-entries'
+} from '@/components/tab-bar/create-entry/open-tab-search-entries'
 import {
   activateBrowserPagePaletteResult,
   type BrowserPagePaletteActivationTarget
 } from '@/lib/browser/palette/browser-page-palette-activation'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
-import { normalizeBrowserNavigationUrl } from '../../../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../../../shared/browser/navigation/browser-url'
 import { requestBrowserFocus } from '../../host-guest/input/browser-focus'
 import { toDisplayUrl } from '../../describe-page/browser-page-url-display'
 import type { BrowserAddressBarSuggestion } from './browser-address-bar-suggestions'

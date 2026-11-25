@@ -29,6 +29,7 @@ import type {
   SessionSearchIndexStore
 } from '../storage/session-search-store-types'
 import { sessionSearchEnumeratedContainers } from '../discovery/session-search-synthetic-sources'
+import type { SessionDiscoveryStatCache } from '../../ai-vault/discovery/session-discovery-stat-cache'
 
 // Bound recent-cycle retirement work and prioritize rows within the recency window.
 const RETIREMENT_ROWS_PER_CYCLE = 512
@@ -44,8 +45,12 @@ export type SessionSearchPassArgs = {
   recentPerAgent: number
   /** Roots with transcripts on the previous pass; undefined before any observation. */
   previousRootsWithFiles?: ReadonlySet<string>
-  /** The deadline stops transcript reads; discovery and retirement still finish. */
-  overdue?: () => boolean
+  /** Armed after discovery; the returned check stops transcript reads, while retirement still finishes. */
+  readDeadline?: () => () => boolean
+  /** A sweep repeated to finish deferred reads skips the retention purge its first pass ran. */
+  skipPurge?: boolean
+  /** Lets discovery reuse stats of quiet indexed files. */
+  statCache?: SessionDiscoveryStatCache
   /** Cache directory reads across discovery-health and retirement checks for this pass. */
   listings: SessionSearchDirectoryReader
   signal?: AbortSignal
@@ -68,13 +73,14 @@ export async function runSessionSearchPass(
 ): Promise<SessionSearchPassResult> {
   const { store, signal } = args
   await store.prepare?.()
-  if (args.full) {
+  if (args.full && !args.skipPurge) {
     // Apply narrowed retention before the new instance’s first discovery.
     await store.purgeOlderThan(store.retentionCutoff, signal)
   }
   return withCursorChatMetaScan(async () => {
     const swept = await discoverSessionSearchCandidates(args.roots, {
       limitPerAgent: args.full ? Number.POSITIVE_INFINITY : args.recentPerAgent,
+      statCache: args.statCache,
       signal
     })
     const issues: AiVaultScanIssue[] = [...swept.issues]
@@ -87,10 +93,14 @@ export async function runSessionSearchPass(
       const read = await runSessionSearchIndexPass(store, swept.candidates, {
         signal,
         rows,
-        overdue: args.overdue
+        overdue: args.readDeadline?.()
       })
       outOfTime = read.outOfTime
       left = read.left
+      // Rows retired as outranked copies are not deleted sources.
+      for (const path of read.retired) {
+        rows.delete(path)
+      }
     } catch (error) {
       if (!signal?.aborted) {
         throw error
@@ -121,6 +131,9 @@ export async function runSessionSearchPass(
             ? sessionSearchEmptiedRoots(previousRootsWithFiles, rootsWithFiles)
             : new Set(),
           listings: args.listings,
+          retiredFileRoots: swept.discoveries.flatMap((discovery) =>
+            discovery.agent === 'hermes' ? [discovery.rootDir] : (discovery.aliasRootDirs ?? [])
+          ),
           directoryLimit: RETIREMENT_DIRECTORIES_PER_PASS,
           signal
         })

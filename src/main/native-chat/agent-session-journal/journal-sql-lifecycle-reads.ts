@@ -11,6 +11,7 @@ import type {
   JournalOutgrownChildRead,
   JournalRestartProgress
 } from './journal-lifecycle-reads'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 export type JournalSqlLifecycleRead =
   | { kind: 'latest-prompt' }
@@ -37,7 +38,9 @@ export function readJournalDomainLifecycle(
       .get(...prefix)
     return {
       kind: 'latest-prompt',
-      prompt: row ? latestStructuredAgentSessionPrompt([JSON.parse(String(row.payload_json))]) : ''
+      prompt: row
+        ? latestStructuredAgentSessionPrompt([readJournalStoredItem(db, prefix, row.payload_json)])
+        : ''
     }
   }
   if (operation.kind === 'restart-progress') {
@@ -74,7 +77,7 @@ export function readJournalDomainLifecycle(
     FROM journal_items WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
           .get(...prefix, agentJournalSubmissionKey(nextClientMessageId))
   const nextItem: AgentJournalRenderItem | null = next
-    ? JSON.parse(String(next.payload_json))
+    ? readJournalStoredItem(db, prefix, next.payload_json)
     : null
   const body = nextItem?.body
   return {

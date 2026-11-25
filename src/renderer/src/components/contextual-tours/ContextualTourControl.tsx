@@ -3,7 +3,7 @@ import { Code2, Highlighter, KeyRound, Languages, Pipette, Puzzle, ShieldCheck }
 import { cn } from '@/lib/class-names'
 import { Switch } from '@/components/ui/switch'
 import { useAppStore } from '@/store'
-import type { ContextualTourStepControl } from '../../../../shared/contextual-tours'
+import type { ContextualTourStepControl } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from './contextual-tour-composer-events'
 import { useTranslate } from '@/i18n/use-translate'
 

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import {
   setPRAutoRefreshCadenceForHost,
   type PRAutoRefreshCadence
-} from '../../../../../shared/review-refresh-policy'
+} from '../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import { useHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { PRAutoRefreshControl } from './PRAutoRefreshControl'

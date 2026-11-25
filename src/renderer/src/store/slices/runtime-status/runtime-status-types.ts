@@ -21,7 +21,12 @@ export type RuntimeStatusSlice = {
   ) => void
   clearRuntimeEnvironmentStatus: (environmentId: string) => void
   retainRuntimeEnvironmentStatuses: (environmentIds: Iterable<string>) => void
-  refreshRuntimeEnvironmentStatus: (environmentId: string, timeoutMs?: number) => Promise<boolean>
+  /** `force` is for a check the user asked for; background refreshes respect the host's failure backoff. */
+  refreshRuntimeEnvironmentStatus: (
+    environmentId: string,
+    timeoutMs?: number,
+    options?: { force?: true }
+  ) => Promise<boolean>
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
 }
 
@@ -41,6 +46,7 @@ export type RuntimeStatusStoreState = RuntimeStatusSlice &
       | 'clearRuntimeDetectedAgents'
       | 'markEnvironmentSshStateStale'
       | 'purgeStaleRuntimeHostState'
+      | 'forgetAgentCliUpdateHosts'
       | 'clearHostWorkspaceStatuses'
       | 'pairedTerminalTabCloseIntentsByEnvironment'
       | 'recordPairedTerminalTabCloseIntent'

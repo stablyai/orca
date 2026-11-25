@@ -16,7 +16,8 @@ import {
   listStructuredProviderSessionOwnership
 } from '../../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+// oxfmt-ignore
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   keysMayMatch,

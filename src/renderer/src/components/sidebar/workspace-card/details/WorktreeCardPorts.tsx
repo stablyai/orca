@@ -17,7 +17,7 @@ import {
 } from '@/lib/workspace-ports/workspace-port-browser-open'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
-import type { WorkspacePort } from '../../../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../../../shared/workspace/ports/workspace-ports'
 import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent

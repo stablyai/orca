@@ -3,7 +3,7 @@ import {
   EMPTY_PENDING_VM_CHECKOUT_INDEX,
   type PendingVmCheckout,
   type PendingVmCheckoutIndex
-} from '../../shared/pending-vm-checkouts'
+} from '../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 /**
  * VM checkouts whose creates are still in progress, per publishing window. Every window, the

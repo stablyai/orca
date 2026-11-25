@@ -3,9 +3,9 @@ import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators,
   resolveRuntimePath
-} from '../../cross-platform-path'
-import type { Repo } from '../../repo-types'
-import { resolveWslRepoWorktreeBasePath } from '../../wsl-paths'
+} from '../../file-access/cross-platform-path'
+import type { Repo } from '../../repository/repo-types'
+import { resolveWslRepoWorktreeBasePath } from '../../file-access/wsl-paths'
 
 export function isRuntimePathAbsoluteForRepo(repoPath: string, layoutPath: string): boolean {
   const pathFlavor =

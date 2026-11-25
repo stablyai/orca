@@ -3,7 +3,10 @@ import { FolderOpen, Plus } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshTarget
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { RemoteFileBrowser } from '../../host-path-browser/RemoteFileBrowser'
 import { SshTargetRow } from '../../host-admission/ssh/SshTargetRow'
 import { AddServerSshHostDialog } from '../../host-admission/ssh/AddServerSshHostDialog'
@@ -192,7 +195,7 @@ export function RemoteStep({
         >
           {isAddingRemote
             ? t('auto.components.sidebar.AddRepoRemoteStep.35831a7312', 'Adding...')
-            : t('auto.components.sidebar.AddRepoRemoteStep.36d427bb66', 'Add project on SSH host')}
+            : t('auto.components.sidebar.AddRepoRemoteStep.36d427bb66', 'Add SSH project')}
         </Button>
       </div>
     </>

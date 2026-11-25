@@ -1,7 +1,8 @@
+import { getWorkspaceCleanupGroup } from '../../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { REPO_COLORS } from '../../../../../shared/repo-badge-color'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { Repo } from '../../../../../shared/repo-types'
+import { REPO_COLORS } from '../../../../../shared/repository/appearance/repo-badge-color'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { CandidateRow, type WorkspaceCleanupDeletionPhase } from './workspace-cleanup-candidate-row'
@@ -46,7 +47,6 @@ type Scenario = {
   status?: string | null
   deletionPhase?: WorkspaceCleanupDeletionPhase
   failure?: Omit<WorkspaceCleanupFailure, 'worktreeId' | 'displayName'>
-  gitPending?: boolean
   selected?: boolean
   expanded?: boolean
 }
@@ -75,15 +75,8 @@ function ws(
   }
 }
 
-function Rows({
-  scenarios,
-  showHostLabel = false
-}: {
-  scenarios: Scenario[]
-  showHostLabel?: boolean
-}): React.JSX.Element {
+function Rows({ scenarios }: { scenarios: Scenario[] }): React.JSX.Element {
   const noop = (): void => {}
-  const showSizeColumn = scenarios.some((scenario) => scenario.size != null)
   return (
     <div>
       {scenarios.map((scenario, index) => {
@@ -96,8 +89,7 @@ function Rows({
             candidate={candidate}
             reviewInfo={{ ...NO_REVIEW, ...scenario.review }}
             repo={REPOS[candidate.repoName] ?? null}
-            showHostLabel={showHostLabel}
-            showSizeColumn={showSizeColumn}
+            group={getWorkspaceCleanupGroup(candidate)}
             expanded={scenario.expanded ?? false}
             last={index === scenarios.length - 1}
             lastActivityLabel={scenario.activity}
@@ -114,7 +106,6 @@ function Rows({
                   }
                 : undefined
             }
-            gitEvidencePending={scenario.gitPending}
             selected={scenario.selected ?? false}
             onIgnore={noop}
             onRestore={noop}
@@ -221,7 +212,7 @@ const STATES: Scenario[] = [
     activity: '9d ago',
     failure: { message: 'Workspace is locked by another process.' }
   },
-  { candidate: ws('checking', 'orca', { git: GIT_UNKNOWN }), activity: '2d ago', gitPending: true },
+  { candidate: ws('checking', 'orca', { git: GIT_UNKNOWN }), activity: '2d ago' },
   {
     candidate: ws('mystery', 'orca', {
       executionHostId: undefined,
@@ -295,12 +286,12 @@ export const singleHost = defineFixture({
 
 export const multiHost = defineFixture({
   width: 880,
-  render: () => <Rows scenarios={MULTI_HOST} showHostLabel />
+  render: () => <Rows scenarios={MULTI_HOST} />
 })
 
 export const states = defineFixture({
   width: 880,
-  render: () => <Rows scenarios={STATES} showHostLabel />
+  render: () => <Rows scenarios={STATES} />
 })
 
 export const variety = defineFixture({
@@ -331,7 +322,7 @@ export const overflow = defineFixture({
 
 export const narrow = defineFixture({
   width: 560,
-  render: () => <Rows scenarios={[...MULTI_HOST.slice(0, 3), OVERFLOW_ROW]} showHostLabel />
+  render: () => <Rows scenarios={[...MULTI_HOST.slice(0, 3), OVERFLOW_ROW]} />
 })
 
 /** Keyboard focus reveals the same row actions hover does. */

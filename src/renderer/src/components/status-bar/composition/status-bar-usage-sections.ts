@@ -1,9 +1,12 @@
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import { isCursorUsageBucket } from '../../../../../shared/cursor-usage-buckets'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+import { isCursorUsageBucket } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { formatRateLimitWindowChipLabel } from '../../../../../shared/rate-limit-window-label'
+import { formatRateLimitWindowChipLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
 import { getUsageHeadlineSection } from '../usage/usage-headline-sections'
 
 export type StatusBarUsageSection = {
@@ -24,8 +27,14 @@ export function getStatusBarUsageSections(
     return []
   }
   if (mode === 'compact') {
-    const headline = getUsageHeadlineSection(p, t)
-    return headline ? [{ key: 'headline', ...headline }] : []
+    // Why 'all': the status bar keeps its original headline, Fable included.
+    const headline = getUsageHeadlineSection(p, t, 'all')
+    if (!headline) {
+      return []
+    }
+    // Why: named pools read "Cursor Models 64%" in Detailed, so Compact keeps that order.
+    const isNamedBucket = p.buckets?.some((bucket) => bucket === headline.window) ?? false
+    return [{ key: 'headline', ...headline, labelFirst: isNamedBucket }]
   }
   if (p.buckets?.length) {
     // Antigravity pool names vary by account tier; Gemini's experimental pools stay hidden.

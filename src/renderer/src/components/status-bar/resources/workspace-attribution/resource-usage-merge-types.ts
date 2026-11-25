@@ -1,5 +1,8 @@
-import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
-import type { WorktreeMemory } from '../../../../../../shared/process-stats-types'
+import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  ChatAgentMemory,
+  WorktreeMemory
+} from '../../../../../../shared/diagnostics/process-stats-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -17,7 +20,10 @@ export type UnifiedSessionRow = {
   incarnationId?: string
   paneKey: string | null
   pid: number
+  /** Live pane titles change often, so they are applied where the row renders, not in the merge. */
   label: string
+  /** The tab whose live pane title, when it has one, replaces `label`. */
+  liveTitleTabId?: string
   bound: boolean
   /** Ownership as the provider could establish it; anything but `absent` means confirm first. */
   agentOwnership: AgentOwnershipEvidence
@@ -43,6 +49,12 @@ export type UnifiedWorktreeRow = {
   /** Paired server that sampled this row; absent for this machine and SSH rows. */
   hostLabel?: string
   sessions: UnifiedSessionRow[]
+  /** The paired machine that sampled this row; its chats open there. */
+  runtimeHostId?: string
+  /** A paired machine's workspace this window doesn't place there; its chats can't be opened from here. */
+  unplaced?: true
+  /** Chat agents the sampling machine attributed to this workspace; absent when it has none. */
+  chats?: readonly ChatAgentMemory[]
   browsers: BrowserWorkspace[]
 }
 
@@ -63,8 +75,6 @@ export type MergeContext = {
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
   /** From useAppStore: SSH sessions known live but not yet reattached; no other binding sees them. */
   deferredSshSessionIdsByTabId?: Record<string, string>
-  /** From useAppStore: per-tab live pane titles (for label resolution). */
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   /** From useAppStore: false until renderer state can distinguish bound/orphan. */
   workspaceSessionReady: boolean
   /** Project display names for sampled and daemon-only groups. */

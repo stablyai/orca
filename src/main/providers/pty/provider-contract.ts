@@ -16,14 +16,22 @@ import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pt
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../../shared/agent-session/agent-session-host-authority'
+} from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { PtyProcessInfo } from './process-info'
 import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { TerminalOwner } from '../../../shared/terminal/pty/lifecycle/terminal-owner'
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type { RuntimeTerminalProjection } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+
+export type PtyProviderBufferSnapshotOptions = {
+  scrollbackRows?: number
+  visibleProjection?: true
+}
 
 export type PtyProviderBufferSnapshot = {
   data: string
+  /** Screen rows returned in place of ANSI for a visible projection request. */
+  visibleProjection?: RuntimeTerminalProjection
   /** Live state that can be restored without an alternate-screen frame. */
   frameRestoreAnsi?: string
   /** Authoritative normal buffer captured beside an alternate-screen frame. */
@@ -157,8 +165,9 @@ export type IPtyProvider = {
   /** Authoritative provider model snapshot after monitoring-stream gaps; optional for other providers. */
   getBufferSnapshot?: (
     id: string,
-    opts?: { scrollbackRows?: number }
+    opts?: PtyProviderBufferSnapshotOptions
   ) => Promise<PtyProviderBufferSnapshot | null>
+  supportsVisibleProjectionSnapshot?(id: string): boolean
   /** Whether this exact PTY can return a sequence-safe provider snapshot. */
   canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
   /** Applied size readback detects dropped/clamped remote resize requests.
@@ -188,6 +197,8 @@ export type IPtyProvider = {
   resetInputModes(id: string): Promise<void>
   /** Sends ESC [ O to a ?1004 program once no viewer is left to blur; hosts that own no viewers omit it. */
   reportFocusLost?(id: string): Promise<void>
+  /** Redraws the program without input; hosts that cannot leave it alone. */
+  requestRepaint?(id: string): Promise<void>
   /** Ends the startup Kitty-query window; OSC 10/11 authority stays with the owner for life. */
   closeStartupQueryAuthority?: (id: string) => Promise<number> | number
   /** Host-wide viewer colours the PTY owner answers OSC 10/11 from. */
@@ -211,9 +222,12 @@ export type IPtyProvider = {
     worktreeId?: string
     /** Scope route validation to these PTYs; absence still requires a complete inventory. */
     ptyIds?: readonly string[]
-    /** Foreground proof only: read `ptyIds` from their established owner. Never exit proof or a census. */
+    /** Foreground proof and root-PID lookups only: read `ptyIds` from their established owner.
+     *  Never a census or an exit proof that reads a PTY's absence as its end. */
     targetOwnerOnly?: boolean
-    /** Diagnostic display only: include generations whose routing owner is unverifiable. */
+    /** Every listed generation, including those whose routing owner is unverifiable: for diagnostic
+     *  display, and for exit proof, where a live unrouted generation must not read as gone. Never for
+     *  routing input. Still requires a complete inventory. */
     includeUnrouted?: boolean
   }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>

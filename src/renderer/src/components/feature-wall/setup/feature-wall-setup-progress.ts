@@ -1,10 +1,10 @@
-import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
-import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
+import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import { hasFeatureInteraction } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import {
   FEATURE_WALL_SETUP_STEPS,
   type FeatureWallSetupStepId
-} from '../../../../../shared/feature-wall-setup-steps'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+} from '../../../../../shared/feature-education/explore/feature-wall-setup-steps'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { selectWorktreesByRepo } from '../../../store/workspaces/catalog/workspace-record-fields'
 
@@ -14,6 +14,7 @@ export type FeatureWallSetupProgressInput = {
   featureInteractions: FeatureInteractionState
   hasConnectedTaskSource: boolean
   browserUseSkillInstalled: boolean
+  computerUseBlocked?: boolean
   computerUseSkillInstalled: boolean
   computerUsePermissionsReady: boolean
   computerUseUnavailable?: boolean
@@ -44,6 +45,7 @@ function countAvailableNonMainWorktrees(worktreesByRepo: Record<string, Worktree
 
 export type AgentCapabilitiesState = {
   browserUseSkillInstalled: boolean
+  computerUseBlocked?: boolean | undefined
   computerUseSkillInstalled: boolean
   computerUseReady: boolean
   computerUseUnavailable: boolean
@@ -53,8 +55,9 @@ export type AgentCapabilitiesState = {
 export function isAgentCapabilitiesDone(state: AgentCapabilitiesState): boolean {
   return (
     state.browserUseSkillInstalled &&
-    state.computerUseSkillInstalled &&
-    (state.computerUseReady || state.computerUseUnavailable) &&
+    (state.computerUseBlocked ||
+      (state.computerUseSkillInstalled &&
+        (state.computerUseReady || state.computerUseUnavailable))) &&
     state.orchestrationSkillInstalled
   )
 }
@@ -70,22 +73,22 @@ export function hasCompletedPreBrowserSetup(input: FeatureWallSetupProgressInput
     hasFeatureInteraction(input.featureInteractions, 'terminal-pane-split') &&
     countAvailableNonMainWorktrees(selectWorktreesByRepo(input)) >= 1 &&
     input.hasConnectedTaskSource &&
-    input.browserUseSkillInstalled &&
-    input.computerUseSkillInstalled &&
-    (input.computerUsePermissionsReady || input.computerUseUnavailable === true) &&
-    input.orchestrationSkillInstalled &&
+    setupGuideAgentCapabilitiesDone(input) &&
     input.hasSetupScript
   )
+}
+
+function setupGuideAgentCapabilitiesDone(input: FeatureWallSetupProgressInput): boolean {
+  return isAgentCapabilitiesDone({
+    ...input,
+    computerUseReady: input.computerUsePermissionsReady,
+    computerUseUnavailable: input.computerUseUnavailable === true
+  })
 }
 
 export function getFeatureWallSetupProgress(
   input: FeatureWallSetupProgressInput
 ): FeatureWallSetupProgress {
-  const agentCapabilitiesDone = isAgentCapabilitiesDone({
-    ...input,
-    computerUseReady: input.computerUsePermissionsReady,
-    computerUseUnavailable: input.computerUseUnavailable === true
-  })
   const stepDone: Record<FeatureWallSetupStepId, boolean> = {
     'default-agent': Boolean(input.settings?.defaultTuiAgent),
     'add-two-repos': input.gitRepoCount >= 2,
@@ -95,7 +98,7 @@ export function getFeatureWallSetupProgress(
     'two-worktrees': countAvailableNonMainWorktrees(selectWorktreesByRepo(input)) >= 1,
     browser: hasFeatureInteraction(input.featureInteractions, 'browser'),
     'task-sources': input.hasConnectedTaskSource,
-    'agent-capabilities': agentCapabilitiesDone,
+    'agent-capabilities': setupGuideAgentCapabilitiesDone(input),
     'setup-script': input.hasSetupScript
   }
   return {

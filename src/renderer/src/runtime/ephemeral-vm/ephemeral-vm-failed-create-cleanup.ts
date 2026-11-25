@@ -1,5 +1,5 @@
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 type FailedCreateCleanupActions = {
   deleteProjectHostSetup: (setupId: string, hostId: ExecutionHostId) => Promise<unknown>

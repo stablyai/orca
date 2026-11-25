@@ -1,5 +1,5 @@
 import { delimiter, win32 as pathWin32 } from 'node:path'
-import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
+import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
 
 export const SHELL_PATH_DELIMITER = '__ORCA_SHELL_PATH__'
 

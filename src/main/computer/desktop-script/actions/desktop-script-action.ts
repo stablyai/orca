@@ -1,7 +1,7 @@
 import type {
   ComputerActionMetadata,
   ComputerProviderCapabilities
-} from '../../../../shared/computer-use-runtime-types'
+} from '../../../../shared/computer/computer-use-runtime-types'
 import { optionalNumberParam, optionalStringParam } from '../desktop-script-provider-params'
 import { RuntimeClientError } from '../../runtime-client-error'
 import type {

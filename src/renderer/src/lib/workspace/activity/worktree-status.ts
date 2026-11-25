@@ -1,12 +1,12 @@
 import { translate } from '@/i18n/i18n'
 import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
 import { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
-import { tabHasLivePty } from '../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import {
   collectRuntimePaneLeafIds,
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleLeafIdFromRoot
-} from '../../../../../shared/runtime-pane-title-leaf-id'
+} from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import { containsAgentSpinnerGlyph } from '../../../../../shared/agent-status/title/agent-title-glyphs'
 import { isSyntheticAgentPermissionTitle } from '../../../../../shared/agent-status/title/synthetic-agent-title'
 import type {
@@ -19,7 +19,7 @@ import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list
 import {
   rankWorktreeStatus,
   type WorktreeStatus
-} from '../../../../../shared/worktree-status-rollup'
+} from '../../../../../shared/worktree/row-display/worktree-status-rollup'
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus

@@ -6,6 +6,7 @@ import { getDashboardPopoutWindow } from '../../window/dashboard-popout-window'
 import { stopSyntheticTitleSpinnerTimer } from './synthetic-title-runtime'
 import { mainProcessState as state } from '../main-process-state'
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
+import { cliWriterTopology } from '../../agent-hooks/server/cli-writer-topology'
 
 export type MainWindowAgentStatusOptions = {
   window: BrowserWindow
@@ -13,8 +14,8 @@ export type MainWindowAgentStatusOptions = {
 }
 
 export function installMainWindowAgentStatusListeners(options: MainWindowAgentStatusOptions): void {
-  agentHookServer.setListener(
-    ({
+  agentHookServer.setListener((row) => {
+    const {
       paneKey,
       tabId,
       worktreeId,
@@ -37,79 +38,91 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       structuredHost,
       programStatus,
       programStatusOnly,
+      paneSleep,
       agentIdentity,
       identityOnly,
       agentPresence
-    }) => {
-      if (state.mainWindow?.isDestroyed()) {
+    } = row
+    if (state.mainWindow?.isDestroyed()) {
+      return
+    }
+    // Renderer still owns structured rows; forwarding would give each pane key two writers until that bridge retires.
+    if (structuredHost) {
+      return
+    }
+    const launchConfig = state.core.runtime?.getLaunchStatementForPaneKey(
+      paneKey,
+      payload.agentType
+    )
+    // A tmux host's conversation reaches the window as shared so it leaves no resume checkpoint.
+    const shared = cliWriterTopology(row) === 'shared' ? { executionHost: 'shared' as const } : {}
+    if (providerSessionOnly) {
+      // An ended agent's retained identity is no conversation for the window to checkpoint.
+      if (agentPresence?.ended) {
         return
       }
-      // Renderer still owns structured rows; forwarding would give each pane key two writers until that bridge retires.
-      if (structuredHost) {
-        return
-      }
-      const launchConfig = state.runtime?.getLaunchStatementForPaneKey(paneKey, payload.agentType)
-      if (providerSessionOnly) {
-        // Idle Pi session_start only refreshes resume identity; skip titles, telemetry and status UI.
-        state.mainWindow?.webContents.send('agentStatus:set', {
-          ...payload,
-          paneKey,
-          ...(launchToken ? { launchToken } : {}),
-          ...(launchConfig !== undefined ? { launchConfig } : {}),
-          tabId,
-          worktreeId,
-          connectionId,
-          receivedAt,
-          ...(evidenceObservedAt !== undefined ? { evidenceObservedAt } : {}),
-          stateStartedAt,
-          ...(providerSession ? { providerSession } : {}),
-          ...(observation ? { observation } : {}),
-          providerSessionOnly: true
-        })
-        return
-      }
-      const runtime = state.runtime
-      const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
-      const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
-      const statusEvent = {
-        ...(authorityRestartId && isReplay !== true ? { authorityRestartId } : {}),
+      // Idle Pi session_start only refreshes resume identity; skip titles, telemetry and status UI.
+      state.mainWindow?.webContents.send('agentStatus:set', {
         ...payload,
         paneKey,
         ...(launchToken ? { launchToken } : {}),
         ...(launchConfig !== undefined ? { launchConfig } : {}),
-        ...(terminalHandle ? { terminalHandle } : {}),
         tabId,
         worktreeId,
         connectionId,
         receivedAt,
         ...(evidenceObservedAt !== undefined ? { evidenceObservedAt } : {}),
         stateStartedAt,
-        ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
-        ...pickHostTurnEnd({ turnEndedAt, turnEndDisposition }),
         ...(providerSession ? { providerSession } : {}),
-        ...(publishedOrcaSessionId(agentIdentity) !== undefined
-          ? { orcaSessionId: publishedOrcaSessionId(agentIdentity) }
-          : {}),
-        ...(promptInteractionKey ? { promptInteractionKey } : {}),
-        ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(observation ? { observation } : {}),
-        ...(orchestration ? { orchestration } : {}),
-        ...(programStatus ? { programStatus } : {}),
-        ...(programStatusOnly === true ? { programStatusOnly: true } : {}),
-        ...(agentPresence?.session && !agentPresence.ended
-          ? { paneOwner: { agent: agentPresence.agent, session: agentPresence.session } }
-          : {}),
-        // Mark reconnect replays so cached completions do not notify again.
-        ...(isReplay === true ? { isReplay: true } : {})
-      }
-      state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
-      getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
-      // A facet-only republish (progress tick) or a settled id is not a state the agent entered.
-      if (programStatusOnly !== true && identityOnly !== true) {
-        options.onRecordAgentState(payload.agentType ?? 'unknown', payload.state)
-      }
+        ...shared,
+        providerSessionOnly: true
+      })
+      return
     }
-  )
+    const runtime = state.core.runtime
+    const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
+    const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
+    const statusEvent = {
+      ...(authorityRestartId && isReplay !== true ? { authorityRestartId } : {}),
+      ...payload,
+      paneKey,
+      ...(launchToken ? { launchToken } : {}),
+      ...(launchConfig !== undefined ? { launchConfig } : {}),
+      ...(terminalHandle ? { terminalHandle } : {}),
+      tabId,
+      worktreeId,
+      connectionId,
+      receivedAt,
+      ...(evidenceObservedAt !== undefined ? { evidenceObservedAt } : {}),
+      stateStartedAt,
+      ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
+      ...pickHostTurnEnd({ turnEndedAt, turnEndDisposition }),
+      ...(providerSession ? { providerSession } : {}),
+      ...(publishedOrcaSessionId(agentIdentity) !== undefined
+        ? { orcaSessionId: publishedOrcaSessionId(agentIdentity) }
+        : {}),
+      ...(promptInteractionKey ? { promptInteractionKey } : {}),
+      ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+      ...(observation ? { observation } : {}),
+      ...(orchestration ? { orchestration } : {}),
+      ...(programStatus ? { programStatus } : {}),
+      ...(programStatusOnly === true ? { programStatusOnly: true } : {}),
+      ...(paneSleep ? { paneSleep } : {}),
+      ...shared,
+      ...(agentPresence?.session && !agentPresence.ended
+        ? { paneOwner: { agent: agentPresence.agent, session: agentPresence.session } }
+        : {}),
+      // Mark reconnect replays so cached completions do not notify again.
+      ...(isReplay === true ? { isReplay: true } : {})
+    }
+    state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
+    getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
+    // A facet-only republish (progress tick) or a settled id is not a state the agent entered.
+    if (programStatusOnly !== true && identityOnly !== true) {
+      options.onRecordAgentState(payload.agentType ?? 'unknown', payload.state)
+    }
+  })
   agentHookServer.setPaneStatusClearListener((clear) => {
     if (state.mainWindow?.isDestroyed()) {
       return

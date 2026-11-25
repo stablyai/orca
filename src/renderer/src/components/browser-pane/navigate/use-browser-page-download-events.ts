@@ -4,7 +4,7 @@ import type {
   BrowserDownloadProgressEvent
 } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserDownloadState } from './browser-download-progress'
-import { emitBrowserRemoteDownloadToast } from '../browser-download-destination-toast'
+import { emitBrowserRemoteDownloadToast } from './browser-download-destination-toast'
 
 export function useBrowserPageDownloadEvents({
   browserTabId,
@@ -34,6 +34,7 @@ export function useBrowserPageDownloadEvents({
           receivedBytes: 0,
           status: 'downloading',
           savePath: event.savePath,
+          ...(event.claimLabel ? { claimLabel: event.claimLabel } : {}),
           error: null,
           progressState: null,
           completedAt: null
@@ -81,7 +82,9 @@ export function useBrowserPageDownloadEvents({
             ? {
                 ...download,
                 status: event.status,
-                savePath: event.savePath,
+                // A claimed download's file is the feature's own and gone once read.
+                savePath: event.claimLabel ? null : event.savePath,
+                ...(event.claimLabel ? { claimLabel: event.claimLabel } : {}),
                 error: event.error,
                 completedAt: Date.now()
               }

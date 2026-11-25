@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { RelayPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 function currentAppPath(): string | undefined {
@@ -11,7 +11,7 @@ function currentAppPath(): string | undefined {
   }
 }
 
-/** WSL guest bundles are never uploaded to SSH hosts. */
+/** WSL guest bundles stay off SSH hosts, except the browser network relay for loopback-only hosts. */
 export function relayBundleCandidates(
   platform: RelayPlatform | 'wsl',
   appPath = currentAppPath()

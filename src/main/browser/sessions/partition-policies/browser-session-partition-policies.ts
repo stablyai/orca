@@ -1,5 +1,5 @@
 import { session, type Session } from 'electron'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { clearProxySessionCredentials } from '../../../network/proxy-settings'
 import {
@@ -20,6 +20,7 @@ import {
   installBrowserSessionPermissionHandlers,
   type BrowserSessionPermissionOptions
 } from '../../site-settings/permissions/browser-session-permission-handlers'
+import { registerBrowserSessionSitePermissions } from '../../site-settings/permissions/browser-site-permission-memory'
 
 const configuredPartitions = new Set<string>()
 const userAgentPolicyDisposerBySession = new WeakMap<Session, () => void>()
@@ -64,6 +65,8 @@ export async function installBrowserSessionPartitionPolicies(
     permissions?: BrowserPartitionPermissionPolicy
     applyAppWideProxy?: boolean
     userAgentExceptions?: boolean
+    /** False for a session that blocks all network itself, so no certificate exception can apply. */
+    certificateRequestGuard?: boolean
   } = {}
 ): Promise<void> {
   const { partition } = profile
@@ -80,7 +83,9 @@ export async function installBrowserSessionPartitionPolicies(
     return proxyReady
   }
 
-  browserManager.installCertificateRequestGuard(sess)
+  if (options.certificateRequestGuard !== false) {
+    browserManager.installCertificateRequestGuard(sess)
+  }
   if (options?.permissions === 'deny') {
     sess.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
     sess.setPermissionCheckHandler(() => false)
@@ -109,6 +114,12 @@ export async function installBrowserSessionPartitionPolicies(
   return proxyReady
 }
 
+export function restoreBrowserSessionPartitionPolicies(profile: BrowserSessionProfile): void {
+  void installBrowserSessionPartitionPolicies(profile).catch(() => {
+    console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)
+  })
+}
+
 export function clearBrowserSessionPartitionPolicies(partition: string, sess: Session): void {
   // Electron Sessions outlive removed partitions; release their callbacks and listeners.
   invalidateBrowserSessionProxyApplication(sess)
@@ -122,5 +133,6 @@ export function clearBrowserSessionPartitionPolicies(partition: string, sess: Se
   clearBrowserWebAuthnAccessHandlers(sess)
   sess.setPermissionRequestHandler(null)
   sess.setPermissionCheckHandler(null)
+  registerBrowserSessionSitePermissions(sess, null)
   sess.setDisplayMediaRequestHandler(null)
 }

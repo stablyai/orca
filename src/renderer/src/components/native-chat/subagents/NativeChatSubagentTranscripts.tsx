@@ -1,11 +1,16 @@
+import { NativeChatWaitingAgentMailRowsContext } from '../queue/NativeChatWaitingAgentMailActions'
+import { slackPeopleOf } from '../../../../../shared/connectors/slack-mention-tokens'
 import { useCallback, useContext, useEffect, useId, useMemo, useRef } from 'react'
 import { NativeChatMessageList } from '../NativeChatMessageList'
 import { NativeChatSideChatForkPointContext } from '../messages/actions/native-chat-fork-context'
+import { NativeChatSlackPeopleContext } from '../native-chat-markdown-mentions'
 import { focusNativeChatPromptCard } from '../prompts/use-native-chat-prompt-card-focus'
 import { NativeChatToolRunWindowProvider } from '../tools/runs/native-chat-tool-run-window-context'
+import { NativeChatGalleryCoveredFocusContext } from '../media/images/gallery/native-chat-image-gallery-context'
 import type { NativeChatFind } from '../viewport/find/use-native-chat-find'
 import {
   closeNativeChatSubagentToPrompt,
+  NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE,
   noteNativeChatSubagentParent,
   openNativeChatSubagent,
   takeNativeChatSubagentOpener,
@@ -75,7 +80,15 @@ export function NativeChatSubagentTranscripts({
     [open, openId, paneKey, showWaiting, stop, titleId, waiting]
   )
   const isVisible = props.isVisible ?? true
+  const slackPeople = useMemo(() => slackPeopleOf(props.session.messages), [props.session.messages])
   const mainRef = useRef<HTMLDivElement>(null)
+  const sheetView = useCallback(
+    () =>
+      mainRef.current
+        ?.closest('[data-native-chat-root]')
+        ?.querySelector<HTMLElement>(`[${NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE}]`) ?? null,
+    []
+  )
   const previousIdRef = useRef<string | null>(null)
   useEffect(() => {
     const previousId = previousIdRef.current
@@ -107,11 +120,16 @@ export function NativeChatSubagentTranscripts({
     <NativeChatToolRunWindowProvider isVisible={isVisible} find={find}>
       <div ref={mainRef} className="relative flex min-h-0 flex-1 flex-col">
         {/* Paused under the sheet, as when hidden: its scroll stays where the reader left it. */}
-        <NativeChatMessageList
-          {...props}
-          isVisible={isVisible && shown === null}
-          subagentView={main}
-        />
+        <NativeChatSlackPeopleContext value={slackPeople}>
+          {/* A sheet opened over an open image viewer takes the focus the viewer gives up. */}
+          <NativeChatGalleryCoveredFocusContext value={sheetView}>
+            <NativeChatMessageList
+              {...props}
+              isVisible={isVisible && shown === null}
+              subagentView={main}
+            />
+          </NativeChatGalleryCoveredFocusContext>
+        </NativeChatSlackPeopleContext>
       </div>
       {shown && openId !== null ? (
         <NativeChatSubagentSheet
@@ -123,20 +141,23 @@ export function NativeChatSubagentTranscripts({
           {/* `/btw` forks from the conversation, never from a subagent's rows. */}
           <NativeChatSideChatForkPointContext value={undefined}>
             <NativeChatInSubagentSheet value>
-              <NativeChatMessageList
-                key={openId}
-                session={props.session}
-                journalItems={props.journalItems}
-                journalSubmissions={props.journalSubmissions}
-                journalLatestTurn={props.journalLatestTurn}
-                subagentRoster={props.subagentRoster}
-                subagentView={shown}
-                isVisible={isVisible}
-                isWorking={false}
-                expandSignal={props.expandSignal}
-                structuredAttachments={props.structuredAttachments}
-                runtimeContext={props.runtimeContext}
-              />
+              {/* The conversation's waiting mail draws in the conversation, not in a subagent's rows. */}
+              <NativeChatWaitingAgentMailRowsContext value={null}>
+                <NativeChatMessageList
+                  key={openId}
+                  session={props.session}
+                  journalItems={props.journalItems}
+                  journalSubmissions={props.journalSubmissions}
+                  journalLatestTurn={props.journalLatestTurn}
+                  subagentRoster={props.subagentRoster}
+                  subagentView={shown}
+                  isVisible={isVisible}
+                  isWorking={false}
+                  expandSignal={props.expandSignal}
+                  structuredAttachments={props.structuredAttachments}
+                  runtimeContext={props.runtimeContext}
+                />
+              </NativeChatWaitingAgentMailRowsContext>
             </NativeChatInSubagentSheet>
           </NativeChatSideChatForkPointContext>
         </NativeChatSubagentSheet>

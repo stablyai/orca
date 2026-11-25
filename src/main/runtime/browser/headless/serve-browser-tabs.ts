@@ -1,10 +1,10 @@
 // List saved headless browser tabs immediately; start pages lazily on first use, never merely on host restart.
 
 import type { BrowserBackend } from '../../../browser/browser-backend'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type {
   LayoutApplyOutcome,
   LayoutCommand
@@ -17,6 +17,9 @@ import {
   withoutServeBrowserPages,
   withServeBrowserPageRecord,
   withServeBrowserPageState,
+  withServeBrowserTabProfile,
+  serveBrowserTabProfileCommand,
+  type ServeBrowserPageProfile,
   type ServeBrowserPageState
 } from './serve-browser-tab-layout'
 
@@ -72,6 +75,21 @@ export class ServeBrowserTabs {
     this.write(page.worktreeId, (_hostId, session) => withServeBrowserPageState(session, page))
   }
 
+  /** A saved tab follows its page into another profile, so the page wakes in it. */
+  profileChanged(page: ServeBrowserPageProfile): void {
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && this.deps.applyLayout) {
+      const session = this.deps.backend() ? this.deps.session(page.worktreeId) : null
+      const command = session ? serveBrowserTabProfileCommand(session, page) : null
+      if (command) {
+        void this.applyLogged(this.deps.applyLayout, page.worktreeId, command)
+      }
+      return
+    }
+    this.write(page.worktreeId, (hostId, session) =>
+      withServeBrowserTabProfile(hostId, session, page)
+    )
+  }
+
   /** A closed page's tab, true when one was saved; a page destroyed with the process is not a close. */
   closed(worktreeId: string, pageId: string): boolean {
     // Drop page facts before main closes the tab layout.
@@ -122,6 +140,49 @@ export class ServeBrowserTabs {
         ? this.activeIn(worktreeId)
         : undefined
     return found ? this.restore(found) : false
+  }
+
+  /** Saved web pages, started or not and active or not, whose tab names this profile. */
+  pagesInProfile(profileId: string): { worktreeId: string; pageId: string; tabId: string }[] {
+    if (!this.deps.backend()) {
+      return []
+    }
+    return [...new Set(this.deps.savedWorktreeIds())].flatMap((worktreeId) => {
+      const session = this.deps.session(worktreeId)
+      return (session?.browserTabsByWorktree?.[worktreeId] ?? [])
+        .filter((tab) => tab.sessionProfileId === profileId)
+        .flatMap((tab) =>
+          (session?.browserPagesByWorkspace?.[tab.id] ?? [])
+            .filter((page) => !page.docLocation && !page.remoteBrowserPageId)
+            .map((page) => ({ worktreeId, pageId: page.id, tabId: tab.id }))
+        )
+    })
+  }
+
+  /** Profiles that saved tabs name; a tab with no profile is Default's. */
+  savedProfileIds(): Set<string> {
+    if (!this.deps.backend()) {
+      return new Set()
+    }
+    return new Set(
+      [...new Set(this.deps.savedWorktreeIds())].flatMap((worktreeId) =>
+        (this.deps.session(worktreeId)?.browserTabsByWorktree?.[worktreeId] ?? []).flatMap((tab) =>
+          tab.sessionProfileId ? [tab.sessionProfileId] : []
+        )
+      )
+    )
+  }
+
+  /** Whether the page's tab is saved, so a freed page can start again from it. */
+  isSaved(page: { browserPageId: string; worktreeId: string }): boolean {
+    return this.startableIn(page.worktreeId).some((saved) => saved.pageId === page.browserPageId)
+  }
+
+  /** The workspace whose saved tab shows the page, for a close that names only the page. */
+  savedWorktreeOf(pageId: string): string | undefined {
+    return [...this.deps.savedWorktreeIds()].find((id) =>
+      this.isSaved({ browserPageId: pageId, worktreeId: id })
+    )
   }
 
   /** Whether a saved tab could register once a window mounts it; every worktree's when none is named. */

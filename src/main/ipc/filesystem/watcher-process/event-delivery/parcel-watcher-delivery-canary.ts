@@ -9,7 +9,8 @@ import {
   hasShallowWatchDelivered,
   noteShallowWatchDelivered
 } from '../native-subscriptions/shallow-watch-delivery-probe'
-import { errorMessage } from '../../../../../shared/error-message'
+import { watchedDirectoryDeletionCheck } from '../native-subscriptions/windows-deleted-directory-watch'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 
 const CANARY_INTERVAL_MS = 10_000
 const CANARY_EVENT_TIMEOUT_MS = 5_000
@@ -94,25 +95,31 @@ export async function startWatcherDeliveryCanary(
   // Keep one fs.watch: opening one per probe makes macOS rebuild the shared FSEventStream.
   let independentLastEventAt = 0
   let independentWatch: FSWatcher | null = null
+  const closeIndependentWatch = (target: FSWatcher): void => {
+    if (independentWatch === target) {
+      independentWatch = null
+    }
+    try {
+      target.close()
+    } catch {
+      // Already failed; close is best-effort.
+    }
+  }
+  const isCanaryDirDeleted = watchedDirectoryDeletionCheck(canaryDir)
   const ensureIndependentWatch = (): boolean => {
     if (independentWatch) {
       return true
     }
     try {
-      const created = watch(canaryDir, { persistent: false }, () => {
+      const created = watch(canaryDir, { persistent: false }, (eventType, fileName) => {
+        if (isCanaryDirDeleted(eventType, fileName)) {
+          closeIndependentWatch(created)
+          return
+        }
         independentLastEventAt = Date.now()
         noteShallowWatchDelivered()
       })
-      created.on('error', () => {
-        if (independentWatch === created) {
-          independentWatch = null
-        }
-        try {
-          created.close()
-        } catch {
-          // Already failed; close is best-effort.
-        }
-      })
+      created.on('error', () => closeIndependentWatch(created))
       independentWatch = created
       return true
     } catch {

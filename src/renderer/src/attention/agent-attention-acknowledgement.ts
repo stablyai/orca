@@ -3,17 +3,40 @@ import {
   type ReadableAgentAttentionUnread
 } from './agent-attention-contract'
 
+export type AgentAttentionTurn = {
+  stateStartedAt: number
+  state?: string
+  sessionBoundary?: boolean
+  stateHistory?: readonly { startedAt: number }[]
+}
+
 /** Subject-keyed turn bookkeeping the acknowledgement policy reads; no surface shape here. */
 export type AgentAttentionTurnRecords = {
-  liveTurns: Record<string, { stateStartedAt: number }>
+  liveTurns: ReadonlyMap<string, AgentAttentionTurn> | Record<string, AgentAttentionTurn>
   acknowledgedTurnStartedAt: Record<string, number>
+}
+
+/** A session-boundary idle restates the turn it displaced, so it keeps that turn's identity instead of its arrival time. */
+export function agentAttentionTurnAt(entry: AgentAttentionTurn): number {
+  if (entry.state !== 'done' || entry.sessionBoundary !== true) {
+    return entry.stateStartedAt
+  }
+  return entry.stateHistory?.at(-1)?.startedAt ?? 0
 }
 
 export function readAgentAttentionTurnStartedAt(
   records: Pick<AgentAttentionTurnRecords, 'liveTurns'>,
   subjectKey: string
 ): number | null {
-  return records.liveTurns[subjectKey]?.stateStartedAt ?? null
+  const turns = records.liveTurns
+  const entry = isTurnMap(turns) ? turns.get(subjectKey) : turns[subjectKey]
+  return entry ? agentAttentionTurnAt(entry) : null
+}
+
+function isTurnMap(
+  turns: AgentAttentionTurnRecords['liveTurns']
+): turns is ReadonlyMap<string, AgentAttentionTurn> {
+  return typeof turns.get === 'function'
 }
 
 /** A turn is unread until acknowledged at or after its start; with no turn there is nothing to read. */
@@ -45,7 +68,9 @@ export function computeAgentAcknowledgementTargets(
   }
   const targets: string[] = []
   const acknowledgedAt = records.acknowledgedTurnStartedAt[subjectKey] ?? 0
-  if (isAgentTurnUnacknowledged(acknowledgedAt, records.liveTurns[subjectKey]?.stateStartedAt)) {
+  if (
+    isAgentTurnUnacknowledged(acknowledgedAt, readAgentAttentionTurnStartedAt(records, subjectKey))
+  ) {
     targets.push(subjectKey)
   }
   return targets

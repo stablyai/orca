@@ -1,11 +1,11 @@
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { joinPath } from '@/lib/path'
-import { normalizeRelativePath } from '../../../../../shared/cross-platform-path'
+import { normalizeRelativePath } from '../../../../../shared/file-access/cross-platform-path'
 import type { StagedRuntimeUploadFileIdentity } from '../../../../../shared/file-import/runtime-upload-staging-contract'
 import {
   DROP_STAGING_GITIGNORE_CONTENT,
   DROP_STAGING_RELATIVE_DIR
-} from '../../../../../shared/drop-staging-ignore'
+} from '../../../../../shared/file-import/drop-staging-ignore'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import {
   callRuntimeFileImportMutation,
@@ -143,9 +143,11 @@ export async function ensureRuntimeDropStagingIgnored(
   session: RuntimeFileImportSession
 ): Promise<void> {
   const destinationArgs = getRemoteFileArgs(context, destinationDir)
+  const destination = destinationArgs && normalizeRelativePath(destinationArgs.relativePath)
   if (
     !destinationArgs ||
-    normalizeRelativePath(destinationArgs.relativePath) !== DROP_STAGING_RELATIVE_DIR
+    (destination !== DROP_STAGING_RELATIVE_DIR &&
+      !destination?.startsWith(`${DROP_STAGING_RELATIVE_DIR}/`))
   ) {
     return
   }

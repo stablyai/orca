@@ -1,13 +1,14 @@
 /** Reuse pane Unicode/link/IME/shortcut and kitty policy outside panes; callers own transport and parse-completion backpressure. */
 import { Terminal, type ITerminalInitOnlyOptions, type ITerminalOptions } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { DashboardCardTerminalInput } from '../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '@/store/index'
 import type { MacOptionAsAlt } from '@/components/terminal-pane/input/keyboard/terminal-option-shortcut-policy'
 import { subscribeToTerminalUserInput } from '@/components/terminal-pane/input/terminal-user-input-signal'
+import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-rebuild-interaction'
 import { installTerminalNativeCopyGutterTrim } from '@/components/terminal-pane/clipboard/terminal-native-copy-gutter'
 import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import type { PreviewTerminalLinkHandlers } from './rendering/preview-terminal-links'
@@ -70,6 +71,8 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
     const signaledUserInput = pendingUserInputSignals > 0
     if (signaledUserInput) {
       pendingUserInputSignals--
+      // Typing here holds atlas rebuilds of the pane terminals mounted behind this view.
+      noteTerminalWebglAtlasTyping()
     }
     // Why: core's signal distinguishes real input from parser replies, so typing survives live replay without forwarding synthetic CPR/DA bytes.
     if (!args.answersQueries && (userInputDisposable ? !signaledUserInput : replayDepth > 0)) {

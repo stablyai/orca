@@ -1,7 +1,7 @@
 import * as z from 'zod'
 import { attachmentTextSegments } from './attachment-text-segments'
 
-import { waitForPromiseWithSignal } from '../abort-signal-reason'
+import { waitForPromiseWithSignal } from '../concurrency/abort-signal-reason'
 import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../agent-session/agent-session-attachments'
 import {
   MAX_FILE_RANGE_READ_BYTES,

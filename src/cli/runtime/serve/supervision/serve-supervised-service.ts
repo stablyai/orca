@@ -1,6 +1,6 @@
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../../shared/single-instance-exit-code'
-import { ORCAD_EXIT_TERMINALS_NOT_DURABLE } from '../../../../shared/serve-supervised-terminal-durability'
-import { orcadStaleLockReclaimCommand } from '../../../../shared/orcad-stale-lock-reclaim'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../../shared/app-lifecycle/launch/single-instance-exit-code'
+import { ORCAD_EXIT_TERMINALS_NOT_DURABLE } from '../../../../shared/remote-runtime/serve-supervisor/serve-supervised-terminal-durability'
+import { orcadStaleLockReclaimCommand } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
 import {
   brakeForBuild,
   clearServeSupervisorBrake,
@@ -22,7 +22,7 @@ import {
   requestSupervisedServeStop,
   resetSupervisedServeStop
 } from './serve-supervised-stop'
-import type { ServeBundlePark } from '../../../../shared/serve-bundle-park'
+import type { ServeBundlePark } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import { createSupervisedParkWatch } from './serve-supervised-park-watch'
 import type { AppImageBuildState } from '../updates/serve-appimage-update'
 

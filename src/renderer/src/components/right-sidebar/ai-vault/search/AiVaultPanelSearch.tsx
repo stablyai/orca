@@ -5,8 +5,8 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { resolveAiVaultSearchSettings } from '../../../../../../shared/ai-vault/search/ai-vault-search-settings'
 import type { AiVaultSearchHostOutcome } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { getTranslatedExecutionHostLabel } from '../../../sidebar/execution-host-label'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { getTranslatedExecutionHostLabel } from '../../../../runtime/hosts/display/execution-host-label'
 import type { useAiVaultPanelSearch } from './use-ai-vault-search'
 
 // Keep reasons short to match adjacent host labels; null means the host answered.
@@ -66,10 +66,12 @@ function describeSkippedHosts(
 export function AiVaultPanelSearch({
   search,
   noAgents,
+  listed,
   children
 }: {
   search: ReturnType<typeof useAiVaultPanelSearch>
   noAgents: boolean
+  listed: boolean
   children: ReactNode
 }) {
   const t = useTranslate()
@@ -100,8 +102,8 @@ export function AiVaultPanelSearch({
   let message: string | null = null
   if (needsLocalConsent) {
     message = t(
-      'sessionSearch.panel.consent',
-      'Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations. Content is not redacted. Authenticated paired clients can search it.'
+      'sessionSearch.panel.consentTranscriptIndex',
+      'Search matches session details and message previews. To search full conversations, enable full-text search (indexes local transcripts, unredacted). Paired devices can search them too.'
     )
   } else if (noAgents) {
     message = t('auto.components.right.sidebar.AiVaultPanel.noAgentsSelected', 'No agents selected')
@@ -157,11 +159,14 @@ export function AiVaultPanelSearch({
       )
     }
   }
-  if (response?.kind === 'results' && search.hits.length === 0 && !message) {
+  if (!message && listed && search.hits.length === 0 && search.replyEmpty) {
+    // Listed rows without hits are local title matches; the notice holds while the next query is pending.
     message = t(
-      'sessionSearch.panel.noMatches',
-      'No matching sessions in the indexed history. Try another query or scope.'
+      'sessionSearch.panel.titleMatchesOnly',
+      'No full-text matches. Showing sessions whose title or details match.'
     )
+  } else if (!message && !listed && response?.kind === 'results') {
+    message = t('sessionSearch.panel.noMatchesToShow', 'No matching sessions to show.')
   }
   const skippedHosts =
     response?.kind === 'results' ? describeSkippedHosts(response.hosts ?? [], t) : null

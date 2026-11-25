@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import {
   CLIPBOARD_IMAGE_MAX_PIXELS,
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
-} from '../../../../../../shared/clipboard-image'
+} from '../../../../../../shared/clipboard/clipboard-image'
 import {
   captureMarkupBaseImage,
   type MarkupBaseImage,

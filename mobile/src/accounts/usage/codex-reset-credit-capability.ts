@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CODEX_RESET_CREDIT_RUNTIME_CAPABILITY } from '../../../../src/shared/account-runtime-capabilities'
+import { CODEX_RESET_CREDIT_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/protocol/account-runtime-capabilities'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { startRuntimeCapabilityProbe } from '../../transport/connection/runtime-capability-probe'
 
