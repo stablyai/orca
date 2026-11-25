@@ -40,7 +40,7 @@ export function useAiVaultSessionRefresh(
   loading: boolean
   /** A foreground refresh is in flight, including while a cached list is shown without a spinner. */
   refreshing: boolean
-  /** Changes when a different list is shown, so a wait can identify its own list. */
+  /** Changes when a different list is shown or a wait ends without one, so a wait can identify its own list. */
   listRevision: number
   scopePending: boolean
   refresh: (args?: AiVaultRefreshArgs) => Promise<void>
@@ -247,6 +247,8 @@ export function useAiVaultSessionRefresh(
         // A published list settles both in its own commit; a queued foreground request already holds the flag.
         if (mountedRef.current && refreshIdRef.current === refreshId && !published) {
           setLoading(false)
+          // Why: this wait is over; a retry that is still pending in the next render must not reclaim its scan.
+          setListRevision((revision) => revision + 1)
           // A queued foreground request is still outstanding until its own refresh settles.
           setRefreshing(pendingRefreshRef.current && pendingForegroundRef.current)
         }

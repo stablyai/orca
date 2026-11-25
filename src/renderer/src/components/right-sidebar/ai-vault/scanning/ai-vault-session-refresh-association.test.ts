@@ -250,6 +250,26 @@ describe('useAiVaultSessionRefresh when chat-link associations change mid-refres
     expect(latest?.refreshing).toBe(false)
   })
 
+  it('moves the list revision when a wait fails with its retry already queued', async () => {
+    await mountWithRows()
+    const failing = deferredList()
+    listSessionsMock.mockReturnValueOnce(failing.promise)
+    await act(async () => void latest?.refresh({ force: true }))
+    const retry = deferredList()
+    listSessionsMock.mockReturnValueOnce(retry.promise)
+    await act(async () => void latest?.refresh({ background: true }))
+    const failedWait = latest?.listRevision
+    await act(async () => failing.reject(new Error('host unavailable')))
+    await flush()
+    // The retry is in flight with the same rows, so only the revision tells the strip that the failed wait is over.
+    expect(listSessionsMock).toHaveBeenCalledTimes(3)
+    expect(ids()).toEqual(['session-1'])
+    expect(latest?.listRevision).not.toBe(failedWait)
+    await act(async () => retry.resolve({ ...EMPTY_RESULT, sessions: [session(1)] }))
+    await flush()
+    expect(ids()).toEqual(['session-1'])
+  })
+
   it('keeps queued foreground intent through the background reply and its own held publication', async () => {
     await mountWithRows()
     const background = deferredList()
