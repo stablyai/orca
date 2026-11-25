@@ -9,10 +9,9 @@ type Inputs = Pick<AppState, 'groupsByWorktree' | 'unifiedTabsByWorktree'>
 const listenersByWorktree = new Map<string, Set<() => void>>()
 let unsubscribeStore: (() => void) | null = null
 
-function changedWorktreeIds(
-  next: Inputs[keyof Inputs],
-  previous: Inputs[keyof Inputs]
-): Iterable<string> {
+type WorktreeRecord = Readonly<Record<string, unknown>>
+
+function changedWorktreeIds(next: WorktreeRecord, previous: WorktreeRecord): Iterable<string> {
   if (next === previous) {
     return []
   }
@@ -20,28 +19,28 @@ function changedWorktreeIds(
   return changes?.kind === 'addressed' ? changes.keys : listenersByWorktree.keys()
 }
 
-function onStoreChange(state: Inputs, previous: Inputs): void {
-  // Writes that leave both records alone (editor input, terminal output) stop at two compares.
-  if (
-    state.groupsByWorktree === previous.groupsByWorktree &&
-    state.unifiedTabsByWorktree === previous.unifiedTabsByWorktree
-  ) {
-    return
-  }
-  const notified = new Set<() => void>()
-  const visit = (ids: Iterable<string>, key: keyof Inputs): void => {
-    for (const id of ids) {
-      if (state[key][id] === previous[key][id]) {
-        continue
-      }
+function collectListeners(
+  next: WorktreeRecord,
+  previous: WorktreeRecord,
+  notified: Set<() => void>
+): void {
+  for (const id of changedWorktreeIds(next, previous)) {
+    if (next[id] !== previous[id]) {
       listenersByWorktree.get(id)?.forEach((listener) => notified.add(listener))
     }
   }
-  visit(changedWorktreeIds(state.groupsByWorktree, previous.groupsByWorktree), 'groupsByWorktree')
-  visit(
-    changedWorktreeIds(state.unifiedTabsByWorktree, previous.unifiedTabsByWorktree),
-    'unifiedTabsByWorktree'
-  )
+}
+
+function onStoreChange(state: Inputs, previous: Inputs): void {
+  const groups = state.groupsByWorktree
+  const tabs = state.unifiedTabsByWorktree
+  // Writes that leave both records alone (editor input, terminal output) stop at two compares.
+  if (groups === previous.groupsByWorktree && tabs === previous.unifiedTabsByWorktree) {
+    return
+  }
+  const notified = new Set<() => void>()
+  collectListeners(groups, previous.groupsByWorktree, notified)
+  collectListeners(tabs, previous.unifiedTabsByWorktree, notified)
   notified.forEach((listener) => listener())
 }
 
