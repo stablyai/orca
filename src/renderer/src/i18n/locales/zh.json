@@ -15781,6 +15781,24 @@
         },
         "forkIndicator": {
           "forkOf": "{{repo}} 的 Fork"
+        },
+        "ProjectPeek": {
+          "faviconPlaceholder": "用来获取网站图标的网址",
+          "folderProject": "文件夹 · 不是 Git 仓库",
+          "forkOf": "{{value0}} 的 Fork",
+          "lettersInput": "最多 2 个字母",
+          "lettersPlaceholder": "1–2 个字母",
+          "noRemote": "本地 Git 仓库 · 没有远程仓库",
+          "openRemote": "在浏览器中打开 {{value0}}",
+          "openSettings": "打开设置",
+          "openUpstream": "在浏览器中打开 {{value0}}",
+          "resetAppearance": "重置图标和颜色",
+          "resetDone": "图标和颜色已重置",
+          "styleLetters": "字母",
+          "stylePicture": "图片",
+          "undo": "撤销",
+          "useLetters": "使用“{{value0}}”",
+          "usingGitHubAvatar": "正在使用 GitHub 头像"
         }
       },
       "pet": {
