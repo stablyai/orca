@@ -106,7 +106,8 @@ function context(callerSessionId?: string) {
         })
       }),
       getOrchestrationDb: () => ({
-        getBotConversationActsFor: () => ({ actsFor: [DANA] }),
+        listBotConversationActsFor: (roots: readonly string[]) =>
+          new Map(roots.map((root) => [root, { actsFor: [DANA] }])),
         getBotRequest: () => undefined
       }),
       listAutomationRuns: () => []
