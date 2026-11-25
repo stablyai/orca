@@ -10,8 +10,8 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { followCreatedBrowserTabOnMobile } from '../../browser/tabs/mobile-terminal-browser-open'
+import type { FollowMobileBrowserTabOptions } from '../../browser/commands/browser-command-contracts'
+import { createMobileBrowserOpenRuntimeHost } from '../../browser/tabs/mobile-terminal-browser-open'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { navigationTargetsClients } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import {
@@ -52,39 +52,35 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
 
   protected abstract getPtyRecordForPaneKey(paneKey: string): { ptyId: string } | null
 
-  protected hasMobileTerminalViewerForPane(paneKey: string): boolean {
-    const parsed = parsePaneKey(paneKey)
-    const leafPtyId = parsed
-      ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId))?.ptyId
-      : null
-    const ptyId = leafPtyId ?? this.getPtyRecordForPaneKey(paneKey)?.ptyId ?? null
-    return ptyId !== null && (this.mobileSubscribers.get(ptyId)?.size ?? 0) > 0
+  private readonly mobileBrowserOpenHost = createMobileBrowserOpenRuntimeHost({
+    getLeafPtyId: (t, l) => this.leaves.get(this.getLeafKey(t, l))?.ptyId,
+    getPanePtyId: (k) => this.getPtyRecordForPaneKey(k)?.ptyId,
+    getDisplayMode: (id) => this.mobileDisplayModes.get(id) ?? 'auto',
+    getSubscribers: (id) => this.mobileSubscribers.get(id)?.values(),
+    getMobileListenerIds: (id) =>
+      this.selectMobileSessionTabsListeners(id)
+        .filter((s) => s.clientKind === 'mobile' && Boolean(s.clientNavigationId))
+        .map((s) => s.clientNavigationId!),
+    hasOffscreenBrowser: () =>
+      !this.hasAuthoritativeWindow() && Boolean(this.offscreenBrowserBackend),
+    hydrateHeadlessTabs: (id) => this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(id),
+    getMobileSessionSnapshot: (id) => this.mobileSessionTabsByWorktree.get(id),
+    graphSyncCallbacks: this.graphSyncCallbacks,
+    getMobileSessionTabsForWorktree: (id) =>
+      this.getMobileSessionTabsForWorktree(id, undefined, { includeAgentSenders: false }),
+    applyTabNavigation: (s, t, n, c, f) => void this.applyMobileSessionTabNavigation(s, t, n, c, f)
+  })
+
+  protected hasMobileTerminalViewerForPane(paneKey: string, worktreeId?: string): boolean {
+    return this.mobileBrowserOpenHost.hasMobileTerminalViewer(paneKey, worktreeId)
   }
 
-  protected followBrowserTabOnMobile(worktreeId: string, browserPageId: string): Promise<boolean> {
-    return followCreatedBrowserTabOnMobile(
-      {
-        hasOffscreenBrowser:
-          !this.hasAuthoritativeWindow() && Boolean(this.offscreenBrowserBackend),
-        hydrateHeadlessTabs: (id) => this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(id),
-        getMobileSessionSnapshot: (id) => this.mobileSessionTabsByWorktree.get(id),
-        graphSyncCallbacks: this.graphSyncCallbacks,
-        getMobileClientNavigationIds: (id) => [
-          ...new Set(
-            this.selectMobileSessionTabsListeners(id)
-              .filter((sub) => sub.clientKind === 'mobile' && Boolean(sub.clientNavigationId))
-              .map((sub) => sub.clientNavigationId!)
-          )
-        ],
-        getMobileSessionTabsForWorktree: (id) =>
-          this.getMobileSessionTabsForWorktree(id, undefined, { includeAgentSenders: false }),
-        applyTabNavigation: (snap, tabId, nav, clientId, follows) => {
-          this.applyMobileSessionTabNavigation(snap, tabId, nav, clientId, follows)
-        }
-      },
-      worktreeId,
-      browserPageId
-    )
+  protected followBrowserTabOnMobile(
+    worktreeId: string,
+    browserPageId: string,
+    options?: FollowMobileBrowserTabOptions
+  ): Promise<boolean> {
+    return this.mobileBrowserOpenHost.followBrowserTabOnMobile(worktreeId, browserPageId, options)
   }
 
   protected applyMobileSessionTabNavigation(

@@ -19,15 +19,34 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import { isBrowserTabSplitDirection } from '../../shared/browser/workspaces/browser-tab-split-direction'
 import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
 import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './browser-command-target'
+import { BROWSER_OPEN_URL_MOBILE_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'open-url': async ({ flags, client, cwd, json }) => {
     const url = getRequiredStringFlag(flags, 'url')
-    const worktree =
-      (await getScopedBrowserWorktreeSelector(flags, cwd, client)) ??
-      (process.env.ORCA_WORKTREE_ID ? `id:${process.env.ORCA_WORKTREE_ID}` : undefined)
     const paneKey = process.env.ORCA_PANE_KEY || undefined
     const onlyWhenMobileViewing = flags.has('if-mobile-viewing')
+    if (onlyWhenMobileViewing) {
+      // Older runtimes drop onlyWhenMobileViewing and would hijack desktop open; fall through cleanly.
+      const status = await client.call<RuntimeStatus>('status.get')
+      if (!status.result.capabilities?.includes(BROWSER_OPEN_URL_MOBILE_RUNTIME_CAPABILITY)) {
+        process.exitCode = 2
+        return
+      }
+    }
+    // Prefer the pane's own worktree under --if-mobile-viewing so `cd` to another folder still targets mobile's workspace.
+    const envWorktree = process.env.ORCA_WORKTREE_ID
+      ? `id:${process.env.ORCA_WORKTREE_ID}`
+      : undefined
+    const worktree =
+      (onlyWhenMobileViewing && !flags.has('worktree') ? envWorktree : undefined) ??
+      (await getScopedBrowserWorktreeSelector(flags, cwd, client)) ??
+      envWorktree
+    if (onlyWhenMobileViewing && !worktree) {
+      process.exitCode = 2
+      return
+    }
     const result = await client.call<{ browserPageId: string | null }>(
       'browser.openUrl',
       {

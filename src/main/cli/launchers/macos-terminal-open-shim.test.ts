@@ -65,6 +65,8 @@ describe('macos-terminal-open-shim', () => {
       expect(result.stderr).toBe('')
       expect(readFileSync(argsLog, 'utf8').trim().split('\n')).toEqual([
         'open-url',
+        '--environment',
+        'local',
         '--url',
         url,
         '--if-mobile-viewing',

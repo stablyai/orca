@@ -87,7 +87,8 @@ export function orcadClientPageCommand(
       openUrlForMobileOrClient({
         host,
         params,
-        canCreateServerTab: engineAvailable(),
+        // orcad has no offscreen/renderer screencast host, so it cannot stream a server tab to mobile.
+        canCreateServerTab: false,
         signal: opts?.signal,
         createServerTab: async (...tabArgs) =>
           requireCreatedPage(await createTab(host, tabArgs, forward, engineAvailable))

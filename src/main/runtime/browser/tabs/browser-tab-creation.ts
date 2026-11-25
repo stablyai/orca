@@ -63,7 +63,8 @@ export class RuntimeBrowserTabCreation {
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'requireAgentBrowserBridge' | 'notifyRendererNavigation'
-    >
+    >,
+    private readonly closeServerTab?: (browserPageId: string, worktree: string) => Promise<void>
   ) {}
 
   async browserTabCreate(
@@ -241,7 +242,8 @@ export class RuntimeBrowserTabCreation {
       params,
       canCreateServerTab: true,
       signal: options?.signal,
-      createServerTab: (tabParams, caller) => this.browserTabCreate(tabParams, caller)
+      createServerTab: (tabParams, caller) => this.browserTabCreate(tabParams, caller),
+      closeServerTab: this.closeServerTab
     })
   }
 }

@@ -5,10 +5,15 @@ type CreationHost = ConstructorParameters<typeof RuntimeBrowserTabCreation>[0]
 type CreationTargets = ConstructorParameters<typeof RuntimeBrowserTabCreation>[1]
 
 function makeCreation(overrides: {
-  hasMobileTerminalViewer?: (paneKey: string) => boolean
-  followBrowserTabOnMobile?: (worktreeId: string, browserPageId: string) => Promise<boolean>
+  hasMobileTerminalViewer?: (paneKey: string, worktreeId?: string) => boolean
+  followBrowserTabOnMobile?: (
+    worktreeId: string,
+    browserPageId: string,
+    options?: { paneKey?: string; signal?: AbortSignal }
+  ) => Promise<boolean>
 }) {
   const createTab = vi.fn().mockResolvedValue({ browserPageId: 'page-mobile-1' })
+  const closeServerTab = vi.fn().mockResolvedValue(undefined)
   const followBrowserTabOnMobile =
     overrides.followBrowserTabOnMobile ?? vi.fn().mockResolvedValue(true)
   const host: CreationHost = {
@@ -33,8 +38,9 @@ function makeCreation(overrides: {
     notifyRendererNavigation: vi.fn()
   }
   return {
-    creation: new RuntimeBrowserTabCreation(host, targets),
+    creation: new RuntimeBrowserTabCreation(host, targets, closeServerTab),
     createTab,
+    closeServerTab,
     followBrowserTabOnMobile
   }
 }
@@ -59,7 +65,10 @@ describe('RuntimeBrowserTabCreation.browserOpenUrlOnClient', () => {
         worktreeId: 'wt-1'
       })
     )
-    expect(followBrowserTabOnMobile).toHaveBeenCalledWith('wt-1', 'page-mobile-1')
+    expect(followBrowserTabOnMobile).toHaveBeenCalledWith('wt-1', 'page-mobile-1', {
+      paneKey: 'tab-1:leaf-1',
+      signal: undefined
+    })
   })
 
   it('returns null browserPageId without opening a tab when onlyWhenMobileViewing is true and no mobile viewer is attached', async () => {
@@ -79,8 +88,8 @@ describe('RuntimeBrowserTabCreation.browserOpenUrlOnClient', () => {
     expect(followBrowserTabOnMobile).not.toHaveBeenCalled()
   })
 
-  it('returns null browserPageId when mobile follow delivery fails under onlyWhenMobileViewing', async () => {
-    const { creation } = makeCreation({
+  it('closes the created tab and returns null when mobile follow delivery fails under onlyWhenMobileViewing', async () => {
+    const { creation, closeServerTab } = makeCreation({
       hasMobileTerminalViewer: () => true,
       followBrowserTabOnMobile: vi.fn().mockResolvedValue(false)
     })
@@ -93,5 +102,6 @@ describe('RuntimeBrowserTabCreation.browserOpenUrlOnClient', () => {
     })
 
     expect(result).toEqual({ browserPageId: null })
+    expect(closeServerTab).toHaveBeenCalledWith('page-mobile-1', 'id:wt-1')
   })
 })

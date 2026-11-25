@@ -116,6 +116,7 @@ export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntime
         runtimeBrowserCommandsFactoryIsAvailable() ||
         getRuntimeBrowserPageRegistry(this).listPages().length > 0 ||
         hasPairedPageHost({ getBrowserHostLeaseRegistry: () => getBrowserHostLeaseRegistry(this) }),
+      hasMobileTerminalViewer: (paneKey) => this.hasMobileTerminalViewerForPane(paneKey),
       resolveWorkspace: (selector) => this.resolveBrowserWorkspace(selector)
     })
   }
