@@ -5,6 +5,8 @@ import type { JSONRPCRequest, Result } from '@modelcontextprotocol/sdk/types.js'
 
 export class SharedMcpResourceSubscriptions {
   private readonly byUri = new Map<string, Set<string>>()
+  /** The child's answer to a resource's first subscribe, which later subscribers wait on. */
+  private readonly pending = new Map<string, Promise<Result>>()
 
   /**
    * A subscribe or unsubscribe from `session`, sent to the child (`send`) only when it changes what
@@ -25,12 +27,24 @@ export class SharedMcpResourceSubscriptions {
       holders.add(session)
       this.byUri.set(uri, holders)
       if (!first) {
-        return Promise.resolve({})
+        return this.pending.get(uri)?.then(() => ({})) ?? Promise.resolve({})
       }
-      return send().catch((error: unknown) => {
-        this.drop(uri, session)
-        throw error
-      })
+      const sent = send()
+      this.pending.set(uri, sent)
+      return sent.then(
+        (result) => {
+          this.pending.delete(uri)
+          return result
+        },
+        (error: unknown) => {
+          // The child holds nothing, so neither does anyone who joined while it was asked.
+          this.pending.delete(uri)
+          if (this.byUri.get(uri) === holders) {
+            this.byUri.delete(uri)
+          }
+          throw error
+        }
+      )
     }
     if (request.method === 'resources/unsubscribe') {
       return this.drop(uri, session) ? send() : Promise.resolve({})

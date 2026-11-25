@@ -26,3 +26,6 @@ export function answerSessionGone(res: ServerResponse): void {
 export function answerParseError(res: ServerResponse): void {
   answer(res, 400, -32700, 'Parse error')
 }
+
+/** The agent hung up, or the relay cut the call (its token was revoked): nothing goes to the child. */
+export const cut = (res: ServerResponse): boolean => res.closed || res.destroyed

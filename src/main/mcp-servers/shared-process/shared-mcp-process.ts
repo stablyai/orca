@@ -26,7 +26,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js'
 import { ChildStdioMcpTransport, logChildStderr } from './child-stdio-mcp-transport'
-import { answerNoSession, answerSessionGone } from './shared-mcp-http-answers'
+import { answerNoSession, answerSessionGone, cut } from './shared-mcp-http-answers'
 import { SharedMcpResourceSubscriptions } from './shared-mcp-resource-subscriptions'
 
 /** What starts the child: an absolute program, its args and env, run in the user's home. */
@@ -142,7 +142,7 @@ export class SharedMcpProcess {
         return false
       }
       // An agent that gave up while the child started opens no session.
-      if (!res.closed) {
+      if (!cut(res)) {
         const session = await this.open()
         await this.serve(session, req, res, body)
         if (session.transport.sessionId === undefined) {
@@ -243,8 +243,8 @@ export class SharedMcpProcess {
     res: ServerResponse,
     body: unknown
   ): Promise<void> {
-    if (res.closed) {
-      // Its agent hung up before Orca got to it.
+    if (cut(res)) {
+      // Its agent hung up, or its token was revoked, before Orca got to it.
       this.expireWhenIdle(session)
       return
     }
