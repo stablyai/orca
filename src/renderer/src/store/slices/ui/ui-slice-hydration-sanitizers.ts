@@ -14,7 +14,7 @@ import {
   type WorkspaceCleanupDismissal,
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
-import { isTopLevelView } from '../../../../../shared/ui-chrome/top-level-view'
+import { isSavedTopLevelView } from '../../../../../shared/ui-chrome/top-level-view'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import '../../../../../shared/orca-profiles/constants'
@@ -175,7 +175,7 @@ export function sanitizeWorkspaceCleanupDismissals(
 
 export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have falls back to terminal rather than rendering nothing.
-  if (!isTopLevelView(value) || value === 'shareRequest') {
+  if (!isSavedTopLevelView(value)) {
     return 'terminal'
   }
   return value
