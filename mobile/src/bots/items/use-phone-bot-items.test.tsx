@@ -177,3 +177,24 @@ it('drops a kept answer card when the list read shows its item closed, not one t
   expect(readBotItemAskCardDraft(shut, 'e1')).toBeUndefined()
   expect(readBotItemAskCardDraft(reopened, 'e1')).toEqual(words)
 })
+
+it('drops a kept answer card when a Closed page read past the first shows its item closed', async () => {
+  const deeper = botItemAskCardKey('host', 'bot-a', 'uid-9')
+  const words = { '0': { picks: [], other: 'unsent' } }
+  saveBotItemAskCardDraft(deeper, 'e1', words)
+  client = makeClient(async (_method, raw) =>
+    BotItemsOwnerList.parse(raw).closedCursor === 'c1'
+      ? reply([closed(9)])
+      : reply([planned, closed(4)], 'c1')
+  )
+  await act(async () => {
+    renderer = create(createElement(Harness))
+  })
+  await tick()
+  expect(readBotItemAskCardDraft(deeper, 'e1')).toEqual(words)
+
+  await act(async () => {
+    await current.loadMoreClosed!()
+  })
+  expect(readBotItemAskCardDraft(deeper, 'e1')).toBeUndefined()
+})

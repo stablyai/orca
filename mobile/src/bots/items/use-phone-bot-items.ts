@@ -110,14 +110,19 @@ export function usePhoneBotItems({
       return
     }
     const mine = ++generation.current
-    void readClosedPages(client, botId, chatIds, read.nextClosedCursor ?? null, depth).then(
-      (next) => {
-        if (generation.current === mine) {
-          setPages(next ? { key, base: read, depth, ...next } : null)
-        }
+    void readClosedPages(
+      client,
+      hostKey,
+      botId,
+      chatIds,
+      read.nextClosedCursor ?? null,
+      depth
+    ).then((next) => {
+      if (generation.current === mine) {
+        setPages(next ? { key, base: read, depth, ...next } : null)
       }
-    )
-  }, [client, read, depth, upToDate, botId, chatIds, key])
+    })
+  }, [client, read, depth, upToDate, hostKey, botId, chatIds, key])
 
   const cursor = upToDate ? ownPages.cursor : depth === 0 ? (read?.nextClosedCursor ?? null) : null
   const loadMoreClosed = useCallback(async () => {
@@ -125,7 +130,7 @@ export function usePhoneBotItems({
       return { items: [], more: false }
     }
     const mine = ++generation.current
-    const next = await readClosedPages(client, botId, chatIds, cursor, 1)
+    const next = await readClosedPages(client, hostKey, botId, chatIds, cursor, 1)
     if (!next) {
       throw new Error('read_failed')
     }
@@ -142,7 +147,7 @@ export function usePhoneBotItems({
       })
     }
     return { items: next.items, more: next.cursor !== null }
-  }, [client, read, cursor, botId, chatIds, key])
+  }, [client, read, cursor, hostKey, botId, chatIds, key])
 
   return {
     read,
@@ -162,9 +167,11 @@ export function usePhoneBotItems({
   }
 }
 
-/** Up to `depth` Closed pages from `cursor`; null if a read fails. */
+/** Up to `depth` Closed pages from `cursor`, each dropping its items' kept answer cards; null if a
+ *  read fails. */
 async function readClosedPages(
   client: RpcClient,
+  hostKey: string,
   botId: string,
   chatIds: readonly string[] | null,
   cursor: string | null,
@@ -173,6 +180,7 @@ async function readClosedPages(
   const items: BotItem[] = []
   let next = cursor
   for (let page = 0; page < depth && next; page++) {
+    const askedAt = botItemAskCardDraftsClock()
     const answer = await readBotItems(client, botId, {
       closedCursor: next,
       closedOnly: true,
@@ -181,6 +189,7 @@ async function readClosedPages(
     if (answer.kind !== 'read') {
       return null
     }
+    retireClosedBotItemAskCardDrafts(hostKey, botId, answer.value.items, askedAt)
     items.push(
       ...answer.value.items.filter((item) => item.status === 'done' || item.status === 'canceled')
     )
