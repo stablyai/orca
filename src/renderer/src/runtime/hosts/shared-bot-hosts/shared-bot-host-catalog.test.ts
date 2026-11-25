@@ -11,6 +11,9 @@ import {
   readSharedBotHosts,
   readTeamSharingOffered
 } from './shared-bot-host-catalog'
+import { selectExecutionHostDisplayLabel } from '../display/execution-host-display-label'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { useAppStore } from '@/store'
 
 const HOST: SharedBotHostView = {
   environmentId: 'shared-env',
@@ -52,6 +55,14 @@ beforeEach(async () => {
 afterEach(() => {
   uninstall()
   vi.unstubAllGlobals()
+})
+
+it('names a shared agent’s host as its owner’s computer, never by its environment id', async () => {
+  await vi.waitFor(() => expect(readSharedBotHosts()).toHaveLength(1))
+  const state = useAppStore.getState()
+  expect(selectExecutionHostDisplayLabel(state, toRuntimeExecutionHostId(HOST.environmentId))).toBe(
+    'Jinwoo Hong’s computer'
+  )
 })
 
 // Its calls and streams go through runtimeEnvironments; main routes them (runtime-environment-shared-hosts.test.ts).

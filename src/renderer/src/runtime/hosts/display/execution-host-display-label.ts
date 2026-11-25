@@ -6,10 +6,12 @@ import {
 import { getHostSettingOverride } from '../../../../../shared/execution-host/host-setting-overrides'
 import { getTranslatedExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
 import type { Translate } from '@/i18n/use-translate'
+import { translate } from '@/i18n/i18n'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import type { AppState } from '@/store/types'
+import { sharedBotHostFor } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 /** Prefer the user rename, then published machine/SSH label, then raw host ID. */
 export function selectExecutionHostDisplayLabel(
@@ -29,6 +31,12 @@ export function selectExecutionHostDisplayLabel(
       ?.name.trim()
     if (name) {
       return name
+    }
+    const shared = sharedBotHostFor({ kind: 'environment', environmentId: parsed.environmentId })
+    if (shared) {
+      return (options.t ?? translate)('bots.share.ownersComputer', '{{name}}’s computer', {
+        name: shared.ownerName
+      })
     }
   }
   if (parsed?.kind === 'ssh') {
