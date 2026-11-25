@@ -182,7 +182,7 @@ export async function mcpServerEntriesForLaunch(
   agent: string,
   workspace: LaunchWorkspace,
   folder = mcpHostListFolder(),
-  read: McpHostListRead = readBotToolsSnapshot
+  read?: McpHostListRead
 ): Promise<{ entries: McpLaunchEntry[]; sharedProcesses: ReadonlyMap<string, string> }> {
   const { all, on } = await launchEntries(agent, workspace, folder, read)
   const seen = new Set<string>()

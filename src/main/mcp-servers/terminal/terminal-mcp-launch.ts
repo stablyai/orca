@@ -106,6 +106,7 @@ export async function currentTerminalMcpFingerprints<Pane extends FingerprintedP
     return answers
   }
   const hostFolder = deps.hostFolder ?? mcpHostListFolder()
+  // Fresh for each count: an edit made outside Orca moves no epoch, and a restart stops agents on it.
   const snapshot = !isMcpServersFeatureEnabled()
     ? null
     : await readBotToolsSnapshot(hostFolder).catch(() => null)
