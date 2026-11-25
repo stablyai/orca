@@ -43,7 +43,10 @@ export type ImportedMcpServerScope = {
 
 export type AddImportedMcpServer<T> = (
   server: BotToolServer,
-  scope: ImportedMcpServerScope
+  scope: ImportedMcpServerScope,
+  /** No agent copy is taken out (a Copy, or a Move whose agents Orca's list doesn't reach), so
+   *  a server Orca already has with this definition serves as is. */
+  keepsCopies: boolean
 ) => Promise<T>
 
 export class AgentMcpServerImportError extends Error {
@@ -200,7 +203,7 @@ export async function copyAgentMcpServer<T>(
 ): Promise<T> {
   return oneImportAtATime(async () => {
     const { found, scope } = await movableRow(host, key)
-    return add(found.server, scope)
+    return add(found.server, scope, true)
   })
 }
 
@@ -230,7 +233,7 @@ export async function moveAgentMcpServer<T>(
 ): Promise<T> {
   return oneImportAtATime(async () => {
     const { found, removing, scope } = await movableRow(host, key)
-    const added = await add(found.server, scope)
+    const added = await add(found.server, scope, removing.length === 0)
     const configName = found.sources[0]!.keyPath.at(-1)!
     const mergeKey = agentMcpServerMergeKey(configName, found.server)
     await removeAgentMcpServerEntries(removing, mergeKey)
