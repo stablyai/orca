@@ -1,6 +1,7 @@
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { createGlyphInkReader } from './terminal-webgl-atlas-ink-reader'
+import { maintainAtlasPending } from './terminal-webgl-atlas-pending'
 import { trace } from './terminal-webgl-atlas-integrity-trace'
 import {
   atlasOfPane,
@@ -76,7 +77,6 @@ const ATLAS_COOLDOWN_MS = 10_000
 const GLOBAL_SPACING_MS = 50
 const READ_WINDOW_MS = 1_000
 const MAX_READS_PER_WINDOW = 16
-const PENDING_EXPIRY_MS = 30_000
 const MAX_PENDING_ATLASES = 8
 const RESET_INTERVAL_MS = 60_000
 const MAX_RESETS_PER_ATLAS = 3
@@ -202,16 +202,9 @@ function attempt(
   } finally {
     if (readIssued) {
       state.completedAt = deps.now()
-    }
-  }
-}
-
-/** Drops collected and expired entries; at most MAX_PENDING_ATLASES checks. */
-function maintainPending(deps: AtlasIntegrityDeps): void {
-  const wallNow = Date.now()
-  for (const [ref, queuedAt] of deps.state.pending) {
-    if (!ref.deref() || wallNow - queuedAt > PENDING_EXPIRY_MS) {
-      deps.state.pending.delete(ref)
+      if (trigger !== 'deferred' && deps.state.pending.size > 0) {
+        maintainAtlasPending(deps.state, state.completedAt, atlas)
+      }
     }
   }
 }
@@ -242,14 +235,14 @@ function armService(deps: AtlasIntegrityDeps, now: number): void {
 
 /** Deduplicated by atlas; when full the oldest entry is dropped (best effort). */
 function enqueue(atlas: GlyphAtlasLike, deps: AtlasIntegrityDeps, now: number): void {
-  maintainPending(deps)
+  maintainAtlasPending(deps.state, now)
   const pending = deps.state.pending
   if (![...pending.keys()].some((ref) => ref.deref() === atlas)) {
     if (pending.size >= MAX_PENDING_ATLASES) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a map at the positive capacity has a first key.
       pending.delete(pending.keys().next().value as WeakRef<GlyphAtlasLike>)
     }
-    pending.set(new WeakRef(atlas), Date.now())
+    pending.set(new WeakRef(atlas), now)
   }
   armService(deps, now)
 }
@@ -258,8 +251,8 @@ function enqueue(atlas: GlyphAtlasLike, deps: AtlasIntegrityDeps, now: number): 
 function service(deps: AtlasIntegrityDeps): void {
   deps.state.serviceTimer = null
   try {
-    maintainPending(deps)
     const now = deps.now()
+    maintainAtlasPending(deps.state, now)
     if (now < globalReadyAt(deps, now)) {
       trace({ stage: 'deny', trigger: 'deferred' })
       return

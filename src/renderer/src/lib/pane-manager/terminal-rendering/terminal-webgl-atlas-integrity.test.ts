@@ -230,7 +230,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     expect(pane.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
   })
 
-  it('serves deferred requests from one renderer-wide timer', () => {
+  it('recovers the same atlas after repeat deferred requests', () => {
     const first = atlas()
     const second = atlas()
     const firstPane = fakePane(first)
@@ -241,7 +241,6 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     verifyPaneWebglAtlasIntegrity(secondPane, 'attach', deps(blank))
     verifyPaneWebglAtlasIntegrity(secondPane, 'reveal', deps(blank))
 
-    expect(fixture.timers).toHaveLength(1)
     runTimers()
     expect(secondPane.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
     expect(events[0]).toMatchObject({ trigger: 'deferred' })
@@ -263,23 +262,33 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     expect(first.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
   })
 
-  it('retires a deferred check when no eligible owner remains or it expired', () => {
+  it('retires a deferred check after 30 seconds of scheduler time', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
-    try {
-      const shared = atlas()
-      const pane = fakePane(shared)
-      register(true, [pane])
+    const pane = fakePane(atlas())
+    register(true, [pane])
 
-      verifyPaneWebglAtlasIntegrity(pane, 'attach', deps(ink))
-      verifyPaneWebglAtlasIntegrity(pane, 'reveal', deps(blank))
-      vi.setSystemTime(Date.now() + 31_000)
-      runTimers()
+    verifyPaneWebglAtlasIntegrity(pane, 'attach', deps(ink))
+    verifyPaneWebglAtlasIntegrity(pane, 'reveal', deps(blank))
+    fixture.clock += 31_000
+    runTimers()
 
-      expect(pane.addon.clearTextureAtlas).not.toHaveBeenCalled()
-      expect(fixture.timers).toHaveLength(0)
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(pane.addon.clearTextureAtlas).not.toHaveBeenCalled()
+    expect(fixture.state.pending.size).toBe(0)
+  })
+
+  it('serves a pending atlas when the wall clock jumps during a short wait', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const first = fakePane(atlas())
+    const waiting = fakePane(atlas())
+    register(true, [first, waiting])
+    verifyPaneWebglAtlasIntegrity(first, 'attach', deps(ink))
+    verifyPaneWebglAtlasIntegrity(waiting, 'reveal', deps(blank))
+
+    vi.setSystemTime(Date.now() + 31_000)
+    runTimers()
+
+    expect(waiting.addon.clearTextureAtlas).toHaveBeenCalled()
+    expect(events[0]).toMatchObject({ trigger: 'deferred', outcome: 'reset' })
   })
 
   it('runs the atlas-change check on a later task, after xterm assigns the atlas', () => {

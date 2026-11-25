@@ -211,6 +211,56 @@ describe('terminal WebGL atlas work limits', () => {
     expect(fixture.timers).toHaveLength(1)
   })
 
+  it('keeps older unread work when a direct read satisfies a later pending entry', () => {
+    const busy = fakePane(atlas())
+    const queuedAtlases = Array.from({ length: 8 }, () => atlas())
+    const queued = queuedAtlases.map((paneAtlas) => fakePane(paneAtlas))
+    const next = fakePane(atlas())
+    register(true, [busy, ...queued, next])
+    const reader = deps(blank)
+
+    verifyPaneWebglAtlasIntegrity(busy, 'reveal', deps(ink))
+    for (const pane of queued) {
+      verifyPaneWebglAtlasIntegrity(pane, 'reveal', reader)
+    }
+    advanceServiceClock(50)
+    verifyPaneWebglAtlasIntegrity(queued[1], 'reveal', reader)
+    verifyPaneWebglAtlasIntegrity(next, 'reveal', reader)
+
+    const stillPending = [...fixture.state.pending.keys()].map((ref) => ref.deref())
+    expect(queued[1].addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(stillPending).toHaveLength(8)
+    expect(stillPending).toContain(queuedAtlases[0])
+    expect(stillPending).not.toContain(queuedAtlases[1])
+  })
+
+  it('retains pending work until a direct read issues and cancels an empty queue wake', () => {
+    const busy = fakePane(atlas())
+    const waiting = fakePane(atlas())
+    register(true, [busy, waiting])
+    const reader = deps(blank)
+
+    verifyPaneWebglAtlasIntegrity(busy, 'reveal', deps(ink))
+    verifyPaneWebglAtlasIntegrity(waiting, 'reveal', reader)
+    advanceServiceClock(50)
+    verifyPaneWebglAtlasIntegrity(
+      waiting,
+      'reveal',
+      deps(() => 'unavailable')
+    )
+    expect(fixture.state.pending.size).toBe(1)
+    expect(fixture.timers).toHaveLength(1)
+    expect(waiting.addon.clearTextureAtlas).not.toHaveBeenCalled()
+
+    advanceServiceClock(50)
+    verifyPaneWebglAtlasIntegrity(waiting, 'reveal', reader)
+
+    expect(waiting.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(fixture.state.pending.size).toBe(0)
+    expect(fixture.state.serviceTimer).toBeNull()
+    expect(fixture.timers).toHaveLength(0)
+  })
+
   it('does not charge the read budget when no scratch could be created', () => {
     const pane = fakePane(atlas())
     register(true, [pane])
