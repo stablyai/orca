@@ -13,6 +13,7 @@ import {
 import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotGroup } from '../../../../../shared/bots/bot-group'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { setBotHostListing } from '@/lib/bot-catalog-snapshot'
 import { syncBotHostListing, type BotHostListingInput } from '@/lib/bot-host-listing'
 
@@ -42,7 +43,7 @@ import { BotGroupPanelHeader } from '../BotGroupPanelHeader'
 import { BotItemRowFace } from './BotItemRowFace'
 import { BotGroupFacePicturesContext, useBotGroupFacePictures } from './bot-group-face-pictures'
 
-const HOST = 'runtime:m4'
+const HOST: ExecutionHostId = 'runtime:m4'
 const PNG = 'data:image/png;base64,UE5H'
 const CONNECTED: RuntimeEnvironmentStatus = {
   status: { ...status('runtime'), capabilities: ['bots.mobile.v1'] },
