@@ -15,6 +15,7 @@ import type { GraphChat, GraphMessage } from './teams-graph-shapes'
 import {
   CHATS_BY_LAST_MESSAGE,
   changedChats,
+  chatReadFailed,
   mentionOf,
   messagesIn,
   type ChatWindow
@@ -173,8 +174,13 @@ export class TeamsTriggerChecker {
     state: TeamsTriggerState,
     now: number
   ): Promise<void> {
-    const graph = this.deps.graph()
-    const { userId } = await graph.account()
+    const signedIn = this.deps.graph()
+    const { userId } = await signedIn.account()
+    // Every read is as the person whose mentions are matched; a sign-in that changes mid-check fails it.
+    const graph: TeamsGraph = {
+      ...signedIn,
+      get: (pathOrLink, shape) => signedIn.get(pathOrLink, shape, userId)
+    }
     if (state.userId !== userId || state.cursor === undefined) {
       state.userId = userId
       state.cursor = now
@@ -231,7 +237,17 @@ export class TeamsTriggerChecker {
         window: { from: Math.max(window.from, floor), until: window.until }
       }))
     for (const { chat, window } of [...listed, ...pending.slice(0, BACKLOG_CHATS_PER_CHECK)]) {
-      const read = await messagesIn(graph, chat.id, window)
+      const read = await messagesIn(graph, chat.id, window).catch((error: unknown) =>
+        chatReadFailed(error, chat.id)
+      )
+      if (!read) {
+        // Not there for this sign-in any more: its window goes.
+        continue
+      }
+      if (read === 'retry') {
+        keep(chat, { from: window.from, until: window.until ?? now + 1 })
+        continue
+      }
       if (read.rest) {
         keep(chat, read.rest)
       }

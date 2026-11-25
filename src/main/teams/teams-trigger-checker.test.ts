@@ -1,7 +1,7 @@
 // teams.mentioned against Graph answers shaped like Microsoft's documented ones; no live tenant.
 import { describe, expect, it } from 'vitest'
 import type { AutomationRunEvent } from '../../shared/automation-event-triggers'
-import type { TeamsGraph } from './teams-graph'
+import { TeamsGraphError, type TeamsGraph } from './teams-graph'
 import { messagesIn } from './teams-mention-reads'
 import { TeamsTriggerChecker } from './teams-trigger-checker'
 import type { TeamsTriggerState } from './teams-trigger-state'
@@ -303,5 +303,62 @@ describe('TeamsTriggerChecker', () => {
       { link: 'https://graph.microsoft.com/v1.0/me/chats?$skiptoken=4', from: T0 - 180_000 },
       { link: 'https://graph.microsoft.com/v1.0/me/chats?$skiptoken=8', from: T0 - 120_000 }
     ])
+  })
+
+  it('reads the rest of the backlog past a chat that fails, and keeps only what can still be read', async () => {
+    const GONE = '19:gone0chat@thread.v2'
+    const FLAKY = '19:flaky0chat@thread.v2'
+    const started: string[] = []
+    const window = { from: T0 - 60_000, until: T0 }
+    let state: TeamsTriggerState = {
+      userId: ME,
+      cursor: T0,
+      listeners: { 'b-on': T0 - 600_000 },
+      backlog: {
+        [GONE]: { ...window, topic: null },
+        [FLAKY]: { ...window, topic: null },
+        [RELEASE]: { ...window, topic: 'Release' }
+      }
+    }
+    const reads: TeamsGraph = {
+      account: async () => ({ userId: ME, grantedScopes: ['Chat.Read'] }),
+      post: () => Promise.reject(new Error('the check never posts')),
+      get: async (path, shape) => {
+        if (path.startsWith('/me/chats?')) {
+          return shape.parse({ value: [] })
+        }
+        if (path.includes(encodeURIComponent(GONE))) {
+          throw new TeamsGraphError(404, 'Teams has no such chat, channel or message for you.')
+        }
+        if (path.includes(encodeURIComponent(FLAKY))) {
+          throw new TeamsGraphError(502, 'Microsoft Graph answered 502.')
+        }
+        return shape.parse({ value: [message('1732557620000', DANA, [ME], T0 - 30_000)] })
+      }
+    }
+    const checker = new TeamsTriggerChecker({
+      automations: () => [
+        {
+          id: 'a-on',
+          enabled: true,
+          bot: { botId: 'b-on', runsIn: 'new', resultsTo: 'chat' },
+          on: [{ id: 'on-1', source: 'teams', event: 'mentioned' }]
+        }
+      ],
+      bots: () => [{ id: 'b-on', teams: true }],
+      graph: () => reads,
+      runForEvent: async (_automationId, event) => {
+        started.push(event.key)
+      },
+      readState: async () => structuredClone(state),
+      writeState: async (next) => {
+        state = next
+      },
+      now: () => T0 + 60_000
+    })
+    await checker.tick()
+    expect(started).toEqual([`teams:chat/${RELEASE}/1732557620000`])
+    // The chat Teams says is gone is dropped; the one that failed for now is read again next check.
+    expect(state.backlog).toEqual({ [FLAKY]: { ...window, topic: null } })
   })
 })

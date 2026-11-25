@@ -1,6 +1,6 @@
 // The Graph reads behind the Teams mention check, each within a page budget. What a budget leaves
 // unread comes back to resume: the chat list's next page, or the part of a chat's window still unread.
-import type { TeamsGraph } from './teams-graph'
+import { TeamsGraphError, type TeamsGraph } from './teams-graph'
 import { ChatPage, MessagePage, type GraphChat, type GraphMessage } from './teams-graph-shapes'
 import { formatTeamsRef } from './teams-place-ref'
 
@@ -74,6 +74,24 @@ export async function messagesIn(
   // whole budget shares that change time, it reads before it, so the window always shrinks.
   const until = oldest + 1 < (window.until ?? Number.POSITIVE_INFINITY) ? oldest + 1 : oldest
   return { messages, rest: { from: window.from, until } }
+}
+
+/**
+ * One chat's read failed. A throttle, a refused or changed sign-in, or no network fails the whole
+ * check, to back off; a chat Teams says is gone is dropped; anything else is read again next check.
+ */
+export function chatReadFailed(error: unknown, chatId: string): null | 'retry' {
+  if (!(error instanceof TeamsGraphError) || [0, 401, 429].includes(error.status)) {
+    throw error
+  }
+  if (error.status === 403 || error.status === 404) {
+    console.warn(
+      '[teams] a chat is gone or closed to this sign-in; its mentions are skipped',
+      chatId
+    )
+    return null
+  }
+  return 'retry'
 }
 
 /** A new message from someone else that @mentions the signed-in person; edits of older ones never count. */

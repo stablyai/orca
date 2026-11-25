@@ -53,8 +53,11 @@ function graphUrl(pathOrLink: string): string {
 }
 
 export type TeamsGraph = {
-  /** Each answer is checked against `shape`; one that doesn't fit is refused, not guessed at. */
-  get: <T>(pathOrLink: string, shape: z.ZodType<T>) => Promise<T>
+  /**
+   * Each answer is checked against `shape`; one that doesn't fit is refused, not guessed at.
+   * `asUser`, as for `post`: a sign-in that changed since reads nothing.
+   */
+  get: <T>(pathOrLink: string, shape: z.ZodType<T>, asUser?: string) => Promise<T>
   /** `asUser`: the person whose permissions were checked; a sign-in that changed since sends nothing. */
   post: <T>(path: string, body: unknown, shape: z.ZodType<T>, asUser?: string) => Promise<T>
   /** What the signed-in person allowed, and who they are. */
@@ -122,7 +125,7 @@ export function teamsGraph(deps: TeamsTokenDeps): TeamsGraph {
     }
   }
   return {
-    get: (pathOrLink, shape) => send('GET', pathOrLink, shape),
+    get: (pathOrLink, shape, asUser) => send('GET', pathOrLink, shape, undefined, asUser),
     post: (path, body, shape, asUser) => send('POST', path, shape, body, asUser),
     account: async () => {
       const record = await teamsAccount(deps)
