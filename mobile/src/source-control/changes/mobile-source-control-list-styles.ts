@@ -42,9 +42,9 @@ export const listStyles = themedStyleSheet(() => ({
     fontSize: typography.metaSize,
     lineHeight: 18
   },
-  // Opaque so a left swipe uncovers Discard only as the row slides.
+  // ListRow's measures (48 pt, 60 with a folder line). Opaque so a left swipe uncovers Discard only as the row slides.
   fileRow: {
-    minHeight: 50,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -53,8 +53,17 @@ export const listStyles = themedStyleSheet(() => ({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
   },
+  fileRowTwoLine: {
+    minHeight: 60
+  },
+  // A translucent wash over the opaque row: bgPanel is all but the page's own colour in light mode.
   fileRowPressed: {
-    backgroundColor: colors.bgPanel
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: colors.translucentFill
   },
   fileRowUnavailable: {
     opacity: 0.72
@@ -75,20 +84,20 @@ export const listStyles = themedStyleSheet(() => ({
   },
   fileName: {
     color: colors.textPrimary,
-    fontSize: typography.bodySize
+    fontSize: 15
   },
   fileNameGone: {
     color: colors.textSecondary,
     textDecorationLine: 'line-through'
   },
   fileMeta: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
+    color: colors.textSecondary,
+    fontSize: 13,
     marginTop: 2
   },
   iconButton: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
@@ -113,7 +122,7 @@ export const listStyles = themedStyleSheet(() => ({
     fontWeight: '600'
   },
   iconButtonPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.translucentFill
   },
   iconButtonDisabled: {
     opacity: 0.45
@@ -158,69 +167,14 @@ export const listStyles = themedStyleSheet(() => ({
   commitButtonDisabledText: {
     color: colors.textMuted
   },
-  commitFailurePanel: {
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.surface,
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.statusRed,
-    gap: spacing.sm
-  },
-  commitFailureHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  commitFailureTextBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  commitFailureTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  commitFailureSummary: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    lineHeight: 16,
-    marginTop: 2
-  },
-  commitFailureFixButton: {
-    minHeight: 36,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.control,
-    backgroundColor: colors.textPrimary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  commitFailure: {
     gap: spacing.xs
   },
-  commitFailureFixButtonDisabled: {
-    opacity: 0.45
-  },
-  commitFailureFixButtonPressed: {
-    opacity: 0.75
-  },
-  commitFailureFixButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
-  commitFailureDetailsButton: {
-    minHeight: 32,
+  commitFailureLinks: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs
-  },
-  commitFailureDetailsButtonPressed: {
-    opacity: 0.75
-  },
-  commitFailureDetailsButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    gap: spacing.xl,
+    minHeight: 28
   },
   commitFailureDetailsText: {
     color: colors.textSecondary,

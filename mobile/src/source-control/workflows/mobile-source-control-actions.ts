@@ -30,8 +30,9 @@ export type MobileSourceControlAction = {
   label: string
   iconKey: MobileSourceControlActionIcon
   disabled?: boolean
+  /** The action can't apply right now (nothing to push, no message), so the menu leaves it out. */
+  inapplicable?: boolean
   hint?: string
-  status?: string
   loading?: boolean
   skipAutoClose?: boolean
   closeBeforePress?: boolean
@@ -97,9 +98,9 @@ export function buildMobileSourceControlActions(
     label: item.label,
     iconKey,
     disabled: busy || item.disabled,
-    // Mobile has no tooltips: show why a row is disabled, and always what Force Push replaces.
-    hint: item.disabled || item.kind === 'force_push' ? item.title : undefined,
-    status: item.status,
+    // Force push stays, last and red; when it is blocked, one line says why. The rest show only when they apply.
+    inapplicable: item.disabled && item.kind !== 'force_push',
+    hint: item.disabled && item.kind === 'force_push' ? item.title : undefined,
     loading: args.busyAction === actionId,
     skipAutoClose: true,
     onPress
@@ -181,6 +182,17 @@ export function groupMobileSourceControlMenu<T extends { id: string }>(
     })
   ).filter((group) => group.length > 0)
   return { groups, forcePush: byId.get('force-push') ?? null }
+}
+
+/** The Changes ⋯ menu: the git actions that apply, Refresh, then the destructive ones last and red. */
+export function buildChangesMenuGroups<T extends { id: string }>(
+  git: { groups: T[][]; forcePush: T | null },
+  extra: { refresh: T; abort: T | null }
+): (T | (T & { destructive: true }))[][] {
+  const destructive = [git.forcePush, extra.abort].flatMap((action) =>
+    action ? [{ ...action, destructive: true as const }] : []
+  )
+  return [...git.groups, [extra.refresh], ...(destructive.length > 0 ? [destructive] : [])]
 }
 
 export function getMobilePrimaryActionHint(
