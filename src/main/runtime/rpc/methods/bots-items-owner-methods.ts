@@ -28,6 +28,7 @@ import type { BotItemRecord } from '../../../bots/bot-items-schema'
 import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import { defineMethod, type RpcContext } from '../core'
 import { ownerOnly } from './bots-caller-gates'
+import { BOT_ITEMS_EVERYONE } from '../../../bots/bot-item-access'
 import { parseCursor, resolveItem } from './bots-items-write-support'
 import {
   botItemCountsForClient,
@@ -141,7 +142,7 @@ const SHOW = defineMethod({
   handler: async (params, context) => {
     ownerActor(context)
     const { botItems } = context.runtime
-    const record = await resolveItem(botItems.store(), params.item)
+    const record = await resolveItem(botItems.store(), params.item, BOT_ITEMS_EVERYONE)
     const after = params.after !== undefined ? parseBotItemEventId(params.after) : 0
     const before = params.before !== undefined ? parseBotItemEventId(params.before) : 0
     if (after === null || before === null) {
@@ -180,7 +181,7 @@ const COMMENT = defineMethod({
     const actor = ownerActor(context)
     const { botItems } = context.runtime
     const store = botItems.store()
-    const item = await resolveItem(store, params.item)
+    const item = await resolveItem(store, params.item, BOT_ITEMS_EVERYONE)
     const bot = context.runtime.bots.list().find((entry) => entry.id === item.ownerBotId)
     if (params.images?.length || params.text.includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)) {
       // The attachment store and its claims come up with the structured chat host.
@@ -229,7 +230,9 @@ const STATUS = defineMethod({
     const actor = ownerActor(context)
     const { botItems } = context.runtime
     const store = botItems.store()
-    const items = await Promise.all(params.items.map((ref) => resolveItem(store, ref)))
+    const items = await Promise.all(
+      params.items.map((ref) => resolveItem(store, ref, BOT_ITEMS_EVERYONE))
+    )
     const uids = items.map((item) => item.uid)
     const result = await store.ownerStatus(
       {
@@ -262,7 +265,9 @@ const SNOOZE = defineMethod({
     const actor = ownerActor(context)
     const { botItems } = context.runtime
     const store = botItems.store()
-    const items = await Promise.all(params.items.map((entry) => resolveItem(store, entry.item)))
+    const items = await Promise.all(
+      params.items.map((entry) => resolveItem(store, entry.item, BOT_ITEMS_EVERYONE))
+    )
     const result = await store.ownerSnooze(
       {
         items: items.map((item, index) => ({

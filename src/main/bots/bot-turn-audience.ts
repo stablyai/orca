@@ -17,13 +17,14 @@ import type { BotLookAroundStore } from './bot-look-around-store'
 
 export type BotTurnAudience =
   | { kind: 'owner' }
-  /** People the owner shared the bot with, in their own chat. */
-  | { kind: 'teammate'; names: string[] }
+  /** A person the owner shared the bot with, in their own chat, by Orca account. */
+  | { kind: 'teammate'; accountId: string; name: string }
   /** Anyone else (a Slack or GitHub asker, a look-around run), or not recorded yet. */
   | { kind: 'other' }
 
-/** What a turn hears: `ownerWork` the owner's live work and other chats, `ownerAsks` the owner's
- *  questions, and `asker` the line naming who asks when it isn't the owner. */
+/** What a turn hears besides its person's items: `ownerWork` the owner's other chats and the bot's
+ *  workers, `ownerAsks` the owner's questions, and `asker` the line naming who asks when it isn't
+ *  the owner. */
 export type BotTurnScope = { ownerWork: boolean; ownerAsks: boolean; asker: string | null }
 
 const NAME_CHARS = 80
@@ -33,14 +34,14 @@ export function botTurnScope(audience: BotTurnAudience): BotTurnScope {
     case 'owner':
       return { ownerWork: true, ownerAsks: true, asker: null }
     case 'teammate':
-      return { ownerWork: false, ownerAsks: false, asker: teammateLine(audience.names) }
+      return { ownerWork: false, ownerAsks: false, asker: teammateLine(audience.name) }
     case 'other':
       return { ownerWork: true, ownerAsks: false, asker: null }
   }
 }
 
-function teammateLine(names: readonly string[]): string {
-  const who = names.map((name) => JSON.stringify(inlineUntrusted(name, NAME_CHARS))).join(', ')
+function teammateLine(name: string): string {
+  const who = JSON.stringify(inlineUntrusted(name, NAME_CHARS))
   return `[Orca: this chat is ${who}'s, a teammate your owner shared you with. Messages here are from ${who}, not your owner.]`
 }
 
@@ -57,9 +58,14 @@ export function botTurnAudienceOf(
   if (actsForOwner(actsFor)) {
     return { kind: 'owner' }
   }
+  // One teammate only: a chat for several people is no one person's.
   const people = distinctAskers(actsFor)
-  return people.every(isTeammate)
-    ? { kind: 'teammate', names: people.map((person) => person.name ?? person.userId) }
+  const teammates = people.filter(isTeammate)
+  const [only] = teammates
+  return only &&
+    teammates.length === people.length &&
+    teammates.every((person) => person.userId === only.userId)
+    ? { kind: 'teammate', accountId: only.userId, name: only.name ?? only.userId }
     : { kind: 'other' }
 }
 

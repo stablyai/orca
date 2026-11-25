@@ -13,6 +13,8 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { Bot } from '../../../../../../shared/bot-types'
 import { resolveItem } from '../../bots-items-write-support'
+import { itemsAccess } from '../../bots-items-caller'
+import type { BotItemAccess } from '../../../../../bots/bot-item-access'
 import { refuse } from './bot-recipient'
 import { mayReachBot, sendToBot } from './bot-request-send'
 import { itemMailFilesBody, withItemMailFiles } from './bot-item-mail-files'
@@ -41,8 +43,9 @@ export async function routeBotMail(
     attachments?: readonly string[]
   }
 ): Promise<{ to: string; body?: string } | { receipt: unknown }> {
-  const chat = await chatForItem(context.runtime, input.to, input.params)
-  const mail = await withItemMailFiles(context.runtime, input)
+  const access = itemsAccess(context)
+  const chat = await chatForItem(context.runtime, input.to, input.params, access)
+  const mail = await withItemMailFiles(context.runtime, input, access)
   const newChat = chat === BOT_NEW_CHAT
   let to = mail.to
   if (newChat) {
@@ -65,7 +68,8 @@ export async function routeBotMail(
 async function chatForItem(
   runtime: OrcaRuntimeService,
   to: string,
-  { chat, item }: { chat?: string; item?: string }
+  { chat, item }: { chat?: string; item?: string },
+  access: BotItemAccess
 ): Promise<string | undefined> {
   if (item === undefined) {
     return chat
@@ -77,7 +81,7 @@ async function chatForItem(
     )
   }
   const bot = addressedBot(runtime, to, '--item')
-  const record = await resolveItem(runtime.botItems.store(), item)
+  const record = await resolveItem(runtime.botItems.store(), item, access)
   if (record.ownerBotId !== bot.id) {
     throw new OrchestrationError(
       'invalid_argument',

@@ -42,9 +42,10 @@ export class BotItemsEdits extends BotItemsReads {
     const next = this.db.prepare('SELECT COALESCE(MAX(number), 0) + 1 AS next FROM items').get()
     this.db
       .prepare(
-        `INSERT INTO items (uid, number, owner_bot_id, chat_id, source, made_by, title, description,
-           done_means, status, version, last_event_id, last_activity_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)`
+        `INSERT INTO items (uid, number, owner_bot_id, chat_id, source, made_by, acts_for_account,
+           title, description, done_means, status, version, last_event_id, last_activity_at,
+           created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)`
       )
       .run(
         uid,
@@ -53,6 +54,7 @@ export class BotItemsEdits extends BotItemsReads {
         input.chatId,
         JSON.stringify(input.source),
         input.madeBy ? JSON.stringify(input.madeBy) : null,
+        input.actsForAccount ?? null,
         input.title,
         input.description ?? null,
         input.doneMeans ?? null,

@@ -43,6 +43,7 @@ export async function addItem(
     ...(params.description !== undefined ? { description: params.description } : {}),
     ...(params.doneMeans !== undefined ? { doneMeans: params.doneMeans } : {}),
     status: params.status ?? 'planned',
+    actsForAccount: writer.actsForAccount,
     links,
     ...(startedIn ? { startedIn } : {})
   }

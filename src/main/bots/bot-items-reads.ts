@@ -25,6 +25,9 @@ export type BotItemListQuery = {
   statuses: readonly BotItemStatus[]
   /** Only these chats' items, counts included. */
   chatIds?: readonly string[]
+  /** Only one person's items (`botItemListScope`): a teammate's account, or null for the owner's;
+   *  absent: everyone's. */
+  actsForAccount?: string | null
   /** Only items linking this: `item list --link`. */
   link?: { kind: BotItemLinkKind; ref: string }
   /** Only these items; the counts stay the whole scope's. */
@@ -100,10 +103,12 @@ export class BotItemsReads extends BotItemsTables {
     const link = query.link
       ? ' AND uid IN (SELECT item_uid FROM item_links WHERE kind = ? AND ref = ?)'
       : ''
-    const scope = `owner_bot_id = ?${chat}${link}`
+    const person = query.actsForAccount !== undefined ? ' AND acts_for_account IS ?' : ''
+    const scope = `owner_bot_id = ?${chat}${person}${link}`
     const scopeArgs = [
       query.botId,
       ...(query.chatIds ? [JSON.stringify(query.chatIds)] : []),
+      ...(query.actsForAccount !== undefined ? [query.actsForAccount] : []),
       ...(query.link ? [query.link.kind, query.link.ref] : [])
     ]
     const counts: Partial<Record<BotItemStatus, number>> = {}

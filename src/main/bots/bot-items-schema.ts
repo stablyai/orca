@@ -126,6 +126,11 @@ export const BOT_ITEMS_MIGRATIONS: readonly string[] = [
   DROP TABLE item_links;
   ALTER TABLE item_links_next RENAME TO item_links;
   CREATE INDEX idx_item_links_ref ON item_links(kind, ref);
+  `,
+  // Whose item it is: a teammate's Orca account when one of their chats made it; NULL is the owner's,
+  // which every earlier item reads as.
+  `
+  ALTER TABLE items ADD COLUMN acts_for_account TEXT;
   `
 ]
 
@@ -161,6 +166,8 @@ export type BotItemRecord = {
   chatId: string
   source: BotItemSource
   madeBy: BotItemMadeBy | null
+  /** The teammate it is for, by Orca account; null: the owner's. */
+  actsForAccount: string | null
   title: string
   description: string | null
   doneMeans: string | null

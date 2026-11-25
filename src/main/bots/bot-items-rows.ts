@@ -98,6 +98,7 @@ export function itemRecordOf(row: SqliteRow): BotItemRecord {
     chatId: text(row, 'chat_id'),
     source: sourceOf(json(row, 'source')),
     madeBy: madeByOf(json(row, 'made_by')),
+    actsForAccount: optionalText(row, 'acts_for_account'),
     title: text(row, 'title'),
     description: optionalText(row, 'description'),
     doneMeans: optionalText(row, 'done_means'),
