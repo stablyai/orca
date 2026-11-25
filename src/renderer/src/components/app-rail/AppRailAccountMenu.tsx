@@ -57,45 +57,10 @@ function AccountInitial({
   )
 }
 
-/** Thin done/total arc around the trigger's avatar or gear while core setup is unfinished. */
-function SetupRing({ milestones }: { milestones: SetupMilestones }): React.JSX.Element {
-  const total = Math.max(milestones.total, 1)
-  const done = Math.min(Math.max(milestones.done, 0), total)
-  const radius = 12
-  const circumference = 2 * Math.PI * radius
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 26 26"
-      className="pointer-events-none absolute inset-0 size-[26px] -rotate-90"
-    >
-      <circle
-        cx="13"
-        cy="13"
-        r={radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        className="opacity-35 dark:opacity-25"
-      />
-      <circle
-        cx="13"
-        cy="13"
-        r={radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={circumference * (1 - done / total)}
-      />
-    </svg>
-  )
-}
-
 /**
  * The rail's one bottom button: the account avatar (signed in) or the Settings gear (signed out), opening one flat
- * menu with the account, Milestones, Settings, every Help row and Sign in/out. It never folds into More.
+ * menu with the account, Milestones, Settings, every Help row and Sign in/out. It never folds into More. The signed-out
+ * gear is the same icon the rail's Settings button used.
  */
 export function AppRailAccountMenu({
   help,
@@ -162,20 +127,11 @@ export function AppRailAccountMenu({
                 ref={triggerRef}
                 itemId="account"
                 label={label}
-                // The ring is visual only; screen readers hear the same progress as its description.
+                // Setup progress shows as the menu's Milestones row; screen readers also hear it on the button.
                 aria-describedby={milestones ? setupDescriptionId : undefined}
                 active={settingsActive}
                 tabStop={tabStop}
-                icon={
-                  milestones ? (
-                    <span className="relative flex size-[26px] items-center justify-center">
-                      {face}
-                      <SetupRing milestones={milestones} />
-                    </span>
-                  ) : (
-                    face
-                  )
-                }
+                icon={face}
               />
             </DropdownMenuTrigger>
           </TooltipTrigger>

@@ -171,7 +171,22 @@ describe('AppRailAccountMenu groups and setup description', () => {
     expect(groups[4]).toEqual(['Sign out'])
   })
 
-  it('describes the setup ring to screen readers, signed in and signed out', () => {
+  it('setup unfinished still shows the plain rail icon: the gear alone, or the initial alone', () => {
+    useAppStore.setState({ orcaProfileAuthStatus: SIGNED_OUT })
+    const { rerender } = render(<Harness milestones={{ done: 3, total: 5 }} />)
+    const gear = screen.getByRole('button', { name: 'Settings' })
+    expect(gear.querySelectorAll('svg')).toHaveLength(1)
+    expect(gear.firstElementChild?.tagName.toLowerCase()).toBe('svg')
+    act(() => {
+      useAppStore.setState({ orcaProfileAuthStatus: SIGNED_IN })
+    })
+    rerender(<Harness milestones={{ done: 3, total: 5 }} />)
+    const avatar = screen.getByRole('button', { name: 'Account' })
+    expect(avatar.querySelector('svg')).toBeNull()
+    expect(avatar.textContent).toBe('A')
+  })
+
+  it('describes setup progress to screen readers, signed in and signed out', () => {
     useAppStore.setState({ orcaProfileAuthStatus: SIGNED_OUT })
     const { rerender } = render(<Harness milestones={{ done: 3, total: 5 }} />)
     expect(screen.getByRole('button', { name: 'Settings' })).toHaveAccessibleDescription(
