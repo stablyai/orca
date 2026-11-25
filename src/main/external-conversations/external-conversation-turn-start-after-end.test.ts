@@ -23,10 +23,16 @@ const SENT = 1_000
 const HANDED_OVER = 1_400
 const ENDED = 18_000
 
-type Row = { state: 'working' | 'done'; stateStartedAt: number }
+type Row = { state: 'working' | 'done' | 'blocked'; stateStartedAt: number }
 
-// A linked chat whose turn was told at SENT and re-dated to HANDED_OVER, its end now being read.
-function endedTurn() {
+// The turn told at its send, then re-dated to its handover.
+const told = (_chats: ChatTurns, show: (next: Row) => void) => {
+  show({ state: 'working', stateStartedAt: SENT })
+  show({ state: 'working', stateStartedAt: HANDED_OVER })
+}
+
+// A linked chat whose turn began as `begin` says, its end now being read.
+function endedTurn(begin: (chats: ChatTurns, show: (next: Row) => void) => void = told) {
   const events: ConversationEvent[] = []
   let row: Row = { state: 'working', stateStartedAt: SENT }
   const chats = new ChatTurns({
@@ -54,8 +60,7 @@ function endedTurn() {
     chats.observe(paneKey)
   }
   const starts = () => events.flatMap((event) => (event.kind === 'turn-started' ? [event.at] : []))
-  show({ state: 'working', stateStartedAt: SENT })
-  show({ state: 'working', stateStartedAt: HANDED_OVER })
+  begin(chats, show)
   chats.news({
     kind: 'turn-ended',
     sessionId,
@@ -88,11 +93,38 @@ describe('a chat turn’s status row after the turn ended', () => {
     expect(starts()).toEqual([SENT, ENDED - 500])
   })
 
-  it('reports no turn running from the ended turn’s row on a new watch', () => {
+  it('reports no turn running from the ended turn’s row on the next watch', () => {
     const { chats, show } = endedTurn()
     show({ state: 'working', stateStartedAt: HANDED_OVER })
+    // The watch goes and a new one opens with a snapshot, while the row still reads working.
+    chats.clear()
     expect(chats.adopt(paneKey)).toBeNull()
     show({ state: 'working', stateStartedAt: ENDED - 500 })
     expect(chats.toldTurn(paneKey)).toBe(ENDED - 500)
+  })
+
+  it('tells no new turn from the row of a turn joined at its prompt, once it ended', () => {
+    const { show, starts } = endedTurn((chats, show) => {
+      show({ state: 'blocked', stateStartedAt: SENT + 5_000 })
+      chats.joined(paneKey, sessionId)
+      // The prompt answered, the row runs under the turn's handover.
+      show({ state: 'working', stateStartedAt: HANDED_OVER })
+    })
+    expect(starts()).toEqual([SENT + 5_000])
+    show({ state: 'working', stateStartedAt: HANDED_OVER })
+    expect(starts()).toEqual([SENT + 5_000])
+  })
+
+  it('snapshots the ended turn’s row as not working', () => {
+    const { chats, show } = endedTurn()
+    show({ state: 'working', stateStartedAt: HANDED_OVER })
+    const row = (at: number) =>
+      ({
+        state: 'working',
+        stateStartedAt: at,
+        structuredHost: true
+      }) as unknown as AgentStatusIpcPayload
+    expect(chats.dates.leadWorking(paneKey, row(HANDED_OVER))).toBe(false)
+    expect(chats.dates.leadWorking(paneKey, row(ENDED - 500))).toBe(true)
   })
 })

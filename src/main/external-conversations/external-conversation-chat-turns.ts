@@ -37,7 +37,7 @@ export class ChatTurns {
   private readonly startedAt = new Map<string, number>()
   private readonly leadState = new Map<string, AgentStatusState>()
   // The dates each chat's open (or last ended) turn showed on its status row: the turn's identity.
-  private readonly dates = new TurnDates()
+  readonly dates = new TurnDates()
   // Chats whose current turn the conversation was told of.
   private readonly told = new Set<string>()
   private readonly toldLinks: ToldWorkLinks
@@ -158,10 +158,13 @@ export class ChatTurns {
     const previous = this.leadState.get(paneKey)
     this.leadState.set(paneKey, lead.state)
     const open = this.startedAt.get(paneKey)
-    if (lead.state !== 'working' || previous === 'blocked' || previous === 'waiting') {
+    if (lead.state !== 'working') {
       return
     }
     if (
+      // Resumed from an answered prompt: the same turn.
+      previous === 'blocked' ||
+      previous === 'waiting' ||
       open === lead.stateStartedAt ||
       // Still working with no delivery waiting to start another, a new date is the row re-dating its
       // turn (from the send to its handover), not a new turn.
@@ -174,8 +177,7 @@ export class ChatTurns {
       }
       return
     }
-    // The turn just ended, and its row still reads working under one of its own dates while the end
-    // is read: the same turn, not a new one. A real next turn shows a date of its own.
+    // The ended turn's row read again (a real next turn shows a date of its own).
     if (open === undefined && this.dates.isEnded(paneKey, lead.stateStartedAt)) {
       return
     }
@@ -327,6 +329,8 @@ export class ChatTurns {
   /** Signed out or another account: a turn end still being read reaches no one. */
   reset(): void {
     this.generation += 1
+    // Kept across a watch gap, so the next snapshot doesn't take an ended turn's row for a running one.
+    this.dates.clear()
     this.clear()
   }
 
@@ -334,7 +338,6 @@ export class ChatTurns {
   clear(): void {
     this.startedAt.clear()
     this.told.clear()
-    this.dates.clear()
     this.prompts.clear()
     this.toldLinks.clear()
     this.leadState.clear()

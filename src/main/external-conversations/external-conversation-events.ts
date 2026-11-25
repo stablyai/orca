@@ -287,7 +287,7 @@ export class ConversationEvents {
         const entry: ConversationSnapshot['conversations'][number] = {
           ...conversationPane(link, workspace.worktreeId),
           agent: link.agent,
-          working: hears && conversationWorking(row),
+          working: hears && this.chats.dates.leadWorking(link.paneKey, row),
           prompt,
           turnId: hears ? this.chats.adopt(link.paneKey) : null,
           activeAt: Math.max(link.createdAt, row?.receivedAt ?? 0),

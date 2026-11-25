@@ -3,7 +3,10 @@
 // Once the turn ends they name the ended turn, so a row still showing one of them is that turn read
 // again, never a new one. A real next turn shows its own date, whatever its clock.
 
-// Re-dates of one turn are few; past this the oldest go.
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { conversationWorking, leadOf } from './external-conversation-turn-state'
+
+// Re-dates of one turn are few; past this the oldest after the told start go.
 const MAX_DATES = 16
 
 export class TurnDates {
@@ -20,7 +23,12 @@ export class TurnDates {
   showed(paneKey: string, at: number): void {
     const dates = this.open.get(paneKey) ?? []
     if (!dates.includes(at)) {
-      this.open.set(paneKey, [...dates, at].slice(-MAX_DATES))
+      // The told start is kept; the oldest re-date after it goes first.
+      const next = [...dates, at]
+      this.open.set(
+        paneKey,
+        next.length > MAX_DATES ? next.slice(0, 1).concat(next.slice(1 - MAX_DATES)) : next
+      )
     }
   }
 
@@ -38,6 +46,11 @@ export class TurnDates {
   /** Whether a working row's date is the ended turn's. */
   isEnded(paneKey: string, at: number): boolean {
     return this.ended.get(paneKey)?.has(at) === true
+  }
+
+  /** Whether the chat's lead works on a turn now, not on the ended turn's row read again. */
+  leadWorking(paneKey: string, row: AgentStatusIpcPayload | null): boolean {
+    return conversationWorking(row) && !(row && this.isEnded(paneKey, leadOf(row).stateStartedAt))
   }
 
   forget(paneKey: string): void {
