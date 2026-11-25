@@ -72,11 +72,7 @@ export function NativeChatCodeBlock({
               <span className="truncate">{getCodeFenceLanguageLabel(language)}</span>
             </span>
           )}
-          {code ? (
-            <div className={cn('flex shrink-0 items-center gap-0.5', !htmlDocument && '-mr-1')}>
-              {actions}
-            </div>
-          ) : null}
+          {code ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
         </div>
       ) : null}
       {previewing ? <NativeChatHtmlPreview code={code} /> : null}
