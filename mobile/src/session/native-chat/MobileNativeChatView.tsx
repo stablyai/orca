@@ -60,7 +60,6 @@ import { MobileNativeChatQueueAbovePromptContext } from './lower-region/mobile-n
 import { MobileNativeChatPromptStrip } from './input/prompts/MobileNativeChatPromptStrip'
 import { MobileNativeChatOfflineQueue } from './input/queued-messages/MobileNativeChatOfflineQueue'
 import { useMobileNativeChatOfflineQueue } from './composer/delivery/use-mobile-native-chat-offline-sends'
-import { StructuredAgentSendingScope } from './transcript/sending/structured-agent-sending-scope'
 
 export type { MobileNativeChatInputLockReason } from './mobile-native-chat-view-props'
 
@@ -159,7 +158,7 @@ export function MobileNativeChatView({
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   const { font, lineSpacing } = useNativeChatTextSettings()
 
-  const { data, hasDisplayedMessage } = useMobileNativeChatTransientData(
+  const data = useMobileNativeChatTransientData(
     { folded, streaming, pending, imagePreviewsByMessageId },
     sendSurfaceId
   )
@@ -379,26 +378,23 @@ export function MobileNativeChatView({
                     roots={disclosures.roots}
                     runPlacements={rowKeys.runPlacements}
                   >
-                    <StructuredAgentSendingScope
-                      source={structuredSending}
-                      isDisplayed={hasDisplayedMessage}
-                    >
-                      <MobileWorkerApprovalReceiptsContext value={workerReceipts}>
-                        <MobileNativeChatRowList
-                          {...listLayout}
-                          emptyStateView={emptyStateView}
-                          header={header}
-                          hasHeader={hasMore === true}
-                          onNearTop={loadEarlierNearTop}
-                          itemJump={itemJump}
-                          rows={turns.listMessages}
-                          runs={turns.presentation.workRuns.heads}
-                          roots={disclosures.roots}
-                          contentContainerStyle={styles.listContent}
-                          pinchGesture={pinchGesture}
-                        />
-                      </MobileWorkerApprovalReceiptsContext>
-                    </StructuredAgentSendingScope>
+                    <MobileWorkerApprovalReceiptsContext value={workerReceipts}>
+                      <MobileNativeChatRowList
+                        {...listLayout}
+                        emptyStateView={emptyStateView}
+                        header={header}
+                        hasHeader={hasMore === true}
+                        onNearTop={loadEarlierNearTop}
+                        itemJump={itemJump}
+                        rows={turns.listMessages}
+                        waitingRows={turns.waitingRows}
+                        sending={structuredSending}
+                        runs={turns.presentation.workRuns.heads}
+                        roots={disclosures.roots}
+                        contentContainerStyle={styles.listContent}
+                        pinchGesture={pinchGesture}
+                      />
+                    </MobileWorkerApprovalReceiptsContext>
                   </MobileNativeChatScrollRootsBoundary>
                 </MobileMarkdownBotCardContext.Provider>
               </MobileBotCardSendContext.Provider>

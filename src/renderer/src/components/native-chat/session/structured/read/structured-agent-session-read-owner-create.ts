@@ -38,6 +38,7 @@ export function createReadOwner(
     current: false
   }
   let published = snapshot
+  const receiptListeners = new Set<() => void>()
   const deliveryListeners = new Set<() => void>()
   let stopActiveRun: (() => void) | null = null
   const retiredHistoryRead = (): boolean => true
@@ -55,21 +56,20 @@ export function createReadOwner(
     ? createStructuredAgentSessionPRLinkObserver(sessionId, target)
     : () => {}
 
-  const emit = (): void => {
-    for (const listener of listeners) {
-      listener()
-    }
-  }
-  const setSnapshot = (next: StructuredAgentSessionReadSnapshot): void => {
+  const setSnapshot = (next: StructuredAgentSessionReadSnapshot, receiptsOnly = false): void => {
     if (next === snapshot) {
       return
     }
-    const deliveryChanged =
-      snapshot.state.cursor !== next.state.cursor ||
-      snapshot.state.writtenAtById !== next.state.writtenAtById
-    snapshot = published = next
-    emit()
-    if (deliveryChanged) {
+    const before = snapshot.state
+    snapshot = next
+    if (!receiptsOnly) {
+      published = next
+      listeners.forEach((listener) => listener())
+    }
+    if (before.writtenAtById !== next.state.writtenAtById) {
+      receiptListeners.forEach((listener) => listener())
+    }
+    if (before.cursor !== next.state.cursor) {
       deliveryListeners.forEach((listener) => listener())
     }
   }
@@ -90,15 +90,10 @@ export function createReadOwner(
     if (state === snapshot.state && current === snapshot.current) {
       return
     }
-    if (
+    const receiptsOnly =
       current === snapshot.current &&
       isStructuredAgentSessionReceiptUpdate(snapshot.state, state, action)
-    ) {
-      snapshot = { ...snapshot, state }
-      deliveryListeners.forEach((listener) => listener())
-      return
-    }
-    setSnapshot({ ...snapshot, state, current })
+    setSnapshot({ ...snapshot, state, current }, receiptsOnly)
   }
   const markStale = (): void => {
     if (snapshot.current) {
@@ -202,7 +197,11 @@ export function createReadOwner(
   let retained = 0
   const deleteIfUnused = (): void => {
     const subscriptions =
-      activations.size + listeners.size + commandListeners.size + deliveryListeners.size
+      activations.size +
+      listeners.size +
+      commandListeners.size +
+      deliveryListeners.size +
+      receiptListeners.size
     if (subscriptions === 0 && retained === 0 && !activity.retained()) {
       forgetStructuredReadOwner(key, owner)
     }
@@ -273,11 +272,13 @@ export function createReadOwner(
       listeners.clear()
       commandListeners.clear()
       deliveryListeners.clear()
+      receiptListeners.clear()
       stopActiveRun?.()
     },
     getSnapshot: () => published,
     getReadCursor: () => snapshot.state.cursor,
     getSubmissionReceipts: () => snapshot.state.writtenAtById,
+    subscribeReceipts: (listener) => subscribeTo(receiptListeners, listener),
     subscribeDelivery: (listener) => subscribeTo(deliveryListeners, listener),
     trimHistory,
     retainHistory: () => {

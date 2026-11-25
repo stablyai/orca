@@ -1,3 +1,7 @@
+import { AcpStructuredTurns } from '../../acp/turns/acp-structured-turns'
+import { AcpStructuredLane } from '../../acp/journal/acp-structured-lane'
+import { GENERIC_ACP_DIALECT } from '../../acp/acp-dialects/acp-dialect'
+import { captureStructuredAgentSessionWorkAuthority } from '../agent-session-wire/observations/structured-agent-session-work-authority'
 import { expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
@@ -713,6 +717,80 @@ it.each([16, 160])('reuses warm receipt work with %i outstanding sends', async (
     for (const stop of close) {
       stop()
     }
+    db.close()
+  }
+})
+
+it('publishes a replacement held send through the live ACP authority', async () => {
+  const db = new Database(':memory:')
+  try {
+    const sessionId = HOST_TEST_SESSION
+    const now = () => 1_800_000_000_000
+    const journal = await SqlAgentSessionJournal.open({
+      database: inProcessSql(db, now),
+      identity: {
+        sessionId,
+        workspaceId: HOST_TEST_LOCATION.workspaceId,
+        hostId: 'local',
+        agent: 'grok',
+        providerHandle: null
+      },
+      now
+    })
+    const lane = new AcpStructuredLane({
+      sink: { tryAppendTransition: () => ({ accepted: true }) },
+      sessionId,
+      agent: 'grok',
+      agentName: 'Grok',
+      generation: 'child',
+      providerSessionId: 'provider',
+      dialect: GENERIC_ACP_DIALECT,
+      logger: { warn: () => {}, error: () => {} },
+      onInputAccepted: () => {},
+      onFailed: () => {}
+    })
+    const turns = new AcpStructuredTurns({
+      lane,
+      connection: { prompt: () => new Promise(() => {}), cancel: async () => {} },
+      agentName: 'Grok',
+      now,
+      settle: () => {},
+      withdrawRequests: () => {},
+      sessionLost: () => {}
+    })
+    const deps = {
+      sessions: new Map([
+        [
+          sessionId,
+          {
+            journal,
+            params: {
+              location: HOST_TEST_LOCATION,
+              provider: agentSessionRecordFixture({ sessionId }).provider
+            },
+            child: {
+              fence: 1,
+              phase: 'ready' as const,
+              generation: 'child',
+              heldSends: () => turns.heldSends
+            }
+          }
+        ]
+      ]),
+      getConversation: () => null
+    }
+    const capture = () =>
+      captureStructuredAgentSessionWorkAuthority(journal, sessionId, deps, {
+        cursor: journal.cursor(),
+        revision: journal.stopMarks.revision(),
+        latest: null
+      })?.authority.child?.heldSends
+    turns.dispatch({ clientMessageId: 'first-send', prompt: [], requestedAt: now() })
+    expect(capture()).toEqual(['first-send'])
+    turns.dispatch({ clientMessageId: 'follow-up', prompt: [], requestedAt: now() })
+    turns.accept('first-send')
+    expect(capture()).toEqual(['follow-up'])
+  } finally {
     db.close()
   }
 })

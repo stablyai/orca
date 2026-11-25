@@ -8,7 +8,7 @@ import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item
 import { selectAgentSessionCurrentRequests } from '../requests/agent-session-current-requests'
 import {
   agentJournalSubmissionReturnedToCard,
-  isQueuedAgentJournalSubmission
+  agentJournalSubmissionDrawnAsHeld
 } from '../requests/agent-session-queued-submission'
 import { collapseProviderRetryRuns } from '../../native-chat/transcript/notices/native-chat-provider-retry-runs'
 import {
@@ -213,11 +213,7 @@ export function projectStructuredAgentSessionMessageRows(
           ? deliveredAgentMailRow(row, submission.queuedMessageId)
           : row
     // Until handover, queued sends have no conversation position.
-    if (
-      submission &&
-      submission.queuedMessageId === undefined &&
-      isQueuedAgentJournalSubmission(submission)
-    ) {
+    if (submission && agentJournalSubmissionDrawnAsHeld(submission)) {
       held.push({ ...message, queued: true })
     } else if (!placement || !stoppedBeforeStart.has(message.id)) {
       delivered.push(withAutomationResultMarks(message, marks))

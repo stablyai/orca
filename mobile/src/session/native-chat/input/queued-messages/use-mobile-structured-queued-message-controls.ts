@@ -1,5 +1,8 @@
 import type { DragReorderMove } from '../../../../components/reorder/drag-reorder-positions'
-import { useMobileQueuedMessageComposerActions } from './use-mobile-queued-message-composer-actions'
+import {
+  useMobileQueuedMessageComposerActions,
+  useMobileQueuedActionResolved
+} from './use-mobile-queued-message-composer-actions'
 import { useCallback, useMemo } from 'react'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { AgentJournalRenderItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
@@ -12,9 +15,10 @@ import type {
   AgentSessionQueuedMessagesResumeResult,
   AgentSessionQueuePause
 } from '../../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import type { AgentSessionSendResult } from '../../../../../../src/shared/agent-session/agent-session-wire'
+import type { useQueuedSteerIntents } from './use-queued-steer-intents'
 import {
   queuedMessagesQueuePause,
+  queuedMessageCardSteers,
   type QueuedMessageCard
 } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import {
@@ -26,7 +30,10 @@ import {
   mobileQueuedMessageCards,
   type MobileQueuedMessageCard
 } from './mobile-structured-queued-message-cards'
-import type { MobileStructuredAgentMutate } from '../../agent-session/use-mobile-structured-agent-mutation'
+import {
+  sendMobileQueuedMessage,
+  type MobileStructuredAgentMutate
+} from '../../agent-session/use-mobile-structured-agent-mutation'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { useMobileStructuredQueuedEdit } from './use-mobile-structured-queued-edit'
 import { useMobileWaitingAgentMailArrivalAnnouncement } from '../../transcript/agent-messages/use-mobile-waiting-agent-mail-arrival-announcement'
@@ -85,6 +92,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
   queuePause: AgentSessionQueuePause | null
   submissions: readonly StructuredAgentSubmission[]
   sending?: readonly QueuedMessageCard[]
+  steer: ReturnType<typeof useQueuedSteerIntents>
   agentWorking?: boolean
   mutate: MobileStructuredAgentMutate
   // Without a live composer or a successful copy, Edit must refuse.
@@ -102,6 +110,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
     queuedMessages,
     queuePause,
     sessionKey,
+    steer: { intents: steerIntents, request: requestSteer },
     submissions
   } = args
   const composerActions = useMobileQueuedMessageComposerActions({
@@ -118,6 +127,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
     () =>
       mobileQueuedMessageCards(queuedMessages, submissions, {
         agentWorking,
+        steerIntents,
         queuePaused: queuePause !== null,
         agentName: args.agentName,
         statedFailures: failureItems ? agentSessionVisibleFailureFacts(failureItems) : [],
@@ -126,6 +136,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
       }),
     [
       agentWorking,
+      steerIntents,
       args.agentName,
       args.sending,
       failureItems,
@@ -157,27 +168,18 @@ export function useMobileStructuredQueuedMessageControls(args: {
     listening:
       args.chatActive && args.transcriptShown && args.queueCurrent && queuedMessages !== null
   })
-  const resolved = useCallback(
-    (accepted: boolean): boolean => {
-      if (accepted) {
-        onActionResolved?.()
-      }
-      return accepted
-    },
-    [onActionResolved]
-  )
+  const resolved = useMobileQueuedActionResolved(onActionResolved)
   const send = useCallback(
-    async (messageId: string): Promise<boolean> =>
-      resolved(
-        (
-          await mutate<AgentSessionSendResult>(
-            'agentSession.queuedMessageSend',
-            'agentSession.queuedMessageSend',
-            { messageId }
-          )
-        ).status === 'accepted'
-      ),
-    [mutate, resolved]
+    async (messageId: string): Promise<boolean> => {
+      const card = allCards.find((entry) => entry.messageId === messageId)
+      const value = await requestSteer(
+        messageId,
+        args.enabled && agentWorking && !!card && queuedMessageCardSteers(card),
+        (operation) => sendMobileQueuedMessage(mutate, messageId, operation)
+      )
+      return resolved(value !== null)
+    },
+    [agentWorking, allCards, args.enabled, mutate, requestSteer, resolved]
   )
   const deleteQueued = useCallback(
     async (messageId: string, copied: boolean): Promise<boolean> => {

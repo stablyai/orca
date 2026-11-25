@@ -4,10 +4,7 @@ import {
   type StructuredAgentSubmission,
   type SubmissionReceipts
 } from './structured-agent-session-submissions'
-import {
-  agentJournalSubmissionAwaitsAgent,
-  isQueuedAgentJournalSubmission
-} from '../requests/agent-session-queued-submission'
+import { agentJournalSubmissionDrawnAsHeld } from '../requests/agent-session-queued-submission'
 
 /** Keep the running clock through a pending notice while hiding the Working indicator. */
 export function nativeChatWorkingPresentation(
@@ -38,32 +35,40 @@ const sendingCandidates = new WeakMap<
   readonly StructuredAgentSubmission[]
 >()
 
-export function structuredAgentSessionSendingItemIds(
+export function structuredAgentSessionSendingMembers(
   pending: readonly { clientMessageId: string; phase?: string }[],
-  submissions: readonly StructuredAgentSubmission[],
-  writtenAtById: SubmissionReceipts
-): ReadonlySet<string> {
+  submissions: readonly StructuredAgentSubmission[]
+): ReadonlyMap<string, string> {
   let candidates = sendingCandidates.get(submissions)
   if (!candidates) {
     candidates = submissions.filter(
       (submission) =>
-        submission.dispatchState === 'pending' &&
-        !(submission.queuedMessageId !== undefined && isQueuedAgentJournalSubmission(submission))
+        submission.dispatchState === 'pending' && !agentJournalSubmissionDrawnAsHeld(submission)
     )
     sendingCandidates.set(submissions, candidates)
   }
   const recorded = structuredAgentSubmissionIndex(submissions)
-  const sending = new Set<string>()
+  const members = new Map<string, string>()
   for (const entry of pending) {
     if (entry.phase !== 'unconfirmed' && !recorded.has(entry.clientMessageId)) {
-      sending.add(agentJournalSubmissionKey(entry.clientMessageId))
+      members.set(entry.clientMessageId, agentJournalSubmissionKey(entry.clientMessageId))
     }
   }
-  for (const submission of candidates) {
-    if (
-      agentJournalSubmissionAwaitsAgent(submission, writtenAtById.get(submission.clientMessageId))
-    ) {
-      sending.add(agentJournalSubmissionKey(submission.clientMessageId))
+  for (const { clientMessageId } of candidates) {
+    members.set(clientMessageId, agentJournalSubmissionKey(clientMessageId))
+  }
+  return members
+}
+
+export function structuredAgentSessionSendingItemIds(
+  pending: Parameters<typeof structuredAgentSessionSendingMembers>[0],
+  submissions: readonly StructuredAgentSubmission[],
+  writtenAtById: SubmissionReceipts
+): ReadonlySet<string> {
+  const sending = new Set<string>()
+  for (const [id, item] of structuredAgentSessionSendingMembers(pending, submissions)) {
+    if (writtenAtById.get(id) === undefined) {
+      sending.add(item)
     }
   }
   return sending

@@ -1,3 +1,4 @@
+import { useQueuedSteerIntents } from '../../input/queued-messages/use-queued-steer-intents'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import {
   createStructuredAgentSendingSource,
@@ -53,6 +54,7 @@ export function useMobileStructuredTranscript(
       state: Pick<
         StructuredAgentSessionState,
         | 'epoch'
+        | 'fence'
         | 'items'
         | 'submissions'
         | 'latestTurn'
@@ -68,7 +70,8 @@ export function useMobileStructuredTranscript(
     turnId: string | null
     queueSendsNext?: boolean
   },
-  isWorking: boolean
+  isWorking: boolean,
+  live = true
 ) {
   const [clearSent, setClearSent] = useState<{
     sessionKey: string
@@ -120,15 +123,27 @@ export function useMobileStructuredTranscript(
   )
   const { queuedMessages, submissions, queuePause } = state
   const queuePaused = queuePause != null
+  const steer = useQueuedSteerIntents(live ? sessionKey : '', state, isWorking)
+  const steerIntents = steer.intents
   const queueSendsAsCards = isWorking || queueSendsNext
   const transcriptPending = useMemo(() => {
     const outside = pendingSendsOutsideQueuedCards(optimistic, heldIds, queueSendsAsCards)
     const steering = steeringQueuedMessageEchoes(queuedMessages, submissions, optimistic, {
       agentWorking: isWorking,
-      queuePaused
+      queuePaused,
+      steerIntents
     })
     return steering.length > 0 ? [...outside, ...steering] : outside
-  }, [optimistic, heldIds, queueSendsAsCards, queuedMessages, submissions, isWorking, queuePaused])
+  }, [
+    optimistic,
+    heldIds,
+    queueSendsAsCards,
+    queuedMessages,
+    submissions,
+    isWorking,
+    queuePaused,
+    steerIntents
+  ])
   const sendingCards = useMemo(
     () => sendingQueuedMessageCards(optimistic, heldIds, queueSendsAsCards, submissions),
     [optimistic, heldIds, queueSendsAsCards, submissions]
@@ -149,6 +164,7 @@ export function useMobileStructuredTranscript(
   )
   return {
     clearing,
+    steer,
     onClearSent,
     timing: useMobileStructuredAgentTurnTiming(state, turnId, transcriptItems),
     messages,

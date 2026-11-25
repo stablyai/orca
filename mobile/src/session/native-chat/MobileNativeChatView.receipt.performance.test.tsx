@@ -31,6 +31,10 @@ vi.mock('./agent-session/structured-session-operation-id', () => ({
   structuredSessionOperationId: () => 'receipt-test'
 }))
 
+function sendingIds(source: StructuredAgentSendingSource | undefined): string[] {
+  return source ? [...source.candidates].filter((id) => source.getId(id)) : []
+}
+
 function shows(tree: ReactTestRenderer, text: string): boolean {
   const textOf = (node: ReactTestInstance | string): string =>
     typeof node === 'string' ? node : node.children.map(textOf).join('')
@@ -305,7 +309,7 @@ it.each([4096, 40960])(
       const retry = { ...SEND, handedOverAt: 2600 }
       activityRenders.mockClear()
       await deliverBatch(batch(sequence + 2, [retry], [], latestTurn))
-      expect(sendingSource?.getSnapshot()).toEqual(new Set(['orca:opener']))
+      expect(sendingSource?.getId('orca:opener')).toBe(true)
       expect(activityRenders).not.toHaveBeenCalled()
 
       await deliverBatch(
@@ -316,7 +320,7 @@ it.each([4096, 40960])(
           latestTurn
         )
       )
-      expect(sendingSource?.getSnapshot().size).toBe(0)
+      expect(sendingIds(sendingSource).length).toBe(0)
       expect(activityRenders).toHaveBeenLastCalledWith(true, false)
       expect(activityRenders).not.toHaveBeenCalledWith(true, true)
 
@@ -328,13 +332,13 @@ it.each([4096, 40960])(
         body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Steer' }] }
       }
       await deliverBatch(batch(sequence + 4, [], [], latestTurn, [card]))
-      expect(sendingSource?.getSnapshot().size).toBe(0)
+      expect(sendingIds(sendingSource).length).toBe(0)
       expect(activityRenders).toHaveBeenLastCalledWith(false, false)
 
       activityRenders.mockClear()
       await deliverBatch(batch(sequence + 5, [], [], latestTurn, [{ ...card, steers: true }]))
       expect(activityRenders).not.toHaveBeenCalled()
-      expect(sendingSource?.getSnapshot()).toEqual(new Set(['orca:held-draft']))
+      expect(sendingIds(sendingSource)).toEqual(['orca:held-draft'])
 
       const steer: AgentJournalSubmission = {
         ...SEND,
@@ -361,11 +365,11 @@ it.each([4096, 40960])(
           []
         )
       )
-      expect(sendingSource?.getSnapshot()).toEqual(new Set(['orca:steer-attempt']))
+      expect(sendingIds(sendingSource)).toEqual(['orca:steer-attempt'])
       expect(activityRenders).not.toHaveBeenCalled()
 
       await deliverBatch(batch(sequence + 7, [{ ...steer, writtenAt: 3000 }], [], latestTurn))
-      expect(sendingSource?.getSnapshot().size).toBe(0)
+      expect(sendingIds(sendingSource).length).toBe(0)
       expect(activityRenders).toHaveBeenCalledExactlyOnceWith(false, false)
     } finally {
       act(() => mounted.unmount())

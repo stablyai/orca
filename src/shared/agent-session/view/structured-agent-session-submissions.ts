@@ -8,6 +8,28 @@ import type { StructuredAgentSubmission } from '../journal/agent-session-journal
 export type { StructuredAgentSubmission }
 export type SubmissionReceipts = Pick<ReadonlyMap<string, number>, 'get'>
 
+type ReceiptDelta = { previous: WeakRef<SubmissionReceipts>; changedIds: string[] }
+const receiptDeltas = new WeakMap<SubmissionReceipts, ReceiptDelta>()
+
+export function changedSubmissionReceiptIds(
+  previous: SubmissionReceipts,
+  current: SubmissionReceipts
+) {
+  const changed = new Set<string>()
+  let version: SubmissionReceipts | undefined = current
+  while (version !== previous) {
+    const delta: ReceiptDelta | undefined = version && receiptDeltas.get(version)
+    if (!delta) {
+      return null
+    }
+    for (const id of delta.changedIds) {
+      changed.add(id)
+    }
+    version = delta.previous.deref()
+  }
+  return changed
+}
+
 const indexes = new WeakMap<readonly StructuredAgentSubmission[], ReadonlyMap<string, number>>()
 
 export function structuredAgentSubmissionIndex(submissions: readonly StructuredAgentSubmission[]) {
@@ -76,13 +98,23 @@ class IndexedSubmissionReceipts implements SubmissionReceipts {
 
   withRecords(records: readonly AgentJournalSubmission[]): IndexedSubmissionReceipts {
     let next = this.root
+    const changedIds: string[] = []
     for (const { clientMessageId, writtenAt } of records) {
       const position = this.index.get(clientMessageId)
       if (position !== undefined) {
-        next = updateReceipt(next, position, TOP_SHIFT, writtenAt)
+        const updated = updateReceipt(next, position, TOP_SHIFT, writtenAt)
+        if (updated !== next) {
+          changedIds.push(clientMessageId)
+          next = updated
+        }
       }
     }
-    return next === this.root ? this : new IndexedSubmissionReceipts(this.index, next)
+    if (next === this.root) {
+      return this
+    }
+    const current = new IndexedSubmissionReceipts(this.index, next)
+    receiptDeltas.set(current, { previous: new WeakRef(this), changedIds })
+    return current
   }
 }
 

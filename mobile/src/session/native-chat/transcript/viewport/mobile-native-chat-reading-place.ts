@@ -1,3 +1,4 @@
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatRowKeys } from '../projection/mobile-native-chat-row-keys'
 import {
   mobileNativeChatReadingParts,
@@ -224,4 +225,38 @@ export function mobileNativeChatReadingDrift(
     }
   }
   return undefined
+}
+
+export function mobileNativeChatDrawnRows(
+  liveRows: readonly NativeChatMessage[],
+  held: readonly NativeChatMessage[] | undefined,
+  keyOf: (row: NativeChatMessage) => string,
+  runs?: ReadonlyMap<number, readonly NativeChatMessage[]>
+) {
+  const unheld = { rows: liveRows, heldFrom: Infinity, heldAt: 0 }
+  const head = held?.[0]
+  const at = head ? liveRows.findIndex((row) => keyOf(row) === keyOf(head)) : -1
+  if (!held || at === -1) {
+    return unheld
+  }
+  // A newly prepended run head owns its held members; draw those members live.
+  let last: NativeChatMessage | undefined
+  for (const [index, members] of runs ?? []) {
+    if (index >= at) {
+      break
+    }
+    last = members.at(-1)
+  }
+  const from = Math.max(at, last ? liveRows.indexOf(last, at) + 1 : 0)
+  const kept = liveRows.slice(at, from).every((row, i) => {
+    const was = held[i]
+    return was !== undefined && keyOf(was) === keyOf(row)
+  })
+  return kept
+    ? {
+        rows: [...liveRows.slice(0, from), ...held.slice(from - at)],
+        heldFrom: from,
+        heldAt: at
+      }
+    : unheld
 }

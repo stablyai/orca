@@ -36,7 +36,12 @@ type ExecutionResult<T> = StructuredAgentSessionWriteOutcome<T> & {
   reportFailure?: (notice: string) => void
 }
 
-type WriteArgs = [method: string, fingerprintMethod: string, fields: Record<string, unknown>]
+type WriteArgs = [
+  method: string,
+  fingerprintMethod: string,
+  fields: Record<string, unknown>,
+  operationId?: string
+]
 
 export type StructuredAgentSessionWrite = <T>(
   ...args: WriteArgs
@@ -109,14 +114,15 @@ export function useStructuredAgentSessionMutate(args: {
       fingerprintMethod: string,
       fields: Record<string, unknown>,
       /** The fence when the press happened, read before any await, so a write never retargets. */
-      pressedFence: number
+      pressedFence: number,
+      operationId?: string
     ): Promise<ExecutionResult<T>> => {
       let result: AgentSessionMutationResult<T>
       try {
         result = await callStructuredAgentSession<AgentSessionMutationResult<T>>(target, method, {
           envelope: {
             sessionId,
-            clientOperationId: structuredSessionOperationId(),
+            clientOperationId: operationId ?? structuredSessionOperationId(),
             expectedRuntimeFence: pressedFence,
             payloadFingerprint: structuredAgentSessionPayloadFingerprint({
               method: fingerprintMethod,
@@ -169,13 +175,14 @@ export function useStructuredAgentSessionMutate(args: {
     const execute = async <T>(
       method: string,
       fingerprintMethod: string,
-      fields: Record<string, unknown>
+      fields: Record<string, unknown>,
+      operationId?: string
     ): Promise<ExecutionResult<T>> => {
       if (
         !structuredAgentSessionStopIsJoinable(fingerprintMethod, fields) ||
         (await supportsStructuredAgentSessionQuietRepeatedStop(target))
       ) {
-        return send<T>(method, fingerprintMethod, fields, pressedFence)
+        return send<T>(method, fingerprintMethod, fields, pressedFence, operationId)
       }
       // Older hosts lack quiet repeated Stops; retain joining until none remain supported.
       const key = `${hostKey}:${sessionId}:${method}:${JSON.stringify(fields)}`

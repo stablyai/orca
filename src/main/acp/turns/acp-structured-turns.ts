@@ -1,4 +1,7 @@
-import type { AcpStructuredTurnsDeps } from './acp-turn-dispatch-contract'
+import type {
+  AcpStructuredTurnsDeps,
+  AcpStructuredSend as Send
+} from './acp-turn-dispatch-contract'
 // Steers wait for the active prompt to answer cancellation; agent-initiated turns accept sends directly.
 
 import {
@@ -10,16 +13,13 @@ import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { acpCompactPrompt } from './acp-compaction-turn'
+import { acpCompactSend } from './acp-compaction-turn'
 import {
   AcpAgentError,
   AcpAuthRequiredError,
   AcpConnectionClosedError
 } from '../transport/acp-errors'
 import { acpPromptRejection } from './acp-prompt-failure'
-import type { ContentBlock } from '../generated/acp-protocol.generated'
-
-type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
 
 export class AcpStructuredTurns {
   private active: Send | null = null
@@ -27,6 +27,7 @@ export class AcpStructuredTurns {
   private steerCancelled: Send | null = null
   private readonly steers: Send[] = []
   private readonly unsettled = new Set<string>()
+  private heldSnapshot: ReadonlySet<string> = Object.freeze(new Set<string>())
   private readonly idleWaiters = new Set<() => void>()
   private ended = false
   private stopAt: number | null = null
@@ -56,7 +57,7 @@ export class AcpStructuredTurns {
   }
 
   get heldSends(): ReadonlySet<string> {
-    return this.unsettled
+    return this.heldSnapshot
   }
 
   get holdsSteers(): boolean {
@@ -132,7 +133,9 @@ export class AcpStructuredTurns {
   }
 
   dispatch(send: Send): void {
-    this.unsettled.add(send.clientMessageId)
+    if (!this.unsettled.has(send.clientMessageId)) {
+      this.heldSnapshot = Object.freeze(new Set(this.unsettled.add(send.clientMessageId)))
+    }
     if (this.active) {
       this.steers.push(send)
       this.cancelForSteer()
@@ -155,11 +158,7 @@ export class AcpStructuredTurns {
         throw new Error(`${this.deps.agentName} is still working`)
       }
     }
-    const send: Send = {
-      clientMessageId: command.clientMessageId,
-      prompt: acpCompactPrompt(command.instructions, this.deps.compactCommand),
-      requestedAt: this.deps.now()
-    }
+    const send = acpCompactSend(command, this.deps.compactCommand, this.deps.now())
     lane.beginCommand(command)
     this.stopAt = null
     try {
@@ -179,6 +178,7 @@ export class AcpStructuredTurns {
 
   accept(clientMessageId: string): void {
     if (this.unsettled.delete(clientMessageId)) {
+      this.heldSnapshot = Object.freeze(new Set(this.unsettled))
       this.deps.settle({
         clientMessageId,
         providerIdentity: { provider: 'orca', clientMessageId }
@@ -208,6 +208,7 @@ export class AcpStructuredTurns {
     if (active && cause instanceof AcpAuthRequiredError) {
       this.agentFailed(active, cause)
     } else if (active && this.unsettled.delete(active.clientMessageId)) {
+      this.heldSnapshot = Object.freeze(new Set(this.unsettled))
       this.deps.settle({ clientMessageId: active.clientMessageId, state: 'unknown', reason })
     }
     this.active = null
@@ -331,9 +332,7 @@ export class AcpStructuredTurns {
   }
 
   private notifyIdle(): void {
-    for (const wake of this.idleWaiters) {
-      wake()
-    }
+    this.idleWaiters.forEach((wake) => wake())
     this.idleWaiters.clear()
   }
 
@@ -341,6 +340,7 @@ export class AcpStructuredTurns {
     if (!this.unsettled.delete(clientMessageId)) {
       return
     }
+    this.heldSnapshot = Object.freeze(new Set(this.unsettled))
     this.deps.settle({
       clientMessageId,
       state: 'rejected',

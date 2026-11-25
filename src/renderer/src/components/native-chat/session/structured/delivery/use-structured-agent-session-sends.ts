@@ -1,3 +1,4 @@
+import { structuredAgentSessionCursorSettlement } from './structured-agent-session-send-runtime'
 import type {
   StructuredAgentSessionSendControl,
   StructuredAgentSessionAttachment
@@ -95,10 +96,11 @@ export function useStructuredAgentSessionSends(args: {
         readOwner.getReadCursor()
       )
     settle()
+    const settleCursor = structuredAgentSessionCursorSettlement(sessionId)
     return readOwner.subscribeDelivery(() => {
       const { state } = readOwner.getSnapshot()
       if (state.submissions === submissions) {
-        settle()
+        settleCursor(readOwner.getReadCursor())
       }
     })
   }, [pending, queuedMessageIds, readOwner, sessionId, submissions])

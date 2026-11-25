@@ -199,10 +199,10 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     agent
   })
   const contextClear = useNativeChatContextClearFloor(state.epoch, journalItems)
-  const { transcriptItems, transcriptPending, messages } = useStructuredAgentSessionMessages(
+  const { transcriptItems, transcriptPending, messages, steer } = useStructuredAgentSessionMessages(
     contextClear.rows,
     agentName,
-    transportState,
+    { ...transportState, owner: readOwner, epoch: state.epoch },
     pending,
     isWorking
   )
@@ -220,7 +220,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     mutate,
     editTransport,
     admit,
-    capturePresentation
+    capturePresentation,
+    steer
   })
   return {
     epoch: state.epoch,

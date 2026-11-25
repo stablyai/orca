@@ -13,6 +13,15 @@ export function isQueuedAgentJournalSubmission(
   )
 }
 
+export function agentJournalSubmissionDrawnAsHeld(
+  submission: Pick<
+    AgentJournalSubmission,
+    'queuedMessageId' | 'handoverRecorded' | 'dispatchState' | 'handedOverAt'
+  >
+): boolean {
+  return submission.queuedMessageId === undefined && isQueuedAgentJournalSubmission(submission)
+}
+
 /** Prove no delivery from a host-held send or explicit settlement proof; older hosts sent immediately, so missing handover there proves nothing. */
 export function agentJournalSubmissionProvenUnwritten(
   submission: Pick<

@@ -9,6 +9,7 @@ import { withoutPullRequestEventRows } from '../../../../shared/native-chat/tran
 import { useStructuredAgentSendingSource } from './session/structured/delivery/use-structured-agent-sending-source'
 import {
   StructuredAgentSendingScope,
+  useDisplayedSendingSlots,
   StructuredAgentWorkingGate
 } from './session/structured/delivery/structured-agent-sending-scope'
 import { useCallback, useMemo, useRef, useState } from 'react'
@@ -145,7 +146,6 @@ export function NativeChatMessageList({
     sendingPending,
     journalSubmissions
   )
-  const isDisplayed = useCallback((id: string) => loadedMessageIds.has(id), [loadedMessageIds])
   const {
     isWorking: drawsActiveTurn,
     turnWorking,
@@ -217,6 +217,13 @@ export function NativeChatMessageList({
     newRowsMarkerIndex: newRows.index,
     typography
   })
+  const displayedSendingIds = useDisplayedSendingSlots(
+    sendingSource,
+    slots,
+    transcriptWindow,
+    waitingSlots
+  )
+
   const transcriptScroll = useNativeChatTranscriptScroll({
     scrollRef,
     contentRef,
@@ -360,7 +367,7 @@ export function NativeChatMessageList({
             <div className={nativeChatTranscriptOuterClass(rail.visible)}>
               <StructuredAgentSendingScope
                 source={subagentId === null ? sendingSource : undefined}
-                isDisplayed={isDisplayed}
+                displayedIds={displayedSendingIds}
               >
                 <NativeChatTranscriptColumn ref={measureContent}>
                   {scope.lead}

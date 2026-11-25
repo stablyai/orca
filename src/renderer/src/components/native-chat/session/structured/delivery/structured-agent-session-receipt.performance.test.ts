@@ -2,31 +2,32 @@
 
 import { act, render, renderHook } from '@testing-library/react'
 import { createElement, useMemo } from 'react'
-import { createStructuredAgentSendingSource } from '../structured-agent-sending-source'
-import { structuredAgentSessionSendingItemIds } from '../structured-agent-session-sending'
+import {
+  createStructuredAgentSendingSource,
+  type SubmissionReceiptSource
+} from '../../../../../../../shared/agent-session/view/structured-agent-sending-source'
+import { steeringQueuedMessageEchoes } from '../../../../../../../shared/agent-session/view/structured-agent-session-sending-queued-cards'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { expect, it, vi } from 'vitest'
 import type {
   AgentSessionHistoryPage,
   AgentSessionLatestTurn,
   AgentSessionSubscribeEvent
-} from '../../agent-session-wire'
+} from '../../../../../../../shared/agent-session/agent-session-wire'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../journal/agent-session-journal-types'
-import { createStructuredAgentTurnBarsSelector } from '../structured-agent-session-turn-timing'
+} from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { createStructuredAgentTurnBarsSelector } from '../../../../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import type {
   StructuredAgentSessionAction,
   StructuredAgentSessionState
-} from './structured-agent-session-reducer'
-import type { SubmissionReceipts } from '../structured-agent-session-submissions'
-import type { NativeChatTurnJournal } from '../../../native-chat/transcript/turns/native-chat-turn-membership'
-import type { StructuredAgentSendingScope as DesktopSendingScope } from '../../../../renderer/src/components/native-chat/session/structured/delivery/structured-agent-sending-scope'
+} from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
+import type { SubmissionReceipts } from '../../../../../../../shared/agent-session/view/structured-agent-session-submissions'
+import type { NativeChatTurnJournal } from '../../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
+import * as desktopSending from './structured-agent-sending-scope'
+import { useStructuredAgentSendingSource } from './use-structured-agent-sending-source'
 
-type DeliveryOwner = {
-  subscribeDelivery: (listener: () => void) => () => void
-  getSubmissionReceipts: () => SubmissionReceipts
-}
 const { useMobileStructuredAgentTurnTiming } = await vi.importActual<{
   useMobileStructuredAgentTurnTiming: (
     state: StructuredAgentSessionState,
@@ -34,7 +35,7 @@ const { useMobileStructuredAgentTurnTiming } = await vi.importActual<{
     items: readonly AgentJournalRenderItem[]
   ) => { turnJournal: NativeChatTurnJournal }
 }>(
-  '../../../../../mobile/src/session/native-chat/transcript/ingestion/use-mobile-structured-agent-turn-timing'
+  '../../../../../../../../mobile/src/session/native-chat/transcript/ingestion/use-mobile-structured-agent-turn-timing'
 )
 const { createMobileStructuredChatStateCache } = await vi.importActual<{
   createMobileStructuredChatStateCache: () => {
@@ -42,6 +43,13 @@ const { createMobileStructuredChatStateCache } = await vi.importActual<{
     getSnapshot: (key: string) => StructuredAgentSessionState | undefined
     subscribe: (key: string, listener: () => void) => () => void
     subscribeDelivery: (key: string, listener: () => void) => () => void
+    receiptsFor: (
+      key: string,
+      epoch: string | null,
+      submissions: StructuredAgentSessionState['submissions'],
+      stored: null,
+      published: { current: StructuredAgentSessionState }
+    ) => SubmissionReceiptSource
     apply: (
       key: string,
       stored: () => null,
@@ -49,7 +57,9 @@ const { createMobileStructuredChatStateCache } = await vi.importActual<{
       receivedAt: number
     ) => void
   }
-}>('../../../../../mobile/src/session/native-chat/agent-session/mobile-structured-chat-state-cache')
+}>(
+  '../../../../../../../../mobile/src/session/native-chat/agent-session/mobile-structured-chat-state-cache'
+)
 const { useNativeChatTurnStatus } = await vi.importActual<{
   useNativeChatTurnStatus: (args: {
     turnKeys: readonly string[]
@@ -61,33 +71,12 @@ const { useNativeChatTurnStatus } = await vi.importActual<{
     notices: undefined
     workingStartedAt: number | null
   }) => { turnWorking: boolean; turnStatuses: object }
-}>('../../../../renderer/src/components/native-chat/conversation/turns/use-native-chat-turn-status')
-vi.mock(
-  '../../../../renderer/src/components/native-chat/session/structured/read/structured-agent-session-read-transport',
-  () => ({
-    startStructuredAgentSessionReadTransport: vi.fn()
-  })
-)
+}>('../../../conversation/turns/use-native-chat-turn-status')
+vi.mock('../read/structured-agent-session-read-transport', () => ({
+  startStructuredAgentSessionReadTransport: vi.fn()
+}))
 
-const { createReadOwner } = await vi.importActual<{
-  createReadOwner: (
-    key: string,
-    sessionId: string,
-    target: { kind: 'local' }
-  ) => DeliveryOwner & {
-    getSnapshot: () => { state: StructuredAgentSessionState }
-    getReadCursor: () => { epoch: string; sequence: number } | null
-    subscribe: DeliveryOwner['subscribeDelivery']
-    publishCreated: (page: AgentSessionHistoryPage) => void
-    activate: (effects: {
-      getState: () => { settings: null }
-      subscribeRetryNow: () => () => void
-    }) => () => void
-    dispose: () => void
-  }
-}>(
-  '../../../../renderer/src/components/native-chat/session/structured/read/structured-agent-session-read-owner-create'
-)
+const { createReadOwner } = await import('../read/structured-agent-session-read-owner-create')
 const { startStructuredAgentSessionReadTransport } = await vi.importMock<{
   startStructuredAgentSessionReadTransport: (args: {
     applyEvent: (event: AgentSessionSubscribeEvent) => void
@@ -95,9 +84,7 @@ const { startStructuredAgentSessionReadTransport } = await vi.importMock<{
     dispose: () => void
     captureHistoryReadGuard: () => () => boolean
   }
-}>(
-  '../../../../renderer/src/components/native-chat/session/structured/read/structured-agent-session-read-transport'
-)
+}>('../read/structured-agent-session-read-transport')
 
 const EPOCH = 'receipt-epoch'
 const SEND: AgentJournalSubmission = {
@@ -149,9 +136,7 @@ function batch(
   }
 }
 
-const NO_PENDING = [] as const
 const NO_TURN_KEYS: string[] = []
-const DISPLAYED = new Set(['orca:opener', 'orca:steer'])
 const noSubscription = () => () => {}
 
 // PR #45057: receipt publication used to rebuild turn membership and projection on both clients.
@@ -191,8 +176,7 @@ it.each([
       ...steer,
       clientMessageId: 'held',
       handedOverAt: undefined,
-      handoverRecorded: true as const,
-      queuedMessageId: 'held-card'
+      handoverRecorded: true as const
     }
     const history = Array.from({ length: submissionCount - 3 }, (_, index) => ({
       ...SEND,
@@ -229,15 +213,6 @@ it.each([
     const before = timingOf(initial)
     const { result, rerender, unmount } = renderHook(
       ({ state }) => {
-        const desktopSending = useMemo(
-          () =>
-            structuredAgentSessionSendingItemIds(
-              NO_PENDING,
-              state.submissions,
-              state.writtenAtById
-            ),
-          [state.submissions, state.writtenAtById]
-        )
         const desktop = useNativeChatTurnStatus({
           turnKeys: NO_TURN_KEYS,
           liveTurnKey: turnId ?? undefined,
@@ -249,28 +224,12 @@ it.each([
           workingStartedAt: running ? 3000 : null
         })
         const mobile = useMobileStructuredAgentTurnTiming(state, turnId, state.items)
-        const mobileSending = useMemo(
-          () =>
-            createStructuredAgentSendingSource(
-              { subscribe: noSubscription, getSnapshot: () => state.writtenAtById },
-              NO_PENDING,
-              state.submissions
-            ).getSnapshot(),
-          [state.submissions, state.writtenAtById]
-        )
-        return {
-          desktop,
-          desktopSending,
-          mobile,
-          mobileSending
-        }
+        return { desktop, mobile }
       },
       { initialProps: { state: initial } }
     )
     try {
       const first = result.current
-      expect(first.desktopSending).toEqual(DISPLAYED)
-      expect(first.mobileSending).toEqual(DISPLAYED)
       // Detect scans of settled candidates even when they never access a row body.
       for (const record of initial.submissions.slice(3)) {
         Object.defineProperty(record, 'dispatchState', {
@@ -295,23 +254,17 @@ it.each([
       expect(stamped.items).toBe(initial.items)
       expect(stamped.latestTurn).toBe(initial.latestTurn)
       expect(timingOf(stamped)).toBe(before)
-      const receiptReads = vi.spyOn(stamped.writtenAtById, 'get')
       rerender({ state: stamped })
       expect(active).not.toHaveBeenCalled()
       expect(cache.getSnapshot('chat')).toBe(initial)
       expect(delivery).toHaveBeenCalledTimes(1)
       expect(inactive).not.toHaveBeenCalled()
-      expect(receiptReads).toHaveBeenCalledTimes(4)
       expect({ rowReads, settledReads }).toEqual({ rowReads: 0, settledReads: 0 })
       expect(result.current.mobile.turnJournal).toBe(first.mobile.turnJournal)
       expect(result.current.desktop.turnStatuses).toBe(first.desktop.turnStatuses)
-      expect(result.current.desktopSending).toEqual(new Set(['orca:steer']))
-      expect(result.current.mobileSending).toEqual(new Set(['orca:steer']))
 
       update('chat', batch(sequence + 1, [{ ...steer, writtenAt: 3500 }], [], latestTurn))
       rerender({ state: cache.get('chat')! })
-      expect(result.current.desktopSending.size).toBe(0)
-      expect(result.current.mobileSending.size).toBe(0)
       expect(result.current.desktop.turnStatuses).toBe(first.desktop.turnStatuses)
       expect(result.current.mobile.turnJournal).toBe(first.mobile.turnJournal)
       expect({ rowReads, settledReads }).toEqual({ rowReads: 0, settledReads: 0 })
@@ -337,7 +290,6 @@ it.each([
       expect(active).toHaveBeenCalledTimes(1)
       expect(result.current.mobile.turnJournal).not.toBe(first.mobile.turnJournal)
       expect(cache.get('chat')!.submissions).not.toBe(initial.submissions)
-      expect(result.current.desktopSending).toEqual(new Set(['orca:steer']))
       expect(rowReads).toBeGreaterThan(0)
     } finally {
       unmount()
@@ -345,16 +297,11 @@ it.each([
   }
 )
 
-const { StructuredAgentSendingScope } = await vi.importActual<{
-  StructuredAgentSendingScope: typeof DesktopSendingScope
-}>(
-  '../../../../renderer/src/components/native-chat/session/structured/delivery/structured-agent-sending-scope'
-)
 const { NativeChatTurnActivityLine } = await vi.importActual<{
   NativeChatTurnActivityLine: React.ComponentType<{
     line: { thinking: boolean; stopping: boolean; activityText: null; reasoning: null }
   }>
-}>('../../../../renderer/src/components/native-chat/messages/reasoning/NativeChatTurnActivityLine')
+}>('../../../messages/reasoning/NativeChatTurnActivityLine')
 
 // PR #45057: desktop transcript subscribers stay asleep as the delivery cursor advances.
 it('publishes only delivery updates to desktop subscribers for receipts', () => {
@@ -387,14 +334,14 @@ it('publishes only delivery updates to desktop subscribers for receipts', () => 
   const unsubscribeBulk = owner.subscribe(bulk)
   const unsubscribeDelivery = owner.subscribeDelivery(delivery)
   const source = createStructuredAgentSendingSource(
-    { subscribe: owner.subscribeDelivery, getSnapshot: owner.getSubmissionReceipts },
+    { subscribe: owner.subscribeReceipts, getSnapshot: owner.getSubmissionReceipts },
     [],
     previous.state.submissions
   )
   const activity = render(
     createElement(
-      StructuredAgentSendingScope,
-      { source, isDisplayed: (id) => id === 'orca:opener' },
+      desktopSending.StructuredAgentSendingScope,
+      { source, displayedIds: new Set(['orca:opener']) },
       createElement(NativeChatTurnActivityLine, {
         line: { thinking: false, stopping: true, activityText: null, reasoning: null }
       })
@@ -424,5 +371,205 @@ it('publishes only delivery updates to desktop subscribers for receipts', () => 
     unsubscribeDelivery()
     release()
     owner.dispose()
+  }
+})
+
+const mobileSending = await vi.importActual<typeof desktopSending>(
+  '../../../../../../../../mobile/src/session/native-chat/transcript/sending/structured-agent-sending-scope'
+)
+
+// PR #45057 rescanned pending submissions and their display IDs for every receipt.
+it('visits only changed Sending IDs at 16 and 160 pending sends on each owner', () => {
+  const emptyPending: readonly StructuredAgentSessionOptimisticMessage[] = []
+  for (const size of [16, 160]) {
+    for (const mobile of [false, true]) {
+      const records = Array.from({ length: size }, (_, index) => ({
+        ...SEND,
+        clientMessageId: `send-${index}`
+      }))
+      const ids = records.map(({ clientMessageId }) => `orca:${clientMessageId}`)
+      const history = {
+        ...page([], records),
+        working: false,
+        latestTurn: null,
+        actionablePromptIds: []
+      }
+      const owner = createReadOwner('chat', 'chat', { kind: 'local' })
+      const transport = vi.mocked(startStructuredAgentSessionReadTransport)
+      transport.mockReturnValue({ dispose: () => {}, captureHistoryReadGuard: () => () => false })
+      const cache = createMobileStructuredChatStateCache()
+      const release = mobile
+        ? () => {}
+        : owner.activate({
+            getState: vi.fn().mockReturnValue({ settings: null }),
+            subscribeRetryNow: noSubscription
+          })
+      const apply = (action: StructuredAgentSessionAction) => {
+        if (mobile) {
+          cache.apply('chat', () => null, action, 5000)
+        } else if (action.type === 'event') {
+          transport.mock.calls.at(-1)![0].applyEvent(action.event)
+        } else if (action.type === 'history-page') {
+          owner.publishCreated(action.page)
+        }
+      }
+      const structural = vi.fn()
+      const unsubscribe = mobile ? cache.subscribe('chat', structural) : owner.subscribe(structural)
+      apply({ type: 'history-page', page: history })
+      apply(batch(1, [], [], null))
+      const state = mobile ? cache.get('chat')! : owner.getSnapshot().state
+      const shown = new Set(ids)
+      const countVisits = new Map<string, number>()
+      const renders = vi.fn<(id: string) => void>()
+      const notifyLeaf = vi.fn<(id: string) => void>()
+      const notifyGate = vi.fn()
+      const {
+        useStructuredAgentItemSending,
+        useStructuredAgentDisplayedSendPending,
+        StructuredAgentSendingScope
+      } = mobile ? mobileSending : desktopSending
+      const Leaf = ({ id }: { id: string }) => {
+        renders(id)
+        useStructuredAgentItemSending(id)
+        return null
+      }
+      const Gate = () => {
+        const pending = useStructuredAgentDisplayedSendPending()
+        return createElement('span', null, pending ? 'Sending' : 'Working')
+      }
+      const {
+        result,
+        rerender: updateSource,
+        unmount
+      } = renderHook(
+        ({ snapshot, pending }) => {
+          const desktopSource = useStructuredAgentSendingSource(
+            mobile ? undefined : owner,
+            pending,
+            snapshot.submissions
+          )
+          return useMemo(
+            () =>
+              mobile
+                ? createStructuredAgentSendingSource(
+                    cache.receiptsFor('chat', snapshot.epoch, snapshot.submissions, null, {
+                      current: snapshot
+                    }),
+                    pending,
+                    snapshot.submissions
+                  )
+                : desktopSource,
+            [desktopSource, pending, snapshot]
+          )
+        },
+        {
+          initialProps: {
+            snapshot: state,
+            pending: emptyPending
+          }
+        }
+      )
+      const source = result.current
+      const subscribeId = source.subscribeId
+      vi.spyOn(source, 'subscribeId').mockImplementation((id, listener) =>
+        subscribeId(id, () => {
+          notifyLeaf(id)
+          listener()
+        })
+      )
+      const gateFor = source.gateFor
+      vi.spyOn(source, 'gateFor').mockImplementation((displayed) => {
+        const gate = gateFor(displayed)
+        const subscribe = gate.subscribe
+        return {
+          ...gate,
+          subscribe: (listener) =>
+            subscribe(() => {
+              notifyGate()
+              listener()
+            })
+        }
+      })
+      const view = (displayedIds: ReadonlySet<string>) =>
+        createElement(
+          StructuredAgentSendingScope,
+          { source, displayedIds },
+          createElement(Gate),
+          ...ids.map((id) => createElement(Leaf, { key: id, id }))
+        )
+      const mounted = render(view(shown))
+      const mapGet = Map.prototype.get
+      const visits = vi.spyOn(Map.prototype, 'get').mockImplementation(function (
+        this: Map<unknown, unknown>,
+        id: unknown
+      ) {
+        const result = mapGet.call(this, id)
+        if (typeof id === 'string' && result === `orca:${id}`) {
+          countVisits.set(id, (mapGet.call(countVisits, id) ?? 0) + 1)
+        }
+        return result
+      })
+      const receiptPrototype: SubmissionReceipts = Object.getPrototypeOf(state.writtenAtById)
+      const receiptReads = vi.spyOn(receiptPrototype, 'get')
+      const displayChecks = vi.spyOn(shown, 'has')
+      structural.mockClear()
+      renders.mockClear()
+      try {
+        act(() => apply(batch(2, [{ ...records[0]!, writtenAt: 1800 }], [], null)))
+        expect(
+          [...countVisits],
+          `candidate visits: ${mobile ? 'mobile' : 'desktop'} / ${size}`
+        ).toEqual([['send-0', 1]])
+        expect(receiptReads.mock.calls).toEqual([['send-0']])
+        expect(displayChecks.mock.calls.every(([id]) => id === ids[0])).toBe(true)
+        expect(displayChecks.mock.calls.length).toBeGreaterThanOrEqual(1)
+        expect(displayChecks.mock.calls.length).toBeLessThanOrEqual(2)
+        expect(notifyLeaf.mock.calls).toEqual([[ids[0]]])
+        expect(renders.mock.calls).toEqual([[ids[0]]])
+        expect(source.gateFor).toHaveBeenCalledTimes(1)
+        expect(notifyGate).not.toHaveBeenCalled()
+        expect(structural).not.toHaveBeenCalled()
+
+        mounted.rerender(view(new Set([ids[0]!])))
+        expect(mounted.container.textContent).toBe('Working')
+        mounted.rerender(view(new Set([ids[1]!])))
+        expect(mounted.container.textContent).toBe('Sending')
+        act(() => apply(batch(3, [{ ...records[1]!, writtenAt: 1801 }], [], null)))
+        expect(mounted.container.textContent).toBe('Working')
+        expect(notifyGate).toHaveBeenCalledTimes(1)
+
+        const newAttempt = { ...records[0]!, fence: 3, handedOverAt: 2200 }
+        act(() => apply(batch(4, [newAttempt], [], null)))
+        const next = mobile ? cache.get('chat')! : owner.getSnapshot().state
+        const pending = steeringQueuedMessageEchoes(
+          [
+            {
+              messageId: 'pressed-steer',
+              position: 1,
+              state: 'waiting',
+              body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Steer' }] }
+            }
+          ],
+          next.submissions,
+          [],
+          { agentWorking: true, steerIntents: new Map([['pressed-steer', 'new-attempt']]) }
+        )
+        updateSource({ snapshot: next, pending })
+        expect(result.current).not.toBe(source)
+        countVisits.clear()
+        expect(result.current.gateFor(new Set(['orca:pressed-steer'])).getSnapshot()).toBe(true)
+        expect(countVisits.size).toBe(size + 1)
+        expect(structural).toHaveBeenCalledTimes(1)
+      } finally {
+        displayChecks.mockRestore()
+        receiptReads.mockRestore()
+        visits.mockRestore()
+        mounted.unmount()
+        unmount()
+        unsubscribe()
+        release()
+        owner.dispose()
+      }
+    }
   }
 })

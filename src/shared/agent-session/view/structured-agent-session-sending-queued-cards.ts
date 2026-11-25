@@ -1,3 +1,5 @@
+import type { AgentSessionSendResult } from '../agent-session-wire'
+import { agentJournalSubmissionAwaitsAgent } from '../requests/agent-session-queued-submission'
 import type { AgentJournalSubmissionFields } from '../journal/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued-message-wire'
 import type { StructuredAgentSubmission } from './structured-agent-session-submissions'
@@ -48,7 +50,7 @@ export function steeringQueuedMessageEchoes(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
   submissions: readonly StructuredAgentSubmission[],
   pending: readonly Pick<StructuredAgentSessionOptimisticMessage, 'clientMessageId' | 'queuedAt'>[],
-  session: { agentWorking: boolean; queuePaused: boolean }
+  session: Parameters<typeof queuedMessageSteersIn>[1]
 ): StructuredAgentSessionOptimisticMessage[] {
   const steering = (queuedMessages ?? []).filter((message) =>
     queuedMessageSteersIn(message, session)
@@ -69,4 +71,57 @@ export function steeringQueuedMessageEchoes(
       queuedAt: sentAt.get(message.messageId) ?? null,
       phase: 'recorded'
     }))
+}
+
+export function reconcileQueuedSteerIntents(
+  intents: ReadonlyMap<string, string>,
+  queuedMessages: readonly AgentSessionQueuedMessage[] | null,
+  submissions: readonly StructuredAgentSubmission[],
+  session: Parameters<typeof queuedMessageSteersIn>[1]
+): ReadonlyMap<string, string> {
+  if (intents.size === 0) {
+    return intents
+  }
+  const next = new Map(intents)
+  for (const [id, operation] of intents) {
+    const card = queuedMessages?.find((message) => message.messageId === id)
+    if (
+      !card ||
+      card.state !== 'waiting' ||
+      card.paused ||
+      queuedMessageSteersIn(card, session) ||
+      submissions.some(
+        (record) =>
+          record.clientMessageId === operation ||
+          (record.queuedMessageId === id && record.dispatchState !== 'rejected')
+      )
+    ) {
+      next.delete(id)
+    }
+  }
+  return next.size === intents.size ? intents : next
+}
+
+function queuedSteerAwaitsReceipt(result: AgentSessionSendResult | null): boolean {
+  return (
+    result !== null &&
+    ('queued' in result
+      ? result.queued.state === 'waiting'
+      : agentJournalSubmissionAwaitsAgent(result.submission, result.submission.writtenAt))
+  )
+}
+
+export async function settleQueuedSteerRequest(
+  send: () => Promise<AgentSessionSendResult | null>,
+  retire: () => void
+): Promise<AgentSessionSendResult | null> {
+  let result: AgentSessionSendResult | null = null
+  try {
+    result = await send()
+    return result
+  } finally {
+    if (!queuedSteerAwaitsReceipt(result)) {
+      retire()
+    }
+  }
 }

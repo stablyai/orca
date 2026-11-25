@@ -1,3 +1,4 @@
+import type { AgentSessionSendResult } from '../../../../../src/shared/agent-session/agent-session-wire'
 import { useCallback } from 'react'
 import type { StructuredAgentSessionState } from '../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
@@ -10,7 +11,8 @@ export type MobileStructuredAgentMutate = <TValue>(
   method: string,
   fingerprintMethod: string,
   fields: Record<string, unknown>,
-  shouldReportError?: () => boolean
+  shouldReportError?: () => boolean,
+  clientOperationId?: string
 ) => Promise<StructuredAgentSessionMutationResult<TValue>>
 
 export function useMobileStructuredAgentMutate(args: {
@@ -27,7 +29,8 @@ export function useMobileStructuredAgentMutate(args: {
       method: string,
       fingerprintMethod: string,
       fields: Record<string, unknown>,
-      shouldReportError?: () => boolean
+      shouldReportError?: () => boolean,
+      clientOperationId?: string
     ): Promise<StructuredAgentSessionMutationResult<TValue>> => {
       const current = stateRef.current
       if (!client || !sessionId || !enabled || current.fence === null) {
@@ -41,6 +44,7 @@ export function useMobileStructuredAgentMutate(args: {
         sessionId,
         expectedRuntimeFence: targetFence,
         fields,
+        clientOperationId,
         ...(agentName ? { agentName } : {})
       })
       if (result.status === 'accepted') {
@@ -60,4 +64,19 @@ export function useMobileStructuredAgentMutate(args: {
     },
     [agentName, client, enabled, onSendError, sessionId, stateRef]
   )
+}
+
+export async function sendMobileQueuedMessage(
+  mutate: MobileStructuredAgentMutate,
+  messageId: string,
+  operation?: string
+): Promise<AgentSessionSendResult | null> {
+  const result = await mutate<AgentSessionSendResult>(
+    'agentSession.queuedMessageSend',
+    'agentSession.queuedMessageSend',
+    { messageId },
+    undefined,
+    operation
+  )
+  return result.status === 'accepted' ? result.value : null
 }

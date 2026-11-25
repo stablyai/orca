@@ -58,6 +58,7 @@ export function mobileQueuedMessageCards(
   submissions: readonly StructuredAgentSubmission[],
   facts: {
     agentWorking?: boolean
+    steerIntents?: ReadonlyMap<string, string>
     queuePaused?: boolean
     agentName?: string
     statedFailures?: readonly AgentSessionFailureFact[]

@@ -53,7 +53,13 @@ export async function refreshPublishedWork(
         ...fields,
         ...shared
       },
-      { currentWork: work, journal, current: checkCurrent, restatement: true }
+      {
+        currentWork: work,
+        journal,
+        current: checkCurrent,
+        restatement: true,
+        queuePublication: queue
+      }
     )
     pending = []
     bytes = 0

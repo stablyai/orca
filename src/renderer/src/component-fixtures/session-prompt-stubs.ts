@@ -72,6 +72,7 @@ export function stubSessionPrompts(
       getSnapshot: () => current,
       getReadCursor: () => current.state.cursor,
       getSubmissionReceipts: () => current.state.writtenAtById,
+      subscribeReceipts: none,
       subscribeDelivery: none,
       subscribe: (listener: () => void) => {
         listeners.add(listener)

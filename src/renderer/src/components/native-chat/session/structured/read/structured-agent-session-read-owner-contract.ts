@@ -35,6 +35,7 @@ export type StructuredAgentSessionReadOwner = {
   getSnapshot: () => StructuredAgentSessionReadSnapshot
   getReadCursor: () => AgentJournalCursor | null
   getSubmissionReceipts: () => SubmissionReceipts
+  subscribeReceipts: (listener: () => void) => () => void
   subscribeDelivery: (listener: () => void) => () => void
   loadOlder: () => Promise<NativeChatOlderPageResult>
   retainHistory: () => () => void

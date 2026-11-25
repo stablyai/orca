@@ -123,10 +123,11 @@ export function useMobileStructuredAgentSession(
     confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
   })
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
-  const { clearing, messages, receipts, timing, onClearSent, sending, sendingCards } =
+  const { clearing, messages, receipts, timing, onClearSent, sending, sendingCards, steer } =
     useMobileStructuredTranscript(
       { agent, read, optimistic: sends.optimistic, sessionKey, turnId, queueSendsNext },
-      isWorking
+      isWorking,
+      enabled && connected
     )
   const backgroundTasks = useMobileStructuredBackgroundTasks({
     sessionKey,
@@ -227,6 +228,7 @@ export function useMobileStructuredAgentSession(
     queuePause,
     submissions: state.submissions,
     sending: sendingCards,
+    steer,
     agentWorking: isWorking,
     imagesCapable: hostSupport?.queuedMessageImageEdit === true,
     skillsCapable: hostSupport?.queuedMessageSkillsEdit === true,

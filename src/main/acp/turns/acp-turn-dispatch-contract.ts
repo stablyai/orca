@@ -1,9 +1,16 @@
+import type { ContentBlock } from '../generated/acp-protocol.generated'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AcpAgentError } from '../transport/acp-errors'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredLane } from '../journal/acp-structured-lane'
+
+export type AcpStructuredSend = {
+  clientMessageId: string
+  prompt: ContentBlock[]
+  requestedAt: number
+}
 
 export type AcpDispatchSettlement = { clientMessageId: string } & (
   | { providerIdentity: AgentJournalItemIdentity }

@@ -28,7 +28,7 @@ function sendingSource(
   let shownReceipts = NO_RECEIPTS
   return createStructuredAgentSendingSource(
     {
-      subscribe: owner?.subscribeDelivery ?? noSubscription,
+      subscribe: owner?.subscribeReceipts ?? noSubscription,
       getSnapshot: () => {
         if (owner?.getSnapshot().state.submissions === submissions) {
           shownReceipts = owner.getSubmissionReceipts()

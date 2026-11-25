@@ -19,7 +19,8 @@ function RecordedSteer({ state }: { state: StructuredAgentSubmission['dispatchSt
       reason: state === 'rejected' ? 'Codex refused the message.' : null,
       submittedAt: 1,
       resolvedAt: state === 'pending' ? null : 2,
-      handoverRecorded: true
+      handoverRecorded: true,
+      queuedMessageId: 'draft'
     }
   ]
   const notices = useStructuredAgentSessionDeliveryNotices({

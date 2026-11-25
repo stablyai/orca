@@ -77,6 +77,7 @@ function completionFixture(isBot: boolean) {
         getSnapshot: () => snapshot,
         getReadCursor: () => snapshot.state.cursor,
         getSubmissionReceipts: () => snapshot.state.writtenAtById,
+        subscribeReceipts: noSubscription,
         subscribeDelivery: noSubscription,
         subscribe: (listener) => {
           listeners.add(listener)

@@ -80,3 +80,15 @@ export function useMobileQueuedMessageComposerActions(args: {
     move: args.reorderCapable && args.enabled ? move : undefined
   }
 }
+
+export function useMobileQueuedActionResolved(onActionResolved?: () => void) {
+  return useCallback(
+    (accepted: boolean): boolean => {
+      if (accepted) {
+        onActionResolved?.()
+      }
+      return accepted
+    },
+    [onActionResolved]
+  )
+}
