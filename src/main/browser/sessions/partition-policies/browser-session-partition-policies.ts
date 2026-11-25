@@ -26,6 +26,12 @@ import { registerBrowserSessionSitePermissions } from '../../site-settings/permi
 const configuredPartitions = new Set<string>()
 const userAgentPolicyDisposerBySession = new WeakMap<Session, () => void>()
 
+// Deny-all sessions (document previews) still let a page's Copy button work. Chromium asks for
+// sanitized write only during a user gesture; other writes ask for clipboard-read, still denied.
+function isGrantedInPermissionDenyingSession(permission: string): boolean {
+  return permission === 'clipboard-sanitized-write'
+}
+
 export function retireBrowserSessionUserAgentPolicy(sess: Session): void {
   const dispose = userAgentPolicyDisposerBySession.get(sess)
   if (!dispose) {
@@ -92,8 +98,12 @@ export async function installBrowserSessionPartitionPolicies(
     browserManager.installCertificateRequestGuard(sess)
   }
   if (options?.permissions === 'deny') {
-    sess.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
-    sess.setPermissionCheckHandler(() => false)
+    sess.setPermissionRequestHandler((_webContents, permission, callback) =>
+      callback(isGrantedInPermissionDenyingSession(permission))
+    )
+    sess.setPermissionCheckHandler((_webContents, permission) =>
+      isGrantedInPermissionDenyingSession(permission)
+    )
     clearBrowserWebAuthnAccessHandlers(sess)
   } else {
     installBrowserSessionPermissionHandlers(sess, profile, options)

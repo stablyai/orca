@@ -34,7 +34,7 @@ export function isRunnableCommand(platform: NodeJS.Platform, candidate: string):
   }
 }
 
-async function isRunnableCommandAsync(
+export async function isRunnableCommandAsync(
   platform: NodeJS.Platform,
   candidate: string
 ): Promise<boolean> {

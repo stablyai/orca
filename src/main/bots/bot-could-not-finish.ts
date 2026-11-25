@@ -29,8 +29,12 @@ export const BOT_COULD_NOT_FINISH_COPY = {
 /** The runtime's owner notice, for every bot alert. */
 export function runtimeBotOwnerNotice(runtime: OrcaRuntimeService): BotOwnerNoticeDeps {
   return {
-    notify: (notice) =>
+    notify: (notice) => {
+      if (notice.worktreeId && runtime.isWorkspaceNotificationMuted(notice.worktreeId)) {
+        return
+      }
       runtime.dispatchOwnerNotice(notice, runtime.requireStore().getSettings().notifications)
+    }
   }
 }
 

@@ -158,19 +158,23 @@ export function getWorkerTerminalResourceFormerlyOwnedBy(
   return row as WorkerTerminalResourceRow | undefined
 }
 
-/** Records bounded recovery bookkeeping without changing ownership or release intent. */
+/**
+ * Records bounded recovery bookkeeping without changing ownership or release intent. `owner`, when given,
+ * charges the attempt only to that dispatch's custody: a row transferred meanwhile is left alone.
+ */
 export function recordWorkerTerminalRecoveryAttempt(
   this: OrchestrationDb,
-  resourceId: string
+  resourceId: string,
+  owner?: string
 ): WorkerTerminalResourceRow | undefined {
   this.db
     .prepare(
       `UPDATE worker_terminal_resources
           SET recovery_attempt_count = MIN(recovery_attempt_count + 1, 32),
               last_recovery_at = datetime('now'), updated_at = datetime('now')
-        WHERE id = ?`
+        WHERE id = ? AND (? IS NULL OR owner_dispatch_id = ?)`
     )
-    .run(resourceId)
+    .run(resourceId, owner ?? null, owner ?? null)
   return this.getWorkerTerminalResource(resourceId)
 }
 

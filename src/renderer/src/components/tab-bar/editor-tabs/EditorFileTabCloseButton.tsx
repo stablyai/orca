@@ -1,17 +1,15 @@
 import { X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 
-type EditorFileTabCloseButtonProps = {
-  fileIsDirty: boolean
-  showsSelectionChrome: boolean
-  onClose: () => void
-}
-
-function EditorFileTabCloseButton({
+export function EditorFileTabCloseButton({
   fileIsDirty,
   showsSelectionChrome,
   onClose
-}: EditorFileTabCloseButtonProps): React.JSX.Element {
+}: {
+  fileIsDirty: boolean
+  showsSelectionChrome: boolean
+  onClose: () => void
+}): React.JSX.Element {
   const t = useTranslate()
   return (
     <button
@@ -34,26 +32,5 @@ function EditorFileTabCloseButton({
     >
       <X className="w-3 h-3" />
     </button>
-  )
-}
-
-export function EditorFileTabCloseSlot({
-  isPinned,
-  ...buttonProps
-}: EditorFileTabCloseButtonProps & { isPinned: boolean }): React.JSX.Element {
-  return (
-    // Share one dot/close slot so autosave cannot change tab width.
-    <div
-      className="relative flex items-center justify-center w-4 h-4 shrink-0"
-      data-tab-icon-badge=""
-    >
-      {buttonProps.fileIsDirty && (
-        <span
-          className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden"
-          data-tab-dirty-dot=""
-        />
-      )}
-      {isPinned ? null : <EditorFileTabCloseButton {...buttonProps} />}
-    </div>
   )
 }

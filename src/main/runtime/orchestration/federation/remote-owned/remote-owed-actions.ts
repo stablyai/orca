@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { mapWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
-import { HelperStopOutcome } from '../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
+import {
+  HelperStopOutcome,
+  isHelperStopDone
+} from '../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { PeerRunCancelResult } from '../../../../../shared/orchestration/remote-owned-wire'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../../db/orchestration-db'
@@ -82,9 +85,7 @@ export function isRemoteStopProof(receipt: unknown): boolean {
     parsed.success &&
     (parsed.data.state === 'stopped' || parsed.data.alreadySettled) &&
     parsed.data.helperStopError === undefined &&
-    (parsed.data.helpers ?? []).every((helper) =>
-      ['stopped', 'already_finished', 'kept_open'].includes(helper.outcome)
-    )
+    (parsed.data.helpers ?? []).every(isHelperStopDone)
   )
 }
 

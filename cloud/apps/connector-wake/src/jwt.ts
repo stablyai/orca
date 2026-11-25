@@ -1,7 +1,7 @@
 // Wake token verification, checked at upgrade only (design §2.2): a wake-scoped token from auth,
 // never the connector token. Same stale-if-error key cache as the edge, plus the colo's last good
 // set (jwks-persist.ts); "could not get keys" is reported apart from "token invalid".
-import { createLocalJWKSet, jwtVerify, type JSONWebKeySet, type JWTVerifyGetKey } from 'jose'
+import { createLocalJWKSet, errors, jwtVerify, type JSONWebKeySet, type JWTVerifyGetKey } from 'jose'
 import { z } from 'zod'
 import { createStaleIfErrorJWKSet } from '../../relay/src/authentication/stale-if-error-jwks'
 import { KeysUnavailableError, persistingFetch, withPersistedFallback } from './jwks-persist'
@@ -32,7 +32,30 @@ function keysFor(env: Env): JWTVerifyGetKey {
   return keys
 }
 
-export type WakeTokenResult = { ok: true; hostId: string } | { ok: false; reason: 'invalid' | 'keys_unavailable' }
+// Why a token was refused, from a fixed set (the refuse metric's detail): the claim or check jose
+// failed on, never anything read from the token. exp/nbf/iat point at clock skew between auth and
+// this colo, aud/iss at a token minted for something else, signature/kid at a key set mismatch.
+export const WAKE_REFUSE_CODES = ['missing', 'exp', 'nbf', 'iat', 'aud', 'iss', 'sub', 'claims', 'signature', 'kid', 'alg', 'malformed', 'host', 'other'] as const
+export type WakeRefuseCode = (typeof WAKE_REFUSE_CODES)[number]
+const CHECKED_CLAIMS = new Set<string>(['exp', 'nbf', 'iat', 'aud', 'iss', 'sub'])
+
+export function refuseCode(error: unknown): WakeRefuseCode {
+  if (error instanceof errors.JWTExpired) { return 'exp' }
+  if (error instanceof errors.JWTClaimValidationFailed) {
+    return CHECKED_CLAIMS.has(error.claim) ? (error.claim as WakeRefuseCode) : 'claims'
+  }
+  if (error instanceof errors.JWSSignatureVerificationFailed) { return 'signature' }
+  if (error instanceof errors.JWKSNoMatchingKey || error instanceof errors.JWKSMultipleMatchingKeys) { return 'kid' }
+  if (error instanceof errors.JOSEAlgNotAllowed) { return 'alg' }
+  if (error instanceof errors.JWSInvalid || error instanceof errors.JWTInvalid || error instanceof errors.JOSENotSupported) { return 'malformed' }
+  if (error instanceof z.ZodError) { return 'claims' }
+  return 'other'
+}
+
+export type WakeTokenResult =
+  | { ok: true; hostId: string }
+  | { ok: false; reason: 'invalid'; code: WakeRefuseCode }
+  | { ok: false; reason: 'keys_unavailable' }
 
 export async function verifyWakeToken(env: Env, token: string): Promise<WakeTokenResult> {
   try {
@@ -43,9 +66,11 @@ export async function verifyWakeToken(env: Env, token: string): Promise<WakeToke
     })
     const claims = ClaimsSchema.parse(payload)
     const hostId = `${claims.sub}:${claims.mid}`
-    return isHostId(hostId) ? { ok: true, hostId } : { ok: false, reason: 'invalid' }
+    return isHostId(hostId) ? { ok: true, hostId } : { ok: false, reason: 'invalid', code: 'host' }
   } catch (error) {
-    return { ok: false, reason: error instanceof KeysUnavailableError ? 'keys_unavailable' : 'invalid' }
+    return error instanceof KeysUnavailableError
+      ? { ok: false, reason: 'keys_unavailable' }
+      : { ok: false, reason: 'invalid', code: refuseCode(error) }
   }
 }
 

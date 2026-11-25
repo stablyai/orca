@@ -3,6 +3,7 @@ import { normalizeSourceControlAiActionDefaults } from '../../source-control/ai/
 import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 import { OptionalTuiAgent } from '../workspaces/worktree-params'
+import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { CONFLICT_RESOLUTIONS } from '../../source-control/listing/source-control-entry-actions'
 
 export const WorktreeSelector = z.object({
@@ -107,6 +108,7 @@ export const GitHistory = WorktreeSelector.extend({
   limit: z.number().int().min(1).max(200).optional(),
   baseRef: z.string().nullable().optional(),
   branchOnly: z.boolean().optional(),
+  branchListOnly: z.boolean().optional(),
   refs: z
     .union([z.literal('head'), z.literal('all'), z.array(GitHistoryRefName).max(1000)])
     .optional(),
@@ -201,9 +203,10 @@ export const GitGenerateCommitMessage = WorktreeSelector.extend({
   sourceControlAi: SourceControlAiSettings.optional(),
   sourceControlAiResolvedParams: ResolvedSourceControlAiGenerationParams.optional(),
   agentCmdOverrides: z.record(z.string(), z.string()).optional(),
-  // Why: 'blank' (Blank terminal) picks the same fallback agent as null.
+  // Why: 'blank' (Blank terminal) and a removed agent (an older client's saved Gemini CLI) pick the same fallback as null.
   defaultTuiAgent: z.preprocess(
-    (value) => (value === 'blank' ? null : value),
+    (value) =>
+      value === 'blank' || (typeof value === 'string' && !isTuiAgent(value)) ? null : value,
     OptionalTuiAgent.nullable()
   ),
   commitMessageDiscoveryHostKey: z.string().optional()

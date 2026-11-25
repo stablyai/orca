@@ -23,7 +23,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { createBot, useHostBots } from '@/lib/bot-catalog'
 import { handleScreenFormSubmitKey } from '@/lib/keyboard/screen-submit-shortcut'
 import { BOT_NAME_MAX_LENGTH, type Bot, type BotAgent } from '../../../../shared/bot-types'
-import { botErrorMessage } from './bot-presentation'
+import { botCreateErrorMessage } from './bot-presentation'
 import { BotRunsOnPicker } from './BotRunsOnPicker'
 import { BotImportNudge } from './BotImportNudge'
 import { openCreatedBot } from './bot-create-open'
@@ -49,14 +49,14 @@ import type { BotCreateParams } from '../../../../shared/rpc-contract/bots-param
 import { NewBotProposalFields, NewBotTakesOver } from './NewBotProposalFields'
 import { NewBotPurposeField } from './NewBotPurposeField'
 import { BotCreateButton } from './BotCreateButton'
-import { BARE_HEADING_CLASS, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
+import { BARE_HEADING_CLASS, FIELD_ERROR, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
 import { openBotTemplates } from './templates/bot-templates-open'
 import { pictureTintFor } from './avatar-picture-tint'
 import {
   canonicalDraft,
   draftOf,
   editedProposal,
-  templateIdentityTooLong,
+  identityTooLong,
   shownDraft,
   shownTemplateIdentity
 } from './new-bot-draft'
@@ -135,7 +135,7 @@ export function NewBotDialog({
   const shown = shownDraft(proposal, draft, t)
   const keepDraft = (next: typeof draft): void => setDraft(canonicalDraft(proposal, next, t))
   const hostChoice = useBotCreateHost(open, hosts, offerHostId)
-  const { hostId, blocked } = hostChoice.host
+  const { hostId, blocked, label } = hostChoice.host
   const hostBots = useHostBots(hostId)
   const name = typedName ?? (fromShare ? freeBotName(fromShare.review.bot.name, hostBots) : '')
   const { model, choices } = useBotAgentMenu(hostId, open)
@@ -154,7 +154,7 @@ export function NewBotDialog({
   )
   const { intake, face } = useNewBotDialogPicture(picture, creating)
   const shownIdentity = shownTemplateIdentity(proposal, t)
-  const identityTooLong = templateIdentityTooLong(proposal, draft.purpose, t)
+  const purposeTooLong = identityTooLong(proposal, draft, t)
   const nameInvalid = submitted && !trimmedName
   // From Bot templates itself (Blank bot), the row would only lead back to it.
   const fromTemplates = useAppStore((state) => state.activeModal === 'bot-templates')
@@ -194,7 +194,7 @@ export function NewBotDialog({
     if (createInFlight.current) {
       return
     }
-    if (!trimmedName || identityTooLong || blocked || !choices.length || intake.reading) {
+    if (!trimmedName || purposeTooLong || blocked || !choices.length || intake.reading) {
       flushSync(() => setSubmitted(true))
       formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
       return
@@ -202,6 +202,7 @@ export function NewBotDialog({
     createInFlight.current = true
     setCreating(true)
     const follow = followedByPicture(face, { hostId, name: trimmedName })
+    const made = fromShare ? null : editedProposal(proposal, draft, trimmedName, t)
     let bot: Bot | null
     try {
       if (fromShare) {
@@ -210,7 +211,6 @@ export function NewBotDialog({
           createNewBotFromShare(fromShare, hostId, { name: trimmedName, setup, intent }, picture)
         )
       } else {
-        const made = editedProposal(proposal, draft, trimmedName, t)
         const offerHere = hostId === (offerHostId ?? LOCAL_EXECUTION_HOST_ID)
         bot = await follow(
           createBot(hostId, {
@@ -237,7 +237,9 @@ export function NewBotDialog({
     } catch (error) {
       createInFlight.current = false
       setCreating(false)
-      toast.error(fromShare ? botShareErrorMessage(error) : botErrorMessage(error))
+      toast.error(
+        fromShare ? botShareErrorMessage(error) : botCreateErrorMessage(error, made?.purpose, label)
+      )
       return
     }
     createInFlight.current = false
@@ -353,7 +355,7 @@ export function NewBotDialog({
                   onChange={(event) => setName(event.target.value)}
                 />
                 {nameInvalid ? (
-                  <p id={nameErrorId} role="alert" className="mt-1 text-xs text-destructive">
+                  <p id={nameErrorId} role="alert" className={FIELD_ERROR}>
                     {t('bots.new.validation.addName', 'Add a name')}
                   </p>
                 ) : null}
@@ -362,7 +364,8 @@ export function NewBotDialog({
                 <NewBotPurposeField
                   value={shown.purpose}
                   prefilled={shownIdentity}
-                  tooLong={submitted && identityTooLong}
+                  tooLong={submitted && purposeTooLong}
+                  sentLength={editedProposal(proposal, draft, trimmedName, t)?.purpose.length ?? 0}
                   onChange={(purpose) => keepDraft({ ...draft, purpose })}
                 />
               )}
@@ -383,7 +386,7 @@ export function NewBotDialog({
               <NewBotTemplateParts
                 template={template}
                 packages={templatePackages}
-                hostLabel={submitted && blocked ? undefined : hostChoice.host.label}
+                hostLabel={submitted && blocked ? undefined : label}
                 kept={kept}
                 onKeptChange={(skill, on) => {
                   const next = new Set(kept)
