@@ -15,7 +15,10 @@ import {
   type BotItemQuestionShape,
   type BotItemQuickReply
 } from '../../../../../shared/bots/bot-item-ask'
-import type { BotItemHeldAnswer } from '../../../../../shared/bots/bot-item-held-answers'
+import {
+  botItemHeldAnswerIsReply,
+  type BotItemHeldAnswer
+} from '../../../../../shared/bots/bot-item-held-answers'
 import { BotItemMarkdown } from './BotItemMarkdown'
 import { BotItemFoldedLine, botItemShownAnswer } from './BotItemFoldedAnswer'
 import type { BotItemQuestionSteps, BotItemQuickReplyActions } from './use-bot-item-question-steps'
@@ -178,17 +181,13 @@ export function BotItemQuestionStep({
     focusInView(sendButton.current)
   })
   // A pick that is no quick reply: words typed, or anything sent with them.
-  const typed = (index: number): boolean => {
-    const pick = picks[index]
-    return (
-      pick !== null &&
-      (pick.images.length > 0 ||
-        pick.skills.length > 0 ||
-        !shape.decisions[index]!.replies.some((reply) => reply.label === pick.words))
+  const typed = (index: number): boolean =>
+    Boolean(picks[index]) &&
+    !shape.decisions[index]!.replies.some((reply) =>
+      botItemHeldAnswerIsReply(picks[index], reply.label)
     )
-  }
   const choose = (index: number, label: string): void => {
-    const clearing = picks[index]?.words === label
+    const clearing = botItemHeldAnswerIsReply(picks[index], label)
     steps.pick(index, label)
     if (clearing) {
       // Cleared: the line stays open, and focus on the chip.
@@ -289,7 +288,7 @@ export function BotItemQuestionStep({
             </div>
             <div className="mt-2.5 flex flex-wrap gap-2">
               {decision.replies.map((reply, at) => {
-                const picked = !typed(index) && pick?.words === reply.label
+                const picked = botItemHeldAnswerIsReply(pick, reply.label)
                 return (
                   <button
                     key={reply.label}

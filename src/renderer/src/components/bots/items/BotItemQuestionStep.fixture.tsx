@@ -3,6 +3,7 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { BotItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
 import {
   botItemHeldAnswer,
+  botItemHeldAnswerIsReply,
   type BotItemHeldAnswer
 } from '../../../../../shared/bots/bot-item-held-answers'
 import { BotItemQuestionStep } from './BotItemQuestionStep'
@@ -115,7 +116,11 @@ function Card({
     pick: (index, words) =>
       setPicks((previous) =>
         previous.map((held, at) =>
-          at === index ? (held?.words === words ? null : botItemHeldAnswer(words)) : held
+          at === index
+            ? botItemHeldAnswerIsReply(held, words)
+              ? null
+              : botItemHeldAnswer(words)
+            : held
         )
       ),
     bind: () => {},

@@ -18,6 +18,7 @@ import type { BotItemQuestionShape } from '../../../../../shared/bots/bot-item-a
 import { botItemAnswerWords } from '../../../../../shared/bots/bot-item-answer-lines'
 import {
   botItemHeldAnswer,
+  botItemHeldAnswerIsReply,
   botItemHeldAnswersComment,
   botItemHeldAnswersOverLimit,
   type BotItemHeldAnswer,
@@ -176,10 +177,12 @@ export function useBotItemQuestionSteps(
     send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers, rideAlongText })
   const pick = useLatestHandler((index: number, words: string) => {
     if (lines.includes(index)) {
-      const same = held[index]
-      // Picked again, a quick reply clears; words typed with it, or sent with files, it replaces.
-      const clears = same?.words === words && same.images.length + same.skills.length === 0
-      hold(stored(index, clears ? null : botItemHeldAnswer(words)))
+      hold(
+        stored(
+          index,
+          botItemHeldAnswerIsReply(held[index], words) ? null : botItemHeldAnswer(words)
+        )
+      )
     }
   })
   const bind = useLatestHandler((index: number) => {

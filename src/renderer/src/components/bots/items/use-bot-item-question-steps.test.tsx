@@ -196,6 +196,18 @@ it('holds an answer with images, files and skills like a pick; Send posts them a
   expect(posted[0]!.skills).toEqual([skill])
 })
 
+it('replaces an image answer whose words match a quick reply with the reply alone, never clearing it', () => {
+  const { hook } = steps('replace-image')
+  act(() => hook.result.current.fromBox('Yes [Image #1]', ['/tmp/a.png'], `e2:0`))
+  act(() => hook.result.current.fromBox('Yes', ['/tmp/b.png'], `e2:1`))
+  // Line 1 holds "Yes" with an image: picking the Yes reply replaces it, as for typed words.
+  act(() => hook.result.current.steps!.pick(1, 'Yes'))
+  expect(hook.result.current.steps!.picks[1]).toEqual(botItemHeldAnswer('Yes'))
+  // The reply alone, picked again, clears.
+  act(() => hook.result.current.steps!.pick(1, 'Yes'))
+  expect(hook.result.current.steps!.picks[1]).toBeNull()
+})
+
 it('keeps in the box an answer whose images the held ones would take past one comment', () => {
   const { hook, posted } = steps('too-many')
   const images = (prefix: string, count: number) =>

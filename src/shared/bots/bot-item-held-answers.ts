@@ -41,6 +41,15 @@ export function botItemHeldAnswer(
   return { words, images, skills }
 }
 
+/** The held answer is the quick reply `label` alone: picking it again clears it. Words typed the same,
+ *  or sent with images or skills, are an answer of their own, which the reply replaces. */
+export function botItemHeldAnswerIsReply(
+  answer: BotItemHeldAnswer | null | undefined,
+  label: string
+): boolean {
+  return answer?.words === label && answer.images.length + answer.skills.length === 0
+}
+
 // Bumped only with a change to what a stored line holds; anything else reads as the old text.
 const FORMAT = 2
 

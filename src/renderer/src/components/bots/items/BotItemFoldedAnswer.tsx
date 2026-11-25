@@ -118,7 +118,7 @@ export function BotItemHeldAnswerAttachments({
         <div className="mt-1.5 flex flex-wrap gap-2">
           {images.map((path, index) => (
             <NativeChatImageAttachmentPreview
-              key={path}
+              key={`${path}:${index}`}
               attachment={{ id: path, path }}
               hostEnvironmentId={hostEnvironmentId}
               number={index + 1}
