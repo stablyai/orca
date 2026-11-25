@@ -878,8 +878,6 @@
       "tooLargeMessage": "Dieser Diff ist zu groß für die mobile Vorschau."
     },
     "diffReviewDrawers": {
-      "addNote": "Notiz hinzufügen",
-      "cancelNote": "Notizeingabe abbrechen",
       "clearSentNotes": "Gesendete Notizen löschen",
       "copyNotes": "Notizen kopieren",
       "deleteNote": "Notiz löschen",
@@ -888,12 +886,10 @@
       "discardTitle": "Änderungen verwerfen?",
       "editNote": "Notiz bearbeiten",
       "fileNote": "Dateinotiz",
-      "lineNumber": "Zeile {{lineNumber}}",
       "loadingSessions": "Agentensitzungen werden geladen…",
       "newAgentSession": "Neue Agentensitzung",
       "openInSession": "In Sitzung öffnen",
       "reviewNote": "Review-Notiz",
-      "saveLineNote": "Notiz zu Zeile {{lineNumber}} speichern",
       "sendNotes": "Notizen senden",
       "sendNotesLabel": "Notizen an den Agenten senden",
       "sendUnsentNotes": "Ungesendete Notizen senden",
@@ -918,7 +914,6 @@
       "title": "Änderungen"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Notiz zu Zeile {{number}} hinzufügen",
       "addedLine": "Hinzugefügte Zeile",
       "addedLineNumber": "Hinzugefügte Zeile {{number}}",
       "contextLine": "Kontextzeile",
@@ -1981,14 +1976,6 @@
       "stateMerged": "Gemergt",
       "stateOpen": "Offen",
       "unavailable": "Checks nicht verfügbar"
-    },
-    "prCommentAudienceLabels": {
-      "all": "Alle",
-      "bots": "Bots",
-      "humans": "Menschen",
-      "noBotComments": "Keine Kommentare von Bots.",
-      "noComments": "Noch keine Kommentare.",
-      "noHumanComments": "Keine Kommentare von Menschen."
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} ist mit keinem offenen PR verknüpft.",
@@ -4460,7 +4447,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",

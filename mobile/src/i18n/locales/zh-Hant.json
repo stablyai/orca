@@ -875,8 +875,6 @@
       "tooLargeMessage": "此差異過大，無法在手機上預覽。"
     },
     "diffReviewDrawers": {
-      "addNote": "新增備註",
-      "cancelNote": "取消編輯備註",
       "clearSentNotes": "清除已傳送的備註",
       "copyNotes": "複製備註",
       "deleteNote": "刪除備註",
@@ -885,12 +883,10 @@
       "discardTitle": "放棄檔案變更",
       "editNote": "編輯備註",
       "fileNote": "檔案備註",
-      "lineNumber": "第 {{lineNumber}} 行",
       "loadingSessions": "正在載入代理程式工作階段…",
       "newAgentSession": "新增代理程式工作階段",
       "openInSession": "在工作階段中開啟",
       "reviewNote": "審查備註",
-      "saveLineNote": "儲存第 {{lineNumber}} 行的備註",
       "sendNotes": "傳送備註",
       "sendNotesLabel": "將備註傳送給代理程式",
       "sendUnsentNotes": "傳送未傳送的備註",
@@ -915,7 +911,6 @@
       "title": "變更"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "在第 {{number}} 行新增備註",
       "addedLine": "新增行",
       "addedLineNumber": "新增的第 {{number}} 行",
       "contextLine": "上下文行",
@@ -1975,14 +1970,6 @@
       "stateMerged": "已合併",
       "stateOpen": "開放",
       "unavailable": "無法取得檢查結果"
-    },
-    "prCommentAudienceLabels": {
-      "all": "全部",
-      "bots": "機器人",
-      "humans": "人類",
-      "noBotComments": "沒有機器人留言。",
-      "noComments": "還沒有留言。",
-      "noHumanComments": "沒有人類留言。"
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} 未連結至開啟中的 PR。",
@@ -4454,7 +4441,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",

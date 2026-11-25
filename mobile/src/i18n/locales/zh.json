@@ -1355,8 +1355,6 @@
       "tooLargeMessage": "此差异过大，无法在移动端预览"
     },
     "diffReviewDrawers": {
-      "addNote": "添加备注",
-      "cancelNote": "取消备注编辑",
       "clearSentNotes": "清除已发送的备注",
       "copyNotes": "复制备注",
       "deleteNote": "删除注释",
@@ -1365,12 +1363,10 @@
       "discardTitle": "放弃文件更改",
       "editNote": "编辑备注",
       "fileNote": "文件备注",
-      "lineNumber": "第 {{lineNumber}} 行",
       "loadingSessions": "正在加载智能体会话…",
       "newAgentSession": "新建智能体会话",
       "openInSession": "在会话中打开",
       "reviewNote": "评审备注",
-      "saveLineNote": "保存第 {{lineNumber}} 行的备注",
       "sendNotes": "发送备注",
       "sendNotesLabel": "向智能体发送备注",
       "viewedFiles_one": "已查看 {{count}} 个文件",
@@ -1384,10 +1380,7 @@
       "discardChanges": "放弃更改",
       "rangeLine": "第 {{line}} 行",
       "rangeLines": "第 {{startLine}}–{{line}} 行",
-      "sendToAgent": "发送给 {{agent}}",
-      "sendToAnAgent": "发送给智能体",
       "rangePlaceholder": "这里应该怎么改？",
-      "commentOnGitHub": "在 GitHub 上评论",
       "sendUnsentNotes": "发送未发送的备注",
       "statusUnreadable": "无法读取此主机的状态。正在重试…",
       "terminal": "终端",
@@ -1420,7 +1413,6 @@
       "title": "更改"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "在第 {{number}} 行添加备注",
       "addedLine": "新增行",
       "addedLineNumber": "第 {{number}} 行（新增）",
       "contextLine": "上下文行",
@@ -2573,7 +2565,6 @@
       "daysAgo_other": "{{count}} 天前",
       "deleteConfirmMessage": "这将永久删除 GitHub 上的这条评论",
       "editPlaceholder": "编辑评论…",
-      "replyToComment": "回复评论",
       "hoursAgo_one": "{{count}} 小时前",
       "hoursAgo_other": "{{count}} 小时前",
       "justNow": "刚刚",
@@ -2582,38 +2573,21 @@
       "monthsAgo_one": "{{count}} 个月前",
       "monthsAgo_other": "{{count}} 个月前",
       "reply": "回复",
-      "editComment": "编辑评论",
-      "deleteComment": "删除评论",
-      "unresolveThread": "将话题标记为未解决",
-      "resolveThread": "解决话题",
       "resolve": "解决",
-      "replyPlaceholder": "写下回复…",
       "unresolve": "标记为未解决",
       "yearsAgo_one": "{{count}} 年前",
-      "yearsAgo_other": "{{count}} 年前",
-      "resolved": "已解决",
-      "openOnGitHub": "在 GitHub 上打开评论"
+      "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
       "comment": "评论",
       "resolvedThreadSingle": "{{author}} 发起的话题（已解决）",
       "resolvedThreadCount": "{{author}} 发起的话题（已解决，{{count}} 条）",
-      "resolvedCommentSingle": "{{author}} 的评论（已解决）",
-      "resolvedCommentCount": "{{author}} 的评论（已解决，{{count}} 条）",
       "commentsLoadFailedRetry": "无法加载评论",
-      "commentsLoadFailed": "无法加载评论。请点按刷新重试",
-      "showMoreOf": "再显示 {{count}} 条（还剩 {{remaining}} 条）",
       "description": "描述",
       "descriptionLoadFailed": "无法加载描述。请点按刷新重试",
-      "all": "全部",
-      "humans": "人类",
-      "bots": "机器人",
-      "noBotComments": "没有机器人评论",
       "noComments": "还没有评论",
       "noDescription": "没有提供描述",
-      "noHumanComments": "没有人类评论",
       "showMore": "再显示 {{count}} 条",
-      "addCommentPlaceholder": "添加评论…",
       "title": "评论"
     },
     "linkPrForm": {
@@ -2719,14 +2693,6 @@
       "stateMerged": "已合并",
       "stateOpen": "开放",
       "unavailable": "检查不可用"
-    },
-    "prCommentAudienceLabels": {
-      "all": "全部",
-      "bots": "机器人",
-      "humans": "人类",
-      "noBotComments": "没有机器人评论",
-      "noComments": "还没有评论",
-      "noHumanComments": "没有人类评论"
     },
     "tab": {
       "updated": "更新于 {{time}}",

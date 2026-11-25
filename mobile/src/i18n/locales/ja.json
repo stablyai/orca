@@ -872,8 +872,6 @@
       "tooLargeMessage": "この差分は大きすぎるため、モバイルではプレビューできません。"
     },
     "diffReviewDrawers": {
-      "addNote": "メモを追加",
-      "cancelNote": "メモの入力をキャンセル",
       "clearSentNotes": "送信済みのメモをクリア",
       "copyNotes": "メモをコピー",
       "deleteNote": "メモの削除",
@@ -882,12 +880,10 @@
       "discardTitle": "ファイルの変更を破棄",
       "editNote": "メモを編集",
       "fileNote": "ファイルのメモ",
-      "lineNumber": "{{lineNumber}} 行目",
       "loadingSessions": "Agent セッションを読み込み中…",
       "newAgentSession": "新規 Agent セッション",
       "openInSession": "セッションで開く",
       "reviewNote": "レビューメモ",
-      "saveLineNote": "{{lineNumber}} 行目のメモを保存",
       "sendNotes": "メモを送信",
       "sendNotesLabel": "Agent にメモを送信",
       "sendUnsentNotes": "未送信のメモを送信",
@@ -912,7 +908,6 @@
       "title": "変更点"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "{{number}} 行目にメモを追加",
       "addedLine": "追加された行",
       "addedLineNumber": "追加された行（{{number}} 行目）",
       "contextLine": "変更のない行",
@@ -1977,14 +1972,6 @@
       "stateMerged": "マージ済み",
       "stateOpen": "オープン",
       "unavailable": "チェックは利用できません"
-    },
-    "prCommentAudienceLabels": {
-      "all": "全て",
-      "bots": "ボット",
-      "humans": "人間",
-      "noBotComments": "ボットのコメントはありません。",
-      "noComments": "コメントはまだありません。",
-      "noHumanComments": "ユーザーによるコメントはありません。"
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} はオープンな PR にリンクされていません。",
@@ -4534,7 +4521,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",

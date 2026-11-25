@@ -1312,13 +1312,9 @@
       "loadingSessions": "Loading agent sessions...",
       "unsentNotes_one": "{{count}} unsent notes",
       "unsentNotes_other": "{{count}} unsent notes",
-      "editNote": "Edit Note",
-      "addNote": "Add Note",
-      "lineNumber": "Line {{lineNumber}}",
+      "editNote": "Edit note",
       "fileNote": "File note",
-      "cancelNote": "Cancel note",
       "reviewNote": "Review note",
-      "saveLineNote": "Save note on line {{lineNumber}}",
       "deleteNote": "Delete note",
       "sendNotesLabel": "Send notes to agent",
       "viewedFiles_one": "{{count}} file viewed",
@@ -1332,10 +1328,12 @@
       "discardChanges": "Discard Changes",
       "rangeLine": "Line {{line}}",
       "rangeLines": "Lines {{startLine}}–{{line}}",
-      "sendToAgent": "Send to {{agent}}",
-      "sendToAnAgent": "Send to agent",
       "rangePlaceholder": "What should change here?",
-      "commentOnGitHub": "Comment on GitHub"
+      "send": "Send",
+      "sendTo": "Send to",
+      "agentInWorkspace": "{{agent}} in this workspace",
+      "anAgentInWorkspace": "Agent in this workspace",
+      "gitHubOnPr": "GitHub, on PR #{{number}}"
     },
     "diffReviewFileSummary": {
       "changed": "Changed",
@@ -1353,7 +1351,10 @@
       "nextFile": "Next file",
       "stageNext": "Stage · next file",
       "viewedNext": "Viewed · next file",
-      "nextFileButton": "Next file"
+      "nextFileButton": "Next file",
+      "commentOnLine": "Comment on line {{line}}",
+      "commentOnLines": "Comment on lines {{startLine}}–{{line}}",
+      "clearSelection": "Clear selection"
     },
     "diffReviewHeader": {
       "title": "Changes",
@@ -1367,8 +1368,8 @@
       "deletedLine": "Deleted line",
       "contextLineNumber": "Context line {{number}}",
       "contextLine": "Context line",
-      "addNoteOnLine": "Add note on line {{number}}",
-      "editNoteOnLine": "Edit note on line {{number}}"
+      "editNoteOnLine": "Edit note on line {{number}}",
+      "selectLine": "Select line {{number}}"
     },
     "hostCard": {
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} active",
@@ -1845,40 +1846,22 @@
       "monthsAgo_other": "{{count}}mo ago",
       "yearsAgo_one": "{{count}}y ago",
       "yearsAgo_other": "{{count}}y ago",
-      "resolved": "resolved",
-      "openOnGitHub": "Open comment on GitHub",
       "editPlaceholder": "Edit comment…",
-      "replyToComment": "Reply to comment",
       "reply": "Reply",
-      "editComment": "Edit comment",
-      "deleteComment": "Delete comment",
-      "unresolveThread": "Unresolve thread",
-      "resolveThread": "Resolve thread",
       "unresolve": "Unresolve",
       "resolve": "Resolve",
-      "replyPlaceholder": "Write a reply…",
       "deleteConfirmMessage": "This permanently deletes the comment on GitHub."
     },
     "commentsSection": {
-      "all": "All",
-      "humans": "Humans",
-      "bots": "Bots",
-      "noBotComments": "No bot comments.",
-      "noHumanComments": "No human comments.",
       "noComments": "No comments yet.",
       "description": "Description",
       "descriptionLoadFailed": "Could not load description. Tap refresh to try again.",
       "noDescription": "No description provided.",
       "title": "Comments",
-      "commentsLoadFailed": "Could not load comments. Tap refresh to try again.",
-      "showMoreOf": "Show {{count}} more of {{remaining}}",
       "showMore": "Show {{count}} more",
-      "addCommentPlaceholder": "Add a comment…",
       "comment": "Comment",
       "resolvedThreadSingle": "Resolved thread by {{author}}",
       "resolvedThreadCount": "Resolved thread by {{author}} ({{count}})",
-      "resolvedCommentSingle": "Resolved comment by {{author}}",
-      "resolvedCommentCount": "Resolved comment by {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Could not load comments."
     },
     "reviewersSection": {
@@ -1983,14 +1966,6 @@
       "stateMerged": "Merged",
       "stateDraft": "Draft",
       "stateClosed": "Closed"
-    },
-    "prCommentAudienceLabels": {
-      "all": "All",
-      "humans": "Humans",
-      "bots": "Bots",
-      "noBotComments": "No bot comments.",
-      "noHumanComments": "No human comments.",
-      "noComments": "No comments yet."
     },
     "tab": {
       "updated": "updated {{time}}",

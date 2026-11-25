@@ -918,8 +918,6 @@
       "tooLargeMessage": "Este diff es demasiado grande para la vista previa del móvil."
     },
     "diffReviewDrawers": {
-      "addNote": "Añadir nota",
-      "cancelNote": "Cancelar nota",
       "clearSentNotes": "Eliminar notas enviadas",
       "copyNotes": "Copiar notas",
       "deleteNote": "Eliminar nota",
@@ -928,12 +926,10 @@
       "discardTitle": "Descartar archivo",
       "editNote": "Editar nota",
       "fileNote": "Nota del archivo",
-      "lineNumber": "Línea {{lineNumber}}",
       "loadingSessions": "Cargando sesiones de agentes…",
       "newAgentSession": "Nueva sesión de agente",
       "openInSession": "Abrir en sesión",
       "reviewNote": "Nota de revisión",
-      "saveLineNote": "Guardar nota en la línea {{lineNumber}}",
       "sendNotes": "Enviar notas",
       "sendNotesLabel": "Enviar notas al agente",
       "sendUnsentNotes": "Enviar notas pendientes",
@@ -959,7 +955,6 @@
       "title": "Cambios"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Añadir una nota en la línea {{number}}",
       "addedLine": "Línea añadida",
       "addedLineNumber": "Línea {{number}} añadida",
       "contextLine": "Línea de contexto",
@@ -2039,14 +2034,6 @@
       "stateMerged": "Fusionado",
       "stateOpen": "Abierto",
       "unavailable": "Checks no disponibles"
-    },
-    "prCommentAudienceLabels": {
-      "all": "Todos",
-      "bots": "Bots",
-      "humans": "Humanos",
-      "noBotComments": "Sin comentarios de robots.",
-      "noComments": "Aún no hay comentarios.",
-      "noHumanComments": "Sin comentarios humanos."
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "La rama {{branch}} no está vinculada a ningún PR abierto.",
@@ -4566,7 +4553,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",

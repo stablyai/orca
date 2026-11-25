@@ -1548,8 +1548,6 @@
       "allStaged": "Всё в индексе"
     },
     "diffReviewDrawers": {
-      "addNote": "Добавить заметку",
-      "cancelNote": "Отменить ввод заметки",
       "clearSentNotes": "Удалить отправленные заметки",
       "copyNotes": "Скопировать заметки",
       "deleteNote": "Удалить заметку",
@@ -1558,12 +1556,10 @@
       "discardTitle": "Отменить изменения в файле",
       "editNote": "Изменить заметку",
       "fileNote": "Заметка к файлу",
-      "lineNumber": "Строка {{lineNumber}}",
       "loadingSessions": "Загрузка сессий агентов…",
       "newAgentSession": "Новая сессия агента",
       "openInSession": "Открыть в сессии",
       "reviewNote": "Заметка по проверке",
-      "saveLineNote": "Сохранить заметку к строке {{lineNumber}}",
       "sendNotes": "Отправить заметки",
       "sendNotesLabel": "Отправить заметки агенту",
       "sendUnsentNotes": "Отправить неотправленные заметки",
@@ -1590,10 +1586,7 @@
       "discardChanges": "Отменить изменения",
       "rangeLine": "Строка {{line}}",
       "rangeLines": "Строки {{startLine}}–{{line}}",
-      "sendToAgent": "Отправить агенту {{agent}}",
-      "sendToAnAgent": "Отправить агенту",
-      "rangePlaceholder": "Что здесь нужно изменить?",
-      "commentOnGitHub": "Прокомментировать на GitHub"
+      "rangePlaceholder": "Что здесь нужно изменить?"
     },
     "diffReviewFileSummary": {
       "changed": "Изменён",
@@ -1621,7 +1614,6 @@
       "jumpToFile": "{{fileName}}, перейти к другому файлу"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Добавить заметку к строке {{number}}",
       "addedLine": "Добавленная строка",
       "addedLineNumber": "Добавленная строка {{number}}",
       "contextLine": "Строка контекста",
@@ -2855,15 +2847,7 @@
       "yearsAgo_few": "{{count}} года назад",
       "yearsAgo_many": "{{count}} лет назад",
       "yearsAgo_one": "{{count}} год назад",
-      "yearsAgo_other": "{{count}} года назад",
-      "resolved": "решено",
-      "openOnGitHub": "Открыть комментарий на GitHub",
-      "replyToComment": "Ответить на комментарий",
-      "editComment": "Изменить комментарий",
-      "deleteComment": "Удалить комментарий",
-      "unresolveThread": "Открыть обсуждение снова",
-      "resolveThread": "Закрыть обсуждение",
-      "replyPlaceholder": "Напишите ответ…"
+      "yearsAgo_other": "{{count}} года назад"
     },
     "commentsSection": {
       "comment": "Добавить комментарий",
@@ -2873,18 +2857,8 @@
       "noDescription": "Описание не добавлено.",
       "showMore": "Показать ещё {{count}}",
       "title": "Комментарии",
-      "all": "Все",
-      "humans": "Люди",
-      "bots": "Боты",
-      "noBotComments": "Комментариев от ботов нет.",
-      "noHumanComments": "Комментариев от людей нет.",
-      "commentsLoadFailed": "Не удалось загрузить комментарии. Нажмите «Обновить», чтобы повторить.",
-      "showMoreOf": "Показать ещё {{count}} из {{remaining}}",
-      "addCommentPlaceholder": "Добавьте комментарий…",
       "resolvedThreadSingle": "Закрытое обсуждение от {{author}}",
       "resolvedThreadCount": "Закрытое обсуждение от {{author}} ({{count}})",
-      "resolvedCommentSingle": "Закрытый комментарий от {{author}}",
-      "resolvedCommentCount": "Закрытый комментарий от {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Не удалось загрузить комментарии."
     },
     "linkPrForm": {
@@ -3002,14 +2976,6 @@
       "stateMerged": "Слит",
       "stateOpen": "Открыт",
       "unavailable": "Проверки недоступны"
-    },
-    "prCommentAudienceLabels": {
-      "all": "Все",
-      "bots": "Боты",
-      "humans": "Люди",
-      "noBotComments": "Комментариев ботов нет.",
-      "noComments": "Комментариев пока нет.",
-      "noHumanComments": "Комментариев людей нет."
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "Ветка {{branch}} не связана с открытым PR.",

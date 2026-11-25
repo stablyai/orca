@@ -1456,8 +1456,6 @@
       "allStaged": "Tüm değişiklikler stage edildi"
     },
     "diffReviewDrawers": {
-      "addNote": "Not Ekle",
-      "cancelNote": "Notu iptal et",
       "clearSentNotes": "Gönderilen Notları Temizle",
       "copyNotes": "Notları Kopyala",
       "deleteNote": "Notu sil",
@@ -1466,12 +1464,10 @@
       "discardTitle": "Dosya Değişikliklerini At",
       "editNote": "Notu Düzenle",
       "fileNote": "Dosya notu",
-      "lineNumber": "Satır {{lineNumber}}",
       "loadingSessions": "Ajan oturumları yükleniyor…",
       "newAgentSession": "Yeni Ajan Oturumu",
       "openInSession": "Oturumda Aç",
       "reviewNote": "İnceleme notu",
-      "saveLineNote": "{{lineNumber}}. satırdaki notu kaydet",
       "sendNotes": "Notları Gönder",
       "sendNotesLabel": "Notları ajana gönder",
       "sendUnsentNotes": "Gönderilmemiş Notları Gönder",
@@ -1492,10 +1488,7 @@
       "discardChanges": "Değişiklikleri At",
       "rangeLine": "{{line}}. satır",
       "rangeLines": "{{startLine}}–{{line}}. satırlar",
-      "sendToAgent": "{{agent}} ajanına gönder",
-      "sendToAnAgent": "Ajana gönder",
-      "rangePlaceholder": "Burada ne değişmeli?",
-      "commentOnGitHub": "GitHub’da yorum yaz"
+      "rangePlaceholder": "Burada ne değişmeli?"
     },
     "diffReviewFileSummary": {
       "changed": "Değişti",
@@ -1521,7 +1514,6 @@
       "jumpToFile": "{{fileName}}, başka bir dosyaya geç"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "{{number}}. satıra not ekle",
       "addedLine": "Eklenen satır",
       "addedLineNumber": "Eklenen satır: {{number}}",
       "contextLine": "Bağlam satırı",
@@ -2713,15 +2705,7 @@
       "resolve": "Çöz",
       "unresolve": "Çözümü geri al",
       "yearsAgo_one": "{{count}} yıl önce",
-      "yearsAgo_other": "{{count}} yıl önce",
-      "resolved": "çözüldü",
-      "openOnGitHub": "Yorumu GitHub'da aç",
-      "replyToComment": "Yorumu yanıtla",
-      "editComment": "Yorumu düzenle",
-      "deleteComment": "Yorumu sil",
-      "unresolveThread": "Konuşma dizisini yeniden aç",
-      "resolveThread": "Yorum dizisini çöz",
-      "replyPlaceholder": "Yanıt yazın…"
+      "yearsAgo_other": "{{count}} yıl önce"
     },
     "commentsSection": {
       "comment": "Yorum yap",
@@ -2731,18 +2715,8 @@
       "noDescription": "Açıklama girilmemiş.",
       "showMore": "{{count}} tane daha göster",
       "title": "Yorumlar",
-      "all": "Tümü",
-      "humans": "İnsanlar",
-      "bots": "Botlar",
-      "noBotComments": "Bot yorumu yok.",
-      "noHumanComments": "İnsan yorumu yok.",
-      "commentsLoadFailed": "Yorumlar yüklenemedi. Yeniden denemek için Yenile’ye dokunun.",
-      "showMoreOf": "Kalan {{remaining}} öğeden {{count}} tane daha göster",
-      "addCommentPlaceholder": "Yorum ekleyin…",
       "resolvedThreadSingle": "{{author}} tarafından açılan çözülmüş konuşma dizisi",
       "resolvedThreadCount": "{{author}} tarafından açılan çözülmüş konuşma dizisi ({{count}})",
-      "resolvedCommentSingle": "{{author}} tarafından yazılan çözülmüş yorum",
-      "resolvedCommentCount": "{{author}} tarafından yazılan çözülmüş yorum ({{count}})",
       "commentsLoadFailedRetry": "Yorumlar yüklenemedi."
     },
     "linkPrForm": {
@@ -2848,14 +2822,6 @@
       "stateMerged": "Merge edildi",
       "stateOpen": "Açık",
       "unavailable": "Kontroller kullanılamıyor"
-    },
-    "prCommentAudienceLabels": {
-      "all": "Tümü",
-      "bots": "Botlar",
-      "humans": "İnsanlar",
-      "noBotComments": "Bot yorumu yok.",
-      "noComments": "Henüz yorum yok.",
-      "noHumanComments": "İnsan yorumu yok."
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} branch'i açık bir PR'a bağlı değil.",

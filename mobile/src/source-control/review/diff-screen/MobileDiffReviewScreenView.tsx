@@ -4,8 +4,13 @@ import { Text, View, type LayoutChangeEvent } from 'react-native'
 import type { useMobileDiffReviewController } from '../use-mobile-diff-review-controller'
 import { useResponsiveLayout } from '../../../layout/responsive-layout'
 import { MobileDiffReviewBody } from './MobileDiffReviewBody'
-import { useMobilePrCommentActions } from '../pull-request/comments/use-mobile-pr-comment-actions'
-import { usePRCommentCardActions } from '../pull-request/comments/PRCommentsSection'
+import {
+  useMobilePrCommentActions,
+  usePrThreadActions
+} from '../pull-request/comments/use-mobile-pr-comment-actions'
+import { PrThreadScreen } from '../pull-request/comments/PrThreadScreen'
+import { useNow } from '../../../hooks/use-now'
+import { useBackClaim } from '../../../navigation/use-back-claim'
 import { MobileDiffReviewDrawers } from './MobileDiffReviewDrawers'
 import { MobileDiffReviewFileSummary } from './MobileDiffReviewFileSummary'
 import { MobileDiffReviewFooter } from './MobileDiffReviewFooter'
@@ -64,13 +69,32 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
     prRepo: github?.prRepo ?? null,
     queries: controller.prQueries
   })
-  const threadActions = usePRCommentCardActions(
+  const threadActions = usePrThreadActions(
     github ? threadCommentActions : undefined,
     github?.prRepo
   )
   const sheet = controller.sheet
   const selectedRange =
-    sheet?.kind === 'range' ? { startLine: sheet.startLine, line: sheet.line } : null
+    sheet?.kind === 'range'
+      ? { startLine: sheet.startLine, line: sheet.line }
+      : controller.lineSelection
+  // A thread's Reply or row opens it over the diff, as the Comments page does.
+  const [openThread, setOpenThread] = useState<{ id: string; focusReply: boolean } | null>(null)
+  const now = useNow(60_000, openThread !== null)
+  useBackClaim(
+    openThread
+      ? () => {
+          setOpenThread(null)
+          return true
+        }
+      : null
+  )
+  const shownThread =
+    openThread === null
+      ? null
+      : ([...controller.threadsByLine.values()]
+          .flat()
+          .find((thread) => thread.threadId === openThread.id) ?? null)
   // Dock GitHub sidebar only when wide; otherwise showPRSidebar toggles RightDrawer overlay.
   const showInlineDock = presentationMode === 'inline' && controller.prSidebarIsGithubRepo
   const gitStatus = controller.screenState.kind === 'ready' ? controller.screenState.status : null
@@ -90,78 +114,109 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
   }, [])
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <MobileDiffReviewHeader
-        actions={overflowActions}
-        fileName={item ? getRuntimePathBasename(item.filePath) : null}
-        subtitle={
-          item
-            ? mobileDiffReviewPositionLabel({
-                scope: item.scope,
-                position: controller.currentIndex + 1,
-                count: controller.filteredQueue.length,
-                viewedCount: controller.reviewedCount
-              })
-            : ''
-        }
-        onBack={onBack}
-        onOpenFiles={() => controller.openSheet({ kind: 'files' })}
-      />
-      <View style={{ flex: 1, flexDirection: 'row' }} onLayout={handleContentRowLayout}>
-        {/* Keep diff layout full; wide sidebar and diff scroll independently. */}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          {item ? (
-            <MobileDiffReviewFileSummary
-              fileNotes={controller.fileNotes}
-              item={item}
+    <View style={styles.screen}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <MobileDiffReviewHeader
+          actions={overflowActions}
+          fileName={item ? getRuntimePathBasename(item.filePath) : null}
+          subtitle={
+            item
+              ? mobileDiffReviewPositionLabel({
+                  scope: item.scope,
+                  position: controller.currentIndex + 1,
+                  count: controller.filteredQueue.length,
+                  viewedCount: controller.reviewedCount
+                })
+              : ''
+          }
+          onBack={onBack}
+          onOpenFiles={() => controller.openSheet({ kind: 'files' })}
+        />
+        <View style={{ flex: 1, flexDirection: 'row' }} onLayout={handleContentRowLayout}>
+          {/* Keep diff layout full; wide sidebar and diff scroll independently. */}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            {item ? (
+              <MobileDiffReviewFileSummary
+                fileNotes={controller.fileNotes}
+                item={item}
+                staleCommentIds={controller.staleCommentIds}
+                onEditNote={controller.openEditComposer}
+                onToggleViewed={(target) => void controller.toggleItemViewed(target)}
+                hiddenThreadCount={controller.hiddenThreadCount}
+              />
+            ) : null}
+            {/* Each source keeps its own line, so a newer thread failure is never hidden behind older feedback. */}
+            {threadCommentActions.error ? (
+              <View style={styles.actionError}>
+                <Text style={styles.actionErrorText}>{threadCommentActions.error}</Text>
+              </View>
+            ) : null}
+            {controller.actionError ? (
+              <View style={styles.actionError}>
+                <Text style={styles.actionErrorText}>{controller.actionError}</Text>
+              </View>
+            ) : null}
+            <MobileDiffReviewBody
+              commentsByLine={controller.commentsByLine}
+              currentItem={item}
+              diffState={controller.diffState}
+              filteredCount={controller.filteredQueue.length}
+              screenState={controller.screenState}
               staleCommentIds={controller.staleCommentIds}
+              threadsByLine={controller.threadsByLine}
+              threadActions={threadActions}
+              selectedRange={selectedRange}
+              onSelectLines={controller.selectLines}
+              onOpenThread={(id, focusReply) => setOpenThread({ id, focusReply })}
+              scrollToLine={controller.scrollToLine}
+              onScrolledToLine={controller.clearScrollToLine}
               onEditNote={controller.openEditComposer}
-              onToggleViewed={(target) => void controller.toggleItemViewed(target)}
-              hiddenThreadCount={controller.hiddenThreadCount}
+              onRetry={controller.retryAction ?? undefined}
+              offline={controller.connState !== 'connected'}
+              filter={controller.filter}
+              onBack={onBack}
             />
-          ) : null}
-          {/* Each source keeps its own line, so a newer thread failure is never hidden behind older feedback. */}
-          {threadCommentActions.error ? (
-            <View style={styles.actionError}>
-              <Text style={styles.actionErrorText}>{threadCommentActions.error}</Text>
+            {item ? (
+              <MobileDiffReviewFooter
+                busyAction={controller.busyAction}
+                item={item}
+                selection={controller.lineSelection}
+                onComment={(range) => controller.openNewNoteSheet({ kind: 'range', ...range })}
+                onClearSelection={() => controller.selectLines(null)}
+                onMarkViewed={() => void controller.markReviewed()}
+                onStageAndOpenNext={() => void controller.stageAndOpenNext()}
+                onMoveFile={controller.moveFile}
+              />
+            ) : null}
+          </View>
+          {showInlineDock ? (
+            <View style={mobilePrSidebarStyles.dockColumn}>
+              <MobilePRSidebar
+                state={controller.prSidebarState}
+                onRetry={controller.retryPRSidebar}
+                refetch={controller.refetchPRSidebar}
+                rereadSlices={controller.rereadPRSlices}
+                hostId={controller.hostId}
+                queries={controller.prQueries}
+                client={controller.client}
+                connState={controller.connState}
+                worktreeId={controller.worktreeId}
+                hostConnection={hostConnection}
+                gitBranch={controller.prSidebarBranch}
+                gitStatus={gitStatus}
+                headSha={controller.prSidebarHeadSha}
+                bottomInset={insets.bottom}
+                workspaceLabel={controller.worktreeLabel}
+              />
             </View>
-          ) : null}
-          {controller.actionError ? (
-            <View style={styles.actionError}>
-              <Text style={styles.actionErrorText}>{controller.actionError}</Text>
-            </View>
-          ) : null}
-          <MobileDiffReviewBody
-            commentsByLine={controller.commentsByLine}
-            currentItem={item}
-            diffState={controller.diffState}
-            filteredCount={controller.filteredQueue.length}
-            screenState={controller.screenState}
-            staleCommentIds={controller.staleCommentIds}
-            threadsByLine={controller.threadsByLine}
-            threadActions={threadActions}
-            selectedRange={selectedRange}
-            onPickLines={(range) => controller.openNewNoteSheet({ kind: 'range', ...range })}
-            scrollToLine={controller.scrollToLine}
-            onScrolledToLine={controller.clearScrollToLine}
-            onEditNote={controller.openEditComposer}
-            onRetry={controller.retryAction ?? undefined}
-            offline={controller.connState !== 'connected'}
-            filter={controller.filter}
-            onBack={onBack}
-          />
-          {item ? (
-            <MobileDiffReviewFooter
-              busyAction={controller.busyAction}
-              item={item}
-              onMarkViewed={() => void controller.markReviewed()}
-              onStageAndOpenNext={() => void controller.stageAndOpenNext()}
-              onMoveFile={controller.moveFile}
-            />
           ) : null}
         </View>
-        {showInlineDock ? (
-          <View style={mobilePrSidebarStyles.dockColumn}>
+        <MobileDiffReviewDrawers controller={controller} />
+        {presentationMode === 'overlay' ? (
+          <RightDrawer
+            visible={controller.showPRSidebar}
+            onClose={() => controller.setShowPRSidebar(false)}
+          >
             <MobilePRSidebar
               state={controller.prSidebarState}
               onRetry={controller.retryPRSidebar}
@@ -176,36 +231,24 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
               gitBranch={controller.prSidebarBranch}
               gitStatus={gitStatus}
               headSha={controller.prSidebarHeadSha}
-              bottomInset={insets.bottom}
               workspaceLabel={controller.worktreeLabel}
             />
-          </View>
+          </RightDrawer>
         ) : null}
-      </View>
-      <MobileDiffReviewDrawers controller={controller} />
-      {presentationMode === 'overlay' ? (
-        <RightDrawer
-          visible={controller.showPRSidebar}
-          onClose={() => controller.setShowPRSidebar(false)}
-        >
-          <MobilePRSidebar
-            state={controller.prSidebarState}
-            onRetry={controller.retryPRSidebar}
-            refetch={controller.refetchPRSidebar}
-            rereadSlices={controller.rereadPRSlices}
-            hostId={controller.hostId}
-            queries={controller.prQueries}
-            client={controller.client}
-            connState={controller.connState}
-            worktreeId={controller.worktreeId}
-            hostConnection={hostConnection}
-            gitBranch={controller.prSidebarBranch}
-            gitStatus={gitStatus}
-            headSha={controller.prSidebarHeadSha}
-            workspaceLabel={controller.worktreeLabel}
+      </SafeAreaView>
+      {openThread ? (
+        <View style={styles.threadLayer}>
+          <PrThreadScreen
+            thread={shownThread}
+            actions={threadActions}
+            error={threadCommentActions.error}
+            focusReply={openThread.focusReply}
+            now={now}
+            onBack={() => setOpenThread(null)}
+            bottomInset={insets.bottom}
           />
-        </RightDrawer>
+        </View>
       ) : null}
-    </SafeAreaView>
+    </View>
   )
 }

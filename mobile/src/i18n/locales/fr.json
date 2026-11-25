@@ -918,8 +918,6 @@
       "tooLargeMessage": "Ce diff est trop volumineux pour l'aperçu sur mobile."
     },
     "diffReviewDrawers": {
-      "addNote": "Ajouter une note",
-      "cancelNote": "Annuler la note",
       "clearSentNotes": "Effacer les notes envoyées",
       "copyNotes": "Copier les notes",
       "deleteNote": "Supprimer la note",
@@ -928,12 +926,10 @@
       "discardTitle": "Abandonner les modifications",
       "editNote": "Modifier la note",
       "fileNote": "Note sur le fichier",
-      "lineNumber": "Ligne {{lineNumber}}",
       "loadingSessions": "Chargement des sessions d'agent…",
       "newAgentSession": "Nouvelle session d'agent",
       "openInSession": "Ouvrir dans une session",
       "reviewNote": "Note de revue",
-      "saveLineNote": "Enregistrer la note sur la ligne {{lineNumber}}",
       "sendNotes": "Envoyer les notes",
       "sendNotesLabel": "Envoyer les notes à l'agent",
       "sendUnsentNotes": "Envoyer les notes non envoyées",
@@ -959,7 +955,6 @@
       "title": "Modifications"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Ajouter une note à la ligne {{number}}",
       "addedLine": "Ligne ajoutée",
       "addedLineNumber": "Ligne {{number}} ajoutée",
       "contextLine": "Ligne de contexte",
@@ -2039,14 +2034,6 @@
       "stateMerged": "Fusionnée",
       "stateOpen": "Ouverte",
       "unavailable": "Checks indisponibles"
-    },
-    "prCommentAudienceLabels": {
-      "all": "Tous",
-      "bots": "Bots",
-      "humans": "Humains",
-      "noBotComments": "Aucun commentaire de bot.",
-      "noComments": "Aucun commentaire pour le moment.",
-      "noHumanComments": "Aucun commentaire humain."
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} n'est pas liée à une PR ouverte.",
@@ -4566,7 +4553,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",

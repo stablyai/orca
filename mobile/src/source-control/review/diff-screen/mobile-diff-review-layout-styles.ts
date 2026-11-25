@@ -3,6 +3,7 @@ import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
 export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
+  screen: { flex: 1 },
   safeArea: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -89,11 +90,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   diffListFrame: {
     flex: 1
   },
-  threadRow: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.bgBase
-  },
+  threadLayer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   diffList: {
     flex: 1,
     backgroundColor: colors.bgBase
