@@ -1,4 +1,8 @@
-import { botFailureText, readBotFailure } from '../../../../shared/bots/bot-failure-copy'
+import {
+  botFailureText,
+  readBotFailure,
+  type BotFailure
+} from '../../../../shared/bots/bot-failure-copy'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
@@ -12,6 +16,7 @@ import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/n
 import { structuredAgentSessionTargetPlace } from '@/components/native-chat/pane/ownership/use-structured-agent-session-host-label'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useAppStore } from '@/store'
+import { GoogleAccountsNeedHostUpdate } from './google/set-bot-google'
 import type { AgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 /** Bots name their agent as the product does ("Claude Code"); the shared catalog's "Claude" stays app-wide. */
@@ -36,12 +41,17 @@ export function botRefusalText(refusal: AgentSessionRefusalReference, hostName?:
   )
 }
 
-/** A bot failure the host sent by code, in this reader's language; null when it sent none. */
-export function botFailureMessage(error: unknown): string | null {
+/** The bot failure code the host sent with an error; null when it sent none. */
+export function botFailureOf(error: unknown): BotFailure | null {
   const data = error instanceof RuntimeRpcCallError ? error.response.error.data : undefined
-  const failure = readBotFailure(
+  return readBotFailure(
     typeof data === 'object' && data !== null && 'botFailure' in data ? data.botFailure : undefined
   )
+}
+
+/** A bot failure the host sent by code, in this reader's language; null when it sent none. */
+export function botFailureMessage(error: unknown): string | null {
+  const failure = botFailureOf(error)
   return failure ? botFailureText(failure, translate) : null
 }
 
@@ -54,6 +64,9 @@ export function botErrorMessage(error: unknown): string {
   const coded = botFailureMessage(error)
   if (coded) {
     return coded
+  }
+  if (error instanceof GoogleAccountsNeedHostUpdate) {
+    return error.message
   }
   // Runtime errors carry the controller's code as their message.
   if (error instanceof Error && error.message === 'bot_name_taken') {

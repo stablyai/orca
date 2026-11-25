@@ -23,8 +23,18 @@ import {
   GoogleStatusParams
 } from '../../../../shared/rpc-contract/google-params'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { Bot } from '../../../../shared/bot-types'
+import { BotFailureError } from '../../../../shared/bots/bot-failure-copy'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { isAgentRpcCaller, rpcCallerOperationKey } from '../callers/rpc-caller-identity'
+import { googleCallerAccount } from '../google-caller-api'
+import { readGoogleDefaultAccount } from '../../../google/google-credential-store'
+import {
+  botGoogleAccess,
+  botGoogleAccountFilter,
+  botGoogleDefault,
+  type BotGoogleAccess
+} from '../../../../shared/google/google-bot-accounts'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 
@@ -60,9 +70,19 @@ async function statusView(
       ? runtime.bots
           .list()
           .filter((bot) => bot.google === true)
-          .map((bot) => ({ id: bot.id, name: bot.name }))
+          .map((bot) => ({
+            id: bot.id,
+            name: bot.name,
+            ...(bot.googleAccounts ? { accounts: bot.googleAccounts } : {})
+          }))
       : []
   }
+}
+
+/** The account a bot's calls without --account use, read once from this computer's default. */
+async function botDefaultAccount(access: BotGoogleAccess): Promise<string | null> {
+  const read = botGoogleDefault(access, await readGoogleDefaultAccount())
+  return 'email' in read ? read.email : null
 }
 
 async function pickAccount(connect: GoogleConnect, wanted: string | undefined): Promise<string> {
@@ -94,13 +114,21 @@ export function googleConnectedLine(account: string, defaultAccount: string | nu
 const GOOGLE_ASKERS_CHANGED =
   'Who can ask changed while you were confirming. Review it and turn Google on again.'
 
-function sameAskers(shown: readonly string[], current: readonly string[]): boolean {
-  const sortedShown = [...shown].sort()
-  const sortedCurrent = [...current].sort()
-  return (
-    sortedShown.length === sortedCurrent.length &&
-    sortedShown.every((key, index) => key === sortedCurrent[index])
-  )
+function sameKeys(shown: readonly string[], current: readonly string[]): boolean {
+  const a = new Set(shown)
+  const b = new Set(current)
+  return a.size === b.size && [...a].every((key) => b.has(key))
+}
+
+function sameGoogleAccess(
+  read: { on: boolean; accounts?: readonly string[] },
+  current: Pick<Bot, 'google' | 'googleAccounts'>
+): boolean {
+  const before = botGoogleAccess({ google: read.on, googleAccounts: read.accounts?.slice() })
+  const now = botGoogleAccess(current)
+  return before.kind === 'some' && now.kind === 'some'
+    ? sameKeys(before.accounts, now.accounts)
+    : before.kind === now.kind
 }
 
 export const GOOGLE_METHODS = [
@@ -108,15 +136,25 @@ export const GOOGLE_METHODS = [
     name: 'google.status',
     permission: 'workspace',
     params: GoogleStatusParams,
-    handler: async ({ check }, { runtime }): Promise<GoogleStatusView> => {
+    handler: async (
+      { check, botToken },
+      { runtime, pairedDeviceId }
+    ): Promise<GoogleStatusView> => {
       const connect = google()
+      // A bot without every account sees (and a check reads tokens of) only its own accounts, none
+      // while Google is off for it, and the default its own calls use; the owner sees them all.
+      const caller = botOfToken(runtime, botToken, pairedDeviceId)
+      const access = caller.kind === 'bot' ? botGoogleAccess(caller.bot) : null
+      const only = access ? botGoogleAccountFilter(access) : undefined
       const [accounts, clientKey] = check
-        ? await Promise.all([connect.checkAccounts(), connect.checkClient()])
+        ? await Promise.all([connect.checkAccounts(only), connect.checkClient()])
         : [await connect.accounts(), await connect.clientCheck()]
+      const defaultAccount =
+        access && only ? await botDefaultAccount(access) : await connect.defaultAccount()
       return {
         ...(await statusView(runtime, connect)),
-        accounts,
-        defaultAccount: await connect.defaultAccount(),
+        accounts: only ? accounts.filter((account) => only(account.email)) : accounts,
+        defaultAccount,
         ...(clientKey ? { clientKey } : {})
       }
     }
@@ -196,6 +234,8 @@ export const GOOGLE_METHODS = [
       if (refusal) {
         throw new InvalidArgumentError(refusal)
       }
+      // A bot limited to some accounts may only pick among them.
+      await googleCallerAccount({ botToken, account }, ctx)
       return { defaultAccount: await google().setDefaultAccount(account) }
     }
   }),
@@ -203,19 +243,38 @@ export const GOOGLE_METHODS = [
     name: 'google.bot.set',
     permission: 'workspace',
     params: GoogleBotAccessSetParams,
-    handler: async ({ botToken, botId, on, confirmedAskers }, ctx) => {
+    handler: async (
+      { botToken, botId, on, accounts, allAccounts, basedOn, confirmedAskers },
+      ctx
+    ) => {
       refuseFromBot(botToken, ctx)
       ctx.runtime.bots.assertEnabled()
       const bot = await ctx.runtime.bots.update(botId, (current) => {
-        if (on && confirmedAskers && !sameAskers(confirmedAskers, botAskerKeys(current))) {
+        if (on && confirmedAskers && !sameKeys(confirmedAskers, botAskerKeys(current))) {
           throw new InvalidArgumentError(GOOGLE_ASKERS_CHANGED)
         }
-        return { google: on }
+        if (on && basedOn && !sameGoogleAccess(basedOn, current)) {
+          throw new BotFailureError('googleAccountsChanged')
+        }
+        if (!on) {
+          return { google: false, googleAccounts: undefined }
+        }
+        if (accounts) {
+          return { google: true, googleAccounts: [...new Set(accounts)] }
+        }
+        // A plain on (phone setup, older clients) keeps a list; only allAccounts widens it.
+        const keep = current.google === true && allAccounts !== true
+        return { google: true, googleAccounts: keep ? current.googleAccounts : undefined }
       })
       // Settings confirms this before turning Google on; the CLI prints it.
       const warning = on ? googleWhoCanAskWarning(bot.name, botOtherAskers(bot)) : null
       return {
-        bot: { id: bot.id, name: bot.name, google: bot.google === true },
+        bot: {
+          id: bot.id,
+          name: bot.name,
+          google: bot.google === true,
+          ...(bot.google === true && bot.googleAccounts ? { accounts: bot.googleAccounts } : {})
+        },
         ...(warning ? { warning } : {})
       }
     }

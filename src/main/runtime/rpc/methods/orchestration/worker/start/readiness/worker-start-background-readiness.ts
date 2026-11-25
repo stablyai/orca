@@ -19,6 +19,7 @@ import {
 } from '../../../../../../terminal/wait/launched-agent-composer-readiness'
 import type { WorkerSetupReceipt } from '../placement/worker-placement-topology'
 import type { SetupEndWatch } from './worker-setup-end-watch'
+import { watchStructuredSetup, type StructuredSetupWait } from './structured-setup-background-wait'
 import { registerWorkerStartWait } from './worker-start-waits'
 import { TUI_IDLE_QUIESCENCE_MS } from '../../../../../../terminal/wait/terminal-idle-policy'
 import { WORKER_AWAITING_AGENT_STAGE } from '../../../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
@@ -84,8 +85,11 @@ export type AwaitingWorkerStart = {
   /** A wait-for-setup launch's watch for Setup's end, kept from launch; the wait owns it from here. */
   setupEnd?: SetupEndWatch | null
   blockedReason?: RuntimeTerminalWaitBlockedReason
-  /** Types the brief and settles the start, as a start ready in time does. */
-  handOver: (ready: RuntimeTerminalWait) => Promise<void>
+  /** A structured worker has no agent screen to wait on: only its wait-for-setup Setup holds the brief. */
+  waitForStructuredSetup?: StructuredSetupWait
+  /** Settles the start from the wait's verdict as a start ready in time does: types the brief, or
+   *  fails on a Setup that did not succeed or could not be watched. */
+  handOver: (ready: RuntimeTerminalWait | Awaited<ReturnType<StructuredSetupWait>>) => Promise<void>
   /** Records the terminal as this worker's own, as a hand-over does first. */
   bindTerminal: () => void
   /** Fails the start as the caller's own failure would. */
@@ -128,6 +132,10 @@ async function watch(start: AwaitingWorkerStart, signal: AbortSignal, clock: Rea
       worker?.state === 'starting' &&
       worker.stage === WORKER_AWAITING_AGENT_STAGE
     )
+  }
+  if (start.waitForStructuredSetup) {
+    await watchStructuredSetup(start, start.waitForStructuredSetup, signal, clock, awaiting)
+    return
   }
   const ptyId = () => workerPanePtyId(runtime, terminalHandle, start.readiness)
   // The clock ran out, or Setup failed and no agent will start: either way the start ends here.

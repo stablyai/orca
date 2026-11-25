@@ -1,8 +1,8 @@
 // Gemini API key chats run on agy when it is here, which offers newer models than Orca's server. agy runs them in a home Orca owns (`--gemini-dir`), whose
 // settings.json picks the method, so the person's own ~/.gemini login and settings stay untouched.
 
-import { basename, join } from 'node:path'
-import { rm, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import { stat } from 'node:fs/promises'
 import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { resolveAntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import {
@@ -12,7 +12,6 @@ import {
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { hostFolderAccountBinding } from '../acp/launch/acp-account-binding'
 import { AcpListingRefused } from '../acp/discovery/acp-listing-account'
-import type { AcpListingSession } from '../acp/discovery/acp-model-discovery-policy'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   providerDiagnostic,
@@ -157,31 +156,4 @@ export async function agyServesOrcaHome(
   )
   versions.set(command, entry)
   return entry.serves
-}
-
-const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const CONVERSATION_FILES = ['.db', '.db-wal', '.db-shm', '.db-journal']
-
-/** agy keeps every session; a model listing's own one is removed from the home Orca owns. */
-export async function discardAgyOrcaListingSession({
-  sessionId,
-  accountHomePath
-}: AcpListingSession): Promise<void> {
-  if (
-    !SESSION_ID.test(sessionId) ||
-    basename(accountHomePath) !== ANTIGRAVITY_AGY_CHAT_HOME_FOLDER
-  ) {
-    return
-  }
-  const home = join(accountHomePath, ANTIGRAVITY_ACP_HOME)
-  const conversation = join(home, 'conversations', sessionId)
-  // Only a session that exists here is the listing's; nothing else is touched.
-  if (!(await stat(`${conversation}.db`).catch(() => null))) {
-    return
-  }
-  await Promise.all([
-    ...CONVERSATION_FILES.map((suffix) => rm(`${conversation}${suffix}`, { force: true })),
-    rm(join(home, 'brain', sessionId), { recursive: true, force: true }),
-    rm(join(home, 'annotations', `${sessionId}.pbtxt`), { force: true })
-  ])
 }
