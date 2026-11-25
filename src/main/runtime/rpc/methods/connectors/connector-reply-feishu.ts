@@ -11,7 +11,8 @@ import type { RpcContext } from '../../core'
 export async function replyToFeishu(
   params: z.infer<typeof ConnectorReply>,
   context: RpcContext,
-  target: ReplyTarget
+  target: ReplyTarget,
+  choices?: string[]
 ) {
   const caller = sessionCallerOf(context.orchestrationCaller)?.sessionId
   if (
@@ -46,7 +47,8 @@ export async function replyToFeishu(
     current.key.externalId,
     current.answerDeliveryId,
     replyId,
-    review ? connectorReviewText(text, review) : text
+    review ? connectorReviewText(text, review) : text,
+    choices
   )
   connectorPostAttempts.attempted(paneKey, replyId, current.key.externalId)
   return { ...sent, place: current.place }

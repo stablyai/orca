@@ -1,3 +1,4 @@
+import { replyToFeishu } from './connectors/connector-reply-feishu'
 import type { ConnectorCloudFeature } from '../../../../shared/connectors/connector-cloud-contract'
 import {
   CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE,
@@ -131,6 +132,27 @@ export async function actAsBot(
   }
   if (runtime.lookAround.botOfLook(sessionId) && !lookAroundConnectorVerbAllowed(verb, args)) {
     throw new ConnectorActError('look_around_reads_only', LOOK_AROUND_REFUSAL)
+  }
+  const localTarget = runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))
+  if (verb === 'reply' && localTarget?.key.source === 'feishu-local') {
+    if (
+      !args.text ||
+      !args.postId ||
+      !args.choices?.length ||
+      Object.keys(args).some((key) => !['text', 'postId', 'choices'].includes(key))
+    ) {
+      throw new ConnectorActError(
+        'connector_invalid_request',
+        'This Feishu action supports text with choices only.'
+      )
+    }
+    const result = await replyToFeishu(
+      { sessionId, replyId: args.postId, text: args.text },
+      context,
+      localTarget,
+      args.choices
+    )
+    return { ok: true as const, result }
   }
   const cloud = runtime.getConnectorCloud()
   const features = cloud?.cloudFeatures()

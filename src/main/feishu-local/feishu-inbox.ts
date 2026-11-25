@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import Database from '../sqlite/sync-database'
 import type { FeishuMessage, FeishuProfile } from './feishu-cli'
+import { FeishuCardStore, type FeishuCardData } from './feishu-card-store'
+import { FeishuRoutes, type FeishuRoute } from './feishu-routes'
 import { binding, type Binding } from './feishu-binding'
 
 const inReplyWindow = (first: number, now: number): boolean =>
@@ -10,6 +12,8 @@ const inReplyWindow = (first: number, now: number): boolean =>
 /** One database per installation. A CLI app can belong to just one Orca profile and bot. */
 export class FeishuInbox {
   private db: Database.Database
+  private cards: FeishuCardStore
+  private routes: FeishuRoutes
   constructor(path: string) {
     this.db = new Database(path)
     this.db.exec(`PRAGMA foreign_keys=ON;
@@ -20,6 +24,8 @@ export class FeishuInbox {
       CREATE TABLE IF NOT EXISTS text_replies(account TEXT NOT NULL,id TEXT NOT NULL,mid TEXT NOT NULL,text TEXT NOT NULL,first_post INTEGER,message_id TEXT,review INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,id),FOREIGN KEY(account,mid) REFERENCES inbox(account,mid) ON DELETE CASCADE);
       CREATE INDEX IF NOT EXISTS pending_feishu_replies ON text_replies(account) WHERE message_id IS NULL AND review=0;
       CREATE INDEX IF NOT EXISTS review_feishu_messages ON inbox(account) WHERE review=1;`)
+    this.cards = new FeishuCardStore(this.db)
+    this.routes = new FeishuRoutes(this.db)
     const columns = this.db.prepare('PRAGMA table_info(inbox)').all()
     if (!columns.some((c) => c.name === 'progress')) {
       this.db.exec('ALTER TABLE inbox ADD COLUMN progress INTEGER NOT NULL DEFAULT 0')
@@ -30,6 +36,43 @@ export class FeishuInbox {
     if (!columns.some((c) => c.name === 'stored_path')) {
       this.db.exec('ALTER TABLE inbox ADD COLUMN stored_path TEXT')
     }
+  }
+  putRoute(account: string, mid: string, route: FeishuRoute) {
+    this.routes.put(account, mid, route)
+  }
+  messageRoute(account: string, mid: string) {
+    return this.routes.message(account, mid)
+  }
+  laneRoute(account: string, external: string) {
+    return this.routes.lane(account, external)
+  }
+  putCard(
+    account: string,
+    id: string,
+    external: string,
+    original: string,
+    chat: string,
+    data: FeishuCardData
+  ) {
+    this.cards.put(account, id, external, original, chat, data)
+  }
+  pendingCards(account: string) {
+    return this.cards.pending(account)
+  }
+  claimCard(account: string, message: string, chat: string, option: string) {
+    return this.cards.claim(account, message, chat, option)
+  }
+  closeCard(account: string, id: string, note: string) {
+    this.cards.close(account, id, note)
+  }
+  closePrompts(account: string, external: string, keep: string | null, note: string) {
+    this.cards.closePrompts(account, external, keep, note)
+  }
+  sendingCard(account: string, id: string, now: number) {
+    return this.cards.sending(account, id, now)
+  }
+  postedCard(account: string, id: string, revision: number, message: string) {
+    this.cards.posted(account, id, revision, message)
   }
   close(): void {
     this.db.close()
@@ -83,7 +126,7 @@ export class FeishuInbox {
   accept(b: Binding, m: FeishuMessage): void {
     if (
       m.sender_id !== b.owner ||
-      m.chat_id !== b.chat ||
+      (m.chat_id !== b.chat && !this.routes.message(b.account, m.message_id)) ||
       b.pairedAt === null ||
       Number(m.create_time) <= b.pairedAt
     ) {
@@ -225,6 +268,9 @@ export class FeishuInbox {
   }
   needsReview(account: string): boolean {
     return Boolean(
+      this.db
+        .prepare('SELECT 1 FROM feishu_cards WHERE account=? AND review=1 LIMIT 1')
+        .get(account) ||
       this.db.prepare('SELECT 1 FROM inbox WHERE account=? AND review=1 LIMIT 1').get(account) ||
       this.db
         .prepare('SELECT 1 FROM text_replies WHERE account=? AND review=1 LIMIT 1')

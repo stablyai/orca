@@ -31,15 +31,19 @@ export async function drainFeishuTextOutbox(
       if (!active()) {
         return
       }
+      const route = await inbox.messageRoute(b.account, row.mid)
       const messageId = await replyFeishu(
         b.app,
         b.account,
         row.mid,
-        b.chat,
+        route?.chat ?? b.chat,
         feishuReplyMessage(row.text, botName),
         `reply:${row.id}`,
         signal
       )
+      if (route) {
+        await inbox.putRoute(b.account, messageId, route)
+      }
       await inbox.replyPosted(b.account, row.id, messageId)
     }
     if (rows.length < 32) {

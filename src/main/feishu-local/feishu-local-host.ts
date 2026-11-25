@@ -142,7 +142,8 @@ export class FeishuLocalHost {
       this.retiring.has(botId) ||
       !c ||
       !c.binding.owner ||
-      dmKey(c.binding).externalId !== externalId ||
+      (dmKey(c.binding).externalId !== externalId &&
+        !(await this.inbox.laneRoute(c.binding.account, externalId))) ||
       !this.runtime.bots.enabled() ||
       !this.runtime.bots.list().some((b) => b.id === botId && !b.paused)
     ) {
@@ -150,17 +151,38 @@ export class FeishuLocalHost {
     }
     await this.inbox.stageFile(c.binding.account, mid, name, bytes)
   }
-  async reply(botId: string, externalId: string, mid: string, replyId: string, text: string) {
+  async reply(
+    botId: string,
+    externalId: string,
+    mid: string,
+    replyId: string,
+    text: string,
+    choices?: string[]
+  ) {
     const c = this.active.get(botId)
     if (
       this.stopping ||
       this.retiring.has(botId) ||
       !c?.binding.owner ||
-      dmKey(c.binding).externalId !== externalId ||
+      (dmKey(c.binding).externalId !== externalId &&
+        !(await this.inbox.laneRoute(c.binding.account, externalId))) ||
       !this.runtime.bots.enabled() ||
       !this.runtime.bots.list().some((b) => b.id === botId && !b.paused)
     ) {
       throw new Error('not_this_bots_conversation')
+    }
+    if (choices?.length) {
+      const route = await this.inbox.messageRoute(c.binding.account, mid)
+      await this.inbox.putCard(
+        c.binding.account,
+        `choices:${replyId}`,
+        externalId,
+        mid,
+        route?.chat ?? c.binding.chat!,
+        { kind: 'choices', text, options: choices.map((label, i) => ({ id: String(i), label })) }
+      )
+      c.wake()
+      return { status: 'queued' as const }
     }
     const result = await this.inbox.queueReply(c.binding.account, mid, replyId, text)
     c.wake()

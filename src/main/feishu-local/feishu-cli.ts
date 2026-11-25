@@ -14,7 +14,17 @@ const profile = z.object({ name: z.string().min(1).max(128), appId: z.string(), 
 export type FeishuProfile = z.infer<typeof profile>
 const message = z.object({
   type: z.literal(EVENT),
-  chat_type: z.literal('p2p'),
+  chat_type: z.enum(['p2p', 'group']),
+  sender_type: z.enum(['user', 'bot']).optional(),
+  root_id: z.union([messageId, z.literal('')]).optional(),
+  reply_to: z.union([messageId, z.literal('')]).optional(),
+  thread_id: z
+    .string()
+    .regex(/^(?:om[t]?_[a-zA-Z0-9_-]+)?$/)
+    .optional(),
+  mentions: z
+    .array(z.object({ id: z.string(), key: z.string(), name: z.string().optional() }))
+    .optional(),
   message_type: z.enum(['text', 'image', 'file']),
   create_time: z.string().regex(/^\d{13}$/),
   event_id: z.string().min(1).max(256),
@@ -123,10 +133,25 @@ export async function consumeFeishu(
   ready: () => void,
   receive: (m: FeishuMessage) => Promise<void>
 ): Promise<void> {
+  return consumeFeishuEvent(app, EVENT, signal, ready, async (line) => {
+    const parsed = readFeishuMessage(line)
+    if (parsed) {
+      await receive(parsed)
+    }
+  })
+}
+
+export async function consumeFeishuEvent(
+  app: string,
+  event: string,
+  signal: AbortSignal,
+  ready: () => void,
+  receive: (line: string) => Promise<void>
+): Promise<void> {
   signal.throwIfAborted()
   const child = spawnProcess({
     program: 'lark-cli',
-    args: ['--profile', app, 'event', 'consume', EVENT, '--as', 'bot'],
+    args: ['--profile', app, 'event', 'consume', event, '--as', 'bot'],
     stdio: 'pipe',
     detached: process.platform !== 'win32'
   })
@@ -154,7 +179,7 @@ export async function consumeFeishu(
     await Promise.all([
       closed,
       readLines(child.stderr, (line) => {
-        if (line === `[event] ready event_key=${EVENT}` && !signal.aborted) {
+        if (line === `[event] ready event_key=${event}` && !signal.aborted) {
           clearTimeout(startup)
           ready()
         } else if (line.startsWith('{')) {
@@ -164,9 +189,8 @@ export async function consumeFeishu(
         }
       }),
       readLines(child.stdout, async (line) => {
-        const parsed = readFeishuMessage(line)
-        if (parsed && !signal.aborted) {
-          await receive(parsed)
+        if (!signal.aborted) {
+          await receive(line)
         }
       })
     ])

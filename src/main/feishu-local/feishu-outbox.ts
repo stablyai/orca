@@ -28,12 +28,15 @@ export async function drainFeishuOutbox(
       if (!active()) {
         return
       }
+      const route = await inbox.messageRoute(b.account, row.deliveryId)
+      const chat = route?.chat ?? b.chat
       const fill = row.fill
       if (
         !fill ||
         row.account !== b.account ||
         row.conversation.source !== 'feishu-local' ||
-        row.conversation.externalId !== dmKey(b).externalId
+        (row.conversation.externalId !== dmKey(b).externalId &&
+          !(await inbox.laneRoute(b.account, row.conversation.externalId)))
       ) {
         continue
       }
@@ -70,7 +73,7 @@ export async function drainFeishuOutbox(
             b.app,
             b.account,
             row.deliveryId,
-            b.chat,
+            chat,
             { type: 'file', content: { file_key: key } },
             'file',
             signal
@@ -80,15 +83,18 @@ export async function drainFeishuOutbox(
         if (!active()) {
           return
         }
-        await replyFeishu(
+        const finalId = await replyFeishu(
           b.app,
           b.account,
           row.deliveryId,
-          b.chat,
+          chat,
           feishuReplyMessage(fill.prose || outcomeSentence(fill.outcome, 'Orca'), botName),
           'final',
           signal
         )
+        if (route) {
+          await inbox.putRoute(b.account, finalId, route)
+        }
       }
       await journal.sent([{ account: b.account, deliveryId: row.deliveryId }])
     }

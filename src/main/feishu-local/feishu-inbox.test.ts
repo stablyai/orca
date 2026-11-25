@@ -22,7 +22,9 @@ const event = {
 
 it('drops unsupported streams and rejects an alias that shadows a pinned app', () => {
   expect(readFeishuMessage(JSON.stringify(event))).toEqual(event)
-  expect(readFeishuMessage(JSON.stringify({ ...event, chat_type: 'group' }))).toBeNull()
+  expect(readFeishuMessage(JSON.stringify({ ...event, chat_type: 'group' }))).toMatchObject({
+    chat_type: 'group'
+  })
   expect(readFeishuMessage(JSON.stringify({ ...event, message_type: 'post' }))).toBeNull()
   expect(readFeishuMessage(JSON.stringify({ ...event, sender_id: '' }))).toBeNull()
   expect(
