@@ -56,7 +56,15 @@ export function projectWorkerFleet(args: {
             autoReleaseAt: liveWorkerTerminalAutoReleaseAt(row.resource),
             updatedAt: row.resource.updated_at
           }
-        : null
+        : null,
+      handedOn: row.handedOn && {
+        toDispatchId: row.handedOn.toDispatchId,
+        resource: row.handedOn.resource && {
+          id: row.handedOn.resource.id,
+          ownerDispatchId: row.handedOn.resource.owner_dispatch_id,
+          releaseState: row.handedOn.resource.release_state
+        }
+      }
     }
   })
   const durable = new Map(workers.map((worker) => [worker.dispatchId, worker]))

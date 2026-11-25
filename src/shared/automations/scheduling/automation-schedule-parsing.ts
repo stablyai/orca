@@ -1,11 +1,15 @@
 import type { AutomationSchedulePreset } from '../automation-definition'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
+import {
+  formatScheduleRefusal,
+  type AutomationScheduleRefusalHints
+} from './automation-schedule-refusal'
 
 import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-text'
 import {
   DAY_NAMES,
   MONTH_NAMES,
-  isCronDayFieldRestricted,
+  isCronFieldRestricted,
   parseCronField,
   type CronParseOptions
 } from './automation-cron-field-parsing'
@@ -30,6 +34,8 @@ export type ParsedCron = {
   daysOfWeek: Set<number>
   dayOfMonthRestricted: boolean
   dayOfWeekRestricted: boolean
+  /** No `*` term in minute or hour: each time names one wall-clock moment, so DST must not skip or repeat it. */
+  fixedTime: boolean
 }
 
 export type ParsedSchedule = ParsedRrule | ParsedCron
@@ -147,8 +153,9 @@ export function parseCronExpression(
       distinctValueCount: 7,
       rejectOversizedStep
     }),
-    dayOfMonthRestricted: isCronDayFieldRestricted(dayOfMonth),
-    dayOfWeekRestricted: isCronDayFieldRestricted(dayOfWeek)
+    dayOfMonthRestricted: isCronFieldRestricted(dayOfMonth),
+    dayOfWeekRestricted: isCronFieldRestricted(dayOfWeek),
+    fixedTime: isCronFieldRestricted(minute) && isCronFieldRestricted(hour)
   }
 }
 
@@ -218,22 +225,27 @@ function cronScheduleRuns(schedule: string, options: CronParseOptions): boolean 
   }
 }
 
-/** Why new input is refused, naming a part the scheduler would drop; null when accepted. */
+/** Why new input is refused, naming what is accepted; null when accepted. */
 export function getAutomationScheduleInputError(
   schedule: string,
-  label = 'Invalid automation trigger'
+  label = 'Invalid automation trigger.',
+  hints: AutomationScheduleRefusalHints = {}
 ): string | null {
+  let ignoredPart: string | null = null
   try {
     const parsed = parseSchedule(schedule, { rejectOversizedStep: true })
-    if (parsed.kind === 'cron') {
-      return cronHasPossibleOccurrence(parsed, Date.now()) ? null : label
+    if (
+      parsed.kind === 'cron'
+        ? cronHasPossibleOccurrence(parsed, Date.now())
+        : parsed.ignoredPart === null
+    ) {
+      return null
     }
-    return parsed.ignoredPart === null
-      ? null
-      : `${label}. RRULE part ${JSON.stringify(parsed.ignoredPart)} is not supported. Use FREQ=HOURLY with BYMINUTE, FREQ=DAILY with BYHOUR and BYMINUTE, or FREQ=WEEKLY with BYDAY, BYHOUR and BYMINUTE.`
+    ignoredPart = parsed.kind === 'rrule' ? parsed.ignoredPart : null
   } catch {
-    return label
+    // Unparseable input gets the same refusal, without a named part.
   }
+  return formatScheduleRefusal(schedule, label, ignoredPart, hints)
 }
 
 /** Accepts a schedule as new input, oversized-step (#15895) and ignored-part (#45519) refusals included. */

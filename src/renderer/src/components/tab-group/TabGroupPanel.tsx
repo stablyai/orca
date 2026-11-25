@@ -1,11 +1,10 @@
-import { Suspense, useCallback, useMemo, useRef } from 'react'
+import { Suspense, useCallback, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store/index'
 import TabBar from '../tab-bar/TabBar'
 
-import { TabBarQuickCommandsButton } from '../tab-bar/quick-commands/TabBarQuickCommandsButton'
-import { TabGroupPaneActionsMenu } from './panel/TabGroupPaneActionsMenu'
+import { TabGroupStripActions } from './panel/TabGroupStripActions'
 import { useTabGroupWorkspaceModel } from './workspace-model/useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/tab-lifecycle/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './workspace-model/tab-group-visible-id'
@@ -24,7 +23,6 @@ import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-h
 import { useClientHostedBrowserRows } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/browser-tabs/client-hosted-browser-row-strip-placement'
 import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
-import { cn } from '@/lib/class-names'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './panel/split-group-dim'
 import { useBotForWorkspace } from '../bots/bot-workspace'
 import { BotPausedBanner } from '../bots/BotPausedBanner'
@@ -32,6 +30,7 @@ import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { EditorRevealFlash } from './editor-reveal/EditorRevealFlash'
 import { SplitPaneLanding } from './landing/SplitPaneLanding'
 import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
+import { useTitlebarChromeOwnerFold } from '@/app-shell/chrome/titlebar-chrome-fold'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -85,7 +84,9 @@ export default function TabGroupPanel({
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   // A bot's page chrome sits in the top-right strip, the one that spacing flag marks, so splits show it once.
   const bot = useBotForWorkspace(reserveClosedExplorerToggleSpace ? worktreeId : null)
-  const quickCommandsSlotRef = useRef<HTMLDivElement>(null)
+  const { foldLevel, setOwnerStripElement } = useTitlebarChromeOwnerFold(
+    tabStrip === 'attached' && isVisible && reserveCollapsedSidebarHeaderSpace && !sidebarOpen
+  )
   const {
     activeTab,
     agentSessionItems,
@@ -204,6 +205,8 @@ export default function TabGroupPanel({
       browserTabs={browserItems}
       clientHostedBrowserRows={clientHostedRows}
       groupActiveTabId={activeTab?.id ?? null}
+      newTabButtonFolded={foldLevel === 2}
+      isGroupFocused={isFocused}
       agentSessionTabs={agentSessionItems}
       activeFileId={
         activeTab && toVisibleTabType(activeTab.contentType) !== 'editor' ? null : activeTab?.id
@@ -250,11 +253,6 @@ export default function TabGroupPanel({
     />
   )
 
-  // Why: actions hide before the tab bar's floor is reached; min-w-0 + clipping is only a backstop so reserved spacers stay clear.
-  const actionChromeClassName = cn(
-    'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5 transition-opacity duration-150',
-    !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
-  )
   return (
     <div
       // Why: store focus (last focused group), not DOM focus, so clicking the sidebar or a dialog keeps the active tab's underline.
@@ -305,41 +303,24 @@ export default function TabGroupPanel({
               />
             ) : null}
             {/* Why: the tab-strip container excludes the reserved spacers, so width rules see only the room tabs and actions share. */}
-            <div className="@container/tab-strip flex min-w-0 flex-1 items-stretch">
+            <div
+              ref={setOwnerStripElement}
+              className="@container/tab-strip group/tab-strip-row flex min-w-0 flex-1 items-stretch"
+            >
               <div className="min-w-10 flex-1 h-full">{tabBar}</div>
-              {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It goes first in narrow strips: 203 = 40 gap + 163 for the tab floor and every control, so controls never clip behind it. */}
+              {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It goes first in narrow strips: 203 = 40 gap + 163 for the tab floor and every control, so controls never clip behind it.
+                  A pinned bot Home beside other tabs adds a second 40px floor, so that moves up to 243. */}
               {reserveRightTitlebarSpace ? (
-                <div className="workspace-tab-drag-handle w-10 min-w-0 @max-[203px]/tab-strip:hidden" />
+                <div className="workspace-tab-drag-handle w-10 min-w-0 @max-[203px]/tab-strip:hidden group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[243px]/tab-strip:hidden" />
               ) : null}
-              <div
-                className={actionChromeClassName}
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              >
-                {/* Why: drop an action whole (and from Tab order) once it can't fit beside the tab floor and "+", never leave a clipped focus target.
-                    163 = 40 tab + 36 "+" + 8 padding + 47 widest collapsed quick-command trigger + 2 gap + 28 pane actions + 2 sub-pixel slack; 114 = 40 + 36 + 8 + 28 + 2.
-                    Narrow strips park it invisible at the pane's top-right edge instead of display:none, so the shortcut menu still has an anchor rect. */}
-                <div
-                  ref={quickCommandsSlotRef}
-                  className="contents @max-[163px]/tab-strip:invisible @max-[163px]/tab-strip:absolute @max-[163px]/tab-strip:end-0 @max-[163px]/tab-strip:top-0 @max-[163px]/tab-strip:block"
-                >
-                  <TabBarQuickCommandsButton
-                    worktreeId={worktreeId}
-                    groupId={groupId}
-                    isFocused={isFocused}
-                  />
-                </div>
-                {hasSplitGroups ? (
-                  <div className="contents @max-[114px]/tab-strip:hidden">
-                    <TabGroupPaneActionsMenu
-                      isFocused={isFocused}
-                      onCloseGroup={commands.closeGroup}
-                      worktreeId={worktreeId}
-                      groupId={groupId}
-                      quickCommandsSlotRef={quickCommandsSlotRef}
-                    />
-                  </div>
-                ) : null}
-              </div>
+              <TabGroupStripActions
+                isFocused={isFocused}
+                worktreeId={worktreeId}
+                groupId={groupId}
+                onCloseGroup={hasSplitGroups ? commands.closeGroup : undefined}
+                foldLevel={foldLevel}
+                onNewTab={commands.newTerminalTab}
+              />
             </div>
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
             {reserveRightTitlebarSpace ? (

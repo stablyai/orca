@@ -1,4 +1,5 @@
 // The desktop bot panels' English wording, for the phone's bot header and sheet.
+import { isHostNotConnectedError } from '../query/host-query-errors'
 import type { AgentType } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import { formatAutomationSchedule } from '../../../src/shared/automations/scheduling/automation-schedules'
@@ -8,12 +9,9 @@ import { rollUpBotStatus } from '../../../src/shared/bots/bot-sidebar-workspaces
 import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
 import { isConnectorSource } from '../../../src/shared/automation-event-triggers'
 import { automationUnheardSources } from '../../../src/shared/bot-event-sources'
-import { botMemberSource, type BotMember } from '../../../src/shared/bot-types'
-import {
-  CONNECTOR_SOURCE_NAMES,
-  CONNECTOR_SOURCES
-} from '../../../src/shared/connectors/external-conversation-link'
+import { CONNECTOR_SOURCE_NAMES } from '../../../src/shared/connectors/external-conversation-link'
 import { translate } from '../i18n/mobile-i18n'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { AgentDotState } from '../worktree/agent-lineage/agent-row-display'
 import type { BotAutomationView } from '../../../src/shared/bots/bot-activity-schema'
 
@@ -88,7 +86,9 @@ export function automationWhenText(automation: BotAutomationView, enabled: boole
         : eventLabel(part.trigger)
     )
     .join(' · ')
-  return enabled ? when : [when, 'Paused'].filter(Boolean).join(' · ')
+  return enabled
+    ? when
+    : [when, translate('bots.automations.paused', 'Paused')].filter(Boolean).join(' · ')
 }
 
 function dotsStatus(dots: readonly AgentDotState[]): WorktreeStatus {
@@ -116,13 +116,6 @@ export function botStatusFromDots(
   )
 }
 
-/** The service a person asks from, as Who can ask names it. */
-export function memberSourceLabel(member: BotMember): string {
-  const source = botMemberSource(member)
-  const known = CONNECTOR_SOURCES.find((entry) => entry === source)
-  return known ? CONNECTOR_SOURCE_NAMES[known] : source
-}
-
 /** The desktop's note on an automation whose events its bot has no connector for. */
 export function automationWontFireNote(
   automation: BotAutomationView,
@@ -132,7 +125,7 @@ export function automationWontFireNote(
   if (!unheard) {
     return null
   }
-  const connectors = new Intl.ListFormat('en', { type: 'disjunction' }).format(
+  const connectors = new Intl.ListFormat(getUiIntlLocale(), { type: 'disjunction' }).format(
     unheard.sources.map((source) =>
       isConnectorSource(source)
         ? CONNECTOR_SOURCE_NAMES[source]
@@ -142,6 +135,28 @@ export function automationWontFireNote(
     )
   )
   return unheard.scheduled
-    ? `Runs on its schedule only: needs the ${connectors} connector`
-    : `Won’t run: needs the ${connectors} connector`
+    ? translate(
+        'automations.eventsWontFire',
+        'Runs on its schedule only: needs the {{connectors}} connector',
+        { connectors }
+      )
+    : translate('automations.wontFire', 'Won’t run: needs the {{connectors}} connector', {
+        connectors
+      })
+}
+
+/** Why a Settings save failed, in the owner's words. */
+export function botSaveErrorMessage(error: unknown, hostName: string): string {
+  return isHostNotConnectedError(error)
+    ? translate('bots.items.write.offline', '{{host}} is offline.', { host: hostName })
+    : error instanceof Error && error.message === 'bot_name_taken'
+      ? translate('bots.settings.nameTaken', 'Another bot already has that name.')
+      : error instanceof Error && error.message === 'bot_avatar_invalid'
+        ? translate(
+            'bots.picture.invalid',
+            'That picture could not be used. Pick a PNG or JPG image.'
+          )
+        : error instanceof Error
+          ? error.message
+          : translate('bots.saveFailed', 'Couldn’t save')
 }

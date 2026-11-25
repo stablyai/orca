@@ -1,12 +1,17 @@
-import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubBots } from '../../component-fixtures/fixture-bots'
-import { useAppStore } from '@/store'
-import { PortalContainerContext } from '../ui/portal-container-context'
 import { BOT_TEMPLATES } from '../../../../shared/bots/bot-templates'
 import { templateProposal, type BotProposal } from '../../../../shared/bots/bot-proposal'
 import type { BotShareReview } from '../../../../shared/bots/bot-share-received'
 import { NewBotDialog } from './NewBotDialog'
+import { refreshAvatarCapability } from './avatar-generation-capability-store'
+import {
+  LONG_FIXTURE_COMPUTER,
+  NewBotFixtureStage,
+  newBotFixture,
+  seedNewBotFixture,
+  typeInto
+} from './new-bot-stage-fixture'
 
 const dialog = () => (
   <div className="h-[720px] bg-background">
@@ -31,21 +36,6 @@ const proposed = (height: number, proposal: BotProposal, origin: string) => () =
     <NewBotDialog open onOpenChange={() => {}} proposal={proposal} origin={origin} />
   </div>
 )
-
-// Types into the controlled fields the way a person would, so React sees the change.
-const typeInto = (selector: string, text: string) => async (): Promise<void> => {
-  const field = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)
-  if (!field) {
-    return
-  }
-  const proto =
-    field instanceof HTMLTextAreaElement
-      ? HTMLTextAreaElement.prototype
-      : HTMLInputElement.prototype
-  Reflect.getOwnPropertyDescriptor(proto, 'value')?.set?.call(field, text)
-  field.dispatchEvent(new Event('input', { bubbles: true }))
-  await new Promise((resolve) => setTimeout(resolve, 50))
-}
 
 const typed = (purpose: string) => async (): Promise<void> => {
   await typeInto('[role="dialog"] input[autocomplete="off"]', 'Pulse')()
@@ -98,65 +88,6 @@ export const proposalLongPurpose = defineFixture({
   )
 })
 
-// Review shots at a 340 and a 480 px dialog. The dialog is fixed, so it portals into a transformed box
-// that wide (plus its 1rem margins) instead of the page's wide viewport.
-function Stage({
-  width,
-  nudge,
-  proposal,
-  height = 620,
-  link
-}: {
-  width: 340 | 480
-  nudge?: boolean
-  proposal?: BotProposal
-  height?: number
-  /** Opened from a reviewed link, as the link flow opens it. */
-  link?: BotShareReview
-}): React.JSX.Element {
-  const [box, setBox] = useState<HTMLElement | null>(null)
-  return (
-    <div
-      ref={setBox}
-      className="relative translate-x-0 bg-background"
-      style={{ width: width + 32, height }}
-    >
-      {box ? (
-        <PortalContainerContext.Provider value={box}>
-          <NewBotDialog
-            open
-            onOpenChange={() => {}}
-            onImport={nudge ? () => {} : undefined}
-            proposal={proposal}
-            {...(link
-              ? { fromShare: { review: link, toolIds: [], onBack: () => {}, onMoved: () => {} } }
-              : {})}
-          />
-        </PortalContainerContext.Provider>
-      ) : null}
-    </div>
-  )
-}
-
-const LONG_COMPUTER = 'build-runner-02.eu-west.internal'
-
-const seeded = (computer?: string) => (): void => {
-  stubBots([])
-  useAppStore.setState((state) => ({
-    detectedAgentIds: ['claude', 'codex'],
-    localDetectedAgentIdsByContext: {
-      host: ['claude', 'codex'],
-      'host\u0000all-agents': ['claude', 'codex']
-    },
-    ensureDetectedAgents: async () => ['claude', 'codex'],
-    isDetectingAgents: false,
-    settings: state.settings && {
-      ...state.settings,
-      hostSettingOverrides: computer ? { local: { displayLabel: computer } } : {}
-    }
-  }))
-}
-
 // A Hermes bot on this computer, so the first-bot import nudge shows.
 const HERMES_SOURCES = [
   {
@@ -167,7 +98,7 @@ const HERMES_SOURCES = [
 ]
 
 const withNudge = (): void => {
-  seeded()()
+  seedNewBotFixture()()
   try {
     localStorage.removeItem('orca.bots.import-nudge-dismissed')
   } catch {
@@ -200,12 +131,6 @@ const openComputerMenu = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 300))
 }
 
-const review = (width: 340 | 480, computer?: string) => ({
-  width: width + 32,
-  setup: seeded(computer),
-  render: () => <Stage width={width} />
-})
-
 const FILLED = named('Atlas', 'Triage new bugs and post a daily summary in #eng.')
 const LONGEST = named(
   'Customer Escalations Concierge for the Platform Team',
@@ -221,27 +146,75 @@ const LONGEST = named(
 export const nudge340 = defineFixture({
   width: 372,
   setup: withNudge,
-  render: () => <Stage width={340} nudge />
+  render: () => <NewBotFixtureStage width={340} nudge />
 })
 export const nudge480 = defineFixture({
   width: 512,
   setup: withNudge,
-  render: () => <Stage width={480} nudge />
+  render: () => <NewBotFixtureStage width={480} nudge />
 })
-export const empty340 = defineFixture(review(340))
-export const empty480 = defineFixture(review(480))
-export const filled340 = defineFixture({ ...review(340), interact: FILLED })
-export const filled480 = defineFixture({ ...review(480), interact: FILLED })
-export const longest340 = defineFixture({ ...review(340, LONG_COMPUTER), interact: LONGEST })
-export const longest480 = defineFixture({ ...review(480, LONG_COMPUTER), interact: LONGEST })
-export const picker340 = defineFixture({ ...review(340), interact: openPicker })
-export const picker480 = defineFixture({ ...review(480), interact: openPicker })
+export const empty340 = defineFixture(newBotFixture(340))
+export const empty480 = defineFixture(newBotFixture(480))
+
+export const filled340 = defineFixture({ ...newBotFixture(340), interact: FILLED })
+export const filled480 = defineFixture({ ...newBotFixture(480), interact: FILLED })
+export const longest340 = defineFixture({
+  ...newBotFixture(340, LONG_FIXTURE_COMPUTER),
+  interact: LONGEST
+})
+export const longest480 = defineFixture({
+  ...newBotFixture(480, LONG_FIXTURE_COMPUTER),
+  interact: LONGEST
+})
+const pictureReview = (width: 340 | 480) => ({
+  width: width + 32,
+  setup: () => {
+    seedNewBotFixture('Demo computer')()
+    const avatarGeneration: typeof window.api.avatarGeneration = {
+      ...window.api.avatarGeneration,
+      capability: async () => ({ agents: [{ agent: 'codex', status: 'ready' }] })
+    }
+    Reflect.set(window.api, 'avatarGeneration', avatarGeneration)
+    refreshAvatarCapability()
+  },
+  render: () => (
+    <NewBotFixtureStage
+      width={width}
+      proposal={{ name: 'Pebble', purpose: 'Sort invented notes for the demo.', mascot: 'B1' }}
+    />
+  )
+})
+
+export const picker340 = defineFixture({ ...pictureReview(340), interact: openPicker })
+export const picker480 = defineFixture({ ...pictureReview(480), interact: openPicker })
+
+const reopenDraft = async (): Promise<void> => {
+  await openPicker()
+  document.querySelector<HTMLButtonElement>('button[aria-label="Previous picture"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  await typeInto('textarea[aria-label="Picture description"]', 'a tiny violet robot gardener')()
+  const popover = document.querySelector<HTMLElement>('[data-slot="popover-content"]')
+  popover?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await openPicker()
+  document.querySelector<HTMLButtonElement>('button[aria-label="Previous picture"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 400))
+}
+
+export const pictureDraft340 = defineFixture({
+  ...pictureReview(340),
+  interact: reopenDraft
+})
+export const pictureDraft480 = defineFixture({
+  ...pictureReview(480),
+  interact: reopenDraft
+})
 export const computerMenu340 = defineFixture({
-  ...review(340, LONG_COMPUTER),
+  ...newBotFixture(340, LONG_FIXTURE_COMPUTER),
   interact: openComputerMenu
 })
 export const computerMenu480 = defineFixture({
-  ...review(480, LONG_COMPUTER),
+  ...newBotFixture(480, LONG_FIXTURE_COMPUTER),
   interact: openComputerMenu
 })
 
@@ -252,8 +225,8 @@ const fromTemplate = (id: string, name?: string) => {
 }
 const templateReview = (width: 340 | 480, id: string, name?: string) => ({
   width: width + 32,
-  setup: seeded(),
-  render: () => <Stage width={width} height={1100} proposal={fromTemplate(id, name)} />
+  setup: seedNewBotFixture(),
+  render: () => <NewBotFixtureStage width={width} height={1100} proposal={fromTemplate(id, name)} />
 })
 const openChip = (label: RegExp) => async (): Promise<void> => {
   const chip = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
@@ -267,7 +240,7 @@ const skillOff = async (): Promise<void> => {
   document.querySelector<HTMLButtonElement>('[role="switch"]')?.click()
   await new Promise((resolve) => setTimeout(resolve, 100))
 }
-const LONG_TEMPLATE_NAME = 'Pull request review for the Platform Team monorepo'
+const LONG_TEMPLATE_NAME = 'Customer Escalations Concierge for the Platform Reliability Team'
 
 export const prReview340 = defineFixture(templateReview(340, 'pr-review'))
 export const prReview480 = defineFixture(templateReview(480, 'pr-review'))
@@ -297,7 +270,7 @@ const LONGEST_LINK: BotShareReview = {
   reviewId: 'review-1',
   shareId: 'share-1',
   versionId: 'version-1',
-  publisher: 'Alexandra Whitfield',
+  publisher: 'Example Studio',
   publishedAt: '2026-11-08T00:00:00.000Z',
   bot: {
     schemaVersion: 1,
@@ -320,8 +293,16 @@ const LONGEST_LINK: BotShareReview = {
 
 const fromLink = (width: 340 | 480) => ({
   width: width + 32,
-  setup: seeded(LONG_COMPUTER),
-  render: () => <Stage width={width} link={LONGEST_LINK} />
+  setup: seedNewBotFixture(LONG_FIXTURE_COMPUTER),
+  render: () => <NewBotFixtureStage width={width} link={LONGEST_LINK} />,
+  interact: (frame: HTMLElement) => {
+    const name = frame.querySelector<HTMLInputElement>('input[aria-label="Name"]')
+    if (!name || document.activeElement === name || frame.querySelector('textarea')) {
+      throw new Error(
+        'A reviewed link must open with a prefilled, unfocused name and no Identity input'
+      )
+    }
+  }
 })
 
 // The link flow's New bot: the same dialog, prefilled from the link, beside longest340/480.

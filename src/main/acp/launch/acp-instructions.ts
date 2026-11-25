@@ -10,7 +10,7 @@ import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
-import { writeFolderContextFile } from './acp-folder-context-file'
+import { removeFolderContextFile, writeFolderContextFile } from './acp-folder-context-file'
 import {
   openCodeSourceConfigDirectory,
   openCodeTakesConfigDirInstructions,
@@ -68,11 +68,16 @@ export function antigravityTakesSystemPrompt(initialized: InitializeResponse): b
 }
 
 // Orca's managed server forgets it when it restarts, and a re-sent text replaces the old one.
-export const deliverAntigravityInstructions: AcpInstructionsDelivery = async ({ text }) => ({
-  sessionMeta: { antigravity: { systemPrompt: { append: text } } },
-  sessionMetaOnReopen: true,
-  takesSessionMeta: antigravityTakesSystemPrompt
-})
+export const deliverAntigravityInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  // agy also reads the folder's GEMINI.md, where Gemini CLI chats (bots now on Antigravity) left
+  // Orca's old copy of these instructions.
+  await removeFolderContextFile(cwd, 'GEMINI.md', 'Gemini').catch(() => undefined)
+  return {
+    sessionMeta: { antigravity: { systemPrompt: { append: text } } },
+    sessionMetaOnReopen: true,
+    takesSessionMeta: antigravityTakesSystemPrompt
+  }
+}
 
 /** OpenCode 1.x and its forks: appended to the user's own inline instructions in `variable`, never
  *  replacing them. */
@@ -153,17 +158,32 @@ export const deliverGooseInstructions: AcpInstructionsDelivery = async ({ text, 
   return {}
 }
 
-// Gemini ignores `_meta` and builds its context from the folder's GEMINI.md at every start, a
-// reopen and each compression included, but reads it only in a trusted folder, so the launch trusts it.
-export const deliverGeminiInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, 'GEMINI.md', 'Gemini', text)
-  return { env: { GEMINI_CLI_TRUST_WORKSPACE: 'true' } }
-}
-
 // Qwen rebuilds its system prompt from the folder's QWEN.md at every start, reopens included
 // (checked live on 0.28.0), so every launch rewrites it with the current text.
 export const deliverQwenCodeInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, 'QWEN.md', 'Qwen Code', text)
+  return {}
+}
+
+// Cline rebuilds its system prompt from the folder's rules at every start, reopens included
+// (checked live on 3.0.75); `.cline/rules` sits beside the user's own `.clinerules`.
+export const deliverClineInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, join('.cline', 'rules', 'orca.md'), 'Cline', text)
+  return {}
+}
+
+// Devin reads the folder's AGENTS.local.md as an always-on rule at `session/new` and keeps it with
+// the session, so a reopened chat keeps the text it began with (checked live on 3000.14.30821).
+export const deliverDevinInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'AGENTS.local.md', 'Devin', text)
+  return {}
+}
+
+// CodeBuddy rebuilds its system prompt from the folder's CODEBUDDY.local.md at every start, reopens
+// included (checked live on 2.185.0). Its --append-system-prompt takes only inline text, which a
+// grown bot preamble would push past Windows' command-line limit.
+export const deliverCodeBuddyInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'CODEBUDDY.local.md', 'CodeBuddy', text)
   return {}
 }
 

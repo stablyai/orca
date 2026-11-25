@@ -3,7 +3,10 @@ import { isAntigravityReferenceSession } from '../../../../../../shared/agent-se
 // Native resume requires provider conversation lookup, unlike terminal resume's PTY-hosting gate.
 
 import { isWslStoredAiVaultSessionFile } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-target'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
+import {
+  createNormalizedPathInsideOrEqualMatcher,
+  normalizeRuntimePathForComparison
+} from '../../../../../../shared/file-access/cross-platform-path'
 import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { adoptsCliConversations } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import {
@@ -40,19 +43,25 @@ export function aiVaultSessionResumeInChatWorkspaceMatters(
   )
 }
 
-/** Compare with shared runtime rules; POSIX case folding would conflate distinct directories. */
-export function aiVaultSessionCwdMatchesWorkspace(
+/** Where a session's recorded cwd sits in the workspace: the folder itself, a sub-folder (Session
+ *  History lists those under the workspace too), or neither. Compare with shared runtime rules;
+ *  POSIX case folding would conflate distinct directories. */
+export function aiVaultSessionCwdInWorkspace(
   cwd: string | null | undefined,
   workspacePath: string | null | undefined,
   cwdAliases: readonly string[] = []
-): boolean {
+): 'same' | 'inside' | null {
   if (!cwd || !workspacePath) {
-    return false
+    return null
   }
   const workspace = normalizeRuntimePathForComparison(workspacePath.trim())
-  return [cwd, ...cwdAliases].some(
-    (path) => normalizeRuntimePathForComparison(path.trim()) === workspace
-  )
+  const paths = [cwd, ...cwdAliases].map((path) => normalizeRuntimePathForComparison(path.trim()))
+  if (paths.includes(workspace)) {
+    return 'same'
+  }
+  return paths.some(createNormalizedPathInsideOrEqualMatcher(workspacePath.trim()))
+    ? 'inside'
+    : null
 }
 
 export function resolveAiVaultSessionResumeInChatEligibility(args: {
@@ -110,7 +119,7 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   }
   if (
     aiVaultSessionResumeInChatWorkspaceMatters(session.agent) &&
-    !aiVaultSessionCwdMatchesWorkspace(session.cwd, args.targetWorkspacePath, session.cwdAliases)
+    !aiVaultSessionCwdInWorkspace(session.cwd, args.targetWorkspacePath, session.cwdAliases)
   ) {
     return { available: false, reason: 'workspace' }
   }

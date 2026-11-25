@@ -1,4 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
+import { DEFAULT_EXPERIMENTAL_SETTINGS } from './default-experimental-settings'
 import type { NotificationSettings } from '../notifications/notification-settings-types'
 import type { VoiceSettings } from '../speech/speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from '../terminal/appearance/terminal-fonts'
@@ -160,7 +161,8 @@ export function buildDefaultSettings(args: {
     agentDefaultSurface: 'terminal',
     nativeChatResumeWorkOnRestart: true,
     nativeChatQueueFollowUps: true,
-    nativeChatAutoContinueAfterUsageLimit: false,
+    nativeChatAutoContinueAfterUsageLimit: true,
+    nativeChatAutoContinueAfterUsageLimitDefaultedOn: true,
     nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
@@ -202,6 +204,7 @@ export function buildDefaultSettings(args: {
     floatingTerminalEnabled: true,
     browserClientHostedRemoteEnabled: true,
     antigravityManagedAgyEnabled: true,
+    antigravityServerAutoUpdateEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: '~',
     floatingTerminalTrustedCwds: [],
@@ -246,6 +249,7 @@ export function buildDefaultSettings(args: {
     skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,
+    skipDeleteChatConfirm: false,
     skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
@@ -259,7 +263,6 @@ export function buildDefaultSettings(args: {
     minimaxUsageModels: 'general',
     minimaxEndpoint: 'overseas',
     zcodePlanSite: 'zai',
-    geminiCliOAuthEnabled: false,
     claudeOAuthUsageEnabled: true,
     agentCmdOverrides: {},
     // Arguments hold only the user's own text; the permission flag comes from the choice below.
@@ -295,17 +298,7 @@ export function buildDefaultSettings(args: {
     mobilePairingCustomAddress: null,
     mobilePairingCustomAddresses: [],
     machineName: '',
-    // Why: off keeps the cosmetic overlay unmounted for users who never opt in.
-    experimentalPet: false,
-    experimentalActivity: false,
-    experimentalActivityDefaultedOffForAllUsers: true,
-    experimentalTerminalAttention: false,
-    experimentalAgentHibernation: false,
-    agentHibernationIdleMs: 30 * 60 * 1000,
-    experimentalNewWorktreeCardStyle: true,
-    experimentalEphemeralVms: false,
-    experimentalWslHosts: false,
-    experimentalOrchestrationPanel: false,
+    ...DEFAULT_EXPERIMENTAL_SETTINGS,
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,

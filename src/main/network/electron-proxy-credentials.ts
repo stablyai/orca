@@ -95,14 +95,6 @@ export function getElectronProxyCredentialsForChallenge(
     : null
 }
 
-export function resetElectronProxyCredentialsForTests(proxySession?: ProxySession): void {
-  if (proxySession) {
-    clearElectronProxyCredentialsForSession(proxySession)
-  } else {
-    proxyCredentialsBySession = new WeakMap()
-  }
-}
-
 export function handleElectronProxyLogin(
   event: { preventDefault(): void },
   webContents: { session: ProxySession } | null,

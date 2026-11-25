@@ -7,18 +7,15 @@ import {
   type EndedChatTurn
 } from './external-conversation-ended-turn'
 export type { EndedChatTurn } from './external-conversation-ended-turn'
-import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../shared/agent-session/agent-session-wire'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import {
-  allLinks,
+  findLinkForSession,
   sameConversation,
   type ExternalConversationLinkStore
 } from './external-conversation-links'
-import { connectorAskerPrompt, connectorPlainMessages } from '../../shared/connector-asker-prompt'
-import { CHAT_GONE_REFUSAL } from '../../shared/connectors/connector-cloud-contract'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import {
   structuredAgentSessionPaneKey,
@@ -29,14 +26,9 @@ import {
   getStructuredAgentSessionHost,
   onStructuredAgentSessionHostChanged
 } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import {
-  sendAgentTurn,
-  type StructuredAgentTurnHost
-} from '../runtime/orchestration/turn-delivery/send-agent-turn'
+import type { StructuredAgentTurnHost } from '../runtime/orchestration/turn-delivery/send-agent-turn'
 import { refusalOf } from './external-conversation-chain'
-import { storedConnectorAsker } from '../../shared/connector-message-asker'
-import { connectorFailure } from './external-conversation-failure'
-import { refused, type ConnectorMessage, type Delivery } from './external-conversation-types'
+import { refused, type Delivery } from './external-conversation-types'
 
 /** What the seam reads of the native-chat host. */
 export type ConversationChat = StructuredAgentTurnHost &
@@ -48,6 +40,7 @@ export type ConversationChat = StructuredAgentTurnHost &
     | 'journalReads'
     | 'currentWork'
     | 'publishedWork'
+    | 'conversation'
   > & {
     deps: { store: { getConversation(sessionId: string): { currentFence: number } | null } }
   }
@@ -85,7 +78,6 @@ export type ChatNews =
       kind: 'turn-ended'
       sessionId: string
       outcome: AgentJournalTurnOutcome
-      mergedTurnCount?: number
       /** Read in full from the journal, only for linked chats; the status row keeps a short preview. */
       readTurn: () => Promise<EndedChatTurn>
       /** Only whom the turn acts for (its opener and the deliveries it answered), read by index. */
@@ -97,12 +89,15 @@ export type ChatNews =
 export function watchChatNews(
   chats: ConversationChatHost,
   listener: (news: ChatNews) => void,
-  id = 'external-conversations'
+  id = 'external-conversations',
+  // A turn's words go out with that turn, even when its workers hold its end.
+  includeHeld = true
 ): () => void {
   const subscribe = (chat: ConversationChat | null): (() => void) =>
     chat?.subscribeTurnCompletions({
       id,
       includePrompts: true,
+      includeHeld,
       onClosed: (sessionId) => listener({ kind: 'closed', sessionId }),
       emit: (event) => {
         if (event.type === 'prompt') {
@@ -113,9 +108,6 @@ export function watchChatNews(
             kind: 'turn-ended',
             sessionId,
             outcome,
-            ...(event.completion.mergedTurnCount !== undefined
-              ? { mergedTurnCount: event.completion.mergedTurnCount }
-              : {}),
             readTurn: () =>
               endedTurn(chat, sessionId, event.completion.turnId, event.completion.journalCursor),
             readAttribution: () =>
@@ -161,10 +153,10 @@ export function chatTurnFacts(
   // A continuation answering this link's requests a restart or usage limit cut: durable, unlike a
   // delivery's mark. One claiming another conversation's (the chat moved since) is not this one's.
   const claimed = (sessionId: string): boolean => {
-    const link = [...allLinks(store)].find((linked) => linked.link.sessionId === sessionId)?.link
-    const opener = link && currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
+    const opener = currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
     const claim = opener?.body.kind === 'message' ? opener.body.connectorClaim : undefined
-    return claim?.origin.some((stamp) => sameConversation(link!, stamp.conversation)) === true
+    const link = claim && findLinkForSession(store, sessionId)?.link
+    return !!link && claim.origin.some((stamp) => sameConversation(link, stamp.conversation))
   }
   return {
     delivered: (sessionId: string) => pending(sessionId) || claimed(sessionId),
@@ -202,111 +194,6 @@ export function envelope(
       sessionId: link.sessionId,
       fields
     })
-  }
-}
-
-/** Sent as a person's message would be: a busy chat takes it into the running turn. A bot's is
- *  labelled with who asked, where and what came before; the chat shows the message alone. */
-export async function deliverToChat(
-  chat: ConversationChat | null,
-  link: ExternalConversationLink,
-  // admitted: told the moment the chat takes the message, before its turn can begin.
-  delivery: ConnectorMessage & {
-    signal: AbortSignal
-    admitted?: () => void
-    deliveryId?: string
-    images?: readonly string[]
-  }
-): Promise<Delivery> {
-  const { asker } = delivery
-  const { note } = delivery
-  const text = asker
-    ? connectorAskerPrompt(link.source, asker, note, delivery)
-    : connectorPlainMessages([delivery, ...(delivery.later ?? [])], note)
-  // Kept beside the message for the chat's tag, with only the links a tag may open or fetch.
-  const stored = asker ? storedConnectorAsker(link.source, asker) : undefined
-  const { signal } = delivery
-  if (!chat) {
-    return refused('agent_not_reachable')
-  }
-  const record = chat.deps.store.getConversation(link.sessionId)
-  // Its chat was deleted: the conversation may start a new one.
-  if (!record) {
-    return refused(CHAT_GONE_REFUSAL)
-  }
-  const fence = record.currentFence
-  let admitted = false
-  try {
-    const outcome = await sendAgentTurn({
-      kind: 'structured-session',
-      host: chat,
-      sessionId: link.sessionId,
-      callerKey: callerFor(link).callerKey,
-      // Admission is the receipt; the host's feed tells how the turn went.
-      budgetMs: 0,
-      turn: {
-        body: {
-          kind: 'message',
-          role: 'user',
-          // Its images ride as a person's attached ones would; the chat shows them with the message.
-          blocks: [
-            { type: 'text', text },
-            ...(delivery.images ?? []).map((path) => ({ type: 'image-ref' as const, path }))
-          ],
-          // An event no one asked through is the connector's too, so the turn finds its conversation;
-          // a bot's message whose asker didn't parse is someone unknown's, never the owner's.
-          ...(asker || delivery.memorySource || link.bot ? { origin: 'connector' as const } : {}),
-          ...(stored ? { asker: stored } : {}),
-          // Whose delivery this is, kept with it: a prompt its turn raises is that conversation's.
-          ...(link.bot
-            ? { connectorConversation: { source: link.source, externalId: link.externalId } }
-            : {}),
-          // Its reply outbox rows commit with this admission (design item 125).
-          ...(delivery.reply && delivery.deliveryId
-            ? {
-                connectorDelivery: {
-                  account: delivery.reply.account,
-                  conversation: { source: link.source, externalId: link.externalId },
-                  deliveryId: delivery.deliveryId,
-                  ...(delivery.reply.carried?.length ? { carried: delivery.reply.carried } : {})
-                }
-              }
-            : {}),
-          ...(delivery.memorySource ? { memorySource: delivery.memorySource } : {})
-        },
-        operationId: createStructuredAgentSessionOperationId(randomUUID),
-        expectedRuntimeFence: fence,
-        delivery: 'now',
-        personsMessage: true,
-        // Runs synchronously at admission, so a disable cannot interleave before the send.
-        beforeRun: () => {
-          if (signal.aborted) {
-            throw new Error(refusalOf(signal))
-          }
-          admitted = true
-          delivery.admitted?.()
-        }
-      }
-    })
-    if (outcome.kind === 'refused') {
-      return refused('agent_not_reachable')
-    }
-    const dispatched = outcome.kind === 'sent' ? outcome.submission?.dispatchState : 'accepted'
-    if (dispatched === 'rejected') {
-      // Why the agent couldn't take it (signed out, not installed…), for the connector to say.
-      const fact = readAgentSessionFailureFact(
-        outcome.kind === 'sent' ? outcome.submission?.rejection : undefined
-      )
-      return refused('agent_not_reachable', fact && connectorFailure(fact, link.agent))
-    }
-    return dispatched === 'unknown'
-      ? { outcome: 'unknown', reason: 'writer_failed' }
-      : { outcome: 'accepted' }
-  } catch {
-    if (admitted) {
-      return { outcome: 'unknown', reason: 'writer_failed' }
-    }
-    return refused(signal.aborted ? refusalOf(signal) : 'agent_not_reachable')
   }
 }
 

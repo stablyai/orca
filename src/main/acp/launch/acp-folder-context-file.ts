@@ -16,21 +16,27 @@ function withOrcaText(existing: string | null, rawText: string, agentName: strin
     return `${header(agentName)}\n\n${text}\n`
   }
   const block = `${BLOCK_START}\n${text}\n${BLOCK_END}`
+  const range = orcaBlockRange(existing)
+  if (range) {
+    return existing.slice(0, range.start) + block + existing.slice(range.end)
+  }
+  return `${existing.trimEnd()}\n\n${block}\n`
+}
+
+function orcaBlockRange(existing: string): { start: number; end: number } | null {
   // Only markers alone on their lines count, so text that quotes them is left alone; the last
   // pair wins, so a stray one the user wrote earlier cannot swallow their text.
   const marks = [...existing.matchAll(/^<!-- orca:(begin|end) -->\r?$/gm)]
   // Take the last begin that is followed by an end with no other begin between them.
   const start = marks.findLast((mark, i) => mark[1] === 'begin' && marks[i + 1]?.[1] === 'end')
   const end = start && marks[marks.indexOf(start) + 1]
-  if (start && end) {
-    const endAt = end.index + end[0].length
-    return existing.slice(0, start.index) + block + existing.slice(endAt)
-  }
-  return `${existing.trimEnd()}\n\n${block}\n`
+  return start && end ? { start: start.index, end: end.index + end[0].length } : null
 }
 
 /** Writes Orca's text into `cwd`'s `path` whole, so the agent never reads a half-written file.
- *  A symlink on the way, or a file that cannot be read, stays untouched. */
+ *  A symlink on the way, or a file that cannot be read, stays untouched. The result is readable
+ *  only by this host's user, a file the user wrote included, since it now carries the bot's
+ *  instructions. An inheritable ACL the user set on the folder still applies on top of that. */
 export async function writeFolderContextFile(
   cwd: string,
   path: string,
@@ -47,7 +53,6 @@ export async function writeFolderContextFile(
   }
   const target = join(realCwd, path)
   let existing: string | null = null
-  let mode = 0o600
   const info = await lstat(target).catch(() => null)
   if (info) {
     // A link may point outside the folder or into a tracked file, so it is left as the user's.
@@ -56,16 +61,44 @@ export async function writeFolderContextFile(
     }
     try {
       existing = await readFile(target, 'utf8')
-      mode = info.mode & 0o777
     } catch {
       return
     }
   } else {
     await mkdir(dirname(target), { recursive: true })
   }
+  await replaceWhole(target, withOrcaText(existing, text, agentName))
+}
+
+/** Takes Orca's text back out of `cwd`'s `path`: deletes a file Orca wrote for `agentName`, or
+ *  removes only Orca's block from a file the user wrote. A symlink or unreadable file stays. */
+export async function removeFolderContextFile(
+  cwd: string,
+  path: string,
+  agentName: string
+): Promise<void> {
+  const target = join(await realpath(cwd).catch(() => cwd), path)
+  const info = await lstat(target).catch(() => null)
+  const existing = info?.isFile() ? await readFile(target, 'utf8').catch(() => null) : null
+  if (existing === null) {
+    return
+  }
+  if (existing.startsWith(header(agentName))) {
+    await rm(target, { force: true })
+    return
+  }
+  const range = orcaBlockRange(existing)
+  if (range) {
+    const before = existing.slice(0, range.start).trimEnd()
+    const after = existing.slice(range.end).trimStart()
+    await replaceWhole(target, `${[before, after].filter(Boolean).join('\n\n')}\n`)
+  }
+}
+
+async function replaceWhole(target: string, content: string): Promise<void> {
   const staged = `${target}.${randomUUID()}`
   try {
-    await writeFile(staged, withOrcaText(existing, text, agentName), { mode })
+    await writeFile(staged, content, { mode: 0o600 })
     await rename(staged, target)
   } catch (error) {
     await rm(staged, { force: true }).catch(() => undefined)

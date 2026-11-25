@@ -64,8 +64,16 @@ function DialogOverlay({
   )
 }
 
-const dialogContentSurfaceVariants = cva('', {
+/** Media sits straight on the scrim; scaling in would make its edge controls slide. */
+const MEDIA_SURFACE_CLASS =
+  'inset-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:shadow-none'
+
+const dialogContentVariants = cva('', {
   variants: {
+    density: {
+      default: '',
+      compact: 'gap-3.5 p-4'
+    },
     surface: {
       default: '',
       /** The tinted, edge-to-edge panel of the two-column feature tip dialogs. */
@@ -77,12 +85,13 @@ const dialogContentSurfaceVariants = cva('', {
       'opaque-panel': 'gap-0 bg-popover p-0',
       /** Trust, consent and provenance decisions: host-owned tokens a plugin theme cannot restyle. */
       security: SECURITY_SURFACE_CLASS,
-      /** Media sits straight on the scrim; scaling in would make its edge controls slide. */
-      media:
-        'inset-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:shadow-none'
+      media: MEDIA_SURFACE_CLASS,
+      /** `media` stepping through a set: focus can rest on the dialog, whose ring the content draws
+       *  above the image (`group-focus-visible/media-gallery`), since a zoomed image covers its edges. */
+      'media-gallery': `${MEDIA_SURFACE_CLASS} group/media-gallery`
     }
   },
-  defaultVariants: { surface: 'default' }
+  defaultVariants: { density: 'default', surface: 'default' }
 })
 
 function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }) {
@@ -94,7 +103,7 @@ function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }
   const button = (
     <DialogPrimitive.Close
       data-slot="dialog-close"
-      className="absolute top-4 right-4 rounded-xs opacity-70 outline-none transition-[opacity,box-shadow] hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+      className="absolute top-4 right-4 rounded-xs opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
     >
       {variant === 'minimize' ? <Minus className="size-3.5" /> : <XIcon />}
       <span className="sr-only">{label}</span>
@@ -115,7 +124,10 @@ function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }
 const unifiedDialogSizeClass: Record<UnifiedDialogSize, string> = {
   confirm: 'sm:max-w-[420px]',
   form: 'sm:max-w-[480px]',
-  list: 'sm:max-w-[520px]'
+  list: 'sm:max-w-[520px]',
+  // The review keeps its final bounds while the panes fill and the dialog fades in.
+  review:
+    'flex h-[min(28rem,calc(100dvh-3rem))] flex-col sm:max-w-[680px] data-[state=open]:[--tw-enter-scale:1]! data-[state=closed]:[--tw-exit-scale:1]!'
 }
 
 function DialogContent({
@@ -125,6 +137,7 @@ function DialogContent({
   showCloseButton,
   closeButtonVariant = 'close',
   surface,
+  density,
   size,
   scrollable = false,
   phoneSheet = false,
@@ -132,7 +145,7 @@ function DialogContent({
   initialFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> &
-  VariantProps<typeof dialogContentSurfaceVariants> & {
+  VariantProps<typeof dialogContentVariants> & {
     overlayClassName?: string
     /** Defaults on, except for the unified sizes, whose footer Cancel closes instead. */
     showCloseButton?: boolean
@@ -157,7 +170,7 @@ function DialogContent({
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay
         className={overlayClassName}
-        scrim={surface === 'media' ? 'dark' : 'default'}
+        scrim={surface === 'media' || surface === 'media-gallery' ? 'dark' : 'default'}
       />
       <DialogPrimitive.Content
         data-slot="dialog-content"
@@ -170,7 +183,7 @@ function DialogContent({
               'gap-3 rounded-[10px] p-5 [&_[data-slot=checkbox][data-state=unchecked]]:border-muted-foreground',
               unifiedDialogSizeClass[size]
             ),
-          dialogContentSurfaceVariants({ surface }),
+          dialogContentVariants({ density, surface }),
           scrollable && 'max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek',
           phoneSheet &&
             'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none',
@@ -252,12 +265,15 @@ function DialogFooter({
   className,
   showCloseButton = false,
   start,
+  variant = 'default',
   children,
   ...props
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean
   /** Unified layout only: one extra on the left (a link, a ghost action or "Don't ask again"). */
   start?: React.ReactNode
+  /** `bar`: a full-width footer strip with a top divider, for edge-to-edge dialogs (p-0). */
+  variant?: 'default' | 'bar'
 }) {
   const t = useTranslate()
   const { unified } = useDialogLayout()
@@ -274,7 +290,11 @@ function DialogFooter({
     return (
       <div
         data-slot="dialog-footer"
-        className={cn('mt-2 flex flex-wrap items-center gap-2', className)}
+        className={cn(
+          'mt-2 flex flex-wrap items-center gap-2',
+          variant === 'bar' && 'mt-0 border-t border-border px-4 py-3',
+          className
+        )}
         {...props}
       >
         {start ? (
@@ -305,7 +325,11 @@ function DialogFooter({
   return (
     <div
       data-slot="dialog-footer"
-      className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
+      className={cn(
+        'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
+        variant === 'bar' && 'border-t border-border px-4 py-3',
+        className
+      )}
       {...props}
     >
       {children}

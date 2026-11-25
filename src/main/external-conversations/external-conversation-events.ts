@@ -57,7 +57,8 @@ export type ConversationEvent =
   | (ConversationPane & { kind: 'turn-started'; at: number; deliveryId?: string })
   | (ConversationPane & {
       kind: 'turn-ended'
-      /** The ended turn's turn-started `at`; null when its start predates this watch. */
+      /** The ended turn's turn-started `at`; null when its start predates this watch. The cloud ends
+       *  its open turn when that is no newer, so a restart's end can name this start as a fence. */
       turnId: number | null
       /** Host verdict; null means none was recorded. */
       stopReason: AgentTurnOutcome | null

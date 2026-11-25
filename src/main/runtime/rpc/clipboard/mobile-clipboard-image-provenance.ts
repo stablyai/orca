@@ -79,12 +79,3 @@ export function hasMobileClipboardImagePath(clientId: string | undefined, path: 
   pruneExpired(Date.now())
   return pathsByClient.get(owner)?.has(path) ?? false
 }
-
-export function resetMobileClipboardImageProvenanceForTest(): void {
-  pathsByClient.clear()
-  entryCount = 0
-}
-
-export function mobileClipboardImageProvenanceSizeForTest(): number {
-  return entryCount
-}

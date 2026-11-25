@@ -12,7 +12,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { BotToolSecretRows } from './BotToolSecretRows'
-import type { BotToolDraft } from './bot-tool-draft'
+import type { BotToolDraft } from '../../../../shared/bots/bot-tool-draft'
 
 export function BotToolDetailsFields({
   draft,

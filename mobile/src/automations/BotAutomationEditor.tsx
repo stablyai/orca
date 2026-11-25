@@ -248,9 +248,7 @@ export function BotAutomationEditor(props: {
       options: props.bots.map((entry) => ({
         value: entry.id,
         label: botLabel(entry.name),
-        renderIcon: () => (
-          <MobileBotAvatar avatar={mobileBotAvatarSource(entry, undefined)} size={24} />
-        )
+        renderIcon: () => <MobileBotAvatar avatar={mobileBotAvatarSource(entry)} size={24} />
       })),
       selected: target?.botId ?? '',
       onSelect: (botId) => {
@@ -267,6 +265,22 @@ export function BotAutomationEditor(props: {
         }
       }
     })
+  const botRow = (
+    <ListRow
+      title={t('automations.botTarget.fieldLabel', 'Bot or project')}
+      subtitle={bot ? bot.name : t('automations.botTarget.deletedBot', 'Deleted bot')}
+      subtitleLines={1}
+      accessibilityLabel={`${t('automations.botTarget.fieldLabel', 'Bot or project')}, ${
+        bot ? bot.name : t('automations.botTarget.deletedBot', 'Deleted bot')
+      }`}
+      subtitleIcon={
+        bot ? <MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={16} /> : undefined
+      }
+      // A saved automation moves only to another agent, never to a project.
+      navigates={bot !== null && props.bots.length > 1}
+      onPress={bot !== null && props.bots.length > 1 && !disabled ? pickBot : undefined}
+    />
+  )
   return (
     <View>
       {header}
@@ -293,20 +307,6 @@ export function BotAutomationEditor(props: {
           editable={!disabled}
           accessibilityLabel={t('automations.botTarget.prompt', 'What should it do?')}
         />
-        <SectionHeader title={t('automations.botTarget.fieldLabel', 'Bot or project')} />
-        <ListGroup>
-          <ListRow
-            title={bot ? botLabel(bot.name) : t('automations.botTarget.deletedBot', 'Deleted bot')}
-            leading={
-              bot ? (
-                <MobileBotAvatar avatar={mobileBotAvatarSource(bot, undefined)} size={24} />
-              ) : undefined
-            }
-            // A saved automation moves only to another agent, never to a project.
-            navigates={bot !== null && props.bots.length > 1}
-            onPress={bot !== null && props.bots.length > 1 && !disabled ? pickBot : undefined}
-          />
-        </ListGroup>
         <SectionHeader title={t('automations.botTarget.when', 'When')} />
         <BotAutomationWhenRows
           draft={draft}
@@ -347,7 +347,7 @@ export function BotAutomationEditor(props: {
                       <ListRow
                         key="edit-in-chat"
                         title={t('automations.botEvents.editInChat', 'Edit in chat')}
-                        strong
+                        accent
                         onPress={() =>
                           leave(() =>
                             askInChat(
@@ -370,6 +370,7 @@ export function BotAutomationEditor(props: {
           <BotAutomationTargetRows
             target={target}
             bot={bot}
+            botRow={botRow}
             agents={agents}
             threadReplies={props.threadReplies}
             hasEventThread={botEventsHaveThreads(draft.eventsOnly, events)}
@@ -377,7 +378,12 @@ export function BotAutomationEditor(props: {
             disabled={disabled}
             onChange={(next) => change({ target: next })}
           />
-        ) : null}
+        ) : (
+          <>
+            <SectionHeader title={t('automations.botTarget.runs', 'Runs')} />
+            <ListGroup>{botRow}</ListGroup>
+          </>
+        )}
       </View>
     </View>
   )

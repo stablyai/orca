@@ -1,3 +1,5 @@
+import { afterWorkerStartWait } from './start/readiness/worker-start-waits'
+import { isWorkerAwaitingAgent } from '../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { mapWithConcurrency } from '../../../../../../shared/concurrency/map-with-concurrency'
@@ -10,7 +12,12 @@ import type {
   WorkerStopReceipt
 } from '../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { stopSingleWorker, type StopMutation } from './stop/single-worker-stop'
-import { settleRestartCutWorkerStart } from '../../../../orchestration/db/worker-dispatch/restart-cut-worker-start'
+import { settleRestartCutStart } from '../../../../orchestration/workers/turn-stops/awaiting-worker-start-report'
+import { closeStoppedWorkerTerminals } from './release/worker-bound-terminal-close'
+import {
+  holdWorkerDockStopping,
+  recordWorkerStop
+} from '../../../../orchestration/dock/worker-dock-owner-stop'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineOrchestrationMethod({
@@ -18,8 +25,14 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
     access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
-    handler: (params, { runtime, orchestrationMutation }) =>
-      stopWorkerAndHelpers(runtime, params.dispatch, orchestrationMutation)
+    handler: (params, { runtime, orchestrationMutation }) => {
+      const db = runtime.getOrchestrationDb()
+      return holdWorkerDockStopping(db, params.dispatch, async () => {
+        const receipt = await stopWorkerAndHelpers(runtime, params.dispatch, orchestrationMutation)
+        recordWorkerStop(db, params.dispatch, receipt)
+        return receipt
+      })
+    }
   })
 ]
 
@@ -29,14 +42,13 @@ export function stopWorkerAndHelpers(
   dispatchId: string,
   mutation: StopMutation
 ): Promise<WorkerStopReceipt> {
-  return dedupeWorkerStop(runtime, dispatchId, async () =>
-    withStoppedHelpers(
-      runtime,
-      dispatchId,
-      mutation,
-      await stopSingleWorker(runtime, dispatchId, mutation)
-    )
-  )
+  return dedupeWorkerStop(runtime, dispatchId, async () => {
+    const stopped = await stopSingleWorker(runtime, dispatchId, mutation)
+    if (stopped.state === 'stopped' && !stopped.alreadySettled) {
+      await closeStoppedWorkerTerminals(runtime, runtime.getOrchestrationDb(), dispatchId)
+    }
+    return withStoppedHelpers(runtime, dispatchId, mutation, stopped)
+  })
 }
 
 /** Runs after the creator's fence commits, so a helper started later was refused, or is stopped when its start finishes. */
@@ -65,8 +77,10 @@ async function stopHelpers(
     async (dispatchId): Promise<HelperStopOutcome[]> => {
       const helper = { dispatchId, creatorDispatchId }
       // A runtime that restarted mid-start never finishes it; settle it as worker-show does, then stop it.
-      const state = settleRestartCutWorkerStart(db, dispatchId, runtime.getRuntimeId())?.state
-      if (state === 'starting') {
+      const worker = settleRestartCutStart(db, dispatchId, runtime)
+      const state = worker?.state
+      // One still waiting on its agent has typed nothing, and no start receipt will stop it later.
+      if (state === 'starting' && !isWorkerAwaitingAgent(worker)) {
         return [
           { ...helper, outcome: 'starting', state },
           ...(await stopHelpers(runtime, dispatchId, mutation))
@@ -147,6 +161,10 @@ export async function stopHelperAfterStart(
   const db = runtime.getOrchestrationDb()
   const creator = db.getDispatchContextById(dispatchId)?.creator_dispatch_id
   if (!creator || !db.isWorkerStopRequested(creator)) {
+    // A start still waiting on its agent hands over later, maybe after its creator's stop listed it.
+    afterWorkerStartWait(dispatchId, 'helper-stop', () => {
+      void stopHelperAfterStart(runtime, startReceipt, mutation)
+    })
     return
   }
   // A start that already settled is skipped by the single stop; its helpers still stop.
