@@ -136,6 +136,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   ): TerminalHandlePty | null
   protected abstract getLiveLeafForHandle(handle: string): TerminalHandleLeaf
   protected abstract getTerminalPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord }
+  abstract getTerminalPtyIdForHandle(handle: string): string | null
   protected abstract getExitWaitPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord }
   protected abstract getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined
   protected abstract getOrchestrationMailboxTerminal(
@@ -279,6 +280,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract isWorkerAgentInTurn(
     resource: Pick<WorkerTerminalResourceRow, 'pane_key' | 'terminal_handle'>
   ): boolean
+  abstract isSetupTerminalRunning(handle: string): boolean
   protected abstract getWorkspaceSessionForWorktree(
     worktreeId: string
   ): WorkspaceSessionState | null

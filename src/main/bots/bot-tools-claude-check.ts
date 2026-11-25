@@ -3,7 +3,8 @@ import { openClaudeStreamJsonConnection } from '../claude/claude-stream-json-con
 import type { BotToolProblem } from '../../shared/bot-tools'
 import { claudeLaunchServers } from './bot-tools-claude'
 import type { BotToolsCli } from './bot-tools-host'
-import type { BotLaunchTools } from './bot-launch-tools'
+import { noteClaudeMcpConfigRefused } from '../mcp-servers/mcp-agent-problems'
+import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import {
   CLAUDE_MCP_CONFIG_FLAG,
   claudeManagedSettingsRefuse
@@ -15,7 +16,7 @@ const REFUSED_BY_MANAGED_SETTINGS =
 
 export async function claudeBotToolProblems(
   cli: BotToolsCli,
-  tools: BotLaunchTools,
+  tools: SessionMcpTools,
   signal?: AbortSignal
 ): Promise<Map<string, BotToolProblem>> {
   const servers = tools.servers
@@ -27,7 +28,8 @@ export async function claudeBotToolProblems(
     options: {
       settingSources: ['user', 'project', 'local'],
       settings: { disableAllHooks: true },
-      mcpServers: claudeLaunchServers(tools)
+      mcpServers: claudeLaunchServers(tools),
+      mcpServersDelivery: 'argv'
     }
   })
   // Aborting closes the CLI at once, failing a status request still under way.
@@ -40,7 +42,10 @@ export async function claudeBotToolProblems(
     do {
       signal?.throwIfAborted()
       problems = new Map(servers.map((server) => [server.name, { kind: 'unconfirmed' }]))
-      for (const server of await connection.mcpServerStatus()) {
+      const statuses = await connection.mcpServerStatus()
+      // Claude took --mcp-config and answered: managed settings don't refuse Orca's servers now.
+      noteClaudeMcpConfigRefused(false)
+      for (const server of statuses) {
         if (!problems.has(server.name)) {
           continue
         }
@@ -62,6 +67,7 @@ export async function claudeBotToolProblems(
     if (!claudeManagedSettingsRefuse(error, CLAUDE_MCP_CONFIG_FLAG.option)) {
       throw new Error('Claude Code could not check the tools. Check its setup and try again.')
     }
+    noteClaudeMcpConfigRefused(true)
     // Chats start without these tools then, so each row says why instead of a failed check.
     problems = new Map(
       servers.map((server) => [

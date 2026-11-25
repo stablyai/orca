@@ -112,14 +112,6 @@ export function installShellCommandInference(session: ConnectPanePtySession): vo
       }) ?? undefined
     )
   }
-  // GPU veto needs current pane evidence: tab-shared/never-cleared launch seeds can describe siblings or dead agents. Use fresh active rows or command evidence; Pi/OMP titles retain their own guard (#7428).
-  session.getPaneScopedRendererOwner = (): AgentType | undefined => {
-    const entry = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
-    return (
-      session.commandInferredPaneAgent ??
-      (entry && session.isFreshActivePaneAgentEntry(entry) ? entry.agentType : undefined)
-    )
-  }
   session.clearInferredInterruptWorkingTitle = (): void => {
     const state = useAppStore.getState()
     const currentTitle = state.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]

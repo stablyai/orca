@@ -45,3 +45,13 @@ export class CodexAppServerTimeoutError extends Error {
     this.name = 'CodexAppServerTimeoutError'
   }
 }
+
+/** This Codex has no such RPC: method-not-found, or serde's unknown-variant refusal. */
+export function isCodexMethodRefusal(error: unknown): boolean {
+  return (
+    (error instanceof Error && error.name === 'CodexAppServerUnsupportedError') ||
+    (isCodexAppServerRequestError(error) &&
+      error.code === -32600 &&
+      error.message.includes('unknown variant'))
+  )
+}

@@ -127,6 +127,8 @@
     var(--worktree-sidebar-foreground) 15%,
     var(--worktree-sidebar-border)
   );
+  /* Bots/Projects split line; stronger than --worktree-sidebar-border so the seam reads. */
+  --color-worktree-sidebar-section-divider: var(--worktree-sidebar-section-divider);
   --color-worktree-sidebar-ring: var(--worktree-sidebar-ring);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
@@ -218,8 +220,26 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Why: react-remove-scroll-bar sets this on body per modal and nothing reads it; inheriting it restyles the whole app. */
+@property --removed-body-scroll-bar-size {
+  syntax: '*';
+  inherits: false;
+}
+
 /* Why: only the drawer that carries it reads the live sidebar width; don't restyle its subtree per drag frame. */
 @property --workspace-sidebar-live-width {
+  syntax: '*';
+  inherits: false;
+}
+
+/* Why: only the workspace board sheet reads its right edge; don't restyle the board subtree on every resize. */
+@property --workspace-board-right-edge {
+  syntax: '*';
+  inherits: false;
+}
+
+/* Why: non-inherited and keyed on .app-layout, so a modal toggle restyles only its direct children, not the whole app. */
+@property --app-layout-modal-blur {
   syntax: '*';
   inherits: false;
 }
@@ -326,6 +346,7 @@
   --worktree-sidebar-accent: #eaeaea;
   --worktree-sidebar-accent-foreground: #171717;
   --worktree-sidebar-border: #e5e5e5;
+  --worktree-sidebar-section-divider: #d4d4d8;
   --worktree-sidebar-ring: #a1a1a1;
   --sidebar: #fafafa;
   --sidebar-foreground: #0a0a0a;
@@ -476,6 +497,7 @@
   /* Match --border / --sidebar-border (7%) so the left sidebar's divider lines
      aren't brighter than the rest of the UI in dark mode (#5906). */
   --worktree-sidebar-border: rgb(255 255 255 / 0.07);
+  --worktree-sidebar-section-divider: rgb(255 255 255 / 0.14);
   --worktree-sidebar-ring: #737373;
   --sidebar: #171717;
   --sidebar-foreground: #f0f0f0;
@@ -1377,9 +1399,14 @@ body[data-modal-overlay-open]
 /* Blur source regions independently so status-bar animation cannot re-filter the workspace. */
 :root:not([data-reduce-effects])
   body:is([data-modal-overlay-open], [data-onboarding-overlay-open])
-  .app-layout
-  > :not(.window-controls) {
-  filter: blur(2px);
+  .app-layout {
+  --app-layout-modal-blur: blur(2px);
+}
+
+/* Always applies, so it overrides any filter utility on a direct child of .app-layout. */
+.app-layout > :not(.window-controls) {
+  --app-layout-modal-blur: inherit;
+  filter: var(--app-layout-modal-blur);
 }
 
 :root:not([data-reduce-effects])
@@ -3617,7 +3644,7 @@ html.native-shell .app-layout {
     border-width: 0;
   }
   57% {
-    max-width: 90px;
+    max-width: 104px;
     padding-inline: 8px;
     border-width: 1px;
   }

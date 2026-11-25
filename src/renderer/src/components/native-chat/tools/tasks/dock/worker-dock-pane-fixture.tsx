@@ -14,16 +14,18 @@ import { NativeChatWorkerDockFrame } from './NativeChatWorkerDockFrame'
 
 // Dev-only: the chat pane the worker dock fixtures render their strip in.
 /** The strip in a full-height chat pane above a message box, as a chat shows it. */
-const queue: StructuredAgentSessionQueuedMessagesController = {
-  cards: [
-    {
-      messageId: 'fixture-queued',
-      position: 0,
-      state: 'waiting',
-      hold: 'turn',
-      text: 'Check the release notes.'
-    }
-  ],
+const queued = [
+  'Check the release notes.',
+  'Then open the PR against main and ask for a review from the dock owners.'
+]
+const queue = (count: number): StructuredAgentSessionQueuedMessagesController => ({
+  cards: queued.slice(0, count).map((text, position) => ({
+    messageId: `fixture-queued-${position}`,
+    position,
+    state: 'waiting' as const,
+    hold: 'turn' as const,
+    text
+  })),
   queueCapable: true,
   holds: () => false,
   agentMail: [],
@@ -43,10 +45,10 @@ const queue: StructuredAgentSessionQueuedMessagesController = {
   edit: async () => {},
   steerHead: undefined,
   isWorking: true
-}
+})
 
 // The chat's own transcript end padding and Jump to latest, so the pill's clearance is real.
-function FixtureTranscript() {
+function FixtureTranscript({ overlay }: { overlay?: React.ReactNode }) {
   const [away, setAway] = useState(false)
   const scroller = useRef<HTMLDivElement>(null)
   // Starts at the end once the pill has reserved its room, as a following reader rests.
@@ -81,6 +83,7 @@ function FixtureTranscript() {
           </div>
         </div>
       </div>
+      {overlay}
       <NativeChatJumpToLatest
         visible={away}
         onJump={() => {
@@ -96,19 +99,29 @@ function FixtureTranscript() {
 
 export function workerDockFixturePane(
   strip: React.ReactNode,
-  sections?: 'question' | 'queue' | 'both'
+  sections?: 'question' | 'queue' | 'both',
+  /** The rest of the chat's stack: a goal, more queued messages, the find bar, and a prompt card
+   *  that stands in for the message box as a chat's does. */
+  more: {
+    goal?: React.ReactNode
+    find?: React.ReactNode
+    queued?: number
+    promptReplacesComposer?: boolean
+  } = {}
 ) {
+  const prompt = sections === 'question' || sections === 'both'
   return (
     <div
       data-native-chat-root=""
       className="native-chat-appearance flex h-[calc(100vh-2rem)] flex-col bg-chat-canvas"
       style={nativeChatAppearanceStyle({})}
     >
-      <FixtureTranscript />
+      <FixtureTranscript overlay={more.find} />
       <Toaster />
       <NativeChatDock>
         <NativeChatWorkerDockFrame>{strip}</NativeChatWorkerDockFrame>
-        {sections === 'question' || sections === 'both' ? (
+        {prompt ? null : more.goal}
+        {prompt ? (
           <NativeChatQuestionCard
             prompt={{
               questions: [
@@ -134,20 +147,25 @@ export function workerDockFixturePane(
           />
         ) : null}
         {sections === 'queue' || sections === 'both' ? (
-          <NativeChatQueuedMessageList controller={queue} chatWorktreeId={null} />
+          <NativeChatQueuedMessageList controller={queue(more.queued ?? 1)} chatWorktreeId={null} />
         ) : null}
-        <div data-native-chat-composer-scope="fixture" className="shrink-0 px-3 pt-2 pb-4 sm:px-4">
-          <div className="rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs">
-            <textarea
-              data-fixture-composer=""
-              data-native-chat-prompt-editor="true"
-              aria-label="Message"
-              className="block min-h-12 w-full resize-none bg-transparent px-2 py-2 text-sm text-chat-foreground outline-none"
-              defaultValue=""
-              placeholder="Ask anything, / for commands, @ for context"
-            />
+        {prompt && more.promptReplacesComposer ? null : (
+          <div
+            data-native-chat-composer-scope="fixture"
+            className="shrink-0 px-3 pt-2 pb-4 sm:px-4"
+          >
+            <div className="mx-auto max-w-(--chat-content-max-width) rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs">
+              <textarea
+                data-fixture-composer=""
+                data-native-chat-prompt-editor="true"
+                aria-label="Message"
+                className="block min-h-12 w-full resize-none bg-transparent px-2 py-2 text-sm text-chat-foreground outline-none"
+                defaultValue=""
+                placeholder="Ask anything, / for commands, @ for context"
+              />
+            </div>
           </div>
-        </div>
+        )}
       </NativeChatDock>
     </div>
   )
