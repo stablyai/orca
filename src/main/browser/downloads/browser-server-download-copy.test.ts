@@ -373,11 +373,13 @@ describe('Save to this computer for a download on a paired server', () => {
       await write.entered
 
       server.callbacks?.onEvent({ type: 'error', code: 'gone', message: 'The server went away.' })
-      // The copy has already stopped; Cancel is refused rather than reported accepted.
-      expect(cancelBrowserServerDownloadCopy('copy-11')).toBe(false)
+      const admitted = cancelBrowserServerDownloadCopy('copy-11')
       write.release()
 
       await expect(result).rejects.toThrow('The server went away.')
+      // The copy had already stopped; Cancel is refused rather than reported accepted. Asserted
+      // after the copy ended, so a wrong answer can't leave it holding its file.
+      expect(admitted).toBe(false)
     })
 
     it('starts no further write once canceled: not the rest of a short write, nor the next frame', async () => {
