@@ -20,11 +20,14 @@ vi.mock('@/lib/bot-hosts', () => ({
       lists += 1
     }
     return {
-      own: bot.id === 'checked' ? [{ name: 'app', detail: 'https://app', remote: true }] : []
+      own: bot.id.startsWith('checked')
+        ? [{ name: 'app', detail: 'https://app', remote: true }]
+        : []
     }
   }
 }))
-vi.mock('@/lib/bot-catalog', () => ({ useBots: () => [] }))
+let listed: { id: string }[] = []
+vi.mock('@/lib/bot-catalog', () => ({ useBots: () => [], readHostBots: () => listed }))
 
 afterEach(cleanup)
 
@@ -65,17 +68,29 @@ it('rereads no shown bot on a change the host scoped to another bot', async () =
   expect(await readsOnChange(0, 100, elsewhere)).toBe(0)
 })
 
-it("keeps a closed bot's finished check for the next badge, and rereads only its tools", async () => {
-  const bot = { hostId: 'local' as const, id: 'checked' }
+/** Checks a bot, closes its view, then sends a host change while the host does or doesn't list it. */
+async function closeCheckedBot(id: string, stillListed: boolean) {
+  const bot = { hostId: 'local' as const, id }
   const tools = renderHook(() => useBotTools(bot, 'check'))
   await waitFor(() => expect(tools.result.current.view).toMatchObject({ problems: { app: {} } }))
   tools.unmount()
+  listed = stillListed ? [{ id }] : []
   lists = 0
   await act(async () => emitBotsChangedWindowEvent('local'))
   expect(lists).toBe(0)
-  const badge = renderHook(() => useBotTools(bot, 'finished'))
+  return renderHook(() => useBotTools(bot, 'finished'))
+}
+
+it("keeps a closed bot's finished check for the next badge, and rereads only its tools", async () => {
+  const badge = await closeCheckedBot('checked', true)
   await waitFor(() =>
     expect(badge.result.current.view).toMatchObject({ problems: { app: { kind: 'sign-in' } } })
   )
   expect(lists).toBe(1)
+})
+
+it('forgets a closed bot the host no longer lists, finished check and all', async () => {
+  const badge = await closeCheckedBot('checked-then-deleted', false)
+  await waitFor(() => expect(badge.result.current.view).toMatchObject({ problems: {} }))
+  expect(badge.result.current.view).not.toMatchObject({ problems: { app: {} } })
 })

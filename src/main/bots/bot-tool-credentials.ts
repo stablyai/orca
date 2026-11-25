@@ -72,20 +72,27 @@ function readFileText(path: string): string | null {
   }
 }
 
-/** The file's entries, every one opened. */
+/** The file's entries, each opened the first time it is read: most reads and writes touch one. */
 function parseStored(folder: string, text: string | null): Stored {
   return Object.fromEntries(
-    Object.entries(parseEnvelopes(text)).map(([id, envelope]) => [
-      id,
-      { envelope, entry: openEntry(folder, id, envelope) }
-    ])
+    Object.entries(parseEnvelopes(text)).map(([id, envelope]) => {
+      let opened: Entry | null | undefined
+      const slot = {
+        envelope,
+        get entry() {
+          return opened === undefined ? (opened = openEntry(folder, id, envelope)) : opened
+        }
+      }
+      return [id, slot]
+    })
   )
 }
 
 const readSealed = (folder: string): Stored =>
   parseStored(folder, readFileText(botToolCredentialsPath(folder)))
 
-const entryOf = (stored: Stored, id: string): Entry | null => stored[id]?.entry ?? null
+const entryOf = (stored: Stored, id: string): Entry | null =>
+  Object.hasOwn(stored, id) ? stored[id]!.entry : null
 
 /**
  * Publishes `next` only while the file still holds `expected`, so a write from another Orca on the
@@ -152,16 +159,8 @@ type BotToolCredentialsReader = {
  * the first id asked for, so a caller with none reads nothing. Only the entries asked for are opened.
  */
 export function botToolCredentialsReader(folder: string): BotToolCredentialsReader {
-  let envelopes: Record<string, string> | undefined
-  const opened = new Map<string, Entry | null>()
-  const entry = (id: string): Entry | null => {
-    envelopes ??= parseEnvelopes(readFileText(botToolCredentialsPath(folder)))
-    if (!opened.has(id)) {
-      const envelope = Object.hasOwn(envelopes, id) ? envelopes[id] : undefined
-      opened.set(id, envelope === undefined ? null : openEntry(folder, id, envelope))
-    }
-    return opened.get(id) ?? null
-  }
+  let sealed: Stored | undefined
+  const entry = (id: string) => entryOf((sealed ??= readSealed(folder)), id)
   return { credential: (id) => credentialOf(entry(id)), oauth: (id) => oauthOf(entry(id)) }
 }
 

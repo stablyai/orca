@@ -2,7 +2,7 @@
 // themselves cheaply, and a check that starts the servers only for readers that show it.
 import { translate } from '@/i18n/i18n'
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { useBots } from '@/lib/bot-catalog'
+import { readHostBots, useBots } from '@/lib/bot-catalog'
 import { botRefKey, callBotRpc, isSameBot, type BotRef } from '@/lib/bot-hosts'
 import { isBotAppTool } from '../../../../shared/bots/bot-connector-entries'
 import type { BotOwnTool, BotToolProblem, BotTools } from '../../../../shared/bot-tools'
@@ -45,9 +45,11 @@ const TOOL_KINDS: readonly BotChangeKind[] = ['settings', 'bot']
 /**
  * The host says its bots changed (in any window, or on its own: a sign-in ended, couldn't start):
  * every shown bot's tools are read again, and the checks under way keep running. A bot no view
- * shows waits for its next view instead, and is forgotten unless it holds a finished check.
+ * shows waits for its next view instead, and is forgotten unless it holds a finished check and
+ * the host still lists it.
  */
 function rereadToolLists(hostId: ExecutionHostId, scope: BotChangeScope | undefined): void {
+  let listed: Set<string> | undefined
   for (const [key, read] of reads) {
     if (
       read.bot.hostId !== hostId ||
@@ -56,7 +58,8 @@ function rereadToolLists(hostId: ExecutionHostId, scope: BotChangeScope | undefi
       continue
     }
     if (!listReaders.has(key)) {
-      if (finishedCheck(read)) {
+      listed ??= new Set(readHostBots(hostId).map((bot) => bot.id))
+      if (finishedCheck(read) && listed.has(read.bot.id)) {
         read.stale = true
       } else {
         reads.delete(key)

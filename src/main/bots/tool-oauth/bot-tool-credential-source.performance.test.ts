@@ -1,5 +1,5 @@
-// Guards the relay credential fix: each call the relay makes opens the one credential it asks for,
-// not every credential the bot has saved.
+// Guards the relay credential fix: each call the relay makes, and each token it saves, opens the one
+// credential it is for, not every credential the bot has saved.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -88,4 +88,20 @@ it('opens one credential per relay call, however many the bot has saved', async 
   expect(await opensPerCall(100, false)).toBe(1)
   expect(await opensPerCall(10, true)).toBe(1)
   expect(await opensPerCall(100, true)).toBe(1)
+})
+
+// A refreshed token commits one sign-in; every other credential's envelope is kept unopened.
+it('opens only the committed sign-in when a refresh saves its tokens', async () => {
+  const opensPerCommit = async (count: number) => {
+    const folder = await botWithTools(count)
+    opened = 0
+    commitBotToolOAuth(folder, 'signed-in', (current) => ({
+      url: current!.url,
+      grant: current!.grant,
+      record: { ...current!.record, tokens: { access_token: 'next', token_type: 'Bearer' } }
+    }))
+    return opened
+  }
+  expect(await opensPerCommit(10)).toBe(1)
+  expect(await opensPerCommit(100)).toBe(1)
 })
