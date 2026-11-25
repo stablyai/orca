@@ -12,6 +12,7 @@ import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-sele
 import { readOwnedDiffComments, type DiffCommentOwner } from './diff-comment-owner'
 // Why: on a protected folder copy a no-op can only look like one because of queued actions; it takes their outcome.
 import { awaitProtectedFolderNoteDependency as settledNoop } from './folder-note-protection'
+import type { FolderNoteScope } from './folder-note-actions'
 import {
   backlogFull,
   deliverySnapshotMatches,
@@ -111,7 +112,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return false
     }
     if (existing[existingIdx].body === trimmed) {
-      return settledNoop(owner, (id) => id === commentId)
+      return settledNoop(owner, { matches: (id) => id === commentId, holds: 'version' })
     }
 
     const result = mutateDiffComments(set, owner, (current) => {
@@ -129,7 +130,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     })
     if (!result) {
       // Why: comment vanished or the same body was already written between pre-check and set; treat as success so the editor closes.
-      return settledNoop(owner, (id) => id === commentId)
+      return settledNoop(owner, { matches: (id) => id === commentId, holds: 'version' })
     }
     try {
       await enqueueDiffCommentPersist(set, worktreeId, get, result)
@@ -154,9 +155,12 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
     const snapshotsById = new Map(comments.map((comment) => [comment.id, comment]))
     // Only a note still as delivered is in scope; an edited one is a fresh note this clear keeps.
-    const inScope = (id: string, note: DiffComment | undefined) => {
-      const snapshot = snapshotsById.get(id)
-      return !!snapshot && !!note && deliverySnapshotMatches(note, snapshot)
+    const inScope: FolderNoteScope = {
+      matches: (id, note) => {
+        const snapshot = snapshotsById.get(id)
+        return !!snapshot && !!note && deliverySnapshotMatches(note, snapshot)
+      },
+      holds: 'cleared'
     }
     const result = mutateDiffComments(
       set,
@@ -196,7 +200,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return false
     }
     const ids = new Set(commentIds)
-    const inScope = (id: string) => ids.has(id)
+    const inScope: FolderNoteScope = { matches: (id) => ids.has(id), holds: 'sent' }
     const result = mutateDiffComments(
       set,
       owner,
@@ -255,8 +259,10 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return false
     }
     const worktreeId = owner.worktreeId
-    const inScope = (_id: string, note: DiffComment | undefined) =>
-      !options?.keepMarkdownNotes || (!!note && !isMarkdownComment(note))
+    const inScope: FolderNoteScope = {
+      matches: (_id, note) => !options?.keepMarkdownNotes || (!!note && !isMarkdownComment(note)),
+      holds: 'cleared'
+    }
     const result = mutateDiffComments(
       set,
       owner,
@@ -283,9 +289,12 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return false
     }
     const worktreeId = owner.worktreeId
-    const inScope = (_id: string, note: DiffComment | undefined) =>
-      note?.filePath === filePath &&
-      !(options?.keepMarkdownNotes === true && isMarkdownComment(note))
+    const inScope: FolderNoteScope = {
+      matches: (_id, note) =>
+        note?.filePath === filePath &&
+        !(options?.keepMarkdownNotes === true && isMarkdownComment(note)),
+      holds: 'cleared'
+    }
     const result = mutateDiffComments(
       set,
       owner,

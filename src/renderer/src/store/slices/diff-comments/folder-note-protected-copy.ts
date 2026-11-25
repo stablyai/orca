@@ -10,7 +10,6 @@ import {
   recordFolderNotesFence
 } from './folder-note-fence'
 import { projectFolderNoteVerdict } from './folder-note-receipt'
-import { diffCommentVersion } from '../../../../../shared/file-review/folder-diff-comment-merge'
 import {
   NOTHING_SATISFIED,
   overlayFolderNotes,
@@ -44,6 +43,9 @@ export type ProtectedCopy = {
   ackGeneration: number | undefined
   // Undefined while idle: the next event takes the list state shows as a provisional base.
   authoritative: DiffComment[] | undefined
+  // The base was sampled from the host (a host list or an accepted catalog fetch), not a floor or
+  // the display: only then can it show what the host holds for an id.
+  baseFromHost: boolean
   // The display rests on an observation or floor, not on a host-issued list after the last write.
   provisional: boolean
   pending: FolderNoteAction[]
@@ -77,6 +79,7 @@ export function adoptHostList(
   notes: DiffComment[]
 ): void {
   copy.authoritative = notes
+  copy.baseFromHost = true
   copy.confirmed.clear()
   copy.provisional = false
   copy.dirty = false
@@ -105,8 +108,11 @@ export function recordConfirmed(
       copy.confirmed.set(id, { note: entry.note, relocated: prior.relocated, generation })
       continue
     }
-    // Only a note added (or re-added after a delete) goes last, behind every earlier confirmation.
-    const added = !!entry.note && (prior ? true : action.before.get(id) === undefined)
+    // Only a note added (or re-added after a delete) goes last, behind every earlier confirmation;
+    // an add the accepted host list already holds landed earlier and stays where the host has it.
+    const heldAlready = copy.baseFromHost && !!copy.authoritative?.some((note) => note.id === id)
+    const added =
+      !!entry.note && (prior ? true : action.before.get(id) === undefined && !heldAlready)
     copy.confirmed.delete(id)
     copy.confirmed.set(id, { note: entry.note, relocated: added, generation })
   }
@@ -118,13 +124,19 @@ export function catalogGenerationOf(copy: ProtectedCopy, get: () => AppState): n
   return peekHostCatalogGeneration(get, 'folder-workspaces', catalogTargetOf(copy.owner))
 }
 
-/** The version of `id` the host is known to hold, from the accepted base and confirmations. */
-export function acceptedVersion(copy: ProtectedCopy, id: string): string {
+/** What the host is known to hold for `id` (confirmations, then a host-sampled base), if anything. */
+export function acceptedNote(
+  copy: ProtectedCopy,
+  id: string
+): { known: true; note: DiffComment | undefined } | { known: false } {
   const confirmed = copy.confirmed.get(id)
   if (confirmed) {
-    return diffCommentVersion(confirmed.note)
+    return { known: true, note: confirmed.note }
   }
-  return diffCommentVersion(copy.authoritative?.find((note) => note.id === id))
+  if (!copy.baseFromHost || !copy.authoritative) {
+    return { known: false }
+  }
+  return { known: true, note: copy.authoritative.find((note) => note.id === id) }
 }
 
 /** The owned row is gone, recreated or served by another pairing: this copy's notes are not its. */
@@ -188,6 +200,7 @@ export function noticeOutsideReplacement(copy: ProtectedCopy, get: () => AppStat
 
 export function observe(copy: ProtectedCopy, list: readonly DiffComment[] | undefined): void {
   copy.authoritative = [...(list ?? [])]
+  copy.baseFromHost = false
   copy.provisional = true
   copy.observationGeneration += 1
   copy.dirty = true
@@ -232,6 +245,7 @@ export function settle(
 /** At a quiet tail with nothing more to do: keep only what the next event needs. */
 export function releaseIdleState(copy: ProtectedCopy): void {
   copy.authoritative = undefined
+  copy.baseFromHost = false
   copy.provisional = true
 }
 

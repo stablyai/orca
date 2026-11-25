@@ -25,6 +25,7 @@ export const WORKSPACE_KEY = folderWorkspaceKey('folder-1')
 
 /** Every module-level queue, protection and fence; test files may share these modules. */
 export function resetFolderNoteTestState(): void {
+  compatibilityGate.current = undefined
   resetDiffCommentPersistenceForTests()
   resetFolderNoteProtectionForTests()
   resetFolderNotesFenceForTests()
@@ -50,12 +51,21 @@ export const folderWorkspacesApi = {
 }
 export const runtimeEnvironmentCall = vi.fn()
 
+/** Holds each paired compatibility check (the wait before a paired call crosses to the host). */
+export const compatibilityGate: { current: Promise<void> | undefined } = { current: undefined }
+
 vi.stubGlobal('window', {
   api: {
     folderWorkspaces: folderWorkspacesApi,
     runtimeEnvironments: {
-      call: (args: RuntimeEnvironmentCallRequest) =>
-        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+      call: async (args: RuntimeEnvironmentCallRequest) => {
+        const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (status) {
+          await compatibilityGate.current
+          return status
+        }
+        return runtimeEnvironmentCall(args)
+      }
     }
   }
 })
@@ -171,6 +181,8 @@ export function setupFolderNotes(kind: HostKind, saved: DiffComment[] = []) {
     remove: (id: string) => store.getState().deleteDiffComment(owner(), id),
     clear: () => store.getState().clearDiffComments(owner()),
     markSent: (ids: string[]) => store.getState().markDiffCommentsSent(owner(), ids, 5),
+    clearDelivered: (delivered: DiffComment[]) =>
+      store.getState().clearDeliveredDiffComments(owner(), delivered),
     /** A catalog refresh replacing this copy's row with what the host holds now. */
     refresh: () =>
       store.setState((state) => ({

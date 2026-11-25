@@ -47,9 +47,12 @@ export function isDefinitiveFolderNoteRefusal(err: unknown): boolean {
  */
 export async function mergeFolderDiffComments(
   owner: Extract<DiffCommentOwner, { kind: 'folder' }>,
-  request: FolderDiffCommentMergeRequest
+  request: FolderDiffCommentMergeRequest,
+  // Runs synchronously right before the request crosses to the host; throwing keeps it unsent.
+  beforeSend?: () => void
 ): Promise<FolderDiffCommentReceipt> {
   if (!owner.runtimeEnvironmentId) {
+    beforeSend?.()
     return window.api.folderWorkspaces.mergeDiffComments(request)
   }
   if (utf8JsonByteLength(request) > FOLDER_NOTE_MERGE_MAX_PARAMS_BYTES) {
@@ -63,6 +66,6 @@ export async function mergeFolderDiffComments(
     }),
     'folderWorkspace.mergeDiffComments',
     request,
-    { timeoutMs: 15_000 }
+    { timeoutMs: 15_000, beforeSend }
   )
 }

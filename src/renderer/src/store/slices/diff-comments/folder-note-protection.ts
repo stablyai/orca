@@ -26,7 +26,7 @@ import {
   isDefinitiveRefusalReply
 } from './folder-note-receipt'
 import {
-  acceptedVersion,
+  acceptedNote,
   adoptHostList,
   catalogGenerationOf,
   isCurrentCopy,
@@ -97,20 +97,43 @@ export function settleOrdinaryFolderNoteAction(copyKey: string, action: FolderNo
   settleFolderNoteAction(copyKey, action, new Set(action.delta.keys()))
 }
 
+/** Whether what the host is known to hold for `id` already gives the dependent what it asked for. */
+function holdsAnyway(
+  copy: ProtectedCopy | null,
+  scope: FolderNoteScope | undefined,
+  id: string,
+  earlier: FolderNoteAction
+): boolean {
+  // Only host evidence counts: a floor or the display cannot show what the host holds.
+  const accepted = copy ? acceptedNote(copy, id) : ({ known: false } as const)
+  if (!accepted.known) {
+    return false
+  }
+  const sameVersion =
+    diffCommentVersion(accepted.note) === diffCommentVersion(earlier.delta.get(id))
+  switch (scope?.holds ?? 'version') {
+    case 'cleared':
+      return !accepted.note || !scope?.matches(id, accepted.note)
+    case 'sent':
+      return !accepted.note || sameVersion
+    default:
+      return sameVersion
+  }
+}
+
 /**
  * Ids an action rests on that did not end as it needs: the latest earlier action changing the id
- * was not confirmed, and the accepted host state does not already hold that version either (a peer
+ * was not confirmed, and the host is not known to hold what the dependent asked for anyway (a peer
  * may have made the same change). Reads settled results only, so it never yields.
  */
 function unmetDependencies(
-  copy: ProtectedCopy,
-  borrowed: ReadonlyMap<string, FolderNoteAction>
+  copy: ProtectedCopy | null,
+  borrowed: ReadonlyMap<string, FolderNoteAction>,
+  scope: FolderNoteScope | undefined
 ): string[] {
   return [...borrowed]
     .filter(
-      ([id, earlier]) =>
-        !earlier.satisfied?.has(id) &&
-        acceptedVersion(copy, id) !== diffCommentVersion(earlier.delta.get(id))
+      ([id, earlier]) => !earlier.satisfied?.has(id) && !holdsAnyway(copy, scope, id, earlier)
     )
     .map(([id]) => id)
 }
@@ -131,7 +154,8 @@ export async function awaitProtectedFolderNoteDependency(
   const shown = new Map((copy.shown ?? []).map((note) => [note.id, note]))
   const borrowed = latestQueuedActionsTouching(copyKey, scope, { shown })
   await Promise.all([...borrowed.values()].map((action) => action.outcome))
-  return !isCurrentCopy(copy) || unmetDependencies(copy, borrowed).length === 0
+  // A copy released or retired meanwhile has no evidence left: only confirmed results count then.
+  return unmetDependencies(isCurrentCopy(copy) ? copy : null, borrowed, scope).length === 0
 }
 
 /** After a new action on a protected copy, shows the derived list (it differs from the optimistic one after a refresh). */
@@ -192,6 +216,7 @@ export function enterFolderNoteProtection(args: {
     lastRunAcknowledged: false,
     ackGeneration: undefined,
     authoritative: [...args.floor],
+    baseFromHost: false,
     provisional: true,
     pending: queued.slice(0, MAX_PENDING_FOLDER_NOTE_ACTIONS),
     confirmed: new Map(),
@@ -260,7 +285,7 @@ export async function runProtectedFolderNoteAction(args: {
   const fail = (reason: string, unverifiable: boolean): never =>
     failRun(copy, action, get, set, reason, unverifiable)
   // Ids it rests on settled before it ran (the queue is serial); it took effect only if they hold.
-  if (unmetDependencies(copy, action.borrowed).length > 0) {
+  if (unmetDependencies(copy, action.borrowed, action.scope).length > 0) {
     return fail('unconfirmed', false)
   }
   if (action.delta.size === 0) {
@@ -278,10 +303,23 @@ export async function runProtectedFolderNoteAction(args: {
   }
   const request = folderNoteRequest(copy.owner, action, 'merge', action.expectedCreatedAt)
   const generationAtSend = copy.observationGeneration
+  // Why at the handoff: a paired call first awaits compatibility, and the copy can retire meanwhile.
+  const markSentIfStillLive = (): void => {
+    if (
+      action.refusedUnsent ||
+      !isCurrentCopy(copy) ||
+      !copy.pending.includes(action) ||
+      !retireIfReplaced(copy, get) ||
+      (!!copy.owner.runtimeEnvironmentId &&
+        getRuntimeEnvironmentRevision(copy.owner.runtimeEnvironmentId) !== action.pairingRevision)
+    ) {
+      throw new FolderNoteWriteNotSentError(action.refusedUnsent ?? 'host changed')
+    }
+    sentActions.add(action)
+  }
   let reply: unknown
-  sentActions.add(action)
   try {
-    reply = await mergeFolderDiffComments(copy.owner, request)
+    reply = await mergeFolderDiffComments(copy.owner, request, markSentIfStillLive)
   } catch (err) {
     return fail(
       err instanceof FolderNoteWriteNotSentError ? err.message : 'no answer',

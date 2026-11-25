@@ -7,8 +7,15 @@ import { findOwnedFolder, type DiffCommentOwner } from './diff-comment-owner'
 
 export type FolderOwner = Extract<DiffCommentOwner, { kind: 'folder' }>
 
-/** Which notes a user action is about, beyond the ids it changes itself (a clear's whole scope). */
-export type FolderNoteScope = (id: string, note: DiffComment | undefined) => boolean
+/**
+ * Which notes a user action is about beyond the ids it changes itself (a clear's whole scope), and
+ * what it needs of each: the version the user saw, the note gone or outside the scope (a clear), or
+ * that version or gone (marking sent).
+ */
+export type FolderNoteScope = {
+  matches: (id: string, note: DiffComment | undefined) => boolean
+  holds: 'version' | 'cleared' | 'sent'
+}
 
 /** One user action on a folder copy's notes: the ids it changed and what it changed them to. */
 export type FolderNoteAction = {
@@ -22,6 +29,8 @@ export type FolderNoteAction = {
   // Ids in the action's scope that look done only because an earlier queued action changed them:
   // id → that latest earlier action. The action took effect only if those did too.
   borrowed: Map<string, FolderNoteAction>
+  // What it needs of each borrowed id.
+  scope: FolderNoteScope | undefined
   /** Resolves once with the ids whose intended version the host holds (empty: unconfirmed). */
   outcome: Promise<ReadonlySet<string>>
   // The same ids, readable without waiting once the action settled.
@@ -53,7 +62,8 @@ function versionsDiffer(a: DiffComment | undefined, b: DiffComment | undefined):
 
 function touches(action: FolderNoteAction, id: string, scope: FolderNoteScope): boolean {
   return (
-    action.delta.has(id) && (scope(id, action.delta.get(id)) || scope(id, action.before.get(id)))
+    action.delta.has(id) &&
+    (scope.matches(id, action.delta.get(id)) || scope.matches(id, action.before.get(id)))
   )
 }
 
@@ -110,7 +120,8 @@ export function createFolderNoteAction(args: {
     resolveOutcome = resolve
   })
   // An action with no scope of its own (or nothing to send) rests on everything queued before it.
-  const scope = args.scope ?? (delta.size === 0 ? () => true : undefined)
+  const scope: FolderNoteScope | undefined =
+    args.scope ?? (delta.size === 0 ? { matches: () => true, holds: 'version' } : undefined)
   const action: FolderNoteAction = {
     seq: nextFolderNoteSeq(),
     delta,
@@ -125,6 +136,7 @@ export function createFolderNoteAction(args: {
           shown: beforeById
         })
       : new Map(),
+    scope,
     outcome,
     resolveOutcome
   }

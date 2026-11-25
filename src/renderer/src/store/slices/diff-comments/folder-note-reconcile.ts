@@ -192,6 +192,7 @@ export function observeFolderCatalogInput(args: {
     const overlapping = copy.pending.length > 0 || copy.readInFlight
     const unreconciled = copy.dirty || copy.provisional
     copy.authoritative = [...(row.diffComments ?? [])]
+    copy.baseFromHost = true
     copy.observationGeneration += 1
     if (
       !overlapping &&
