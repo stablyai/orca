@@ -23,6 +23,9 @@ const RELEASE_SLICE_CHARS = 64 * 1024
 export type ProviderRelayAckFloor = {
   observe: (seq: number, line: string) => void
   floor: () => number | null
+  /** A forced ack (the daemon's file cap) released everything through `seq`: items it held that
+   *  started there can't be kept whole any more, so they hold nothing from now on. */
+  released?: (seq: number) => void
 }
 
 type OutputOptions = {
@@ -343,6 +346,7 @@ export class RelayedProviderOutput {
         this.keptFrom = keepFrom
         if (force && keepFrom === null) {
           this.releasedThrough = Math.max(this.releasedThrough, target)
+          this.options.ackFloor?.released?.(target)
         }
       } catch {
         // Unacked output is replayed on the next attach; a later ack covers it.

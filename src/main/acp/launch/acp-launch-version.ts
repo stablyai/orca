@@ -1,4 +1,5 @@
 import type { StructuredAgentResolutionOperation } from '../../native-chat/agent-launch/structured-agent-command-resolution'
+import { keptRunningProviderRelayPid } from '../../provider-relay/app-provider-relays'
 import {
   checkAgentCliVersion,
   type AgentCliVersionCheck,
@@ -12,10 +13,15 @@ export async function checkAcpLaunchVersion(
   spec: AcpLaunchSpec,
   launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'> & {
     operation?: StructuredAgentResolutionOperation
+    /** The chat launching; one whose agent the terminal host kept starts no program to check. */
+    chat?: string
   },
   wantVersion: boolean,
   read?: AgentCliVersionReader
 ): Promise<AgentCliVersionCheck> {
+  if (launch.chat !== undefined && keptRunningProviderRelayPid(launch.chat) !== null) {
+    return { status: 'unknown', version: null }
+  }
   if (!spec.minimumVersions && !wantVersion) {
     noteAcpForkVersion(spec.agent, null)
     return { status: 'unknown', version: null }

@@ -14,6 +14,7 @@ import * as childState from './children/acp-structured-child'
 import type { AcpSessionEvent } from '../protocol/acp-session-events'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import { keptAcpStartTime, launchRelayedAcpAgent } from '../process/acp-kept-agent'
+import { keptAcpLaunchPermission } from '../process/acp-kept-launch-permission'
 import { carryOnKeptAcpAgent } from './start/acp-kept-turn'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { AcpStructuredLane } from '../journal/acp-structured-lane'
@@ -26,7 +27,6 @@ import {
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
 import { SharedToolProcessSession } from '../../runtime/agent-session/environment/shared-tool-process-callers'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
-import { acpLaunchPermission } from '../launch/acp-launch-permission-modes'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
 import { acpStructuredPermissionHandler } from '../requests/acp-structured-permission-handler'
 import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
@@ -82,7 +82,6 @@ export async function acquireAcpStructuredSession(input: {
     history: AcpLoadHistory | null
   } = { lane: null, reattaching: false, history: null }
   const options = new AcpStructuredOptions(spec.dialect)
-  const launchPermission = acpLaunchPermission(spec, launch.fullAccess, acquire.permissionMode)
   const prompts = new AcpStructuredPrompts(
     () => slot.lane,
     () => childState.isAcpReadySession(session) && session.turns?.acceptsRequests === true
@@ -105,6 +104,8 @@ export async function acquireAcpStructuredSession(input: {
     ...acpProcessEnvironment(launch)
   }
   const relayed = await launchRelayedAcpAgent(input, launch, processLaunch)
+  const launchPermission = await keptAcpLaunchPermission(spec, relayed, launch, acquire)
+  const fullAccess = launchPermission.permission === 'full-access'
   const connection = connect(processLaunch, {
     ...(relayed ? { relayed } : {}),
     clientInfo: acpClientInfo(spec, launch.version ?? null),
@@ -149,7 +150,7 @@ export async function acquireAcpStructuredSession(input: {
   // Until the process exits, only its session's tools can name the chat.
   sharedTools = SharedToolProcessSession.forLaunch(spec, launch.env, launch.version)
   if (!spec.permissionModeConfig) {
-    options.applied.set('permissionMode', launch.fullAccess ? 'full-access' : 'ask')
+    options.applied.set('permissionMode', fullAccess ? 'full-access' : 'ask')
   }
   // From here, cancellation closes this connection even before exit is proven.
   input.track(connection)

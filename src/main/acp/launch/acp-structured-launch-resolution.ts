@@ -213,7 +213,7 @@ export function acpStructuredLaunchPart(
     // PATH may have changed since chat creation.
     const launchVersion = await checkAcpLaunchVersion(
       spec,
-      { command, prefixArgs, cwd, env },
+      { command, prefixArgs, cwd, env, chat: identity.sessionId },
       roots.length > 0,
       deps.probeVersion
     )

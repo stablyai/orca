@@ -99,8 +99,12 @@ describe('ACP relay ack floor', () => {
     await output.settle(true)
     expect(acks).toEqual([1, 5])
     expect(await send(chunk('c'))).toEqual([1, 5, 6])
+    // A call that starts after the release still holds from its start: the release lets go of the
+    // turn's start, so it no longer masks the call's.
+    await send(update('tool_call', { toolCallId: 'c2' }))
+    expect(await send(chunk('d'))).toEqual([1, 5, 6])
     answer.reject(new Error('rate limited'))
-    await vi.waitFor(async () => expect(await send(chunk('later'))).toEqual([1, 5, 6, 7]))
+    await vi.waitFor(async () => expect(await send(chunk('later'))).toEqual([1, 5, 6, 9]))
   })
 
   it('reads a long update from its ends without parsing its payload', async () => {

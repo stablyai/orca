@@ -153,6 +153,21 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
     this.turnPending = this.turnStart === null
   }
 
+  /** A forced ack released through `seq`: what started there is acked already, so later items
+   *  (a new call, a new message) hold the floor on their own. */
+  released(seq: number): void {
+    for (const open of [this.calls, this.messages]) {
+      for (const [key, item] of open) {
+        if (item.seq <= seq) {
+          open.delete(key)
+        }
+      }
+    }
+    if (this.turnStart !== null && this.turnStart <= seq) {
+      this.turnStart = null
+    }
+  }
+
   /** The call reported its final status. */
   endCall(toolCallId: string): void {
     this.calls.delete(toolCallId)
