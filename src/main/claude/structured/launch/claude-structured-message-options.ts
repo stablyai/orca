@@ -157,11 +157,12 @@ export async function applyClaudeMessageOptions(
 /** A kept agent may run an older CLI than the installed one the capability check read: once it
  *  refuses the flag-settings control, it runs on its own choices and the message still goes. */
 function keptCliRefusedFlagSettings(session: ClaudeSession, error: unknown): void {
-  if (
-    !(error instanceof AgentSessionOptionRejectedError) ||
-    !(error.cause instanceof ClaudeControlRequestError) ||
-    !keptClaudeAgentRelay(session.connection)
-  ) {
+  // Refused once (the effort write), the CLI's local check refuses the rest of this message too.
+  const refused =
+    session.flagSettingsControl === 'unsupported' ||
+    (error instanceof AgentSessionOptionRejectedError &&
+      error.cause instanceof ClaudeControlRequestError)
+  if (!refused || !keptClaudeAgentRelay(session.connection)) {
     throw error
   }
   session.flagSettingsControl = 'unsupported'

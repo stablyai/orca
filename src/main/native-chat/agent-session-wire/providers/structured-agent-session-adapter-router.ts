@@ -61,6 +61,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     await this.liveOwnerOrNull(input.sessionId)?.applyPermissionMode?.(input)
   }
 
+  permissionPickedWhileStarting: NonNullable<Adapter['permissionPickedWhileStarting']> = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.permissionPickedWhileStarting?.(input)
+
   runningPermissionMode: NonNullable<Adapter['runningPermissionMode']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.runningPermissionMode?.(sessionId)
 

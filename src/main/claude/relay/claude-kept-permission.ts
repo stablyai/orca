@@ -201,6 +201,18 @@ export function requiresAcquisition(
   }
 }
 
+/** A pick saved while a kept agent reattaches is handed over at ready; until then, anything but
+ *  Full access withdraws auto-approval at once, ahead of the requests the reattach releases. */
+export function pickedWhileStarting(
+  sessions: Sessions
+): NonNullable<Adapter['permissionPickedWhileStarting']> {
+  return ({ sessionId, mode }) => {
+    if (mode !== 'full-access') {
+      keptSession(sessions, sessionId)?.liveFullAccess?.unpicked()
+    }
+  }
+}
+
 export function applyLive(
   sessions: Sessions,
   timeoutMs: () => number | undefined
