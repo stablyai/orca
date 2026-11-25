@@ -87,6 +87,7 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.tabPreviousAllTypes', 'Previous tab (all types)'),
   'tab.previousRecent': () =>
     translate('keybindings.title.tabPreviousRecent', 'Previous recent tab'),
+  'tab.search': () => translate('keybindings.title.tabSearch', 'Search tabs'),
   'tab.nextTerminal': () => translate('keybindings.title.tabNextTerminal', 'Next terminal tab'),
   'tab.previousTerminal': () =>
     translate('keybindings.title.tabPreviousTerminal', 'Previous terminal tab'),

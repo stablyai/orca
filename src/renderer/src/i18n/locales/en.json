@@ -5806,6 +5806,21 @@
                   "14965cc123": "mobile"
                 }
               }
+            },
+            "search": {
+              "TabSearch": {
+                "789246b689": "Search tabs",
+                "7f56c1fde9": "Search open tabs in every workspace",
+                "bc2174bc27": "No matching tabs",
+                "3b27fc7f7c": "No open tabs",
+                "e6d5cf7750": "Open tabs",
+                "e555a5a097": "Switch",
+                "tabsFound_one": "{{count}} tab found",
+                "tabsFound_other": "{{count}} tabs found"
+              },
+              "TabSearchRow": {
+                "10e04285dd": "Close tab"
+              }
             }
           },
           "TabWorkspaceLayoutMenuSection": {
@@ -26726,7 +26741,8 @@
       "d286d1ab85": "Clear pane title",
       "botItemBack": "Back to items",
       "botItemPrevious": "Previous item",
-      "botItemNext": "Next item"
+      "botItemNext": "Next item",
+      "tabSearch": "Search tabs"
     },
     "group": {
       "global": "Global",

@@ -29,6 +29,17 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
   )
 
   unsubs.push(
+    window.api.ui.onToggleTabSearch(() => {
+      const store = useAppStore.getState()
+      if (store.activeModal === 'tab-search') {
+        store.closeModal()
+        return
+      }
+      store.openModal('tab-search')
+    })
+  )
+
+  unsubs.push(
     window.api.ui.onOpenNewWorkspace(() => {
       const store = useAppStore.getState()
       openNewWorkspaceFromShortcut(store)

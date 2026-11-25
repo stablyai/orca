@@ -1253,6 +1253,18 @@
           }
         }
       },
+      "tab": {
+        "bar": {
+          "tab": {
+            "search": {
+              "TabSearch": {
+                "tabsFound_one": "{{count}} tab found",
+                "tabsFound_other": "{{count}} tabs found"
+              }
+            }
+          }
+        }
+      },
       "task": {
         "project": {
           "source": {
