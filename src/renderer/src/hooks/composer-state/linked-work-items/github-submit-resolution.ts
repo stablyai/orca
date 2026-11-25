@@ -190,7 +190,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
             .filter((candidate): candidate is GitHubWorkItem => candidate !== null)
             .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0]
         : selectedRepo && selectedRepoIsGit
-          ? intent.kind === 'hash-number' && selectedRepo.defaultIssueRepository
+          ? intent.kind === 'hash-number' && selectedRepo.defaultGitHubIssueRepository
             ? (await lookupSmartGitHubNumberItems(selectedRepo, intent.number, lookup))[0]
             : await lookupSmartGitHubSubmitItem({
                 ...lookup,

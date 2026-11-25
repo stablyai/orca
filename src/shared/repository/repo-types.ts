@@ -67,7 +67,7 @@ export type Repo = {
   /** Absent means auto; writers omit on creation for persisted-record compatibility. */
   issueSourcePreference?: IssueSourcePreference
   /** Default for bare GitHub issue numbers, on this repo's GitHub host. */
-  defaultIssueRepository?: IssueRepository | null
+  defaultGitHubIssueRepository?: IssueRepository | null
   /** Host-owned Jira project default; users can override it in each composer. */
   defaultJiraProject?: JiraProjectReference | null
   /** Bind host/login only; resolve a short-lived gh token at spawn and inject into that child’s environment. */

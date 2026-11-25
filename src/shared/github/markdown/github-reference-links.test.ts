@@ -4,7 +4,7 @@ import { githubReferenceRepo, linkGitHubReferences } from './github-reference-li
 it('links bare references to the default issue repository and preserves explicit repositories', () => {
   const repo = {
     upstream: null,
-    defaultIssueRepository: { owner: 'team', repo: 'planning' }
+    defaultGitHubIssueRepository: { owner: 'team', repo: 'planning' }
   }
   const tree: Parameters<typeof linkGitHubReferences>[0] = {
     type: 'paragraph',

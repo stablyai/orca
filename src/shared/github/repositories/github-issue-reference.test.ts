@@ -18,7 +18,7 @@ it('resolves shorthand to the named issue on the workspace host', () => {
   expect(
     resolveGitHubIssueReference(reference, {
       host: 'github.acme.example:8443',
-      defaultIssueRepository: { owner: 'Acme-Tools', repo: 'Elsewhere' }
+      defaultGitHubIssueRepository: { owner: 'Acme-Tools', repo: 'Elsewhere' }
     })
   ).toEqual({
     kind: 'url',
@@ -42,7 +42,7 @@ it('only resolves a bare issue number to a URL when there is a default issue rep
   expect(
     resolveGitHubIssueReference(parseGitHubIssueReference('#42'), {
       host: 'github.acme.example',
-      defaultIssueRepository: parseIssueRepository(' jdoe_acme/Planning ')
+      defaultGitHubIssueRepository: parseIssueRepository(' jdoe_acme/Planning ')
     })
   ).toEqual({
     kind: 'url',
@@ -60,7 +60,7 @@ it('keeps the repository and comment anchor of a pasted issue URL', () => {
       parseGitHubIssueReference(
         'https://github.example:8443/jdoe_acme/Planning/issues/42#issuecomment-3'
       ),
-      { host: 'github.com', defaultIssueRepository: { owner: 'Acme', repo: 'Elsewhere' } }
+      { host: 'github.com', defaultGitHubIssueRepository: { owner: 'Acme', repo: 'Elsewhere' } }
     )
   ).toEqual({
     kind: 'url',

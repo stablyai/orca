@@ -84,7 +84,7 @@ export function sanitizeRepoUpdatesForPersistence<
       | 'forkSyncMode'
       | 'agentWorkspaceTrust'
       | 'defaultJiraProject'
-      | 'defaultIssueRepository'
+      | 'defaultGitHubIssueRepository'
       | 'customWorktreeVisibilitySources'
       | 'worktreeVisibilitySourcePreferences'
     >
@@ -105,12 +105,12 @@ export function sanitizeRepoUpdatesForPersistence<
       sanitized.defaultJiraProject = reference
     }
   }
-  if ('defaultIssueRepository' in sanitized) {
-    const repository = normalizeIssueRepository(sanitized.defaultIssueRepository)
+  if ('defaultGitHubIssueRepository' in sanitized) {
+    const repository = normalizeIssueRepository(sanitized.defaultGitHubIssueRepository)
     if (repository === undefined) {
-      delete sanitized.defaultIssueRepository
+      delete sanitized.defaultGitHubIssueRepository
     } else {
-      sanitized.defaultIssueRepository = repository
+      sanitized.defaultGitHubIssueRepository = repository
     }
   }
   if ('badgeColor' in sanitized) {

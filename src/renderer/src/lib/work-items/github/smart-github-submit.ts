@@ -213,8 +213,8 @@ export async function lookupSmartGitHubNumberItems(
     lookupSmartGitHubSubmitItem({ ...lookup, repoId: repo.id, repoPath: repo.path, intent }).catch(
       () => null
     )
-  const { defaultIssueRepository } = repo
-  if (!defaultIssueRepository) {
+  const { defaultGitHubIssueRepository } = repo
+  if (!defaultGitHubIssueRepository) {
     const item = await lookUp({ kind: 'hash-number', number })
     return item ? [item] : []
   }
@@ -224,7 +224,7 @@ export async function lookupSmartGitHubNumberItems(
     const issue = resolveGitHubIssueReference(
       { kind: 'bare', number },
       {
-        defaultIssueRepository,
+        defaultGitHubIssueRepository,
         host: originKey ? githubHostFromIdentityKey(originKey) : repo.upstream?.host
       }
     )

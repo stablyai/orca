@@ -10,7 +10,7 @@ type IssueReference = BareIssueReference | ShorthandIssueReference | IssueUrl
 
 type IssueReferenceContext = {
   host?: string
-  defaultIssueRepository?: IssueRepository | null
+  defaultGitHubIssueRepository?: IssueRepository | null
 }
 
 const SHORTHAND = /^([^/]+)\/([^/#]+)#(\d+)$/
@@ -94,7 +94,7 @@ export function resolveGitHubIssueReference(
   if (!reference || reference.kind === 'url') {
     return reference
   }
-  const repository = reference.kind === 'bare' ? context.defaultIssueRepository : reference
+  const repository = reference.kind === 'bare' ? context.defaultGitHubIssueRepository : reference
   if (!repository) {
     return { kind: 'bare', number: reference.number }
   }

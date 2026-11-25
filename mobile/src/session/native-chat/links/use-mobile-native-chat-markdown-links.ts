@@ -91,7 +91,7 @@ const repoLinkFieldsSchema = z.looseObject({
     .looseObject({ owner: z.string(), repo: z.string(), host: z.string().optional() })
     .nullish(),
   issueSourcePreference: z.enum(['upstream', 'origin', 'auto']).optional(),
-  defaultIssueRepository: z
+  defaultGitHubIssueRepository: z
     .object({ owner: z.string(), repo: z.string() })
     .nullish()
     .catch(undefined)

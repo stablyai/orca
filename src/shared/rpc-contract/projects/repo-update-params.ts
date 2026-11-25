@@ -65,7 +65,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
         symlinkPaths: z.array(z.string()).optional(),
         dictationTerms: z.unknown().transform(normalizeDictationTerms).optional(),
         issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
-        defaultIssueRepository: z.unknown().optional().transform(normalizeIssueRepository),
+        defaultGitHubIssueRepository: z.unknown().optional().transform(normalizeIssueRepository),
         defaultJiraProject: z.unknown().optional().transform(normalizeJiraProjectReference),
         ghAccount: z
           .unknown()
@@ -104,8 +104,8 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
         workspaceCleanupPolicy: RepoWorkspaceCleanupPolicyParam.optional()
       })
       .transform((updates) => {
-        if (updates.defaultIssueRepository === undefined) {
-          delete updates.defaultIssueRepository
+        if (updates.defaultGitHubIssueRepository === undefined) {
+          delete updates.defaultGitHubIssueRepository
         }
         return updates
       })

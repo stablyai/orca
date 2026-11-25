@@ -149,7 +149,8 @@ export function parseWorkspaceAttachmentInput(
   if (kind === 'github-issue') {
     const reference = resolveGitHubIssueReference(parseGitHubIssueReference(value), {
       host: githubHostFromIdentityKey(repo?.gitRemoteIdentity?.canonicalKey),
-      defaultIssueRepository: repo && !isFolderRepo(repo) ? repo.defaultIssueRepository : undefined
+      defaultGitHubIssueRepository:
+        repo && !isFolderRepo(repo) ? repo.defaultGitHubIssueRepository : undefined
     })
     if (reference) {
       return {

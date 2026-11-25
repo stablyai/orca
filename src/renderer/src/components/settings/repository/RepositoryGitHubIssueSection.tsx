@@ -29,7 +29,7 @@ export function getRepositoryGitHubIssueSearchEntry(repo: Repo, t: Translate): S
 
 type UpdateIssueRepository = (
   id: string,
-  updates: { defaultIssueRepository: IssueRepository | null }
+  updates: { defaultGitHubIssueRepository: IssueRepository | null }
 ) => void | Promise<boolean>
 
 async function saveIssueRepository(
@@ -38,7 +38,7 @@ async function saveIssueRepository(
   updateRepo: UpdateIssueRepository
 ): Promise<'save' | 'runtime' | null> {
   try {
-    if ((await updateRepo(repo.id, { defaultIssueRepository: repository })) === false) {
+    if ((await updateRepo(repo.id, { defaultGitHubIssueRepository: repository })) === false) {
       return 'save'
     }
     const hostId = getRepoExecutionHostId(repo)
@@ -46,7 +46,7 @@ async function saveIssueRepository(
       .getState()
       .repos.find(
         (entry) => entry.id === repo.id && getRepoExecutionHostId(entry) === hostId
-      )?.defaultIssueRepository
+      )?.defaultGitHubIssueRepository
     if (echoed?.owner !== repository?.owner || echoed?.repo !== repository?.repo) {
       return 'runtime'
     }
@@ -71,8 +71,8 @@ export function RepositoryGitHubIssueSection({
   const [draft, setDraft] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<'invalid' | 'save' | 'runtime' | null>(null)
-  const current = repo.defaultIssueRepository
-    ? `${repo.defaultIssueRepository.owner}/${repo.defaultIssueRepository.repo}`
+  const current = repo.defaultGitHubIssueRepository
+    ? `${repo.defaultGitHubIssueRepository.owner}/${repo.defaultGitHubIssueRepository.repo}`
     : ''
   const text = draft ?? current
   const value = text.trim()

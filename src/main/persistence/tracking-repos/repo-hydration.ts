@@ -41,7 +41,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     agentWorkspaceTrust: rawAgentWorkspaceTrust,
     ghAccount: rawGhAccount,
     defaultJiraProject: rawDefaultJiraProject,
-    defaultIssueRepository: rawDefaultIssueRepository,
+    defaultGitHubIssueRepository: rawDefaultGitHubIssueRepository,
     customWorktreeVisibilitySources: rawCustomWorktreeVisibilitySources,
     worktreeVisibilitySourcePreferences: rawWorktreeVisibilitySourcePreferences,
     orcadRetained: rawOrcadRetained,
@@ -57,7 +57,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
   const agentWorkspaceTrust = sanitizeAgentWorkspaceTrustDecision(rawAgentWorkspaceTrust)
   const ghAccount = normalizeGhAccountBinding(rawGhAccount)
   const defaultJiraProject = normalizeJiraProjectReference(rawDefaultJiraProject)
-  const defaultIssueRepository = normalizeIssueRepository(rawDefaultIssueRepository)
+  const defaultGitHubIssueRepository = normalizeIssueRepository(rawDefaultGitHubIssueRepository)
   const customWorktreeVisibilitySources = normalizeCustomWorktreeVisibilitySources(
     rawCustomWorktreeVisibilitySources
   )
@@ -85,7 +85,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     ...(agentWorkspaceTrust !== undefined ? { agentWorkspaceTrust } : {}),
     ...(ghAccount ? { ghAccount } : {}),
     ...(defaultJiraProject !== undefined ? { defaultJiraProject } : {}),
-    ...(defaultIssueRepository !== undefined ? { defaultIssueRepository } : {}),
+    ...(defaultGitHubIssueRepository !== undefined ? { defaultGitHubIssueRepository } : {}),
     ...(customWorktreeVisibilitySources !== undefined ? { customWorktreeVisibilitySources } : {}),
     ...(worktreeVisibilitySourcePreferences !== undefined
       ? { worktreeVisibilitySourcePreferences }

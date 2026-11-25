@@ -22,11 +22,11 @@ const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([
 
 /** Where bare `#123` points. Markdown issue links are github.com-only. */
 export function githubReferenceRepo(
-  repo: Pick<Repo, 'upstream' | 'issueSourcePreference' | 'defaultIssueRepository'>,
+  repo: Pick<Repo, 'upstream' | 'issueSourcePreference' | 'defaultGitHubIssueRepository'>,
   originIdentityKey: string
 ): GitHubRepoReference | null {
-  if (repo.defaultIssueRepository && !githubHostFromIdentityKey(originIdentityKey)) {
-    return repo.defaultIssueRepository
+  if (repo.defaultGitHubIssueRepository && !githubHostFromIdentityKey(originIdentityKey)) {
+    return repo.defaultGitHubIssueRepository
   }
   const upstreamKey = repoUpstreamIdentityKey(repo, originIdentityKey)
   const key =

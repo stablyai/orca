@@ -54,7 +54,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'symlinkPaths'
             | 'dictationTerms'
             | 'issueSourcePreference'
-            | 'defaultIssueRepository'
+            | 'defaultGitHubIssueRepository'
             | 'forkSyncMode'
             | 'agentWorkspaceTrust'
             | 'externalWorktreeVisibilityPromptDismissedAt'

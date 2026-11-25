@@ -151,7 +151,7 @@ export function createRepoUpdateActions(
                     { timeoutMs: 15_000 }
                   )
                 ).repo
-          if (!updatedRepo && sanitizedUpdates.defaultIssueRepository !== undefined) {
+          if (!updatedRepo && sanitizedUpdates.defaultGitHubIssueRepository !== undefined) {
             return false
           }
           if (
