@@ -37,16 +37,6 @@ describe.skipIf(process.platform === 'win32').each(MODES)(
       ])
     })
 
-    it('runs a stored weekly rule with another WKST every week', () => {
-      const [first, second] = runs(
-        'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO;BYHOUR=9;WKST=SU',
-        '2026-01-05T09:00:00Z',
-        '2026-01-05T09:00:00Z',
-        2
-      )
-      expect(Date.parse(second) - Date.parse(first)).toBeLessThan(8 * 86_400_000)
-    })
-
     it('counts the Monday week of a mid-week dtstart as week 1', () => {
       expect(runs(BIWEEKLY, '2026-11-12T00:00:00-05:00', '2026-11-12T00:00:00-05:00', 2)).toEqual([
         '2026-11-25T16:00:00.000Z',

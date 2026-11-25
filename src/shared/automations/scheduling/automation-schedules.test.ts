@@ -101,7 +101,8 @@ describe('RRULE parts the scheduler drops', () => {
     [`${everyOtherWednesday};COUNT=3`, everyOtherWednesday],
     ['FREQ=WEEKLY;BYDAY=MO;BYDAY=WE;BYHOUR=9;COUNT=3', 'FREQ=WEEKLY;BYDAY=WE;BYHOUR=9;BYMINUTE=0'],
     ['FREQ=DAILY;BYDAY=MO;BYHOUR=9=10;UNTIL=20270101T000000Z', 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0'],
-    ['FREQ=HOURLY;BYHOUR=9;BYMINUTE=15;INTERVAL=3', 'FREQ=HOURLY;INTERVAL=3;BYMINUTE=15']
+    ['FREQ=HOURLY;BYHOUR=9;BYMINUTE=15;INTERVAL=3', 'FREQ=HOURLY;INTERVAL=3;BYMINUTE=15'],
+    ['FREQ=WEEKLY;INTERVAL=2;BYDAY=MO;BYHOUR=9;WKST=SU', 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0']
   ])('rebuilds stored %s for a move with the same runs', (stored, rebuilt) => {
     expect(withoutIgnoredRruleParts(stored)).toBe(rebuilt)
     expect(getAutomationScheduleInputError(rebuilt)).toBeNull()
