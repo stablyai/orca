@@ -328,10 +328,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** Debounced `botsChanged` for clients showing a bot; every source of change calls it. */
   protected readonly botChangeNotices = new BotChangeNotices({
-    emit: (scope) => {
-      this.notifier?.botsChanged?.(scope)
-      this.emitClientEvent({ type: 'botsChanged', ...scope })
-    },
+    emit: (scope) => this.emitBotsChanged(scope),
     hasBots: () => this.bots.list().length > 0,
     needsYouCounts: () => this.botItems.needsYouCounts(Date.now())
   })
@@ -351,6 +348,17 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
    *  Unscoped, every reader re-reads. */
   notifyBotsChanged(scope: BotChangeScope = {}): void {
     this.botChangeNotices.changed(scope)
+  }
+
+  /** The agents shared with this computer's account changed. Sent with no bots of its own too: a
+   *  phone listing those agents reads the notice. */
+  notifySharedBotsChanged(): void {
+    this.emitBotsChanged({ kinds: ['bot'] })
+  }
+
+  private emitBotsChanged(scope: BotChangeScope): void {
+    this.notifier?.botsChanged?.(scope)
+    this.emitClientEvent({ type: 'botsChanged', ...scope })
   }
 
   /** This host's waiting access requests changed; windows and phones re-read them. */

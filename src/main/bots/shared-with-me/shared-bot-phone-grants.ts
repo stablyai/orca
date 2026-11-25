@@ -31,7 +31,19 @@ export type SharedBotPhoneGrantsDeps = {
 }
 
 export class SharedBotPhoneGrants {
+  private noted = JSON.stringify({ shares: [] } satisfies SharedBotsPhoneList)
+
   constructor(private readonly deps: SharedBotPhoneGrantsDeps) {}
+
+  /** Calls `changed` when `phoneShares` differs from the list last noted: phones read it again
+   *  only when told. */
+  noteListed(changed: (() => void) | undefined): void {
+    const listed = JSON.stringify(this.phoneShares())
+    if (listed !== this.noted) {
+      this.noted = listed
+      changed?.()
+    }
+  }
 
   /** The shared agents this computer has reached, which a phone can get a key to. */
   phoneShares(): SharedBotsPhoneList {

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from './shared-bot-hosts'
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { UNREADABLE_ANSWER } from '../../connector-cloud/connector-cloud-request'
 import { SharedBotHeldSends } from './shared-bot-held-sends'
 import { SharedBotHeldUploads } from './shared-bot-held-uploads'
@@ -94,7 +95,8 @@ const offer = (inviteExpiresAt: number): NonNullable<SharedBotHostEntry['offer']
 function hosts(
   mine: () => MineShare[] | Promise<MineShare[]>,
   now: () => number,
-  hold: SharedBotsCloud['hold'] = async () => ({ ok: true, value: { status: 'held' } })
+  hold: SharedBotsCloud['hold'] = async () => ({ ok: true, value: { status: 'held' } }),
+  phoneSharesChanged?: () => void
 ) {
   const holds: [string, ConnectorShareHoldRequest][] = []
   const dir = mkdtempSync(join(tmpdir(), 'shared-bot-hosts-'))
@@ -141,7 +143,11 @@ function hosts(
     account: () => 'ada',
     cloud: () => cloud,
     platform: NODE_RELAY_CLIENT_PLATFORM,
-    publish: (state) => published.push(state.hosts.map((view) => view.shareId)),
+    // As the desktop's publish does (ipc/shared-bot-hosts.ts).
+    publish: (state) => {
+      published.push(state.hosts.map((view) => view.shareId))
+      service.phones.noteListed(phoneSharesChanged)
+    },
     homes: memory.homes,
     now
   })
@@ -190,6 +196,43 @@ describe('shared agent pairing', () => {
     const refused = withoutRefusedCredential(live, { kind: 'invite', inviteToken: 'i'.repeat(43) })
     expect(nextPairingStep(refused, share({ hostOnline: false }), 5)).toEqual({ kind: 'wait' })
     expect(refused.offer?.deviceId).toBe('device-1')
+  })
+})
+
+describe('a share reaching this computer after its phone connected', () => {
+  it('tells the phone through botsChanged, though this computer has no bots of its own', async () => {
+    const runtime = new OrcaRuntimeService()
+    expect(runtime.bots.list()).toEqual([])
+    const events: unknown[] = []
+    runtime.onClientEvent((event) => {
+      if (event.type === 'botsChanged') {
+        events.push(event)
+      }
+    })
+    const primitives = NODE_PAIRED_E2EE_PRIMITIVES
+    const hostKey = primitives.publicKeyToBase64(primitives.generateKeyPair().publicKey)
+    let current = share({ state: 'ready', hostKey })
+    const { service } = hosts(
+      () => [current],
+      () => 1_000,
+      undefined,
+      () => runtime.notifySharedBotsChanged()
+    )
+    await service.refresh()
+    // Listed but not reached: the phone can't get a key to it yet, so its list is unchanged.
+    expect(service.phones.phoneShares().shares).toEqual([])
+    const { deviceKey, sealKey } = service.store.get('share-1')!
+    // Expired invite, so nothing dials the relay.
+    const sealedOffer = sealBotTeamShareOffer(primitives, {
+      sealKey: sealKey.publicKeyB64,
+      offer: { ...offer(0), hostPublicKeyB64: hostKey }
+    })
+    current = { ...current, offers: [{ devicePublicKey: deviceKey.publicKeyB64, sealedOffer }] }
+    await service.refresh()
+    service.stop()
+    expect(service.phones.phoneShares().shares.map((listed) => listed.shareId)).toEqual(['share-1'])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(events).toEqual([{ type: 'botsChanged', kinds: ['bot'] }])
   })
 })
 

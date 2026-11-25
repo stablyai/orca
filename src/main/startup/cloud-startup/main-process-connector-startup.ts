@@ -57,7 +57,7 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
       deleteFolderWorkspace: (id) =>
         runtime.deleteFolderWorkspace(id, { discardUnsavedDrafts: true })
     },
-    phoneSharesChanged: () => runtime.notifyBotsChanged({ kinds: ['bot'] })
+    phoneSharesChanged: () => runtime.notifySharedBotsChanged()
   })
   powerMonitor.on('resume', refreshSharedBotHosts)
   // A share made while this window was in the background shows on return, not at the next idle read.
