@@ -33,7 +33,7 @@ afterEach(() => {
 function quickReplies(send: BotItemQuestionStepsSend) {
   let quick: ReturnType<typeof useBotItemQuestionSteps>['quick'] | null = null
   function Steps() {
-    quick = useBotItemQuestionSteps('host\0bot\0uid-1', item, events, send, []).quick
+    quick = useBotItemQuestionSteps('host\0bot\0uid-1', item, events, send, [], true).quick
     return null
   }
   act(() => {
