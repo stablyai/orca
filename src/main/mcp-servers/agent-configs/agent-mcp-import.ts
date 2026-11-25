@@ -97,10 +97,10 @@ function limitedTo(found: DiscoveredAgentMcpServer): string[] | null {
   const enabled = found.sources.filter((source) => !source.disabled)
   const reach = enabled.length > 0 ? enabled : found.sources
   // One unscoped copy means every workspace already gets it.
-  const paths = reach.flatMap((source) =>
-    source.projectPath === undefined ? [] : [source.projectPath]
-  )
-  return paths.length === reach.length ? paths : null
+  if (reach.some((source) => source.projectPath === undefined)) {
+    return null
+  }
+  return reach.flatMap((source) => (source.projectPath === undefined ? [] : [source.projectPath]))
 }
 
 type MappedPath = { path: string; workspace: ReturnType<WorkspaceForPath> }
