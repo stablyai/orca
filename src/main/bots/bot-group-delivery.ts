@@ -23,7 +23,7 @@ import type { BotGroupRuntime } from './bot-group-runtime'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import { botGroupTurnBody } from './bot-group-turn-body'
 import { deliverRemoteAsks } from './bot-group-peer-delivery'
-import { activeGroupSpeaker, groupRouteRoot } from './bot-group-route-scope'
+import { assertTurnActive } from './bot-group-route-scope'
 import { remoteAsksFor } from './bot-group-remote-question'
 
 export type SendBotGroupMessageOptions = {
@@ -171,33 +171,6 @@ export function assertGroupQueuedMessageAllowed(
   }
 }
 
-function assertTurnActive(
-  groups: BotGroupRuntime,
-  message: BotGroupMessage,
-  turn: BotGroupTurn
-): void {
-  const group = groups.store.room(message.groupId, message.threadId)
-  if (
-    !group.members.some(
-      (member) =>
-        member.sessionId === turn.sessionId &&
-        (member.stoppedThroughSequence ?? 0) < (message.rootSequence ?? message.sequence)
-    )
-  ) {
-    throw new BotFailureError('groupTurnInactive')
-  }
-  if (message.groupRequest) {
-    const root = groupRouteRoot(groups, message)
-    if (!root || !activeGroupSpeaker(groups, group, root, message.groupRequest.from)) {
-      throw new BotFailureError('groupTurnInactive')
-    }
-  }
-  const bot = groups.runtime.bots.list().find((bot) => bot.id === turn.botId)
-  if (!bot || bot.paused || !groups.runtime.bots.enabled()) {
-    throw new BotFailureError('groupBotUnavailable')
-  }
-}
-
 function recordTurnError(
   groups: BotGroupRuntime,
   messageId: string,
@@ -229,17 +202,27 @@ export async function deliverTurn(
   turn: BotGroupTurn,
   run?: BotRunFields
 ): Promise<string | undefined> {
+  if (message.continuation && !groups.runtime.bots.enabled()) {
+    return undefined
+  }
   const context = groups.store.pendingContext(turn.operationId)
   if (context === null || groups.deliveries.has(turn.operationId)) {
     return undefined
   }
   groups.deliveries.add(turn.operationId)
+  let paused = false
   try {
     const host = await requireStructuredHost(groups.runtime)
     if (await (await host.journalReads(turn.sessionId)).operationSent(turn.operationId)) {
       return undefined
     }
-    const beforeRun = () => assertTurnActive(groups, message, turn)
+    const beforeRun = () => {
+      if (message.continuation && !groups.runtime.bots.enabled()) {
+        paused = true
+        throw new BotFailureError('groupBotUnavailable')
+      }
+      assertTurnActive(groups, message, turn)
+    }
     beforeRun()
     // A hand-off serves the person's post it continues, whose words and images it carries.
     const original =
@@ -274,12 +257,19 @@ export async function deliverTurn(
     }
     return agentSessionSendBodyFingerprint(turn.sessionId, body)
   } catch (error) {
-    recordTurnError(groups, message.id, turn.operationId, error)
+    if (!paused) {
+      recordTurnError(groups, message.id, turn.operationId, error)
+    }
     return undefined
   } finally {
-    groups.store.delivered([turn.operationId])
     groups.deliveries.delete(turn.operationId)
-    groups.changed(message.groupId)
+    if (!paused) {
+      groups.store.delivered([turn.operationId])
+      groups.changed(message.groupId)
+    } else if (groups.store.db.isOpen && groups.runtime.bots.enabled()) {
+      // Re-enable may have seen the in-flight claim before this refusal reached us.
+      void deliverTurn(groups, message, turn)
+    }
   }
 }
 

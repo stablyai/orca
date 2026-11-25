@@ -3,9 +3,11 @@ import {
   botGroupRoom,
   type BotGroup,
   type BotGroupMessage,
-  type BotGroupRemoteMember
+  type BotGroupRemoteMember,
+  type BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { startsBotGroupRequest, type BotGroupSpeaker } from '../../shared/bots/bot-group-schema'
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import type { BotGroupRuntime } from './bot-group-runtime'
 
 export function findCurrentGroupMember(groups: readonly BotGroup[], sessionId: string) {
@@ -85,4 +87,31 @@ export function activeGroupSpeaker(
         (member.stoppedThroughSequence ?? 0) < root.sequence
     ) && groups.runtime.bots.list().some((bot) => bot.id === source.botId && !bot.paused)
   )
+}
+
+export function assertTurnActive(
+  groups: BotGroupRuntime,
+  message: BotGroupMessage,
+  turn: BotGroupTurn
+): void {
+  const group = groups.store.room(message.groupId, message.threadId)
+  if (
+    !group.members.some(
+      (member) =>
+        member.sessionId === turn.sessionId &&
+        (member.stoppedThroughSequence ?? 0) < (message.rootSequence ?? message.sequence)
+    )
+  ) {
+    throw new BotFailureError('groupTurnInactive')
+  }
+  if (message.groupRequest) {
+    const root = groupRouteRoot(groups, message)
+    if (!root || !activeGroupSpeaker(groups, group, root, message.groupRequest.from)) {
+      throw new BotFailureError('groupTurnInactive')
+    }
+  }
+  const bot = groups.runtime.bots.list().find((bot) => bot.id === turn.botId)
+  if (!bot || bot.paused || !groups.runtime.bots.enabled()) {
+    throw new BotFailureError('groupBotUnavailable')
+  }
 }
