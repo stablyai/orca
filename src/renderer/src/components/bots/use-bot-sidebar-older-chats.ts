@@ -10,6 +10,7 @@ import {
   splitOlderBotSidebarChats,
   type OlderBotSidebarChats
 } from '../../../../shared/bots/bot-sidebar-older-chats'
+import type { BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
 import type { BotSidebarChatView } from '../../../../shared/bots/bot-sidebar-tree'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -82,6 +83,8 @@ export function useBotSidebarOlderChats(input: {
   bot: Pick<Bot, 'hostId' | 'folderWorkspaceId'>
   entryKey: string
   views: readonly BotSidebarChatView<Worktree>[]
+  /** The read's every chat, those with no row too: their workers are evidence of a shared workspace id. */
+  readChats: readonly BotChatTreeChat[]
   /** Every root workspace of the bot, sleeping ones too: attention under a hidden root still holds. */
   workspaces: readonly Worktree[]
   workspaceChats: Readonly<Record<string, string>>
@@ -139,6 +142,7 @@ export function useBotSidebarOlderChats(input: {
           [frontSessionId, input.reveal?.chatId].filter((id): id is string => Boolean(id))
         ),
         heldLineIds,
+        readChats: input.readChats,
         workspaces,
         workspaceChats: input.workspaceChats,
         childrenOf,
@@ -154,6 +158,7 @@ export function useBotSidebarOlderChats(input: {
     input.reveal,
     frontSessionId,
     views,
+    input.readChats,
     workspaces,
     input.workspaceChats,
     childrenOf

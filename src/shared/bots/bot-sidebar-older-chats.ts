@@ -1,5 +1,5 @@
 // Which of a bot's sidebar chats fold under its "Show N older" toggle: presentation only, nothing closes.
-import { chatIsGoing, type BotChatTreeChat } from './bot-chat-tree'
+import { chatIsGoing, type BotChatTreeChat, type BotChatTreeWorker } from './bot-chat-tree'
 import type { BotSidebarChatView } from './bot-sidebar-tree'
 
 /** A settled chat this long unmoved, unchanged and unfocused, folds. */
@@ -15,12 +15,13 @@ function knownTime(value: number | undefined): number {
 
 /** When a settled chat's outcome is dated: a day of quiet is measured from the latest of its turn, mail
  *  and its workers' settle times. 0 when any worker the read shows finished with no settle time (it exited
- *  without reporting): finished workers sort by start, so an undated exit can sit behind a dated one and
- *  nothing proves how long ago it ended. Only the read's shown finished workers (the newest page) count. */
+ *  without reporting, or its record has none and the time shown is its creation): finished workers sort
+ *  by start, so an undated exit can sit behind a dated one and nothing proves how long ago it ended. Only
+ *  the read's shown finished workers (the newest page) count. */
 function settledChatDatedAt(chat: BotChatTreeChat): number {
   let settledAt = 0
   for (const worker of chat.finished) {
-    const at = knownTime(worker.settledAt)
+    const at = worker.settledUndated ? 0 : knownTime(worker.settledAt)
     if (at === 0) {
       return 0
     }
@@ -36,6 +37,9 @@ export type OlderBotChatHolds<T> = {
   heldSessionIds: ReadonlySet<string>
   /** Workspaces held wherever they sit, by id: live, waiting on the owner, open, revealed. */
   heldLineIds: ReadonlySet<string>
+  /** Every chat of the read, listed or not (no tab, closed): their shown workers are claims and host
+   *  evidence for a shared workspace id. Holds only ever apply to the listed chats. */
+  readChats: readonly BotChatTreeChat[]
   /** Every workspace of the bot, not only the paged ones shown, and the chat each sits under. */
   workspaces: readonly T[]
   workspaceChats: Readonly<Record<string, string>>
@@ -77,17 +81,38 @@ export function botSidebarChatFoldTimes<T extends { id: string }>(
       upward.push(...(parents.get(identity) ?? []))
     }
   }
-  // An id two physical workspaces share (twins on two hosts) maps to one chat however many claim it, so
-  // which chat it belongs to can't be told: every chat whose lines include such an id holds. Known limit:
-  // the read already placed both twins under one chat, so another chat that also claimed one isn't seen.
-  const identitiesById = new Map<string, Set<string>>()
+  // An id two physical workspaces share (twins on two hosts) maps to the one chat that ran there last,
+  // so which chat owns which twin can't be told. Two hosts are seen either as two listed workspaces or as
+  // the read's workers naming the id on two hosts, any chat's (one with no row of its own too). Then
+  // every chat that claims the id holds: the one it maps to, and every chat with a worker the read shows
+  // there, a row whose record couldn't be read included (it claims, but names no host). One workspace
+  // reused by several chats (one host) is not ambiguous: the earlier chats may fold.
+  const lineIdentitiesById = new Map<string, Set<string>>()
   for (const [identity, line] of lines) {
-    identitiesById.set(line.id, (identitiesById.get(line.id) ?? new Set()).add(identity))
+    addTo(lineIdentitiesById, line.id, identity)
+  }
+  const workerHostsById = new Map<string, Set<string>>()
+  const claimants = new Map<string, Set<string>>()
+  for (const chat of holds.readChats) {
+    for (const worker of [...chat.running, ...chat.finished]) {
+      if (worker.worktreeId) {
+        addTo(workerHostsById, worker.worktreeId, workerHost(worker))
+      }
+      const claimed = worker.worktreeId ?? worker.placedWorktreeId
+      if (claimed) {
+        addTo(claimants, claimed, chat.chatId)
+      }
+    }
   }
   const sharedIds = new Set(
-    [...identitiesById].filter(([, identities]) => identities.size > 1).map(([id]) => id)
+    [...lineIdentitiesById, ...workerHostsById]
+      .filter(([, hosts]) => hosts.size > 1)
+      .map(([id]) => id)
   )
   const heldChats = new Set<string>()
+  for (const id of sharedIds) {
+    claimants.get(id)?.forEach((chatId) => heldChats.add(chatId))
+  }
   for (const root of holds.workspaces) {
     const chatId = holds.workspaceChats[root.id]
     if (chatId === undefined || heldChats.has(chatId)) {
@@ -114,6 +139,16 @@ export function botSidebarChatFoldTimes<T extends { id: string }>(
     )
   }
   return times
+}
+
+function addTo(map: Map<string, Set<string>>, key: string, value: string): void {
+  map.set(key, (map.get(key) ?? new Set()).add(value))
+}
+
+/** The host a worker's record places it on: a paired server by id, else where it sits relative to the
+ *  host that answered (an older host names neither: the answering one). */
+function workerHost(worker: BotChatTreeWorker): string {
+  return worker.hostId ?? worker.host ?? 'local'
 }
 
 /** Whether any line in the root's tree has one of these ids; nothing to walk when there are none. */

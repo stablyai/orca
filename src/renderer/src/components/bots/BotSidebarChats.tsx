@@ -135,6 +135,7 @@ export function BotSidebarChats({
     bot,
     entryKey: botSidebarEntryKey(bot),
     views: view.chats,
+    readChats: chats,
     workspaces: allWorkspaces,
     workspaceChats,
     lineageChildrenByParentIdentity,
