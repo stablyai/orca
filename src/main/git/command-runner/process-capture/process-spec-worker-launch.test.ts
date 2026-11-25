@@ -38,6 +38,7 @@ vi.mock(
 function createInProcessWorkerHost(): {
   host: WorkerThreadChildProcessHost
   close: () => void
+  loseWorker: () => void
 } {
   const { port1, port2 } = new MessageChannel()
   serveWorkerThreadChildProcesses(port2)
@@ -61,6 +62,7 @@ function createInProcessWorkerHost(): {
   const host = new WorkerThreadChildProcessHost(() => transport)
   return {
     host,
+    loseWorker: () => emitter.emit('exit', 1),
     close: () => {
       port1.close()
       port2.close()
@@ -150,6 +152,31 @@ describe.skipIf(process.platform === 'win32')('launchPlainProcessSpecOnPosixWork
 
     expect(result).toMatchObject({ code: 0, stderr: '1111', outputTruncated: true })
     expect(observed.join('')).toBe('11112222DONE')
+  })
+
+  it('kills a running child whose worker was lost, so it cannot outlive its timeout', async () => {
+    const setup = createInProcessWorkerHost()
+    closeHost = setup.close
+    workerMock.host = setup.host
+    workerMock.readyNow = true
+    expect(await setup.host.whenReady()).toBe(true)
+
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
+    let pid = 0
+    const run = runProcess({
+      program: process.execPath,
+      // Never reads stdin, so closed pipes alone would not end it.
+      args: ['-e', 'process.stderr.write(String(process.pid)); setInterval(() => {}, 1000)'],
+      onStderr: (chunk) => {
+        pid = Number(chunk.toString())
+        setup.loseWorker()
+      },
+      timeoutMs: 30_000
+    })
+
+    await expect(run).rejects.toMatchObject({ code: 'ERR_ORCA_WORKER_CHILD_ABANDONED' })
+    expect(pid).toBeGreaterThan(1)
+    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 5_000 })
   })
 
   it('gives spec.launch precedence over the default launcher even when it returns null', async () => {

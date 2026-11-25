@@ -115,7 +115,15 @@ function launchProcessSpecOnWorker(
     }
     onWorkerLost?.()
     if (process.platform !== 'win32') {
-      // Worker death closes stdio pipes (EOF/SIGPIPE); avoid SIGKILLing a pid the dead worker may already have reaped.
+      // No worker is left to deliver a timeout or abort kill, and a child that ignores closed pipes would outlive both.
+      // The worker reports an exit in the turn it reaps, so an unreported exit means the pid is still this child's.
+      if (child.exitCode === null && child.signalCode === null) {
+        try {
+          process.kill(child.pid, 'SIGKILL')
+        } catch {
+          /* already gone */
+        }
+      }
       if (lifetimeEndsOnLoss) {
         onTerminated()
       }
