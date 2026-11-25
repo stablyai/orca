@@ -95,15 +95,18 @@ function sha256(text) {
  */
 export async function runRailProof(name, body) {
   const owned = { server: null, driver: null, browser: null }
-  // Set when this run asked for a server start, so a start that fails or times out is still cleaned up.
-  let startRequested = false
-  const preexistingPid = readServerState()?.pid ?? null
-  let tornDown = false
-  const teardown = async () => {
-    if (tornDown) {
-      return
-    }
-    tornDown = true
+  // The server this run spawned, known before it publishes its state, so a start that is interrupted, fails or times
+  // out is still stopped.
+  let spawnedPid = null
+  // One teardown for every caller: a signal that lands while `finally` is tearing down waits for the same cleanup.
+  let teardownPromise = null
+  const teardown = () => {
+    teardownPromise ??= runTeardown()
+    return teardownPromise
+  }
+  /** Stops what this run started; false if anything it owns is still running afterwards. */
+  const runTeardown = async () => {
+    let complete = true
     if (owned.browser) {
       await owned.browser.close().catch(() => {})
     }
@@ -111,33 +114,46 @@ export async function runRailProof(name, body) {
       const pid = owned.driver.process()?.pid
       await owned.driver.close().catch(() => {})
       const gone = pid ? await terminate(pid, 5000) : true
+      complete &&= gone
       log(`teardown: driver browser pid ${pid} ${gone ? 'exited' : 'STILL RUNNING'}`)
     }
-    if (!owned.server && startRequested) {
+    if (!owned.server && spawnedPid !== null && isAlive(spawnedPid)) {
       const state = readServerState()
-      if (state?.pid && state.pid !== preexistingPid && isAlive(state.pid)) {
-        owned.server = { pid: state.pid, url: state.url, children: childPids(state.pid) }
+      owned.server = {
+        pid: spawnedPid,
+        url: state?.pid === spawnedPid ? state.url : null,
+        children: childPids(spawnedPid)
       }
     }
     if (owned.server) {
       const { pid, url, children } = owned.server
-      await callFixtureServer(url, 'stop', {}).catch(() => {})
+      // Ask first, but never wait on a server that accepts the request and then hangs.
+      if (url) {
+        await Promise.race([callFixtureServer(url, 'stop', {}).catch(() => {}), delay(5000)])
+      }
       // The server stops its own browser on stop; an unresponsive one is signalled so nothing outlives this run.
       const serverGone = await terminate(pid, 10_000)
-      const childrenGone = await Promise.all(children.map((child) => terminate(child, 5000)))
+      const childrenGone = (
+        await Promise.all(children.map((child) => terminate(child, 5000)))
+      ).every(Boolean)
+      complete &&= serverGone && childrenGone
       log(
-        `teardown: fixture server children [${children.join(', ')}] ${childrenGone.every(Boolean) ? 'exited' : 'STILL RUNNING'}`
+        `teardown: fixture server children [${children.join(', ')}] ${childrenGone ? 'exited' : 'STILL RUNNING'}`
       )
       log(
         `teardown: fixture server pid ${String(pid)} (started by this run) ${serverGone ? 'stopped' : 'STILL RUNNING'}`
       )
     }
+    return complete
   }
   const onSignal = (signal) => {
     log(`received ${signal}; tearing down`)
     // The conventional 128 + signal number.
     const code = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }[signal] ?? 1
-    void teardown().finally(() => process.exit(code))
+    void teardown().then(
+      (complete) => process.exit(complete ? code : 1),
+      () => process.exit(1)
+    )
   }
   const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP']
   for (const signal of SIGNALS) {
@@ -147,8 +163,8 @@ export async function runRailProof(name, body) {
   log(`${name}: node pid ${process.pid}, playwright-core ${PLAYWRIGHT_VERSION}`)
   try {
     const { url, started } = await ensureFixtureServer({
-      onStart: () => {
-        startRequested = true
+      onStart: (pid) => {
+        spawnedPid = pid ?? null
       }
     })
     const state = readServerState()
@@ -186,7 +202,10 @@ export async function runRailProof(name, body) {
     log(`${name}: FAIL`)
     process.exitCode = 1
   } finally {
-    await teardown()
+    if (!(await teardown())) {
+      log('teardown left a process this run started; failing the run')
+      process.exitCode = 1
+    }
     for (const signal of SIGNALS) {
       process.off(signal, onSignal)
     }

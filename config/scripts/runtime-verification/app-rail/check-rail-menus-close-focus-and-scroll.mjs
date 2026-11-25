@@ -309,13 +309,15 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
     )
     assert.equal(hit, name, `the point hits ${name}`)
     const checked = await row.getAttribute('aria-checked')
+    const flipped = checked === 'true' ? 'false' : 'true'
     await page.mouse.click(point.x, point.y)
+    // The named row, still in this menu, must reach the opposite state; a row that vanished doesn't count.
     await page.waitForFunction(
-      ({ name, checked }) =>
-        Array.from(document.querySelectorAll('[role=menuitemcheckbox]'))
+      ({ name, flipped }) =>
+        Array.from(document.querySelectorAll('[role=menu] [role=menuitemcheckbox]'))
           .find((element) => element.textContent?.trim() === name)
-          ?.getAttribute('aria-checked') !== checked,
-      { name, checked },
+          ?.getAttribute('aria-checked') === flipped,
+      { name, flipped },
       { polling: 50 }
     )
     return `${name} ${checked} → ${await row.getAttribute('aria-checked')}`
@@ -346,9 +348,12 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
       const flipped = state.checked === 'true' ? 'false' : 'true'
       for (const expected of [flipped, state.checked]) {
         await page.keyboard.press(' ')
+        // The same row, still focused, reaches the expected state.
         await page.waitForFunction(
-          (checked) => document.activeElement?.getAttribute('aria-checked') === checked,
-          expected,
+          ({ name, checked }) =>
+            document.activeElement?.textContent?.trim() === name &&
+            document.activeElement.getAttribute('aria-checked') === checked,
+          { name, checked: expected },
           { polling: 50 }
         )
         await page.waitForTimeout(1100)

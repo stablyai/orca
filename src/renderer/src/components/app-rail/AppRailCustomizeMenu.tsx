@@ -97,6 +97,10 @@ export function AppRailCustomizeRows({
           onPointerDown={() => {
             byPointerRef.current = true
           }}
+          // A press that started elsewhere (on "…") and is released on a row selects it on pointerup alone.
+          onPointerUp={() => {
+            byPointerRef.current = true
+          }}
           onKeyDown={() => {
             byPointerRef.current = false
           }}

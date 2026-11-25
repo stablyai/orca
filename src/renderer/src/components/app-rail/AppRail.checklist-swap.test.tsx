@@ -69,7 +69,8 @@ async function toggle(name: string, via: 'click' | 'space'): Promise<void> {
     // Arrow keys from the row that has focus, as a keyboard user would; focus must follow them.
     const rows = screen.getAllByRole('menuitemcheckbox')
     for (let step = 0; step < rows.length && document.activeElement !== target; step++) {
-      const from = rows.indexOf(document.activeElement as HTMLElement)
+      const active = document.activeElement
+      const from = active instanceof HTMLElement ? rows.indexOf(active) : -1
       fireEvent.keyDown(document.activeElement!, {
         key: rows.indexOf(target) > from ? 'ArrowDown' : 'ArrowUp'
       })
