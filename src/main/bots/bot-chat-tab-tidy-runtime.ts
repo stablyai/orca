@@ -104,7 +104,20 @@ async function chatAdmission(
     if (facts.holds.length > 0) {
       return facts.holds.join(',')
     }
-    const activeAt = Math.max(chat.lastActiveAt, facts.lastMailAt ?? Number.NEGATIVE_INFINITY)
+    // Read now, not from the pass's list: every session's last turn and the newest mail.
+    const turns = lineage.flatMap((id) => {
+      const turn = store?.getRecord(id)?.lastTurn
+      return turn ? [turn] : []
+    })
+    if (turns.some((turn) => turn.state === 'open')) {
+      return 'open-turn'
+    }
+    const turnAts = turns.map((turn) => turn.at)
+    const activeAt = Math.max(
+      chat.lastActiveAt,
+      facts.lastMailAt ?? Number.NEGATIVE_INFINITY,
+      ...turnAts
+    )
     if (Date.now() - activeAt < BOT_CHAT_TAB_IDLE_MS) {
       return 'active'
     }
