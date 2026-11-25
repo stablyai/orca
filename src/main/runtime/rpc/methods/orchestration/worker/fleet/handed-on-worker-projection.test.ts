@@ -3,6 +3,7 @@ import { OrchestrationDb } from '../../../../../orchestration/db/orchestration-d
 import { projectWorkerFleet } from './worker-list-projection'
 import { exposeWorkerTerminalResource } from '../release/worker-terminal-resource-presentation'
 
+const NOW = Date.parse('2026-11-24T12:00:00Z')
 let db: OrchestrationDb
 beforeEach(() => {
   db = new OrchestrationDb(':memory:')
@@ -48,10 +49,10 @@ function project(dispatchId: string) {
   const rows = db.listWorkerTerminalResources({ dispatchIds: [dispatchId], limit: 1 })
   return projectWorkerFleet({
     rows,
-    attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], Date.now()),
+    attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], NOW),
     statuses: [],
     limit: 1,
-    now: Date.now()
+    now: NOW
   }).workers[0]
 }
 
