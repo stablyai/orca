@@ -135,6 +135,16 @@ export function createCodexStructuredItemStreams(
     }
   })
 
+  // Text past its last checkpoint is saved before a hand-off's last ack and on the daemon's ask.
+  const releaseLiveText = deps.sink.bindLiveText?.({
+    read: () => [],
+    has: () => coalescer.someLength((key, length) => length !== (checkpointLengths.get(key) ?? 0)),
+    flush: () => {
+      flush()
+    },
+    deferrable: true
+  })
+
   const ensureState = (
     threadId: string,
     itemId: string,
@@ -282,6 +292,7 @@ export function createCodexStructuredItemStreams(
     },
     flush,
     dispose: () => {
+      releaseLiveText?.()
       coalescer.dispose()
       states.clear()
       checkpointLengths.clear()

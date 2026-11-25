@@ -47,14 +47,25 @@ export class ProviderRelayChannel {
   private readonly partial = new Map<string, { seq: number; pieces: string[] }>()
   private stopEvents: (() => void) | null = null
   private stopDisconnects: (() => void) | null = null
+  /** The client forgets its daemon's identity on disconnect, before telling us; a reattach compares against this. */
+  private lastDaemonPid: number | null = null
 
   constructor(readonly client: DaemonClient) {}
 
   get daemonPid(): number | null {
-    return this.client.getDaemonIdentity()?.pid ?? null
+    return this.rememberDaemon()
+  }
+
+  private rememberDaemon(): number | null {
+    const pid = this.client.getDaemonIdentity()?.pid ?? null
+    if (pid !== null) {
+      this.lastDaemonPid = pid
+    }
+    return pid ?? this.lastDaemonPid
   }
 
   bind(relayId: string, sink: ProviderRelaySink): () => void {
+    this.rememberDaemon()
     this.listen()
     this.sinks.set(relayId, sink)
     return () => {
