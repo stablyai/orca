@@ -75,6 +75,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   /** Settles once a dropped stream is attached again (or given up), so input waits for it. */
   private reattached: Promise<void> = Promise.resolve()
   private writing: Promise<void> = Promise.resolve()
+  private handingOff = false
   private readonly options: RelayedProviderChildOptions
   private resolveReady!: () => void
   private rejectReady!: (error: Error) => void
@@ -130,8 +131,9 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     return this.output.initializeLine
   }
 
+  /** Handed to the daemon, or being handed: a close meanwhile must not stop what quit keeps. */
   get handedOff(): boolean {
-    return this.state === 'detached'
+    return this.state === 'detached' || this.handingOff
   }
 
   /** Attaches from `fromSeq`; the spool after it and unanswered requests then arrive as stdout. */
@@ -178,7 +180,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   kill(signal?: NodeJS.Signals | number): boolean {
     // A chat that gives up before it was ready still hears the agent's end, after its output.
     this.releaseOutput()
-    if (this.state === 'exited' || this.state === 'detached') {
+    if (this.state === 'exited' || this.handedOff) {
       return false
     }
     this.killed = true
@@ -190,13 +192,11 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
 
   close(grace?: 'brief'): Promise<void> {
     this.releaseOutput()
-    if (this.state === 'exited' || this.state === 'detached') {
+    if (this.state === 'exited' || this.handedOff) {
       return Promise.resolve()
     }
-    return this.options.channel
-      .close(this.relayId, grace)
-      .then(() => {})
-      .catch(() => {})
+    const done = (): void => {}
+    return this.options.channel.close(this.relayId, grace).then(done, done)
   }
 
   /** Everything handed on is durable and acked, so a later attach replays nothing twice. */
@@ -207,9 +207,10 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
 
   /** The agent keeps running under the daemon; this app stops seeing it. */
   async detach(policy: ProviderRelayDetachPolicy): Promise<void> {
-    if (this.state === 'exited' || this.state === 'detached') {
+    if (this.state === 'exited' || this.handedOff) {
       return
     }
+    this.handingOff = true
     // Nothing more is read first: a line read during the last ack would be saved but not acked.
     this.unbind?.()
     this.unbind = null
