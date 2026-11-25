@@ -122,7 +122,7 @@ describe('SSH forwards beside a local [::1] server on the same port', () => {
     expect(manager.listForwards('target').map((forward) => forward.localPort)).toEqual([localPort])
   })
 
-  it('opens that forward on 127.0.0.1, and only while it maps the same port', async (ctx) => {
+  it('opens that forward on 127.0.0.1, only while it is live and maps the same port', async (ctx) => {
     const localPort = await portHeldOnIpv6Only(ctx)
     const manager = useSshTarget({ localPort, remoteHost: 'localhost', remotePort: 3000 })
     const forward = await manager.addForward('target', conn, localPort, 'localhost', 3000)
@@ -142,5 +142,10 @@ describe('SSH forwards beside a local [::1] server on the same port', () => {
     // An edit to another remote port, or another kind's forward with this ID, is not this forward.
     expect(await systemBrowserUrlForForward({ ...request, remotePort: 4000 })).toBeNull()
     expect(await systemBrowserUrlForForward({ ...request, forwardKind: 'paired' })).toBeNull()
+    // A disconnect disposes the session before the forward's listener finishes closing.
+    setConnectionManager({
+      getConnection: () => ({ isDisposed: () => true })
+    } as unknown as SshConnectionManager)
+    expect(await systemBrowserUrlForForward(request)).toBeNull()
   })
 })

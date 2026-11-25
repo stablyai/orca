@@ -1,15 +1,31 @@
 import type { PortForwardEntry } from '../../shared/remote-runtime/ssh/ssh-types'
 import type { ForwardedUrlOpenRequest } from '../../shared/workspace/ports/forwarded-url-open'
-import { portForwardManager } from '../ipc/ssh/ssh-ipc-context'
+import { connectionManager, portForwardManager } from '../ipc/ssh/ssh-ipc-context'
 import { listPairedPortForwards } from './paired-forwards/paired-port-forwards'
 import { holdsIpv6Loopback } from './paired-forwards/paired-port-forward-provider'
+import { pairedForwardTunnel } from './paired-forwards/paired-port-forward-tunnels'
 import { assertIpv6LoopbackPortFree } from '../ssh/port-forwarding/local-forward-ipv6-loopback-probe'
 
+// An explicit :0 is no port at all; only an absent one means the scheme's default.
 function urlPort(url: URL): number {
-  return Number(url.port) || (url.protocol === 'https:' ? 443 : 80)
+  return url.port === '' ? (url.protocol === 'https:' ? 443 : 80) : Number(url.port)
 }
 
+/** Teardown disposes a connection before its listeners finish closing; their entries reach nothing. */
+function connectionUsable(request: ForwardedUrlOpenRequest): boolean {
+  const connection =
+    request.forwardKind === 'ssh'
+      ? connectionManager?.getConnection(request.connectionId)
+      : pairedForwardTunnel(request.connectionId)
+  return connection !== undefined && connection !== null && !connection.isDisposed()
+}
+
+/** The forward still listed under the same mapping, on a connection that is not torn down. Whether
+ *  it has bound yet is not checked: dialing it would open a remote stream on every click. */
 function liveForward(request: ForwardedUrlOpenRequest): PortForwardEntry | undefined {
+  if (!connectionUsable(request)) {
+    return undefined
+  }
   const forwards =
     request.forwardKind === 'ssh'
       ? (portForwardManager?.listForwards(request.connectionId) ?? [])
