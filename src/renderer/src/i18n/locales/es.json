@@ -642,6 +642,11 @@
       "keywordDelay": "retraso",
       "keywordCooldown": "espera",
       "keywordSecurity": "seguridad"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "Bloqueado por la configuración de Claude de tu organización"
+      }
     }
   },
   "menu": {
@@ -25796,10 +25801,7 @@
         "lastItem": "Último elemento",
         "previous": "Elemento anterior",
         "next": "Elemento siguiente",
-        "linkCount": "{{count}} enlaces",
-        "reply": "Responder",
-        "replyAbove": "Responder, arriba",
-        "replyBelow": "Responder, abajo"
+        "subWhere": "Elemento {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "enlazó {{links}}",
@@ -25837,7 +25839,9 @@
         "notSentYet": "aún no enviado",
         "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde.",
         "replacedByNewer": "Sustituida por una pregunta más reciente",
-        "skipped": "Omitidas"
+        "skipped": "Omitidas",
+        "heldImagesLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} imágenes. Envía primero las respuestas guardadas hasta ahora o quita algunas.",
+        "heldSkillsLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} habilidades. Envía primero las respuestas guardadas hasta ahora o quita algunas."
       },
       "readMoreClosedFailed": "No se pudieron leer más elementos cerrados"
     },

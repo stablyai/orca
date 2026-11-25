@@ -120,7 +120,7 @@ export async function codexThread(
   rpc: Parameters<Parameters<typeof runCodexAppServerSession>[1]>[0],
   cli: BotToolsCli,
   tools: SessionMcpTools,
-  ownerStdioNames: readonly string[]
+  ownerStdioNames: ReadonlySet<string>
 ): Promise<string> {
   const started = await rpc.request('thread/start', {
     cwd: cli.folder,
@@ -147,8 +147,8 @@ export async function inheritedTools(cli: BotToolsHome): Promise<BotInheritedToo
 }
 
 /** The owner's Codex stdio servers, read from the same config.toml as its inherited tools. */
-export async function codexStdioToolNames(cli: BotToolsCli): Promise<string[]> {
-  return cli.accountHome ? await readCodexStdioToolNames(cli.accountHome) : []
+export async function codexStdioToolNames(cli: BotToolsCli): Promise<ReadonlySet<string>> {
+  return cli.accountHome ? await readCodexStdioToolNames(cli.accountHome) : new Set()
 }
 
 export async function listBotTools(cli: BotToolsHome): Promise<BotTools> {
@@ -218,7 +218,7 @@ export async function botToolProblems(
   }
   const scoped = own.filter((server) => !remote || 'url' in server)
   // Codex runs the owner's stdio server of a taken name instead, even for a tool Orca signs in to.
-  const ownerStdioNames = cli.agent === 'codex' ? await codexStdioToolNames(cli) : []
+  const ownerStdioNames = cli.agent === 'codex' ? await codexStdioToolNames(cli) : new Set<string>()
   const taken = codexTakenToolProblems(scoped, ownerStdioNames)
   // A tool Orca signs in to has its state from Orca's own store; checking it would start it.
   const readOAuth = botToolCredentialsReader(cli.folder).oauth

@@ -4,9 +4,10 @@ import { requestsCwdOutsideWorkspaceRoot } from '../../shared/shell/launch/termi
 import type { AgentLaunchModeReceipt } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { RUNTIME_CAPABILITIES } from '../../shared/remote-runtime/protocol/protocol-version'
 import {
+  readStructuredCreateSupport,
   REGISTERED_STRUCTURED_AGENTS,
-  readStructuredCreateSupport
-} from './agent-launch-structured-create-support'
+  type AgentLaunchSupportPlace
+} from './agent-launch-support-place'
 import {
   nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
@@ -181,15 +182,17 @@ export function decideAgentLaunchMode(args: {
 }
 
 /** Refuse explicit chat only before effects; a created workspace keeps its terminal fallback. */
+export type { AgentLaunchSupportPlace }
+
 export async function resolveAgentLaunchModeOnHost(
   runtime: AgentLaunchModeHostRuntime & WslHostChatSettingsSource,
   receipt: AgentLaunchModeReceipt,
-  worktreeId: string | undefined,
+  place: AgentLaunchSupportPlace | undefined,
   agent: TuiAgent | undefined,
   vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY,
   context?: AgentLaunchModeSettlement
 ): Promise<AgentLaunchModeReceipt> {
-  if (receipt.mode !== 'structured' || !worktreeId) {
+  if (receipt.mode !== 'structured' || !place) {
     return receipt
   }
   const settlement = context ? { ...context, agent } : undefined
@@ -202,7 +205,7 @@ export async function resolveAgentLaunchModeOnHost(
       launchCwdRelation(context) === 'custom'
     )
   }
-  const support = await readStructuredCreateSupport(runtime, worktreeId, agent)
+  const support = await readStructuredCreateSupport(runtime, place, agent)
   let settled: AgentLaunchModeReceipt
   try {
     settled = downgradeAgentLaunchModeForHost(receipt, support, vocabulary, settlement)
@@ -210,7 +213,7 @@ export async function resolveAgentLaunchModeOnHost(
     throw await withWslHostChatRecovery(error, context?.workspacePath, runtime)
   }
   // Why after the host verdict: an SSH or WSL workspace, which never pins, keeps its own reason.
-  if (settled.mode !== 'structured' || !projectClaudeAccountForLaunch(runtime, worktreeId, agent)) {
+  if (settled.mode !== 'structured' || !projectClaudeAccountForLaunch(runtime, place, agent)) {
     return settled
   }
   // Why refused: an explicit chat request must not quietly become a terminal before anything opens.

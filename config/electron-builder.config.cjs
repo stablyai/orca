@@ -611,6 +611,11 @@ module.exports = {
         context.packager
       )
       await signMacStandaloneHelper(
+        join(resourcesDir, '..', 'MacOS', 'orca-socket-owner'),
+        'orca-socket-owner',
+        context.packager
+      )
+      await signMacStandaloneHelper(
         finalizePackagedProviderExec(resourcesDir, 'darwin'),
         'orca-provider-exec',
         context.packager
@@ -738,6 +743,10 @@ module.exports = {
       {
         from: 'native/process-footprint-macos/.build/release/orca-process-footprint',
         to: 'MacOS/orca-process-footprint'
+      },
+      {
+        from: 'native/socket-owner-macos/.build/release/orca-socket-owner',
+        to: 'MacOS/orca-socket-owner'
       },
       // Nested executables belong in Contents/MacOS, where afterPack signs them before the app.
       {

@@ -47,7 +47,6 @@
 1 src/main/browser/cookies/chromium/import-cookies.ts
 2 src/main/browser/cookies/sources/browser-cookie-detection.ts
 8 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
-2 src/main/browser/cookies/sources/browser-cookie-key.ts
 1 src/main/browser/cookies/sources/browser-cookie-safari-import.ts
 5 src/main/browser/cookies/sources/browser-cookie-source-profiles.ts
 11 src/main/browser/cookies/staging/browser-session-cookie-staging.ts

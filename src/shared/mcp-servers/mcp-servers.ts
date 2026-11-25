@@ -35,9 +35,13 @@ export const McpServerWorkspacesSchema = z
     on: z.array(McpServerWorkspaceKey).max(1000),
     off: z.array(McpServerWorkspaceKey).max(1000)
   })
-  .refine((workspaces) => {
-    const off = new Set(workspaces.off)
-    return !workspaces.on.some((key) => off.has(key))
+  .refine(({ on, off }) => {
+    // Every launch parses each server's choice, and the usual one has an empty side.
+    if (on.length === 0 || off.length === 0) {
+      return true
+    }
+    const offKeys = new Set(off)
+    return !on.some((key) => offKeys.has(key))
   }, 'A workspace is either on or off')
 export type McpServerWorkspaces = z.infer<typeof McpServerWorkspacesSchema>
 
@@ -104,12 +108,25 @@ export type DiscoveredMcpServer = {
   detail: string
   transport: 'http' | 'command'
   agents: string[]
+  /**
+   * The agents Move takes it out of: those whose sessions on the host get Orca's list. The others
+   * keep their copy. Absent from older hosts, which take it out of every agent.
+   */
+  removesFrom?: string[]
   /** The absolute config paths it came from. */
   files: string[]
   /** Empty for a user-level server; for a local-scope one, the repos or folders it's limited to. */
   projectNames: string[]
   /** False for a repo's own files (shared with the team): listed, never moved. */
   movable: boolean
+}
+
+/** The agents Move takes a discovered server out of. */
+export function mcpMoveRemovesFrom(server: {
+  agents: readonly string[]
+  removesFrom?: readonly string[] | undefined
+}): readonly string[] {
+  return server.removesFrom ?? server.agents
 }
 
 export type McpServerTypedFailureCode =

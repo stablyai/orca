@@ -1,11 +1,9 @@
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { resolveProjectClaudeAccount } from '../claude-accounts/project-claude-account-resolution'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { AgentLaunchSupportPlace, CreateSupportRuntime } from './agent-launch-support-place'
 
-export type AgentLaunchModeHostRuntime = Pick<
-  OrcaRuntimeService,
-  'getStructuredAgentSessionCreateSupport'
-> &
+export type AgentLaunchModeHostRuntime = CreateSupportRuntime &
   Partial<Pick<OrcaRuntimeService, 'listRepos'>>
 
 export const PROJECT_CLAUDE_ACCOUNT_DETAIL =
@@ -17,15 +15,15 @@ export const PROJECT_CLAUDE_ACCOUNT_DETAIL =
  */
 export function projectClaudeAccountForLaunch(
   runtime: Partial<Pick<OrcaRuntimeService, 'listRepos'>>,
-  worktreeId: string,
+  place: AgentLaunchSupportPlace,
   agent: TuiAgent | undefined
 ): string | undefined {
-  if (agent !== 'claude') {
+  if (agent !== 'claude' || !('worktreeId' in place)) {
     return undefined
   }
   const repos = runtime.listRepos?.() ?? []
   return resolveProjectClaudeAccount({
     getRepo: (repoId) => repos.find((repo) => repo.id === repoId),
-    worktreeId
+    worktreeId: place.worktreeId
   })
 }

@@ -5193,7 +5193,9 @@
       "ask": {
         "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
         "replacedByNewer": "새 질문으로 대체됨",
-        "skipped": "건너뜀"
+        "skipped": "건너뜀",
+        "heldImagesLimit": "답변은 댓글 하나로 보내지며, 사진은 최대 {{max}}장까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요.",
+        "heldSkillsLimit": "답변은 댓글 하나로 보내지며, 스킬은 최대 {{max}}개까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요."
       }
     },
     "needs": {
@@ -5787,5 +5789,8 @@
     "cardSlot": {
       "working": "작업 중"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "조직의 Claude 설정에 의해 차단됨"
   }
 }
