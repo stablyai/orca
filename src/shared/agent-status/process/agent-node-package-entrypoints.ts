@@ -6,6 +6,8 @@ export const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> 
   zcode: ['node_modules/@zcode/cli/'],
   // DSH's PATH launcher re-execs its profile-installed copy by absolute path.
   'dsh-tui': ['node_modules/@deepseek-harness-tui/dsh-tui/'],
+  // dima's Windows launcher stays Node (bin/dimcode.mjs) around its native child; the TypeScript `dimcode` package is unrelated.
+  dimcode: ['node_modules/dimcode-alpha/'],
   dsb: ['node_modules/@innocarpe/deepseek-build/'],
   'deepseek-build': ['node_modules/@innocarpe/deepseek-build/']
 }

@@ -29,7 +29,8 @@ const APP_TO_AGENT_TYPE: Readonly<Record<string, string>> = {
   'claude-code': 'claude',
   'grok-build': 'grok',
   'kimi-code': 'kimi',
-  'kiro-cli': 'kiro'
+  'kiro-cli': 'kiro',
+  dim: 'dima'
 }
 
 function agentTypeForProgramStatusApp(app: string | undefined): string | undefined {

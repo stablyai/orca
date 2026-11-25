@@ -43,7 +43,9 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   devin: '--permission-mode bypass --respect-workspace-trust false',
   ante: '--yolo',
   trae: '--yolo',
-  droid: '--auto high'
+  droid: '--auto high',
+  // Why: dima's default `workspace-write` preset asks before running commands.
+  dima: '--permission full-access'
 }
 
 export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {

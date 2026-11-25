@@ -43,3 +43,4 @@ export type TuiAgent =
   | 'prime-agent' // Prime Agent (Prime Intellect)
   | 'dsh' // DeepSeek Harness (`dsh`, launched through its `dsh-tui` terminal profile)
   | 'jcode'
+  | 'dima' // DimAgent (ArcShips Rust CLI from `dimcode-alpha`, not the TypeScript `dim`)
