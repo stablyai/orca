@@ -51,6 +51,7 @@ export class ProviderRelay {
     this.idleStop = ProviderRelayIdleStop.forRelay(this, options, () => this.spool.unacked())
     const stdout = options.managed.child.stdout
     this.input = new ProviderRelayInput(options.managed.child.stdin)
+    this.pending.toAgent = (line) => this.attachment === null && this.input.writeLine(line)
     this.spool = new ProviderRelaySpool({
       path: options.spoolPath,
       deliver: (record) => this.deliver(record),

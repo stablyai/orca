@@ -238,7 +238,9 @@ export async function launchRelayedAcpAgent(
       },
       continuation
     },
-    keep: ACP_RELAY_KEEP,
+    keep: spec.dialect.detachedReplies
+      ? { ...ACP_RELAY_KEEP, replies: { ...spec.dialect.detachedReplies } }
+      : ACP_RELAY_KEEP,
     passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor)
   }
   const relayed = await launchRelayedProviderProcess(processLaunch, relay).catch(refuse)

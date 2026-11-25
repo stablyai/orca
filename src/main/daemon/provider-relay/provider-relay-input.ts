@@ -30,6 +30,12 @@ export class ProviderRelayInput {
     this.stdin.write(data, callback)
   }
 
+  /** A line the daemon writes itself (no app is attached to answer it). */
+  writeLine(line: string): true {
+    this.stdin.write(line, () => {})
+    return true
+  }
+
   /** A lone half left by the last write still reaches the agent, as it did before pairs were joined. */
   flush(): void {
     if (this.carry) {

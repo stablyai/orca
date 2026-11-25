@@ -87,6 +87,8 @@ export class ProviderRelayPendingRequests {
   /** Session state kept for the next attach, as `relaySpawn` named it. */
   readonly kept = new ProviderRelayKeptState()
 
+  /** Writes a line to the agent while no app is attached; false while one is. */
+  toAgent: ((line: string) => boolean) | null = null
   /** Spooled requests already answered, resolved or replaced, so a replay never asks again. */
   readonly answered: ProviderRelayAnsweredRequests
 
@@ -107,6 +109,13 @@ export class ProviderRelayPendingRequests {
     this.working.clear()
     this.pending.clear()
     this.pendingChars = 0
+  }
+
+  /** Answers a request the keep spec gives a fixed reply, while no app is attached to. */
+  private answerItself(method: string, id: unknown): boolean {
+    const result = this.kept.reply(method)
+    const line = `${JSON.stringify({ jsonrpc: '2.0', id, result })}\n`
+    return result !== undefined && this.toAgent?.(line) === true
   }
 
   private hold(key: string, record: ProviderRelayRecord): void {
@@ -154,7 +163,10 @@ export class ProviderRelayPendingRequests {
       }
     } else if (typeof method === 'string') {
       const key = rpcId(message.id)
-      if (key) {
+      if (key && this.answerItself(method, message.id)) {
+        // Answered already, so a replay never asks the app again.
+        this.answered.add(record.seq)
+      } else if (key) {
         this.hold(key, record)
       }
     } else if (type === 'control_request' || type === 'control_cancel_request') {

@@ -10,6 +10,20 @@ const keepNames = (value: unknown): value is string[] =>
     (name) => typeof name === 'string' && name.length > 0 && name.length <= MAX_KEEP_NAME_CHARS
   )
 
+const MAX_REPLY_CHARS = 4096
+
+/** Fixed answers by method; a malformed or oversized set answers nothing itself. */
+function readReplies(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined
+  }
+  const entries = Object.entries(value)
+  return keepNames(entries.map(([method]) => method)) &&
+    entries.every(([, reply]) => (JSON.stringify(reply)?.length ?? Infinity) <= MAX_REPLY_CHARS)
+    ? Object.fromEntries(entries)
+    : undefined
+}
+
 /** Untrusted wire input; a malformed spec keeps nothing rather than refusing the launch. */
 export function readProviderRelayKeepSpec(value: unknown): ProviderRelayKeepSpec | null {
   if (typeof value !== 'object' || value === null) {
@@ -19,10 +33,11 @@ export function readProviderRelayKeepSpec(value: unknown): ProviderRelayKeepSpec
   const lines = 'lines' in value ? value.lines : undefined
   const outstanding = 'outstanding' in value ? value.outstanding : undefined
   const requests = 'requests' in value ? value.requests : []
+  const replies = 'replies' in value ? readReplies(value.replies) : undefined
   if (!keepNames(answers) || !keepNames(lines) || !keepNames(outstanding) || !keepNames(requests)) {
     return null
   }
   return answers.length > 0 || lines.length > 0 || outstanding.length > 0 || requests.length > 0
-    ? { answers, lines, outstanding, requests }
+    ? { answers, lines, outstanding, requests, ...(replies ? { replies } : {}) }
     : null
 }

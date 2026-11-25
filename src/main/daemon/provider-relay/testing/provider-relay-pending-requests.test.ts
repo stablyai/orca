@@ -412,6 +412,26 @@ describe('provider relay kept lines', () => {
     agent(pending, 2, configUpdate('x'.repeat(1024 * 1024 + 1)))
     expect(pending.kept.records()).toEqual([])
   })
+  it('answers a housekeeping request itself only while no app is attached, and never replays it', () => {
+    const pending = new ProviderRelayPendingRequests()
+    const replies = { 'craft/drainMidTurnQueue': { messages: [], hasQueuedPrompt: false } }
+    pending.kept.configure({ answers: [], lines: [], outstanding: ['session/prompt'], replies })
+    const written: string[] = []
+    let attached = false
+    pending.toAgent = (line) => !attached && written.push(line) > 0
+    const drain = { id: 9, method: 'craft/drainMidTurnQueue', params: {} }
+    agent(pending, 1, drain)
+    expect(written.map((line) => JSON.parse(line))).toEqual([
+      { jsonrpc: '2.0', id: 9, result: replies['craft/drainMidTurnQueue'] }
+    ])
+    expect(pending.records()).toEqual([])
+    expect(pending.answered.replayed({ seq: 1, line: JSON.stringify(drain) }).line).toBe('')
+    // An attached app answers it as usual.
+    attached = true
+    agent(pending, 2, { ...drain, id: 10 })
+    expect(pending.records().map((record) => record.seq)).toEqual([2])
+  })
+
   it("never keeps a tool's output that quotes a kept update kind in place of the real update", () => {
     const pending = new ProviderRelayPendingRequests()
     pending.kept.configure({

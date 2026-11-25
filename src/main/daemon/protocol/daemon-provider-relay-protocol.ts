@@ -156,6 +156,9 @@ export type ProviderRelayKeepSpec = {
   outstanding: string[]
   /** Client request `method`s whose latest accepted request is kept (its answer says nothing). */
   requests?: string[]
+  /** Agent request `method`s the daemon answers itself, with this result, while no app is attached:
+   *  housekeeping whose answer never depends on the app (an attached app answers as usual). */
+  replies?: Record<string, unknown>
 }
 
 /** A kept line's seq and the name it was kept under (`a:<method>`, `q:<method>` or `l:<marker>`). */
