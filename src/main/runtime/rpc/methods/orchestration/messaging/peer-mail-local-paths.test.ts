@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -87,6 +87,33 @@ describe('local paths in mail to another computer', () => {
     expect(await named(3)).toContain(`names ${a}, ${b}, and ${c} on this computer`)
     expect(await named(5)).toContain(`names ${a}, ${b}, ${c}, and 2 more on this computer`)
     expect(await named(1)).toContain('or attach it to a bot item with --file.')
+  })
+
+  it('keeps the spaces a folder name holds', async () => {
+    mkdirSync(join(dir, 'My  Project'))
+    const file = join(dir, 'My  Project', 'brief.md')
+    writeFileSync(file, '')
+    expect((await localPathWarning(`See ${file} now.`, 'bot:Docs', 'm4'))?.message).toContain(
+      `names ${file} on this computer`
+    )
+  })
+
+  it('reads a quoted path as its whole quoted text', async () => {
+    const report = join(dir, 'report')
+    writeFileSync(report, '')
+    // Only the shorter path exists: the quoted one names a different file.
+    expect(
+      await localPathWarning(`See "${join(dir, 'report notes.md')}".`, 'bot:Docs', 'm4')
+    ).toBeNull()
+    expect((await localPathWarning(`See "${report}".`, 'bot:Docs', 'm4'))?.message).toContain(
+      `names ${report} on this computer`
+    )
+    mkdirSync(join(dir, 'My Project'))
+    const spaced = join(dir, 'My Project', 'brief.md')
+    writeFileSync(spaced, '')
+    expect(
+      (await localPathWarning(`Read \`${spaced}\` first.`, 'bot:Docs', 'm4'))?.message
+    ).toContain(`names ${spaced} on this computer`)
   })
 
   describe('a path that a cap cuts', () => {

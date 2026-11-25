@@ -21,6 +21,7 @@ export const LOCAL_PATH_SCAN_MAX = 64 * 1024
 // The warning is advice: a stalled disk (a network home folder) never holds the send past this.
 const LOOKUP_MAX_MS = 2000
 const PATH_START = /(?:^|[\s"'`(<[=])((?:~|[A-Za-z]:)?[\\/])/g
+const QUOTES = ['"', "'", '`']
 const TRAILING = /[.,;:!?"'`)>\]]+$/
 // "file.ts:42:7" names file.ts.
 const LINE_NUMBER = /(?::\d+){1,2}$/
@@ -55,18 +56,8 @@ function candidates(body: string): string[][] {
     const line = (
       newline !== -1 ? rest.slice(0, newline) : rest.slice(0, LOCAL_PATH_LINE_MAX)
     ).replace(/\r$/, '')
-    const all = line.split(/[ \t]+/)
-    // A line the cap cut may have cut its last word, so no reading ends on that word: it could name a
-    // shorter file than the body does ("/tmp/report" of "/tmp/report-archive").
-    const words = all.slice(0, Math.min(EXTRA_WORDS_MAX + 1, ended ? all.length : all.length - 1))
-    const readings = words
-      .map((_, count) =>
-        words
-          .slice(0, count + 1)
-          .join(' ')
-          .replace(TRAILING, '')
-          .replace(LINE_NUMBER, '')
-      )
+    const readings = lineReadings(line, ended, match[0].charAt(0))
+      .map((raw) => raw.replace(TRAILING, '').replace(LINE_NUMBER, ''))
       .filter((raw) => raw.length > 1)
       .map((raw) => resolve(raw.startsWith('~') ? `${home}${raw.slice(1)}` : raw))
       // Inside one of them, never one of them (or above it): "~/" or the temp folder names no file.
@@ -83,6 +74,36 @@ function candidates(body: string): string[][] {
     }
   }
   return starts
+}
+
+/** What the path starting `line` may be, shortest first, each cut from the line's own text (so a
+ *  folder name keeps its spaces, "My  Project"): through its first word, then each word after it.
+ *  A quoted path is only its whole quoted text. `ended`: the line truly ends where `line` does. */
+function lineReadings(line: string, ended: boolean, opener: string): string[] {
+  if (QUOTES.includes(opener)) {
+    const close = line.indexOf(opener)
+    if (close !== -1) {
+      return [line.slice(0, close)]
+    }
+    // The quote closes past the cap: where the path ends is unknown.
+    if (!ended) {
+      return []
+    }
+  }
+  const ends: number[] = []
+  for (const word of line.matchAll(/[^ \t]+/g)) {
+    const end = word.index + word[0].length
+    // A line the cap cut may have cut its last word, so no reading ends on that word: it could name a
+    // shorter file than the body does ("/tmp/report" of "/tmp/report-archive").
+    if (end === line.length && !ended) {
+      break
+    }
+    ends.push(end)
+    if (ends.length > EXTRA_WORDS_MAX) {
+      break
+    }
+  }
+  return ends.map((end) => line.slice(0, end))
 }
 
 type PathStat = (path: string) => Promise<unknown>
