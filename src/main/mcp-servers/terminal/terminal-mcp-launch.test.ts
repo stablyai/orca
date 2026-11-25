@@ -6,7 +6,7 @@ import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment
 import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { changeBotToolEntries } from '../../bots/bot-tools-file'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { teammateMcpRelayEnv } from './agent-teams-teammate-mcp-env'
+import { ClaudeAgentTeamsService } from '../../runtime/terminal/agent-teams/claude-agent-teams-service'
 import { withTerminalMcpServers, type TerminalMcpLaunchInput } from './terminal-mcp-launch'
 
 const dirs: string[] = []
@@ -63,6 +63,15 @@ async function hostList(): Promise<string> {
   return folder
 }
 
+/** The env a team's teammates start with, for a lead whose terminal had `leadEnv`. */
+const teammateEnv = (leadEnv: Record<string, string>): Record<string, string> =>
+  new ClaudeAgentTeamsService().createLaunchEnv({
+    leaderHandle: 'term_lead',
+    baseEnv: leadEnv,
+    shimDir: '/shim',
+    shimBin: null
+  }).env
+
 const launch = (agent: TuiAgent, command: string): TerminalMcpLaunchInput => ({
   launchAgent: agent,
   command,
@@ -90,7 +99,7 @@ describe('the host list in an agent terminal', () => {
       expect(result).toEqual({ command, pane: null })
       expect({ env: input.env, envToDelete: input.envToDelete }).toEqual(before)
     }
-    expect(teammateMcpRelayEnv({ ORCA_MCP_TOKEN: TOKEN, NO_PROXY: '127.0.0.1' })).toEqual({})
+    expect(teammateEnv({ ORCA_MCP_TOKEN: TOKEN })).not.toHaveProperty('ORCA_MCP_TOKEN')
   })
 
   it('gives an Agent Teams lead the config after its claude-teams subcommand, which forwards it to claude', async () => {
@@ -107,7 +116,7 @@ describe('the host list in an agent terminal', () => {
     expect(command).not.toContain(TOKEN)
     expect(pane?.agent).toBe('claude')
     // Teammates start with the team's env, so the relay env they need is taken from the lead's.
-    expect(teammateMcpRelayEnv(input.env)).toEqual({
+    expect(teammateEnv(input.env)).toMatchObject({
       ORCA_MCP_TOKEN: TOKEN,
       NO_PROXY: expect.stringContaining('127.0.0.1'),
       no_proxy: expect.stringContaining('127.0.0.1')
