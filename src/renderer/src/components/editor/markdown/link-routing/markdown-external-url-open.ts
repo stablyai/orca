@@ -32,9 +32,21 @@ export function openMarkdownExternalUrl(
     return
   }
   // When destination is not specified, respect the user's link routing setting.
-  // The default behavior of openOwnedHttpLink will use the managed browser if
-  // available, otherwise fall back to system browser.
+  // Check managed-browser eligibility: if unavailable, fall back to system browser.
   if (!destination) {
+    const canOpenOwnedBrowser =
+      sourceOwner.kind === 'local'
+        ? getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser'].state ===
+          'enabled'
+        : canOpenRemoteLinkInWorkspaceBrowser(state, worktreeId, sourceOwner)
+    if (!canOpenOwnedBrowser) {
+      openOwnedHttpLink(url, {
+        worktreeId,
+        sourceOwner,
+        forceSystemBrowser: true
+      })
+      return
+    }
     openOwnedHttpLink(url, {
       allowRemoteInApp: true,
       worktreeId,
