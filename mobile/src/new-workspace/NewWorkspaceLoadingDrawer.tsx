@@ -6,7 +6,6 @@ import {
   PanResponder,
   Pressable,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions
 } from 'react-native'
@@ -15,12 +14,9 @@ import { bottomDrawerStyles } from '../components/bottom-drawer/bottom-drawer-st
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
-import {
-  DownloadProgressBar,
-  downloadedMegabytesCaption
-} from '../mobile-web-shell/presentation/DownloadProgressBar'
+import { NewWorkspaceLoadProgress } from './new-workspace-load-progress'
 import type { ShellOverlayDownload } from '../mobile-web-shell/presentation/shell-overlay-load'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -121,32 +117,12 @@ export function NewWorkspaceLoadingDrawer({
                 accessibilityLabel={t('newWorkspace.loadingDrawer.loading', 'Loading')}
               />
             ) : (
-              <DownloadProgress download={download} />
+              <NewWorkspaceLoadProgress download={download} />
             )}
           </View>
         </Animated.View>
       </View>
     </Animated.View>
-  )
-}
-
-function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
-  const t = useMobileTranslation()
-  useMobileColorScheme()
-  return (
-    <>
-      <DownloadProgressBar
-        feed={download.feed}
-        receivedBytes={download.receivedBytes}
-        totalBytes={download.totalBytes}
-        accessibilityLabel={t('newWorkspace.loadingDrawer.downloading', 'Downloading')}
-      />
-      <Text style={styles.caption}>
-        {t('newWorkspace.loadingDrawer.downloadProgress', 'Downloading… {{progress}}', {
-          progress: downloadedMegabytesCaption(download.receivedBytes, download.totalBytes)
-        })}
-      </Text>
-    </>
   )
 }
 
@@ -156,10 +132,5 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm
-  },
-  caption: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    fontVariant: ['tabular-nums']
   }
 }))

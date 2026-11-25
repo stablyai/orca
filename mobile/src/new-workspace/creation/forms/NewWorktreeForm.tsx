@@ -5,7 +5,6 @@ import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../
 import type { WorkspaceSshGate } from '../workspace-ssh-gate'
 import type { useMobileComposerSource } from '../../source-selection/use-mobile-composer-source'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { MobileLoadErrorState, MobileStateView } from '../../../components/feedback/MobileStateView'
 import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
 import {
@@ -28,10 +27,9 @@ import { SmartWorkspaceSourceField } from '../../source-selection/presentation/S
 type Composer = ReturnType<typeof useMobileComposerSource>
 type Selection = { label: string; detail?: string }
 
-export function NewWorktreeFormSheet(props: {
+export function NewWorktreeForm(props: {
   creationKind?: WorkspaceCreationKind
   onCreationKindChange?: (kind: WorkspaceCreationKind) => void
-  visible: boolean
   interactive: boolean
   loading: boolean
   hasRepos: boolean
@@ -83,7 +81,7 @@ export function NewWorktreeFormSheet(props: {
     ? t('components.newWorktreeFormSheet.connectTargetFirst', 'Connect target first')
     : props.selectedAgent.label
   return (
-    <BottomDrawer visible={props.visible} interactive={props.interactive} onClose={props.onClose}>
+    <>
       <View style={styles.header}>
         <SheetHeader
           title={title}
@@ -200,6 +198,6 @@ export function NewWorktreeFormSheet(props: {
           </View>
         </>
       )}
-    </BottomDrawer>
+    </>
   )
 }

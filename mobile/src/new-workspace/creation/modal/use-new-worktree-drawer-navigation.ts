@@ -14,7 +14,6 @@ const NEW_WORKTREE_DRAWER_TRANSITION_MS = 16
 
 export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
   drawerView: NewWorktreeDrawerView
-  formSheetVisible: boolean
   formSheetInteractive: boolean
   transitionDrawer: (nextView: Exclude<NewWorktreeDrawerView, 'transition'>) => void
   openSourceDrawer: () => void
@@ -65,7 +64,6 @@ export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
   return {
     drawerView,
     // Pickers stack over the pinned form, so closing one reveals it in place and the host is never empty (#16165).
-    formSheetVisible: modalVisible,
     formSheetInteractive: drawerView === 'form',
     transitionDrawer,
     openSourceDrawer

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
+import { Keyboard } from 'react-native'
 
 import type { ExecutionHostId } from '../../../../../src/shared/execution-host/execution-host'
 import { useReachableServerClients } from '../../../worktree/execution-hosts/use-reachable-server-clients'
 import { withServerHosts } from '../../../worktree/execution-hosts/server-workspaces'
-import { NewChatWorkspaceModal } from '../../NewChatWorkspaceModal'
 import { NewWorktreeModal } from './NewWorktreeModal'
 import type { NewWorktreeModalProps } from '../forms/new-worktree-modal-types'
 
@@ -33,14 +33,19 @@ export function NewWorktreeModalController({
     [hostLabelById, servers]
   )
 
-  const Form =
-    kind === 'chat' && !modalProps.folderLaunch ? NewChatWorkspaceModal : NewWorktreeModal
   return (
-    <Form
-      key={`${modalProps.hostId ?? ''}:${opening.epoch}:${kind}`}
+    <NewWorktreeModal
+      key={`${modalProps.hostId ?? ''}:${opening.epoch}`}
       {...modalProps}
       creationKind={kind}
-      onCreationKindChange={modalProps.folderLaunch ? undefined : setKind}
+      onCreationKindChange={
+        modalProps.folderLaunch
+          ? undefined
+          : (next) => {
+              Keyboard.dismiss()
+              setKind(next)
+            }
+      }
       visible={visible}
       client={client}
       serverClients={serverClients}

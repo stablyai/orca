@@ -35,7 +35,9 @@ import {
   buildNewWorkspaceRunTargetOptions,
   getNewWorkspaceRunTarget
 } from '../../source-selection/presentation/new-workspace-project-targets'
-import { NewWorktreeFormSheet } from '../forms/NewWorktreeFormSheet'
+import { NewWorktreeForm } from '../forms/NewWorktreeForm'
+import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
+import { useNewChatWorkspaceForm } from '../../use-new-chat-workspace-form'
 import { NewWorktreeModalDrawers } from './NewWorktreeModalDrawers'
 import { useNewWorkspaceAgentSelection } from '../runtime/use-new-workspace-agent-selection'
 import { useNewWorkspaceCreateSubmit } from '../runtime/use-new-workspace-create-submit'
@@ -80,12 +82,15 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     onClose,
     folderLaunch
   } = props
+  const isChat = props.creationKind === 'chat' && !folderLaunch
+  const worktreeVisible = visible && !isChat
+  const chat = useNewChatWorkspaceForm({ ...props, visible: visible && isChat })
   const { repos, allRepos, selectedRepo, setSelectedRepo, loading, loadError, retryLoad } =
     useNewWorkspaceRepositories({
       client: desktopClient,
       serverClients,
       hostId,
-      visible,
+      visible: worktreeVisible,
       ...(folderLaunch
         ? {
             initialRepo: { id: folderLaunch.repoId, executionHostId: folderLaunch.executionHostId }
@@ -95,7 +100,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   // Route picked-repo operations to its host; desktop settings/accounts stay on desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
   const client = repoServer ? (serverClients?.get(repoServer) ?? null) : desktopClient
-  const navigation = useNewWorktreeDrawerNavigation(visible)
+  const navigation = useNewWorktreeDrawerNavigation(worktreeVisible)
   // Kept per desktop until a create succeeds, and read only once the form shows. The host is in the key
   // because the tablet sidebar's native host list has no shell to bind it.
   const [note, setNote] = useDurableDraftField(
@@ -103,8 +108,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     'note'
   )
   const [error, setError] = useState('')
-  const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId, repoServer)
-  const repoRuntime = useNewWorktreeRuntimeCapabilities(client, visible)
+  const runtime = useNewWorkspaceRuntimeContext(client, worktreeVisible, hostId, repoServer)
+  const repoRuntime = useNewWorktreeRuntimeCapabilities(client, worktreeVisible)
   const {
     tasksSupported,
     getWorktreeCreateCutoverSupport,
@@ -119,7 +124,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     client,
     connectionId: selectedRepoConnectionId,
     repoId: selectedRepo?.id,
-    visible
+    visible: worktreeVisible
   })
   const setupScript = useNewWorkspaceSetupScript({ client, selectedRepo })
   // A kept note opens Options until the user folds them, so it isn't sent unseen.
@@ -148,13 +153,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   }, [composer, folderLaunch])
   const selectedRepoIsGit = selectedRepo ? selectedRepo.kind !== 'folder' : true
   useWorktreeCreateBasePrefetch({
-    client: visible ? client : null,
+    client: worktreeVisible ? client : null,
     repoId: selectedRepo?.id ?? null,
     repoIsGit: selectedRepoIsGit,
     selection: composer.createSelection
   })
   const agentSelection = useNewWorkspaceAgentSelection({
-    visible,
+    visible: worktreeVisible,
     runtimeSettings: runtime.runtimeSettings,
     detectedAgentIds: executionTarget.detectedAgentIds
   })
@@ -283,90 +288,108 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   }
 
   return (
-    <BottomDrawerModalHost visible={visible} onRequestClose={requestClose}>
-      <NewWorktreeFormSheet
-        creationKind={props.creationKind}
-        onCreationKindChange={props.onCreationKindChange}
-        visible={navigation.formSheetVisible}
-        interactive={navigation.formSheetInteractive}
-        loading={loading}
-        hasRepos={repos.length > 0}
-        loadError={loadError}
-        onRetryLoad={retryLoad}
-        project={selectedProject}
-        runTarget={selectedRunTarget}
-        projectBadgeColor={selectedRepo ? getMobileWorkspaceRepoBadgeColor(selectedRepo) : null}
-        selectedRepoIsGit={selectedRepoIsGit}
-        selectedRepoConnectionId={selectedRepoConnectionId}
-        selectedRepoName={
-          selectedRepo?.displayName ??
-          t('components.newWorktreeModal.remoteRepository', 'Remote repository')
-        }
-        sshGate={executionTarget.sshGate}
-        composer={composer}
-        selectedAgent={agentSelection.selectedAgent}
-        showAdvanced={showOptions}
-        note={note}
-        setupCommand={setupScript.setupCommand}
-        setupSource={setupScript.setupSource}
-        setupRunPolicy={setupScript.setupRunPolicy}
-        setupDecisionChoice={setupScript.setupDecisionChoice}
-        runSetup={setupScript.runSetup}
-        waitForSetup={setupScript.waitForSetup}
-        error={error}
-        creating={createSubmit.creating}
-        canCreate={canCreate}
-        onClose={onClose}
-        onOpenExternalUrl={openExternalUrl}
-        onOpenProject={() => openPicker('project')}
-        onOpenRunTarget={() => openPicker('runTarget')}
-        onOpenSource={navigation.openSourceDrawer}
-        onClearError={() => setError('')}
-        onConnect={() => void executionTarget.connect()}
-        onOpenAgent={() => openPicker('agent')}
-        onShowAdvancedChange={(show) => {
-          if (!show) {
-            setNoteOptions('folded')
-          }
-          setupScript.setShowAdvanced(show)
-        }}
-        onNoteChange={setNote}
-        onSetupDecisionChange={setupScript.setSetupDecisionChoice}
-        onRunSetupChange={setupScript.setRunSetup}
-        onWaitForSetupChange={setupScript.setWaitForSetup}
-        onCreate={() => void createSubmit.create()}
-      />
-
-      <NewWorktreeModalDrawers
+    <BottomDrawerModalHost
+      visible={visible}
+      onRequestClose={isChat ? chat.requestClose : requestClose}
+    >
+      <BottomDrawer
         visible={visible}
-        drawerView={navigation.drawerView}
-        client={client}
-        composer={composer}
-        sourceAvailability={sourceAvailability}
-        selectedRepo={selectedRepo}
-        repos={hostRepos}
-        pasteRepos={pasteRepos}
-        jiraSiteId={runtime.jiraConnection.selection}
-        jiraSites={runtime.jiraConnection.sites}
-        sshReady={!executionTarget.sshGate.requiresConnection}
-        projectPickerItems={projectPickerItems}
-        selectedProjectId={selectedProjectId}
-        runTargetPickerItems={runTargetPickerItems}
-        pickerAgentOptions={agentSelection.pickerAgentOptions}
-        selectedAgent={agentSelection.selectedAgent}
-        setupTrustPrompt={createSubmit.setupTrustPrompt}
-        creating={createSubmit.creating}
-        onSourceRepoChange={(repo) => selectRepo(repo, false)}
-        onRepoChange={(repo) => selectRepo(repo, true)}
-        onAgentChange={(agent) => {
-          agentSelection.setAgentOverridden(true)
-          agentSelection.setSelectedAgent(agent)
-        }}
-        onTransitionToForm={() => navigation.transitionDrawer('form')}
-        onApproveSetupTrust={(alwaysTrust) => void createSubmit.approveSetupTrust(alwaysTrust)}
-        onSkipSetupTrust={createSubmit.skipSetupTrust}
-        onCloseSetupTrust={createSubmit.closeSetupTrust}
-      />
+        interactive={isChat ? chat.interactive : navigation.formSheetInteractive}
+        dismissible={isChat ? chat.dismissible : undefined}
+        onClose={isChat ? chat.onClose : onClose}
+        scrollResetKey={isChat ? 'chat' : 'worktree'}
+      >
+        {isChat ? (
+          chat.form
+        ) : (
+          <NewWorktreeForm
+            creationKind={props.creationKind}
+            onCreationKindChange={props.onCreationKindChange}
+            interactive={navigation.formSheetInteractive}
+            loading={loading}
+            hasRepos={repos.length > 0}
+            loadError={loadError}
+            onRetryLoad={retryLoad}
+            project={selectedProject}
+            runTarget={selectedRunTarget}
+            projectBadgeColor={selectedRepo ? getMobileWorkspaceRepoBadgeColor(selectedRepo) : null}
+            selectedRepoIsGit={selectedRepoIsGit}
+            selectedRepoConnectionId={selectedRepoConnectionId}
+            selectedRepoName={
+              selectedRepo?.displayName ??
+              t('components.newWorktreeModal.remoteRepository', 'Remote repository')
+            }
+            sshGate={executionTarget.sshGate}
+            composer={composer}
+            selectedAgent={agentSelection.selectedAgent}
+            showAdvanced={showOptions}
+            note={note}
+            setupCommand={setupScript.setupCommand}
+            setupSource={setupScript.setupSource}
+            setupRunPolicy={setupScript.setupRunPolicy}
+            setupDecisionChoice={setupScript.setupDecisionChoice}
+            runSetup={setupScript.runSetup}
+            waitForSetup={setupScript.waitForSetup}
+            error={error}
+            creating={createSubmit.creating}
+            canCreate={canCreate}
+            onClose={onClose}
+            onOpenExternalUrl={openExternalUrl}
+            onOpenProject={() => openPicker('project')}
+            onOpenRunTarget={() => openPicker('runTarget')}
+            onOpenSource={navigation.openSourceDrawer}
+            onClearError={() => setError('')}
+            onConnect={() => void executionTarget.connect()}
+            onOpenAgent={() => openPicker('agent')}
+            onShowAdvancedChange={(show) => {
+              if (!show) {
+                setNoteOptions('folded')
+              }
+              setupScript.setShowAdvanced(show)
+            }}
+            onNoteChange={setNote}
+            onSetupDecisionChange={setupScript.setSetupDecisionChoice}
+            onRunSetupChange={setupScript.setRunSetup}
+            onWaitForSetupChange={setupScript.setWaitForSetup}
+            onCreate={() => void createSubmit.create()}
+          />
+        )}
+      </BottomDrawer>
+
+      {isChat ? (
+        chat.drawers
+      ) : (
+        <NewWorktreeModalDrawers
+          visible={visible}
+          drawerView={navigation.drawerView}
+          client={client}
+          composer={composer}
+          sourceAvailability={sourceAvailability}
+          selectedRepo={selectedRepo}
+          repos={hostRepos}
+          pasteRepos={pasteRepos}
+          jiraSiteId={runtime.jiraConnection.selection}
+          jiraSites={runtime.jiraConnection.sites}
+          sshReady={!executionTarget.sshGate.requiresConnection}
+          projectPickerItems={projectPickerItems}
+          selectedProjectId={selectedProjectId}
+          runTargetPickerItems={runTargetPickerItems}
+          pickerAgentOptions={agentSelection.pickerAgentOptions}
+          selectedAgent={agentSelection.selectedAgent}
+          setupTrustPrompt={createSubmit.setupTrustPrompt}
+          creating={createSubmit.creating}
+          onSourceRepoChange={(repo) => selectRepo(repo, false)}
+          onRepoChange={(repo) => selectRepo(repo, true)}
+          onAgentChange={(agent) => {
+            agentSelection.setAgentOverridden(true)
+            agentSelection.setSelectedAgent(agent)
+          }}
+          onTransitionToForm={() => navigation.transitionDrawer('form')}
+          onApproveSetupTrust={(alwaysTrust) => void createSubmit.approveSetupTrust(alwaysTrust)}
+          onSkipSetupTrust={createSubmit.skipSetupTrust}
+          onCloseSetupTrust={createSubmit.closeSetupTrust}
+        />
+      )}
     </BottomDrawerModalHost>
   )
 }

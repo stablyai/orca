@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
-import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
-import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ListGroup, ListRow, SectionHeader, LIST_LEADING_INSET } from '../components/list/ListGroup'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
@@ -23,7 +21,7 @@ import { WorkspaceCreationTabs } from './WorkspaceCreationTabs'
 import { durableDraftRowKey } from '../drafts/durable-draft-rows'
 import { useDurableDraftField } from '../drafts/durable-draft-fields'
 
-export function NewChatWorkspaceModal(props: NewWorktreeModalProps) {
+export function useNewChatWorkspaceForm(props: NewWorktreeModalProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [settings, setSettings] = useState<NewWorktreeRuntimeSettings | null>(null)
@@ -114,14 +112,13 @@ export function NewChatWorkspaceModal(props: NewWorktreeModalProps) {
     props.onClose()
   }
   const title = t('chats.create', 'Create chat')
-  return (
-    <BottomDrawerModalHost visible={props.visible} onRequestClose={requestClose}>
-      <BottomDrawer
-        dismissible={!creating}
-        visible={navigation.formSheetVisible}
-        interactive={navigation.formSheetInteractive}
-        onClose={creating ? () => undefined : props.onClose}
-      >
+  return {
+    interactive: navigation.formSheetInteractive,
+    dismissible: !creating,
+    requestClose,
+    onClose: creating ? () => undefined : props.onClose,
+    form: (
+      <>
         <View style={styles.header}>
           <SheetHeader
             title={title}
@@ -180,7 +177,9 @@ export function NewChatWorkspaceModal(props: NewWorktreeModalProps) {
             onPress={() => void create()}
           />
         </View>
-      </BottomDrawer>
+      </>
+    ),
+    drawers: (
       <PickerListDrawer
         visible={props.visible && navigation.drawerView === 'agent'}
         title={t('components.newWorktreeFormSheet.agent', 'Agent')}
@@ -193,6 +192,6 @@ export function NewChatWorkspaceModal(props: NewWorktreeModalProps) {
         onClose={() => navigation.transitionDrawer('form')}
         renderIcon={(agent) => <MobileAgentIcon agentId={agent.id} size={20} />}
       />
-    </BottomDrawerModalHost>
-  )
+    )
+  }
 }
