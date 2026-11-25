@@ -1,9 +1,10 @@
-import { chmodSync, mkdirSync, readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell/launch/shell-argument-quoting'
 
 const SHIM_DIR_NAME = 'macos-open-shim'
+const writtenScriptByPath = new Map<string, string>()
 
 /** Routes single http(s) URL opens to Orca when a mobile client is viewing the terminal, else /usr/bin/open. */
 export function buildMacosTerminalOpenShimScript(cliLauncher: string | null): string {
@@ -27,29 +28,40 @@ exec /usr/bin/open "$@"
 `
 }
 
-export function ensureMacosTerminalOpenShimDir(options: {
+export async function ensureMacosTerminalOpenShimDir(options: {
   userDataPath: string
   cliLauncher: string | null
   platform?: NodeJS.Platform
-}): string | null {
+}): Promise<string | null> {
   if ((options.platform ?? process.platform) !== 'darwin') {
     return null
   }
   const shimDir = join(options.userDataPath, SHIM_DIR_NAME)
   const shimPath = join(shimDir, 'open')
   const script = buildMacosTerminalOpenShimScript(options.cliLauncher)
+  if (writtenScriptByPath.get(shimPath) === script) {
+    return shimDir
+  }
   try {
     let existing: string | null = null
     try {
-      existing = readFileSync(shimPath, 'utf8')
+      existing = await readFile(shimPath, 'utf8')
     } catch {
       existing = null
     }
     if (existing !== script) {
-      mkdirSync(shimDir, { recursive: true })
-      writeFileAtomically(shimPath, script, { mode: 0o755 })
+      await mkdir(shimDir, { recursive: true })
+      const tempPath = `${shimPath}.${randomUUID()}.tmp`
+      try {
+        await writeFile(tempPath, script, { mode: 0o755 })
+        await rename(tempPath, shimPath)
+      } catch (error) {
+        await unlink(tempPath).catch(() => {})
+        throw error
+      }
     }
-    chmodSync(shimPath, 0o755)
+    await chmod(shimPath, 0o755)
+    writtenScriptByPath.set(shimPath, script)
   } catch {
     return null
   }
@@ -66,17 +78,12 @@ export function applyMacosTerminalOpenShimEnv(
   }
 ): string | null {
   delete env.ORCA_OPEN_SHIM_DIR
-  if (options.isWsl) {
+  const platform = options.platform ?? process.platform
+  if (options.isWsl || platform !== 'darwin') {
     return null
   }
-  const shimDir = ensureMacosTerminalOpenShimDir({
-    userDataPath: options.userDataPath,
-    cliLauncher: options.cliLauncher,
-    platform: options.platform
-  })
-  if (!shimDir) {
-    return null
-  }
+  const shimDir = join(options.userDataPath, SHIM_DIR_NAME)
+  void ensureMacosTerminalOpenShimDir(options)
   env.ORCA_OPEN_SHIM_DIR = shimDir
   const currentPath = env.PATH ?? process.env.PATH ?? ''
   const entries = currentPath.split(':').filter((entry) => entry.length > 0 && entry !== shimDir)

@@ -52,7 +52,11 @@ export async function openUrlForMobileOrClient(options: {
       { clientKind: 'mobile', signal: options.signal }
     )
     const worktree = await options.host.resolveBrowserWorkspace(options.params.worktree)
-    await options.host.followBrowserTabOnMobile?.(worktree.id, created.browserPageId)
+    const delivered =
+      (await options.host.followBrowserTabOnMobile?.(worktree.id, created.browserPageId)) ?? false
+    if (!delivered && options.params.onlyWhenMobileViewing) {
+      return { browserPageId: null }
+    }
     return created
   }
   if (options.params.onlyWhenMobileViewing) {
@@ -79,7 +83,7 @@ export async function followCreatedBrowserTabOnMobile(
   },
   worktreeId: string,
   browserPageId: string
-): Promise<void> {
+): Promise<boolean> {
   const findBrowserTab = (): RuntimeMobileSessionBrowserTab | undefined => {
     if (runtime.hasOffscreenBrowser) {
       runtime.hydrateHeadlessTabs(worktreeId)
@@ -118,14 +122,15 @@ export async function followCreatedBrowserTabOnMobile(
     })
   }
   if (!tab) {
-    return
+    return false
   }
   const mobileIds = runtime.getMobileClientNavigationIds(worktreeId)
   if (mobileIds.length === 0) {
-    return
+    return false
   }
   const snapshot = await runtime.getMobileSessionTabsForWorktree(worktreeId)
   for (const clientNavigationId of mobileIds) {
     runtime.applyTabNavigation(snapshot, tab.id, 'caller', clientNavigationId, true)
   }
+  return true
 }

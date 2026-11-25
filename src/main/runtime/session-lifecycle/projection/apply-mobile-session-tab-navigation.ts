@@ -61,10 +61,11 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     return ptyId !== null && (this.mobileSubscribers.get(ptyId)?.size ?? 0) > 0
   }
 
-  protected followBrowserTabOnMobile(worktreeId: string, browserPageId: string): Promise<void> {
+  protected followBrowserTabOnMobile(worktreeId: string, browserPageId: string): Promise<boolean> {
     return followCreatedBrowserTabOnMobile(
       {
-        hasOffscreenBrowser: Boolean(this.offscreenBrowserBackend),
+        hasOffscreenBrowser:
+          !this.hasAuthoritativeWindow() && Boolean(this.offscreenBrowserBackend),
         hydrateHeadlessTabs: (id) => this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(id),
         getMobileSessionSnapshot: (id) => this.mobileSessionTabsByWorktree.get(id),
         graphSyncCallbacks: this.graphSyncCallbacks,

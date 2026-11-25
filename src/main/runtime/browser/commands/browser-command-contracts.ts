@@ -69,7 +69,7 @@ export type RuntimeBrowserCommandHost = {
   /** The tab bar's browser tabs, loaded or not, from the published session snapshot. */
   readBrowserTabBar?(worktreeId: string | undefined): BrowserTabBarEntry[]
   hasMobileTerminalViewer?(paneKey: string): boolean
-  followBrowserTabOnMobile?(worktreeId: string, browserPageId: string): Promise<void>
+  followBrowserTabOnMobile?(worktreeId: string, browserPageId: string): Promise<boolean>
   retireRuntimeOwnedBrowserSessionTab?(worktreeId: string, browserPageId: string): boolean | void
   /** Persist/start only when no host window exists; hasStartable reads saved tabs either way. */
   serveBrowserTabs?: Pick<

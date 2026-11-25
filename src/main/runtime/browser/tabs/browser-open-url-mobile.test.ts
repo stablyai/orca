@@ -6,11 +6,11 @@ type CreationTargets = ConstructorParameters<typeof RuntimeBrowserTabCreation>[1
 
 function makeCreation(overrides: {
   hasMobileTerminalViewer?: (paneKey: string) => boolean
-  followBrowserTabOnMobile?: (worktreeId: string, browserPageId: string) => Promise<void>
+  followBrowserTabOnMobile?: (worktreeId: string, browserPageId: string) => Promise<boolean>
 }) {
   const createTab = vi.fn().mockResolvedValue({ browserPageId: 'page-mobile-1' })
   const followBrowserTabOnMobile =
-    overrides.followBrowserTabOnMobile ?? vi.fn().mockResolvedValue(undefined)
+    overrides.followBrowserTabOnMobile ?? vi.fn().mockResolvedValue(true)
   const host: CreationHost = {
     getAgentBrowserBridge: vi.fn().mockReturnValue(null),
     resolveBrowserWorkspace: vi.fn().mockResolvedValue({ id: 'wt-1' }),
@@ -77,5 +77,21 @@ describe('RuntimeBrowserTabCreation.browserOpenUrlOnClient', () => {
     expect(result).toEqual({ browserPageId: null })
     expect(createTab).not.toHaveBeenCalled()
     expect(followBrowserTabOnMobile).not.toHaveBeenCalled()
+  })
+
+  it('returns null browserPageId when mobile follow delivery fails under onlyWhenMobileViewing', async () => {
+    const { creation } = makeCreation({
+      hasMobileTerminalViewer: () => true,
+      followBrowserTabOnMobile: vi.fn().mockResolvedValue(false)
+    })
+
+    const result = await creation.browserOpenUrlOnClient({
+      url: 'https://auth.example.com/login',
+      worktree: 'id:wt-1',
+      paneKey: 'tab-1:leaf-1',
+      onlyWhenMobileViewing: true
+    })
+
+    expect(result).toEqual({ browserPageId: null })
   })
 })

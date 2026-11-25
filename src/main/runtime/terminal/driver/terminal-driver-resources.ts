@@ -79,7 +79,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     options: BrowserSessionTabSelectionOptions
   ): Promise<void>
   protected abstract hasMobileTerminalViewerForPane(paneKey: string): boolean
-  protected abstract followBrowserTabOnMobile(worktreeId: string, pageId: string): Promise<void>
+  protected abstract followBrowserTabOnMobile(worktreeId: string, pageId: string): Promise<boolean>
   abstract notifyMobileSessionTabsChanged(worktreeId?: string): void
   protected abstract getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId
   protected abstract setWorkspaceSessionForWorktree(

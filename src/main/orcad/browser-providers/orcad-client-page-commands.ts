@@ -200,7 +200,7 @@ function createTab(
   }
   const hasEngine = engineAvailable()
   const createOnEngine = async (): Promise<unknown> => {
-    const created = await forward([params, caller])
+    const created = await forward([params, caller], 'browserTabCreate')
     if (
       hasEngine &&
       browserTabCreateClientPageStartsActive(params?.activate) &&

@@ -17,18 +17,18 @@ afterEach(() => {
 })
 
 describe('macos-terminal-open-shim', () => {
-  it('returns null on non-darwin platforms', () => {
+  it('returns null on non-darwin platforms', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-open-shim-'))
     tempDirs.push(dir)
     expect(
-      ensureMacosTerminalOpenShimDir({
+      await ensureMacosTerminalOpenShimDir({
         userDataPath: dir,
         cliLauncher: '/usr/local/bin/orca',
         platform: 'linux'
       })
     ).toBeNull()
     expect(
-      ensureMacosTerminalOpenShimDir({
+      await ensureMacosTerminalOpenShimDir({
         userDataPath: dir,
         cliLauncher: 'C:\\orca.exe',
         platform: 'win32'
@@ -38,7 +38,7 @@ describe('macos-terminal-open-shim', () => {
 
   it.skipIf(process.platform === 'win32')(
     'routes single http(s) URLs with ORCA_PANE_KEY silently and leaves non-URLs alone',
-    () => {
+    async () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-open-shim-'))
       tempDirs.push(dir)
       const argsLog = join(dir, 'cli-args.txt')
@@ -48,7 +48,7 @@ describe('macos-terminal-open-shim', () => {
       })
       chmodSync(fakeCli, 0o755)
 
-      const shimDir = ensureMacosTerminalOpenShimDir({
+      const shimDir = await ensureMacosTerminalOpenShimDir({
         userDataPath: dir,
         cliLauncher: fakeCli,
         platform: 'darwin'
