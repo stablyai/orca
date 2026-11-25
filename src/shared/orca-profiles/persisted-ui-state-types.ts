@@ -1,4 +1,5 @@
 import type { GitHistoryRefs } from '../git/history/git-history-types'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { BotChatFold } from '../bots/bot-chat-tree'
 import type { JiraQuickFilterState } from '../jira/jira-quick-filters'
 import type { BrowserDevToolsDockLayout } from '../browser/devtools/browser-devtools-dock'
@@ -105,6 +106,8 @@ export type PersistedUIState = {
   agentsVisibleHostIds?: VisibleWorkspaceHostIds
   /** Agents-view project filter; empty = all projects. Separate from filterRepoIds (workspace nav). */
   agentsFilterRepoIds?: string[]
+  /** Agents-view catalog selection; empty or absent means all agent types. */
+  agentsFilterAgentTypes?: TuiAgent[]
   /** Agents-view workspace-origin filters; separate from the workspace-nav hide flags. Absent means off. */
   agentsHideWorkspacesFromOtherDevices?: boolean
   agentsHideAutomationGeneratedWorkspaces?: boolean

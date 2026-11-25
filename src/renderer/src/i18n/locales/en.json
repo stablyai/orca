@@ -19889,6 +19889,7 @@
           "unreadCount_other": "{{count}} unread"
         },
         "ActivityScopeFilterControls": {
+          "showFullCatalog": "Show full catalog",
           "resetScope": "Show all hosts and projects",
           "hideAutomationCreated": "Hide automation-created",
           "hideCliCreated": "Hide CLI-created",

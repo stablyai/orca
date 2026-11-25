@@ -1,5 +1,6 @@
 import { GitHistoryRefName } from '../source-control/git-params'
 import * as z from 'zod'
+import { ALL_TUI_AGENTS } from '../../agent-launch/catalog/tui-agent-display-names'
 import { StatusBarItems } from './client-ui-status-bar-params'
 import { isFeatureTipSeenId } from '../../feature-education/feature-tips'
 import {
@@ -133,6 +134,7 @@ export const UiUpdateFields = z
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
     agentsVisibleHostIds: z.array(z.string()).nullable().optional(),
     agentsFilterRepoIds: StringArray.optional(),
+    agentsFilterAgentTypes: z.array(z.enum(ALL_TUI_AGENTS)).optional(),
     agentsHideWorkspacesFromOtherDevices: z.boolean().optional(),
     agentsHideAutomationGeneratedWorkspaces: z.boolean().optional(),
     agentsHideCliCreatedWorkspaces: z.boolean().optional(),

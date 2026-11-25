@@ -9,8 +9,7 @@ import {
 import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
   normalizeExecutionHostScope,
-  normalizeExecutionHostOrder,
-  normalizeVisibleExecutionHostIds
+  normalizeExecutionHostOrder
 } from '../../../../../shared/execution-host/execution-host'
 import { hydrateFeatureInteractions } from './ui-slice-feature-interactions-hydration'
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
@@ -18,10 +17,6 @@ import { normalizeFeatureTipIds } from '../../../../../shared/feature-education/
 import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../../../shared/workspace-view/sleeping-workspace-visibility'
 import { normalizeAgentActivityDisplayMode } from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/row-display/card-properties'
-import {
-  normalizeActivityGroupBy,
-  normalizeThreadReadFilter
-} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -56,7 +51,6 @@ import {
   hydrateTrustedOrcaHooks,
   hydrateUnexpectedSignoutDismissal,
   normalizeHydratedVisibleWorkspaceHostIds,
-  preserveStringArrayIdentity,
   sanitizeHydratedActiveView,
   sanitizePersistedRepoIds,
   sanitizePerWorktreePreferences,
@@ -75,6 +69,7 @@ import {
 import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
 import { hydrateBrowserPaneLayout } from './browser-pane-layout-hydration'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
+import { hydrateAgentsViewPreferences } from './ui-slice-agents-view-preference-actions'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
@@ -94,7 +89,6 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             : withWslMovedRepoIds(listedRepoIds, s.wslMovedProjects)
         const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
         const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
-        const persistedAgentsFilterRepoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
         // Why: pre-rename builds used sidekick* keys; read as fallback only so new pet* writes win after upgrade.
         const customPets = Array.isArray(ui.customPets)
           ? ui.customPets
@@ -162,25 +156,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             validRepoIds.size === 0
               ? persistedFilterRepoIds
               : persistedFilterRepoIds.filter((repoId) => validRepoIds.has(repoId)),
-          agentsVisibleHostIds: preserveStringArrayIdentity(
-            s.agentsVisibleHostIds,
-            normalizeVisibleExecutionHostIds(ui.agentsVisibleHostIds)
-          ),
-          agentsFilterRepoIds: preserveStringArrayIdentity(
-            s.agentsFilterRepoIds,
-            validRepoIds.size === 0
-              ? persistedAgentsFilterRepoIds
-              : persistedAgentsFilterRepoIds.filter((repoId) => validRepoIds.has(repoId))
-          ),
-          agentsHideWorkspacesFromOtherDevices: ui.agentsHideWorkspacesFromOtherDevices === true,
-          agentsHideAutomationGeneratedWorkspaces:
-            ui.agentsHideAutomationGeneratedWorkspaces === true,
-          agentsHideCliCreatedWorkspaces: ui.agentsHideCliCreatedWorkspaces === true,
-          agentsShowChildAgents: ui.agentsShowChildAgents === true,
-          agentsCompactMode: ui.agentsCompactMode !== false,
-          agentsShowSearch: ui.agentsShowSearch !== false,
-          agentsReadFilter: normalizeThreadReadFilter(ui.agentsReadFilter),
-          agentsGroupBy: normalizeActivityGroupBy(ui.agentsGroupBy),
+          ...hydrateAgentsViewPreferences(s, ui, validRepoIds),
           collapsedGroups: new Set(ui.collapsedGroups ?? []),
           uiZoomLevel: ui.uiZoomLevel ?? 0,
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
