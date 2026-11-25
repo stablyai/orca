@@ -8,6 +8,7 @@ export type FileSearchWorktreeState = {
   useRegex: boolean
   includePattern: string
   excludePattern: string
+  includeIgnored: boolean
   results: SearchResult | null
   resultOwner: FileSearchResultOwner | null
   error?: string | null

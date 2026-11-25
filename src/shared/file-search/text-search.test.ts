@@ -1,11 +1,27 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildRgArgs,
   buildSubmatchRegex,
   createAccumulator,
   ingestGitGrepLine,
   ingestRgJsonLine
 } from './text-search'
+
+describe('buildRgArgs', () => {
+  it('keeps VCS ignore by default', () => {
+    const args = buildRgArgs('needle', '.', {})
+    expect(args).not.toContain('--no-ignore-vcs')
+    expect(args).toContain('!.git')
+  })
+
+  it('widens only VCS ignore when ignored files are included', () => {
+    const args = buildRgArgs('needle', '.', { includeIgnored: true })
+    expect(args).toContain('--no-ignore-vcs')
+    expect(args).toContain('--no-config')
+    expect(args).toContain('!.git')
+  })
+})
 
 describe('ingestRgJsonLine', () => {
   const makeMatch = (

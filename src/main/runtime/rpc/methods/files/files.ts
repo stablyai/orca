@@ -226,6 +226,7 @@ export const FILE_METHODS = [
             useRegex: params.useRegex,
             includePattern: params.includePattern,
             excludePattern: params.excludePattern,
+            includeIgnored: params.includeIgnored,
             maxResults: params.maxResults
           },
           { signal }
