@@ -9,6 +9,13 @@ import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import { noteAcpForkVersion } from '../capabilities/acp-fork-support'
 
+/** Chats whose last launch skipped its check for a kept agent; a fresh spawn instead must not. */
+const skippedForKept = new Set<string>()
+
+export function takeAcpKeptVersionSkip(chat: string): boolean {
+  return skippedForKept.delete(chat)
+}
+
 export async function checkAcpLaunchVersion(
   spec: AcpLaunchSpec,
   launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'> & {
@@ -20,6 +27,7 @@ export async function checkAcpLaunchVersion(
   read?: AgentCliVersionReader
 ): Promise<AgentCliVersionCheck> {
   if (launch.chat !== undefined && keptRunningProviderRelayPid(launch.chat) !== null) {
+    skippedForKept.add(launch.chat)
     return { status: 'unknown', version: null }
   }
   if (!spec.minimumVersions && !wantVersion) {

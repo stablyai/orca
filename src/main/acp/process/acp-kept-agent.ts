@@ -1,3 +1,4 @@
+import { takeAcpKeptVersionSkip } from '../launch/acp-launch-version'
 import type { ProviderRelayKeepSpec } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import {
   launchRelayedProviderProcess,
@@ -201,6 +202,7 @@ export async function launchRelayedAcpAgent(
   processLaunch: ProviderProcessLaunch
 ): Promise<AcpRelayedProcess | null> {
   const { spec } = input.deps
+  const versionSkipped = takeAcpKeptVersionSkip(input.acquire.identity.sessionId)
   // A bot's tool grants live only in this app, so a kept bot would lose its tools.
   if (!acpSpecRelays(spec) || launch.appBoundGrants) {
     return null
@@ -230,6 +232,12 @@ export async function launchRelayedAcpAgent(
   const relayed = await launchRelayedProviderProcess(processLaunch, relay).catch(refuse)
   floor = relayed?.child.attachResult?.maxClientRequestId ?? 0
   const sessionId = launch.resume?.sessionId
+  // The kept agent ended before the attach: this launch never checked its version or chose its
+  // instructions by it, so it goes, and the chat's next message launches afresh.
+  if (!relayed?.reattached && versionSkipped) {
+    await relayed?.managed.close().catch(() => undefined)
+    return refuse(new Error('agent_kept_running_gone'))
+  }
   const kept = relayed?.reattached ? acpKeptAgent(relayed.child) : null
   if (relayed && kept && !restorableAcpSession(kept, sessionId)) {
     input.deps.logger?.warn('a kept ACP agent cannot carry on its chat', {

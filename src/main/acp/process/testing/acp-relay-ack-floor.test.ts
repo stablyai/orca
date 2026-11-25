@@ -17,6 +17,7 @@ const chunk = (text: string, messageId?: string): string =>
 
 function rig() {
   const acks: number[] = []
+  const cuts: number[] = []
   const turns = new AcpRelayTurns()
   const output = new RelayedProviderOutput({
     stdout: new Readable({ read() {} }),
@@ -24,7 +25,10 @@ function rig() {
     durable: async () => true,
     // Where a reattach would replay from, less one: the daemon keeps lines from `keepFrom` on, and
     // never gets back lines it already dropped.
-    ack: async (seq, keepFrom) => {
+    ack: async (seq, keepFrom, cut) => {
+      if (cut) {
+        cuts.push(seq)
+      }
       const replayedFrom = (keepFrom ?? seq + 1) - 1
       if (replayedFrom > (acks.at(-1) ?? 0)) {
         acks.push(replayedFrom)
@@ -52,7 +56,7 @@ function rig() {
   }
   /** The connection's parse of a line it was handed. */
   const parsed = (line: string) => turns.observeSessionUpdate(JSON.parse(line).params)
-  return { output, acks, send, prompt, parsed }
+  return { output, acks, cuts, send, prompt, parsed }
 }
 
 describe('ACP relay ack floor', () => {
@@ -105,6 +109,19 @@ describe('ACP relay ack floor', () => {
     expect(await send(chunk('d'))).toEqual([1, 5, 6])
     answer.reject(new Error('rate limited'))
     await vi.waitFor(async () => expect(await send(chunk('later'))).toEqual([1, 5, 6, 9]))
+  })
+
+  it('cuts every ack while a message a forced ack released still streams, so its tail continues apart', async () => {
+    const { output, cuts, send, prompt } = rig()
+    prompt()
+    await send(chunk('a', 'm1'), chunk('b', 'm1'))
+    await output.settle(true)
+    await send(chunk('c', 'm1'))
+    expect(cuts).toEqual([2, 3])
+    // A call ends the message: acks after it are plain again.
+    await send(update('plan', { entries: [] }))
+    await send(chunk('d', 'm2'))
+    expect(cuts).toEqual([2, 3])
   })
 
   it('reads a long update from its ends without parsing its payload', async () => {

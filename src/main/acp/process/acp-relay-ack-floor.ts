@@ -98,6 +98,9 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   private turnPending: boolean
   private numbered = false
   private givesIds = false
+  /** Messages a forced ack released mid-stream, by session: every ack until each ends is a cut, so
+   *  a reattach moves the tail it replays to a continuation row instead of over the saved text. */
+  private readonly cutMessages = new Map<string, string | undefined>()
 
   /** `running`: a prompt runs across this attach (a dropped stream), so its turn holds from here. */
   constructor(running: boolean) {
@@ -119,6 +122,11 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
       for (const [id, message] of this.messages) {
         if (message.session === update.sessionId) {
           this.messages.delete(id)
+        }
+      }
+      for (const [id, session] of this.cutMessages) {
+        if (session === update.sessionId) {
+          this.cutMessages.delete(id)
         }
       }
     }
@@ -156,6 +164,11 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   /** A forced ack released through `seq`: what started there is acked already, so later items
    *  (a new call, a new message) hold the floor on their own. */
   released(seq: number): void {
+    for (const [id, message] of this.messages) {
+      if (message.seq <= seq && this.cutMessages.size < MAX_OPEN_ITEMS) {
+        this.cutMessages.set(id, message.session)
+      }
+    }
     for (const open of [this.calls, this.messages]) {
       for (const [key, item] of open) {
         if (item.seq <= seq) {
@@ -168,6 +181,10 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
     }
   }
 
+  tookCut(): boolean {
+    return this.cutMessages.size > 0
+  }
+
   /** The call reported its final status. */
   endCall(toolCallId: string): void {
     this.calls.delete(toolCallId)
@@ -177,6 +194,7 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   endTurn(): void {
     this.calls.clear()
     this.messages.clear()
+    this.cutMessages.clear()
     this.turnStart = null
     this.turnPending = false
     this.numbered = false
