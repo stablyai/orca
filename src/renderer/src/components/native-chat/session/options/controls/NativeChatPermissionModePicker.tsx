@@ -1,3 +1,5 @@
+// @protected-copy scope=file
+// The pill names the policy the agent runs under: a language pack must not reword what it says.
 import { memo } from 'react'
 import { ChevronDown, PencilRuler, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -29,6 +31,7 @@ import {
   nativeChatPermissionPickerTitle
 } from './native-chat-permission-mode-labels'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
+import { PermissionChoiceRadioItem } from './PermissionChoiceRadioItem'
 
 export function NativeChatPermissionModeName(props: {
   mode: AgentChatPermissionMode
@@ -70,19 +73,15 @@ export function NativeChatPermissionModeItems({
   return (
     <>
       {modes.map((mode) => (
-        <DropdownMenuRadioItem
+        <PermissionChoiceRadioItem
           key={mode}
           value={mode}
+          description={nativeChatPermissionModeDescription(mode, agent, t)}
           disabled={disabled}
           onSelect={() => onSelect(mode)}
         >
-          <div className="min-w-0 py-0.5">
-            <NativeChatPermissionModeName mode={mode} />
-            <div className="text-xs font-normal text-muted-foreground">
-              {nativeChatPermissionModeDescription(mode, agent, t)}
-            </div>
-          </div>
-        </DropdownMenuRadioItem>
+          <NativeChatPermissionModeName mode={mode} />
+        </PermissionChoiceRadioItem>
       ))}
     </>
   )
@@ -248,7 +247,12 @@ function NativeChatPermissionModePickerInner({
           ) : null}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-72">
+      <DropdownMenuContent
+        align="start"
+        side="top"
+        collisionPadding={8}
+        className="w-72 max-w-(--radix-dropdown-menu-content-available-width)"
+      >
         <DropdownMenuRadioGroup
           aria-label={title}
           value={current ?? (inherit ? INHERIT_VALUE : undefined)}

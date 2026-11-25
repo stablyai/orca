@@ -85,8 +85,8 @@ export function useMobileWebShellSession(args: {
   const runtimeRef = useRef<MobileWebShellRuntime | null>(null)
   runtimeRef.current ??= args.runtime ?? createMobileWebShellRuntime()
   const runtime = runtimeRef.current
-  const storeRef = useRef<GenerationStore | null>(null)
-  storeRef.current ??= runtime.createStore()
+  const [initialStore] = useState(() => runtime.createStore())
+  const storeRef = useRef<GenerationStore | null>(initialStore)
 
   const sessionRef = useRef(createMobileWebShellSession(routePathname, wide, appNamesRoute))
   const [state, setState] = useState(sessionRef.current.state)

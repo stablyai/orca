@@ -40,7 +40,7 @@ export function providerPrimaryMaxUsed(p: ProviderRateLimits, t?: Translate): nu
     : -1
 }
 
-// Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
+// Buckets (Antigravity and Cursor pools) keep their name; windows use their duration.
 export function shortUsageLabel(
   p: ProviderRateLimits,
   section: UsageSection,
