@@ -38,6 +38,8 @@ import { getManagedStatusLineScript } from './hooks/statusline-script'
 // oxfmt-ignore
 import { installClaudeManagedStatusLine, retireClaudeManagedStatusLine } from './hooks/statusline-install'
 import { refuseProfileAtDefaultHome } from './hooks/claude-profile-hook-target'
+import { publishClaudeHookPlugin, removeClaudeHookPlugin } from './hooks/claude-hook-plugin'
+import type { HooksConfig } from '../agent-hooks/installation/configuration/hook-config-schema'
 import {
   applyManagedHooks,
   CLAUDE_HOOK_SETTINGS,
@@ -113,6 +115,16 @@ export class ClaudeHookService {
       : (this.options.hookPlan ?? OPENCLAUDE_MANAGED_HOOK_PLAN)
   }
 
+  private unparsableSettings(configPath: string): AgentHookInstallStatus {
+    return {
+      agent: this.options.agent,
+      state: 'error',
+      configPath,
+      managedHooksPresent: false,
+      detail: `Could not parse ${this.options.displayName} settings.json`
+    }
+  }
+
   getStatus(options: ClaudeHookTargetOptions = {}): AgentHookInstallStatus {
     const refused = refuseProfileAtDefaultHome(this.options, options.configDir)
     if (refused) {
@@ -122,13 +134,7 @@ export class ClaudeHookService {
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
-      return {
-        agent: this.options.agent,
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: `Could not parse ${this.options.displayName} settings.json`
-      }
+      return this.unparsableSettings(configPath)
     }
 
     // Count either Windows launcher form: installation falls back to .cmd when the exe cannot be placed.
@@ -190,34 +196,33 @@ export class ClaudeHookService {
     }
     const configPath = getConfigPath(this.options.settings, options.configDir)
     const scriptPath = getManagedScriptPath(this.options.settings)
-    const config = readHooksJson(configPath)
-    if (!config) {
-      return {
-        agent: this.options.agent,
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: `Could not parse ${this.options.displayName} settings.json`
-      }
-    }
-
     const plan = this.managedHookPlan(options)
     const exePath = this.usesWindowsEntry ? installWindowsClaudeHookExecutable(scriptPath) : null
     const execForm = claudeAcceptsExecFormHooks(options.claudeVersion)
-    let nextConfig = applyManagedHooks(
-      config,
-      (eventName) =>
-        getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
-      getManagedScriptFileName(this.options.settings),
-      plan,
-      process.platform !== 'win32'
-    )
+    const applyPlan = (config: HooksConfig): HooksConfig =>
+      applyManagedHooks(
+        config,
+        (eventName) =>
+          getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
+        getManagedScriptFileName(this.options.settings),
+        plan,
+        process.platform !== 'win32'
+      )
     const payload = this.managedScript()
     if (this.usesWindowsEntry) {
       installWindowsClaudeHookFiles(scriptPath, payload)
     } else {
       writeManagedScript(scriptPath, payload)
     }
+    if (options.configDir === undefined) {
+      publishClaudeHookPlugin(this.options.agent, () => applyPlan({}).hooks)
+    }
+    const config = readHooksJson(configPath)
+    if (!config) {
+      return this.unparsableSettings(configPath)
+    }
+
+    let nextConfig = applyPlan(config)
     // Profiles inherit statusLine from the default-home settings copy.
     if (options.configDir === undefined && plan.statusLine === 'install') {
       nextConfig = installClaudeManagedStatusLine(nextConfig, this.options.settings)
@@ -288,16 +293,11 @@ export class ClaudeHookService {
   }
 
   remove(): AgentHookInstallStatus {
+    removeClaudeHookPlugin(this.options.agent)
     const configPath = getConfigPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
-      return {
-        agent: this.options.agent,
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: `Could not parse ${this.options.displayName} settings.json`
-      }
+      return this.unparsableSettings(configPath)
     }
     const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
       config,
