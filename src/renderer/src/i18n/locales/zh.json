@@ -27849,7 +27849,8 @@
         "accountThenCatalog": "只需连接一次，即可用于你的所有 bots。然后从 Composio 的全部应用中挑选",
         "keyStored": "存储在此电脑上，bots 永远看不到它。你的应用登录信息由 Composio 保管",
         "addKey": "添加密钥并继续",
-        "keyStoredOnHost": "存储在 {{host}} 上，bots 永远看不到它。你的应用登录信息由 Composio 保管"
+        "keyStoredOnHost": "存储在 {{host}} 上，bots 永远看不到它。你的应用登录信息由 Composio 保管",
+        "signsIn": "通过你的 Composio 账户登录。"
       },
       "closeKeepsSigningIn": "登录会在浏览器中继续进行",
       "openPageAgain": "再次打开页面",
@@ -27863,7 +27864,9 @@
         "line": "{{bot}} 要使用的任意 MCP 服务器",
         "failedLine": "{{app}} 已添加到 {{bot}}，但尚未登录。请重试，或在“设置 › 工具”中将其移除",
         "done": "{{app}} 已添加到 {{bot}}",
-        "doneLine": "{{bot}} 从下一轮起即可使用它的工具"
+        "doneLine": "{{bot}} 从下一轮起即可使用它的工具",
+        "name": "自定义",
+        "rowLine": "任意 MCP 服务器"
       },
       "couldNotSignIn": "无法登录 {{app}}",
       "done": "完成",
@@ -27971,7 +27974,18 @@
         "box": "文件和文件夹",
         "miro": "白板、便签和框架",
         "reddit": "帖子、评论和子版块"
-      }
+      },
+      "addAppsTitle": "向 {{bot}} 添加应用",
+      "addedCaption": "已添加",
+      "addedCount": "已添加 {{count}} 个",
+      "chip": {
+        "all": "全部",
+        "more": "更多"
+      },
+      "filters": "按应用筛选",
+      "searchAdded": "搜索已添加的应用",
+      "setUp": "设置",
+      "setUpNamed": "设置 {{name}}"
     },
     "row": {
       "paused": "已暂停",
@@ -28032,7 +28046,9 @@
       "actionFor": "{{action}}：{{title}}",
       "worker": "工作者：{{name}}",
       "permissionTool": "权限 · {{tool}}",
-      "whereItRuns": "{{need}} · 请在它运行的位置打开"
+      "whereItRuns": "{{need}} · 请在它运行的位置打开",
+      "pairedAsk": "{{from}} 想要给 {{name}} 发消息",
+      "pairedAskDetail": "权限 · 给 {{name}} 发消息"
     },
     "chats": {
       "untitled": "新聊天",
@@ -28085,7 +28101,8 @@
       "delete": "删除聊天",
       "open": "打开",
       "actions": "聊天操作",
-      "hideOlder": "隐藏更早的"
+      "hideOlder": "隐藏更早的",
+      "needsYouCount": "{{count}} 项需要你处理"
     },
     "items": {
       "view": {
