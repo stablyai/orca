@@ -20,7 +20,7 @@ import {
 } from '../../shared/native-chat/input/composer/agent-image-paste'
 import type { FeishuStore } from './feishu-store-ops'
 import type { Binding } from './feishu-binding'
-import { feishuCommand } from './feishu-cli'
+import { originalContent, postImageKeys, readOriginal } from './feishu-original-message'
 
 export type ResourceKind = 'image' | 'file'
 const resource = z.object({
@@ -36,29 +36,12 @@ const resource = z.object({
   file_size: z.coerce.number().int().nonnegative().optional()
 })
 export function originalResource(value: unknown, b: Binding, mid: string, kind: ResourceKind) {
-  const msg = z.object({
-    message_id: z.literal(mid),
-    chat_id: z.literal(b.chat),
-    msg_type: z.literal(kind),
-    sender: z.object({
-      id_type: z.literal('open_id'),
-      sender_type: z.literal('user'),
-      id: z.literal(b.owner)
-    }),
-    body: z.object({ content: z.string() })
-  })
-  const result = z
-    .object({
-      ok: z.literal(true),
-      identity: z.literal('bot'),
-      data: z.object({ items: z.tuple([msg]) })
-    })
-    .safeParse(value)
-  if (!result.success) {
+  const content = originalContent(value, b, mid, kind)
+  if (content === null) {
     return null
   }
   try {
-    const data = resource.parse(JSON.parse(result.data.data.items[0].body.content))
+    const data = resource.parse(JSON.parse(content))
     const key = kind === 'image' ? data.image_key : data.file_key
     return key
       ? {
@@ -71,31 +54,18 @@ export function originalResource(value: unknown, b: Binding, mid: string, kind: 
     return null
   }
 }
+
 async function storeFeishuResource(
   b: Binding,
   mid: string,
   kind: ResourceKind,
+  meta: { key: string; name: string; size?: number } | null,
   signal: AbortSignal
 ): Promise<string> {
   const store = getAgentSessionAttachmentStore()
   if (!store || !b.owner || !b.chat) {
     throw new Error('Attachment storage unavailable')
   }
-  const value = await feishuCommand(
-    [
-      '--profile',
-      b.app,
-      'api',
-      'GET',
-      `/open-apis/im/v1/messages/${mid}`,
-      '--params',
-      '{"user_id_type":"open_id"}',
-      '--as',
-      'bot'
-    ],
-    signal
-  )
-  const meta = originalResource(value, b, mid, kind)
   const limit =
     kind === 'image'
       ? Math.min(AGENT_SESSION_ATTACHMENT_MAX_BYTES, MAX_ASKER_IMAGE_BYTES)
@@ -199,15 +169,62 @@ async function storedResourceAvailable(path: string): Promise<boolean> {
   }
 }
 
+// A post's images the turn sees at most; the rest are named in its words.
+const POST_IMAGES = 4
+const POST_IMAGE = /!\[[^\]\n]*\]\((img_[a-zA-Z0-9_-]{1,192})\)/g
+
+/** A rich-text post: its words as the CLI flattened them, its images verified on the original. */
+async function postInput(
+  binding: Binding,
+  row: { mid: string; body: string },
+  agent: string,
+  signal: AbortSignal
+): Promise<{ prompt: string; storedImages?: string[] }> {
+  const text = row.body.replace(POST_IMAGE, '[image]').trim()
+  const shown = [...row.body.matchAll(POST_IMAGE)].length
+  if (shown === 0) {
+    return { prompt: text }
+  }
+  if (getAgentImageHandling(agent) === 'unsupported') {
+    return {
+      prompt: `${text}\n\n(The owner's post holds images this bot’s agent can’t see. Tell the owner if they matter.)`
+    }
+  }
+  const keys = await readOriginal(binding, row.mid, signal).then(
+    (value) => postImageKeys(value, binding, row.mid),
+    () => []
+  )
+  signal.throwIfAborted()
+  const storedImages: string[] = []
+  for (const key of keys.slice(0, POST_IMAGES)) {
+    try {
+      storedImages.push(
+        await storeFeishuResource(binding, row.mid, 'image', { key, name: 'image' }, signal)
+      )
+    } catch {
+      signal.throwIfAborted()
+    }
+  }
+  const missing = Math.max(shown, keys.length) - storedImages.length
+  const note =
+    missing > 0
+      ? `\n\n(${missing} of the post's images could not be attached; do not infer their contents.)`
+      : ''
+  return { prompt: `${text}${note}`, ...(storedImages.length > 0 ? { storedImages } : {}) }
+}
+
 export async function feishuInput(
   inbox: Pick<FeishuStore, 'stored'>,
   binding: Binding,
-  row: NonNullable<Awaited<ReturnType<FeishuStore['next']>>>,
+  row: Exclude<NonNullable<Awaited<ReturnType<FeishuStore['next']>>>, { kind: 'unsupported' }>,
   agent: string,
   signal: AbortSignal
 ): Promise<{ prompt: string; storedImages?: string[] }> {
   if (row.kind === 'text') {
     return { prompt: row.body }
+  }
+  if (row.kind === 'post') {
+    return postInput(binding, row, agent, signal)
   }
   if (row.kind === 'image' && getAgentImageHandling(agent) === 'unsupported') {
     return {
@@ -219,7 +236,13 @@ export async function feishuInput(
   if (!path || !(await storedResourceAvailable(path))) {
     signal.throwIfAborted()
     try {
-      path = await storeFeishuResource(binding, row.mid, row.kind, signal)
+      const meta = originalResource(
+        await readOriginal(binding, row.mid, signal),
+        binding,
+        row.mid,
+        row.kind
+      )
+      path = await storeFeishuResource(binding, row.mid, row.kind, meta, signal)
     } catch {
       signal.throwIfAborted()
       return {

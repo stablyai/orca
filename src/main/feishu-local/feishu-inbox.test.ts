@@ -20,10 +20,12 @@ const event = {
   content: 'Hello'
 } as const
 
-it('drops unsupported streams and rejects an alias that shadows a pinned app', () => {
+it('drops group streams and malformed types, and rejects an alias that shadows a pinned app', () => {
   expect(readFeishuMessage(JSON.stringify(event))).toEqual(event)
   expect(readFeishuMessage(JSON.stringify({ ...event, chat_type: 'group' }))).toBeNull()
-  expect(readFeishuMessage(JSON.stringify({ ...event, message_type: 'post' }))).toBeNull()
+  // Kept, so the owner hears back about a type Orca can't read; a malformed type is not.
+  expect(readFeishuMessage(JSON.stringify({ ...event, message_type: 'sticker' }))).not.toBeNull()
+  expect(readFeishuMessage(JSON.stringify({ ...event, message_type: 'Post!' }))).toBeNull()
   expect(readFeishuMessage(JSON.stringify({ ...event, sender_id: '' }))).toBeNull()
   expect(
     eligibleProfiles([profile, { ...profile, name: 'cli_example', appId: 'cli_other' }])
@@ -80,5 +82,31 @@ it('keeps the pairing, actor, original DM and both replay keys bound across a re
     inbox.close()
     other.close()
     await rm(dir, { recursive: true, force: true })
+  }
+})
+
+it('keeps a DM no chat took for Retry, and lets one that may have run only be dismissed', () => {
+  const inbox = new FeishuInbox(':memory:')
+  try {
+    const b = inbox.add('scope', 'bot', profile)
+    inbox.pair('scope', b, event)
+    const [bound] = inbox.bindings('scope')
+    for (const n of [1, 2]) {
+      const at = { create_time: `180000000000${n}`, message_id: `om_${n}`, event_id: `e${n}` }
+      inbox.accept(bound, { ...event, ...at })
+    }
+    inbox.review(b.account, 'om_1')
+    inbox.admitted(b.account, 'om_2')
+    inbox.review(b.account, 'om_2')
+    expect(inbox.reviewCount(b.account)).toEqual({ count: 2, retryable: 1 })
+    expect(inbox.next(b.account)).toBeUndefined()
+    expect(inbox.retryReview(b.account)).toBe(1)
+    expect(inbox.next(b.account)).toMatchObject({ mid: 'om_1', body: 'Hello', kind: 'text' })
+    expect(inbox.reviewCount(b.account)).toEqual({ count: 1, retryable: 0 })
+    expect(inbox.dismissReview(b.account)).toBe(1)
+    expect(inbox.reviewCount(b.account)).toEqual({ count: 0, retryable: 0 })
+    expect(inbox.next(b.account)).toMatchObject({ mid: 'om_1' })
+  } finally {
+    inbox.close()
   }
 })

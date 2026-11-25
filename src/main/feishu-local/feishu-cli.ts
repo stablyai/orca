@@ -15,7 +15,8 @@ export type FeishuProfile = z.infer<typeof profile>
 const message = z.object({
   type: z.literal(EVENT),
   chat_type: z.literal('p2p'),
-  message_type: z.enum(['text', 'image', 'file']),
+  // Any type is kept, so the owner hears back about the ones Orca can't read.
+  message_type: z.string().regex(/^[a-z_]{1,32}$/),
   create_time: z.string().regex(/^\d{13}$/),
   event_id: z.string().min(1).max(256),
   message_id: messageId,
@@ -39,6 +40,37 @@ export function readFeishuMessage(line: string): FeishuMessage | null {
 /** A recalled original or a missing topic cannot accept another reply. */
 export class FeishuReplyTargetGone extends Error {}
 
+/** The app lacks a permission the call needs; `scopes` are what the CLI named, when it did. */
+export class FeishuPermissionDenied extends Error {
+  constructor(readonly scopes: string[]) {
+    super('The Feishu app lacks a permission')
+  }
+}
+
+/** Feishu answered with an error code that isn't one of the above. */
+export class FeishuApiError extends Error {
+  constructor(readonly code: number) {
+    super('Feishu CLI command failed')
+  }
+}
+
+// 99991672: the app's scope isn't granted; 99991679: the user's isn't; 230027: no permission.
+const PERMISSION_CODES = new Set([99991672, 99991679, 230027])
+const PERMISSION_SUBTYPES = new Set([
+  'missing_scope',
+  'app_scope_not_applied',
+  'permission_denied',
+  'access_denied'
+])
+const diagnosticShape = z.object({
+  ok: z.literal(false),
+  error: z.object({
+    code: z.number().optional(),
+    subtype: z.string().optional(),
+    missing_scopes: z.array(z.string().regex(/^[a-z][\w.:-]{0,127}$/)).optional()
+  })
+})
+
 export async function feishuCommand(
   args: string[],
   signal?: AbortSignal,
@@ -61,11 +93,19 @@ export async function feishuCommand(
       } catch {
         // Unstructured CLI failures stay retryable.
       }
-      const code = z
-        .object({ ok: z.literal(false), error: z.object({ code: z.number() }) })
-        .safeParse(diagnostic).data?.error.code
+      const error = diagnosticShape.safeParse(diagnostic).data?.error
+      const code = error?.code
       if (code === 230011 || code === 230019 || code === 230110) {
         throw new FeishuReplyTargetGone('The Feishu reply target is unavailable')
+      }
+      if (
+        (code !== undefined && PERMISSION_CODES.has(code)) ||
+        (error?.subtype !== undefined && PERMISSION_SUBTYPES.has(error.subtype))
+      ) {
+        throw new FeishuPermissionDenied(error?.missing_scopes?.slice(0, 8) ?? [])
+      }
+      if (code !== undefined) {
+        throw new FeishuApiError(code)
       }
     }
     throw new Error('Feishu CLI command failed')

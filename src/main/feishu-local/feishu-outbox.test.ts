@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { JournalConnectorReplyRow } from '../../shared/agent-session/journal/journal-connector-reply'
 import { BotsDbWorkerClient } from '../bots/db-worker/bots-db-worker-client'
@@ -7,8 +8,9 @@ import { dmKey, type Binding } from './feishu-binding'
 import * as cli from './feishu-cli'
 import { drainFeishuOutbox } from './feishu-outbox'
 import { feishuStore, type FeishuStore } from './feishu-store-ops'
+import { FeishuStream } from './feishu-stream'
 
-let client: BotsDbWorkerClient, inbox: FeishuStore, binding: Binding
+let client: BotsDbWorkerClient, inbox: FeishuStore, binding: Binding, stream: FeishuStream
 let owed: JournalConnectorReplyRow[]
 const changed = vi.fn()
 const receipt = {
@@ -33,6 +35,14 @@ beforeEach(async () => {
     content: 'pair'
   })
   ;[binding] = await inbox.bindings('scope')
+  stream = new FeishuStream({
+    inbox,
+    binding,
+    signal: new AbortController().signal,
+    journal: () => undefined,
+    linkedSession: () => null,
+    changed
+  })
   owed = []
   changed.mockClear()
 })
@@ -41,7 +51,11 @@ afterEach(() => {
   closeBotsDbStores()
   vi.restoreAllMocks()
 })
-async function admit(mid: string, outcome: 'answered' | 'no_answer' | 'failed' = 'answered') {
+async function admit(
+  mid: string,
+  outcome: 'answered' | 'no_answer' | 'failed' = 'answered',
+  fill: { prose?: string; answerDeliveryId?: string } = {}
+) {
   await inbox.accept(binding, {
     type: 'im.message.receive_v1',
     chat_type: 'p2p',
@@ -61,7 +75,7 @@ async function admit(mid: string, outcome: 'answered' | 'no_answer' | 'failed' =
     epoch: 'one',
     messageId: mid,
     queued: false,
-    fill: { outcome, answerDeliveryId: mid, filledAt: 1 }
+    fill: { outcome, answerDeliveryId: mid, filledAt: 1, ...fill }
   })
 }
 const drain = (
@@ -84,7 +98,8 @@ const drain = (
     new AbortController().signal,
     () => true,
     checkProfile,
-    changed
+    changed,
+    stream
   )
 
 it.each(['upload', 'file reply'])(
@@ -109,7 +124,7 @@ it.each(['upload', 'file reply'])(
     expect(calls).toEqual(phase === 'upload' ? ['upload'] : ['upload', 'file reply'])
     expect(owed).toEqual([])
     expect(changed).toHaveBeenCalledTimes(1)
-    expect(await inbox.needsReview(binding.account)).toBe(true)
+    expect((await inbox.reviewCount(binding.account)).count).toBe(1)
     expect(await inbox.artifact(binding.account, 'om_target')).toMatchObject({
       key: 'file_fixture',
       posted: phase === 'upload' ? 0 : 1
@@ -192,7 +207,7 @@ it('settles an already-confirmed file-only reply after restart even if its windo
   await drain()
   expect(send).not.toHaveBeenCalled()
   expect(owed).toEqual([])
-  expect(await inbox.needsReview(binding.account)).toBe(false)
+  expect((await inbox.reviewCount(binding.account)).count).toBe(0)
 })
 it('retains a failed turn’s file across a transient reply error and clears the bytes on settlement', async () => {
   await admit('om_a', 'failed')
@@ -241,4 +256,84 @@ it('keeps a failed checkpoint owed without blocking other rows or resending a se
     )
   ).toEqual(['om_a', 'om_b', 'om_c', 'om_a'])
   expect(changed).toHaveBeenCalledTimes(1)
+})
+
+type Call = { path: string; uuid?: string; content: string }
+function calls(spy: { mock: { calls: Parameters<typeof cli.feishuCommand>[] } }): Call[] {
+  return spy.mock.calls.map(([args, , input]) => {
+    const body = JSON.parse(String(input ?? '{}'))
+    return { path: `${args[3]} ${args[4]}`, uuid: body.uuid, content: String(body.content) }
+  })
+}
+const uuidOf = (...part: string[]) =>
+  createHash('sha256')
+    .update(JSON.stringify([binding.account, ...part]))
+    .digest('hex')
+    .slice(0, 48)
+
+it('puts a long answer in the DM once across crashes: one card, its final edit, then each part', async () => {
+  const prose = Array.from(
+    { length: 900 },
+    (_, i) => `Line ${i} of the long synthetic answer.`
+  ).join('\n')
+  await admit('om_a', 'answered', { prose })
+  // The card was reserved, then Orca died before its id was saved.
+  await inbox.takeCard(binding.account, 'om_a')
+  let failNext = true
+  const send = vi.spyOn(cli, 'feishuCommand').mockImplementation(async (args, _, input) => {
+    if (args.includes('PATCH')) {
+      return { ok: true, identity: 'bot', data: {} }
+    }
+    const { uuid } = JSON.parse(String(input))
+    if (uuid === uuidOf('om_a', 'cont-1') && failNext) {
+      failNext = false
+      throw new Error('offline')
+    }
+    return { ...receipt, data: { ...receipt.data, message_id: 'om_card' } }
+  })
+  await expect(drain()).rejects.toThrow('another attempt')
+  await drain()
+  const sent = calls(send)
+  expect(sent.map((c) => [c.path, c.uuid])).toEqual([
+    ['POST /open-apis/im/v1/messages/om_a/reply', uuidOf('om_a', 'card')],
+    ['PATCH /open-apis/im/v1/messages/om_card', undefined],
+    ['POST /open-apis/im/v1/messages/om_a/reply', uuidOf('om_a', 'cont-1')],
+    ['POST /open-apis/im/v1/messages/om_a/reply', uuidOf('om_a', 'cont-1')]
+  ])
+  // Never under the plain final's uuid, so no second copy of the answer.
+  expect(sent.some((c) => c.uuid === uuidOf('om_a'))).toBe(false)
+  const head = JSON.stringify(JSON.parse(sent[1]!.content))
+  const tail = JSON.parse(sent[3]!.content).zh_cn.content[0][0].text
+  expect(head).toContain('Line 0 of')
+  expect(head).not.toContain('Line 899 of')
+  expect(tail).toContain('Line 899 of')
+  expect(tail).not.toContain('Line 0 of')
+  expect(sent[2]!.content).toBe(sent[3]!.content)
+  expect(owed).toEqual([])
+})
+
+it('falls back to a plain final reply naming merged messages when the card cannot be edited', async () => {
+  await admit('om_a', 'answered', { prose: 'Synthetic answer.' })
+  await admit('om_b', 'answered', { answerDeliveryId: 'om_a' })
+  await inbox.takeCard(binding.account, 'om_a')
+  await inbox.setCard(binding.account, 'om_a', 'om_card')
+  const send = vi.spyOn(cli, 'feishuCommand').mockImplementation(async (args) => {
+    if (args.includes('PATCH')) {
+      throw new cli.FeishuPermissionDenied(['im:message:update'])
+    }
+    return receipt
+  })
+  await drain()
+  await drain()
+  const sent = calls(send)
+  expect(sent.map((c) => [c.path, c.uuid])).toEqual([
+    ['PATCH /open-apis/im/v1/messages/om_card', undefined],
+    ['POST /open-apis/im/v1/messages/om_a/reply', uuidOf('om_a')]
+  ])
+  expect(JSON.parse(sent[1]!.content).zh_cn.content[0][0].text).toBe(
+    'Synthetic answer.\n\n— Also answers: “synthetic”'
+  )
+  expect(stream.state).toEqual({ mode: 'fallback', missing: ['im:message:update'] })
+  expect((await inbox.card(binding.account, 'om_a'))?.card).toBe('')
+  expect(owed).toEqual([])
 })

@@ -57,6 +57,18 @@ export const BOT_FEISHU_LOCAL_METHODS = [
     handler: ({ botId }, context) => host(context).state(botId)
   }),
   defineMethod({
+    name: 'bots.feishuLocal.retryReview',
+    permission: 'accounts-admin',
+    params: FeishuLocalBot,
+    handler: ({ botId }, context) => host(context).retryReview(botId)
+  }),
+  defineMethod({
+    name: 'bots.feishuLocal.dismissReview',
+    permission: 'accounts-admin',
+    params: FeishuLocalBot,
+    handler: ({ botId }, context) => host(context).dismissReview(botId)
+  }),
+  defineMethod({
     name: 'bots.feishuLocal.profiles',
     permission: 'accounts-admin',
     params: null,

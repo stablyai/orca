@@ -1,17 +1,19 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import type { Binding } from './feishu-binding'
-import type { FeishuStore } from './feishu-store-ops'
 import { feishuCommand } from './feishu-cli'
+export type FeishuReply = { type: 'text' | 'post' | 'file' | 'interactive'; content: unknown }
+
+/** Replies once per (original, part): Feishu takes a repeated uuid within an hour as the same
+ *  message and returns its id. 'final' keeps the uuid older builds used for the answer. */
 export async function replyFeishu(
   app: string,
   account: string,
   original: string,
   chat: string,
-  message: { type: 'text' | 'post' | 'file'; content: unknown },
-  part: 'final' | 'progress' | 'file',
+  message: FeishuReply,
+  part: string,
   signal: AbortSignal
-): Promise<void> {
+): Promise<string> {
   const uuid = createHash('sha256')
     .update(JSON.stringify(part === 'final' ? [account, original] : [account, original, part]))
     .digest('hex')
@@ -32,14 +34,41 @@ export async function replyFeishu(
     signal,
     JSON.stringify({ msg_type: message.type, content: JSON.stringify(message.content), uuid })
   )
-  z.object({
-    ok: z.literal(true),
-    identity: z.literal('bot'),
-    data: z.object({
-      chat_id: z.literal(chat),
-      message_id: z.string().regex(/^om_[a-zA-Z0-9_-]+$/)
+  return z
+    .object({
+      ok: z.literal(true),
+      identity: z.literal('bot'),
+      data: z.object({
+        chat_id: z.literal(chat),
+        message_id: z.string().regex(/^om_[a-zA-Z0-9_-]+$/)
+      })
     })
-  }).parse(response)
+    .parse(response).data.message_id
+}
+
+/** Replaces a card the bot sent with new content; Feishu shows the newest edit to every reader. */
+export async function patchFeishuCard(
+  app: string,
+  card: string,
+  content: string,
+  signal: AbortSignal
+): Promise<void> {
+  const response = await feishuCommand(
+    [
+      '--profile',
+      app,
+      'api',
+      'PATCH',
+      `/open-apis/im/v1/messages/${card}`,
+      '--as',
+      'bot',
+      '--data',
+      '-'
+    ],
+    signal,
+    JSON.stringify({ content })
+  )
+  z.object({ ok: z.literal(true), identity: z.literal('bot') }).parse(response)
 }
 
 /** Raw post content never invokes the CLI Markdown helper's URL fetcher. */
@@ -82,32 +111,4 @@ export async function uploadFeishuFile(
       data: z.object({ file_key: z.string().regex(/^file_[a-zA-Z0-9_-]+$/) })
     })
     .parse(reply).data.file_key
-}
-
-/** Progress is best effort: reserve once before posting so a lost receipt cannot repeat the notice. */
-export async function acknowledgeFeishuMessage(
-  inbox: FeishuStore,
-  b: Binding,
-  mid: string,
-  signal: AbortSignal,
-  active: () => boolean
-): Promise<void> {
-  if (
-    !b.chat ||
-    signal.aborted ||
-    !active() ||
-    !(await inbox.takeProgress(b.account, mid)) ||
-    !active()
-  ) {
-    return
-  }
-  await replyFeishu(
-    b.app,
-    b.account,
-    mid,
-    b.chat,
-    { type: 'text', content: { text: 'Received in Orca. I’m working on this.' } },
-    'progress',
-    signal
-  ).catch(() => {})
 }

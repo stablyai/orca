@@ -1,40 +1,27 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import Database from '../sqlite/sync-database'
+import type Database from '../sqlite/sync-database'
+import { openFeishuInboxDatabase } from './feishu-inbox-schema'
 import type { FeishuMessage, FeishuProfile } from './feishu-cli'
 import { binding, type Binding } from './feishu-binding'
+const READABLE = ['text', 'image', 'file', 'post'] as const
+
+function excerptOf(m: FeishuMessage): string {
+  if (m.message_type !== 'text' && m.message_type !== 'post') {
+    return `[${m.message_type}]`
+  }
+  const line = m.content
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '[image]')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return line.length <= 40 ? line : `${line.slice(0, 39).trimEnd()}…`
+}
+
 /** One database per installation. A CLI app can belong to just one Orca profile and bot. */
 export class FeishuInbox {
   private db: Database.Database
   constructor(path: string) {
-    this.db = new Database(path)
-    this.db.exec(`PRAGMA foreign_keys=ON;
-      CREATE TABLE IF NOT EXISTS bindings(account TEXT PRIMARY KEY, scope TEXT NOT NULL,bot TEXT NOT NULL,profile TEXT NOT NULL,app TEXT NOT NULL UNIQUE,owner TEXT,chat TEXT,pairedAt INTEGER,UNIQUE(scope,bot));
-      CREATE TABLE IF NOT EXISTS inbox(account TEXT NOT NULL REFERENCES bindings(account) ON DELETE CASCADE,mid TEXT NOT NULL,event TEXT NOT NULL,body TEXT,first_post INTEGER,review INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,mid),UNIQUE(account,event));
-      CREATE INDEX IF NOT EXISTS pending_feishu_messages ON inbox(account) WHERE body IS NOT NULL AND review=0;
-      CREATE TABLE IF NOT EXISTS reply_files(account TEXT NOT NULL,mid TEXT NOT NULL,name TEXT NOT NULL,bytes BLOB,sha256 TEXT,file_key TEXT,posted INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,mid),FOREIGN KEY(account,mid) REFERENCES inbox(account,mid) ON DELETE CASCADE);
-      CREATE INDEX IF NOT EXISTS review_feishu_messages ON inbox(account) WHERE review=1;`)
-    if (
-      !this.db
-        .prepare('PRAGMA table_info(reply_files)')
-        .all()
-        .some((c) => c.name === 'sha256')
-    ) {
-      this.db.exec('ALTER TABLE reply_files ADD COLUMN sha256 TEXT')
-    }
-    const columns = this.db.prepare('PRAGMA table_info(inbox)').all()
-    if (!columns.some((c) => c.name === 'reply_done')) {
-      this.db.exec('ALTER TABLE inbox ADD COLUMN reply_done INTEGER NOT NULL DEFAULT 0')
-    }
-    if (!columns.some((c) => c.name === 'progress')) {
-      this.db.exec('ALTER TABLE inbox ADD COLUMN progress INTEGER NOT NULL DEFAULT 0')
-    }
-    if (!columns.some((c) => c.name === 'kind')) {
-      this.db.exec("ALTER TABLE inbox ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'")
-    }
-    if (!columns.some((c) => c.name === 'stored_path')) {
-      this.db.exec('ALTER TABLE inbox ADD COLUMN stored_path TEXT')
-    }
+    this.db = openFeishuInboxDatabase(path)
   }
   close(): void {
     this.db.close()
@@ -95,8 +82,10 @@ export class FeishuInbox {
       return
     }
     this.db
-      .prepare('INSERT OR IGNORE INTO inbox(account,mid,event,body,kind) VALUES(?,?,?,?,?)')
-      .run(b.account, m.message_id, m.event_id, m.content, m.message_type)
+      .prepare(
+        'INSERT OR IGNORE INTO inbox(account,mid,event,body,kind,excerpt) VALUES(?,?,?,?,?,?)'
+      )
+      .run(b.account, m.message_id, m.event_id, m.content, m.message_type, excerptOf(m))
   }
   next(account: string) {
     const row = this.db
@@ -104,17 +93,16 @@ export class FeishuInbox {
         'SELECT mid,body,kind,stored_path AS path FROM inbox WHERE account=? AND body IS NOT NULL AND review=0 ORDER BY rowid LIMIT 1'
       )
       .get(account)
-    return (
-      row &&
-      z
-        .object({
-          mid: z.string(),
-          body: z.string(),
-          kind: z.enum(['text', 'image', 'file']),
-          path: z.string().nullable()
-        })
-        .parse(row)
-    )
+    if (!row) {
+      return row
+    }
+    const { kind, ...rest } = z
+      .object({ mid: z.string(), body: z.string(), kind: z.string(), path: z.string().nullable() })
+      .parse(row)
+    const readable = z.enum(READABLE).safeParse(kind)
+    return readable.success
+      ? { ...rest, kind: readable.data }
+      : { ...rest, kind: 'unsupported' as const, type: kind }
   }
   stored(account: string, mid: string, path: string): void {
     this.db
@@ -177,12 +165,57 @@ export class FeishuInbox {
   filePosted(account: string, mid: string): void {
     this.db.prepare('UPDATE reply_files SET posted=1 WHERE account=? AND mid=?').run(account, mid)
   }
-  takeProgress(account: string, mid: string): boolean {
+  /** Reserves the streamed reply once, so a lost receipt can't post a second one. */
+  takeCard(account: string, mid: string): boolean {
     return Boolean(
       this.db
-        .prepare('UPDATE inbox SET progress=1 WHERE account=? AND mid=? AND progress=0')
+        .prepare('UPDATE inbox SET progress=2 WHERE account=? AND mid=? AND progress=0')
         .run(account, mid).changes
     )
+  }
+  setCard(account: string, mid: string, card: string): void {
+    this.db
+      .prepare('UPDATE inbox SET card=? WHERE account=? AND mid=? AND card IS NULL')
+      .run(card, account, mid)
+  }
+  abandonCard(account: string, mid: string): void {
+    this.db.prepare("UPDATE inbox SET card='' WHERE account=? AND mid=?").run(account, mid)
+  }
+  /** The streamed reply shows its final words; a retry only owes what follows it. */
+  cardFinal(account: string, mid: string): void {
+    this.db
+      .prepare("UPDATE inbox SET progress=3 WHERE account=? AND mid=? AND card<>''")
+      .run(account, mid)
+  }
+  card(account: string, mid: string) {
+    const row = this.db
+      .prepare('SELECT card,progress,excerpt FROM inbox WHERE account=? AND mid=?')
+      .get(account, mid)
+    return row
+      ? z
+          .object({
+            card: z.string().nullable(),
+            progress: z.number(),
+            excerpt: z.string().nullable()
+          })
+          .parse(row)
+      : null
+  }
+  merged(account: string, mids: string[], head: string): void {
+    const mark = this.db.prepare(
+      'UPDATE inbox SET answered_by=? WHERE account=? AND mid=? AND mid<>? AND answered_by IS NULL'
+    )
+    for (const mid of mids) {
+      mark.run(head, account, mid, head)
+    }
+  }
+  /** The owner's words a reply answers besides the head's, oldest first. */
+  mergedExcerpts(account: string, head: string): string[] {
+    return this.db
+      .prepare('SELECT excerpt FROM inbox WHERE account=? AND answered_by=? ORDER BY rowid')
+      .all(account, head)
+      .map((row) => String(row.excerpt ?? ''))
+      .filter(Boolean)
   }
   admitted(account: string, mid: string): void {
     this.db
@@ -194,9 +227,33 @@ export class FeishuInbox {
       .prepare('UPDATE inbox SET review=1 WHERE account=? AND mid=? AND review=0')
       .run(account, mid).changes
   }
-  needsReview(account: string): boolean {
-    return Boolean(
-      this.db.prepare('SELECT 1 FROM inbox WHERE account=? AND review=1 LIMIT 1').get(account)
+  /** Messages for the owner to look at; the retryable ones never reached a chat. */
+  reviewCount(account: string): { count: number; retryable: number } {
+    const row = this.db
+      .prepare(
+        'SELECT COUNT(*) AS count, COALESCE(SUM(body IS NOT NULL AND reply_done=0),0) AS retryable FROM inbox WHERE account=? AND review=1'
+      )
+      .get(account)
+    return { count: Number(row?.count ?? 0), retryable: Number(row?.retryable ?? 0) }
+  }
+  /** Messages no chat took go to one again, under their own delivery ids. */
+  retryReview(account: string): number {
+    return Number(
+      this.db
+        .prepare(
+          'UPDATE inbox SET review=0 WHERE account=? AND review=1 AND body IS NOT NULL AND reply_done=0'
+        )
+        .run(account).changes
+    )
+  }
+  /** Seen by the owner: never delivered nor shown again. */
+  dismissReview(account: string): number {
+    return Number(
+      this.db
+        .prepare(
+          'UPDATE inbox SET review=2,body=NULL,stored_path=NULL WHERE account=? AND review=1'
+        )
+        .run(account).changes
     )
   }
   replyState(account: string, mid: string) {

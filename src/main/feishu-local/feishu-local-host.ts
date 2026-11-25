@@ -76,6 +76,14 @@ export class FeishuLocalHost {
     }
     return this.active.get(bot)?.state() ?? { status: 'off' }
   }
+  async retryReview(bot: string): Promise<FeishuLocalState> {
+    await this.active.get(bot)?.retryReview()
+    return this.state(bot)
+  }
+  async dismissReview(bot: string): Promise<FeishuLocalState> {
+    await this.active.get(bot)?.dismissReview()
+    return this.state(bot)
+  }
   async profiles(): Promise<string[]> {
     return (await listProfiles()).map((p) => p.name)
   }
