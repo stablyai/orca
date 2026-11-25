@@ -19,13 +19,14 @@ import {
 const ALL = '__all__'
 const SYSTEM_DEFAULT = '__system_default__'
 
-/** Lists one Claude account's conversations; only shown once this computer has saved accounts. */
+/** Lists one Claude account's conversations; shown while this computer has saved accounts or a
+ *  filter is still set, so a filter left by a removed account can be cleared. */
 export function AiVaultClaudeAccountFilterMenu(): React.JSX.Element | null {
   const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
   const filter = useAiVaultClaudeAccountFilter()
   const accounts = hostClaudeAccounts(settings)
-  if (accounts.length === 0) {
+  if (accounts.length === 0 && filter === undefined) {
     return null
   }
   return (

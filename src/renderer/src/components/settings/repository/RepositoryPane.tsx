@@ -305,6 +305,13 @@ export function RepositoryPane({
           forceVisible={forceFullPaneForRepoMatch}
         />
 
+        <RepositoryAccountSections
+          repo={repo}
+          isFolder={isFolder}
+          updateRepo={updateSelectedRepo}
+          forceVisible={forceFullPaneForRepoMatch}
+        />
+
         {!isFolder ? (
           <>
             <RepositoryHostSetupsSection
@@ -334,12 +341,6 @@ export function RepositoryPane({
             />
 
             <RepositoryForkSyncSection
-              repo={repo}
-              updateRepo={updateSelectedRepo}
-              forceVisible={forceFullPaneForRepoMatch}
-            />
-
-            <RepositoryAccountSections
               repo={repo}
               updateRepo={updateSelectedRepo}
               forceVisible={forceFullPaneForRepoMatch}

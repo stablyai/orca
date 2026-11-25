@@ -7792,7 +7792,8 @@
           "unmuteNotifications": "Unmute Notifications"
         },
         "ProjectGroupClaudeAccount": {
-          "menu": "Claude account"
+          "menu": "Claude account",
+          "useParentGroup": "Use {{group}}’s account"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",

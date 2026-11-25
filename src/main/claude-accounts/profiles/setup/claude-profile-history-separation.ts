@@ -1,5 +1,5 @@
-import { lstat, mkdir, realpath, rm, stat, unlink } from 'node:fs/promises'
-import { join } from 'node:path'
+import { lstat, mkdir, readlink, realpath, rm, stat, unlink } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
 import { isLinkedDirectory, removeDirectoryLink } from '../../../filesystem/merged-directory-link'
 import { resolveClaudeDefaultHome } from '../claude-profile-paths'
 import {
@@ -29,6 +29,12 @@ async function separateDirectory(
   return 'synced'
 }
 
+function samePath(left: string, right: string): boolean {
+  const a = resolve(left)
+  const b = resolve(right)
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
+}
+
 /** Drops the prompt history link: a symlink, or on Windows a hardlink to the same file. */
 async function separatePromptHistory(
   profile: string,
@@ -37,15 +43,24 @@ async function separatePromptHistory(
   const source = join(profile, HISTORY)
   const destination = join(home, HISTORY)
   const entry = await lstat(source).catch(() => null)
-  const shared = await stat(destination, { bigint: true }).catch(() => null)
-  if (!entry || !shared) {
+  if (!entry) {
     return 'unchanged'
   }
-  const linked = entry.isSymbolicLink()
-    ? (await realpath(source).catch(() => null)) === (await realpath(destination))
-    : await stat(source, { bigint: true }).then(
+  let linked: boolean
+  if (entry.isSymbolicLink()) {
+    // A link left dangling by a deleted shared file would share again once it is recreated.
+    linked =
+      samePath(resolve(profile, await readlink(source)), destination) ||
+      (await realpath(source).catch(() => null)) ===
+        (await realpath(destination).catch(() => undefined))
+  } else {
+    const shared = await stat(destination, { bigint: true }).catch(() => null)
+    linked =
+      shared !== null &&
+      (await stat(source, { bigint: true }).then(
         (own) => own.dev === shared.dev && own.ino === shared.ino
-      )
+      ))
+  }
   if (!linked) {
     return 'unchanged'
   }

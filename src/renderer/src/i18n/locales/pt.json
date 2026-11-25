@@ -11960,7 +11960,8 @@
           "optionsFilterCount_many": "Opções do espaço de trabalho ({{count}} filtros)"
         },
         "ProjectGroupClaudeAccount": {
-          "menu": "Conta do Claude"
+          "menu": "Conta do Claude",
+          "useParentGroup": "Usar a conta de {{group}}"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Atualização necessária",

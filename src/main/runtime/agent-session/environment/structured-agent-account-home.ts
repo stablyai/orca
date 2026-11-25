@@ -34,10 +34,12 @@ export type StructuredClaudeAccountHomeDeps = {
 export async function resolveStructuredClaudeAccountHomePath(
   deps: StructuredClaudeAccountHomeDeps
 ): Promise<string> {
-  const binding = installedClaudeAccountBinding(deps.workspaceId)
+  // Why host only: bindings name host accounts; a WSL chat follows its lane's selection, as its
+  // terminals do.
+  const binding = deps.wslDistro ? null : installedClaudeAccountBinding(deps.workspaceId)
   if (binding) {
-    const bound = deps.wslDistro ? undefined : getClaudeProfileRouter()
-    // Why throw: bindings name host accounts, and following the selection would run another account.
+    const bound = getClaudeProfileRouter()
+    // Why throw: following the selection would run another account.
     if (!bound) {
       throw claudeAccountBindingUnavailable()
     }

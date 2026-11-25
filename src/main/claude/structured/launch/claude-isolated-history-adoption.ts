@@ -3,7 +3,8 @@ import { basename, dirname, join } from 'node:path'
 import type { ClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-router'
 import { resolveSessionFilePath } from '../../../native-chat/session-file-resolver'
 
-/** Rename keeps it atomic on one volume; another volume copies, then removes the original. */
+/** Rename keeps it atomic on one volume; another volume copies under a staging name first, so
+ *  the target never appears half-written. */
 async function moveEntry(source: string, target: string): Promise<void> {
   try {
     await rename(source, target)
@@ -12,7 +13,10 @@ async function moveEntry(source: string, target: string): Promise<void> {
       throw error
     }
     const isDirectory = (await stat(source)).isDirectory()
-    await (isDirectory ? cp(source, target, { recursive: true }) : copyFile(source, target))
+    const staging = `${target}.orca-partial`
+    await rm(staging, { recursive: true, force: true })
+    await (isDirectory ? cp(source, staging, { recursive: true }) : copyFile(source, staging))
+    await rename(staging, target)
     await rm(source, { recursive: true, force: true })
   }
 }
@@ -49,10 +53,12 @@ export async function adoptClaudeTranscriptIntoIsolatedAccount(input: {
   }
   const bucket = join(claudeConfigDir, 'projects', basename(dirname(source)))
   await mkdir(bucket, { recursive: true, mode: 0o700 })
-  await moveEntry(source, join(bucket, basename(source)))
+  // Why: the transcript moves last because the launch takes it as proof the move finished; a
+  // failure before then leaves it shared and the next launch retries the whole move.
   const subagents = source.replace(/\.jsonl$/, '')
   if ((await stat(subagents).catch(() => null))?.isDirectory()) {
     await moveEntry(subagents, join(bucket, basename(subagents)))
   }
+  await moveEntry(source, join(bucket, basename(source)))
   return true
 }

@@ -74,10 +74,17 @@ export function ProjectGroupClaudeAccountSubmenu({
             }}
           >
             <DropdownMenuRadioItem value={UNBOUND_BINDING_VALUE}>
-              {t(
-                'auto.components.settings.RepositoryClaudeAccountSection.followSelection',
-                'Follow the selected account'
-              )}
+              {/* An unbound nested group runs on its parent's account, not the selection. */}
+              {account.inheritedFrom
+                ? t(
+                    'auto.components.sidebar.ProjectGroupClaudeAccount.useParentGroup',
+                    'Use {{group}}’s account',
+                    { group: account.inheritedFrom }
+                  )
+                : t(
+                    'auto.components.settings.RepositoryClaudeAccountSection.followSelection',
+                    'Follow the selected account'
+                  )}
             </DropdownMenuRadioItem>
             {accounts.map((saved) => {
               const usage = claudeAccountUsage(rateLimits, settings, saved.id)

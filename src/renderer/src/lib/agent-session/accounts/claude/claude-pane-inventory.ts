@@ -110,10 +110,8 @@ export function* localClaudePanes(
     getProjectGroups: () => state.projectGroups
   }
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    // A project bound to a Claude account keeps its terminals on it through any switch.
-    if (claudeAccountBindingForWorkspace(worktreeId, bindings)) {
-      continue
-    }
+    // A bound project keeps its host terminals on its account; WSL ones follow the selection.
+    const bound = claudeAccountBindingForWorkspace(worktreeId, bindings) !== null
     for (const tab of tabs) {
       const boundPtyIds = new Set(state.ptyIdsByTabId[tab.id] ?? [])
       const leaves = Object.entries(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {})
@@ -140,6 +138,9 @@ export function* localClaudePanes(
           continue
         }
         const { laneKey } = resolveCodexPaneSelectionLane({ state, tab, ptyId })
+        if (bound && !isWslLane(laneKey)) {
+          continue
+        }
         const providerSession =
           normalizeAgentProviderSession(entry?.providerSession) ??
           normalizeAgentProviderSession(saved)

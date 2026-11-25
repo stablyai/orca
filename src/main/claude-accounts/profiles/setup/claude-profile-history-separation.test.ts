@@ -1,4 +1,13 @@
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -53,4 +62,18 @@ describe('separateClaudeProfileHistory', () => {
       'personal\n'
     )
   })
+
+  // Windows links prompt history with a hardlink, which no longer shares once the file is gone.
+  it.skipIf(process.platform === 'win32')(
+    'drops a prompt history link whose shared file was deleted, so it cannot share again',
+    async () => {
+      const { userHome, shared, profileHome } = setup()
+      symlinkSync(join(shared, 'history.jsonl'), join(profileHome, 'history.jsonl'))
+      rmSync(join(shared, 'history.jsonl'))
+
+      await separateClaudeProfileHistory({ profileHome, userHome })
+      writeFileSync(join(shared, 'history.jsonl'), '{"display":"personal"}\n')
+      expect(existsSync(join(profileHome, 'history.jsonl'))).toBe(false)
+    }
+  )
 })

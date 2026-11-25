@@ -13,13 +13,15 @@ type RepositoryAccountSectionsProps = {
   forceVisible?: boolean
 }
 
-/** The accounts this project's GitHub calls and Claude chats run on. */
-export function RepositoryAccountSections(
-  props: RepositoryAccountSectionsProps
-): React.JSX.Element {
+/** The accounts this project's GitHub calls and Claude chats run on; a folder project has no
+ *  GitHub account. */
+export function RepositoryAccountSections({
+  isFolder,
+  ...props
+}: RepositoryAccountSectionsProps & { isFolder: boolean }): React.JSX.Element {
   return (
     <>
-      <RepositoryGitHubAccountSection {...props} />
+      {isFolder ? null : <RepositoryGitHubAccountSection {...props} />}
       <RepositoryClaudeAccountSection {...props} />
     </>
   )

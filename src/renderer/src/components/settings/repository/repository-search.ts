@@ -19,6 +19,7 @@ import {
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
 import { getRepositoryBrowserProfileSearchEntry } from './RepositoryBrowserProfileSection'
+import { getRepositoryClaudeAccountSearchEntry } from './claude-account/RepositoryClaudeAccountSection'
 import { getRepositoryWorkspaceCleanupSearchEntry } from './workspace-cleanup/repository-workspace-cleanup-search'
 
 type RepositoryPaneSearchOptions = {
@@ -209,6 +210,7 @@ function getRepositorySearchParts(
   return {
     agentTrust: getRepositoryAgentTrustSearchEntry(),
     browserProfile: getRepositoryBrowserProfileSearchEntry(t),
+    claudeAccount: getRepositoryClaudeAccountSearchEntry(repo, t),
     jira,
     displayName,
     icon,
@@ -237,15 +239,8 @@ export function getRepositoryPaneSearchEntries(
     parts.displayName,
     parts.icon
   ]
-  if (parts.github) {
-    entries.push(parts.github)
-  }
-  if (parts.fork) {
-    entries.push(parts.fork)
-  }
-  if (parts.projectRuntime) {
-    entries.push(parts.projectRuntime)
-  }
+  const optional = [parts.github, parts.claudeAccount, parts.fork, parts.projectRuntime]
+  entries.push(...optional.filter((entry) => entry !== undefined))
   if (!isFolderRepo(repo)) {
     entries.push(...getRepositoryGitWorktreeSearchEntries(repo, t))
     entries.push(getRepositoryWorkspaceCleanupSearchEntry(repo, t))
@@ -277,15 +272,8 @@ export function getRepositoryPaneSearchMetadata(
     parts.displayName,
     parts.icon
   ]
-  if (parts.github) {
-    identity.push(parts.github)
-  }
-  if (parts.fork) {
-    identity.push(parts.fork)
-  }
-  if (parts.projectRuntime) {
-    identity.push(parts.projectRuntime)
-  }
+  const optional = [parts.github, parts.claudeAccount, parts.fork, parts.projectRuntime]
+  identity.push(...optional.filter((entry) => entry !== undefined))
   if (worktrees) {
     identity.push(...worktrees.identity)
   }
