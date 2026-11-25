@@ -10,7 +10,7 @@ import {
   type TurnSectionsMemo
 } from './bot-active-work'
 import type { BotActiveWorkScope } from './bot-active-work-read'
-import { type BotItemAccess, botItemPersonOfAudience, botItemsOfPerson } from './bot-item-access'
+import { type BotItemAccess, botItemPeopleOfAudience, botItemsOfPeople } from './bot-item-access'
 import type { BotRecentChatsSection } from './bot-recent-chats'
 import { type BotTurnAudience, botTurnScope } from './bot-turn-audience'
 import { BOT_WORK_NOTE_TIMEOUT_MS } from './bot-work-record'
@@ -39,7 +39,7 @@ export type BotTurnNotes = {
 
 /** Whose items a turn lists: only its own person's, the owner's turns included (his choice). */
 const turnItems = (audience: BotTurnAudience): BotItemAccess =>
-  botItemsOfPerson(botItemPersonOfAudience(audience))
+  botItemsOfPeople(botItemPeopleOfAudience(audience))
 
 export function createBotTurnNotes(sources: BotTurnNoteSources): BotTurnNotes {
   const unansweredQuestionNote = createBotUnansweredQuestionNote(sources.endedTurns)

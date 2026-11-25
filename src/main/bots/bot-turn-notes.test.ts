@@ -37,16 +37,16 @@ beforeEach(() => {
     ]
   })
   items = BotItemsStore.open(':memory:')
-  for (const [chatId, title, actsForAccount] of [
+  for (const [chatId, title, actsForAccounts] of [
     [OWNER_CHAT, 'Owner invite delay', null],
-    [TEAMMATE_CHAT, 'Teammate report draft', 'acct-2']
+    [TEAMMATE_CHAT, 'Teammate report draft', ['acct-2']]
   ] as const) {
     items.add(
       {
         ownerBotId: BOT,
         chatId,
         source: { kind: 'home', title: null },
-        actsForAccount,
+        actsForAccounts,
         title,
         status: 'working',
         links: []

@@ -81,7 +81,7 @@ const readers = new WeakMap<OrcaRuntimeService, ReturnType<typeof createBotActiv
 export type BotActiveWorkScope = { items: BotItemAccess; workers: boolean }
 
 function scopeKey({ items, workers }: BotActiveWorkScope): string {
-  return JSON.stringify([items.kind === 'everyone' ? '*' : items.account, workers])
+  return JSON.stringify([items.kind === 'everyone' ? '*' : items.accounts, workers])
 }
 
 /** The runtime's reads for a turn of one of `botId`'s chats. */

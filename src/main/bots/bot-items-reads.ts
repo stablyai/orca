@@ -25,9 +25,9 @@ export type BotItemListQuery = {
   statuses: readonly BotItemStatus[]
   /** Only these chats' items, counts included. */
   chatIds?: readonly string[]
-  /** Only one person's items (`botItemListScope`): a teammate's account, or null for the owner's;
-   *  absent: everyone's. */
-  actsForAccount?: string | null
+  /** Only these people's items (`botItemListScope`): those acting for any of these teammates'
+   *  accounts, or null for the owner's; absent: everyone's. */
+  actsForAccounts?: readonly string[] | null
   /** Only items linking this: `item list --link`. */
   link?: { kind: BotItemLinkKind; ref: string }
   /** Only these items; the counts stay the whole scope's. */
@@ -103,12 +103,17 @@ export class BotItemsReads extends BotItemsTables {
     const link = query.link
       ? ' AND uid IN (SELECT item_uid FROM item_links WHERE kind = ? AND ref = ?)'
       : ''
-    const person = query.actsForAccount !== undefined ? ' AND acts_for_account IS ?' : ''
+    const person =
+      query.actsForAccounts === undefined
+        ? ''
+        : query.actsForAccounts === null
+          ? ' AND items.acts_for_accounts IS NULL'
+          : ' AND EXISTS (SELECT 1 FROM json_each(items.acts_for_accounts) WHERE value IN (SELECT value FROM json_each(?)))'
     const scope = `owner_bot_id = ?${chat}${person}${link}`
     const scopeArgs = [
       query.botId,
       ...(query.chatIds ? [JSON.stringify(query.chatIds)] : []),
-      ...(query.actsForAccount !== undefined ? [query.actsForAccount] : []),
+      ...(query.actsForAccounts ? [JSON.stringify(query.actsForAccounts)] : []),
       ...(query.link ? [query.link.kind, query.link.ref] : [])
     ]
     const counts: Partial<Record<BotItemStatus, number>> = {}
