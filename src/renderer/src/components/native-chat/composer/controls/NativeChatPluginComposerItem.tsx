@@ -20,15 +20,14 @@ export function NativeChatPluginComposerItem({
   const { command, popover } = item
   const showPopover = popover && (popover.title || popover.rows?.length || popover.actions?.length)
 
-  const run = async (id: string): Promise<void> => {
+  const run = (id: string): Promise<void> => {
     setRunning(true)
-    try {
-      await item.runCommand(id)
-    } catch {
-      toast.error(t('auto.App.pluginCommandFailed', 'Could not run the plugin command.'))
-    } finally {
-      setRunning(false)
-    }
+    return item
+      .runCommand(id)
+      .catch(() => {
+        toast.error(t('auto.App.pluginCommandFailed', 'Could not run the plugin command.'))
+      })
+      .finally(() => setRunning(false))
   }
 
   const content = (
