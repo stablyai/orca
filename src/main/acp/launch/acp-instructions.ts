@@ -1,7 +1,17 @@
 // ACP has no standard channel for standing instructions; each agent takes them its own way.
 
 import { randomUUID } from 'node:crypto'
-import { lstat, mkdir, readdir, rename, rm, rmdir, unlink, writeFile } from 'node:fs/promises'
+import {
+  lstat,
+  mkdir,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  rmdir,
+  unlink,
+  writeFile
+} from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { nativeChatScratchFolderName } from '../../native-chat/conversation-files/native-chat-scratch-folder'
@@ -187,15 +197,70 @@ export const deliverCodeBuddyInstructions: AcpInstructionsDelivery = async ({ te
   return {}
 }
 
+/** Opens and instruction cleanups in one folder wait for each other, so a concurrent DSH launch
+ *  never deletes or overwrites `AGENTS.local.md` before another's `session/new` reads it. */
+const dshOpeningByFolder = new Map<string, Promise<void>>()
+
+async function acquireDshFolderLock(cwd: string): Promise<() => void> {
+  const key = await realpath(cwd).catch(() => cwd)
+  const previous = dshOpeningByFolder.get(key) ?? Promise.resolve()
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const held = previous.then(() => gate)
+  dshOpeningByFolder.set(key, held)
+  await previous
+  return () => {
+    release()
+    if (dshOpeningByFolder.get(key) === held) {
+      dshOpeningByFolder.delete(key)
+    }
+  }
+}
+
+async function placeDshOpeningInstructions(
+  cwd: string,
+  text: string
+): Promise<() => Promise<void>> {
+  const release = await acquireDshFolderLock(cwd)
+  try {
+    const written = await writeFolderContextFile(cwd, 'AGENTS.local.md', 'DeepSeek Harness', text)
+    if (!written) {
+      throw new Error(
+        "DeepSeek Harness cannot take this chat's standing instructions, so it did not start"
+      )
+    }
+    return async () => {
+      try {
+        await removeFolderContextFile(cwd, 'AGENTS.local.md', 'DeepSeek Harness')
+      } finally {
+        release()
+      }
+    }
+  } catch (error) {
+    release()
+    throw error
+  }
+}
+
 // DSH reads the folder's AGENTS.local.md at session creation and keeps it with the session.
-// Refuses to start when AGENTS.local.md cannot be written (a link or unreadable file).
-export const deliverDshInstructions: AcpInstructionsDelivery = async ({ text, cwd }) =>
-  (await writeFolderContextFile(cwd, 'AGENTS.local.md', 'DeepSeek Harness', text)) ? {} : null
+// Writing around `session/new` under a per-folder lock keeps concurrent launches in the same
+// workspace from clobbering or deleting each other's instructions before `session/new` reads them.
+export const deliverDshInstructions: AcpInstructionsDelivery = async ({ text }) => ({
+  aroundNewSession: (cwd) => placeDshOpeningInstructions(cwd, text)
+})
 
 /** DSH reads the folder's AGENTS.local.md at session creation, so a launch that brings no
- *  instructions removes the block an earlier one left behind. */
+ *  instructions removes any stale block an earlier crashed launch left behind, after any
+ *  in-flight `session/new` in the same folder finishes. */
 export const undoDshInstructions = async ({ cwd }: { cwd: string }): Promise<void> => {
-  await removeFolderContextFile(cwd, 'AGENTS.local.md', 'DeepSeek Harness')
+  const release = await acquireDshFolderLock(cwd)
+  try {
+    await removeFolderContextFile(cwd, 'AGENTS.local.md', 'DeepSeek Harness')
+  } finally {
+    release()
+  }
 }
 
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.

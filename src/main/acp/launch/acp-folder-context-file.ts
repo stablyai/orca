@@ -133,10 +133,13 @@ export async function removeFolderContextFile(
   if (!span) {
     return
   }
-  // Only the end of `before` and start of `after` are tidied: the user's own first line may
-  // open an indented code block, and its indentation is theirs to keep.
+  // Only the end of `before` and separating line endings of `after` are tidied: the user's own
+  // first line may open an indented code block, and its indentation is theirs to keep.
   const before = existing.text.slice(0, span.at).trimEnd()
-  const after = existing.text.slice(span.until).trimStart()
+  const after = existing.text
+    .slice(span.until)
+    .replace(/^(?:[ \t]*\r?\n)+/, '')
+    .trimEnd()
   if (!before && !after) {
     await rm(target, { force: true })
     return

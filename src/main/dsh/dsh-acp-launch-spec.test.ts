@@ -42,7 +42,7 @@ describe('DSH ACP launch spec', () => {
     expect(resolved).toEqual({ variable: 'DSH_HOME', path: '/tmp/custom-dsh' })
   })
 
-  it('writes standing instructions to AGENTS.local.md and removes them when a launch has none', async () => {
+  it('writes standing instructions around session/new and removes them on undo or instruction-free launch', async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'dsh-instructions-'))
     const result = await acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
       sessionId: 'dsh-session-1',
@@ -50,37 +50,78 @@ describe('DSH ACP launch spec', () => {
       env: {},
       cwd: tempDir
     })
-    expect(result).toEqual({})
+    expect(result?.aroundNewSession).toBeTypeOf('function')
     const instructionsPath = join(tempDir, 'AGENTS.local.md')
-    const content = await readFile(instructionsPath, 'utf8')
-    expect(content).toContain('Follow Orca bot rules.')
+    await expect(stat(instructionsPath)).rejects.toThrow()
 
-    // A subsequent launch without instructions removes Orca's file so old rules do not linger.
-    await expect(
-      acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
-        sessionId: 'dsh-session-2',
-        text: null,
-        env: {},
-        cwd: tempDir
-      })
-    ).resolves.toBeNull()
+    const undo = await result?.aroundNewSession?.(tempDir)
+    expect(await readFile(instructionsPath, 'utf8')).toContain('Follow Orca bot rules.')
+
+    // A concurrent instruction-free launch waits until session/new finishes and calls undo.
+    let undoCompleted = false
+    const concurrentNoInstructions = acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
+      sessionId: 'dsh-session-2',
+      text: null,
+      env: {},
+      cwd: tempDir
+    }).then((res) => {
+      undoCompleted = true
+      return res
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(undoCompleted).toBe(false)
+    expect(await readFile(instructionsPath, 'utf8')).toContain('Follow Orca bot rules.')
+
+    await undo?.()
+    await expect(concurrentNoInstructions).resolves.toBeNull()
+    expect(undoCompleted).toBe(true)
+    await expect(stat(instructionsPath)).rejects.toThrow()
+
+    // Two concurrent launches with instructions serialize around session/new in the same folder.
+    const firstLaunch = await acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
+      sessionId: 'dsh-session-3a',
+      text: 'First bot rules.',
+      env: {},
+      cwd: tempDir
+    })
+    const firstUndo = await firstLaunch?.aroundNewSession?.(tempDir)
+    expect(await readFile(instructionsPath, 'utf8')).toContain('First bot rules.')
+
+    const secondLaunch = await acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
+      sessionId: 'dsh-session-3b',
+      text: 'Second bot rules.',
+      env: {},
+      cwd: tempDir
+    })
+    let secondPlaced = false
+    const secondPlacement = secondLaunch?.aroundNewSession?.(tempDir).then((nextUndo) => {
+      secondPlaced = true
+      return nextUndo
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(secondPlaced).toBe(false)
+    expect(await readFile(instructionsPath, 'utf8')).toContain('First bot rules.')
+
+    await firstUndo?.()
+    const secondUndo = await secondPlacement
+    expect(secondPlaced).toBe(true)
+    expect(await readFile(instructionsPath, 'utf8')).toContain('Second bot rules.')
+    await secondUndo?.()
     await expect(stat(instructionsPath)).rejects.toThrow()
 
     // User-authored text in AGENTS.local.md is preserved when Orca's block is removed.
     await writeFile(instructionsPath, 'User rules.\n')
-    await acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
-      sessionId: 'dsh-session-3',
+    const userPreservingLaunch = await acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
+      sessionId: 'dsh-session-4',
       text: 'Bot rules.',
       env: {},
       cwd: tempDir
     })
+    const userUndo = await userPreservingLaunch?.aroundNewSession?.(tempDir)
     expect(await readFile(instructionsPath, 'utf8')).toContain('Bot rules.')
-    await acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
-      sessionId: 'dsh-session-4',
-      text: null,
-      env: {},
-      cwd: tempDir
-    })
+    await userUndo?.()
     expect(await readFile(instructionsPath, 'utf8')).toBe('User rules.\n')
   })
 
