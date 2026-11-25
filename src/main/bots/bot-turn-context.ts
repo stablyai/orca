@@ -71,7 +71,7 @@ export function createBotTurnContext(
   const readTopics = (folder: string): Promise<BotMemoryTopics> => readBotMemoryTopics(fs, folder)
   // Codex restores proven file digests from its receipt; the remaining turn state stays in memory.
   const given = new Map<string, Given>()
-  const launches = new Map<string, object>()
+  const launches = new Map<string, symbol>()
   const update = (sessionId: string, fields: Partial<Omit<Given, 'botId' | 'folder'>>): void => {
     const entry = given.get(sessionId)
     if (entry) {
@@ -87,7 +87,7 @@ export function createBotTurnContext(
   const relinked = async (
     sessionId: string,
     entry: Given,
-    launch: object | undefined
+    launch: symbol | undefined
   ): Promise<Given> => {
     const next = await relinkedSkills(linkedSkills, sessionId, entry)
     if (next && launches.get(sessionId) === launch) {
@@ -116,7 +116,7 @@ export function createBotTurnContext(
       return { soul, memory, skills }
     },
     launched: (sessionId, botId, folder, files, delivered, orcaRules) => {
-      const launch = {}
+      const launch = Symbol()
       launches.set(sessionId, launch)
       const prior = given.get(sessionId)
       const retained =

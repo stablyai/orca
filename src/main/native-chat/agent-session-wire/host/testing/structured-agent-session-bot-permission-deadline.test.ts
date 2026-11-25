@@ -3,6 +3,7 @@ import { codexNativeResumeRequirement } from '../../../../codex/structured/turns
 import type { CodexSession } from '../../../../codex/structured/session-lifecycle/codex-structured-session-state'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
+  HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestSendParams
 } from './structured-agent-session-host-test-data.test-fixture'
@@ -51,7 +52,7 @@ async function currentBotReceipt() {
       sessionId: SESSION,
       fence: store.getRecord(SESSION)!.lease.runtimeFence,
       permissionMode: 'own',
-      now: Date.now()
+      now: HOST_TEST_NOW
     }
   })
   dispatch.mockClear()
@@ -67,6 +68,7 @@ it('bounds the actual Ask-to-own cold retirement with a current bot receipt and 
   closeSession.mockImplementation(() => closed)
   try {
     const a = await accept('permission recovery A')
+    await eventually(() => expect(closeSession.mock.calls.length).toBeGreaterThan(0))
     await vi.advanceTimersByTimeAsync(9_000)
     expect(await submission(a)).toMatchObject({ dispatchState: 'pending' })
     await vi.advanceTimersByTimeAsync(2_000)
@@ -77,7 +79,9 @@ it('bounds the actual Ask-to-own cold retirement with a current bot receipt and 
       })
     )
     expect(store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
+    closeSession.mockClear()
     const b = await accept('B waits for real writer release')
+    await eventually(() => expect(closeSession.mock.calls.length).toBeGreaterThan(0))
     await vi.advanceTimersByTimeAsync(11_000)
     await eventually(async () =>
       expect(await submission(b)).toMatchObject({

@@ -8164,7 +8164,6 @@
       "nextRunTomorrow": "Next run tomorrow at {{time}}",
       "nextRunWeekday": "Next run {{day}} at {{time}}",
       "nextRunDate": "Next run {{date}}",
-      "keepEditing": "Keep editing",
       "lastRun": "Last run",
       "failed": "Failed"
     },
