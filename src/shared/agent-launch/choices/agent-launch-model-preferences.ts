@@ -10,6 +10,7 @@ import { isPiModelOptionId } from '../../agent-session/options/catalog-providers
 import { parseDimaModelSelector } from '../../agent-session/options/model-catalog/dima-model-list-probe'
 import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/launch/agent-session-option-launch'
 import type { TuiAgent } from '../catalog/tui-agent'
+import type { AgentLaunchSurface } from '../contracts/agent-launch-surface'
 
 export const OPENCODE_MODEL_VERSION_REFUSAL =
   'OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice.'
@@ -29,6 +30,8 @@ export type AgentLaunchModelPreferenceCheck =
 
 export function checkAgentLaunchModelPreferences(args: {
   agent: TuiAgent
+  /** The surface the caller asked for; absent may open either. */
+  surface?: AgentLaunchSurface
   /** OpenCode model choices need a fresh terminal on a supported execution host. */
   openCodeModelLaunchSupported?: boolean
   createsWorktree?: boolean
@@ -68,8 +71,9 @@ export function checkAgentLaunchModelPreferences(args: {
       `Agent pi needs a provider/id model, such as anthropic/claude-sonnet-4-5; got ${args.model}.`
     )
   }
-  // A bare id would run on whichever provider dima resolves; the picker always names one.
-  if (args.agent === 'dima' && !parseDimaModelSelector(args.model)) {
+  // A terminal's bare id would run on whichever provider dima resolves; a chat's model option
+  // takes dima's own model id, which dima itself checks.
+  if (args.agent === 'dima' && args.surface !== 'chat' && !parseDimaModelSelector(args.model)) {
     return refuse(
       'invalid_argument',
       `Agent dima needs a provider/model selector, such as openai-codex/gpt-5.5; got ${args.model}.`

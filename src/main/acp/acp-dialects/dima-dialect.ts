@@ -20,5 +20,7 @@ function approvalRequest(method: string, params: unknown): AcpRequestPresentatio
 }
 
 export const DIMA_ACP_DIALECT: AcpDialect = {
-  request: approvalRequest
+  request: approvalRequest,
+  // A current model two providers share hides the option, so a requested one is written, not skipped.
+  unpublishedModelConfigId: 'model'
 }

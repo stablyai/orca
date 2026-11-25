@@ -245,6 +245,9 @@ export type AcpDialect = {
   compactCommand?: string
   /** Orca's catalog ids (the agent CLI's) its chat server names differently, as the server's ids. */
   chatModelIds?: ReadonlyMap<string, string>
+  /** Its model option's id, which still sets a model it lists while it leaves the option out
+   *  because its current model is not listed. */
+  unpublishedModelConfigId?: string
   /** Resolves a CLI model id the chat server does not list to a listed model plus its effort,
    *  thinking and Fast; null if none. */
   unlistedChatModel?(value: string, listed: readonly string[]): AcpListedChatModel | null

@@ -30,6 +30,10 @@ function isSelect(option: SessionConfigOption): option is SelectOption {
   return option.type === 'select'
 }
 
+function configWrite(configId: string | undefined, value: string): AcpOptionWrite | null {
+  return configId === undefined ? null : { method: 'config', configId, value }
+}
+
 export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
@@ -38,6 +42,7 @@ export class AcpStructuredOptions {
       | 'familyEfforts'
       | 'withheldCommands'
       | 'chatModelIds'
+      | 'unpublishedModelConfigId'
       | 'effortChangesModel'
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
@@ -224,27 +229,23 @@ export class AcpStructuredOptions {
 
   write(key: string, value: string): AcpOptionWrite | null {
     if (key === 'fastMode' || key === 'thinking') {
-      const option = this.idSelect(
-        key === 'fastMode' ? this.dialect.fastConfigId : this.dialect.thinkingConfigId
-      )
-      return option ? { method: 'config', configId: option.id, value } : null
+      const id = key === 'fastMode' ? this.dialect.fastConfigId : this.dialect.thinkingConfigId
+      return configWrite(this.idSelect(id)?.id, value)
     }
     if (key === 'model') {
       const option = this.select('model')
       const model = this.dialect.chatModelIds?.get(value) ?? value
-      if (option) {
-        return { method: 'config', configId: option.id, value: model }
-      }
-      return this.models ? { method: 'model', modelId: model } : null
+      return !option && this.models
+        ? { method: 'model', modelId: model }
+        : configWrite(option?.id ?? this.dialect.unpublishedModelConfigId, model)
     }
     if (key === 'effort') {
-      const option = this.effortOption()
-      return option ? { method: 'config', configId: option.id, value } : null
+      return configWrite(this.effortOption()?.id, value)
     }
     if (key === 'interactionMode') {
       const option = this.select('mode')
       const native = acpInteractionModeValue(this.dialect.interactionModes, option, value)
-      return option && native ? { method: 'config', configId: option.id, value: native } : null
+      return native ? configWrite(option?.id, native) : null
     }
     return null
   }

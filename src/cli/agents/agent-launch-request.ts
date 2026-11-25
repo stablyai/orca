@@ -73,8 +73,10 @@ export function readCliAgentLaunch(
   agent: TuiAgent,
   target: { createsWorktree: boolean }
 ): CliAgentLaunch {
+  const surface = readSurfaceFlag(flags)
   const checked = checkAgentLaunchModelPreferences({
     agent,
+    ...(surface ? { surface } : {}),
     model: getOptionalStringFlag(flags, 'model'),
     effort: getOptionalStringFlag(flags, 'effort'),
     createsWorktree: target.createsWorktree,
@@ -92,7 +94,6 @@ export function readCliAgentLaunch(
   if (operationId !== undefined && parseAgentSessionOperationTimestamp(operationId) === null) {
     throw new RuntimeClientError('invalid_argument', 'Malformed --retry-launch operation ID')
   }
-  const surface = readSurfaceFlag(flags)
   return {
     agent,
     ...(surface ? { surface } : {}),
