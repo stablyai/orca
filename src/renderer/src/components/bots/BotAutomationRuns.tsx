@@ -193,9 +193,11 @@ export function BotAutomationRuns({
             )}
           />
         )}
-        {runs.error && runs.status !== 'error' ? (
+        {runs.error && (runs.status !== 'error' || pinnedRun || receipt) ? (
           <p className="px-2 text-2xs text-muted-foreground">
-            {t('bots.automationPanel.runsStale', "Couldn't read newer runs.")}
+            {runs.status === 'error'
+              ? t('bots.automationPanel.runsFailed', "Couldn't read its runs.")
+              : t('bots.automationPanel.runsStale', "Couldn't read newer runs.")}
             <button type="button" className={LINK} onClick={() => void controller.refreshRuns()}>
               {t('bots.automationPanel.retry', 'Retry')}
             </button>

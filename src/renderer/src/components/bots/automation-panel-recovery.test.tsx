@@ -370,3 +370,15 @@ it('hides Edit in chat while the captured computer is being checked, and disting
   expect(screen.getByText(/Fixture Bot's computer changed/)).toBeTruthy()
   expect(screen.queryByText('This automation was deleted')).toBeNull()
 })
+
+it('keeps the newest-history retry visible beside a successfully pinned older run', async () => {
+  render(<Panel runId="older" />)
+  await act(async () => {
+    show.resolve({ automation })
+    runs.reject(new Error('newest unavailable'))
+  })
+  expect(await screen.findByRole('button', { name: /Pinned result/ })).toBeTruthy()
+  const retry = screen.getByRole('button', { name: 'Retry' })
+  fireEvent.click(retry)
+  expect(await screen.findByRole('button', { name: /Retained result/ })).toBeTruthy()
+})
