@@ -1,6 +1,7 @@
 import type { OnMount } from '@monaco-editor/react'
 import type { IDisposable, editor } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
+import { composeQuickOpenText } from '../../../../../../shared/quick-open/quick-open-path-search'
 import {
   getMarkdownDocCompletionContext,
   getMarkdownDocCompletionDocuments
@@ -48,13 +49,21 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
 
       return {
         suggestions: getMarkdownDocCompletionDocuments(documents, context.partial).map(
-          (document) => ({
-            label: document.name,
-            kind: monaco.languages.CompletionItemKind.File,
-            detail: document.relativePath,
-            insertText: suffix.startsWith(']]') ? document.name : `${document.name}]]`,
-            range
-          })
+          (document) => {
+            const composedName = composeQuickOpenText(document.name)
+            return {
+              label: document.name,
+              // Why: Monaco filters the typed text as is against filterText, cut at 128 characters.
+              // The stored name goes first so every match the label alone had stays; the composed
+              // name after it lets text typed composed (NFC) match a name stored decomposed (NFD).
+              filterText:
+                composedName === document.name ? document.name : `${document.name} ${composedName}`,
+              kind: monaco.languages.CompletionItemKind.File,
+              detail: document.relativePath,
+              insertText: suffix.startsWith(']]') ? document.name : `${document.name}]]`,
+              range
+            }
+          }
         )
       }
     }

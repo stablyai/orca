@@ -59,7 +59,7 @@ export async function codexSharedServerSpec(
   // A --config value may be a path Codex resolves from its folder, so such a launch keeps its own.
   const cwd = configValues(launch.args).some((value) => !isOrcaHooksState(value))
     ? launch.cwd
-    : homedir()
+    : sharedServerFolder(launch)
   const env = { ...launch.env }
   const chatEnv: Record<string, string> = {}
   for (const key of PER_CHAT_ENV_KEYS) {
@@ -90,6 +90,15 @@ export async function codexSharedServerSpec(
     launch: { command: launch.command, args: launch.args, cwd, env, envToDelete },
     chatEnv
   }
+}
+
+/** Codex reads `<folder>/.codex/config.toml` as project config unless that folder is CODEX_HOME,
+ *  so a server started in home under another CODEX_HOME would load the user's ~/.codex twice. */
+function sharedServerFolder(launch: CodexAppServerLaunch): string {
+  const codexHome = launch.env?.CODEX_HOME
+  return codexHome && isAbsolute(codexHome) && !launch.envToDelete?.includes('CODEX_HOME')
+    ? codexHome
+    : homedir()
 }
 
 function configValues(args: readonly string[]): string[] {

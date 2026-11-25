@@ -8,7 +8,11 @@ import {
 import type { WorkerTerminalResourceRow } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
 import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
-import { archiveSummary } from './worker-terminal-resource-presentation'
+import {
+  archiveSummary,
+  receiptForUnchangedRelease,
+  unknownWriteApplied
+} from './worker-terminal-resource-presentation'
 import { captureWorkerResumeSession } from '../follow-up/worker-resume-session-capture'
 
 /** Record where release output lives; unverifiable structured sessions finish release_unknown instead of retrying forever as requested. A fresh request may retry. */
@@ -27,7 +31,10 @@ export function captureWorkerReleaseArchive(
     if (!capture.structuredWorker || !isUnverifiableSessionRefusal(error)) {
       throw error
     }
-    const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, error.message)
+    const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, error.message, dispatchId)
+    if (!unknownWriteApplied(unknown, dispatchId)) {
+      return { receipt: receiptForUnchangedRelease(dispatchId, unknown) }
+    }
     return {
       receipt: {
         dispatchId,

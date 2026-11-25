@@ -18,7 +18,22 @@ import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from './bot-made-for-wor
 
 const line = (max: number) => z.string().trim().min(1).max(max)
 
-export const BOT_PURPOSE_MAX_LENGTH = 200
+export const BOT_PURPOSE_MAX_LENGTH = 1000
+// Hosts before the 1,000 limit refuse more with a schema error naming this one.
+const OLDER_HOST_PURPOSE_MAX_LENGTH = 200
+
+/** Whether a host refused a create only because it is older and checks the earlier 200 limit. */
+export function refusedForOlderHostPurposeLimit(
+  code: string | undefined,
+  message: string,
+  purpose: string | undefined
+): boolean {
+  return (
+    code === 'invalid_argument' &&
+    (purpose?.length ?? 0) > OLDER_HOST_PURPOSE_MAX_LENGTH &&
+    message.includes(`<=${OLDER_HOST_PURPOSE_MAX_LENGTH}`)
+  )
+}
 
 /** What goes into the new bot's SOUL.md. */
 export const BotProposalSeedSchema = z.object({
