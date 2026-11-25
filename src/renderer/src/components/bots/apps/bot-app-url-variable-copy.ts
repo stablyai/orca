@@ -13,6 +13,8 @@ export function urlVariableLabel(
   switch (appId) {
     case 'datadog':
       return t('bots.apps.mcp.datadog.siteLabel', 'Datadog site')
+    case 'intercom':
+      return t('bots.apps.mcp.intercom.siteLabel', 'Intercom region')
     case 'gitlab':
       return t('bots.apps.mcp.gitlab.hostLabel', 'GitLab address (optional)')
     default:
@@ -31,6 +33,8 @@ export function urlVariableHint(t: Translate, appId: string, hint: string): stri
 
 export function sitePlace(t: Translate, site: BotMcpAppSite): string {
   switch (site.place) {
+    case 'United States':
+      return t('bots.apps.mcp.place.unitedStates', 'United States')
     case 'US East':
       return t('bots.apps.mcp.place.usEast', 'US East')
     case 'US West':

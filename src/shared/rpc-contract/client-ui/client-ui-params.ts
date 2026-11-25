@@ -1,5 +1,6 @@
 import { GitHistoryRefName } from '../source-control/git-params'
 import * as z from 'zod'
+import { StatusBarItems } from './client-ui-status-bar-params'
 import { isFeatureTipSeenId } from '../../feature-education/feature-tips'
 import {
   WORKTREE_CARD_PROPERTIES,
@@ -52,24 +53,6 @@ export const RightSidebarTabParam = z.custom<StaticRightSidebarTab | `plugin:${s
 )
 
 export const AgentActivityDisplayMode = z.enum(['compact', 'full'])
-
-export const StatusBarItem = z.enum([
-  'claude',
-  'codex',
-  'gemini',
-  'antigravity',
-  'opencode-go',
-  'kimi',
-  'minimax',
-  'grok',
-  'cursor',
-  'zcode',
-  'muse',
-  'ssh',
-  'resource-usage',
-  'ports',
-  'git-blame'
-])
 
 export const WorkspaceStatusDefinition = z.object({
   id: z.string(),
@@ -205,7 +188,7 @@ export const UiUpdateFields = z
     _workspaceStatusesReorderedDefaultRepaired: z.boolean().optional(),
     _workspaceStatusesDefaultWorkflowMigrated: z.boolean().optional(),
     _workspaceStatusesDefaultVisualsMigrated: z.boolean().optional(),
-    statusBarItems: z.array(StatusBarItem).optional(),
+    statusBarItems: StatusBarItems.optional(),
     _portsStatusBarDefaultAdded: z.boolean().optional(),
     _kimiStatusBarDefaultAdded: z.boolean().optional(),
     _minimaxStatusBarDefaultAdded: z.boolean().optional(),
@@ -225,7 +208,6 @@ export const UiUpdateFields = z
           .object({
             claude: z.string().optional(),
             codex: z.string().optional(),
-            gemini: z.string().optional(),
             'opencode-go': z.string().optional(),
             kimi: z.string().optional(),
             minimax: z.string().optional(),

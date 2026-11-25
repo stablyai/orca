@@ -98,13 +98,8 @@ const REFUSED =
 /** Classifies a sign-in error or a failed turn; null when switching methods wouldn't help. */
 export function antigravityAuthFailureReason(input: {
   failureKind?: string
-  /** `system`: the host's own agy, whose sign-in Orca doesn't manage. */
-  account?: string
   text: string
 }): AntigravityAuthFailureReason | null {
-  if (input.account === 'system') {
-    return null
-  }
   const { text } = input
   if (text === ANTIGRAVITY_SUBSCRIPTION_REQUIRED || SUBSCRIPTION.test(text)) {
     return 'noSubscription'

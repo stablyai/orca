@@ -11,7 +11,6 @@ export const TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
   'qoder-cn': 'qoder.cn',
   zcode: 'zcode.z.ai',
   'prime-agent': 'primeintellect.ai',
-  gemini: 'gemini.google.com',
   antigravity: 'antigravity.google',
   goose: 'goose-docs.ai',
   amp: 'ampcode.com',

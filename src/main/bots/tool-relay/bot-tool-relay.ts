@@ -1,7 +1,6 @@
 // Orca's loopback relay for bots' HTTP tools: a bot's agent sends each call to 127.0.0.1 with its own
 // token, and Orca adds the tool's saved headers or its own sign-in's token and streams it to the
 // real server and back.
-import { createHash, randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { resolve } from 'node:path'
 import { BoundedMap } from '../../../shared/collections/bounded-map'
@@ -20,6 +19,12 @@ import {
   type BotToolHeaderSource
 } from '../tool-oauth/bot-tool-credential-source'
 import { RelayAdmission, type RelayCall } from './bot-tool-relay-admission'
+import {
+  MCP_HOST_LIST_RELAY_OWNER,
+  RelayGrants,
+  relayToolPath,
+  type RelayFolders
+} from './bot-tool-relay-grants'
 import { header, readBody, RelayRefusal } from './bot-tool-relay-requests'
 import { answerSignInNeeded, answerUnavailable } from './bot-tool-relay-sign-in-answer'
 import {
@@ -30,26 +35,23 @@ import {
   type RelayFetch
 } from './bot-tool-relay-upstream'
 
-type Grant = { botId: string; folder: string }
-
-const PATH = /^\/bot-tools\/([A-Za-z0-9_-]{8,64})\/mcp(?:\?.*)?$/
 const MAX_TRACKED_SESSIONS = 1_000
 const MAX_TRACKED_PROBLEMS = 1_000
 /** Why a call was aborted: the agent hung up, or the tool, its sign-in or the bot went. */
 const AGENT_LEFT = Symbol('agent left')
 const CREDENTIAL_ENDED = Symbol('credential ended')
 
-const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex')
 const credentialKey = (folder: string, credentialId: string) => `${folder}\0${credentialId}`
 const SESSION_ENDED = 'This tool’s session ended. Start a new one.'
+
+export { MCP_HOST_LIST_RELAY_OWNER, relayToolUrl, type RelayFolders } from './bot-tool-relay-grants'
 
 export class BotToolRelay {
   private server: Server | null = null
   private port = 0
   private listening: Promise<number> | null = null
   private stopListeningForEnds: (() => void) | null = null
-  private readonly grants = new Map<string, Grant>()
-  private readonly tokens = new Map<string, string>()
+  private readonly grants = new RelayGrants()
   /** Which upstream session identity an MCP session was made under, so a changed one starts over. */
   private readonly sessions = new BoundedMap<string, string>({ maxEntries: MAX_TRACKED_SESSIONS })
   private readonly problems = new BoundedMap<string, string>({ maxEntries: MAX_TRACKED_PROBLEMS })
@@ -60,30 +62,24 @@ export class BotToolRelay {
     private readonly source: BotToolCredentialSource = botToolCredentialSource()
   ) {}
 
-  /** The relay's address and the bot's token for this run of Orca; starts listening on first use. */
-  async grant(botId: string, folder: string): Promise<{ origin: string; token: string }> {
+  /**
+   * The relay's address and the owner's token for this run of Orca; starts listening on first use.
+   * The token reaches only `folders`, as the owner's latest launch named them.
+   */
+  async grant(owner: string, folders: RelayFolders): Promise<{ origin: string; token: string }> {
     const port = await this.listen()
-    let token = this.tokens.get(botId)
-    if (!token) {
-      token = randomBytes(32).toString('base64url')
-      this.tokens.set(botId, token)
-    }
-    this.grants.set(hashToken(token), { botId, folder: resolve(folder) })
-    return { origin: `http://127.0.0.1:${port}`, token }
+    return { origin: `http://127.0.0.1:${port}`, token: this.grants.grant(owner, folders) }
   }
 
   /** The bot a token was granted to in this run of Orca; null once revoked or from another run. */
   botOf(token: string): string | null {
-    return this.grants.get(hashToken(token))?.botId ?? null
+    const owner = this.grants.of(token)?.owner ?? null
+    return owner === MCP_HOST_LIST_RELAY_OWNER ? null : owner
   }
 
   /** A deleted bot's token stops working at once, and its open calls are cut. */
   revoke(botId: string): void {
-    const token = this.tokens.get(botId)
-    if (token) {
-      this.grants.delete(hashToken(token))
-      this.tokens.delete(botId)
-    }
+    this.grants.revoke(botId)
     this.admission.abortWhere((call) => call.botId === botId, CREDENTIAL_ENDED)
   }
 
@@ -103,7 +99,6 @@ export class BotToolRelay {
     this.port = 0
     this.listening = null
     this.grants.clear()
-    this.tokens.clear()
     this.sessions.clear()
     this.problems.clear()
   }
@@ -157,7 +152,7 @@ export class BotToolRelay {
       ) {
         throw new RelayRefusal(403, 'Not allowed.')
       }
-      const match = PATH.exec(req.url ?? '')
+      const match = relayToolPath(req.url ?? '')
       if (!match) {
         throw new RelayRefusal(404, 'Not found.')
       }
@@ -166,14 +161,20 @@ export class BotToolRelay {
         throw new RelayRefusal(405, 'Method not allowed.')
       }
       const auth = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')
-      const grant = auth?.[1] ? this.grants.get(hashToken(auth[1])) : undefined
+      const grant = auth?.[1] ? this.grants.of(auth[1]) : undefined
       if (!grant) {
         throw new RelayRefusal(401, 'This tool needs the bot’s Orca token.')
       }
-      const credentialId = match[1]!
-      label = `${grant.botId} ${credentialId} ${method}`
-      // Counted before any wait for a token, so slow refreshes can't pile up calls.
-      call = this.admission.admit(grant.botId, method, credentialKey(grant.folder, credentialId))
+      const folder = grant.folders[match.scope]
+      if (!folder) {
+        throw new RelayRefusal(404, 'This token has no such tool.')
+      }
+      const { credentialId } = match
+      label = `${grant.owner} ${credentialId} ${method}`
+      // Counted before any wait for a token, so slow refreshes can't pile up calls. Every non-bot
+      // session shares the host's token, so only this computer's limits bound its calls.
+      const shared = grant.owner === MCP_HOST_LIST_RELAY_OWNER
+      call = this.admission.admit(grant.owner, method, credentialKey(folder, credentialId), !shared)
       if (!call) {
         throw new RelayRefusal(429, 'Too many tool calls at once.')
       }
@@ -183,7 +184,7 @@ export class BotToolRelay {
           abort.abort(AGENT_LEFT)
         }
       })
-      await this.forward(req, res, grant, credentialId, abort.signal)
+      await this.forward(req, res, { owner: grant.owner, folder, credentialId }, abort.signal)
     } catch (error) {
       this.fail(res, call?.abort.signal, error, label)
     } finally {
@@ -221,13 +222,12 @@ export class BotToolRelay {
   private async forward(
     req: IncomingMessage,
     res: ServerResponse,
-    grant: Grant,
-    credentialId: string,
+    { owner, folder, credentialId }: { owner: string; folder: string; credentialId: string },
     signal: AbortSignal
   ): Promise<void> {
     const body = req.method === 'POST' ? await readBody(req) : undefined
-    const key = credentialKey(grant.folder, credentialId)
-    const request = { host: 'local', folder: grant.folder, credentialId, signal } as const
+    const key = credentialKey(folder, credentialId)
+    const request = { host: 'local', folder, credentialId, signal } as const
     let answer = await this.ask(request)
     let upstream: Response
     for (let tries = 1; ; tries += 1) {
@@ -256,7 +256,7 @@ export class BotToolRelay {
       }
       answer = await this.ask({ ...request, rejected: answer.bearer })
     }
-    const label = `${grant.botId} ${credentialId} ${req.method}`
+    const label = `${owner} ${credentialId} ${req.method}`
     await this.relayResponse(req, res, key, label, answer, upstream, signal)
   }
 

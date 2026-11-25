@@ -82,16 +82,25 @@ export const TRAILING_REDIRECT: Record<LookAroundShell, RegExp> = {
   powershell: /[ \t]+2>&1$/
 }
 
-/** Codex wraps commands as `/bin/zsh -lc '<command>'`: a bare shell name or a system shell path,
- *  and nothing else before it, or the prefix could itself run something. */
+/** Codex shows a command as its argv joined by shlex, `/bin/zsh -lc <command>`: a bare shell name
+ *  or a system shell path, and nothing else before it, or the prefix could itself run something.
+ *  The command is one word of literal runs: 'single quotes', "double quotes" with no `$`, `` ` ``
+ *  or `!` and only shlex's `\"` and `\\` escapes, and `\'`. Single-quoted runs never touch, since
+ *  zsh's RC_QUOTES reads `''` as `'`. */
 const SHELL_WRAPPER =
-  /^(?:(?:\/usr|\/usr\/local|\/opt\/homebrew)?\/bin\/)?(?:ba|z)?sh[ \t]+-l?c[ \t]+'((?:[^']|'\\'')*)'$/
+  /^(?:(?:\/usr|\/usr\/local|\/opt\/homebrew)?\/bin\/)?(?:ba|z)?sh[ \t]+-l?c[ \t]+((?:'[^']*'(?!')|"(?:[^"\\$`!]|\\["\\])*"|\\')+)$/
+const LITERAL_RUN = /'([^']*)'|"((?:[^"\\]|\\.)*)"|\\(')/g
 
 /** The command a shell wrapper runs, checked whole; anything else unchanged. */
 export function unwrapShell(command: string): string {
   const trimmed = trimBlanks(command)
   const wrapped = SHELL_WRAPPER.exec(trimmed)
-  return wrapped ? wrapped[1].replace(/'\\''/g, "'") : trimmed
+  return wrapped
+    ? wrapped[1].replace(
+        LITERAL_RUN,
+        (_, single, double, quote) => single ?? double?.replace(/\\(.)/g, '$1') ?? quote
+      )
+    : trimmed
 }
 
 /** How a bot's preamble names this session's own CLI on POSIX; Orca seals the variable. */
