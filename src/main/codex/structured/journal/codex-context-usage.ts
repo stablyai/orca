@@ -1,4 +1,7 @@
-import type { AgentSessionContextUsage } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
+import type {
+  AgentSessionContextUsage,
+  AgentSessionTokenUsage
+} from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { writeAgentJournalTurnRow } from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -9,6 +12,26 @@ import type { CodexRowAttribution } from '../background-work/codex-subagent-link
 
 function positiveCount(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+}
+
+function tokenCount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
+function readTotalUsage(value: unknown): AgentSessionTokenUsage | null {
+  const total = readRecord(value)
+  const input = tokenCount(total.inputTokens)
+  const output = tokenCount(total.outputTokens)
+  const cached = tokenCount(total.cachedInputTokens ?? 0)
+  if (input === null || output === null || cached === null || cached > input) {
+    return null
+  }
+  return {
+    inputTokens: input - cached,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: cached,
+    outputTokens: output
+  }
 }
 
 // last.totalTokens measures context, including after compaction; total is cumulative thread spend.
@@ -23,6 +46,7 @@ export function readCodexContextUsage(
     return null
   }
   const windowTokens = positiveCount(usage.modelContextWindow)
+  const totalUsage = readTotalUsage(usage.total)
   if (windowTokens === null) {
     // The reading the journal already holds may be measured against another model's window.
     return { used: { kind: 'unknown', capturedAt } }
@@ -30,6 +54,7 @@ export function readCodexContextUsage(
   return {
     used: {
       kind: 'report',
+      ...(totalUsage ? { totalUsage } : {}),
       // The frame names no model.
       model: 'unknown',
       usedTokens,

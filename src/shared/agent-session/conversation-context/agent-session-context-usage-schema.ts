@@ -23,6 +23,7 @@ const TokenUsage = z.object({
 const Used = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('report'),
+    totalUsage: TokenUsage.optional(),
     model: ModelId,
     usedTokens: TokenCount,
     windowTokens: WindowTokens,

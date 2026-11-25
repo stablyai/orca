@@ -20923,6 +20923,14 @@
         "unverifiable": "Не удалось проверить {{value0}}: {{value1}}",
         "unresolved": "Не удалось найти {{value0}} в этом рабочем пространстве"
       },
+      "tokenUsage": {
+        "title": "Токены",
+        "session": "Токены сессии",
+        "response": "Токены последнего ответа",
+        "used": "Всего",
+        "input": "Вход",
+        "output": "Выход"
+      },
       "contextUsage": {
         "label": "Контекст: {{used}} из {{window}} токенов, использовано {{percent}}%",
         "title": "Контекст",
