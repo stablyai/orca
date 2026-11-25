@@ -78,6 +78,7 @@ function host(
       ? answer('update', {
           bot: (saved = {
             ...saved,
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the switch's own bots.update call sends { botId, updates }.
             ...(args.params as { updates: Partial<Bot> }).updates
           })
         })

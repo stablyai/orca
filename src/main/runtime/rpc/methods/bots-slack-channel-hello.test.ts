@@ -8,6 +8,7 @@ import type { RpcContext } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { BOT_METHODS } from './bots'
 import { BOT_SLACK_CHANNEL_HELLO_METHODS } from './bots-slack-channel-hello'
+import type { BotSlackChannelHelloSetParams } from '../../../../shared/rpc-contract/bots-slack-channel-hello-params'
 
 // Which chat a session is (its bot), and whom the turn running in it acts for.
 const sessions = vi.hoisted(() => new Map<string, { bot: string; turnFor: string }>())
@@ -104,7 +105,12 @@ describe('bots.slackChannelHello.set', () => {
   })
 
   it('refuses, and changes nothing, for every caller that may not turn it off', async () => {
-    const refused: [string, Parameters<typeof contextFor>[0], Record<string, unknown>, string][] = [
+    const refused: [
+      string,
+      Parameters<typeof contextFor>[0],
+      BotSlackChannelHelloSetParams,
+      string
+    ][] = [
       [
         'another bot’s chat',
         { verified: 'scout-chat' },
@@ -168,7 +174,7 @@ describe('bots.slackChannelHello.set', () => {
     ]
     for (const [why, options, params, refusal] of refused) {
       const { context, update, saved } = contextFor(options)
-      await expect(setIntro!.handler(params as never, context), why).rejects.toThrow(refusal)
+      await expect(setIntro!.handler(params, context), why).rejects.toThrow(refusal)
       expect(update, why).not.toHaveBeenCalled()
       expect(saved.get('scout')?.slackChannelHello, why).toBeUndefined()
       expect(saved.get('reviewer')?.slackChannelHello, why).toBeUndefined()
@@ -194,11 +200,12 @@ describe('bots.slackChannelHello.set', () => {
   })
 
   it('only reports without off, telling an unsupported cloud from no connection', async () => {
-    for (const [features, cloud] of [
+    const cases: [string[] | null, string][] = [
       [[], 'no'],
       [null, 'not_connected']
-    ] as const) {
-      const { context, update } = contextFor({ features: features as string[] | null })
+    ]
+    for (const [features, cloud] of cases) {
+      const { context, update } = contextFor({ features })
       await expect(setIntro!.handler({ botId: 'scout' }, context)).resolves.toMatchObject({
         slackChannelHello: true,
         cloud,
