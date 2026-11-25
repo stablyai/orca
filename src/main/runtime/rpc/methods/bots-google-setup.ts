@@ -99,6 +99,7 @@ export async function answerGoogleSetupCard(
   }
   await runtimeBotChats(runtime).sendToChat(
     botId,
+    'owner',
     googleSetupAnswerLine(card, values),
     'card-answer'
   )
@@ -130,7 +131,12 @@ export async function recordGoogleSetupKeyMissed(
 ): Promise<void> {
   const { prev, run } = applied(botId, 'owner', { action: 'key-missed', reason })
   writeGoogleSetupCards(chatOf(runtime, botId), prev, run)
-  await runtimeBotChats(runtime).sendToChat(botId, googleSetupKeyRefusedLine(reason), 'card-answer')
+  await runtimeBotChats(runtime).sendToChat(
+    botId,
+    'owner',
+    googleSetupKeyRefusedLine(reason),
+    'card-answer'
+  )
 }
 
 /** A bot's start when Google's app is already on this host: its Connect card, or a line, instead of a
@@ -252,6 +258,7 @@ export const GOOGLE_SETUP_METHODS = [
       const { prev, run } = applied(botId, actor, { action: 'start', mode: 'unchosen', newApp })
       const { sessionId } = await runtimeBotChats(context.runtime).sendToChat(
         botId,
+        'owner',
         googleSetupStartLine(from, newApp),
         'card-answer'
       )

@@ -24645,7 +24645,8 @@
       "untitled": "Yeni sohbet",
       "loading": "Sohbetler yükleniyor…",
       "readFailed": "Bu botun sohbetleri okunamadı.",
-      "searchRetry": "Tekrar dene"
+      "searchRetry": "Tekrar dene",
+      "personHome": "Home ({{name}})"
     },
     "needs": {
       "chat": "{{name}} ile sohbetiniz",

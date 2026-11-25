@@ -27,11 +27,13 @@ import { BOT_CHATS_METHODS, botChatsSummary, readBotChats } from './bots-chats'
 import { BOT_CHAT_TREE_METHODS } from './bots-chat-tree'
 import { BOT_MEMORY_METHODS } from './bots-memory'
 import { BOT_KICKOFF_METHODS } from './bots-kickoff'
+import { newHomeChatOf } from './bots-caller-home'
+import { createChatOrcaSessionIdResolver } from '../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { namedOrCallerBot } from './bots-caller-bot'
 import { releaseDeletedBotLinks } from './bots-home-release'
 import { dropUnreadBotRequests } from './orchestration/messaging/bot-request-outcome'
 import { releaseHeldBotMail } from '../../../bots/bot-paused-mail'
-import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import { botSkillProjectViews, relinkBotSkills } from '../../../bots/bot-skill-projects'
 import { botOwnSkillsView, linkBotOwnSkills } from '../../../bots/bot-own-skills'
 import { botHomeFolder } from '../../../bots/bot-home'
@@ -90,12 +92,15 @@ async function newHomeChat(params: BotChatResetParams, context: RpcContext) {
   const { runtime } = context
   runtime.bots.assertEnabled()
   const { bot, caller, callerBot } = namedOrCallerBot(params, context)
-  // Another chat ending this one's Home Chat would cut off a conversation it isn't part of.
-  if (caller && callerBot && (callerBot.id !== bot.id || caller !== bot.chatSessionId)) {
-    throw new InvalidArgumentError('Only the bot’s own Home Chat can start a new Home Chat.')
-  }
-  // Its old Chat's queued messages move over; bot requests it never read are dropped.
-  const sessionId = await runtimeBotChats(runtime).reset(bot.id)
+  const of = newHomeChatOf({
+    scope: botShareScopeOf(context),
+    bot,
+    caller,
+    callerBot,
+    rootOf: createChatOrcaSessionIdResolver()
+  })
+  // Its old Home's queued messages move over; requests it never read are dropped.
+  const sessionId = await runtimeBotChats(runtime).reset(bot.id, of)
   return { sessionId }
 }
 
@@ -276,7 +281,7 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.chat.reset',
     permission: 'workspace',
-    share: 'not-shared',
+    share: SHARE_BY_BOT,
     params: BotChatReset,
     handler: newHomeChat
   }),

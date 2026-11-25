@@ -9,9 +9,11 @@ export type BotChatsResult = { bot: string; chats: BotChatRow[] }
 function formatChat(chat: BotChatRow, address: string, now: number): string {
   const active = ago(chat.lastActivityAt, now)
   const title = oneLine(chat.title)
+  // A teammate's Home lists by its name ("Alice’s Home"); older hosts name only the owner's.
+  const ownerHome = chat.home && (chat.homeOf ?? 'owner') === 'owner'
   const name = chat.closed
     ? `earlier chat, closed (takes no mail)${title ? `  ${JSON.stringify(title)}` : ''}`
-    : chat.home
+    : ownerHome
       ? 'Home Chat (current)'
       : title
         ? JSON.stringify(title)
@@ -24,7 +26,7 @@ function formatChat(chat: BotChatRow, address: string, now: number): string {
       name,
       ...(active ? [`active ${active}`] : []),
       ...(chat.self ? ['(this chat)'] : []),
-      ...(chat.home && !chat.closed ? [`<- where --to ${address} lands`] : [])
+      ...(ownerHome && !chat.closed ? [`<- where --to ${address} lands`] : [])
     ].join('  '),
     ...(asked ? [`  last asked: ${asked}`] : []),
     ...(said ? [`  last said:  ${said}`] : [])

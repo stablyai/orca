@@ -25640,7 +25640,8 @@
       "untitled": "Novo chat",
       "loading": "Carregando chats…",
       "readFailed": "Não foi possível ler os chats deste bot.",
-      "searchRetry": "Tentar novamente"
+      "searchRetry": "Tentar novamente",
+      "personHome": "Home de {{name}}"
     },
     "needs": {
       "chat": "Seu chat com {{name}}",

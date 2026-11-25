@@ -36,6 +36,7 @@ import {
 import { makeBotsHome, type BotsHomeCreateInput } from './bot-home-workspace'
 import { newBotRecord } from './bot-new-record'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
+import { withBotHome, type BotHomeOf } from '../../shared/bots/bot-home-of'
 
 /** Where a new bot came from, kept on its record. */
 export type BotOrigin = Partial<Pick<Bot, 'sharedFrom' | 'templateId'>>
@@ -287,12 +288,13 @@ export class BotController {
     )
   }
 
-  /** Not a user edit: the Chat module names which session is the bot's Chat. */
-  setChatSession(botId: string, chatSessionId: string): Promise<Bot> {
+  /** Not a user edit: the Chat module names which session is that person's Home Chat. Throws
+   *  bot_not_shared, writing nothing, once a teammate's share is gone. */
+  setHome(botId: string, of: BotHomeOf, sessionId: string): Promise<Bot> {
     return this.serialize(async () => {
       const store = requireBotStore(this.deps.getStore())
       const bot = requireStoredBot(store, botId)
-      const next: Bot = { ...bot, chatSessionId, updatedAt: Date.now() }
+      const next: Bot = { ...bot, ...withBotHome(bot, of, sessionId), updatedAt: Date.now() }
       store.saveBot(next)
       this.deps.notifyBotsWritten(false)
       return next

@@ -16,6 +16,7 @@ import {
   type AutomationTriggeredBy,
   type BotRequestAsker
 } from '../../shared/bots/bot-acts-for'
+import { runActsFor } from '../../shared/bots/bot-home-of'
 
 /** The conversation a request came in, as Orca Cloud names it. */
 export type BotRequestConversation = { source: ConnectorSource; externalId: string }
@@ -64,7 +65,11 @@ export type BotActingTurnLookups = {
   automationPlace?: () => BotWakingPlace | null
   /** The workspace of the conversation this session answers, from its link. */
   conversationWorkspaceId: string | null
+  /** A teammate's name by account id, for a run made for them; trust reads only the id. */
+  personName?: (accountId: string) => string | null
 }
+
+const noName = (): null => null
 
 /** The people Orca recorded on a bot request: whom the chain acts for, who asked at its start, and
  *  the event that started the chain when one did. */
@@ -98,13 +103,13 @@ function textOf(body: AgentJournalItemBody): string | null {
 
 type ItemReading =
   | { kind: 'asker'; asker: BotRequestAsker; wokenAt?: BotWakingPlace | null }
-  /** The owner's own message or an automation's prompt: it acts for the conversation, except an
-   *  automation's run (`run`), which acts for the owner in whichever chat it lands. */
+  /** A person's own message or an automation's prompt: it acts for the conversation, except an
+   *  automation's run (`run`), which acts for whom it was made for in whichever chat it lands. */
   | {
       kind: 'conversation'
       wokenAt?: BotWakingPlace | null
       triggeredBy?: AutomationTriggeredBy
-      run?: true
+      run?: { home?: string }
     }
   | { kind: 'request'; messageIds: string[] }
   | { kind: 'agent' }
@@ -142,7 +147,9 @@ function readItem(body: AgentJournalItemBody, lookups: BotActingTurnLookups): It
     ...(wokenAt !== undefined ? { wokenAt } : {}),
     ...(body.memorySource && body.triggeredBy ? { triggeredBy: body.triggeredBy } : {}),
     // Only Orca writes a run's record on a message; no client can send one.
-    ...(body.automationRun ? { run: true as const } : {})
+    ...(body.automationRun
+      ? { run: body.automationRun.home ? { home: body.automationRun.home } : {} }
+      : {})
   }
 }
 
@@ -181,6 +188,7 @@ export function firstMessageActsFor(
   lookups: {
     botRequestAskers: (messageId: string) => BotRequestAsker[] | null
     conversationWorkspaceId: string | null
+    personName?: (accountId: string) => string | null
   }
 ): BotRequestAsker[] | null {
   const first = items.find(isRootUserMessage)
@@ -201,6 +209,10 @@ export function firstMessageActsFor(
   }
   if (body.origin === 'connector' && !body.memorySource) {
     return [{ kind: 'unknown' }]
+  }
+  // A run acts for whom its automation was made for: a teammate's, them.
+  if (body.automationRun) {
+    return runActsFor(body.automationRun, lookups.personName ?? noName)
   }
   return [...OWNER_ACTS_FOR]
 }
@@ -306,25 +318,31 @@ export function readBotActingTurnWithin(
           ? [entry.reading.triggeredBy]
           : []
       )
-      // An automation's run acts for the owner wherever it lands; an older run's prompt asks for whom its
-      // conversation acts; an unstamped message is the owner's own.
-      const ran = openers.some(
-        (entry) => entry.reading.kind === 'conversation' && entry.reading.run
+      // Each opener for its own people: an automation's run for whom it was made for, wherever it
+      // lands; an older run's prompt or a person's message for whom the conversation acts.
+      const personName = lookups.personName ?? noName
+      const conversational = openers.flatMap((entry): readonly BotRequestAsker[] =>
+        entry.reading.kind !== 'conversation'
+          ? []
+          : entry.reading.run
+            ? runActsFor(entry.reading.run, personName)
+            : lookups.conversationActsFor
       )
+      // An unstamped message is the owner's own.
       const askedBy = openers.flatMap((entry) =>
         entry.reading.kind === 'asker'
           ? [entry.reading.asker]
           : entry.reading.kind === 'conversation' && entry.reading.run
-            ? OWNER_ACTS_FOR
+            ? runActsFor(entry.reading.run, personName)
             : entry.item.body.kind === 'message' && entry.item.body.memorySource
               ? lookups.conversationActsFor
               : OWNER_ACTS_FOR
       )
       return {
         rootItemId: opener.item.itemId,
-        // Anyone stamped in the same turn still holds a mixed turn to the least trusted.
+        // Every opener's people at once, so a mixed turn is held to the least trusted.
         askers: distinctAskers([
-          ...(ran ? OWNER_ACTS_FOR : lookups.conversationActsFor),
+          ...(conversational.length > 0 ? conversational : lookups.conversationActsFor),
           ...stamped
         ]),
         askedBy: distinctAskers(askedBy),

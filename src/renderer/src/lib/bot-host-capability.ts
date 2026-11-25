@@ -7,6 +7,7 @@ import {
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { BOTS_HOME_PIN_RUNTIME_CAPABILITY } from '../../../shared/bot-runtime-capabilities'
+import { sharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 /** A paired server's last verified status; null for this app's own runtime, or before it is known. */
 export function pairedBotHostStatus(
@@ -32,12 +33,16 @@ export function botHostHasCapability(
   )
 }
 
-/** Whether `bot`'s host keeps its Home pinned first; an older paired server leaves its pages as they were. */
+/** Whether `bot`'s host keeps its Home pinned first; an older paired server leaves its pages as they
+ *  were. Sharing is newer than the Home pin, so a shared agent's host always keeps it. */
 export function botHomeRuleApplies(
   bot: { hostId: ExecutionHostId } | null,
-  statuses: RuntimeStatuses
+  statuses: RuntimeStatuses,
+  sharedHost: (hostId: ExecutionHostId) => unknown = sharedBotHostOf
 ): boolean {
   return (
-    bot !== null && botHostHasCapability(bot.hostId, BOTS_HOME_PIN_RUNTIME_CAPABILITY, statuses)
+    bot !== null &&
+    (sharedHost(bot.hostId) !== null ||
+      botHostHasCapability(bot.hostId, BOTS_HOME_PIN_RUNTIME_CAPABILITY, statuses))
   )
 }

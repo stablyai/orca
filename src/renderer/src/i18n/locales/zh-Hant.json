@@ -24190,7 +24190,8 @@
       "untitled": "新對話",
       "searchRetry": "重試",
       "loading": "正在載入聊天…",
-      "readFailed": "無法讀取此機器人的聊天。"
+      "readFailed": "無法讀取此機器人的聊天。",
+      "personHome": "{{name}} 的 Home"
     },
     "needs": {
       "chat": "你與 {{name}} 的對話",

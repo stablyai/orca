@@ -66,6 +66,7 @@ export function captureAutomationRunMessage(
     runId: run.id,
     automation: botAutomationFacts(automation),
     trigger: run.trigger,
+    ...(automation.bot?.home ? { home: automation.bot.home } : {}),
     ...(run.trigger === 'scheduled' ? { scheduledFor: run.scheduledFor } : {}),
     ...(wait ? { wait } : {}),
     ...(automation.bot?.chat?.toConversation ? { toConversation: true as const } : {}),

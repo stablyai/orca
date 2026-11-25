@@ -38,4 +38,7 @@ export type AutomationBotTarget = {
   /** Its own agent and launch for runs in a new conversation; absent, the bot's. Kept when the bot
    *  switches agents, since a launch belongs to its agent. Older hosts drop it. */
   agentSetup?: BotAgentSetup
+  /** Whose Home Chat its "chat" runs and results use, and whom its runs act for: a teammate's account
+   *  id; absent is the owner. Host-set only. Older hosts drop it. */
+  home?: string
 }

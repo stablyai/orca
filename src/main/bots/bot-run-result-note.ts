@@ -13,10 +13,13 @@ import { writeStructuredAgentSessionOrcaNote } from '../native-chat/agent-sessio
 import { requireStructuredHost, type runtimeBotChats } from './bot-chat-session'
 import type { Bot } from '../../shared/bot-types'
 import type { BotRunResult } from './bot-run-results'
+import type { BotHomeOf } from '../../shared/bots/bot-home-of'
 
 export type BotRunNoteDependencies = {
-  /** An Orca note in the bot's Chat: the agent reads it only with the person's next message. */
-  noteToChat(bot: Bot, note: AutomationResultNote): Promise<unknown>
+  /** An Orca note in that person's Home Chat: the agent reads it only with their next message. */
+  noteToChat(bot: Bot, home: BotHomeOf, note: AutomationResultNote): Promise<unknown>
+  /** Whose Home an automation's results use. */
+  homeOf(bot: Bot, target: AutomationBotTarget | undefined): BotHomeOf
 }
 
 /** A run in its own conversation leaves a note in the Chat, unless the bot is to react to it. */
@@ -38,7 +41,11 @@ export async function leave(
     return {}
   }
   try {
-    await deps.noteToChat(result.bot, botRunResultNote(result, outcome, text))
+    await deps.noteToChat(
+      result.bot,
+      deps.homeOf(result.bot, result.automation.bot),
+      botRunResultNote(result, outcome, text)
+    )
     return {}
   } catch (error) {
     console.warn('[bots] could not add a run result note to the Chat', error)
@@ -68,10 +75,10 @@ export function runtimeNoteToChat(
   runtime: OrcaRuntimeService,
   chats: ReturnType<typeof runtimeBotChats>
 ): BotRunNoteDependencies['noteToChat'] {
-  return async (bot, note) =>
+  return async (bot, home, note) =>
     writeStructuredAgentSessionOrcaNote(
       await requireStructuredHost(runtime),
-      await chats.ensure(bot.id),
+      await chats.ensure(bot.id, home),
       automationResultNoteClientMessageId(note.runId),
       automationResultNoteBody(note)
     )

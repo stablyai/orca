@@ -1,5 +1,6 @@
-// Where a bot's mail meant for one of its chats lands: that chat while it takes mail, else Home Chat,
-// including the reports of workers a room member started once that member's chat closes.
+// Where an agent's mail meant for one of its chats lands: that chat while it takes mail, else the Home
+// Chat of the person it was for, including the reports of workers a room member started once that
+// member's chat closes.
 import type { Bot } from '../../shared/bot-types'
 import type { BotGroupMember } from '../../shared/bots/bot-group'
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
@@ -8,9 +9,10 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { closeStructuredAgentSessionChild } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import { botChatTakingMail } from '../runtime/rpc/methods/bots-chats'
 import { runtimeBotChats } from './bot-chat-session'
+import { botHomeOfChat } from './bot-conversation-acts-for'
 
-/** The session mail for `chatId` reaches; Home Chat once that chat takes none (a room deleted or
- *  left, a chat closed), so item changes and worker reports are never left without a reader. */
+/** The session mail for `chatId` reaches; its person's Home Chat once that chat takes none (a room
+ *  deleted or left, a chat closed), so item changes and worker reports are never left without a reader. */
 export async function botMailSession(
   runtime: OrcaRuntimeService,
   bot: Bot,
@@ -18,7 +20,7 @@ export async function botMailSession(
 ): Promise<string> {
   return (
     (await botChatTakingMail(runtime, bot, chatId))?.sessionId ??
-    (await runtimeBotChats(runtime).ensure(bot.id))
+    (await runtimeBotChats(runtime).ensure(bot.id, botHomeOfChat(runtime, bot, chatId)))
   )
 }
 

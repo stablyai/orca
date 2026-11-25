@@ -10,17 +10,9 @@ import { runtimeBotChatSearchHost, searchBotChats } from '../../../bots/bot-chat
 import { defineMethod } from '../core'
 import { botShareChatFilter, botShareScopeOf } from '../../../bots/team-share/bot-share-chats'
 import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
-import type { BotChatTreeRead as BotChatTree } from '../../../../shared/bots/bot-chat-tree'
-
-/** A teammate's tree: their own chats, and only the workspaces under those. */
-function botShareChatTree(tree: BotChatTree, owns: (chatId: string) => boolean): BotChatTree {
-  return {
-    chats: tree.chats.filter((chat) => owns(chat.chatId)),
-    workspaceChats: Object.fromEntries(
-      Object.entries(tree.workspaceChats).filter(([, chatId]) => owns(chatId))
-    )
-  }
-}
+import { botChatTreeForViewer, type BotChatTreeViewer } from '../../../bots/bot-chat-tree-viewer'
+import { NO_HOME_CHAT_ID } from '../../../../shared/bots/bot-chat-tree-model'
+import { botHomePlaceholderId, botSharePersonName } from '../../../../shared/bots/bot-home-of'
 
 export const BOT_CHAT_TREE_METHODS = [
   defineMethod({
@@ -29,9 +21,29 @@ export const BOT_CHAT_TREE_METHODS = [
     share: SHARE_BY_BOT,
     params: BotChatTreeRead,
     handler: async (params, context) => {
-      const tree = await readSharedBotChatTree(context.runtime, params)
+      const { runtime } = context
       const share = botShareScopeOf(context)
-      return share ? botShareChatTree(tree, botShareChatFilter(context.runtime, share)) : tree
+      // A teammate's Home row not made yet goes by the owner's empty id on their side.
+      const read =
+        share && params.chatId === NO_HOME_CHAT_ID
+          ? { ...params, chatId: botHomePlaceholderId(share.accountId) }
+          : params
+      const tree = await readSharedBotChatTree(runtime, read)
+      const viewer: BotChatTreeViewer = share
+        ? {
+            kind: 'teammate',
+            accountId: share.accountId,
+            owns: botShareChatFilter(runtime, share)
+          }
+        : {
+            kind: 'owner',
+            personName: (accountId) =>
+              botSharePersonName(
+                runtime.bots.list().find((bot) => bot.id === params.botId) ?? {},
+                accountId
+              )
+          }
+      return botChatTreeForViewer(tree, viewer, { page: params.chatId !== undefined })
     }
   }),
   // Each bot's own side chats, pane and title, so its row's line says what any of them is doing.
@@ -45,7 +57,7 @@ export const BOT_CHAT_TREE_METHODS = [
       const share = botShareScopedView(context)?.['bots.chats.own']
       return {
         chats: share
-          ? await readBotOwnChatPanes(host, share.botIds, share.owns)
+          ? await readBotOwnChatPanes(host, share.botIds, share.owns, share.home)
           : await readBotOwnChatPanes(host, params.botIds)
       }
     }
