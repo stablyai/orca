@@ -42,9 +42,9 @@ describe('sessionConnectionVerdict', () => {
     expect(verdictDisplayLabel(verdict)).toBe('Work laptop is offline')
   })
 
-  it('says Relay access expired when the relay refused the credential', () => {
+  it('says Relay refused access when the relay refused the credential', () => {
     expect(label({ relayHostReachability: 'credential-refused' })).toBe(
-      'Relay access expired for Work laptop'
+      'Relay refused access for Work laptop'
     )
   })
 

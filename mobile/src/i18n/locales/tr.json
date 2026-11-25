@@ -1966,7 +1966,7 @@
       "pairingInvalid": "Eşleştirme geçersiz — bilgisayarınızla yeniden eşleştirin",
       "rePairDetail": "Bilgisayarınızla yeniden eşleştirin",
       "reconnecting": "Yeniden bağlanılıyor…",
-      "relayAccessExpired": "{{host}} için Relay erişiminin süresi doldu",
+      "relayAccessRefused": "Relay, {{host}} için erişimi reddetti",
       "relayConnectFailed": "Relay üzerinden bağlanılamadı",
       "relayUnreachable": "Relay'e ulaşılamadı",
       "signInDetail": "Yeniden bağlanmak için bilgisayarınızda Orca'da oturum açın",

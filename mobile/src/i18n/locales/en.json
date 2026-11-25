@@ -1097,7 +1097,7 @@
       "signInDetail": "Sign in to Orca on your desktop to reconnect",
       "hostOffline": "{{host}} is offline",
       "hostOfflineDetail": "Check it's awake, Orca is running, and you're signed in",
-      "relayAccessExpired": "Relay access expired for {{host}}",
+      "relayAccessRefused": "Relay refused access for {{host}}",
       "rePairDetail": "Re-pair with your desktop",
       "relayUnreachable": "Can't reach Relay",
       "checkConnection": "Check your connection",

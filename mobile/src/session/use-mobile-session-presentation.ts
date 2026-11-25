@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { MobileAnimatedInterpolation } from '../platform/animated-handles'
-import { isConnectionOutage, verdictDisplayLabel } from '../transport/connection/connection-health'
+import { isConnectionOutage } from '../transport/connection/connection-health'
 import { useRelayRecoveryStatus } from '../transport/connection/client-context-connection-metrics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useInitialSessionTerminalAutoCreate } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
@@ -9,7 +9,12 @@ import type { MobileSessionBulkCloseModel } from './tabs/use-mobile-session-bulk
 import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
 import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
-import { sessionConnectionVerdict } from './session-connection-verdict'
+import {
+  isSessionErrorVerdict,
+  sessionConnectionVerdict,
+  sessionStatusDot,
+  sessionStatusLine
+} from './session-connection-verdict'
 
 // The toast rises this far as it fades in; Reduce Motion keeps the fade alone.
 const TOAST_RISE_PX = 8
@@ -76,27 +81,35 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     hostName,
     ...relayRecovery
   })
-  const connectionEscalated = isConnectionOutage(connectionVerdict)
-  const showConnectionRetry = connectionEscalated && forceReconnectHost !== null
+  // Errors, refused pairings included, keep the title block visible beside side-rail tabs.
+  const connectionEscalated = isSessionErrorVerdict(connectionVerdict)
+  // auth-failed needs a re-pair, which a redial cannot give.
+  const showConnectionRetry = isConnectionOutage(connectionVerdict) && forceReconnectHost !== null
 
   // Delay reconnect header changes so brief self-healing drops cannot flicker the label.
   const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
   // A session with nothing to draw says it is offline instead of showing an empty frame.
   const showOfflineState = presentedConnState !== 'connected' && nothingActive
+  const statusLine = sessionStatusLine({
+    verdict: connectionVerdict,
+    presentedConnState,
+    pendingPath: relayRecovery.pendingPath,
+    relayHostReachability: relayRecovery.relayHostReachability,
+    retryShown: showConnectionRetry
+  })
+  const statusDot = sessionStatusDot({ verdict: connectionVerdict, connState, presentedConnState })
   const terminalSummary =
-    presentedConnState === 'connected'
+    statusLine === null
       ? showLoadingState && visibleTabs.length === 0
         ? t('session.presentation.loadingTabs', 'Loading tabs')
         : // The tab count lives in the tab bar, so the header names the branch, or the project when the branch repeats the title.
           (sessionPlaceLabel(scope.worktreeName, scope.worktreeBranch, scope.worktreeRepo) ??
           MOBILE_SESSION_STATUS_LABELS.connected)
-      : showConnectionRetry
+      : statusLine.withRetrySuffix
         ? t('session.presentation.tapToRetry', '{{status}} — tap to retry', {
-            status: verdictDisplayLabel(connectionVerdict)
+            status: statusLine.label
           })
-        : connectionEscalated
-          ? verdictDisplayLabel(connectionVerdict)
-          : MOBILE_SESSION_STATUS_LABELS[presentedConnState]
+        : statusLine.label
 
   const [sideRail, padAvailable] = [useShellSideRail(), useDirectionPadAvailable()]
   const dockShown =
@@ -124,6 +137,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     connectionVerdict,
     showConnectionRetry,
     connectionEscalated,
+    statusDot,
     terminalSummary,
     dockBottomInset,
     toastRise

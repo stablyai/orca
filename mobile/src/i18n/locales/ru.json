@@ -2082,7 +2082,7 @@
       "pairingInvalid": "Сопряжение недействительно — повторите сопряжение с компьютером",
       "rePairDetail": "Повторно выполните сопряжение с компьютером",
       "reconnecting": "Повторное подключение…",
-      "relayAccessExpired": "Истёк срок доступа к Relay для {{host}}",
+      "relayAccessRefused": "Relay отказал в доступе для {{host}}",
       "relayConnectFailed": "Не удаётся подключиться через Relay",
       "relayUnreachable": "Не удаётся связаться с Relay",
       "signInDetail": "Войдите в Orca на компьютере, чтобы подключиться снова",
