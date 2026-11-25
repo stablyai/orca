@@ -130,6 +130,6 @@ function handleManagedPaneMouseEnter(
       managerDestroyed: host.isDestroyed()
     })
   ) {
-    host.setActivePane(paneId, { focus: true, userInitiated: true })
+    host.setActivePane(paneId, { focus: true })
   }
 }
