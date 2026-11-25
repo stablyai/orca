@@ -19,8 +19,8 @@ export type RenderedTabStrip = {
   pinnedHomeId: string | null
   /** Other tabs share the bar beside a pinned Home, hidden ones included. */
   stripHasTabs: boolean
-  /** Two or more other tabs: the narrowest plans always fold them into the +N chip. */
-  stripHasSeveralTabs: boolean
+  /** Hides Home's slot only below a width where the plan always shows the +N chip, whose list leads with Home. */
+  pinnedHomeNarrowHideClassName: string
   /** The strip itself renders a tab, so it keeps its 40px floor. */
   stripRendersTabs: boolean
   /** The selected entry: a client-hosted browser row that owns selection, else the active tab. */
@@ -69,7 +69,10 @@ export function resolveRenderedTabStrip({
     pinnedCount,
     pinnedHomeId,
     stripHasTabs: allItems.length + allClientHostedBrowserRows.length > pinnedCount,
-    stripHasSeveralTabs: allItems.length + allClientHostedBrowserRows.length - pinnedCount >= 2,
+    // The same count the condense plan lays out: TabBar's strip ids are every entry, client-hosted rows included, but Home.
+    pinnedHomeNarrowHideClassName: pinnedHomeNarrowHideClassName(
+      allItems.length + allClientHostedBrowserRows.length - pinnedCount
+    ),
     stripRendersTabs: orderedItems.length + clientHostedBrowserRows.length > pinnedCount,
     activeId
   }
@@ -102,4 +105,17 @@ export function overflowChipActiveId(strip: RenderedTabStrip, plan: TabStripPlan
     return strip.pinnedHomeId
   }
   return plan.mode === 'condensed' ? plan.activeId : null
+}
+
+/**
+ * Below these tab-strip widths Home's slot hides (PINNED_HOME_HIDE_BELOW_*_PX). With Home gone the plan's room is at most
+ * the width minus 8px action padding and the 1px strip border, and there it always folds the other tabs behind the +N
+ * chip: three or more tabs at any room under 70px, two only under 70px less the "never +1" case, so 76px. One tab never
+ * gets a chip, so Home stays.
+ */
+export function pinnedHomeNarrowHideClassName(otherTabCount: number): string {
+  if (otherTabCount >= 3) {
+    return '@max-[78px]/tab-strip:hidden'
+  }
+  return otherTabCount === 2 ? '@max-[76px]/tab-strip:hidden' : ''
 }

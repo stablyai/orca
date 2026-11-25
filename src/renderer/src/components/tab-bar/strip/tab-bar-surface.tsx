@@ -162,7 +162,7 @@ export function renderTabBarSurface(
             sortableIds={strip.pinnedSortableIds}
             singleTab={singleTab}
             withStrip={strip.stripHasTabs}
-            hidesWhenNarrowest={strip.stripHasSeveralTabs}
+            narrowHideClassName={strip.pinnedHomeNarrowHideClassName}
           >
             {renderItems([{ kind: 'tabs', start: 0, end: pinnedCount }], 0)}
           </PinnedHomeTabSlot>
