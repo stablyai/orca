@@ -4815,6 +4815,12 @@
                 "message": "L'utilisation de Claude se met à jour la prochaine fois que Claude s'exécute."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Se met à jour quand Codex s'exécute",
+                "message": "L'utilisation de Codex se met à jour la prochaine fois que Codex s'exécute."
+              }
+            },
             "remoteOwnerNotConfigured": "Non configuré sur {{server}}",
             "remoteOwnerSignInSavedHere": "Sa connexion est enregistrée uniquement sur cet ordinateur.",
             "claudeNoUsageFromHost": "Aucun usage depuis {{server}}",

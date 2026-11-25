@@ -5072,6 +5072,12 @@
                 "message": "Die Claude-Nutzung wird beim nächsten Start von Claude aktualisiert."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Wird aktualisiert, wenn Codex läuft",
+                "message": "Die Codex-Nutzung wird beim nächsten Start von Codex aktualisiert."
+              }
+            },
             "justNow": "gerade eben",
             "minutesAgo": "vor {{minutes}} Min.",
             "hoursAgo": "vor {{hours}} Std.",

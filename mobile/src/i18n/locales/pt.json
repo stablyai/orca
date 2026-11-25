@@ -5102,6 +5102,12 @@
                 "message": "O uso do Claude será atualizado na próxima vez que ele for executado."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Atualiza quando o Codex é executado",
+                "message": "O uso do Codex será atualizado na próxima vez que ele for executado."
+              }
+            },
             "1804cd8c3f": "Atualizando login",
             "bf2e739f18": "Login indisponível",
             "f8f0f9d8cc": "Problema de rede",

@@ -4416,6 +4416,12 @@
                 "message": "Claude 用量將在下次執行 Claude 時更新。"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "執行 Codex 時更新",
+                "message": "Codex 用量將在下次執行 Codex 時更新。"
+              }
+            },
             "1804cd8c3f": "正在重新整理登入",
             "bf2e739f18": "登入不可用",
             "f8f0f9d8cc": "網路問題",

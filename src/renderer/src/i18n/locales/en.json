@@ -6227,6 +6227,12 @@
                 "message": "Claude usage updates the next time Claude runs."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Updates when Codex runs",
+                "message": "Codex usage updates the next time Codex runs."
+              }
+            },
             "justNow": "just now",
             "minutesAgo": "{{minutes}}m ago",
             "hoursAgo": "{{hours}}h ago",
