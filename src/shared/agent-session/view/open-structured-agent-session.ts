@@ -25,6 +25,8 @@ export type {
   StructuredSessionRemovedWorkspaceKind
 } from './structured-session-open-types'
 
+type Located = Awaited<ReturnType<StructuredSessionOpenDeps['locate']>>
+
 /** Only explicit unsupported responses prove that a fallback cannot duplicate an applied operation. */
 export function structuredSessionOpenFailure(error: unknown): StructuredSessionOpenFailure {
   const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : null
@@ -67,7 +69,7 @@ export async function resolveStructuredSessionOpenSource(
         : source.fallback
   const address =
     source.kind === 'sender' ? source.party.address : `orca_session_id:${seed?.sessionId}`
-  let found: Awaited<ReturnType<typeof locate>>
+  let found: Located
   try {
     found = await locate(address, source.kind === 'sender' ? source.messageIds : [])
   } catch (error) {
