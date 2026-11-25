@@ -198,6 +198,22 @@ export function playNativeChatTextReveal(
   }
 }
 
+/** A reply shown at its saves, once it has received text: the save it is at, and while paced by
+ *  its save gap, only its last arrival, which alone times the next draw. Unchanged text keeps its
+ *  object unless the save moved on (a save can keep the text and change only its attribution). */
+export function nativeChatSaveReceived(
+  next: NativeChatTextReveal,
+  previous: NativeChatTextReveal,
+  savedAt: number | undefined,
+  saveGapMs: number | undefined,
+  paced: boolean
+): NativeChatTextReveal {
+  if (next === previous) {
+    return next.savedAt === savedAt ? next : { ...next, savedAt }
+  }
+  return { ...next, arrivals: paced ? next.arrivals.slice(-1) : next.arrivals, savedAt, saveGapMs }
+}
+
 /** A reply shown at its saves shows each this long after the one before, at most, so a slow
  *  stream doesn't hold its text back for longer. */
 const MAX_SAVE_GAP_MS = 8000
@@ -235,9 +251,11 @@ export function playNativeChatSaveReveal(
     draw(end)
     return () => {}
   }
-  const middle = pacedTextEnd(reveal.source, from + (end - from) / 2, true)
-  if (middle > from && reveal.halfDrawnAt !== savedAt) {
-    draw(middle, savedAt)
+  if (reveal.halfDrawnAt !== savedAt) {
+    const middle = pacedTextEnd(reveal.source, from + (end - from) / 2, true)
+    if (middle > from) {
+      draw(middle, savedAt)
+    }
   }
   const timer = setTimeout(() => draw(end), wait)
   return () => clearTimeout(timer)

@@ -19,6 +19,7 @@ import {
 import {
   nativeChatTextAppended,
   playNativeChatSaveReveal,
+  nativeChatSaveReceived,
   playNativeChatTextRevealOnClock,
   receiveNativeChatText,
   startNativeChatTextReveal,
@@ -205,9 +206,9 @@ export function useNativeChatPacedText(
       performance.now(),
       pacesSaves ? Infinity : revealMs
     )
-    if (drawsWhole && pace.current !== previous) {
-      const arrivals = pacesSaves ? pace.current.arrivals.slice(-1) : pace.current.arrivals
-      pace.current = { ...pace.current, arrivals, savedAt: saved.current.revision, saveGapMs }
+    if (drawsWhole) {
+      const savedAt = saved.current.revision
+      pace.current = nativeChatSaveReceived(pace.current, previous, savedAt, saveGapMs, pacesSaves)
     }
     // While text is still to reveal, only the reveal steps it, so arrivals don't add renders.
     if (caughtUp || pace.current.shown >= source.length) {
