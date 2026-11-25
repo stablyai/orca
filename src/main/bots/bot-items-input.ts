@@ -126,10 +126,14 @@ export function botItemCommentData(
   if (!parsed.success) {
     throw new BotItemError('invalid_argument', parsed.error.issues[0]?.message ?? 'Invalid --ask.')
   }
+  // A recommendation read from a label can add its note to the text; an ask that fit as written
+  // still goes in, as written.
   const normalized = normalizeBotItemAsk(parsed.data)
-  const text = botItemAskText(normalized)
+  const normalizedText = botItemAskText(normalized)
+  const fits = normalizedText.length <= TEXT_LIMITS.text
+  const text = fits ? normalizedText : botItemAskText(parsed.data)
   assertBotItemText('text', text)
-  return { text, ask: normalized }
+  return { text, ask: fits ? normalized : parsed.data }
 }
 
 /** Each link once, first spelling kept: what an add checks and then stores. */

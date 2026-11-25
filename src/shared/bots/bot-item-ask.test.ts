@@ -8,13 +8,14 @@ describe('botItemQuestionLine', () => {
 })
 
 it('normalizes a written "(Recommended)" into the recommended flag, once', () => {
-  const ask = (labels: string[], recommended?: number) =>
+  const ask = (labels: string[], recommended?: number, multi?: true) =>
     normalizeBotItemAsk({
       questions: [
         {
           prompt: 'Go?',
           options: labels.map((label) => ({ label })),
-          ...(recommended === undefined ? {} : { recommended })
+          ...(recommended === undefined ? {} : { recommended }),
+          ...(multi ? { multi } : {})
         }
       ]
     }).questions[0]!
@@ -40,16 +41,65 @@ it('normalizes a written "(Recommended)" into the recommended flag, once', () =>
   const bare = ask(['(Recommended)', 'Wait (Recommended)'])
   expect(labelsOf(bare)).toEqual(['(Recommended)', 'Wait (Recommended)'])
   expect(bare.recommended).toBeUndefined()
+  // Recommended inside a label, or in a mismatched pair, is its words.
+  expect(labelsOf(ask(['The recommended fix']))).toEqual(['The recommended fix'])
+  const mismatched = ask(['Go (recommended]', 'Wait'])
+  expect(labelsOf(mismatched)).toEqual(['Go (recommended]', 'Wait'])
+  expect(mismatched.recommended).toBeUndefined()
+  expect(labelsOf(ask(['Go [recommended)', 'Wait'], 1))).toEqual(['Go [recommended)', 'Wait'])
+  // A mark written twice goes whole, and cleaning again changes nothing.
+  const twice = ask(['Deploy (Recommended) [recommended]', 'Wait'])
+  expect(labelsOf(twice)).toEqual(['Deploy', 'Wait'])
+  expect(normalizeBotItemAsk({ questions: [twice] }).questions[0]).toEqual(twice)
+})
+
+it('keeps the words of options cleaning would make read alike', () => {
+  const ask = (labels: string[], recommended?: number, multi?: true) =>
+    normalizeBotItemAsk({
+      questions: [
+        {
+          prompt: 'Go?',
+          options: labels.map((label) => ({ label })),
+          ...(recommended === undefined ? {} : { recommended }),
+          ...(multi ? { multi } : {})
+        }
+      ]
+    }).questions[0]!
+  const labelsOf = (question: ReturnType<typeof ask>) => question.options.map((o) => o.label)
+
   // A twin keeps its words, yet the recommendation is still read from them.
   const twin = ask(['Go', 'Go (Recommended)'])
   expect(labelsOf(twin)).toEqual(['Go', 'Go (Recommended)'])
   expect(twin.recommended).toBe(1)
-  // A twin does not stop a sibling from being cleaned.
-  expect(labelsOf(ask(['Go', 'Go (Recommended)', 'Wait (Recommended)'], 0))).toEqual([
-    'Go',
+  // Twins keep their words in either order; a sibling is still cleaned.
+  expect(labelsOf(ask(['Go (Recommended)', 'Go [recommended]', 'Wait (Recommended)'], 1))).toEqual([
+    'Go (Recommended)',
+    'Go [recommended]',
+    'Wait'
+  ])
+  expect(labelsOf(ask(['Go [recommended]', 'Go (Recommended)', 'Wait (Recommended)'], 0))).toEqual([
+    'Go [recommended]',
     'Go (Recommended)',
     'Wait'
   ])
-  // Recommended inside a label is its words.
-  expect(labelsOf(ask(['The recommended fix']))).toEqual(['The recommended fix'])
+  // Not the phone's twin either: it drops one "(Recommended)" from a label itself.
+  expect(labelsOf(ask(['Deploy (Recommended) (Recommended)', 'Deploy'], 1))).toEqual([
+    'Deploy (Recommended) (Recommended)',
+    'Deploy'
+  ])
+  // Pick several: a label that would read like two siblings sent together keeps every label's words.
+  const joined = ask(['Audit', 'Notify', 'Audit, Notify (Recommended)'], undefined, true)
+  expect(labelsOf(joined)).toEqual(['Audit', 'Notify', 'Audit, Notify (Recommended)'])
+  expect(joined.recommended).toBe(2)
+  expect(labelsOf(ask(['Audit (Recommended)', 'Notify', 'Audit, Notify'], 0, true))).toEqual([
+    'Audit (Recommended)',
+    'Notify',
+    'Audit, Notify'
+  ])
+  // Pick one: the same labels are cleaned, since its answer is one label.
+  expect(labelsOf(ask(['Audit', 'Notify', 'Audit, Notify (Recommended)']))).toEqual([
+    'Audit',
+    'Notify',
+    'Audit, Notify'
+  ])
 })

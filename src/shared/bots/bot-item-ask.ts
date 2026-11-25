@@ -60,45 +60,36 @@ export const BotItemAskSchema = z.object({
 
 export type BotItemAsk = z.infer<typeof BotItemAskSchema>
 
-// "(Recommended)" or "[recommended]" an agent wrote at the end of an option, with the space before it.
-const RECOMMENDED_SUFFIX = /\s*[([]\s*recommended\s*[)\]]\s*$/i
+// "(Recommended)" or "[recommended]" an agent wrote at the end of an option, with the space before it;
+// a mark written twice goes too. Mismatched pairs like "(recommended]" are the label's own words.
+const RECOMMENDED_SUFFIX = /(?:\s*(?:\(\s*recommended\s*\)|\[\s*recommended\s*\]))+\s*$/i
 
 /** The ask as stored: `recommended` is the one mark of the recommended option, so a "(Recommended)"
  *  an agent also wrote into a label leaves the label, and marks that option when --recommended didn't
- *  and it is the only one. Several marked with no flag, or a label it would empty or make a
- *  sibling's twin, keep their words. */
+ *  and it is the only one. Several marked with no flag keep their words. So does a label the words
+ *  would empty, or leave reading like a sibling (also as the phone shows it, which drops its own
+ *  "(Recommended)"), and, on a pick-several question, every label when one would read like a sibling's
+ *  picks sent together: options that were told apart stay told apart. */
 export function normalizeBotItemAsk(ask: BotItemAsk): BotItemAsk {
   return {
     ...ask,
     questions: ask.questions.map((question) => {
-      const marked: number[] = []
-      const labels = question.options.map((option, index) => {
-        const label = option.label.replace(RECOMMENDED_SUFFIX, '')
-        if (label === option.label) {
-          return option.label
-        }
-        marked.push(index)
-        // Marked all the same, but a label with no other words keeps them.
-        return label || option.label
-      })
+      const written = question.options.map((option) => option.label)
+      const bare = written.map((label) => label.replace(RECOMMENDED_SUFFIX, ''))
+      const marked = bare.flatMap((label, index) => (label === written[index] ? [] : [index]))
       // Several marked and no flag: the words are the only hint of which, so they stay.
       const recommended = question.recommended ?? (marked.length === 1 ? marked[0] : undefined)
       if (marked.length === 0 || recommended === undefined) {
         return question
       }
-      // A cleaned label that would be a sibling's twin keeps its words; the rest are still cleaned.
-      // Putting words back can make a new twin, so repeat until none collide; each pass restores at
-      // least one label, so it ends.
-      let collided = true
-      while (collided) {
-        collided = false
-        labels.forEach((label, index) => {
-          const written = question.options[index]!.label
-          if (label !== written && labels.indexOf(label) !== labels.lastIndexOf(label)) {
-            labels[index] = written
-            collided = true
-          }
-        })
+      // Compared without marks, so which twin keeps its words doesn't depend on their order.
+      let labels = written.map((label, index) =>
+        bare[index] && bare.indexOf(bare[index]) === bare.lastIndexOf(bare[index])
+          ? bare[index]
+          : label
+      )
+      if (question.multi && hasJoinedTwin(labels)) {
+        labels = written
       }
       return {
         ...question,
@@ -107,6 +98,26 @@ export function normalizeBotItemAsk(ask: BotItemAsk): BotItemAsk {
       }
     })
   }
+}
+
+/** Whether a label reads like two or more of its siblings sent together ("A, B"), the way a
+ *  pick-several answer writes its picks. */
+function hasJoinedTwin(labels: readonly string[]): boolean {
+  const joins = (words: string, pool: readonly string[], picked: number): boolean =>
+    pool.some((label, at) => {
+      const rest = pool.filter((_, other) => other !== at)
+      return (
+        (picked >= 1 && words === label) ||
+        (words.startsWith(`${label}, `) && joins(words.slice(label.length + 2), rest, picked + 1))
+      )
+    })
+  return labels.some((label, index) =>
+    joins(
+      label,
+      labels.filter((_, other) => other !== index),
+      0
+    )
+  )
 }
 
 /** A question's first line with words, as plain words, for a one-line row, so a question the agent wrote in
