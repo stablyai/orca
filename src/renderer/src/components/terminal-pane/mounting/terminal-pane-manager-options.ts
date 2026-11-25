@@ -61,7 +61,7 @@ export function createTerminalPaneManagerOptions(
     withHoverFocus: withBotThreadPaneHover,
     onPaneActivation: (leafId, interaction, changed) =>
       noteBotThreadPaneActivation(tabId, leafId, interaction, changed),
-    onActivePaneChange: (pane) => {
+    onActivePaneChange: (pane, interaction) => {
       const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
       const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
       if (Object.keys(ptyIdsByLeafId).length > 0 && !ptyIdsByLeafId[pane.leafId]) {
@@ -74,7 +74,7 @@ export function createTerminalPaneManagerOptions(
           ? (managerRef.current?.getNumericIdForLeaf(fallbackLeafId) ?? null)
           : null
         if (fallbackPaneId != null && fallbackPaneId !== pane.id) {
-          managerRef.current?.setActivePane(fallbackPaneId, { focus: true })
+          managerRef.current?.setActivePane(fallbackPaneId, { focus: true, interaction })
           return
         }
       }

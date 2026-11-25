@@ -40,7 +40,7 @@ export function activateManagedPane(
   }
 
   if (changed) {
-    host.options.onActivePaneChange?.(toPublicPane(pane))
+    host.options.onActivePaneChange?.(toPublicPane(pane), opts?.interaction)
   }
   if (
     host.options.onPaneActivation &&

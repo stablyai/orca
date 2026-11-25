@@ -62,7 +62,10 @@ export type PaneDropTaker = (
 export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
   onPaneClosed?: (paneId: number, closedPane?: ClosedPaneInfo) => void
-  onActivePaneChange?: (pane: ManagedPane) => void
+  onActivePaneChange?: (
+    pane: ManagedPane,
+    interaction?: PaneActivationOptions['interaction']
+  ) => void
   onPaneActivation?: (
     leafId: TerminalLeafId,
     interaction: PaneActivationOptions['interaction'],
