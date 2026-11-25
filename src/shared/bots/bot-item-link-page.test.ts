@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { BotItemLinkView } from './bot-items'
 import { BOT_ITEM_LINK_ROWS, botItemLinkPage, botItemLinkRows } from './bot-item-link-rows'
 
-const worker = (i: number, pr: number | null = null): BotItemLinkView => ({
+const worker = (
+  i: number,
+  pr: number | null = null
+): Extract<BotItemLinkView, { kind: 'dispatch' }> => ({
   kind: 'dispatch',
   ref: `ctx_${i}`,
   latest: null,
