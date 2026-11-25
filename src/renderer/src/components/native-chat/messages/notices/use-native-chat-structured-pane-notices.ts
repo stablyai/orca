@@ -1,3 +1,4 @@
+import { useNativeChatSignInVisibility } from '../../host-access/use-native-chat-sign-in-visibility'
 import type { AgentSessionAccountKind } from '../../../../../../shared/agent-session/failures/agent-session-availability'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -7,9 +8,10 @@ import {
   useWslHostChatOfferSettingUp
 } from '@/lib/agent-session/launch/structured-chat-wsl-host-offer'
 import { useNativeChatHostSetup } from '../../host-access/native-chat-host-setup'
+import { isNativeChatSignInFailureKind } from '../../host-access/native-chat-host-setup-view'
 import {
   nativeChatAgySignedOutBeforeSend,
-  nativeChatSignInAccount
+  nativeChatSignInContext
 } from '../../host-access/native-chat-sign-in-account'
 import { useAntigravityChatAuthDetection } from '@/runtime/provider-accounts/sign-in/antigravity-chat-auth-detection'
 import { isAntigravityGoogleMethod } from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
@@ -27,7 +29,48 @@ import type { useNativeChatInstallSlot } from '../../host-access/NativeChatInsta
 import type { useNativeChatHostSendGate } from '../../host-access/use-native-chat-host-send-gate'
 import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
 import type { AgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
+import { inSendOrder } from '../../../../../../shared/native-chat/transcript/pending-sends/native-chat-send-order'
 import { useTranslate } from '../../../../i18n/use-translate'
+
+/** Only what the notices read, so a test or fixture can drive the production wiring. */
+export type NativeChatStructuredPaneNoticesInput = {
+  props: Pick<
+    Omit<NativeChatStructuredViewProps, 'mode'>,
+    'agent' | 'target' | 'groupId' | 'sessionId' | 'isVisible'
+  >
+  ownerWorktreeId: string | null
+  provisionalLaunch: Pick<
+    ReturnType<typeof useNativeChatProvisionalLaunch>,
+    'lifecycle' | 'failure'
+  >
+  submits: Pick<ReturnType<typeof useStructuredNativeChatSubmitReveal>, 'retryLaunch'>
+  startFailures: readonly AgentSessionFailureFact[]
+  controller: Pick<
+    ReturnType<typeof useStructuredAgentSession>,
+    'unavailable' | 'submissions' | 'journalItems' | 'error' | 'readRefusal'
+  > & {
+    optionSurface: Pick<
+      ReturnType<typeof useStructuredAgentSession>['optionSurface'],
+      'demandModelCatalog'
+    >
+  }
+  continuation: {
+    view: Pick<NativeChatInterruptedContinuation['view'], 'wslDistro' | 'remoteHost' | 'hostLabel'>
+    continueError: NativeChatInterruptedContinuation['continueError']
+  }
+  deliveryNotices: Parameters<typeof useNativeChatAvailabilityNotice>[0]['deliveryNotices']
+  agentLabel: string
+  viewState: Pick<NativeChatViewState, 'kind'>
+  readFailure: StructuredAgentSessionReadFailureNotice | null
+  composerError: Parameters<typeof structuredSessionNotices>[0]['composerError']
+  install: Pick<ReturnType<typeof useNativeChatInstallSlot>, 'antigravityAuth' | 'signIn'> & {
+    slot: Pick<ReturnType<typeof useNativeChatInstallSlot>['slot'], 'kind'>
+  }
+  hostSendGate: Pick<ReturnType<typeof useNativeChatHostSendGate>, 'notice'>
+  /** The account a new bot's refused kickoff needs signed in, which its setup card offers. */
+  kickoffSignIn?: { account?: AgentSessionAccountKind } | null
+  hostNotice: NativeChatComposerNotice | null
+}
 
 export function useNativeChatStructuredPaneNotices({
   props,
@@ -46,25 +89,7 @@ export function useNativeChatStructuredPaneNotices({
   hostSendGate,
   hostNotice,
   kickoffSignIn
-}: {
-  props: Omit<NativeChatStructuredViewProps, 'mode'>
-  ownerWorktreeId: string | null
-  provisionalLaunch: ReturnType<typeof useNativeChatProvisionalLaunch>
-  submits: ReturnType<typeof useStructuredNativeChatSubmitReveal>
-  startFailures: readonly AgentSessionFailureFact[]
-  controller: ReturnType<typeof useStructuredAgentSession>
-  continuation: NativeChatInterruptedContinuation
-  deliveryNotices: Parameters<typeof useNativeChatAvailabilityNotice>[0]['deliveryNotices']
-  agentLabel: string
-  viewState: NativeChatViewState
-  readFailure: StructuredAgentSessionReadFailureNotice | null
-  composerError: Parameters<typeof structuredSessionNotices>[0]['composerError']
-  install: ReturnType<typeof useNativeChatInstallSlot>
-  hostSendGate: ReturnType<typeof useNativeChatHostSendGate>
-  /** The account a new bot's refused kickoff needs signed in, which its setup card offers. */
-  kickoffSignIn?: { account?: AgentSessionAccountKind } | null
-  hostNotice: NativeChatComposerNotice | null
-}) {
+}: NativeChatStructuredPaneNoticesInput) {
   const t = useTranslate()
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
   const kickoffOwed = kickoffSignIn != null
@@ -94,31 +119,54 @@ export function useNativeChatStructuredPaneNotices({
   const agySignedOut = isAntigravityGoogleMethod(detection?.method) && detection?.agySignedOut
   const unavailable =
     controller.unavailable ?? nativeChatAgySignedOutBeforeSend(agySignedOut, controller.submissions)
+  const latestSubmission = useMemo(
+    () => inSendOrder(controller.submissions ?? [], (submission) => submission).at(-1),
+    [controller.submissions]
+  )
+  const { account, failure } = nativeChatSignInContext({
+    unavailable,
+    launchDetails: launchFailed ? details : undefined,
+    items: controller.journalItems,
+    latestSubmission,
+    kickoff: kickoffSignIn
+  })
+  const launchSignInKey =
+    launchFailed && isNativeChatSignInFailureKind(details?.reason)
+      ? `launch:${details?.reason}`
+      : undefined
+  const availabilityKey =
+    unavailable?.reason === 'notSignedIn' ? `availability:${unavailable.account ?? ''}` : undefined
+  const failureKey =
+    failure?.key ?? launchSignInKey ?? availabilityKey ?? (kickoffOwed ? 'kickoff' : undefined)
   const setup = useNativeChatHostSetup({
     ...props,
     worktreeId: ownerWorktreeId,
-    // The host names which account is signed out; a managed-account sign-in can't fix the system one.
-    account: nativeChatSignInAccount({
-      unavailable,
-      launchDetails: details,
-      items: controller.journalItems,
-      submissions: controller.submissions,
-      kickoff: kickoffSignIn
-    }),
+    failureKey,
+    transcriptFailureId: failure?.rowId,
+    onSignInRechecked: demandModelCatalog,
+    needsSignIn: failureKey !== undefined,
+    account,
     failure: provisionalLaunch.failure,
     startFailures,
     journalItems: controller.journalItems,
     onRechecked
   })
+  const visibility = useNativeChatSignInVisibility(setup)
   const availability = useNativeChatAvailabilityNotice({
     // While Install or the sign-in strip shows, it already says what is missing and offers the fix.
-    unavailable: installing || install.signIn ? null : unavailable,
+    unavailable:
+      installing || install.signIn
+        ? null
+        : (unavailable ??
+          (failure && !setup.resolved
+            ? { reason: 'notSignedIn', account: failure.fact.account }
+            : null)),
     setup,
     agent: props.agent,
     wslDistro: continuation.view.wslDistro,
     launchFailure: provisionalLaunch.lifecycle === 'failed' ? provisionalLaunch.failure : null,
     journalItems: controller.journalItems,
-    submissions: controller.submissions,
+    latestSubmission,
     deliveryNotices
   })
   const wslHostOffer = useAppStore(
@@ -147,15 +195,19 @@ export function useNativeChatStructuredPaneNotices({
       wslHostOfferSettingUp
     },
     t
-  )
+  ).filter((notice) => !notice.signIn || !setup.resolved)
   if (hostNotice) {
     notices.push(hostNotice)
   }
-  // One Sign in on screen: while the composer's notice or Antigravity's sign-in strip has it,
-  // transcript rows only say what wasn't sent.
+  for (const notice of notices) {
+    if (notice.signIn) {
+      notice.hidden = !visibility.banner
+    }
+  }
   const signInInComposer =
-    install.signIn !== null || notices.some((notice) => notice.signIn !== undefined)
-  // A new bot's setup card offers the kickoff's sign-in, so the composer doesn't repeat it.
+    install.signIn !== null ||
+    kickoffOwed ||
+    notices.some((notice) => notice.signIn && !notice.hidden)
   const shown = kickoffOwed ? notices.filter((notice) => notice.signIn === undefined) : notices
   const rowSetup = useMemo(() => ({ ...setup, signInInComposer }), [setup, signInInComposer])
   return { setup: rowSetup, notices: shown }

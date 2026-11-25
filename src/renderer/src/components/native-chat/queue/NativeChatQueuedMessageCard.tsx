@@ -1,6 +1,17 @@
+import {
+  queuedMessageCardCaption,
+  queuedMessageCardSendNow
+} from './native-chat-queued-message-presentation'
+import { NativeChatSignInButton, NativeChatSignInRow } from '../host-access/NativeChatSignInRow'
+import { useNativeChatHostSetupView } from '../host-access/native-chat-host-setup-view'
+import {
+  nativeChatNotSignedInSentence,
+  nativeChatSignInNoticeView
+} from '../host-access/native-chat-sign-in-notice'
+import { useNativeChatSignInCandidate } from '../host-access/use-native-chat-sign-in-visibility'
 import { QueuedMessageImageCount } from '@/components/native-chat/queue/NativeChatQueuedMessageImageCount'
 import type { QueuedMessageDragPresentation } from '@/components/native-chat/queue/NativeChatQueuedMessageRows'
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import {
   AlertCircle,
   ChevronDown,
@@ -14,16 +25,11 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
-import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { useTranslate } from '@/i18n/use-translate'
 import { isMacPlatform } from '@/components/native-chat/pane/routing/native-chat-shortcut'
 import {
   queuedMessageCardLine,
   queuedMessageCardNeedsAttention,
-  queuedMessageCardSteers,
-  queuedMessageReturnedNotice,
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { NativeChatAgentMessageSenders } from '@/components/native-chat/messages/agent-senders/NativeChatAgentMessageSenders'
@@ -38,7 +44,10 @@ import {
   QueuedMessageRowTool,
   queuedRowToolsMask
 } from '@/components/native-chat/queue/NativeChatQueuedMessageRowTools'
-import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
+import {
+  readAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../../../../../shared/agent-session/failures/agent-session-failure'
 import {
   NativeChatQueuedMessageComposer,
   type QueuedEditAttachTarget
@@ -49,72 +58,6 @@ import {
   NATIVE_CHAT_UNKERNED_CSS,
   nativeChatTextHasUnkernedRun
 } from '@/components/native-chat/composer/editor/native-chat-unkerned-runs'
-
-/** The visible caption under the text; the default waiting hold needs none. */
-export function queuedMessageCardCaption(
-  card: QueuedMessageCard,
-  agentName?: string,
-  statedFailures: readonly AgentSessionFailureFact[] = [],
-  t: Translate = translate
-): string | null {
-  switch (card.hold) {
-    case 'returned': {
-      const notice = queuedMessageReturnedNotice(card, agentName, statedFailures)
-      if (notice === null) {
-        return null
-      }
-      return notice === 'withdrawn'
-        ? t('components.native-chat.queuedMessages.withdrawnHold', 'Stopped before it was sent')
-        : agentSessionWriteNoticeText(notice)
-    }
-    case 'paused':
-      // Localize known pause markers; unknown newer-host markers fall back to a plain pause.
-      if (card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
-        // Its Send shows only while the agent is idle; the words match what is on the card.
-        return card.waitsForAgent
-          ? t(
-              'components.native-chat.queuedMessages.pausedSendFailedWaiting',
-              "Couldn't send — press Send to retry once the agent finishes."
-            )
-          : t('components.native-chat.queuedMessages.couldNotSend', "Couldn't send")
-      }
-      return t('components.native-chat.queuedMessages.paused', 'Paused')
-    case 'sending':
-      return t('components.native-chat.messageSending', 'Sending…')
-    case 'turn':
-    case 'queue-paused':
-      // Plainly queued; a paused queue's header row carries the why.
-      return null
-  }
-}
-
-/** Steer's or Send's label and tooltip: Steer only into a turn that is running (`queuedMessageCardSteers`). */
-export function queuedMessageCardSendNow(
-  card: Pick<QueuedMessageCard, 'hold' | 'command'>,
-  agentWorking: boolean,
-  t: Translate = translate
-): {
-  /** Steer's ↳, or Send's paper plane. */
-  steers: boolean
-  label: string
-  hint: string
-} {
-  if (!agentWorking || !queuedMessageCardSteers(card)) {
-    return {
-      steers: false,
-      label: t('components.native-chat.queuedMessages.send', 'Send'),
-      hint: t('components.native-chat.queuedMessages.sendHint', 'Send this message now')
-    }
-  }
-  return {
-    steers: true,
-    label: t('components.native-chat.queuedMessages.steer', 'Steer'),
-    hint: t(
-      'components.native-chat.queuedMessages.steerHint',
-      'Send now, while the agent keeps working'
-    )
-  }
-}
 
 export function NativeChatQueuedMessageCard({
   card,
@@ -159,13 +102,35 @@ export function NativeChatQueuedMessageCard({
   drag?: QueuedMessageDragPresentation
 }): React.JSX.Element {
   const t = useTranslate()
+  const failure = readAgentSessionFailureFact(card.returnedRejection)
+  const auth = card.state === 'returned' && failure?.kind === 'notSignedIn'
+  const setup = useNativeChatHostSetupView()
+  const signIn = nativeChatSignInNoticeView(
+    {
+      kind: auth ? 'notSignedIn' : undefined,
+      agent: agentName,
+      account: failure?.kind === 'notSignedIn' ? failure.account : undefined,
+      setup
+    },
+    t
+  )
+  const signInAnchor = useRef<HTMLSpanElement>(null)
+  const selected = useNativeChatSignInCandidate(
+    'queue',
+    card.messageId,
+    Boolean(auth && signIn && !setup?.resolved && !editor),
+    signInAnchor
+  )
+  const showsSignIn = Boolean(signIn && !setup?.resolved && !setup?.signInInComposer && selected)
+  const authRecovery = auth && signIn !== null
   const caption = queuedMessageCardCaption(card, agentName, statedFailures, t)
   const line = queuedMessageCardLine(card, nativeChatImageLabelCopy(t))
   const returned = card.state === 'returned'
   const attention = queuedMessageCardNeedsAttention(card)
-  const failed = attention && caption !== null
+  const failed = !auth && attention && caption !== null
   const sendNow = queuedMessageCardSendNow(card, agentWorking, t)
   const busy = pending !== null
+  const editLabel = t('components.native-chat.queuedMessages.editMessage', 'Edit message')
   const isMac = isMacPlatform()
   // Allow inspecting clipped text before acting; another agent may have authored the card.
   const [expanded, setExpanded] = useState(false)
@@ -194,9 +159,76 @@ export function NativeChatQueuedMessageCard({
   // The host refuses these edits: a command would become a message, a run the owner's words.
   const editable = actionable && !card.notEditable && onEdit !== undefined
   // Edit and Delete wait for hover or keyboard focus; Steer stays on every row.
-  const toolCount = actionable ? (editable ? 2 : 1) : 0
+  const toolCount = actionable && !authRecovery ? (editable ? 2 : 1) : 0
   const maskStyle: (React.CSSProperties & { '--queued-tools-mask': string }) | undefined =
     toolCount > 0 ? { '--queued-tools-mask': queuedRowToolsMask(toolCount) } : undefined
+  const tools = actionable ? (
+    <>
+      {editable &&
+        (authRecovery ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={busy || editDisabled}
+            onClick={onEdit}
+          >
+            <Pencil className="size-3.5" />
+            {editLabel}
+          </Button>
+        ) : (
+          <QueuedMessageRowTool label={editLabel} disabled={busy || editDisabled} onClick={onEdit}>
+            <Pencil className="size-3.5" />
+          </QueuedMessageRowTool>
+        ))}
+      <QueuedMessageRowTool
+        label={t('components.native-chat.queuedMessages.delete', 'Delete')}
+        disabled={busy}
+        onClick={onDelete}
+      >
+        <NativeChatPendingIcon pending={pending === 'delete'} className="size-3.5">
+          <Trash2 className="size-3.5" />
+        </NativeChatPendingIcon>
+      </QueuedMessageRowTool>
+    </>
+  ) : null
+  // The recovery row has no inline-row inset to pull Steer's glyph toward.
+  const steerGlyph = authRecovery ? 'size-3' : STEER_GLYPH
+  const sendButton =
+    actionable && !card.waitsForAgent ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
+            size="xs"
+            className="min-h-[24px] min-w-[24px]"
+            data-queued-message-send
+            onClick={onSteer}
+            disabled={steerHeld || busy}
+          >
+            <NativeChatPendingIcon pending={pending === 'send'} className={steerGlyph}>
+              {failed && drag?.grip ? (
+                <AlertCircle className={cn(steerGlyph, 'text-destructive')} />
+              ) : sendNow.steers ? (
+                <CornerDownRight className={steerGlyph} />
+              ) : (
+                <Send className={steerGlyph} />
+              )}
+            </NativeChatPendingIcon>
+            {failed ? t('components.native-chat.queuedMessages.retry', 'Retry') : sendNow.label}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          <span className="flex items-center gap-2">
+            <span>{failed ? caption : sendNow.hint}</span>
+            {showsSteerShortcut ? (
+              <ShortcutKeyCombo keys={isMac ? ['⌘', '⇧', '⏎'] : ['Ctrl', 'Shift', 'Enter']} />
+            ) : null}
+          </span>
+        </TooltipContent>
+      </Tooltip>
+    ) : null
   return (
     <li
       ref={drag?.rowRef}
@@ -221,22 +253,24 @@ export function NativeChatQueuedMessageCard({
           )}
         />
       ) : null}
-      <div className="flex items-center gap-1">
-        <span className="relative flex size-3.5 shrink-0 items-center justify-center">
-          {attention && !drag?.grip ? (
-            <AlertCircle className="size-3.5 text-destructive" aria-hidden />
-          ) : (
-            <ListEnd
-              className={cn(
-                'size-3.5 text-muted-foreground',
-                drag?.grip &&
-                  'group-hover/queued:opacity-0 group-has-[:focus-visible]/queued:opacity-0 [@media(hover:none)]:opacity-0'
-              )}
-              aria-hidden
-            />
-          )}
-          {drag?.grip}
-        </span>
+      <div className={cn('flex items-center gap-1', authRecovery && 'flex-wrap')}>
+        {!authRecovery || drag?.grip ? (
+          <span className="relative flex size-3.5 shrink-0 items-center justify-center">
+            {attention && !authRecovery && !drag?.grip ? (
+              <AlertCircle className="size-3.5 text-destructive" aria-hidden />
+            ) : (
+              <ListEnd
+                className={cn(
+                  'size-3.5 text-muted-foreground',
+                  drag?.grip &&
+                    'group-hover/queued:opacity-0 group-has-[:focus-visible]/queued:opacity-0 [@media(hover:none)]:opacity-0'
+                )}
+                aria-hidden
+              />
+            )}
+            {drag?.grip}
+          </span>
+        ) : null}
         <div
           className={cn(
             'min-w-0 flex-1',
@@ -254,7 +288,13 @@ export function NativeChatQueuedMessageCard({
               {line}
             </p>
           )}
-          {caption ? (
+          {authRecovery && signIn ? (
+            <NativeChatSignInRow
+              view={{ ...signIn, button: null }}
+              sentence={nativeChatNotSignedInSentence(agentName ?? 'the agent', t)}
+              surface="composer"
+            />
+          ) : caption ? (
             <p
               className={cn(
                 'truncate text-xs',
@@ -283,24 +323,7 @@ export function NativeChatQueuedMessageCard({
                 !busy && QUEUED_ROW_REVEAL
               )}
             >
-              {editable ? (
-                <QueuedMessageRowTool
-                  label={t('components.native-chat.queuedMessages.editMessage', 'Edit message')}
-                  disabled={busy || editDisabled}
-                  onClick={onEdit}
-                >
-                  <Pencil className="size-3.5" />
-                </QueuedMessageRowTool>
-              ) : null}
-              <QueuedMessageRowTool
-                label={t('components.native-chat.queuedMessages.delete', 'Delete')}
-                disabled={busy}
-                onClick={onDelete}
-              >
-                <NativeChatPendingIcon pending={pending === 'delete'} className="size-3.5">
-                  <Trash2 className="size-3.5" />
-                </NativeChatPendingIcon>
-              </QueuedMessageRowTool>
+              {tools}
             </div>
           ) : null}
           {card.images ? (
@@ -322,43 +345,20 @@ export function NativeChatQueuedMessageCard({
           ) : null}
           {/* Every row keeps its own Steer at rest, since each sends that one message. A command never
               steers: its Send shows only while the agent is idle. */}
-          {actionable && !card.waitsForAgent ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
-                  size="xs"
-                  className="min-h-[24px] min-w-[24px]"
-                  data-queued-message-send
-                  onClick={onSteer}
-                  disabled={steerHeld || busy}
-                >
-                  <NativeChatPendingIcon pending={pending === 'send'} className={STEER_GLYPH}>
-                    {failed && drag?.grip ? (
-                      <AlertCircle className={cn(STEER_GLYPH, 'text-destructive')} />
-                    ) : sendNow.steers ? (
-                      <CornerDownRight className={STEER_GLYPH} />
-                    ) : (
-                      <Send className={STEER_GLYPH} />
-                    )}
-                  </NativeChatPendingIcon>
-                  {failed
-                    ? t('components.native-chat.queuedMessages.retry', 'Retry')
-                    : sendNow.label}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                <span className="flex items-center gap-2">
-                  <span>{failed ? caption : sendNow.hint}</span>
-                  {showsSteerShortcut ? (
-                    <ShortcutKeyCombo keys={isMac ? ['⌘', '⇧', '⏎'] : ['Ctrl', 'Shift', 'Enter']} />
-                  ) : null}
-                </span>
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
+          {!authRecovery ? sendButton : null}
         </div>
+        {authRecovery ? (
+          <div className="flex w-full flex-wrap items-center gap-2">
+            {/* Observe the Sign in control itself: a wrapped group can be partly visible while it is clipped. */}
+            <span ref={signInAnchor} className="flex shrink-0 empty:-mr-2">
+              {showsSignIn && signIn?.button ? (
+                <NativeChatSignInButton button={signIn.button} />
+              ) : null}
+            </span>
+            {sendButton}
+            {tools}
+          </div>
+        ) : null}
       </div>
       {expanded ? (
         <p
@@ -419,3 +419,5 @@ function QueuedMessageExpandToggle({
     </Tooltip>
   )
 }
+
+export { queuedMessageCardCaption } from './native-chat-queued-message-presentation'

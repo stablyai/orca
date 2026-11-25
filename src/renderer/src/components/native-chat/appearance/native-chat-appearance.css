@@ -94,7 +94,8 @@
   );
 }
 
-[data-composer-field] {
+[data-composer-field],
+[data-native-chat-prompt-notices] {
   --composer-atomic-width: calc(var(--spacing) * 10);
 }
 

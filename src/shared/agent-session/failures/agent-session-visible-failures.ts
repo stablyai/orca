@@ -76,10 +76,10 @@ export function agentSessionUnresolvedFailureRows(
 /** The newest failure line no later successful turn resolved, and the sequence of that latest
  *  success (-Infinity without one), so a refused send can be weighed against both. */
 export function agentSessionLatestFailureLine(items: readonly AgentJournalRenderItem[]): {
-  line: { sequence: number; fact: AgentSessionFailureFact } | null
+  line: { itemId: string; sequence: number; fact: AgentSessionFailureFact } | null
   resolvedAt: number
 } {
-  let line: { sequence: number; fact: AgentSessionFailureFact } | null = null
+  let line: { itemId: string; sequence: number; fact: AgentSessionFailureFact } | null = null
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]!
     const turn = readAgentJournalTurn(item.body)
@@ -95,7 +95,7 @@ export function agentSessionLatestFailureLine(items: readonly AgentJournalRender
     const fact =
       item.body.kind === 'status' ? readWholeAgentSessionFailureFact(item.body.failure) : undefined
     if (!line && fact) {
-      line = { sequence: item.sequence, fact }
+      line = { itemId: item.itemId, sequence: item.sequence, fact }
     }
   }
   return { line, resolvedAt: Number.NEGATIVE_INFINITY }

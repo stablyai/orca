@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { codexChatSignInAccount } from './codex-chat-sign-in-account'
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { CodexAccountAddTarget } from '../../codex-accounts/account-management/codex-account-service-types'
 import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
@@ -40,6 +41,9 @@ export function registerCodexAccountHandlers(
     forgetStaleCodexPanes(args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'))
   })
   ipcMain.handle('codexAccounts:list', () => codexAccounts.listAccounts())
+  ipcMain.handle('codexAccounts:chatSignInAccount', (_event, args: { sessionId: string }) =>
+    codexChatSignInAccount(args.sessionId, getSettings)
+  )
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
     codexAccounts.addAccount(args)
   )
@@ -50,9 +54,33 @@ export function registerCodexAccountHandlers(
   codexAccounts.setWslLoginUrlOpener((url) => openAccountSignInLink('codex', url))
   ipcMain.handle(
     'codexAccounts:reauthenticate',
-    (_event, args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
-      codexAccounts.reauthenticateAccount(args.accountId, {
-        activateIfSelectionWasEmpty: args.activateIfSelectionWasEmpty === true
+    (
+      _event,
+      {
+        accountId,
+        sessionId,
+        activateIfSelectionWasEmpty
+      }: {
+        accountId: string
+        sessionId?: string
+        activateIfSelectionWasEmpty?: boolean
+      }
+    ) =>
+      codexAccounts.reauthenticateAccount(accountId, {
+        activateIfSelectionWasEmpty: !sessionId && activateIfSelectionWasEmpty === true,
+        preserveSelection: Boolean(sessionId),
+        ...(sessionId
+          ? {
+              beforeLogin: async (managedHomePath) => {
+                if (
+                  (await codexChatSignInAccount(sessionId, getSettings, managedHomePath)) !==
+                  accountId
+                ) {
+                  throw new Error('The chat account changed. Try signing in again.')
+                }
+              }
+            }
+          : {})
       })
   )
   ipcMain.handle('codexAccounts:remove', (_event, args: { accountId: string }) =>

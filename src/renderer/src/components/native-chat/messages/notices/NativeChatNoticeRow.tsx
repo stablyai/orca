@@ -44,7 +44,7 @@ import {
   isNativeChatFailureRowResolved,
   isNativeChatSetupFailureKind,
   useNativeChatHostSetupView
-} from '../../host-access/native-chat-host-setup'
+} from '../../host-access/native-chat-host-setup-view'
 import { agentSessionFailureDetailText } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'

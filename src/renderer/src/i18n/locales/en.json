@@ -22062,7 +22062,9 @@
         "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
       },
       "signIn": {
-        "title": "Sign in to {{agent}} to start chatting"
+        "title": "Sign in to {{agent}} to start chatting",
+        "succeeded": "Signed in.",
+        "cancelled": "Sign-in cancelled or failed. Try again."
       },
       "claudeSignIn": {
         "signingIn": "Signing in…"
@@ -22780,7 +22782,10 @@
         "signsInClaudeAccount": "Signs in this Claude account",
         "runsCommand": "Runs {{command}} in a terminal",
         "thenSlashCommand": "Sign in, then type {{slashCommand}}.",
-        "signsInAgy": "Signs agy in with Google in your browser"
+        "signsInAgy": "Signs agy in with Google in your browser",
+        "signsInCodexAccount": "Signs in this Codex account",
+        "wasNotSignedIn": "{{agent}} wasn't signed in.",
+        "checksChatAccount": "Checks which account this chat uses"
       },
       "antigravityAuth": {
         "chipLabel": "Antigravity signs in with {{method}}. Change",

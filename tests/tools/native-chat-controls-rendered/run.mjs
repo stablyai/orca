@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { verifySignInRecovery } from './verify-sign-in.mjs'
 
 expect(process.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
 expect(process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL).toBe('1')
@@ -33,7 +34,9 @@ for (const name of [
 const root = fileURLToPath(new URL('../../../', import.meta.url))
 const parent = path.join(root, '.bench-fixtures')
 mkdirSync(parent, { recursive: true })
-const reuse = process.argv[2]
+const args = process.argv.slice(2)
+const signIn = args.includes('--sign-in')
+const reuse = args.find((arg) => arg !== '--sign-in')
 const output = reuse ? realpathSync(reuse) : mkdtempSync(path.join(parent, 'native-chat-controls-'))
 expect(path.dirname(output)).toBe(realpathSync(parent))
 const main = path.join(output, 'main.cjs')
@@ -64,8 +67,23 @@ const app = await electron.launch({
 try {
   const page = await app.firstWindow()
   const errors = []
-  page.on('pageerror', (error) => errors.push(error.message))
+  page.on('pageerror', (error) => {
+    errors.push(error.message)
+    console.error(error)
+  })
   const url = pathToFileURL(path.join(output, 'renderer/index.html')).href
+  await (signIn ? verifySignInRecovery : verifyFindControls)(page, url)
+  expect(errors).toEqual([])
+  const windows = await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().map((w) => [w.isVisible(), w.isFocused()])
+  )
+  expect(windows).toEqual([[false, false]])
+  console.log(`PASS: ${signIn ? 'chat sign-in recovery' : 'chat find controls'} (${output})`)
+} finally {
+  await app.close()
+}
+
+async function verifyFindControls(page, url) {
   const search = page.getByRole('search')
   const next = page.getByRole('button', { name: 'Next match', exact: true })
   async function openFind() {
@@ -109,12 +127,4 @@ try {
   expect(probe).toEqual({ overlap: true, content: 'none', wrapper: 'none', hit: true })
   await next.click()
   await expect(search).toContainText('2/2')
-  expect(errors).toEqual([])
-  const windows = await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows().map((w) => [w.isVisible(), w.isFocused()])
-  )
-  expect(windows).toEqual([[false, false]])
-  console.log(`PASS: native header geometry and tooltip pointer passage (${output})`)
-} finally {
-  await app.close()
 }

@@ -11,18 +11,22 @@ import type {
   AgentJournalSubmission
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionLatestFailureLine } from '../../../../../shared/agent-session/failures/agent-session-visible-failures'
+import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 
-type Submission = Pick<AgentJournalSubmission, 'dispatchState' | 'rejection' | 'submittedSequence'>
+type Submission = Pick<
+  AgentJournalSubmission,
+  'clientMessageId' | 'dispatchState' | 'rejection' | 'resolvedAt' | 'submittedSequence'
+>
+type CurrentFailure = { fact: AgentSessionFailureFact; rowId: string; key: string }
 
 /** The chat's current failure: the newer of its latest unresolved failure line and its latest
  *  send, when that send was refused. A send that went through after the line, or a successful turn
  *  after either, leaves none. */
 function currentFailure(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Submission[]
-): AgentSessionFailureFact | undefined {
+  latest: Submission | undefined
+): CurrentFailure | null {
   const { line, resolvedAt } = agentSessionLatestFailureLine(items)
-  const latest = submissions.at(-1)
   // Older hosts don't say where a send sits; it is then taken as the newest thing that happened.
   const sentAt = latest ? (latest.submittedSequence ?? Number.POSITIVE_INFINITY) : null
   if (
@@ -31,32 +35,38 @@ function currentFailure(
     sentAt > resolvedAt &&
     sentAt > (line?.sequence ?? Number.NEGATIVE_INFINITY)
   ) {
-    return latest.dispatchState === 'rejected'
-      ? readAgentSessionFailureFact(latest.rejection)
-      : undefined
+    const fact =
+      latest.dispatchState === 'rejected'
+        ? readAgentSessionFailureFact(latest.rejection)
+        : undefined
+    const rowId = agentJournalSubmissionKey(latest.clientMessageId)
+    return fact ? { fact, rowId, key: `${rowId}:${latest.resolvedAt ?? sentAt}` } : null
   }
-  return line?.fact
+  return line
+    ? { fact: line.fact, rowId: line.itemId, key: `${line.itemId}:${line.sequence}` }
+    : null
 }
 
 /** Which account a chat's sign-in is for: the host's verdict or the failed launch, else the chat's
  *  current failure, else the bot kickoff's refusal. A failure that no longer stands names none. */
-export function nativeChatSignInAccount(input: {
+export function nativeChatSignInContext(input: {
   unavailable: AgentSessionUnavailable | null | undefined
   launchDetails: unknown
   items: readonly AgentJournalRenderItem[]
-  submissions: readonly Submission[] | undefined
+  latestSubmission: Submission | undefined
   kickoff?: { account?: AgentSessionAccountKind } | null
-}): AgentSessionAccountKind | undefined {
+}): { account: AgentSessionAccountKind | undefined; failure: CurrentFailure | null } {
   const details = input.launchDetails
-  const current = currentFailure(input.items, input.submissions ?? [])
-  return (
+  const current = currentFailure(input.items, input.latestSubmission)
+  const failure = current?.fact.kind === 'notSignedIn' ? current : null
+  const account =
     (input.unavailable?.reason === 'notSignedIn' ? input.unavailable.account : undefined) ??
     (typeof details === 'object' && details !== null && 'account' in details
       ? accountKind(details.account)
       : undefined) ??
-    (current?.kind === 'notSignedIn' ? current.account : undefined) ??
+    failure?.fact.account ??
     input.kickoff?.account
-  )
+  return { account, failure }
 }
 
 function accountKind(value: unknown): AgentSessionAccountKind | undefined {

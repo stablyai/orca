@@ -1,7 +1,7 @@
 import {
   nativeChatSetupAction,
   type NativeChatHostSetup
-} from '../../host-access/native-chat-host-setup'
+} from '../../host-access/native-chat-host-setup-view'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useMemo, useState } from 'react'
 import type { AgentSessionUnavailable } from '../../../../../../shared/agent-session/failures/agent-session-availability'
@@ -12,7 +12,6 @@ import type {
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { agentJournalSubmissionKey } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { inSendOrder } from '../../../../../../shared/native-chat/transcript/pending-sends/native-chat-send-order'
 import { agentSessionRefusalReasonWords } from '../../../../../../shared/agent-session/failures/agent-session-refusal-reason-words'
 import type { AgentSessionWriteRefusal } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
@@ -46,16 +45,15 @@ function failedStartReason(items: readonly AgentJournalRenderItem[] | undefined)
 
 type NoticeSubmission = Pick<
   AgentJournalSubmission,
-  'clientMessageId' | 'dispatchState' | 'rejection' | 'submittedAt' | 'submittedSequence'
+  'clientMessageId' | 'dispatchState' | 'rejection'
 >
 
 /** Return the newest rejection reason only while its loaded message and delivery line are visible. */
 function shownRejectionReason(
-  submissions: readonly NoticeSubmission[],
+  newest: NoticeSubmission | undefined,
   shownLines: ReadonlyMap<string, unknown>,
   items: readonly AgentJournalRenderItem[]
 ): string | null {
-  const newest = inSendOrder(submissions, (submission) => submission).at(-1)
   const key = newest && agentJournalSubmissionKey(newest.clientMessageId)
   return newest?.dispatchState === 'rejected' &&
     key !== undefined &&
@@ -74,7 +72,7 @@ export function useNativeChatAvailabilityNotice(input: {
   wslDistro?: string | null
   launchFailure: AgentSessionWriteRefusal | null
   journalItems: readonly AgentJournalRenderItem[] | undefined
-  submissions?: readonly NoticeSubmission[]
+  latestSubmission?: NoticeSubmission
   /** The lines under the chat's messages, by message key: a refused send's says why. */
   deliveryNotices?: ReadonlyMap<string, unknown>
 }): NativeChatComposerNotice | null {
@@ -93,24 +91,17 @@ export function useNativeChatAvailabilityNotice(input: {
   const sendReason = useMemo(
     () =>
       shownRejectionReason(
-        input.submissions ?? [],
+        input.latestSubmission,
         input.deliveryNotices ?? new Map(),
         journalItems ?? []
       ),
-    [input.submissions, input.deliveryNotices, journalItems]
+    [input.latestSubmission, input.deliveryNotices, journalItems]
   )
-  if (!unavailable || (dismissal.key === key && dismissal.dismissed)) {
+  if (!unavailable) {
     return null
   }
   const launchWords = input.launchFailure && agentSessionRefusalReasonWords(input.launchFailure)
   const launchReason = launchWords && 'fact' in launchWords ? launchWords.fact : null
-  if (
-    launchReason === unavailable.reason ||
-    rowReason === unavailable.reason ||
-    sendReason === unavailable.reason
-  ) {
-    return null
-  }
   const agentName = structuredAgentLabel(input.agent)
   const signIn = nativeChatSignInNoticeView(
     {
@@ -121,6 +112,15 @@ export function useNativeChatAvailabilityNotice(input: {
     },
     t
   )
+  if (
+    launchReason === unavailable.reason ||
+    (!signIn &&
+      ((dismissal.key === key && dismissal.dismissed) ||
+        rowReason === unavailable.reason ||
+        sendReason === unavailable.reason))
+  ) {
+    return null
+  }
   // No dismiss: it clears once signed in or once a send says why it wasn't sent.
   if (signIn) {
     return {

@@ -4,7 +4,7 @@ import {
   isNativeChatSetupFailureKind,
   nativeChatSetupAction,
   useNativeChatHostSetupView
-} from './native-chat-host-setup'
+} from './native-chat-host-setup-view'
 import { useTranslate } from '../../../i18n/use-translate'
 
 export function NativeChatSetupButton({

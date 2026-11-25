@@ -22,8 +22,10 @@ export type CodexAccountsApi = {
   cancelPendingLogin: () => Promise<boolean>
   getPendingLoginUrl: () => Promise<string | null>
   onPendingLoginUrlChanged: (callback: (url: string | null) => void) => () => void
+  chatSignInAccount: (args: { sessionId: string }) => Promise<string | null>
   reauthenticate: (args: {
     accountId: string
+    sessionId?: string
     /** Local-only: activate the re-authed account when its runtime lane had no selection. */
     activateIfSelectionWasEmpty?: boolean
   }) => Promise<CodexRateLimitAccountsState>
