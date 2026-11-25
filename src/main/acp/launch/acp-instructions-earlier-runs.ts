@@ -27,34 +27,39 @@ async function olderLaunches(
   spawnedAt: ReadonlyMap<string, number>
 ): Promise<string[]> {
   const length = nativeChatScratchFolderName('').length
-  const launches: { name: string; chat: string; at: number }[] = []
+  const launches: { name: string; chat: string; at: number | null }[] = []
   for (const name of names.filter((entry) => entry.charAt(length) === '-')) {
-    launches.push({ name, chat: name.slice(0, length), at: 0 })
+    launches.push({ name, chat: name.slice(0, length), at: null })
   }
   for (let at = 0; at < launches.length; at += REMOVE_BATCH) {
     const batch = launches.slice(at, at + REMOVE_BATCH)
     await Promise.all(
       batch.map(async (launch) => {
-        launch.at = (await lstat(join(root, launch.name)).catch(() => null))?.mtimeMs ?? 0
+        launch.at = (await lstat(join(root, launch.name)).catch(() => null))?.mtimeMs ?? null
       })
     )
   }
-  const keep = new Map<string, string>()
-  const pick = (key: string, launch: { name: string; at: number }): void => {
-    const held = launches.find((other) => other.name === keep.get(key))
-    if (!held || held.at < launch.at) {
-      keep.set(key, launch.name)
+  const keep = new Map<string, { name: string; at: number }>()
+  const pick = (key: string, name: string, at: number): void => {
+    if ((keep.get(key)?.at ?? -1) < at) {
+      keep.set(key, { name, at })
     }
   }
-  for (const launch of launches) {
-    pick(`newest:${launch.chat}`, launch)
-    const spawned = spawnedAt.get(launch.chat)
-    if (spawned !== undefined && launch.at <= spawned + SPAWN_SLACK_MS) {
-      pick(`spawned:${launch.chat}`, launch)
+  for (const { name, chat, at } of launches) {
+    if (at === null) {
+      continue
+    }
+    pick(`newest:${chat}`, name, at)
+    const spawned = spawnedAt.get(chat)
+    if (spawned !== undefined && at <= spawned + SPAWN_SLACK_MS) {
+      pick(`spawned:${chat}`, name, at)
     }
   }
-  const kept = new Set(keep.values())
-  return launches.filter((launch) => !kept.has(launch.name)).map((launch) => launch.name)
+  const kept = new Set([...keep.values()].map((launch) => launch.name))
+  // One whose time can't be read may be the one an agent reads: it stays.
+  return launches
+    .filter((launch) => launch.at !== null && !kept.has(launch.name))
+    .map((launch) => launch.name)
 }
 
 /** An earlier run's leftovers go, except those of chats whose agent the terminal host kept running
