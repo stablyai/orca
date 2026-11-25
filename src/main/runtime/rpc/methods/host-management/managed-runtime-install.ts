@@ -196,6 +196,7 @@ function agentCliInstallation(
     dataDirectory,
     program: 'cli',
     findExternal,
+    hostHasBuild: () => managedAgentCli(agent).available(),
     updatesEnabled: () => managedCopyMayRun(agent, runtime),
     onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
     // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.
@@ -307,6 +308,10 @@ export const MANAGED_RUNTIME_INSTALL_METHODS = [
     permission: 'host-admin',
     params: ManagedRuntimeAgentParams,
     handler: async ({ agent, program }, { runtime }) => {
+      // An older client names a program this host no longer has; removing another would surprise.
+      if (program && !installationPrograms(agent).includes(program)) {
+        throw new Error('That runtime is no longer used on this host.')
+      }
       const installation = await selectedInstallation(agent, runtime, program)
       installation.remove()
       return installation.status()

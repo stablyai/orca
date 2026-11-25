@@ -136,10 +136,11 @@ export function createAgentModelCatalogRefreshes(context: {
       })
       projecting = bound.projecting
       void projecting.finally(defaults.resolve)
+      const scopeParams = { agent, workspacePath, savedOnly: launch.passive, legacy: launch.legacy }
       const scope = await bounded(
         resolveAgentModelCatalogScope(
           deps,
-          { agent, workspacePath, savedOnly: launch.passive, legacy: launch.legacy },
+          { ...scopeParams, relistRequested: () => relisting },
           scoped,
           base,
           probeHome,
@@ -150,13 +151,16 @@ export function createAgentModelCatalogRefreshes(context: {
       if (!scope) {
         return
       }
-      const { fingerprint, exact, resolved, cwd } = scope
-      if (relisting) {
-        deps.store.relistScope(fingerprint)
-      }
+      const { fingerprint, exact, resolved, cwd, unavailable } = scope
       resolvedFingerprint = fingerprint
       Object.assign(bound, { fingerprint, exact, cwd })
       bindAgentModelCatalogScope(bindings, launch.bindingKey, bound, requestKey)
+      if (unavailable) {
+        return
+      }
+      if (relisting) {
+        deps.store.relistScope(fingerprint)
+      }
       const probe = deps.probes?.[agent]
       let completion: Promise<AgentModelCatalogEntry | null> | undefined
       if (

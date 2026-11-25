@@ -45,6 +45,7 @@ export function structuredStatusSummariesEqual(
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.launchDirectory === b.launchDirectory &&
     a.hostProgram === b.hostProgram &&
+    a.ownLogin === b.ownLogin &&
     a.conversationName === b.conversationName &&
     a.conversationNameSource === b.conversationNameSource &&
     agentSessionForkNamingEqual(a.forkedFrom, b.forkedFrom) &&

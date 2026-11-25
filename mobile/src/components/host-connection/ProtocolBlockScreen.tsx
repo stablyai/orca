@@ -137,21 +137,26 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, t: Translate): 
   )
 }
 
-export function ProtocolBlockScreen({ verdict }: Props) {
-  useMobileColorScheme()
+/** Where this phone gets a newer Orca Mobile: the known update, else its store. */
+export function useMobileUpdateLink(): { label: string; url: string } {
   const t = useMobileTranslation()
-  const router = useRouteHandoff()
   const mobileUpdate = useWallAppUpdate()
-  const remedy = blockRemedy(verdict)
-  const mobileUpdateTarget = mobileUpdateChannelTarget(t)
-  const mobileAction = mobileUpdate
+  return mobileUpdate
     ? {
         label: t('components.protocolBlockScreen.getVersion', 'Get Orca {{version}}', {
           version: mobileUpdate.version
         }),
         url: mobileUpdate.url
       }
-    : { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
+    : mobileUpdateChannelTarget(t)
+}
+
+export function ProtocolBlockScreen({ verdict }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const router = useRouteHandoff()
+  const remedy = blockRemedy(verdict)
+  const mobileAction = useMobileUpdateLink()
   // No download to offer when the fix is a refetch: reconnecting is what this screen leaves you to do.
   const primaryAction =
     remedy === 'refresh-bundle'

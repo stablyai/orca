@@ -229,6 +229,12 @@ export async function openClaudeSession(input: {
       new Error('claude session closed before startup completed')
     )
   }
+  // Facts can settle long before the host opens; a refusal in that gap had no listener yet.
+  const refused = initialized.initProof.refusal()
+  if (refused) {
+    input.onLateRefusal(refused)
+    throw refused
+  }
   initialized.initProof.onRefusal = (error) => {
     if (input.isCurrent()) {
       input.onLateRefusal(error)

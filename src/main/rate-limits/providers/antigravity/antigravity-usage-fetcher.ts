@@ -14,7 +14,10 @@ import {
   hasReachedAppVersion,
   parseCliVersion
 } from '../../../../shared/app-lifecycle/identity/app-version'
-import { resolveCommandOnLocalPath } from '../../../ipc/command-path/command-path-resolver'
+import {
+  resolveAntigravityHostProgram,
+  type AntigravityHostProgramOptions
+} from './antigravity-usage-host-program'
 import { withConfiguredProxyEnv } from '../../../network/configured-proxy-child-env'
 import { hostShellEnvironment } from '../../../runtime/agent-session/environment/structured-agent-shell-environment'
 import type {
@@ -62,8 +65,9 @@ const unsupportedUsageRuntimes = new Set<string>()
 export type AntigravityUsageDependencies = {
   /** Injected so tests exercise the classification without spawning agy. */
   runCommand?: typeof runProcess
-  resolveCommand?: typeof resolveCommandOnLocalPath
+  resolveCommand?: AntigravityHostProgramOptions['resolveCommand']
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
+  credentialPresence?: AntigravityHostProgramOptions['credentialPresence']
   platform?: NodeJS.Platform
   now?: () => number
 }
@@ -187,21 +191,22 @@ async function readAntigravityUsage(
         signal: options.signal
       })
   } else {
-    const resolve = options.resolveCommand ?? resolveCommandOnLocalPath
     const platform = options.platform ?? process.platform
     const resolveEnvironment = options.resolveEnvironment ?? (() => hostShellEnvironment())
     // Why the env agent launches use: agy lives on the login-shell or saved Windows PATH, not Electron's.
     const env = { ...(await resolveEnvironment()), ...ANTIGRAVITY_PROBE_ENV }
-    const program = await resolve(command, { platform, env })
-    if (!program) {
-      return notFound()
+    const resolved = await resolveAntigravityHostProgram(command, { ...options, platform, env })
+    if (resolved.kind !== 'found') {
+      return resolved.kind === 'missing'
+        ? notFound()
+        : unavailable(resolved.message, resolved.failureKind, now())
     }
     // agy is a Go CLI that reads only proxy env vars; WSL runs keep the guest's own proxy env.
     const probeEnv = withConfiguredProxyEnv(env, options.networkProxySettings) ?? env
     const runCommand = options.runCommand ?? runProcess
     run = (args, timeoutMs) =>
       runCommand({
-        program,
+        program: resolved.program,
         args,
         env: probeEnv,
         timeoutMs,

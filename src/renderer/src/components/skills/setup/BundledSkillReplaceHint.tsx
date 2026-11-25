@@ -10,24 +10,26 @@ export function BundledSkillReplaceHint({
   action,
   children
 }: {
+  /** The button reads Replace now; false while it runs. */
   replacing: boolean
   /** The plan Replace would run; names the planned host's backups folder. */
   action: BundledSkillInstallActionState | undefined
   children: ReactElement
 }): ReactElement {
   const t = useTranslate()
-  if (!replacing) {
+  if (action?.kind !== 'replace') {
     return children
   }
+  // Why wrap for the whole Replace action: dropping the wrapper on click would remount the
+  // focused button mid-run.
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {bundledSkillReplaceMovesCopyHint(
-          action && 'backup' in action ? action.backup : undefined,
-          t
-        )}
-      </TooltipContent>
+      {replacing ? (
+        <TooltipContent side="top" sideOffset={4}>
+          {bundledSkillReplaceMovesCopyHint(action.backup, t)}
+        </TooltipContent>
+      ) : null}
     </Tooltip>
   )
 }

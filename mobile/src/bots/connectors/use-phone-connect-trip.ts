@@ -1,6 +1,6 @@
-// "Connect Linear" / "Connect GitHub" from the phone, as the desktop's connector-connect-state does for a
-// paired server: the host runs the trip as its own Orca account, its page opens in Orca's browser on the
-// host (in the bot's workspace, so the 127.0.0.1 return reaches the host), and the phone waits on the host.
+// "Connect Linear" / "Connect GitHub" and Google's sign-in from the phone, as the desktop does for a paired
+// server: the host runs the trip (Linear and GitHub as its own Orca account), its page opens in Orca's browser
+// on the host (in the bot's workspace, so the 127.0.0.1 return reaches the host), and the phone waits there.
 // The trip lives with the bot's workspace screen, so it keeps waiting while the panel closes to show that page.
 import {
   createContext,
@@ -13,41 +13,35 @@ import {
 } from 'react'
 import { sessionBrowserTabCreate } from '../../browser/tab-navigation/mobile-session-browser-operations'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { slackCall } from './bot-slack-operations'
+import { connectCancel } from './bot-connector-account-operations'
 import {
-  connectCancel,
-  connectStart,
-  connectWait,
-  type PhoneConnectLink
-} from './bot-connector-account-operations'
-import type { ConnectorPage } from './connector-pages'
+  beginConnect,
+  beginGoogle,
+  CANCELLED,
+  EXPIRED,
+  IDLE,
+  pause,
+  RETRY_MS,
+  TRIP_MS,
+  type ConnectSignInPage,
+  type HostTripCancel,
+  type PhoneConnectTrip
+} from './connect-host-trip'
+import type { ConnectorPage, GoogleSignInAsk } from './connector-pages'
 
-type ConnectSource = 'linear' | 'github'
+type ConnectSource = 'linear' | 'github' | 'google'
 
-/** The trip's page in Orca's browser on the host. */
-export type ConnectSignInPage = { url: string; browserPageId: string | null }
-
-export type PhoneConnectTrip =
-  | { status: 'idle' }
-  | { status: 'waiting'; since: number; page: ConnectSignInPage | null }
-  | { status: 'linked'; link: PhoneConnectLink }
-  | { status: 'failed'; error: string }
+/** What a sign-in asks: Linear's or GitHub's account picker, or Google's account and services. */
+type ConnectAsk =
+  | { source: 'linear' | 'github'; switchAccount: boolean }
+  | ({ source: 'google' } & GoogleSignInAsk)
 
 /** The page couldn't open in Orca's browser on the host. */
 export const CONNECT_NOT_ROUTED = 'not_routed'
-/** The host couldn't wait for the return, so the sign-in finishes in Orca there. */
-export const CONNECT_ON_HOST = 'loopback_unavailable'
-const CANCELLED = 'cancelled'
-const EXPIRED = 'expired'
-// The cloud's connect session lives this long; a dropped wait is asked again this often.
-const TRIP_MS = 10 * 60_000
-const RETRY_MS = 2_000
-const WAIT_TIMEOUT_MS = 60_000
-const IDLE: PhoneConnectTrip = { status: 'idle' }
 
 type PhoneConnectTrips = {
   current: { source: ConnectSource; trip: PhoneConnectTrip } | null
-  start: (source: ConnectSource, switchAccount: boolean) => void
+  start: (ask: ConnectAsk) => void
   cancel: (source: ConnectSource) => void
   /** A setup page left: its ended trip goes, so the next setup starts fresh. */
   release: (source: ConnectSource) => void
@@ -55,6 +49,8 @@ type PhoneConnectTrips = {
   shown: RefObject<{ source: ConnectSource; refresh: () => Promise<unknown> } | null>
   /** Shows the trip's page on this phone, then reopens `back` when the trip ends; null where it can't. */
   showSignIn: ((back: ConnectorPage) => void) | null
+  /** Cancels the sign-in shown here and reopens its setup. */
+  cancelSignIn: () => void
 }
 
 export const PhoneConnectTripContext = createContext<PhoneConnectTrips | null>(null)
@@ -71,9 +67,17 @@ export function usePhoneConnectTrips(
   const [current, setCurrent] = useState<PhoneConnectTrips['current']>(null)
   // The newest start; a cancel or unmount bumps it, and an older wait stops.
   const latest = useRef(0)
+  // The current trip's side on the host, once it answered.
+  const running = useRef<HostTripCancel | null>(null)
+  // The last Google start: the next waits for it, so it never resumes a flow that one is ending.
+  const googleStart = useRef<Promise<unknown>>(Promise.resolve())
   useEffect(
     () => () => {
       latest.current += 1
+      // A Google sign-in is this phone's own, so it ends with the screen.
+      if (running.current?.own) {
+        running.current.cancel()
+      }
     },
     []
   )
@@ -86,18 +90,25 @@ export function usePhoneConnectTrips(
   const away = useRef<ConnectorPage | null>(null)
 
   const start = useCallback(
-    (source: ConnectSource, switchAccount: boolean) => {
+    (ask: ConnectAsk) => {
       if (!client) {
         return
       }
+      const { source } = ask
       const request = ++latest.current
       const current = () => request === latest.current
       away.current = null
+      // Only one Google sign-in runs on a host, so a newer start ends this phone's last one.
+      if (running.current?.own) {
+        running.current.cancel()
+      }
+      running.current = null
       const since = Date.now()
       setCurrent({ source, trip: { status: 'waiting', since, page: null } })
       const end = (trip: PhoneConnectTrip) => {
         const back = away.current
         away.current = null
+        running.current = null
         if (shown.current?.source === source) {
           setCurrent({ source, trip })
         } else if (back) {
@@ -109,14 +120,21 @@ export function usePhoneConnectTrips(
         }
       }
       void (async () => {
-        const started = await slackCall(
-          () =>
-            connectStart.request(client, { source, switchAccount }, { failWhenDisconnected: true }),
-          connectStart.interpret
-        )
+        let started
+        if (ask.source === 'google') {
+          const begun = googleStart.current.then(() =>
+            beginGoogle(client, ask, current, (host) => {
+              running.current = host
+            })
+          )
+          googleStart.current = begun
+          started = await begun
+        } else {
+          started = await beginConnect(client, ask.source, ask.switchAccount)
+        }
         if (!started.ok) {
           if (current()) {
-            end({ status: 'failed', error: started.error })
+            end(started.error === CANCELLED ? IDLE : { status: 'failed', error: started.error })
           }
           return
         }
@@ -124,7 +142,9 @@ export function usePhoneConnectTrips(
         if (!current()) {
           return
         }
-        const url = started.value.authorizeUrl
+        const host = started.trip
+        running.current = host
+        const { url } = host
         const opened = await sessionBrowserTabCreate
           .request(
             client,
@@ -136,7 +156,7 @@ export function usePhoneConnectTrips(
         if (!opened) {
           // Only this trip's own failure ends the host's trip; a newer one there is left alone.
           if (current()) {
-            void connectCancel.request(client, { source }).catch(() => {})
+            host.cancel()
             end({ status: 'failed', error: CONNECT_NOT_ROUTED })
           }
           return
@@ -148,28 +168,13 @@ export function usePhoneConnectTrips(
         const until = Date.now() + TRIP_MS
         while (current()) {
           const asked = Date.now()
-          const waited = await connectWait
-            .request(client, { tripId: started.value.tripId }, { timeoutMs: WAIT_TIMEOUT_MS })
-            .then((reply) => connectWait.interpret(reply))
-            .catch(() => null)
-          if (waited?.state === 'done') {
-            const result = waited.result
-            if (result.ok && result.value) {
-              if (shown.current?.source === source) {
-                await shown.current.refresh()
-              }
+          const ended = await host.wait()
+          if (ended) {
+            if (ended.status === 'linked' && shown.current?.source === source) {
+              await shown.current.refresh()
             }
             if (current()) {
-              end(
-                result.ok
-                  ? // Null: the host had no loopback and the trip ends at "Open Orca", which only it redeems.
-                    result.value
-                    ? { status: 'linked', link: result.value }
-                    : { status: 'failed', error: CONNECT_ON_HOST }
-                  : result.error === CANCELLED
-                    ? IDLE
-                    : { status: 'failed', error: result.error }
-              )
+              end(ended)
             }
             return
           }
@@ -180,8 +185,8 @@ export function usePhoneConnectTrips(
             return
           }
           // A dropped wait, or a host that answers at once, is asked again after a pause.
-          if (!waited || Date.now() - asked < RETRY_MS) {
-            await new Promise((resolve) => setTimeout(resolve, RETRY_MS))
+          if (Date.now() - asked < RETRY_MS) {
+            await pause()
           }
         }
       })()
@@ -193,8 +198,13 @@ export function usePhoneConnectTrips(
     (source: ConnectSource) => {
       latest.current += 1
       away.current = null
+      const host = running.current
+      running.current = null
       setCurrent(null)
-      if (client) {
+      if (host) {
+        host.cancel()
+      } else if (client && source !== 'google') {
+        // Before the host answered: Google's start ends its own flow once it answers.
         void connectCancel.request(client, { source }).catch(() => {})
       }
     },
@@ -207,6 +217,24 @@ export function usePhoneConnectTrips(
     )
   }, [])
 
+  const cancelSignIn = useCallback(() => {
+    const back = away.current
+    // A trip that ended while the sheet closed already reopened its setup.
+    if (!back) {
+      return
+    }
+    if (current) {
+      cancel(current.source)
+    }
+    // A page that opened on the sign-in would start it again, so Cancel returns where it came from.
+    callbacks.current.reopen(
+      back.kind === 'google-sign-in' ||
+        ((back.kind === 'linear-setup' || back.kind === 'github-setup') && back.signIn)
+        ? back.from
+        : back
+    )
+  }, [cancel, current])
+
   const page = current?.trip.status === 'waiting' ? current.trip.page : null
   const { show } = signIn
   const showSignIn =
@@ -217,7 +245,7 @@ export function usePhoneConnectTrips(
         }
       : null
 
-  return { current, start, cancel, release, shown, showSignIn }
+  return { current, start, cancel, release, shown, showSignIn, cancelSignIn }
 }
 
 /** One setup page's view of the screen's trip: idle while another source's runs. */
@@ -227,7 +255,8 @@ export function usePhoneConnectTrip(
   onLinked: () => Promise<unknown>
 ): {
   trip: PhoneConnectTrip
-  start: (switchAccount?: boolean) => void
+  /** Linear's and GitHub's take whether to switch accounts; Google's, the account and services. */
+  start: (ask?: boolean | GoogleSignInAsk) => void
   cancel: () => void
   showSignIn: ((back: ConnectorPage) => void) | null
 } {
@@ -247,7 +276,12 @@ export function usePhoneConnectTrip(
   const mine = trips?.current?.source === source ? trips.current.trip : IDLE
   return {
     trip: mine,
-    start: (switchAccount = false) => trips?.start(source, switchAccount),
+    start: (ask) =>
+      trips?.start(
+        source === 'google'
+          ? { source, ...(typeof ask === 'object' ? ask : {}) }
+          : { source, switchAccount: ask === true }
+      ),
     cancel: () => trips?.cancel(source),
     showSignIn: mine.status === 'waiting' ? (trips?.showSignIn ?? null) : null
   }

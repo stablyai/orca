@@ -7,6 +7,7 @@ import { LinearApiKeyDialog } from '@/components/integrations/task-trackers/line
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store/index'
 import {
   IntegrationCardDetails,
@@ -14,10 +15,8 @@ import {
 } from '../presentation/integration-card-shell'
 import { useIntegrationSubordinateRowClass } from '../presentation/integration-card-presentation'
 import { LinearAgentSkillInstallCta } from '../../skills/setup/linear-agent-skill-install-cta'
-import {
-  getProviderAccountScope,
-  type ProviderHostScope
-} from '../../provider-accounts/provider-account-scope'
+import type { ProviderHostScope } from '../../provider-accounts/provider-account-scope'
+import { useProviderAccountScope } from '../../provider-accounts/use-provider-host-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { LINEAR_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 import { useTranslate } from '@/i18n/use-translate'
@@ -46,7 +45,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
   const checking = !contextMatches || !linearStatusChecked
   const connected = contextMatches && linearStatus.connected
   const workspaces = linearStatus.workspaces ?? []
-  const accountScope = getProviderAccountScope(settings, t)
+  const accountScope = useProviderAccountScope(defaultScopeHost(settings))
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
 
   const handleDisconnect = async (workspaceId?: string): Promise<void> => {

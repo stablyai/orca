@@ -402,6 +402,43 @@ it("leaves a user's Update alone when the kill switch is turned off", async () =
 describe('the managed CLI, which follows its latest release', () => {
   const cli = () => runtime({ updatesToPin: undefined, refreshPin: async () => undefined })
 
+  it('asks the release server nothing while Orca has no copy installed', async () => {
+    const refreshPin = vi.fn(async () => undefined)
+    const subject = installation(serve(), {
+      runtime: runtime({ updatesToPin: undefined, refreshPin, pin: () => null })
+    })
+    const state = await subject.status()
+    expect(refreshPin).not.toHaveBeenCalled()
+    // Install still offers itself; it looks the release up when it runs.
+    expect(state).toMatchObject({ available: true, version: null, installedVersion: null })
+  })
+
+  it('looks up the latest release once Orca has a copy installed', async () => {
+    await seedRelease(OLD)
+    const refreshPin = vi.fn(async () => undefined)
+    const subject = installation(serve(), {
+      runtime: runtime({ updatesToPin: undefined, refreshPin })
+    })
+    await subject.status()
+    expect(refreshPin).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers no Install where the host has no build', async () => {
+    const subject = new ManagedRuntimeInstallation(
+      'server-agent',
+      runtime({ updatesToPin: undefined, refreshPin: async () => undefined, pin: () => null }),
+      {
+        dataDirectory: data,
+        program: 'cli',
+        findExternal: async () => false,
+        hostHasBuild: () => false,
+        fence: (work) => work(),
+        fetcher: serve()
+      }
+    )
+    expect((await subject.status()).available).toBe(false)
+  })
+
   it('keeps retrying a failed update hourly, without lengthening the wait', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     await seedRelease(OLD)

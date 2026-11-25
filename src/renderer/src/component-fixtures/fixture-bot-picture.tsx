@@ -168,7 +168,7 @@ export async function artBase64(): Promise<string> {
  *  second, once the fixture has left the picker. */
 export function stubGeneration(
   capability: AvatarGenerationCapability,
-  result: 'image' | 'running' | 'usage-limit' | 'late-failure' | 'late-image'
+  result: 'image' | 'running' | 'usage-limit' | 'no-image' | 'late-failure' | 'late-image'
 ): () => void {
   return () => {
     // Fixtures share one page: a run left going by the one before would show here.
@@ -179,8 +179,8 @@ export function stubGeneration(
         if (result === 'running') {
           return new Promise(() => {})
         }
-        if (result === 'usage-limit') {
-          return { ok: false, error: 'usage-limit', agent: 'codex' }
+        if (result === 'usage-limit' || result === 'no-image') {
+          return { ok: false, error: result, agent: 'codex' }
         }
         if (result === 'late-failure') {
           await settle(2500)

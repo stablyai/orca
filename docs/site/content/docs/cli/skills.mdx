@@ -178,4 +178,4 @@ Any repo with a `skills/<name>/SKILL.md` file can be installed via `npx skills a
 
 ## MCP servers
 
-Model Context Protocol (MCP) servers expose external tools to compatible agents. Register MCP endpoints under [Settings → Integrations → MCP](/docs/settings); those tools appear inside agent CLIs that support MCP.
+Model Context Protocol (MCP) servers expose external tools to compatible agents. Each agent reads its own MCP settings, and a repo's `.mcp.json` (or `.cursor/mcp.json`) adds servers for agents working in it. **Settings → Repository → MCP configs** shows the ones a repo defines.
