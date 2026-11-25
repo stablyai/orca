@@ -1,53 +1,25 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ManagedPaneInternal } from '../pane-manager-types'
-import { registerLivePaneManager, unregisterLivePaneManager } from '../pane-manager-registry'
-import { setTerminalWebglDiagnosticRecorder } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
+import { describe, expect, it, vi } from 'vitest'
 import {
-  createAtlasIntegrityState,
-  requestAtlasChangeIntegrityCheck,
-  verifyPaneWebglAtlasIntegrity,
-  type AtlasIntegrityDeps
-} from './terminal-webgl-atlas-integrity'
+  atlas,
+  blank,
+  evict,
+  fakePane,
+  fakeReader,
+  glyph,
+  ink,
+  setupAtlasIntegrityFixture
+} from './terminal-webgl-atlas-integrity-test-fixture'
 import { createGlyphInkReader } from './terminal-webgl-atlas-ink-reader'
-import { fakeKit, pageWithInk } from './terminal-webgl-atlas-test-canvas'
+import { fakeKit } from './terminal-webgl-atlas-test-canvas'
 import {
-  admittedRect,
-  checkAtlasIntegrity,
-  type AtlasCanvas,
-  type GlyphAtlasLike,
-  type GlyphInkReader,
-  type GlyphRect,
-  type InkRead
-} from './terminal-webgl-atlas-sampling'
+  requestAtlasChangeIntegrityCheck,
+  verifyPaneWebglAtlasIntegrity
+} from './terminal-webgl-atlas-integrity'
+import { admittedRect, checkAtlasIntegrity, type InkRead } from './terminal-webgl-atlas-sampling'
 
-type Glyph = NonNullable<GlyphAtlasLike['pages'][number]['glyphs']>[number]
-type Page = { canvas: { width: number; height: number }; glyphs: Glyph[] }
-type MutableAtlas = { pages: Page[]; pageLayoutVersion: number }
-
-// offset.y = padding - top + adj; -3 means xterm's top scan found ink at row 7 with padding 4.
-const glyph = (x: number, y = 0, offsetY = -3): Glyph => ({
-  texturePosition: { x, y },
-  size: { x: 9, y: 18 },
-  offset: { x: -1, y: offsetY }
-})
-
-function atlas(glyphs: Glyph[] = [glyph(0), glyph(9)], width = 512): MutableAtlas {
-  return { pages: [{ canvas: { width, height: width }, glyphs }], pageLayoutVersion: 1 }
-}
-
+const fixture = setupAtlasIntegrityFixture()
+const { advanceServiceClock, deps, events, register, runTimers, takeScheduledWake } = fixture
 const traversal = () => ({ layoutVersion: undefined, cursors: [], startPage: 0 })
-const ink = fakeReader(() => 'ink')
-const blank = fakeReader(() => 'blank')
-
-function fakeReader(classify: (canvas: AtlasCanvas, rect: GlyphRect) => InkRead): GlyphInkReader {
-  return (canvas, rect, onReadIssued) => {
-    const result = classify(canvas, rect)
-    if (result !== 'unavailable') {
-      onReadIssued()
-    }
-    return result
-  }
-}
 
 describe('admittedRect', () => {
   const page = { width: 512, height: 512 }
@@ -96,11 +68,6 @@ describe('checkAtlasIntegrity', () => {
     })
     const [inkAfter, inkReader] = pages(['unreadable', 'ink'])
     expect(checkAtlasIntegrity(inkAfter, inkReader, traversal(), 2)).toEqual({
-      outcome: 'inconclusive',
-      reads: 2
-    })
-    const [twoInvalid, twoInvalidReader] = pages(['unreadable', 'unreadable', 'blank'])
-    expect(checkAtlasIntegrity(twoInvalid, twoInvalidReader, traversal(), 16)).toEqual({
       outcome: 'inconclusive',
       reads: 2
     })
@@ -155,140 +122,6 @@ describe('checkAtlasIntegrity', () => {
     page.pages[0].glyphs = [glyph(0, 200)]
     expect(checkAtlasIntegrity(page, blank, walk, 16)).toMatchObject({ outcome: 'poisoned' })
   })
-
-  it('counts unreadable and throwing reads and respects the read budget', () => {
-    const throwing: GlyphInkReader = (_canvas, _rect, onReadIssued) => {
-      onReadIssued()
-      throw new Error('readback failed')
-    }
-    expect(checkAtlasIntegrity(atlas(), throwing, traversal(), 16)).toEqual({
-      outcome: 'inconclusive',
-      reads: 1
-    })
-    expect(checkAtlasIntegrity(atlas(), blank, traversal(), 0)).toEqual({
-      outcome: 'inconclusive',
-      reads: 0
-    })
-  })
-})
-
-type FakePane = ManagedPaneInternal & {
-  webglAddon: NonNullable<ManagedPaneInternal['webglAddon']>
-  refresh: ReturnType<typeof vi.fn>
-  refreshRows: ReturnType<typeof vi.fn>
-  addon: { clearTextureAtlas: ReturnType<typeof vi.fn> }
-}
-
-function evict(paneAtlas: MutableAtlas): void {
-  paneAtlas.pageLayoutVersion++
-  paneAtlas.pages = [{ canvas: { width: 512, height: 512 }, glyphs: [] }]
-}
-
-function fakePane(
-  paneAtlas: MutableAtlas,
-  options: { synchronizedOutput?: boolean; covered?: boolean; contextLost?: boolean } = {}
-): FakePane {
-  const refresh = vi.fn()
-  const refreshRows = vi.fn()
-  const terminal = {
-    rows: 24,
-    refresh,
-    element: { isConnected: true },
-    _core: options.synchronizedOutput
-      ? {
-          _renderService: { _isPaused: false, refreshRows },
-          coreService: { decPrivateModes: { synchronizedOutput: true } }
-        }
-      : undefined
-  }
-  const container = { isConnected: true, querySelector: () => (options.covered ? {} : null) }
-  const addon = {
-    _renderer: {
-      _charAtlas: paneAtlas,
-      _gl: { isContextLost: () => options.contextLost === true }
-    },
-    clearTextureAtlas: vi.fn(() => evict(paneAtlas))
-  }
-  return {
-    id: 1,
-    terminal,
-    container,
-    refresh,
-    refreshRows,
-    addon,
-    webglDisabledAfterContextLoss: false,
-    webglAddon: addon
-  } as unknown as FakePane
-}
-
-let clock = 0
-let timers: { callback: () => void; ms: number }[] = []
-let windowPresented = true
-let deps: (read: GlyphInkReader) => AtlasIntegrityDeps
-let state = createAtlasIntegrityState()
-const registered: object[] = []
-const events: Record<string, unknown>[] = []
-
-function atlasOfPaneFor(pane: FakePane): unknown {
-  return (pane.addon as unknown as { _renderer: { _charAtlas: unknown } })._renderer._charAtlas
-}
-
-function register(visible: boolean, panes: FakePane[]): void {
-  const manager = {
-    resetWebglTextureAtlases: () => {},
-    isVisibleForAtlasRecovery: () => visible,
-    containsElement: (element: Element) => panes.some((pane) => pane.container === element),
-    forEachInternalPane: (visit: (pane: ManagedPaneInternal) => boolean | void) =>
-      panes.some((pane) => visit(pane) === true)
-  }
-  registered.push(manager)
-  registerLivePaneManager(manager)
-}
-
-function runTimers(): void {
-  for (let round = 0; round < 10 && timers.length; round++) {
-    const due = timers
-    timers = []
-    for (const timer of due) {
-      clock += timer.ms
-      timer.callback()
-    }
-  }
-}
-
-function takeScheduledWake(delay: number): () => void {
-  expect(timers).toEqual([{ callback: expect.any(Function), ms: delay }])
-  expect(state.timerArmed).toBe(true)
-  const [{ callback }] = timers.splice(0, 1)
-  return callback
-}
-
-function advanceServiceClock(ms: number): void {
-  clock += ms
-  vi.setSystemTime(Date.now() + ms)
-}
-
-beforeEach(() => {
-  clock = 1_000_000
-  timers = []
-  windowPresented = true
-  events.length = 0
-  state = createAtlasIntegrityState()
-  deps = (read) => ({
-    now: () => clock,
-    read,
-    setTimer: (callback, ms) => timers.push({ callback, ms }),
-    isWindowPresented: () => windowPresented,
-    state
-  })
-  setTerminalWebglDiagnosticRecorder((kind, detail) => events.push({ kind, ...detail }))
-})
-
-afterEach(() => {
-  registered.splice(0).forEach((manager) => unregisterLivePaneManager(manager as never))
-  setTerminalWebglDiagnosticRecorder(null)
-  vi.restoreAllMocks()
-  vi.useRealTimers()
 })
 
 describe('verifyPaneWebglAtlasIntegrity', () => {
@@ -314,6 +147,19 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     expect(events).toEqual([
       expect.objectContaining({ kind: 'webgl-atlas-poisoned', outcome: 'reset', trigger: 'reveal' })
     ])
+  })
+
+  it('repaints a pane that moved to a different visible root before enumeration catches up', () => {
+    const pane = fakePane(atlas())
+    const previous = register(true, [pane])
+    vi.spyOn(previous, 'containsElement').mockReturnValue(false)
+    const current = register(true, [])
+    vi.spyOn(current, 'containsElement').mockImplementation((element) => element === pane.container)
+
+    verifyPaneWebglAtlasIntegrity(pane, 'reveal', deps(blank))
+
+    expect(events).toEqual([expect.objectContaining({ outcome: 'reset' })])
+    expect(pane.refresh).toHaveBeenCalled()
   })
 
   it('reads the clear outcome before presenting, so a repainting owner cannot change it', () => {
@@ -361,33 +207,15 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     expect(pane.refreshRows).toHaveBeenCalledWith(0, 23, true)
   })
 
-  it('refuses resets past the per-atlas cap and charges failed clears', () => {
-    const pane = fakePane(atlas())
-    pane.addon.clearTextureAtlas.mockImplementation(() => {})
-    register(true, [pane])
-    for (let attempt = 0; attempt < 5; attempt++) {
-      clock += 61_000
-      verifyPaneWebglAtlasIntegrity(pane, 'reveal', deps(blank))
-    }
-    expect(pane.addon.clearTextureAtlas).toHaveBeenCalledTimes(3)
-    expect(events.map((event) => event.outcome)).toEqual([
-      'reset-failed',
-      'reset-failed',
-      'reset-failed',
-      'refused',
-      'refused'
-    ])
-  })
-
   it('does nothing while the window is parked or hidden', () => {
     const pane = fakePane(atlas())
     register(true, [pane])
-    windowPresented = false
+    fixture.windowPresented = false
 
     verifyPaneWebglAtlasIntegrity(pane, 'reveal', deps(blank))
 
     expect(pane.addon.clearTextureAtlas).not.toHaveBeenCalled()
-    expect(timers).toHaveLength(0)
+    expect(fixture.timers).toHaveLength(0)
   })
 
   it('lets a zero-read attach leave the following reveal free to check', () => {
@@ -397,10 +225,10 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
 
     verifyPaneWebglAtlasIntegrity(pane, 'attach', deps(blank))
     paneAtlas.pages[0].glyphs.push(glyph(0))
-    clock += 100
+    fixture.clock += 100
     verifyPaneWebglAtlasIntegrity(pane, 'reveal', deps(blank))
 
-    expect(timers).toHaveLength(0)
+    expect(fixture.timers).toHaveLength(0)
     expect(pane.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
   })
 
@@ -415,30 +243,10 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     verifyPaneWebglAtlasIntegrity(secondPane, 'attach', deps(blank))
     verifyPaneWebglAtlasIntegrity(secondPane, 'reveal', deps(blank))
 
-    expect(timers).toHaveLength(1)
+    expect(fixture.timers).toHaveLength(1)
     runTimers()
     expect(secondPane.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
     expect(events[0]).toMatchObject({ trigger: 'deferred' })
-  })
-
-  it('does no owner discovery while the renderer-wide gate still denies the service', () => {
-    const paneAtlas = atlas()
-    const pane = fakePane(paneAtlas)
-    register(true, [pane])
-    const forEach = vi.spyOn(
-      registered[0] as { forEachInternalPane: () => void },
-      'forEachInternalPane'
-    )
-
-    verifyPaneWebglAtlasIntegrity(pane, 'attach', deps(ink))
-    verifyPaneWebglAtlasIntegrity(pane, 'reveal', deps(blank))
-    forEach.mockClear()
-    // Fire early: the gate still denies, so the service re-arms without scanning.
-    const early = timers.shift()
-    early?.callback()
-
-    expect(forEach).not.toHaveBeenCalled()
-    expect(timers).toHaveLength(1)
   })
 
   it('hands a deferred check to another eligible owner when the requester is covered', () => {
@@ -448,7 +256,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     register(true, [first, second])
 
     verifyPaneWebglAtlasIntegrity(first, 'attach', deps(ink))
-    clock += 100
+    fixture.clock += 100
     verifyPaneWebglAtlasIntegrity(second, 'reveal', deps(blank))
     ;(second.container as unknown as { querySelector: () => object }).querySelector = () => ({})
     runTimers()
@@ -469,7 +277,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
       runTimers()
 
       expect(pane.addon.clearTextureAtlas).not.toHaveBeenCalled()
-      expect(timers).toHaveLength(0)
+      expect(fixture.timers).toHaveLength(0)
     } finally {
       vi.useRealTimers()
     }
@@ -503,7 +311,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
       runTimers()
 
       expect(events).toEqual([])
-      expect(state.lastAttemptAt).toBe(Number.NEGATIVE_INFINITY)
+      expect(fixture.state.lastAttemptAt).toBe(Number.NEGATIVE_INFINITY)
     }
   )
 
@@ -517,172 +325,8 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     verifyPaneWebglAtlasIntegrity(visible, 'reveal', deps(blank))
 
     expect(visible.addon.clearTextureAtlas).not.toHaveBeenCalled()
-    expect(timers).toHaveLength(1)
+    expect(fixture.timers).toHaveLength(1)
   })
-
-  it('keeps at most eight pending atlases, dropping the oldest', () => {
-    const first = fakePane(atlas())
-    register(true, [first])
-    verifyPaneWebglAtlasIntegrity(first, 'reveal', deps(ink))
-    const waiting = Array.from({ length: 9 }, () => fakePane(atlas()))
-    register(true, waiting)
-    for (const pane of waiting) {
-      verifyPaneWebglAtlasIntegrity(pane, 'reveal', deps(ink))
-    }
-
-    expect(state.pending.size).toBe(8)
-    expect(
-      [...state.pending.keys()].some((ref) => ref.deref() === atlasOfPaneFor(waiting[0]))
-    ).toBe(false)
-    expect(timers).toHaveLength(1)
-  })
-
-  it('does not charge the read budget when no scratch could be created', () => {
-    const pane = fakePane(atlas())
-    register(true, [pane])
-
-    verifyPaneWebglAtlasIntegrity(
-      pane,
-      'reveal',
-      deps(() => 'unavailable')
-    )
-
-    expect(state.readTimes).toEqual([])
-    expect(state.lastAttemptAt).toBe(clock)
-  })
-
-  it('holds the rolling budget until the oldest physical readback expires', () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    const start = clock
-    const readTimes: number[] = []
-    const kit = fakeKit()
-    const clearRect = kit.ctx.clearRect.bind(kit.ctx)
-    vi.spyOn(kit.ctx, 'clearRect').mockImplementation((...args) => {
-      if (readTimes.length === 0) {
-        advanceServiceClock(4)
-      }
-      clearRect(...args)
-    })
-    const getImageData = kit.ctx.getImageData.bind(kit.ctx)
-    vi.spyOn(kit.ctx, 'getImageData').mockImplementation((...args) => {
-      readTimes.push(clock)
-      const pixels = getImageData(...args)
-      if (readTimes.length === 1) {
-        advanceServiceClock(3)
-      }
-      return pixels
-    })
-    const sharedDeps = deps(createGlyphInkReader(() => kit))
-    const atlases = Array.from({ length: 17 }, () => {
-      const paneAtlas = atlas()
-      paneAtlas.pages[0].canvas = pageWithInk(true)
-      return paneAtlas
-    })
-    const panes = atlases.map((paneAtlas) => fakePane(paneAtlas))
-    register(true, panes)
-
-    verifyPaneWebglAtlasIntegrity(panes[0], 'reveal', sharedDeps)
-    expect(readTimes).toEqual([start + 4])
-    expect(state.lastAttemptAt).toBe(start)
-    expect(state.atlases.get(atlases[0])?.completedAt).toBe(start + 7)
-    for (const [index, pane] of panes.slice(1, 16).entries()) {
-      advanceServiceClock(start + (index + 1) * 50 - clock)
-      verifyPaneWebglAtlasIntegrity(pane, 'reveal', sharedDeps)
-    }
-    expect(readTimes).toHaveLength(16)
-
-    advanceServiceClock(start + 1001 - clock)
-    verifyPaneWebglAtlasIntegrity(panes[16], 'reveal', sharedDeps)
-    expect(readTimes).toHaveLength(16)
-    expect(state.pending.size).toBe(1)
-
-    const wake = takeScheduledWake(3)
-    advanceServiceClock(3)
-    wake()
-    expect(readTimes).toHaveLength(17)
-    expect(readTimes.at(-1)).toBe(start + 1004)
-    expect(state.pending.size).toBe(0)
-    expect(state.timerArmed).toBe(false)
-  })
-
-  it.each([
-    ['context loss before readback', false],
-    ['an exception during preparation', false],
-    ['an exception during readback', true]
-  ] as const)('accounts for physical readback after %s', (failure, issued) => {
-    const start = clock
-    const brokenKit = fakeKit({ lost: failure === 'context loss before readback' })
-    const nextKit = fakeKit()
-    const firstReadback = vi.spyOn(brokenKit.ctx, 'getImageData')
-    const nextReadback = vi.spyOn(nextKit.ctx, 'getImageData')
-    if (failure === 'an exception during preparation') {
-      vi.spyOn(brokenKit.ctx, 'clearRect').mockImplementation(() => {
-        throw new Error('scratch preparation failed')
-      })
-    } else if (failure === 'an exception during readback') {
-      firstReadback.mockImplementation(() => {
-        throw new Error('readback failed')
-      })
-    }
-    const kits = [brokenKit, nextKit]
-    const sharedDeps = deps(createGlyphInkReader(() => kits.shift() ?? null))
-    const firstAtlas = atlas()
-    const first = fakePane(firstAtlas)
-    const next = fakePane(atlas())
-    register(true, [first, next])
-    state.readTimes.push(...Array.from({ length: 15 }, () => start))
-
-    verifyPaneWebglAtlasIntegrity(first, 'reveal', sharedDeps)
-    expect(firstReadback).toHaveBeenCalledTimes(issued ? 1 : 0)
-    expect(state.readTimes).toHaveLength(issued ? 16 : 15)
-    expect(state.atlases.get(firstAtlas)?.completedAt).toBe(
-      issued ? start : Number.NEGATIVE_INFINITY
-    )
-    expect(state.lastAttemptAt).toBe(start)
-    expect(first.addon.clearTextureAtlas).not.toHaveBeenCalled()
-
-    clock += 50
-    verifyPaneWebglAtlasIntegrity(next, 'reveal', sharedDeps)
-    expect(nextReadback).toHaveBeenCalledTimes(issued ? 0 : 1)
-    expect(next.addon.clearTextureAtlas).toHaveBeenCalledTimes(issued ? 0 : 1)
-  })
-
-  it.each([
-    [-1, false],
-    [0, true]
-  ] as const)(
-    'checks the clear interval at invocation with a %s ms offset from expiry',
-    (offset, clearsAgain) => {
-      const start = clock
-      const kit = fakeKit()
-      const getImageData = kit.ctx.getImageData.bind(kit.ctx)
-      vi.spyOn(kit.ctx, 'getImageData').mockImplementation((...args) => {
-        clock += 10
-        return getImageData(...args)
-      })
-      const sharedDeps = deps(createGlyphInkReader(() => kit))
-      const paneAtlas = atlas()
-      const pane = fakePane(paneAtlas)
-      const clearTimes: number[] = []
-      pane.addon.clearTextureAtlas.mockImplementation(() => {
-        clearTimes.push(clock)
-        evict(paneAtlas)
-        clock++
-      })
-      register(true, [pane])
-
-      verifyPaneWebglAtlasIntegrity(pane, 'reveal', sharedDeps)
-      expect(clearTimes).toEqual([start + 10])
-      expect(state.atlases.get(paneAtlas)?.resetAt).toBe(start + 10)
-      expect(state.atlases.get(paneAtlas)?.completedAt).toBe(start + 11)
-
-      paneAtlas.pages[0].glyphs.push(glyph(0))
-      clock = start + 60_000 + offset
-      verifyPaneWebglAtlasIntegrity(pane, 'reveal', sharedDeps)
-      expect(clearTimes).toEqual(clearsAgain ? [start + 10, start + 60_010] : [start + 10])
-      expect(events.at(-1)?.outcome).toBe(clearsAgain ? 'reset' : 'refused')
-    }
-  )
 
   it.each([
     ['has no eligible owner', { covered: true }],
@@ -702,7 +346,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
 
     expect(first.addon.clearTextureAtlas).not.toHaveBeenCalled()
     expect(second.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
-    expect(timers).toHaveLength(0)
+    expect(fixture.timers).toHaveLength(0)
   })
 
   it.each([
@@ -710,7 +354,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     ['throws after being selected', 'throw']
   ])('keeps serving the next pending atlas after the first %s', (_name, firstMode) => {
     vi.useFakeTimers({ toFake: ['Date'] })
-    const start = clock
+    const start = fixture.clock
     const busy = fakePane(atlas())
     const firstAtlas = atlas()
     const secondAtlas = atlas()
@@ -741,31 +385,31 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     verifyPaneWebglAtlasIntegrity(first, 'reveal', sharedDeps)
     verifyPaneWebglAtlasIntegrity(second, 'reveal', sharedDeps)
     expect(observed).toEqual([])
-    expect(state.pending.size).toBe(2)
+    expect(fixture.state.pending.size).toBe(2)
 
     const firstWake = takeScheduledWake(50)
     advanceServiceClock(50)
     expect(firstWake).not.toThrow()
     const firstEvent = firstMode === 'throw' ? 'first throws' : 'first reads'
     expect(observed).toEqual([firstEvent])
-    expect(state.readTimes).toEqual(firstMode === 'throw' ? [start] : [start, start + 50])
-    expect(state.pending.size).toBe(1)
+    expect(fixture.state.readTimes).toEqual(firstMode === 'throw' ? [start] : [start, start + 50])
+    expect(fixture.state.pending.size).toBe(1)
 
     const nextWake = takeScheduledWake(50)
     advanceServiceClock(50)
     nextWake()
 
     expect(observed).toEqual([firstEvent, 'second reads'])
-    expect(state.readTimes.at(-1)).toBe(start + 100)
+    expect(fixture.state.readTimes.at(-1)).toBe(start + 100)
     expect(second.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
-    expect(state.pending.size).toBe(0)
-    expect(state.timerArmed).toBe(false)
-    expect(timers).toHaveLength(0)
+    expect(fixture.state.pending.size).toBe(0)
+    expect(fixture.state.timerArmed).toBe(false)
+    expect(fixture.timers).toHaveLength(0)
   })
 
   it('re-arms a pending wake that later direct work denied, and still serves it', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
-    const start = clock
+    const start = fixture.clock
     const busy = fakePane(atlas())
     const pendingAtlas = atlas()
     const pendingCanvas = pendingAtlas.pages[0].canvas
@@ -785,13 +429,13 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     verifyPaneWebglAtlasIntegrity(later, 'reveal', sharedDeps)
     expect(reader).toHaveBeenCalledTimes(2)
     expect(reader.mock.lastCall?.[0]).toBe(laterAtlas.pages[0].canvas)
-    expect(state.lastAttemptAt).toBe(start + 50)
-    expect(state.readTimes).toEqual([start, start + 50])
+    expect(fixture.state.lastAttemptAt).toBe(start + 50)
+    expect(fixture.state.readTimes).toEqual([start, start + 50])
 
     wake()
     expect(reader).toHaveBeenCalledTimes(2)
     expect(pending.addon.clearTextureAtlas).not.toHaveBeenCalled()
-    expect(state.pending.size).toBe(1)
+    expect(fixture.state.pending.size).toBe(1)
 
     const nextWake = takeScheduledWake(50)
     advanceServiceClock(50)
@@ -799,36 +443,11 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
 
     expect(reader).toHaveBeenCalledTimes(3)
     expect(reader.mock.lastCall?.[0]).toBe(pendingCanvas)
-    expect(state.readTimes).toEqual([start, start + 50, start + 100])
+    expect(fixture.state.readTimes).toEqual([start, start + 50, start + 100])
     expect(pending.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
-    expect(state.pending.size).toBe(0)
-    expect(state.timerArmed).toBe(false)
-    expect(timers).toHaveLength(0)
-  })
-
-  it.each([
-    ['an invalid read', fakeReader(() => 'unreadable'), true],
-    [
-      'a throwing read',
-      ((_canvas, _rect, onReadIssued) => {
-        onReadIssued()
-        throw new Error('readback failed')
-      }) as GlyphInkReader,
-      true
-    ],
-    ['an unavailable scratch', (() => 'unavailable') as GlyphInkReader, false]
-  ])('charges the shared read budget for %s only if a read was issued', (_name, read, charged) => {
-    const spender = fakePane(atlas())
-    const third = fakePane(atlas())
-    register(true, [spender, third])
-    state.readTimes.push(...Array.from({ length: 15 }, () => clock))
-
-    verifyPaneWebglAtlasIntegrity(spender, 'reveal', deps(read))
-    clock += 100
-    verifyPaneWebglAtlasIntegrity(third, 'reveal', deps(blank))
-
-    expect(third.addon.clearTextureAtlas).toHaveBeenCalledTimes(charged ? 0 : 1)
-    expect(timers).toHaveLength(charged ? 1 : 0)
+    expect(fixture.state.pending.size).toBe(0)
+    expect(fixture.state.timerArmed).toBe(false)
+    expect(fixture.timers).toHaveLength(0)
   })
 
   it('never throws into its caller when atlas internals throw', () => {

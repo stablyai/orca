@@ -1,5 +1,9 @@
 /** Alpha-only 2D context: enough of the canvas model for the reader's copy and control pixels. */
-export type ScratchState = { dropControl?: 'source' | 'destination' | 'both'; lost?: boolean }
+export type ScratchState = {
+  dropControl?: 'source' | 'destination' | 'both'
+  lost?: boolean
+  beforeSourceControl?: () => void
+}
 
 export function fakeKit(options: ScratchState = {}) {
   const width = 258
@@ -20,6 +24,7 @@ export function fakeKit(options: ScratchState = {}) {
     },
     drawImage: (source: { alphaAt?: (x: number, y: number) => number }, ...args: number[]) => {
       if (args.length === 2) {
+        options.beforeSourceControl?.()
         if (options.dropControl !== 'source' && options.dropControl !== 'both') {
           alpha[args[1] * width + args[0]] = 255
         }

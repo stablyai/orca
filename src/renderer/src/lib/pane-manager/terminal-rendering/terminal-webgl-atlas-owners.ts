@@ -1,5 +1,9 @@
 import type { ManagedPaneInternal } from '../pane-manager-types'
-import { forEachVisibleInternalPane, isElementInVisiblePaneManager } from '../pane-manager-registry'
+import {
+  forEachVisibleInternalPane,
+  isElementInVisiblePaneManager,
+  type RegisteredPaneManager
+} from '../pane-manager-registry'
 import { isManagedPaneDisplayNone } from '../terminal-fit/pane-display-visibility'
 import { getWindowParkVisible } from '../../window-activity/window-park-visibility'
 import { presentPaneViewport } from './pane-viewport-present'
@@ -26,7 +30,11 @@ export function isWindowPresented(): boolean {
 }
 
 /** A leaf currently showing this atlas on screen through a live WebGL context. */
-export function isEligibleOwner(pane: ManagedPaneInternal, atlas: GlyphAtlasLike): boolean {
+export function isEligibleOwner(
+  pane: ManagedPaneInternal,
+  atlas: GlyphAtlasLike,
+  manager?: RegisteredPaneManager
+): boolean {
   try {
     const renderer = (pane.webglAddon as unknown as WebglInternals | null)?._renderer
     const terminalElement = (pane.terminal as { element?: { isConnected?: boolean } }).element
@@ -38,7 +46,7 @@ export function isEligibleOwner(pane: ManagedPaneInternal, atlas: GlyphAtlasLike
       atlasOfPane(pane) === atlas &&
       pane.container.isConnected &&
       terminalElement?.isConnected === true &&
-      isElementInVisiblePaneManager(pane.container) &&
+      isElementInVisiblePaneManager(pane.container, manager) &&
       !isManagedPaneDisplayNone(pane) &&
       !paneIsCoveredByNativeChat(pane)
     )
@@ -49,8 +57,8 @@ export function isEligibleOwner(pane: ManagedPaneInternal, atlas: GlyphAtlasLike
 
 export function findEligibleOwner(atlas: GlyphAtlasLike): ManagedPaneInternal | undefined {
   let owner: ManagedPaneInternal | undefined
-  forEachVisibleInternalPane((pane) => {
-    if (isEligibleOwner(pane, atlas)) {
+  forEachVisibleInternalPane((pane, manager) => {
+    if (isEligibleOwner(pane, atlas, manager)) {
       owner = pane
       return true
     }
@@ -60,8 +68,8 @@ export function findEligibleOwner(atlas: GlyphAtlasLike): ManagedPaneInternal | 
 }
 
 export function presentEligibleOwners(atlas: GlyphAtlasLike): void {
-  forEachVisibleInternalPane((pane) => {
-    if (isEligibleOwner(pane, atlas)) {
+  forEachVisibleInternalPane((pane, manager) => {
+    if (isEligibleOwner(pane, atlas, manager)) {
       try {
         presentPaneViewport(pane)
       } catch {

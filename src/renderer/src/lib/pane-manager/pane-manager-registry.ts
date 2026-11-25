@@ -2,7 +2,7 @@ import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal/diagn
 import { registerRendererMemoryProfileContributor } from '../../diagnostics/memory/renderer-memory-profile'
 import type { ManagedPaneInternal, PaneRenderingDiagnostics } from './pane-manager-types'
 
-type RegisteredPaneManager = {
+export type RegisteredPaneManager = {
   resetWebglTextureAtlases(): void
   clearWebglTextureAtlases?: () => void
   presentViewports?: () => void
@@ -125,11 +125,11 @@ export function rebuildAllTerminalWebglRenderers(reason: string): void {
 
 /** Visits leaves of on-screen managers until `visit` returns true; one manager's teardown never stops the rest. */
 export function forEachVisibleInternalPane(
-  visit: (pane: ManagedPaneInternal) => boolean | void
+  visit: (pane: ManagedPaneInternal, manager: RegisteredPaneManager) => boolean | void
 ): void {
   for (const manager of visibleManagers) {
     try {
-      if (manager.forEachInternalPane?.(visit)) {
+      if (manager.forEachInternalPane?.((pane) => visit(pane, manager))) {
         return
       }
     } catch {
@@ -138,10 +138,30 @@ export function forEachVisibleInternalPane(
   }
 }
 
-/** Whether an element sits inside an on-screen manager; checks only visible managers' roots, never their panes. */
-export function isElementInVisiblePaneManager(element: Element): boolean {
+function visibleRootContains(manager: RegisteredPaneManager, element: Element): boolean {
+  try {
+    return (
+      manager.isVisibleForAtlasRecovery?.() !== false && manager.containsElement?.(element) === true
+    )
+  } catch {
+    return false
+  }
+}
+
+/** Prefer the enumerated root, which may have changed during a pane move. */
+export function isElementInVisiblePaneManager(
+  element: Element,
+  associatedManager?: RegisteredPaneManager
+): boolean {
+  if (
+    associatedManager &&
+    visibleManagers.has(associatedManager) &&
+    visibleRootContains(associatedManager, element)
+  ) {
+    return true
+  }
   for (const manager of visibleManagers) {
-    if (manager.containsElement?.(element)) {
+    if (manager !== associatedManager && visibleRootContains(manager, element)) {
       return true
     }
   }
