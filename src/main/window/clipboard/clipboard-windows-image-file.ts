@@ -35,7 +35,7 @@ function isOrdinaryUncShare(share: string | undefined): boolean {
   return typeof share === 'string' && share.toLowerCase() !== 'pipe'
 }
 
-function isFullyQualifiedWindowsPath(filePath: string): boolean {
+export function isFullyQualifiedWindowsPath(filePath: string): boolean {
   if (/^[A-Za-z]:[\\/]/.test(filePath)) {
     return true
   }

@@ -1,5 +1,8 @@
 import { clipboardFilePathsFromUrls, clipboardFilePathsFromUriList } from './clipboard-file-urls'
-import { readWindowsCopiedFilePath } from './clipboard-windows-image-file'
+import {
+  isFullyQualifiedWindowsPath,
+  readWindowsCopiedFilePath
+} from './clipboard-windows-image-file'
 
 type ClipboardFormatReader = { readBuffer: (format: string) => Buffer | Promise<Buffer> }
 
@@ -50,7 +53,9 @@ export async function readClipboardCopiedFilePaths(
   try {
     const uriList = await clipboard.readBuffer('text/uri-list')
     if (uriList.length > 0) {
-      return clipboardFilePathsFromUriList(uriList, platform)
+      const paths = clipboardFilePathsFromUriList(uriList, platform)
+      // Device and pipe paths (file://./pipe/x) must not reach attach flows as copied files.
+      return platform === 'win32' && !paths.every(isFullyQualifiedWindowsPath) ? [] : paths
     }
     if (platform === 'darwin') {
       return await readMacCopiedFilePaths(clipboard)

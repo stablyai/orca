@@ -15,15 +15,20 @@ export function createSecretClipboardClearer<Timer>(
   deps: SecretClipboardDeps<Timer>
 ): (text: string) => void {
   let pending: Timer | null = null
+  let generation = 0
   return (text) => {
     if (pending !== null) {
       deps.clearTimer(pending)
     }
+    const scheduled = ++generation
     pending = deps.setTimer(() => {
       pending = null
       void deps
         .readText()
-        .then((current) => (current === text ? deps.clear() : undefined))
+        // A newer secret supersedes a read already in flight.
+        .then((current) =>
+          current === text && scheduled === generation ? deps.clear() : undefined
+        )
         .catch((error: unknown) => {
           console.error('[clipboard] secret clear failed', error)
         })

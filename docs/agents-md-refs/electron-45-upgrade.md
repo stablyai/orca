@@ -14,7 +14,7 @@ The desktop moves from 43.8.10 to **45.4.1**: Chromium 156.0.8078.100, V8 15.6, 
 
 Electron no longer publishes Windows ia32 or Linux armv7l builds. Orca's desktop targets are already x64/arm64. Electron 44 also updated its Linux support policy to supported major distributions; that documentation change does not justify raising Orca's existing glibc 2.31 native-module packaging gate. Linux/Windows packaging and runtime validation remain necessary in CI.
 
-**Embedded Node security release.** 45.3.3 was the first Electron with Node 24.22.3, which fixes 9 High, 7 Medium and 3 Low CVEs, mostly in `http2` and TLS. Electron 43.x had not picked it up at the time of this upgrade. Orca runs no TLS, HTTPS or `http2` server and starts Chromium with `--disable-http2`, so the server-side CVEs (for example CVE-2026-126051) do not apply. The client-side ones do apply to outgoing TLS (link previews, downloads, diagnostics, proxy tunnels): CVE-2026-123864, CVE-2026-123872, CVE-2026-123877 and CVE-2026-123871. The separately pinned managed Node runtime (24.22.1) is unaffected by this upgrade and needs its own bump.
+**Embedded Node security release.** 45.3.3 was the first Electron with Node 24.22.3, which fixes 9 High, 7 Medium and 3 Low CVEs, mostly in `http2` and TLS. Electron 43.x had not picked it up at the time of this upgrade. Orca runs no TLS, HTTPS or `http2` server and starts Chromium with `--disable-http2`, so the server-side CVEs (for example CVE-2026-126051, CVE-2026-123864 and CVE-2026-123872) do not apply. The client-side ones apply to outgoing TLS and HTTP (link previews, downloads, diagnostics, proxy tunnels): CVE-2026-123877 and CVE-2026-123871. The separately pinned managed Node runtime (24.22.1) is unaffected by this upgrade and needs its own bump.
 
 ## Changes made
 
@@ -73,7 +73,7 @@ Clipboard IPC channel names and results remain compatible with existing preload/
 
 Synchronous `safeStorage.isEncryptionAvailable()`, `encryptString()`, and `decryptString()` still work in 45 but are **removed in 46**. They remain behind `guardedSafeStorage` and the synchronous `SecretStore` contract. Callers include persisted host credentials, plugin secrets, and cloud profile sessions.
 
-Migrate the shared secret-store interface and all callers together to `isAsyncEncryptionAvailable()`, `encryptStringAsync()`, and `decryptStringAsync()`. The latter returns `{ result, shouldReEncrypt, isTemporarilyUnavailable }`, not a string. Required checks for that follow-up:
+Migrate the shared secret-store interface and all callers together to `isAsyncEncryptionAvailable()`, `encryptStringAsync()`, and `decryptStringAsync()`. The latter resolves to `{ result, shouldReEncrypt }`, not a string. Although Electron's docs mention `isTemporarilyUnavailable`, the 45.x implementation rejects the promise when the key provider is temporarily unavailable, so callers must catch that rejection and keep the saved ciphertext. Required checks for that follow-up:
 
 - Read existing synchronous ciphertext on macOS, Windows, and Linux; preserve stored credentials and the plaintext fallback policy.
 - Preserve the run-wide keychain withhold and headless-serve behavior. Async native calls do not by themselves prove there will be no OS prompt.
