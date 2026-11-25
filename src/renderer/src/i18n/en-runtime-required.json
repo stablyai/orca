@@ -21,7 +21,19 @@
     "heading_one": "{{count}} CLI update available",
     "heading_other": "{{count}} CLI updates available",
     "statusCount_one": "{{count}} CLI update",
-    "statusCount_other": "{{count}} CLI updates"
+    "statusCount_other": "{{count}} CLI updates",
+    "cardNamesSome_one": "{{first}}, {{second}} and {{count}} more",
+    "cardNamesSome_other": "{{first}}, {{second}} and {{count}} more",
+    "cardNamesMany_one": "{{first}} and {{count}} more",
+    "cardNamesMany_other": "{{first}} and {{count}} more",
+    "cardHostsTitle_one": "{{count}} CLI update on {{hosts}} hosts",
+    "cardHostsTitle_other": "{{count}} CLI updates on {{hosts}} hosts",
+    "cardUpdateSome_one": "Update {{count}} CLI",
+    "cardUpdateSome_other": "Update {{count}} CLIs",
+    "cardDone_one": "{{count}} CLI is up to date",
+    "cardDone_other": "All {{count}} CLIs are up to date",
+    "cardFailed_one": "{{count}} CLI didn’t update",
+    "cardFailed_other": "{{count}} CLIs didn’t update"
   },
   "agentLaunch": {
     "opencode": {
