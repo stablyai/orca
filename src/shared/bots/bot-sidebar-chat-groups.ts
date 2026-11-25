@@ -2,6 +2,20 @@ import { CHAT_TREE_CAPS, type BotChatTreeChat, type BotChatTreeWorker } from './
 
 export type BotSidebarChatGroup<T> = { chat: BotChatTreeChat; workspaces: T[] }
 
+/** A shared agent's chats with `tab` as this computer has them: the host's tabs are its owner's, so
+ *  a chat has one here when a tab of it (or of its /clear successor) is open here. */
+export function withViewerChatTabs(
+  chats: readonly BotChatTreeChat[],
+  openSessionIds: ReadonlySet<string>
+): BotChatTreeChat[] {
+  return chats.map((chat) => ({
+    ...chat,
+    tab:
+      openSessionIds.has(chat.chatId) ||
+      (chat.liveSessionId !== undefined && openSessionIds.has(chat.liveSessionId))
+  }))
+}
+
 /** The chats the sidebar lists: only those with an open tab; an older host doesn't say, so its open chats all list. */
 export function botSidebarListedChats(chats: readonly BotChatTreeChat[]): BotChatTreeChat[] {
   return chats.filter((chat) => !chat.closed && chat.tab !== false)

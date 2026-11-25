@@ -91,6 +91,7 @@ describe('a phone’s key to a shared agent', () => {
       botName: 'Ivy',
       ownerName: 'Jinwoo Hong',
       environmentId: 'env-1',
+      accountId: 'acct-teammate',
       connectorOrigin: 'https://cloud.example',
       hostKey: HOST_KEY,
       sealedOffer: 'sealed'
