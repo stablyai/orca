@@ -79,7 +79,7 @@ function headlineSections(
   return scope === 'all' ? usedSections(p, t) : primarySections(p, t)
 }
 
-/** Most-consumed window within the scope. */
+/** The 5h window when present, else the most-consumed window within the scope. */
 export function getTightestUsageSection(
   p: ProviderRateLimits,
   t?: Translate,
@@ -95,7 +95,13 @@ export function getTightestUsageSection(
       ? candidate
       : current
   )
-  return { ...tightest, label: shortUsageLabel(p, tightest, true, t) }
+  // Why: the 5h window leads the headline; another window only takes over once it is nearly spent.
+  const session = sections.find((s) => s.window === p.session)
+  const lead =
+    session && clampUsedPercent(tightest.window.usedPercent) < USAGE_URGENT_PERCENT
+      ? session
+      : tightest
+  return { ...lead, label: shortUsageLabel(p, lead, true, t) }
 }
 
 export function getUsageHeadlineSection(
