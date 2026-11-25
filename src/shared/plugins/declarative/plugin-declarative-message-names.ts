@@ -38,7 +38,7 @@ export const PLUGIN_DECLARATIVE_CATALOG_VERSION = 4
 export const PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
   Stack: ['gap', 'align'],
   Row: ['gap', 'align', 'justify', 'wrap'],
-  Text: ['tone', 'muted', 'size', 'weight', 'truncate'],
+  Text: ['tone', 'muted', 'size', 'weight', 'truncate', 'tooltip'],
   Heading: ['level'],
   Button: ['variant', 'tone', 'size', 'icon', 'tooltip', 'disabled', 'onPress'],
   IconButton: ['icon', 'label', 'tooltip', 'variant', 'tone', 'size', 'disabled', 'onPress'],

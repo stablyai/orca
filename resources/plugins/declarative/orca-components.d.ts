@@ -90,6 +90,8 @@ declare module 'orca' {
     size?: Size
     weight?: 'regular' | 'medium' | 'semibold'
     truncate?: boolean
+    /** Shown on hover when provided; truncated plain text gets its full value as a native title. */
+    tooltip?: string
   }
   export type HeadingProps = WithChildren & { level?: 1 | 2 | 3 }
   export type ButtonProps = WithChildren & {
