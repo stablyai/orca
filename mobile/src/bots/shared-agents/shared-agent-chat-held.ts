@@ -7,6 +7,7 @@ import {
   isSharedBotNewChatId,
   type SharedBotHeldView
 } from '../../../../src/shared/bots/shared-bot-hosts'
+import type { MobileNativeChatInputLockReason } from '../../session/native-chat/MobileNativeChatView'
 import type { MobileNativeChatPendingItem } from '../../session/native-chat/transcript/projection/mobile-native-chat-render-data'
 
 /** A held message's word under it: still waiting, or refused and able to be sent again. */
@@ -81,4 +82,13 @@ export function sharedAgentChatTranscriptHeld(
     return { id, text: message.text, sentAt: message.sentAt }
   })
   return { pending, words, readable: !isSharedBotNewChatId(sessionId) }
+}
+
+/** A shared chat's composer while its host is away: open when the agent holds sends, else gone, never
+ *  queued as a paired server's chat is (that queue is the paired computer's, not the host's). */
+export function sharedAgentChatInputLock(
+  live: boolean,
+  holds: boolean
+): MobileNativeChatInputLockReason | null {
+  return live || holds ? null : 'unreachable'
 }

@@ -7956,7 +7956,6 @@
     "shared": {
       "chatOf": "{{name}} · Shared by {{owner}}",
       "offline": "{{owner}}’s computer is offline. Messages wait and send when it’s back.",
-      "offlineNoHold": "{{owner}}’s computer is offline",
       "back": "Back to bots",
       "removedTitle": "You no longer have access to {{name}}",
       "removedTitleUnnamed": "You no longer have access to this bot",
@@ -7964,7 +7963,8 @@
       "backToBots": "Back to bots",
       "newChat": "New chat",
       "yourChats": "Your chats",
-      "backLabel": "Bots"
+      "backLabel": "Bots",
+      "reconnecting": "Reconnecting to {{owner}}’s computer…"
     }
   },
   "mobileWebShell": {

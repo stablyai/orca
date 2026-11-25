@@ -95,7 +95,9 @@ export function sharedAgentOfflineText(
         '{{owner}}’s computer is offline. Messages wait and send when it’s back.',
         { owner: view.ownerName }
       )
-    : t('bots.shared.offlineNoHold', '{{owner}}’s computer is offline', { owner: view.ownerName })
+    : t('bots.shared.reconnecting', 'Reconnecting to {{owner}}’s computer…', {
+        owner: view.ownerName
+      })
 }
 
 /** Said on the agent's page while its owner's computer is away. */

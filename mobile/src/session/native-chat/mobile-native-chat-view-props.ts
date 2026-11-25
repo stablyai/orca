@@ -22,7 +22,8 @@ import type { MobileNativeChatInputLockStatus } from './composer/field/MobileNat
 import type { MobileNativeChatPendingItem } from './transcript/projection/mobile-native-chat-render-data'
 import type { MobileWorkerApprovals } from './input/prompts/use-mobile-worker-approvals'
 
-export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
+// unreachable: the host is out and nothing can wait for it, so the composer gives way to why.
+export type MobileNativeChatInputLockReason = 'disconnected' | 'unreachable' | 'waiting'
 
 export type MobileNativeChatViewProps = MobileNativeChatSendProps &
   Omit<ComponentProps<typeof MobileNativeChatPromptCard>, 'answering' | 'requiresTerminal'> & {

@@ -27,7 +27,7 @@ import {
   sharedAgentOfflineText
 } from './MobileSharedAgentChrome'
 import { sharedAgentChatHref } from './MobileSharedAgentPage'
-import { sharedAgentChatTranscriptHeld } from './shared-agent-chat-held'
+import { sharedAgentChatInputLock, sharedAgentChatTranscriptHeld } from './shared-agent-chat-held'
 import { SHARED_AGENT_CHAT_CONNECTION, useSharedAgentChat } from './use-shared-agent-chat'
 import { useSharedAgentDictation } from './use-shared-agent-dictation'
 import { MobileSharedAgentChatMenu } from './MobileSharedAgentChatMenu'
@@ -160,8 +160,7 @@ export function MobileSharedAgentChat() {
               images={chat.images}
               structuredComposer={chat.structuredComposer}
               {...dictation.mic}
-              // Away with nothing held: locked as a paired server's chat is while it is away.
-              inputLockReason={page.live || view.holds ? null : 'disconnected'}
+              inputLockReason={sharedAgentChatInputLock(page.live, view.holds)}
               sendErrorMessage={chat.sendError.message}
               onClearSendError={chat.sendError.clear}
               sendSurfaceId={chat.scopeKey ?? ''}

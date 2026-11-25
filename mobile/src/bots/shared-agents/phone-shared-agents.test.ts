@@ -385,8 +385,8 @@ describe('a new chat while the shared agent’s host is away', () => {
       const agents = new PhoneSharedAgents(() => 1_000)
       const desktop = computer()
       cloud()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
       const page = routeSharedAgentCalls(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
         desktop.client as unknown as RpcClient,
         'computer-1',
         agents
