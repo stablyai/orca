@@ -18,6 +18,7 @@ export function PickerRow<Value extends string>(props: {
   onSelect: (value: Value) => void
   present: PresentAutomationSheet
   disabled?: boolean
+  searchable?: boolean
 }) {
   return (
     <DrillRow
@@ -29,6 +30,7 @@ export function PickerRow<Value extends string>(props: {
           title: props.label,
           options: props.options,
           selected: props.value,
+          searchable: props.searchable,
           onSelect: (value) => {
             const option = props.options.find((entry) => entry.value === value)
             if (option) {

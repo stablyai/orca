@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { PickerModal, type PickerOption } from '../components/sheets/PickerModal'
+import { TextInputModal } from '../components/sheets/TextInputModal'
 
 export type AutomationSheet =
   | {
@@ -12,6 +13,14 @@ export type AutomationSheet =
       options: PickerOption[]
       selected: string
       onSelect: (value: string) => void
+      searchable?: boolean
+    }
+  | {
+      kind: 'text'
+      title: string
+      value: string
+      placeholder?: string
+      onSubmit: (value: string) => void
     }
   | {
       kind: 'confirm'
@@ -27,6 +36,7 @@ export type PresentAutomationSheet = (sheet: AutomationSheet) => void
 
 type PickerSheet = Extract<AutomationSheet, { kind: 'picker' }>
 type ConfirmSheet = Extract<AutomationSheet, { kind: 'confirm' }>
+type TextSheet = Extract<AutomationSheet, { kind: 'text' }>
 
 /** The sheet an owner holds for its rows: open one, and close only the one that closed. Each kind
  *  keeps its last content, so a closing sheet slides away with what it showed. */
@@ -34,9 +44,12 @@ export function useAutomationSheet() {
   const [open, setOpen] = useState<AutomationSheet | null>(null)
   const [picker, setPicker] = useState<PickerSheet | null>(null)
   const [confirm, setConfirm] = useState<ConfirmSheet | null>(null)
+  const [text, setText] = useState<TextSheet | null>(null)
   const present: PresentAutomationSheet = (next) => {
     if (next.kind === 'picker') {
       setPicker(next)
+    } else if (next.kind === 'text') {
+      setText(next)
     } else {
       setConfirm(next)
     }
@@ -53,6 +66,19 @@ export function useAutomationSheet() {
         selected={picker?.selected ?? ''}
         onSelect={(value) => picker?.onSelect(value)}
         onClose={() => close(picker)}
+        searchable={picker?.searchable}
+      />
+      <TextInputModal
+        visible={open !== null && open === text}
+        title={text?.title ?? ''}
+        defaultValue={text?.value ?? ''}
+        placeholder={text?.placeholder}
+        allowEmpty
+        onSubmit={(value) => {
+          text?.onSubmit(value)
+          close(text)
+        }}
+        onCancel={() => close(text)}
       />
       <ConfirmModal
         visible={open !== null && open === confirm}
