@@ -29,6 +29,8 @@ export type QueuedMessageDrainDeps = {
     journal: SqlAgentSessionJournal
   ) => Promise<JournalAutomaticSelection>
   wakeDelivery: (sessionId: string) => void
+  /** The daemon still holds this chat's agent from the last run; its attach writes and wakes the drain. */
+  keptAgentPending?: (sessionId: string) => Promise<boolean>
   submissionReceipt?: (sessionId: string) => JournalOperationReceipt
   queuedAgentMessageOwed?: StructuredAgentSessionHostDeps['queuedAgentMessageOwed']
   onMessageAdmitted?: StructuredAgentSessionHostDeps['onMessageAdmitted']
@@ -74,6 +76,10 @@ export class StructuredAgentSessionQueuedMessageDrain {
   private async step(sessionId: string): Promise<void> {
     const session = this.deps.sessions.get(sessionId)
     if (this.disposed || !session) {
+      return
+    }
+    // Without its kept agent the chat looks idle, and a card claimed now would start a second turn.
+    if (!session.child && (await this.deps.keptAgentPending?.(sessionId))) {
       return
     }
     const journal = session.journal
