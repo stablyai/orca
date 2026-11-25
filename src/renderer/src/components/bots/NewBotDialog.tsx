@@ -154,7 +154,7 @@ export function NewBotDialog({
   )
   const { intake, face } = useNewBotDialogPicture(picture, creating)
   const shownIdentity = shownTemplateIdentity(proposal, t)
-  const purposeTooLong = identityTooLong(proposal, draft.purpose, t)
+  const purposeTooLong = identityTooLong(proposal, draft, t)
   const nameInvalid = submitted && !trimmedName
   // From Bot templates itself (Blank bot), the row would only lead back to it.
   const fromTemplates = useAppStore((state) => state.activeModal === 'bot-templates')

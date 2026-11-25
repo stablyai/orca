@@ -60,6 +60,22 @@ export function botErrorText(error: unknown): string {
   return botFailureMessage(error) ?? (error instanceof Error ? error.message : String(error))
 }
 
+// A sentence for people: capital first, end punctuation, and no snake_case code inside.
+const HOST_SENTENCE = /^[A-Z][^\n]*\s[^\n]*[.!?]$/
+const CODE_TOKEN = /\b[a-z0-9]+_[a-z0-9_]+\b/
+
+/** An invalid_argument refusal the host worded for people: its reason beats a generic retry, which
+ *  would fail the same way. Codes and schema errors stay behind the generic copy. */
+function hostSentenceOf(error: unknown): string | null {
+  if (!(error instanceof RuntimeRpcCallError) || error.code !== 'invalid_argument') {
+    return null
+  }
+  const text = error.message.trim()
+  // A paired server's words call itself "this computer", which here would mean the Mac.
+  const remote = error.target?.kind === 'environment' && /this computer/i.test(text)
+  return HOST_SENTENCE.test(text) && !CODE_TOKEN.test(text) && !remote ? text : null
+}
+
 export function botErrorMessage(error: unknown): string {
   const coded = botFailureMessage(error)
   if (coded) {
@@ -101,9 +117,9 @@ export function botErrorMessage(error: unknown): string {
       host && structuredAgentSessionTargetPlace(useAppStore.getState(), host, translate)
     )
   }
-  // The host's own reason beats a generic retry, which would fail the same way.
-  if (error instanceof RuntimeRpcCallError && error.code === 'invalid_argument') {
-    return error.message
+  const reason = hostSentenceOf(error)
+  if (reason) {
+    return reason
   }
   return translate('bots.errors.generic', 'Something went wrong. Try again.')
 }

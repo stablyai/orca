@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/bots/bot-proposal'
 import { botTemplate } from '../../../../shared/bots/bot-templates'
 import { botTemplateText } from '../../../../shared/bots/bot-template-text'
+import { sliceAtCodeUnitLimit } from '../../../../shared/text/surrogate-safe-text-slice'
 import { finalSentenceStop, joinSentences } from '../../../../shared/text/sentence-joining'
 import type { NewBotProposalDraft } from './NewBotProposalFields'
 
@@ -58,8 +59,7 @@ export const draftOf = (proposal: BotProposal | undefined, purpose?: string): Ne
   purpose:
     templateIdentity(proposal) ??
     proposal?.purpose ??
-    purpose?.slice(0, BOT_PURPOSE_MAX_LENGTH) ??
-    '',
+    sliceAtCodeUnitLimit(purpose?.trim() ?? '', BOT_PURPOSE_MAX_LENGTH),
   watches: proposal?.watches,
   does: proposal?.does,
   reports: proposal?.reports
@@ -123,14 +123,14 @@ export function identityUntouched(
   )
 }
 
-/** The identity box becomes the bot's purpose, so it keeps the purpose's limit, unless it still
- *  holds a template's own lines. */
+/** Whether the purpose Create would send, a cleared box falling back to the proposal's, is over
+ *  the host's limit. */
 export function identityTooLong(
   proposal: BotProposal | undefined,
-  purpose: string,
+  draft: NewBotDraft,
   t: Translate
 ): boolean {
-  return !identityUntouched(proposal, purpose, t) && purpose.trim().length > BOT_PURPOSE_MAX_LENGTH
+  return (editedProposal(proposal, draft, '', t)?.purpose.length ?? 0) > BOT_PURPOSE_MAX_LENGTH
 }
 
 // An emptied field drops out of the new bot's SOUL.md.

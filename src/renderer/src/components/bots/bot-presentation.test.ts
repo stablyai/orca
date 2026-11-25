@@ -46,3 +46,30 @@ describe('botErrorMessage', () => {
     expect(botErrorMessage(error)).not.toContain('this computer')
   })
 })
+
+describe('botErrorMessage on invalid_argument', () => {
+  const refusal = (message: string): RuntimeRpcCallError =>
+    new RuntimeRpcCallError({
+      id: 'desktop-ipc',
+      ok: false,
+      error: { code: 'invalid_argument', message },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+  const generic = 'Something went wrong. Try again.'
+
+  it('shows a sentence the host worded for people', () => {
+    expect(botErrorMessage(refusal("Run this from a bot's chat."))).toBe(
+      "Run this from a bot's chat."
+    )
+  })
+
+  it.each([
+    'bot_not_found',
+    'Too big: expected string to have <=200 characters',
+    'invalid_argument',
+    '   ',
+    'Refused: tidy_now_busy happened.'
+  ])('keeps the generic copy for %j', (message) => {
+    expect(botErrorMessage(refusal(message))).toBe(generic)
+  })
+})
