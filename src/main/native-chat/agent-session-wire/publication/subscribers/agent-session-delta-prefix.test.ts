@@ -9,5 +9,7 @@ describe('appendWithinUtf8ByteLimit', () => {
     const next = appendWithinUtf8ByteLimit(['ab\uD83D'], 5, `\uDE00${'x'.repeat(40)}`, 43, 44)
     expect(next.chunks).toEqual([`ab😀xxxx${AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER}`])
     expect(next.retainedBytes).toBeLessThanOrEqual(44)
+    const lone = appendWithinUtf8ByteLimit(['\uD83D'], 3, `😀${'x'.repeat(40)}`, 44, 41)
+    expect(lone.chunks).toEqual([`\uFFFD😀${AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER}`])
   })
 })

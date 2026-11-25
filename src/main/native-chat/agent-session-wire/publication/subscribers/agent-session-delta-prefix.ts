@@ -86,11 +86,14 @@ function writeAt(buffer: Buffer, end: number, text: string): number {
   return buffer.write(text, end, buffer.length - end, 'utf8')
 }
 
-/** Writes the carried high surrogate with only the delta's first unit, so the delta isn't copied. */
+/** Writes the carried high surrogate with only the delta's first unit when that unit completes it,
+ *  so the delta isn't copied. */
 function writePairedDelta(buffer: Buffer, end: number, carry: string, delta: string): number {
-  const pair = carry + delta.slice(0, 1)
+  const first = delta.charCodeAt(0)
+  const pairs = first >= 0xdc00 && first <= 0xdfff
+  const pair = pairs ? carry + delta.slice(0, 1) : carry
   const written = writeAt(buffer, end, pair)
   return written < Buffer.byteLength(pair, 'utf8')
     ? end + written
-    : end + written + writeAt(buffer, end + written, delta.slice(1))
+    : end + written + writeAt(buffer, end + written, pairs ? delta.slice(1) : delta)
 }
