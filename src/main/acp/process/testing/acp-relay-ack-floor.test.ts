@@ -138,6 +138,23 @@ describe('ACP relay ack floor', () => {
     expect(acks).toEqual([2])
   })
 
+  it('names only the messages a cut splits, by the ids the agent itself sent', async () => {
+    const { output, cuts, cutKeys, send, prompt } = rig()
+    prompt()
+    // A continuation re-keyed m1 at an earlier attach; the agent's own lines still say m1.
+    await send(chunk('a', 'relay:r-1-x:9:m1'))
+    await output.settle(true)
+    expect(cutKeys[0]).toEqual([JSON.stringify(['s', 'm1'])])
+    // A subagent's message starts after the release: a later cut ack (m1 still streaming) doesn't
+    // name it, so its replay stays on its own row.
+    const update = { sessionUpdate: 'agent_message_chunk', messageId: 'k1', content: {} }
+    const params = { rootSessionId: 's', childSessionId: 'c', type: 'update', update }
+    await send(JSON.stringify({ jsonrpc: '2.0', method: 'opencode/session/child_update', params }))
+    await send(chunk('c', 'relay:r-1-x:9:m1'))
+    expect(cuts.length).toBeGreaterThan(1)
+    expect(cutKeys.at(-1)).toEqual([JSON.stringify(['s', 'm1'])])
+  })
+
   it("holds an OpenCode child's open message until its session reports a status", async () => {
     const { send } = rig()
     const child = (params: Record<string, unknown>): string =>
