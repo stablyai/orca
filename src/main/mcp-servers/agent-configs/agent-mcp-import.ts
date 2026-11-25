@@ -94,28 +94,23 @@ type ImportRow = {
 }
 
 function importRow(found: DiscoveredAgentMcpServer, workspaceFor: WorkspaceForPath): ImportRow {
-  const projectPaths = found.sources.map((source) => source.projectPath)
+  // The copies that were on decide where the server reaches; when every copy was off, all of them.
+  const enabled = found.sources.filter((source) => !source.disabled)
+  const reach = enabled.length > 0 ? enabled : found.sources
   // One unscoped copy means every workspace already gets it.
-  const limited = projectPaths.every((path) => path !== undefined)
+  const limited = reach.every((source) => source.projectPath !== undefined)
   const mapped = limited
-    ? found.sources.map((source) => ({
+    ? reach.map((source) => ({
         path: source.projectPath!,
-        disabled: source.disabled,
         workspace: workspaceFor(source.projectPath!)
       }))
     : []
-  const keysOf = (copies: typeof mapped): string[] => [
-    ...new Set(copies.flatMap(({ workspace }) => (workspace ? [workspace.key] : [])))
-  ]
+  const keys = [...new Set(mapped.flatMap(({ workspace }) => (workspace ? [workspace.key] : [])))]
   const agents = [...new Set(found.sources.map((source) => source.agent))]
-  // A project-limited copy is on only where its own copy was on; all off keeps its reach, off.
-  const enabledKeys = keysOf(mapped.filter(({ disabled }) => !disabled))
   return {
     found,
     scope: {
-      workspaces: limited
-        ? { later: false, on: enabledKeys.length > 0 ? enabledKeys : keysOf(mapped), off: [] }
-        : null,
+      workspaces: limited ? { later: false, on: keys, off: [] } : null,
       agentsOff: agents.filter((agent) =>
         found.sources.every((source) => source.agent !== agent || source.disabled)
       )

@@ -79,7 +79,7 @@ beforeEach(() => {
   )
   write(
     '.factory/mcp.json',
-    '{ "mcpServers": { "drd": { "type": "http", "url": "https://drd.dev/mcp", "disabled": true } } }'
+    '{ "mcpServers": { "drd": { "type": "http", "url": "https://drd.dev/mcp", "disabled": true }, "db": { "command": "pg-mcp", "args": [], "disabled": true } } }'
   )
   write('.config/amp/settings.json', '{ "amp.mcpServers": { "amp": { "command": "amp-mcp" } } }')
 })
@@ -100,7 +100,7 @@ describe('agent MCP config discovery and move', () => {
     ).toEqual([
       ['github', 'claude,codex', false],
       ['playwright', 'claude', false],
-      ['db', 'claude', true],
+      ['db', 'claude,droid', true],
       ['lost', 'claude', false],
       ['linear', 'codex', false],
       ['oc1', 'opencode', true],
@@ -141,7 +141,7 @@ describe('agent MCP config discovery and move', () => {
     }
     const rows = await listAgentMcpServers(host)
     const row = (name: string) => rows.find((found) => found.name === name)!
-    expect([row('db').projectNames, row('db').movable]).toEqual([['orca', 'docs'], true])
+    expect([row('db').projectNames, row('db').movable]).toEqual([['docs'], true])
     expect([row('lost').projectNames, row('lost').movable]).toEqual([['elsewhere'], false])
     expect(row('github')).toMatchObject({
       agents: ['claude', 'codex'],
@@ -161,8 +161,8 @@ describe('agent MCP config discovery and move', () => {
       ],
       [
         { name: 'db', command: 'pg-mcp', args: [] },
-        // Switched off in orca, on in docs: only docs gets it.
-        { workspaces: { later: false, on: ['repo-2'], off: [] }, agentsOff: [] }
+        // Off in orca and in Droid, on in docs: only docs gets it, and Droid stays off.
+        { workspaces: { later: false, on: ['repo-2'], off: [] }, agentsOff: ['droid'] }
       ],
       [
         { name: 'grk', command: 'grk', args: ['a'] },
