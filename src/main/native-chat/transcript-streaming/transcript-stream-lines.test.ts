@@ -22,7 +22,7 @@ describe('bounded transcript records', () => {
   it('counts an oversized record the caller replaces without buffering it', async () => {
     const standIn = (head: string) => (head.startsWith('{"big"') ? '{}' : undefined)
     const read = async (chunks: string[]) => {
-      const records = []
+      const records: { line: string; byteLength: number; terminated: boolean }[] = []
       for await (const record of splitTranscriptStreamLines(Readable.from(chunks), 8, standIn)) {
         records.push(record)
       }
