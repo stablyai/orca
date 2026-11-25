@@ -1,5 +1,5 @@
 // `send --to bot:<name> --item <n> --file`: files sent with mail about an item, admitted into that
-// item's chat as its comments' are. Images go with the mail as the chat's image blocks; other files
+// item's chat as its comments' are, or into the Home Chat once that chat stopped taking mail. Images go with the mail as the chat's image blocks; other files
 // join the body as `@path`. A paired Orca's files arrive already uploaded to this store.
 import { isAgentInlineImagePath } from '../../../../../../shared/native-chat/input/composer/agent-inline-image-types'
 import { formatNativeChatFileReference } from '../../../../../../shared/native-chat/input/composer/agent-image-paste'
@@ -13,7 +13,7 @@ import {
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveItem } from '../../bots-items-write-support'
-import { botChatTakingMail } from '../../bots-chats'
+import { botChatTakingMail, botHomeChatTakingMail } from '../../bots-chats'
 
 type ItemMail = {
   to: string
@@ -51,7 +51,10 @@ export async function withItemMailFiles<T extends ItemMail>(
         store: getAgentSessionAttachmentStore(),
         local: local.length > 0,
         claim: getAgentSessionAttachmentClaimer(),
-        chat: () => botChatTakingMail(runtime, bot, item.chatId)
+        // The files go where the mail does: the Home Chat once the item's chat stopped taking mail.
+        chat: async () =>
+          (await botChatTakingMail(runtime, bot, item.chatId)) ??
+          (await botHomeChatTakingMail(runtime, bot))
       },
       body,
       uploaded.filter(isAgentInlineImagePath),

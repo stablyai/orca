@@ -100,7 +100,23 @@ export async function botChatTakingMail(
   bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId'>,
   id: string
 ): Promise<{ title: string | null; sessionId: string } | null> {
-  const row = (await readBotChats(runtime, bot, null)).find((chat) => chat.id === id)
+  return chatTakingMail(runtime, bot, (chat) => chat.id === id)
+}
+
+/** The bot's Home Chat as `botChatTakingMail` reads one of its chats; null while it has none. */
+export async function botHomeChatTakingMail(
+  runtime: Parameters<typeof botChatTakingMail>[0],
+  bot: Parameters<typeof botChatTakingMail>[1]
+): Promise<{ title: string | null; sessionId: string } | null> {
+  return chatTakingMail(runtime, bot, (chat) => chat.home)
+}
+
+async function chatTakingMail(
+  runtime: Parameters<typeof botChatTakingMail>[0],
+  bot: Parameters<typeof botChatTakingMail>[1],
+  match: (chat: BotChatRow) => boolean
+): Promise<{ title: string | null; sessionId: string } | null> {
+  const row = (await readBotChats(runtime, bot, null)).find(match)
   if (!row) {
     return null
   }
