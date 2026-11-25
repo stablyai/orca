@@ -2040,6 +2040,134 @@
       "accounts": {
         "description": "Optional account switching and usage setup for Claude, Codex, Antigravity, OpenCode Go, MiniMax, and Grok."
       }
+    },
+    "mcpServers": {
+      "custom": {
+        "noneChecked": "Check a server to add.",
+        "addMany": "Add {{count}} servers",
+        "found": "Found {{count}} servers",
+        "foundUrl": "URL · {{line}}",
+        "foundCommand": "Command · {{line}}",
+        "title": "Custom server",
+        "sourceLabel": "Server URL, start command or config",
+        "sourceHint": "Paste a server URL, start command or config, or enter the details yourself.",
+        "nameTaken": "A server named {{name}} already exists. Choose another name.",
+        "line": "A URL, a start command or a config",
+        "foundTaken": "Already added"
+      },
+      "empty": {
+        "copied": "Copied {{count}} servers from {{host}}",
+        "title": "No MCP servers on {{host}}",
+        "copyFrom": "Copy from {{host}}"
+      },
+      "addServer": "Add a server",
+      "toast": {
+        "allOn": "{{name}} turned on for every agent",
+        "allOff": "{{name}} turned off for every agent",
+        "agentOn": "{{name}} turned on for {{agent}}",
+        "agentOff": "{{name}} turned off for {{agent}}",
+        "saved": "{{name}} saved",
+        "sharedOn": "{{name}} shares one process",
+        "sharedOff": "{{name}} runs once per session",
+        "signedOut": "Signed out of {{name}}",
+        "removed": "{{name}} removed",
+        "workspaces": "{{name}}: {{workspaces}}",
+        "added": "{{name}} added",
+        "newSessions": "Applies to new sessions",
+        "restart": "Restart {{count}} sessions"
+      },
+      "fileAgent": {
+        "title": "Let Orca edit {{agent}}’s MCP file?",
+        "line": "Orca will keep your MCP servers in {{agent}}’s settings file ({{file}}). Your own entries stay as they are.",
+        "allow": "Allow"
+      },
+      "agents": {
+        "title": "Agents",
+        "allOff": "Turn all off",
+        "allOn": "Turn all on",
+        "all": "All agents",
+        "someOff": "{{count}} agents off",
+        "none": "No agents",
+        "some": "{{on}} of {{total}} agents"
+      },
+      "stale": "This server changed elsewhere. Showing it as it is now.",
+      "launch": {
+        "title": "Launch",
+        "command": "Command",
+        "args": "Arguments",
+        "env": "Environment"
+      },
+      "connection": {
+        "title": "Connection",
+        "url": "URL",
+        "headers": "Headers"
+      },
+      "shared": {
+        "title": "Share one process across agents",
+        "line": "Uses less memory. The server runs outside the workspace folder."
+      },
+      "status": {
+        "needsSignIn": "Needs sign-in",
+        "signedIn": "Signed in",
+        "commandFailed": "Command not found on {{host}}",
+        "unreachable": "Can’t reach {{host}}"
+      },
+      "signIn": "Sign in",
+      "signInActions": "Sign-in actions",
+      "signInAgain": "Sign in again",
+      "signOut": "Sign out",
+      "loading": "Reading MCP servers…",
+      "remove": {
+        "title": "Remove {{name}}?",
+        "line": "New sessions on {{host}} won’t have it. Its saved values and sign-in are deleted.",
+        "confirm": "Remove",
+        "button": "Remove server"
+      },
+      "found": {
+        "onlyIn": "{{agents}} · {{projects}} only",
+        "move": "Move to Orca",
+        "actions": "{{name}} actions",
+        "copy": "Copy to Orca",
+        "open": "Open",
+        "copied": "Copied {{name}} to Orca",
+        "title": "In your agents",
+        "summary": "Found {{count}} servers in {{agents}}",
+        "moveAll": "Move all to Orca"
+      },
+      "signedInToast": "Signed in to {{name}}",
+      "pasteRefused": "That address isn’t from this sign-in.",
+      "workspaces": {
+        "title": "Workspaces",
+        "later": "Workspaces added later",
+        "all": "All workspaces",
+        "none": "No workspaces",
+        "allBut": "All but {{names}}",
+        "only": "Only {{names}}"
+      },
+      "catalog": {
+        "noMatch": "No server matches “{{query}}”.",
+        "search": "Search servers",
+        "caption": "Servers"
+      },
+      "add": {
+        "title": "Add an MCP server"
+      },
+      "catalogLine": {
+        "github": "Issues, pull requests and code search",
+        "linear": "Read and update issues and projects"
+      },
+      "move": {
+        "title": "Move {{name}} to Orca?",
+        "allTitle": "Move {{count}} servers to Orca?",
+        "line": "Orca removes it from {{agents}} settings and keeps a backup.",
+        "allLine": "Orca removes them from {{agents}} settings and keeps a backup.",
+        "confirm": "Move"
+      },
+      "yours": "Yours",
+      "fromPlugins": "From plugins",
+      "unsupported": "MCP servers aren’t available on {{host}}.",
+      "title": "MCP servers",
+      "description": "Servers your agents can use. Changes apply to new sessions."
     }
   },
   "menu": {

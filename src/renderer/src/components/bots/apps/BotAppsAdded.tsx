@@ -102,12 +102,31 @@ export function BotAppsAddedButton({
   pressed: boolean
   onToggle: () => void
 }): React.JSX.Element | null {
-  const t = useTranslate()
   const apps = useAddedApps(sources)
-  if (apps.length === 0) {
+  return (
+    <AppsAddedButton
+      faces={apps.map((app) => ({ key: app.key, logo: app.logo('sm') }))}
+      pressed={pressed}
+      onToggle={onToggle}
+    />
+  )
+}
+
+/** "N added" with the first three logos; any catalog's header toggle for what it already has. */
+export function AppsAddedButton({
+  faces,
+  pressed,
+  onToggle
+}: {
+  faces: readonly { key: string; logo: React.ReactNode }[]
+  pressed: boolean
+  onToggle: () => void
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  if (faces.length === 0) {
     return null
   }
-  const extra = apps.length - FACES
+  const extra = faces.length - FACES
   return (
     <Button
       variant={pressed ? 'default' : 'ghost'}
@@ -117,12 +136,12 @@ export function BotAppsAddedButton({
       className="h-7.5"
     >
       <span aria-hidden className="flex">
-        {apps.slice(0, FACES).map((app) => (
+        {faces.slice(0, FACES).map((face) => (
           <span
-            key={app.key}
+            key={face.key}
             className="relative -ml-1.25 rounded ring-2 ring-dialog-surface first:ml-0 after:pointer-events-none after:absolute after:inset-0 after:rounded after:ring-1 after:ring-border after:ring-inset"
           >
-            {app.logo('sm')}
+            {face.logo}
           </span>
         ))}
         {extra > 0 ? (
@@ -131,7 +150,7 @@ export function BotAppsAddedButton({
           </span>
         ) : null}
       </span>
-      {t('bots.apps.addedCount', '{{count}} added', { count: apps.length })}
+      {t('bots.apps.addedCount', '{{count}} added', { count: faces.length })}
       <ChevronRight className="size-3.5" />
     </Button>
   )
