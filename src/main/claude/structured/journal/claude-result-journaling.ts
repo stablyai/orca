@@ -128,7 +128,13 @@ export function journalClaudeResult(
   const notice = compactionFailure && message.api_error_status !== 403 ? command?.notice : null
   const terminalFailure = notice || usageLimit
   if (command && commandResult?.row && !terminalFailure) {
-    sink.appendItem(command.resultIdentity, commandResult.row, { turnScope: endedTurnScope })
+    const identity =
+      commandResult.end.outcome === 'success' && command.compacted
+        ? command.compacted
+        : command.resultIdentity
+    sink.appendItem(identity, commandResult.row, {
+      turnScope: endedTurnScope
+    })
   } else if (command && commandResult?.row && stopCheck) {
     // Stopped, the command's own result row stands in for the failure.
     const { resultIdentity: identity } = command

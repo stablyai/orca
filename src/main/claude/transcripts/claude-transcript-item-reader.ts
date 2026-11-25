@@ -21,6 +21,7 @@ import {
 } from '../structured/journal/claude-structured-item-translation'
 import { claudeTranscriptPrompt } from './claude-transcript-prompt'
 import { claudeTranscriptRowFrame } from './claude-local-command-reply'
+import { claudeCompactionIdentity } from '../structured/journal/claude-journal-compactions'
 
 /** Every saved item used by the projection is a conditional commit dependency, even if equal. */
 export async function createClaudeTranscriptItemReader(
@@ -140,6 +141,10 @@ export function claudeTranscriptItemKeys(
     return []
   }
   const keys: string[] = []
+  const boundary = claudeCompactionIdentity(frame)
+  if (boundary) {
+    keys.push(agentJournalItemKey(boundary))
+  }
   const envelope = readClaudeMessageEnvelope(frame)
   if (envelope?.role === 'assistant') {
     if (envelope.messageId && typeof row.apiBlockIndex === 'number') {

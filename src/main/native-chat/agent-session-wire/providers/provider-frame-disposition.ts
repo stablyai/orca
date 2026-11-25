@@ -121,7 +121,7 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'message:stream_event:content_block_delta': 'stream-into-item',
     'message:stream_event:content_block_stop': 'status-chrome',
     'message:stream_event:ping': 'suppressed-benign',
-    'message:system:compact_boundary': 'status-chrome',
+    'message:system:compact_boundary': 'timeline-substantive',
     'message:system:status': 'status-chrome',
     'message:system:api_retry': 'status-chrome',
     'message:system:control_request_progress': 'status-chrome',

@@ -147,7 +147,8 @@ export function createClaudeTranscriptImportPlan(input: {
         const uuid = String(row.uuid)
         const parsedAt = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Number.NaN
         sourceObservedAt = Number.isFinite(parsedAt) && parsedAt > 0 ? parsedAt : undefined
-        if (!envelope && !queued) {
+        const boundary = row.type === 'system' && row.subtype === 'compact_boundary'
+        if (!envelope && !queued && !boundary) {
           if (row.type === 'system' && row.subtype === 'turn_duration') {
             idle(sourceObservedAt)
           }
@@ -189,7 +190,7 @@ export function createClaudeTranscriptImportPlan(input: {
           if (hasWork && sourceObservedAt !== undefined) {
             workAt = Math.max(workAt ?? sourceObservedAt, sourceObservedAt)
           }
-          if (hasWork || envelope?.role === 'assistant') {
+          if (hasWork || envelope?.role === 'assistant' || boundary) {
             translator.handle({
               type: 'message',
               sessionId: input.sessionId,
