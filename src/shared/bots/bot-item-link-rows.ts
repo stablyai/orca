@@ -139,8 +139,20 @@ function prKey(ref: string): string {
   return ref.trim().toLowerCase()
 }
 
-/** Rows a Links list draws at first and adds per Show more: an item holds up to 1,000 links. */
+/** Links a Links list draws at first and adds per Show more: an item holds up to 1,000. */
 export const BOT_ITEM_LINK_ROWS = 50
+
+/** The rows of the newest `shown` links, so live workers and recent PRs need no Show more, and how many
+ *  links the next Show more adds. */
+export function botItemLinkPage(
+  links: readonly BotItemLinkView[],
+  shown: number
+): { rows: BotItemLinkRow[]; more: number } {
+  return {
+    rows: botItemLinkRows(links.slice(-shown)),
+    more: Math.min(Math.max(links.length - shown, 0), BOT_ITEM_LINK_ROWS)
+  }
+}
 
 export function botItemLinkRows(links: readonly BotItemLinkView[]): BotItemLinkRow[] {
   const rows: BotItemLinkRow[] = []

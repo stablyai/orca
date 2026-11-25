@@ -71,7 +71,7 @@ function LinkChips({
           <Chip bot={bot} chat={chat} row={rows[0]!} fileContext={fileContext} />
         </div>
       ) : (
-        <LinksMenu bot={bot} rows={rows} chat={chat} />
+        <LinksMenu bot={bot} count={rows.length} links={links} chat={chat} />
       )}
     </NativeChatLinkPeekProvider>
   )
@@ -80,11 +80,13 @@ function LinkChips({
 /** Two or more links: their count, whose popover lists them all as full rows. */
 function LinksMenu({
   bot,
-  rows,
+  count,
+  links,
   chat
 }: {
   bot: Bot
-  rows: readonly BotItemLinkRow[]
+  count: number
+  links: readonly BotItemLinkView[]
   chat: string
 }): React.JSX.Element {
   const t = useTranslate()
@@ -92,7 +94,7 @@ function LinksMenu({
   const trigger = useRef<HTMLButtonElement | null>(null)
   // The item's pane, read on open: the list stays inside it and is no wider than it.
   const [pane, setPane] = useState<Element | null>(null)
-  const label = t('bots.items.view.linkCount', '{{count}} links', { count: rows.length })
+  const label = t('bots.items.view.linkCount', '{{count}} links', { count })
   return (
     <Popover
       onOpenChange={(open) => {
@@ -106,7 +108,7 @@ function LinksMenu({
           <Link2 className="size-3 text-muted-foreground" />
           {/* Only the count in a narrow pane, so the row never cuts its controls. */}
           <span className="@max-[290px]:hidden">{label}</span>
-          <span className="hidden tabular-nums @max-[290px]:inline">{rows.length}</span>
+          <span className="hidden tabular-nums @max-[290px]:inline">{count}</span>
           <ChevronDown className="size-3 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
@@ -128,7 +130,7 @@ function LinksMenu({
           tabIndex={-1}
           className="scrollbar-sleek max-h-[min(15rem,var(--radix-popover-content-available-height,15rem))] overflow-y-auto p-1 outline-none"
         >
-          <BotItemLinkRowList bot={bot} rows={rows} chat={chat} />
+          <BotItemLinkRowList bot={bot} links={links} chat={chat} />
         </div>
       </PopoverContent>
     </Popover>

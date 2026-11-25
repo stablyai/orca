@@ -78,12 +78,13 @@ const ROW_PRS = 5
 function linkSummary(links: readonly BotItemLinkView[]): string[] {
   const workers = links.filter((link) => link.kind === 'dispatch')
   const prs: string[] = []
+  let serverPr = false
   for (const link of links) {
     const pr = link.kind === 'pr' || link.kind === 'dispatch' ? link.pr : null
     if (pr?.shown) {
       prs.push(`#${pr.number}`)
-    } else if (pr && !pr.shown) {
-      prs.push('PR not shown for server work yet')
+    } else if (pr) {
+      serverPr = true
     }
   }
   const unique = [...new Set(prs)]
@@ -92,10 +93,12 @@ function linkSummary(links: readonly BotItemLinkView[]): string[] {
     unique.length <= ROW_PRS
       ? unique
       : [...new Set(prs.toReversed())].slice(0, ROW_PRS).toReversed()
+  const hidden = unique.length - shown.length
   return [
     ...(workers.length > 0 ? [`${workers.length} worker${workers.length === 1 ? '' : 's'}`] : []),
     ...shown,
-    ...(unique.length > ROW_PRS ? [`${unique.length - ROW_PRS} more PRs`] : [])
+    ...(hidden > 0 ? [`${hidden} more PR${hidden === 1 ? '' : 's'}`] : []),
+    ...(serverPr ? ['PR not shown for server work yet'] : [])
   ]
 }
 

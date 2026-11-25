@@ -18,7 +18,7 @@ import {
 import { Text, View } from 'react-native'
 import {
   BOT_ITEM_LINK_ROWS,
-  botItemLinkRows,
+  botItemLinkPage,
   botItemWorkerRow,
   type BotItemGitHubRow,
   type BotItemLinkRow
@@ -144,10 +144,9 @@ export function MobileBotItemLinks({
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const [pressed, setPressed] = useState<LongPress | null>(null)
-  const rows = botItemLinkRows(links)
   const [shown, setShown] = useState(BOT_ITEM_LINK_ROWS)
-  // Each Show more draws the next page: an item holds up to 1,000 links.
-  const more = Math.min(rows.length - Math.min(shown, rows.length), BOT_ITEM_LINK_ROWS)
+  // The newest page first; each Show more adds the next older one.
+  const { rows, more } = botItemLinkPage(links, shown)
   const row = (entry: BotItemLinkRow): React.JSX.Element => {
     switch (entry.kind) {
       case 'worker': {
@@ -272,7 +271,7 @@ export function MobileBotItemLinks({
     <>
       <ListGroup separatorInset={LIST_LEADING_INSET}>
         {[
-          ...rows.slice(0, shown).map(row),
+          ...rows.map(row),
           ...(more > 0
             ? [
                 <ListRow
