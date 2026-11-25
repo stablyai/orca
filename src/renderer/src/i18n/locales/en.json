@@ -13346,6 +13346,7 @@
         "PluginConsentDialog": {
           "reconsent": "Changed since you approved it",
           "instructionalWarning": "Its commands can act for you or your agents",
+          "mcpServersWarning": "Gives your agents its MCP servers, which can start programs and act for them",
           "declarativeWarning": "Content only. No code runs.",
           "enable": "Enable plugin",
           "capability": {
@@ -14597,6 +14598,7 @@
           "command": "Command",
           "panel": "Sidebar panel",
           "recipe": "Machine recipe",
+          "mcpServer": "MCP server",
           "access": "Can access",
           "accessLoading": "Reading the plugin…",
           "logs": "Logs",
@@ -14672,6 +14674,7 @@
           "newPanels": "Adds panels",
           "newEvents": "Reacts to more Orca events",
           "newRecipes": "Machine recipes",
+          "newMcpServers": "MCP servers",
           "newContributions": "Features that act for you",
           "allAccess": "See all access",
           "update": "Update",
@@ -14774,6 +14777,7 @@
           "contentOnly": "Content only",
           "fullAccess": "Full access",
           "addsVmRecipes": "Adds VM recipes",
+          "addsMcpServers": "Adds MCP servers",
           "opensAndEditsFiles": "Opens and edits files",
           "runsPluginCode": "Runs plugin code"
         },
