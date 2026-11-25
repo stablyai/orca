@@ -172,6 +172,13 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
         ...(groupOrder === undefined ? {} : { order: groupOrder })
       })
     if (Object.keys(updates).length === 0) {
+      // An empty flag value parses as absent; without this it would fall through and ungroup the repo.
+      if (group === undefined) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          `Pass a value for at least one of ${REPO_SET_FLAGS.map((flag) => `--${flag}`).join(', ')}.`
+        )
+      }
       printResult(await moveToGroup(repo), json, formatRepoShow)
       return
     }

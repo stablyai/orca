@@ -31,3 +31,18 @@ it('moves a repo it has just renamed by id, not by the name that no longer match
     ['projectGroup.moveProject', { repo: 'id:r1', groupId: 'g1' }]
   ])
 })
+
+it('writes nothing when its only flag has an empty value, instead of ungrouping the repo', async () => {
+  const call = vi.fn(async (_method: string, _params?: unknown) => ({ result: { groups: [] } }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo set only uses client.call.
+  const client = { call, isRemote: false } as unknown as RuntimeClient
+  const flags = new Map<string, string | boolean>([
+    ['repo', 'name:acme-web'],
+    ['display-name', '']
+  ])
+
+  await expect(
+    REPO_HANDLERS['repo set']({ flags, client, cwd: '/', json: true })
+  ).rejects.toMatchObject({ code: 'invalid_argument' })
+  expect(call).not.toHaveBeenCalled()
+})
