@@ -244,13 +244,13 @@ An item in the native Chat composer on desktop.
 | `tone` | `"neutral"` \| `"accent"` \| `"success"` \| `"warning"` \| `"danger"` | no | 1.4.276 | Colour of the item. Defaults to neutral. Example: `"warning"` |
 | `tooltip` | string | no | 1.4.276 | Shown on hover. Defaults to the plugin name. |
 | `placement` | `"toolbar"` \| `"footer"` | no | 1.4.276 | Toolbar beside the model controls, or footer beside the workspace and branch. Defaults to toolbar. Example: `"footer"` |
-| `resolve` | string | no | 1.4.276 | Worker command that receives the chat context and returns the display fields, or null to hide the item. Orca calls it when a chat opens and when its agent settles after a turn. |
-| `popover` | [ComposerItemPopover](#composeritempopover) | no | 1.4.276 | Details and actions shown when the user presses a composer item. |
+| `resolve` | string | no | 1.4.276 | Worker command that receives the chat context and returns the display fields, or null to hide the item. Orca calls it when a chat opens, when its agent settles after a turn, and when its model changes. |
+| `popover` | [ComposerItemPopover](#composeritempopover) | no | 1.4.276 | Details and actions shown when the user presses a composer item. Use at most one of `popover` and `command`; a text-only item needs neither. |
 | `command` | string | no | 1.4.276 | Worker command run when the item is pressed. Receives the same chat context as the resolver. |
 
 ## ComposerItemPopover
 
-Details and actions shown when the user presses a composer item.
+Details and actions shown when the user presses a composer item. Use at most one of `popover` and `command`; a text-only item needs neither.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |

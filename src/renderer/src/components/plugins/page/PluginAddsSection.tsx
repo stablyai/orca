@@ -7,6 +7,7 @@ import {
   FilePlus,
   Highlighter,
   Languages,
+  MessageSquare,
   Palette,
   PanelBottom,
   PanelRight,
@@ -99,7 +100,7 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   mcpServers: <Plug />,
   newFiles: <FilePlus />,
   statusBarItems: <PanelBottom />,
-  composerItems: <PanelBottom />
+  composerItems: <MessageSquare />
 }
 
 type AddsCommand = {

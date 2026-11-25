@@ -2,6 +2,7 @@ import { NativeChatTextAttachmentScope } from '../media/text/NativeChatTextAttac
 import { forwardRef } from 'react'
 import {
   NativeChatPluginComposerItems,
+  nativeChatSessionModel,
   useNativeChatPluginComposerItems
 } from './controls/use-native-chat-plugin-composer-items'
 import { NativeChatComposerPane } from './NativeChatComposerPane'
@@ -18,9 +19,12 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         ? undefined
         : structuredTransport
     const items = useNativeChatPluginComposerItems(
-      chat?.sessionId,
-      props.agent,
-      chat?.runtime,
+      {
+        sessionId: chat?.sessionId,
+        agent: props.agent,
+        runtime: chat?.runtime,
+        model: nativeChatSessionModel(chat?.optionSnapshot)
+      },
       props.isWorking ?? false
     )
     return (

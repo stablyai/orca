@@ -1730,7 +1730,7 @@
           ]
         },
         "resolve": {
-          "description": "Worker command that receives the chat context and returns the display fields, or null to hide the item. Orca calls it when a chat opens and when its agent settles after a turn.",
+          "description": "Worker command that receives the chat context and returns the display fields, or null to hide the item. Orca calls it when a chat opens, when its agent settles after a turn, and when its model changes.",
           "x-orca-since": "1.4.276",
           "type": "string",
           "minLength": 1,
@@ -1825,7 +1825,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Details and actions shown when the user presses a composer item."
+      "description": "Details and actions shown when the user presses a composer item. Use at most one of `popover` and `command`; a text-only item needs neither."
     },
     "McpServerContribution": {
       "type": "object",

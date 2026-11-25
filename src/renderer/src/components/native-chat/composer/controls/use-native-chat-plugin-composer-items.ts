@@ -1,6 +1,7 @@
 import { createContext, useEffect, useMemo, useRef, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { PluginHostListEntry } from '../../../../../../shared/plugins/plugin-list-entry'
+import type { SessionOptionDescriptor } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   ensurePluginPanelsLoaded,
@@ -15,7 +16,12 @@ import {
   type PluginComposerItemPopover
 } from '../../../../../../shared/plugins/contributions/plugin-composer-item-contribution'
 
-type ChatContext = { sessionId: string; agent: string; runtime: 'local' | 'remote' }
+type ChatContext = {
+  sessionId: string
+  agent: string
+  runtime: 'local' | 'remote'
+  model: string | null
+}
 type Item = PluginComposerItemContribution & {
   key: string
   pluginKey: string
@@ -27,6 +33,16 @@ type Display = NonNullable<ReturnType<typeof pluginComposerItemResultSchema.pars
 export type NativeChatPluginComposerItem = Omit<Item & Display, 'popover'> & {
   popover?: PluginComposerItemPopover
   runCommand: (commandId: string) => Promise<void>
+}
+
+/** The model the chat's model pill shows: a provider fallback when one runs, else the selection. */
+export function nativeChatSessionModel(
+  snapshot: readonly SessionOptionDescriptor[] | undefined
+): string | undefined {
+  const model = snapshot?.find((descriptor) => descriptor.category === 'model')
+  return (
+    model?.fallbackModel ?? (model?.kind.type === 'select' ? model.kind.currentValue : undefined)
+  )
 }
 
 function invokeComposerItemCommand(
@@ -79,18 +95,16 @@ function selectComposerItems({ plugins }: { plugins: readonly PluginHostListEntr
 }
 
 export function useNativeChatPluginComposerItems(
-  sessionId: string | undefined,
-  agent: string | undefined,
-  runtime: ChatContext['runtime'] | undefined,
+  { sessionId, agent, runtime, model }: Partial<ChatContext>,
   isWorking: boolean
 ): NativeChatPluginComposerItem[] {
   const items = usePluginPanelsStore(selectComposerItems)
   const chat = useMemo(
     () =>
       sessionId && agent && runtime && !isWebClientLocation()
-        ? { sessionId, agent, runtime }
+        ? { sessionId, agent, runtime, model: model ?? null }
         : null,
-    [sessionId, agent, runtime]
+    [sessionId, agent, runtime, model]
   )
   useEffect(() => {
     if (chat) {
@@ -155,6 +169,7 @@ export function useNativeChatPluginComposerItems(
     if (!chat || items.length === 0) {
       return EMPTY_ITEMS
     }
+    // Why per context: another model's display would misstate what a click sends.
     const values = resolved?.chat === chat && resolved.items === items ? resolved.values : undefined
     return items.flatMap((item) => {
       const value = values?.get(item.key)

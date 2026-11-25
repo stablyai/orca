@@ -79,16 +79,18 @@ Declare `contributes.composerItems` with an `id` and a short `text`, `icon`, or 
 narrow pane. These items appear in native Chat in the desktop app.
 
 For live data, set `resolve` to your own worker command id. Orca calls it when a chat opens and
-after the agent finishes working. The command receives `{ itemId, sessionId, agent, runtime }`.
-`sessionId` is Orca's chat id and `runtime` is `"local"` or `"remote"`. Return display fields
-(`text`, `icon`, `tone`, `tooltip`, `visible`) or `null` to hide the item. A separate optional
-`command` receives the same arguments when the user presses the item.
+after the agent finishes working, and again when the chat's model changes. The command receives
+`{ itemId, sessionId, agent, runtime, model }`. `sessionId` is Orca's chat id, `runtime` is
+`"local"` or `"remote"`, and `model` is the model the chat's picker shows, or `null`. Return
+display fields (`text`, `icon`, `tone`, `tooltip`, `visible`) or `null` to hide the item. A
+separate optional `command` receives the same arguments when the user presses the item.
 
-Use `command` for a direct action or `popover` to show details when pressed. A popover accepts
-a `title`, `rows` of `{ label, value }`, and `actions` of `{ label, command }`. If you declare a
-popover, your resolver can return `popover: { title, rows }` to update its content or
-`popover: null` to hide it. Action commands are declared in the manifest and receive the same
-chat context. After a command succeeds, Orca reruns the item's resolver when one is configured.
+Use `command` for a direct action or `popover` to show details when pressed, never both. A
+text-only item needs neither. A popover accepts a `title`, `rows` of `{ label, value }`, and
+`actions` of `{ label, command }`. If you declare a popover, your resolver can return
+`popover: { title, rows }` to update its content or `popover: null` to hide it. Action commands are
+declared in the manifest and receive the same chat context. After a command succeeds, Orca
+reruns the item's resolver when one is configured.
 
 ## Changing or refusing what Orca does (hooks)
 

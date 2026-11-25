@@ -62,7 +62,8 @@ const pluginComposerItemPopoverSchema = z
   })
   .meta({
     id: 'ComposerItemPopover',
-    description: 'Details and actions shown when the user presses a composer item.'
+    description:
+      'Details and actions shown when the user presses a composer item. Use at most one of `popover` and `command`; a text-only item needs neither.'
   })
 
 export type PluginComposerItemPopover = z.infer<typeof pluginComposerItemPopoverSchema>
@@ -105,7 +106,7 @@ export const pluginComposerItemContributionSchema = z
       .optional()
       .meta(
         pluginFieldDoc(
-          'Worker command that receives the chat context and returns the display fields, or null to hide the item. Orca calls it when a chat opens and when its agent settles after a turn.',
+          'Worker command that receives the chat context and returns the display fields, or null to hide the item. Orca calls it when a chat opens, when its agent settles after a turn, and when its model changes.',
           PLUGIN_COMPOSER_ITEMS_SINCE
         )
       ),
