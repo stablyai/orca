@@ -21,7 +21,6 @@
 1 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
 8 src/main/amp/hook-service.ts
 2 src/main/amp/managed-plugin-install-status.ts
-2 src/main/antigravity/native-credential-backend.ts
 3 src/main/antigravity/native-file-credentials.ts
 3 src/main/artifacts/artifact-create-intent-store.ts
 2 src/main/artifacts/artifact-share-record-store.ts
@@ -48,7 +47,6 @@
 1 src/main/browser/cookies/chromium/import-cookies.ts
 2 src/main/browser/cookies/sources/browser-cookie-detection.ts
 8 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
-2 src/main/browser/cookies/sources/browser-cookie-key.ts
 1 src/main/browser/cookies/sources/browser-cookie-safari-import.ts
 5 src/main/browser/cookies/sources/browser-cookie-source-profiles.ts
 11 src/main/browser/cookies/staging/browser-session-cookie-staging.ts
@@ -134,8 +132,7 @@
 5 src/main/codex/configuration/homes/codex-pane-account-registry.ts
 5 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
-1 src/main/codex/configuration/settings/config-settings-baseline.ts
-5 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable (per promotion pass with edits to write back or values held back), so a host ~/.codex linked into a WSL distro is detected before any write (#45247)
+3 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable (per promotion pass with edits to write back or values held back), so a host ~/.codex linked into a WSL distro is detected before any write (#45247)
 2 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)

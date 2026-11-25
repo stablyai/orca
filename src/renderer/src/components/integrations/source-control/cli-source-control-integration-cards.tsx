@@ -1,5 +1,6 @@
 import { ExternalLink, Github, Gitlab, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store/index'
 import {
   IntegrationCardDetails,
@@ -9,7 +10,7 @@ import {
   useIntegrationCommandRowClass,
   useIntegrationSubordinateRowClass
 } from '../presentation/integration-card-presentation'
-import { getProviderAccountScope } from '../../provider-accounts/provider-account-scope'
+import { useProviderAccountScope } from '../../provider-accounts/use-provider-host-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
 import { translate } from '@/i18n/i18n'
@@ -53,7 +54,7 @@ function ProviderAccountScopeDetails({
 }): React.JSX.Element {
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
-  const accountScope = getProviderAccountScope(settings, t)
+  const accountScope = useProviderAccountScope(defaultScopeHost(settings))
   const subordinateRowClass = useIntegrationSubordinateRowClass('text-xs')
 
   return (

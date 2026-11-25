@@ -61,7 +61,8 @@ export const BOT_ITEM_LIMITS = {
   text: 8_000,
   /** What a Waiting item waits on: one line. */
   wait: 200,
-  links: 50,
+  /** A sanity bound, not a budget: a busy item gathers hundreds of workers. */
+  links: 1_000,
   listPage: 50,
   /** Also the most items one list read names by uid. */
   listPageMax: 100,

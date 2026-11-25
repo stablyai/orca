@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { BOT_WORK_KINDS } from '../../../../shared/bots/bot-change-scope'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { botRefKey, callBotRpc } from '@/lib/bot-hosts'
+import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   botOwnChatTree,
@@ -14,6 +14,7 @@ import {
 import { botChatTreeCursor, mergeShownFinished } from '../../../../shared/bots/bot-chat-tree-model'
 import { createBotHostRead, useBotHostRead, type BotHostReadState } from './use-bot-host-read'
 import { useBotHostReadState } from './use-bot-host-read-state'
+import { onBotsChanged } from '@/lib/bots-changed-window-event'
 
 /** Work changes come in bursts, so reads start at most this often. */
 const CHAT_TREE_MIN_READ_GAP_MS = 1000
@@ -37,6 +38,12 @@ export type BotChatTree = {
   loadMore: (chatId: string) => void
   /** Whether the chats have been read. */
   state: BotHostReadState
+  /** The chats are the last good read after a refresh failed. */
+  refreshFailed: boolean
+  /** A read landed since this surface opened: the chats aren't only the kept ones. */
+  landed: boolean
+  /** The host said the bot's work changed and no read started since has landed: the chats may be out of date. */
+  changeUnread: boolean
   retry: () => void
 }
 
@@ -46,11 +53,135 @@ type LoadedPages = { botKey: string; byChat: Record<string, BotChatTreeWorker[]>
 const NO_WORKSPACES: Record<string, string> = {}
 const NO_PAGES: LoadedPages['byChat'] = {}
 
+type ChangeNotices = {
+  unread: boolean
+  /** Bumped by each notice, so only the newest notice's read clears `unread`. */
+  latest: number
+  /** A notice came while the window was hidden; its read is asked for once it shows. */
+  missed: boolean
+  /** A settle is waiting on a read. */
+  settling: boolean
+  listeners: Set<() => void>
+  /** Asks again for a read covering the newest notice: when a reader attaches while one is unread. */
+  settle: () => void
+  stop: () => void
+}
+
+/** Per bot, shared by every surface reading its chats (sidebar, Chats panel), for as long as any does:
+ *  set by each change notice, cleared only when a read that started after the newest notice lands. */
+const changeNoticesByBot = new Map<string, ChangeNotices>()
+
+function watchChangeNotices(bot: BotRef, key: string): ChangeNotices {
+  const notices: ChangeNotices = {
+    unread: false,
+    latest: 0,
+    missed: false,
+    settling: false,
+    listeners: new Set(),
+    settle: () => {},
+    stop: () => {}
+  }
+  const tell = (): void => notices.listeners.forEach((listener) => listener())
+  // Unchanged answers notify no reader, so this waits on the read itself, not on the shown value. A read
+  // that fails or never comes leaves `unread` set until a later covering read lands: the next notice's,
+  // the window showing again, or a reader attaching (its own first read, shared, not an extra one).
+  const settle = (): void => {
+    const notice = notices.latest
+    notices.settling = true
+    void chatTreeRead.requestSettled(bot).then((settled) => {
+      if (changeNoticesByBot.get(key) !== notices) {
+        return
+      }
+      notices.settling = false
+      if (settled.ok && notice === notices.latest) {
+        notices.unread = false
+        tell()
+      }
+    })
+  }
+  notices.settle = settle
+  const onChanged = (): void => {
+    notices.latest += 1
+    if (!notices.unread) {
+      notices.unread = true
+      tell()
+    }
+    // A hidden window reads once it shows again, as the chat read itself does.
+    if (document.visibilityState === 'visible') {
+      settle()
+    } else {
+      notices.missed = true
+    }
+  }
+  const onVisible = (): void => {
+    if (
+      (notices.missed || (notices.unread && !notices.settling)) &&
+      document.visibilityState === 'visible'
+    ) {
+      notices.missed = false
+      settle()
+    }
+  }
+  const stopListening = onBotsChanged(onChanged, bot.hostId, {
+    botId: bot.id,
+    kinds: chatTreeRead.kinds
+  })
+  document.addEventListener('visibilitychange', onVisible)
+  notices.stop = () => {
+    stopListening()
+    document.removeEventListener('visibilitychange', onVisible)
+  }
+  return notices
+}
+
+/** Whether the host said the bot's work changed and no read started since has landed. */
+function useChangeUnread(bot: Bot | null): boolean {
+  const hostId = bot?.hostId ?? null
+  const botId = bot?.id ?? null
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      if (!hostId || !botId) {
+        return () => {}
+      }
+      const ref = { hostId, id: botId }
+      const key = botRefKey(ref)
+      let notices = changeNoticesByBot.get(key)
+      if (!notices) {
+        notices = watchChangeNotices(ref, key)
+        changeNoticesByBot.set(key, notices)
+      }
+      const watched = notices
+      watched.listeners.add(listener)
+      // A reader attaching starts its own read; an unread notice with no settle waiting rides on it.
+      if (watched.unread && !watched.settling && document.visibilityState === 'visible') {
+        watched.settle()
+      }
+      return () => {
+        watched.listeners.delete(listener)
+        if (watched.listeners.size === 0 && changeNoticesByBot.get(key) === watched) {
+          watched.stop()
+          changeNoticesByBot.delete(key)
+        }
+      }
+    },
+    [hostId, botId]
+  )
+  const getUnread = useCallback(
+    () =>
+      hostId && botId
+        ? (changeNoticesByBot.get(botRefKey({ hostId, id: botId }))?.unread ?? false)
+        : false,
+    [hostId, botId]
+  )
+  return useSyncExternalStore(subscribe, getUnread, getUnread)
+}
+
 /** The bot's chats with their workers, from its host (a paired server's too); empty until read.
  *  Pass null to read nothing, for a surface that shows no chats (a folded bot, say). */
 export function useBotChatTree(bot: Bot | null): BotChatTree {
   const read = useBotHostRead(chatTreeRead, bot)
-  const { state, retry } = useBotHostReadState(chatTreeRead, bot)
+  const { state, refreshFailed, landed, retry } = useBotHostReadState(chatTreeRead, bot)
+  const changeUnread = useChangeUnread(bot)
   // Only this bot's finished turns' acks, so focusing a pane elsewhere doesn't re-render it.
   const turnPanes = useMemo(
     () => (read?.chats ?? []).flatMap((chat) => (chat.turnDone ? [chat.turnDone.paneKey] : [])),
@@ -124,6 +255,9 @@ export function useBotChatTree(bot: Bot | null): BotChatTree {
     workspaceChats: read?.workspaceChats ?? NO_WORKSPACES,
     loadMore,
     state,
+    refreshFailed,
+    landed,
+    changeUnread,
     retry
   }
 }
