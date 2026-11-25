@@ -12,7 +12,7 @@ import type { BotSlackResult } from '../../../../shared/connector-bot-slack-cont
 const SEARCH_DEBOUNCE_MS = 250
 
 export type Search =
-  | { status: 'loading'; searchPlaceholder?: string }
+  | { status: 'loading'; announce: boolean; searchPlaceholder?: string }
   | { status: 'ready'; found: BotWhoCanAskFound }
   | { status: 'failed'; error: string }
 
@@ -47,11 +47,11 @@ export function useMemberSearch(
   retrying: boolean
   identities: Identities
 } {
-  const [search, setSearch] = useState<Search>({ status: 'loading' })
+  const [search, setSearch] = useState<Search>({ status: 'loading', announce: false })
   const [identities, setIdentities] = useState<Identities>(NO_IDENTITIES)
   // Try again starts a fresh session (and with it a fresh read of what the service lists).
   const [session, setSession] = useState(0)
-  const { errorMessage } = service
+  const { errorMessage, kind } = service
   // One search session per picker open, kept across keystrokes.
   const active = useMemo(
     (): BotWhoCanAskSession =>
@@ -81,6 +81,7 @@ export function useMemberSearch(
     }
     setSearch((previous) => ({
       status: 'loading',
+      announce: kind !== 'github',
       searchPlaceholder:
         previous.status === 'ready'
           ? previous.found.searchPlaceholder
@@ -109,13 +110,19 @@ export function useMemberSearch(
       issued = true
       void active.search(query.trim()).then(show)
     }, SEARCH_DEBOUNCE_MS)
+    const announce = setTimeout(() => {
+      setSearch((previous) =>
+        previous.status === 'loading' ? { ...previous, announce: true } : previous
+      )
+    }, SEARCH_DEBOUNCE_MS + 200)
     return () => {
       current = false
       generation.current += 1
       clearTimeout(timer)
+      clearTimeout(announce)
       stopWatching()
     }
-  }, [active, errorMessage, query])
+  }, [active, errorMessage, kind, query])
   return {
     search,
     retry: () => setSession((count) => count + 1),

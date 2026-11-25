@@ -121,7 +121,11 @@ export function gitHubWhoCanAskAnswer(
         searchPlaceholder: t('bots.github.whoCanAsk.searchUsername', 'Search by GitHub username'),
         note: hint,
         empty: {
-          title: t('bots.github.whoCanAsk.noPerson', 'No one found for “{{query}}”', { query }),
+          title: exact?.ok
+            ? t('bots.github.whoCanAsk.noPerson', 'No one found for “{{query}}”', { query })
+            : t('bots.github.whoCanAsk.couldNotSearch', 'Couldn’t search for “{{query}}”', {
+                query
+              }),
           detail: hint
         }
       }
@@ -269,7 +273,10 @@ export function gitHubWhoCanAskAnswer(
       : null
   ]
   // One sentence per line, so no line wraps at the popover's width.
-  const note = [rosterLine, exactOnly, ...limits].filter(Boolean).join('\n') || undefined
+  const note =
+    roster.status === 'unreached' && exactFailed
+      ? t('bots.github.whoCanAsk.listAndUsernameFailed', 'People list and username check failed.')
+      : [rosterLine, exactOnly, ...limits].filter(Boolean).join('\n') || undefined
 
   const exactSearched = exact?.ok === true
   // An absence refers to the dated list in the note, never to the repos or orgs as they are now.
@@ -299,7 +306,7 @@ export function gitHubWhoCanAskAnswer(
             // The unavailable line already says what to do; the exact-username hint would wrap it.
             detail:
               (roster.status === 'unavailable' || roster.status === 'unreached') && rosterLine
-                ? [rosterLine, exactFailed].filter(Boolean).join('\n')
+                ? (note ?? rosterLine)
                 : [rosterLine, t('bots.github.whoCanAsk.tryExact', 'Try an exact username.')]
                     .filter(Boolean)
                     .join('\n')

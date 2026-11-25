@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -93,6 +93,24 @@ export function BotWhoCanAskPicker({
   // that drew it, so a remembered one would outlive what it described.
   const [pickedNames, setPickedNames] = useState<Readonly<Record<string, string>>>({})
   const { search, retry, retryInPlace, retrying, identities } = useMemberSearch(service, query)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const retryRef = useRef<HTMLButtonElement>(null)
+  const restoreRetryFocus = useRef(false)
+  useLayoutEffect(() => {
+    if (retrying || search.status === 'loading' || !restoreRetryFocus.current) {
+      return
+    }
+    restoreRetryFocus.current = false
+    const input = inputRef.current
+    if (input && input.ownerDocument.activeElement === input.ownerDocument.body) {
+      ;(retryRef.current ?? input).focus()
+    }
+  }, [retrying, search])
+  const rememberRetryFocus = (action: () => void): void => {
+    const button = retryRef.current
+    restoreRetryFocus.current = button !== null && button.ownerDocument.activeElement === button
+    action()
+  }
   // On GitHub a leading @ is how people write a handle, not part of it: matched as its search does.
   const typed = query.trim().toLowerCase()
   const needle = service.kind === 'github' ? typed.replace(/^@/, '') : typed
@@ -207,9 +225,10 @@ export function BotWhoCanAskPicker({
       <Button
         size="xs"
         variant="outline"
+        ref={retryRef}
         disabled={retrying}
         onKeyDown={keepButtonEnter}
-        onClick={retryInPlace}
+        onClick={() => rememberRetryFocus(retryInPlace)}
       >
         {t('bots.whoCanAsk.retry', 'Try again')}
       </Button>
@@ -228,14 +247,22 @@ export function BotWhoCanAskPicker({
   ) : search.status === 'failed' ? (
     <div role="alert" className="flex items-center gap-2 p-3 text-sm">
       <span className="min-w-0 flex-1 text-destructive">{search.error}</span>
-      <Button size="xs" variant="outline" onKeyDown={keepButtonEnter} onClick={retry}>
+      <Button
+        size="xs"
+        variant="outline"
+        ref={retryRef}
+        onKeyDown={keepButtonEnter}
+        onClick={() => rememberRetryFocus(retry)}
+      >
         {t('bots.whoCanAsk.retry', 'Try again')}
       </Button>
     </div>
   ) : search.status === 'loading' ? (
-    <p role="status" className="p-3 text-sm text-muted-foreground">
-      {t('bots.whoCanAsk.searching', 'Searching…')}
-    </p>
+    search.announce ? (
+      <p role="status" className="p-3 text-sm text-muted-foreground">
+        {t('bots.whoCanAsk.searching', 'Searching…')}
+      </p>
+    ) : null
   ) : addable.length > 0 ? (
     <>
       {scoped.length > 0 ? (
@@ -304,6 +331,7 @@ export function BotWhoCanAskPicker({
   return (
     <Command shouldFilter={false}>
       <CommandInput
+        ref={inputRef}
         autoFocus
         value={query}
         onValueChange={setQuery}

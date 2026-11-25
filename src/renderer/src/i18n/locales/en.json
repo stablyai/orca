@@ -28284,6 +28284,7 @@
         "fromEarlierList": "From an earlier people list",
         "noReadable": "No readable repos to search.",
         "unreached": "Couldn’t get the people list.",
+        "listAndUsernameFailed": "People list and username check failed.",
         "searchedListExact": "Searched your people list and exact usernames.",
         "searchedList": "Searched your people list.",
         "notInList": "Not in your people list",

@@ -775,6 +775,7 @@
     "bots.github.whoCanAsk.foundInReposAndOrgs",
     "bots.github.whoCanAsk.fromEarlierList",
     "bots.github.whoCanAsk.keepTyping",
+    "bots.github.whoCanAsk.listAndUsernameFailed",
     "bots.github.whoCanAsk.listFrom",
     "bots.github.whoCanAsk.loading",
     "bots.github.whoCanAsk.loadingTitle",

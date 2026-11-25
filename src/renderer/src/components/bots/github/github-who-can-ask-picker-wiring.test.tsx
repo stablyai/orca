@@ -519,7 +519,7 @@ describe('the Add picker on a GitHub session', () => {
       await act(() => vi.advanceTimersByTimeAsync(300))
       // Both failed: one answer, one in-place Try again, not the whole-search error.
       expect(screen.queryByRole('alert')).toBeNull()
-      expect(screen.getByText(/Username check failed\./)).toBeTruthy()
+      expect(screen.getByText('People list and username check failed.')).toBeTruthy()
       const again = screen.getByRole('button', { name: 'Try again' })
       await act(async () => {
         fireEvent.click(again)
@@ -533,7 +533,7 @@ describe('the Add picker on a GitHub session', () => {
         await vi.advanceTimersByTimeAsync(0)
       })
       fireEvent.click(again)
-      expect(screen.getByText(/Username check failed\./)).toBeTruthy()
+      expect(screen.getByText('People list and username check failed.')).toBeTruthy()
       expect(box).toHaveProperty('value', 'brennan')
       await act(async () => {
         held[first === 'people' ? 'users' : 'people']()
@@ -541,7 +541,7 @@ describe('the Add picker on a GitHub session', () => {
       })
       expect(screen.getByText('brennan')).toBeTruthy()
       expect(screen.getByText('brennanb2025')).toBeTruthy()
-      expect(screen.queryByText(/Username check failed/)).toBeNull()
+      expect(screen.queryByText('People list and username check failed.')).toBeNull()
       expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
       expect(people).toHaveBeenCalledTimes(2)
       expect(users).toHaveBeenCalledTimes(2)
