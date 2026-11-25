@@ -94,7 +94,9 @@ function stalledStretch(): TerminalModelWait {
     turnKey: 'turn-1',
     toolMaybeOpen: false,
     stillWaiting: () => true,
-    toolSeenRunning: () => {}
+    toolSeenRunning: () => {},
+    // No transcriptPath, so the transcript is never read: the generic wording, as before.
+    firstTranscriptLook: () => true
   }
 }
 
