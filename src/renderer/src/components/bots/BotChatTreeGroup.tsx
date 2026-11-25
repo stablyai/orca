@@ -1,5 +1,5 @@
 // One chat in the Chats tab: one folded row; its chevron shows the workers it started, capped and stepped.
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { useTranslate } from '@/i18n/use-translate'
@@ -130,18 +130,23 @@ function BotChatPreview({
         : null)
   // A teammate's Home is titled by their name already.
   const person = hidePerson || chat.homeOf ? null : (chat.person?.name ?? null)
-  const place = botChatPlace(chat)
-  const rest = [closed, preview].filter(Boolean).join(' · ')
+  const parts: { key: string; node: React.ReactNode }[] = [
+    { key: 'place', node: botChatPlace(chat) },
+    {
+      key: 'person',
+      node: person ? <span className="text-foreground/80">{person}</span> : null
+    },
+    { key: 'closed', node: closed },
+    { key: 'preview', node: preview }
+  ].filter((part) => part.node)
   return (
     <>
-      {place ? `${place} · ` : null}
-      {person ? (
-        <>
-          <span className="text-foreground/80">{person}</span>
-          {' · '}
-        </>
-      ) : null}
-      {rest}
+      {parts.map((part, index) => (
+        <Fragment key={part.key}>
+          {index > 0 ? ' · ' : null}
+          {part.node}
+        </Fragment>
+      ))}
     </>
   )
 }

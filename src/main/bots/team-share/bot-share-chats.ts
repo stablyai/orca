@@ -4,7 +4,7 @@ import type { BotRequestPerson } from '../../../shared/bots/bot-acts-for'
 import { actsForOwner, shareOwnsChat } from '../../../shared/bots/bot-acts-for'
 import type { Bot } from '../../../shared/bot-types'
 import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
-import { botHomePlaceholderAccount, botSharePersonName } from '../../../shared/bots/bot-home-of'
+import { botSharePersonName } from '../../../shared/bots/bot-home-of'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -112,12 +112,12 @@ export function withBotChatPeople<T extends { chats: BotChatTreeChat[] }>(
   return {
     ...read,
     chats: read.chats.map((chat) => {
-      // A teammate's Home not made yet has no record; its row's id names them.
       const of = homes.get(chat.chatId)
-      const accountId =
-        botHomePlaceholderAccount(chat.chatId) ?? (of && of !== 'owner' ? of.accountId : null)
-      return accountId
-        ? { ...chat, person: { accountId, name: botSharePersonName(bot, accountId) } }
+      return of && of !== 'owner'
+        ? {
+            ...chat,
+            person: { accountId: of.accountId, name: botSharePersonName(bot, of.accountId) }
+          }
         : chat
     })
   }

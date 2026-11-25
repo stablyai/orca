@@ -7,6 +7,7 @@ import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
 import { BotChatTreeReadSchema } from '../../../shared/bots/bot-chat-tree-schema'
 import { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 import { botHomePlaceholderId } from '../../../shared/bots/bot-home-of'
+import { botHomeOfChat, botHomesOfChats } from '../bot-conversation-acts-for'
 import { withBotChatPeople } from './bot-share-chats'
 
 const SHARES: NonNullable<Bot['shares']> = [
@@ -104,13 +105,28 @@ describe('whose chat each of the owner’s chats is', () => {
       sources(),
       { shares: declined },
       {
-        chats: [chat('alice'), chat(botHomePlaceholderId('acc-bo'))]
+        chats: [
+          chat('alice'),
+          chat(botHomePlaceholderId('acc-bo')),
+          chat(botHomePlaceholderId('acc-alice'))
+        ]
       }
     )
     expect(read.chats.map((entry) => entry.person)).toEqual([
       undefined,
-      { accountId: 'acc-bo', name: 'bo@x.dev' }
+      { accountId: 'acc-bo', name: 'bo@x.dev' },
+      undefined
     ])
+  })
+
+  it('answers one chat the way the batched read answers it', () => {
+    const src = sources()
+    const bot = { shares: SHARES }
+    const roots = [...ids, botHomePlaceholderId('acc-bo'), botHomePlaceholderId('acc-gone')]
+    const batched = botHomesOfChats(src, bot, roots)
+    expect(roots.map((root) => botHomeOfChat(src, bot, root))).toEqual(
+      roots.map((root) => batched.get(root))
+    )
   })
 
   it('leaves an unshared bot’s chats as they were', () => {

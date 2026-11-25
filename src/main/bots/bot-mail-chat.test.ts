@@ -34,8 +34,10 @@ const sources = {
   getOrchestrationDb: () =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fallback reads only this record.
     ({
-      getBotConversationActsFor: (root: string) =>
-        ACTS_FOR[root] ? { actsFor: ACTS_FOR[root] } : undefined
+      listBotConversationActsFor: (roots: readonly string[]) =>
+        new Map(
+          roots.flatMap((root) => (ACTS_FOR[root] ? [[root, { actsFor: ACTS_FOR[root] }]] : []))
+        )
     }) as unknown as OrchestrationDb,
   listAutomationRuns: () => [],
   showAutomation: () => {

@@ -45,4 +45,16 @@ describe('a chat row’s second line', () => {
     cleanup()
     expect(line(alice, true)).toBe('#releases · Three new crashes')
   })
+
+  it('puts separators only between parts, for a replying chat with nothing said', () => {
+    const replying = chat({
+      live: 'replying',
+      origin: 'slack',
+      originLabel: '#orca',
+      person: { accountId: 'acc-alice', name: 'Alice Park' }
+    })
+    expect(line(replying)).toBe('#orca · Alice Park')
+    cleanup()
+    expect(line(chat({ live: 'replying' }))).toBe('')
+  })
 })

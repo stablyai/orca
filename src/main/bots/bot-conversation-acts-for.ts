@@ -7,7 +7,13 @@ import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-req
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import type { Bot } from '../../shared/bot-types'
 import type { AutomationBotTarget } from '../../shared/automation-bot-target'
-import { automationHomeOf, botHomeOfActsFor, type BotHomeOf } from '../../shared/bots/bot-home-of'
+import {
+  automationHomeOf,
+  botHomeOfActsFor,
+  botHomeOpenable,
+  botHomePlaceholderAccount,
+  type BotHomeOf
+} from '../../shared/bots/bot-home-of'
 import { createChatOrcaSessionIdResolver } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 
 export type BotConversationActsForSources = {
@@ -24,11 +30,10 @@ export function readBotConversationActsFor(
   sources: BotConversationActsForSources,
   root: string
 ): BotConversationActsFor | undefined {
-  const recorded = sources.getOrchestrationDb().getBotConversationActsFor(root)
-  return recorded && withoutLegacyRunUnknown(sources, root, recorded)
+  return readBotConversationActsForMany(sources, [root]).get(root)
 }
 
-/** `readBotConversationActsFor` for many roots in one database read; one without a record is absent. */
+/** Many roots' records in one database read; one without a record is absent. */
 function readBotConversationActsForMany(
   sources: BotConversationActsForSources,
   roots: readonly string[]
@@ -76,11 +81,13 @@ export function botHomeOfChat(
   bot: Pick<Bot, 'shares'>,
   sessionId: string
 ): BotHomeOf {
-  const recorded = readBotConversationActsFor(sources, createChatOrcaSessionIdResolver()(sessionId))
-  return recorded ? botHomeOfActsFor(bot, recorded.actsFor) : 'owner'
+  const root = createChatOrcaSessionIdResolver()(sessionId)
+  return botHomesOfChats(sources, bot, [root]).get(root) ?? 'owner'
 }
 
-/** `botHomeOfChat` for many chats (by /clear root) in one database read. */
+/** Whose Home each chat (by /clear root) falls under, in one database read: a teammate's Home row not
+ *  made yet is theirs while they may have one; any other chat is the teammate it acts for alone, else
+ *  the owner's. */
 export function botHomesOfChats(
   sources: BotConversationActsForSources,
   bot: Pick<Bot, 'shares'>,
@@ -88,7 +95,12 @@ export function botHomesOfChats(
 ): Map<string, BotHomeOf> {
   const recorded = readBotConversationActsForMany(sources, roots)
   return new Map(
-    roots.map((root) => {
+    roots.map((root): [string, BotHomeOf] => {
+      const placeholder = botHomePlaceholderAccount(root)
+      if (placeholder !== null) {
+        const of = { accountId: placeholder }
+        return [root, botHomeOpenable(bot, of) ? of : 'owner']
+      }
       const record = recorded.get(root)
       return [root, record ? botHomeOfActsFor(bot, record.actsFor) : 'owner']
     })

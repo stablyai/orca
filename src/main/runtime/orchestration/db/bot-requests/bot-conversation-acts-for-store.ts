@@ -59,17 +59,11 @@ function parseActsForRow(row: ActsForRow): BotConversationActsFor {
   }
 }
 
-const SELECT_ROWS = 'SELECT session_id, acts_for, triggered_by FROM bot_conversation_acts_for'
-
 export function getBotConversationActsFor(
   this: OrchestrationDb,
   sessionId: string
 ): BotConversationActsFor | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema above pins every column as TEXT.
-  const row = this.db.prepare(`${SELECT_ROWS} WHERE session_id = ?`).get(sessionId) as
-    | ActsForRow
-    | undefined
-  return row ? parseActsForRow(row) : undefined
+  return listBotConversationActsFor.call(this, [sessionId]).get(sessionId)
 }
 
 /** Many conversations' records in one read, by session id; one without a record is absent. */
@@ -82,7 +76,8 @@ export function listBotConversationActsFor(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema above pins every column as TEXT.
   const rows = this.db
-    .prepare(`${SELECT_ROWS} WHERE session_id IN (SELECT value FROM json_each(?))`)
+    .prepare(`SELECT session_id, acts_for, triggered_by FROM bot_conversation_acts_for
+       WHERE session_id IN (SELECT value FROM json_each(?))`)
     .all(JSON.stringify(sessionIds)) as ActsForRow[]
   return new Map(rows.map((row) => [row.session_id, parseActsForRow(row)]))
 }
