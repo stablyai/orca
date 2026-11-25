@@ -29,7 +29,10 @@ import { CLAUDE_DEFAULT_SETTING_SOURCES, claudeDiscoveryOptions } from './claude
 import { claudeInChromeDefaultArgs } from '../../configuration/claude-in-chrome-default'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import { claudeOwnServerNames } from '../../../bots/bot-tools-claude'
-import { deliverHostMcpServers } from '../../../mcp-servers/session-host-mcp-delivery'
+import {
+  deliverHostMcpServers,
+  noteSessionIgnoresHostMcp
+} from '../../../mcp-servers/session-host-mcp-delivery'
 import { noteClaudeMcpConfigRefused } from '../../../mcp-servers/mcp-agent-problems'
 import type {
   ClaudeCliFlagCheck,
@@ -204,6 +207,8 @@ export function claudeStructuredLaunchPart(
     const launchArgs = await deps.resolveLaunchArgs()
     const { thinkingDisplayArgs, visuals, promptSuggestions, refused } = await launchFlags
     noteClaudeMcpConfigRefused(refused.mcpConfig)
+    // Refused, Orca's servers go nowhere this launch, so no list edit is this chat's.
+    noteSessionIgnoresHostMcp(basis.record.sessionId, refused.mcpConfig)
     const linked = await basis.linkedSkills()
     const discovery = claudeDiscoveryOptions({
       configuredArgs: launchArgs,

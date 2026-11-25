@@ -1,5 +1,6 @@
 // Reading the host's MCP server list for a launch: each server's agent and workspace switches, and
 // the servers a new session gets. Read only, so a launch never writes the list.
+import { createHash } from 'node:crypto'
 import type { BotToolServer } from '../../shared/bot-tools'
 import {
   ALL_MCP_SERVER_WORKSPACES,
@@ -9,6 +10,7 @@ import {
   type McpServer,
   type McpServerWorkspaces
 } from '../../shared/mcp-servers/mcp-servers'
+import { botToolCredentialFingerprints } from '../bots/bot-tool-credentials'
 import { botToolEntries, readBotToolsSnapshot } from '../bots/bot-tools-file'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 
@@ -59,6 +61,54 @@ export async function mcpServersForLaunch(
   folder = mcpHostListFolder()
 ): Promise<BotToolServer[]> {
   return (await launchEntries(agent, workspace, folder)).map(({ server }) => server)
+}
+
+/**
+ * As `mcpServersForLaunch`, with each server's digest by name: it changes only when that server or
+ * its saved values or sign-in do (not when a token refreshes), so a running session can tell which
+ * of its servers an edit touched.
+ */
+export async function mcpServersWithDigestsForLaunch(
+  agent: string,
+  workspace: LaunchWorkspace,
+  folder = mcpHostListFolder()
+): Promise<{ servers: BotToolServer[]; digests: Record<string, string> }> {
+  const servers = await mcpServersForLaunch(agent, workspace, folder)
+  const saved = savedValues(
+    folder,
+    new Set(
+      servers.flatMap((server) => ('url' in server && server.credential ? [server.credential] : []))
+    )
+  )
+  const digests = Object.fromEntries(
+    servers.map((server) => [
+      server.name,
+      createHash('sha256')
+        .update(JSON.stringify(server))
+        .update(
+          'url' in server && server.credential
+            ? JSON.stringify(saved.get(server.credential) ?? null)
+            : ''
+        )
+        .digest('hex')
+    ])
+  )
+  return { servers, digests }
+}
+
+/**
+ * Each credential's saved values or sign-in, as the tools revision counts them, from one read of
+ * the store. A store Orca can't read never keeps the servers from launching.
+ */
+function savedValues(folder: string, credentials: ReadonlySet<string>): Map<string, unknown> {
+  if (credentials.size === 0) {
+    return new Map()
+  }
+  try {
+    return botToolCredentialFingerprints(folder, credentials)
+  } catch {
+    return new Map([...credentials].map((id) => [id, 'unreadable']))
+  }
 }
 
 /** The server with `id` as a session of `agent` in `workspace` gets it; null when it's off there or gone. */
