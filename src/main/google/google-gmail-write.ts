@@ -16,7 +16,8 @@ import {
   type GmailDraftArgs
 } from './google-gmail-draft-compose'
 import { header, MessageSchema } from './google-gmail-message'
-import { GMAIL, GMAIL_CALLS_AT_ONCE, inBatches, parseGmailRef } from './google-gmail-read'
+import { GMAIL, GMAIL_CALLS_AT_ONCE, inBatches } from './google-gmail-read'
+import { parseGmailRef } from './google-gmail-ref'
 import { randomBytes } from 'node:crypto'
 import { splitAddresses } from '../../shared/google/email-address-list'
 import { buildMimeMessage } from './gmail-mime-message'

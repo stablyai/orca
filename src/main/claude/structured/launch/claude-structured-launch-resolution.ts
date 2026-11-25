@@ -1,5 +1,5 @@
 import { claudeBotSessionOptions } from './claude-bot-session-options'
-import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import { withSessionMcpToolsEnv } from '../../../mcp-servers/session-mcp-tools'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import { prepareClaudeLaunchAccount, withClaudeLaunchAccountPin } from './claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
@@ -28,6 +28,9 @@ import { withClaudeArtifactDefault } from './claude-artifact-env'
 import { CLAUDE_DEFAULT_SETTING_SOURCES, claudeDiscoveryOptions } from './claude-discovery-options'
 import { claudeInChromeDefaultArgs } from '../../configuration/claude-in-chrome-default'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
+import { claudeOwnServerNames } from '../../../bots/bot-tools-claude'
+import { deliverHostMcpServers } from '../../../mcp-servers/session-host-mcp-delivery'
+import { noteClaudeMcpConfigRefused } from '../../../mcp-servers/mcp-agent-problems'
 import type {
   ClaudeCliFlagCheck,
   ClaudeCliFlagSupport
@@ -200,6 +203,7 @@ export function claudeStructuredLaunchPart(
     )
     const launchArgs = await deps.resolveLaunchArgs()
     const { thinkingDisplayArgs, visuals, promptSuggestions, refused } = await launchFlags
+    noteClaudeMcpConfigRefused(refused.mcpConfig)
     const linked = await basis.linkedSkills()
     const discovery = claudeDiscoveryOptions({
       configuredArgs: launchArgs,
@@ -232,7 +236,7 @@ export function claudeStructuredLaunchPart(
       envDeps,
       (base) =>
         withNativeChatVisualsEnv(
-          withBotLaunchToolsEnv(
+          withSessionMcpToolsEnv(
             {
               ...withClaudeArtifactDefault(base),
               // The turn translator relies on Claude's authoritative idle frame when no result arrives.
@@ -265,6 +269,11 @@ export function claudeStructuredLaunchPart(
         hasTranscript: deps.hasTranscript
       })
     }
+    // The host list's servers the launch account's own Claude config doesn't already name.
+    const launchEnv = { ...env, ...claudeConfigDirEnvPatch(launchHome, { env }) }
+    const delivered = await deliverHostMcpServers(record.sessionId, 'Claude Code', tools, () =>
+      claudeOwnServerNames(launchEnv.CLAUDE_CONFIG_DIR?.trim() || null, cwd)
+    )
     return {
       launch: {
         pathToClaudeCodeExecutable: command,
@@ -275,7 +284,7 @@ export function claudeStructuredLaunchPart(
           ...CLAUDE_STRUCTURED_BASE_OPTIONS,
           ...permission,
           ...discovery,
-          ...(await claudeBotSessionOptions(basis, linked.projects, tools, refused)),
+          ...(await claudeBotSessionOptions(basis, linked.projects, delivered, refused)),
           ...(promptSuggestions ? { promptSuggestions } : {}),
           extraArgs: {
             ...discovery.extraArgs,

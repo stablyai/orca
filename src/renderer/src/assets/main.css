@@ -232,6 +232,12 @@
   inherits: false;
 }
 
+/* Why: only the workspace board sheet reads its right edge; don't restyle the board subtree on every resize. */
+@property --workspace-board-right-edge {
+  syntax: '*';
+  inherits: false;
+}
+
 /* Why: non-inherited and keyed on .app-layout, so a modal toggle restyles only its direct children, not the whole app. */
 @property --app-layout-modal-blur {
   syntax: '*';
@@ -3638,7 +3644,7 @@ html.native-shell .app-layout {
     border-width: 0;
   }
   57% {
-    max-width: 90px;
+    max-width: 104px;
     padding-inline: 8px;
     border-width: 1px;
   }

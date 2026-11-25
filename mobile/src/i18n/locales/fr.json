@@ -1259,7 +1259,7 @@
       "pairingInvalid": "Appairage invalide — refaites l'appairage avec votre ordinateur",
       "rePairDetail": "Refaites l'appairage avec votre ordinateur",
       "reconnecting": "Reconnexion…",
-      "relayAccessExpired": "L'accès à Relay a expiré pour {{host}}",
+      "relayAccessRefused": "Relay a refusé l'accès pour {{host}}",
       "relayConnectFailed": "Connexion impossible via Relay",
       "relayUnreachable": "Impossible de joindre Relay",
       "signInDetail": "Connectez-vous à Orca sur votre ordinateur pour rétablir la connexion",
@@ -5232,7 +5232,13 @@
         "github": "Mentions et événements sur les issues et les PR",
         "slack": "Messages et mentions",
         "linear": "Issues assignées et mentions",
-        "google": "Gmail, Agenda et Drive, en votre nom"
+        "google": "Gmail, Agenda et Drive, en votre nom",
+        "clickup": "Gérer les tâches, listes et docs",
+        "airtable": "Interroger et modifier les bases, tables et enregistrements",
+        "todoist": "Ajouter, trier et terminer des tâches",
+        "zapier": "Lancer des actions dans les apps configurées dans Zapier",
+        "granola": "Rechercher dans les notes et transcriptions de réunion",
+        "intercom": "Rechercher conversations, contacts et articles"
       },
       "composioLine": {
         "outlook": "E-mails, calendrier et contacts",

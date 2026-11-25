@@ -15,8 +15,8 @@ import {
 } from './bot-tool-credentials'
 import { readBotToolDetails } from './bot-tool-details'
 import { addBotTool, updateBotTool, type BotToolsHome } from './bot-tools-host'
+import { sessionMcpLaunchTools } from '../mcp-servers/session-mcp-launch'
 import {
-  botSessionToolServers,
   botToolsPath,
   changeBotToolServers,
   currentBotToolsRevision,
@@ -57,22 +57,17 @@ const relay = {
 }
 
 describe("a bot's tools file", () => {
-  it("gives its servers and token to sessions in the bot's home folder, and only there", async () => {
+  it("gives a session in the bot's home its servers and the bot's token", async () => {
     const folder = tempDir('bot-tools-file-')
     await writeBotToolServers(folder, [notion])
-    const bots = [{ id: 'scout', folderWorkspaceId: 'scout-home' }]
-    const home = folderWorkspaceKey('scout-home')
-    const launch = (workspaceId: string) =>
-      botSessionToolServers(bots, { provider: 'grok', location: { workspaceId } }, folder, relay)
-
-    const { tools } = await launch(home)
+    const { tools } = await sessionMcpLaunchTools(
+      { id: 'scout' },
+      { provider: 'grok', location: { workspaceId: folderWorkspaceKey('scout-home') } },
+      folder,
+      { relay }
+    )
     expect(tools.servers).toEqual([notion])
     expect(tools.env).toEqual({ ORCA_BOT_TOOLS_TOKEN: 'bot-token' })
-
-    const elsewhere = await launch('repo-1')
-    expect(elsewhere.tools.servers).toEqual([])
-    expect({ ...elsewhere.tools.env, ...elsewhere.tools.commandEnv }).toEqual({})
-    expect(elsewhere.launched).toBeNull()
   })
 
   it('keeps header values out of the file, sealed in the host store bound to the address', async () => {
@@ -126,7 +121,7 @@ const signedInNotion = async () => {
     folder,
     signInFolder: folder,
     otherBotFolders: [],
-    agent: 'gemini'
+    agent: 'droid'
   }
   const id = newBotToolCredentialId()
   await addBotTool(
@@ -201,7 +196,7 @@ describe('an edited tool', () => {
       folder,
       signInFolder: folder,
       otherBotFolders: [],
-      agent: 'gemini'
+      agent: 'droid'
     }
     await writeBotToolServers(folder, [{ ...notion, headers: { authorization: SECRET } }])
     const [before] = await readBotToolServers(folder)
@@ -264,12 +259,14 @@ describe('saving a tool', () => {
 })
 
 describe('the tools a chat launched with', () => {
-  const bots = [{ id: 'scout', folderWorkspaceId: 'scout-home' }]
   const launch = (
     folder: string,
     provider = 'codex',
     workspaceId = folderWorkspaceKey('scout-home')
-  ) => botSessionToolServers(bots, { provider, location: { workspaceId } }, folder, relay)
+  ) =>
+    sessionMcpLaunchTools({ id: 'scout' }, { provider, location: { workspaceId } }, folder, {
+      relay
+    })
 
   it('changes the revision when the first tool is added and the last tool is removed', async () => {
     const folder = tempDir('bot-tools-revision-')

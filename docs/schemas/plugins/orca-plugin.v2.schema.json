@@ -345,6 +345,16 @@
             "$ref": "#/$defs/StatusBarItemContribution"
           }
         },
+        "mcpServers": {
+          "default": [],
+          "description": "MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers. At most 16.",
+          "x-orca-since": "1.4.276",
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/McpServerContribution"
+          }
+        },
         "agentHarnesses": {
           "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -354,13 +364,6 @@
         },
         "skills": {
           "description": "Reserved for agent skills; must be empty until their format is defined.",
-          "x-orca-since": "1.4.245",
-          "maxItems": 0,
-          "type": "array",
-          "items": {}
-        },
-        "mcpServers": {
-          "description": "Reserved for MCP server definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
           "maxItems": 0,
           "type": "array",
@@ -1598,6 +1601,72 @@
       ],
       "additionalProperties": false,
       "description": "An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`."
+    },
+    "McpServerContribution": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
+          "description": "Server name agents see, unique in this plugin: letters, digits, `-` and `_`, at most 64.",
+          "x-orca-since": "1.4.276",
+          "examples": [
+            "datadog"
+          ]
+        },
+        "url": {
+          "description": "Streamable HTTP address of a remote server. Give either `url` or `command`.",
+          "x-orca-since": "1.4.276",
+          "examples": [
+            "https://mcp.datadoghq.com/mcp"
+          ],
+          "type": "string",
+          "maxLength": 2048
+        },
+        "command": {
+          "description": "Executable that starts a local (stdio) server.",
+          "x-orca-since": "1.4.276",
+          "examples": [
+            "npx"
+          ],
+          "type": "string",
+          "maxLength": 1024
+        },
+        "args": {
+          "description": "Arguments for `command`.",
+          "x-orca-since": "1.4.276",
+          "examples": [
+            [
+              "-y",
+              "@acme/mcp-server"
+            ]
+          ],
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "env": {
+          "description": "Environment variables for `command`; nothing secret.",
+          "x-orca-since": "1.4.276",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "An MCP server Orca offers to the agents it launches, beside the user’s own."
     },
     "Capability": {
       "type": "object",

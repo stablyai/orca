@@ -14,6 +14,7 @@ import { pluginInstalledHostImages } from '../media/plugin-manifest-images'
 import { markCommandReplacementOwners } from '../commands/plugin-command-replacement-owners'
 import type { PluginService } from '../plugin-service'
 import { listPluginVmRecipeCommands } from '../../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
+import { pluginMcpServerListing } from '../../../shared/plugins/contributions/plugin-mcp-server-contribution'
 import {
   isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
@@ -263,6 +264,7 @@ export async function buildPluginList(
         statusBarItems: plugin.manifest.contributes.statusBarItems,
         hooks: plugin.manifest.contributes.hooks.map((hook) => hook.event),
         hasWorker: Boolean(plugin.manifest.main),
+        mcpServers: plugin.manifest.contributes.mcpServers.map(pluginMcpServerListing),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,
           name: recipe.name,
