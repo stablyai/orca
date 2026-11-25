@@ -84,8 +84,9 @@ const powerShellSuffix = (images: boolean): string =>
   ` } finally { if ($orcaRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }${images ? '; if ($orcaKitty) { Remove-Item Env:KITTY_WINDOW_ID }' : ''} }`
 
 const BOTH = [true, false]
-const NO_DAEMON_SKIP_ARGS: ReadonlySet<string> = new Set(CODEX_NO_DAEMON_SKIP_ARGS)
-const POSIX_WRAPPERS = BOTH.flatMap((images) =>
+// Launch planning can import CODEX_EXECUTABLE without retaining the shell wrappers.
+const NO_DAEMON_SKIP_ARGS: ReadonlySet<string> = /* @__PURE__ */ new Set(CODEX_NO_DAEMON_SKIP_ARGS)
+const POSIX_WRAPPERS = /* @__PURE__ */ BOTH.flatMap((images) =>
   BOTH.map((probe) => ({ images, probe, prefix: posixPrefix(images, probe) }))
 )
 

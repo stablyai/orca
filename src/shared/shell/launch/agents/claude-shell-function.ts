@@ -133,7 +133,7 @@ const powerShellRestoreClaudeEnv =
   'if ($null -eq $saved[$name]) { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue } ' +
   "else { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') } }"
 
-const powerShellClaudeAccountRouting = [
+const powerShellClaudeAccountRouting = /* @__PURE__ */ [
   "$orcaClaudeHome = '';",
   'if ($env:ORCA_CLAUDE_PROFILE_POINTER -and (Test-Path -LiteralPath $env:ORCA_CLAUDE_PROFILE_POINTER -PathType Leaf)) {',
   '$orcaClaudeHome = [IO.File]::ReadAllText($env:ORCA_CLAUDE_PROFILE_POINTER).TrimEnd() };',

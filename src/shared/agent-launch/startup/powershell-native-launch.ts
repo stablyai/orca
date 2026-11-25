@@ -9,7 +9,7 @@ import { readLaunchPosition, type LaunchPosition } from './launch-position'
 const SCRIPT_HEAD = /& \{ (\$orcaProgram = |param\(\$orcaProgram\); )/
 const SCRIPT_END = ' } --'
 const INVOCATION = '& $orcaProgram @orcaNativeArgs'
-const ESCAPE_FUNCTION = getPowerShellEscapeNativeArgsFunction({ inline: true })
+const ESCAPE_FUNCTION = /* @__PURE__ */ getPowerShellEscapeNativeArgsFunction({ inline: true })
 const CODE_CHARS = '$@;|&(){}<>#'
 const DOUBLE_QUOTES = '"\u201C\u201D\u201E'
 
