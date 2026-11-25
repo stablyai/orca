@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState, type RefObject } from 'react'
-import { Quote } from 'lucide-react'
+import { Check, Copy, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { addViewportSizeChangeListener } from '@/lib/window-activity/viewport-size-change-listener'
@@ -7,25 +7,31 @@ import { useTranslate } from '@/i18n/use-translate'
 
 // Why: shown at once, a double-click's action would sit under the pointer and take the third click.
 const DOUBLE_CLICK_SETTLE_MS = 500
+const COPIED_FEEDBACK_MS = 1500
 
 type QuoteRequest = {
   text: string
+  /** Copy landed; the offer shows that for a moment before it closes. */
+  copied?: boolean
   anchor: { getBoundingClientRect: () => DOMRect; contextElement?: Element }
 }
 
 export type QuotableSelection = { text: string; range: Range }
 
-/** Offers "Add to chat" beside a settled selection inside `rootRef` that `readQuotable` accepts. */
+/** Offers "Add to chat" (and Copy, given `readCopyText`) beside a settled selection inside `rootRef` that `readQuotable` accepts. */
 export function SelectionAddToChatPopover({
   rootRef,
   enabled,
   readQuotable,
+  readCopyText,
   onSelectionSettled,
   onAdd
 }: {
   rootRef: RefObject<HTMLElement | null>
   enabled: boolean
   readQuotable: (root: HTMLElement) => QuotableSelection | null
+  /** Enables Copy and reads the same selection text as the context menu. */
+  readCopyText?: (root: HTMLElement) => string
   /** Runs once per changed selection, before the offer is read. */
   onSelectionSettled?: (root: HTMLElement) => void
   /** `button` is where the offer was clicked, for a surface that opens a menu from it. */
@@ -34,10 +40,13 @@ export function SelectionAddToChatPopover({
   const t = useTranslate()
   const [request, setRequest] = useState<QuoteRequest | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const virtualRef = useMemo(() => ({ current: request?.anchor ?? null }), [request])
+  const copiedTimerRef = useRef<number>(undefined)
+  const virtualRef = useMemo(() => ({ current: request?.anchor ?? null }), [request?.anchor])
   // Why: inline callbacks must not re-install the document listeners every render.
   const readLatestQuotable = useEffectEvent(readQuotable)
   const settleSelection = useEffectEvent((root: HTMLElement) => onSelectionSettled?.(root))
+
+  useEffect(() => () => window.clearTimeout(copiedTimerRef.current), [])
 
   useEffect(() => {
     const root = rootRef.current
@@ -146,10 +155,12 @@ export function SelectionAddToChatPopover({
           // Never takes focus itself, so it must not keep the composer from taking it.
           data-focus-behavior="page"
         >
-          <div className="p-0.5">
+          <div className={readCopyText ? 'flex items-center gap-0.5 p-0.5' : 'p-0.5'}>
             <Button
               variant="ghost"
               size="xs"
+              // Why: dimmed rather than removed, so Copy does not jump left under the pointer.
+              disabled={request.copied}
               onClick={(event) => {
                 // Taken or not (the composer may have locked since), the offer is spent.
                 setRequest(null)
@@ -159,6 +170,38 @@ export function SelectionAddToChatPopover({
               <Quote />
               {t('components.native-chat.addSelectionToChat', 'Add to chat')}
             </Button>
+            {readCopyText && (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={async () => {
+                  const root = rootRef.current
+                  const text = (root && readCopyText(root)) || request.text
+                  // Why: the write is async; a newer offer (another anchor) must not be touched.
+                  const stillOffered = (current: QuoteRequest | null): current is QuoteRequest =>
+                    current?.anchor === request.anchor
+                  try {
+                    await window.api.ui.writeClipboardText(text)
+                  } catch {
+                    setRequest((current) => (stillOffered(current) ? null : current))
+                    return
+                  }
+                  setRequest((current) =>
+                    stillOffered(current) ? { ...current, copied: true } : current
+                  )
+                  window.clearTimeout(copiedTimerRef.current)
+                  copiedTimerRef.current = window.setTimeout(
+                    () => setRequest((current) => (stillOffered(current) ? null : current)),
+                    COPIED_FEEDBACK_MS
+                  )
+                }}
+              >
+                {request.copied ? <Check className="text-status-success" /> : <Copy />}
+                {request.copied
+                  ? t('components.native-chat.copyMessage.copied', 'Copied')
+                  : t('auto.components.nativeChat.contextMenu.copy', 'Copy')}
+              </Button>
+            )}
           </div>
         </PopoverContent>
       ) : null}

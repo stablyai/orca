@@ -48,6 +48,7 @@ export function NativeChatSelectionQuote({
       readQuotable={(root) =>
         composerRef.current?.acceptsText() ? readNativeChatQuotableSelection(root) : null
       }
+      readCopyText={readNativeChatTranscriptSelection}
       onSelectionSettled={copyTranscriptSelectionOnSelect}
       onAdd={(text) => composerRef.current?.appendText(formatNativeChatQuote(text))}
     />
