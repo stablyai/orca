@@ -217,9 +217,12 @@ export function AntigravityAccountsSection({
       : null
   useOnLaterChange(installKey, reread)
   // Signing in or adding an account changes agy's login, which the account rows read again.
-  // 'idle' is a known first value, so the first sign-in after mount re-reads too.
-  const signedInFlow =
-    signIn.flow?.phase === 'signedIn' ? (signIn.flow.flowId ?? 'another client') : 'idle'
+  // 'idle' once the status is read is a first value, so the first sign-in after mount re-reads too.
+  const signedInFlow = !signIn.known
+    ? null
+    : signIn.flow?.phase === 'signedIn'
+      ? (signIn.flow.flowId ?? 'another client')
+      : 'idle'
   useOnLaterChange(signedInFlow, reread)
   const description = windowsHost
     ? t(

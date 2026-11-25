@@ -138,6 +138,7 @@ export function useAntigravityChatSignInControls(props: {
   const line = status === 'known' ? chatSignInLine(flow, auth, openFailed, t) : null
   return {
     flow,
+    known: status === 'known',
     auth: status === 'known' ? auth : 'unknown',
     signingIn: running(flow),
     ownFlow,

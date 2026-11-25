@@ -42,6 +42,8 @@ let agyLoginGeneration = 0
 /** agy's login changed (a sign-in, an account switch): checks already under way are stale. */
 export function noteAgyLoginChanged(): void {
   agyLoginGeneration += 1
+  // The old login's answer no longer holds; the next check gives the new one.
+  lastAgySignIn = null
 }
 let lastRunsInOrcaHome = false
 
