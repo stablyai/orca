@@ -20,7 +20,7 @@ import {
   botItemWaitingLine,
   type BotItemWaitingLine
 } from './bot-item-question-answers'
-import type { BotItemPendingComment } from './bot-item-pending-comments'
+import type { BotItemPendingComment, BotItemPendingIntent } from './bot-item-pending-comments'
 
 const NO_ASK: BotItemQuestionShape = { body: '', decisions: [] }
 
@@ -64,14 +64,16 @@ export type BotItemQuickReplyActions = {
 export type BotItemSentAnswers = { askId: string; text: string; answers: (string | null)[] }
 
 /** `questionId`: the ask the text answers, so a reply that lands after a new question is refused;
- *  `plain`: it answers none; `skipped`: that ask's lines it leaves unanswered, closing them. */
+ *  `plain`: it answers none; `skipped`: that ask's lines it leaves unanswered, closing them; `intent`:
+ *  what it answers, kept on this device, so a refusal gives back the right words. */
 export type BotItemQuestionStepsSend = (
   text: string,
   paths?: readonly string[],
   questionId?: string,
   plain?: boolean,
   skills?: readonly BotItemCommentSkill[],
-  skipped?: readonly number[]
+  skipped?: readonly number[],
+  intent?: BotItemPendingIntent
 ) => void
 
 export type BotItemQuestionStepsState = {
@@ -166,7 +168,7 @@ export function createBotItemQuestionStepsHooks(
     ): void => {
       hold([])
       setSent({ askId, text, answers })
-      send(text, paths, askId, undefined, skills, skipped)
+      send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers })
     }
     // Typed words wait like a quick reply; files and skills aren't held here, so they post the answers so far.
     const settle = (
@@ -234,6 +236,7 @@ export function createBotItemQuestionStepsHooks(
       : null
     const quick = useLatest(
       (text: string, answering?: { askId: string; skipped: readonly number[] }) => {
+        let intent: BotItemPendingIntent | undefined
         if (asked) {
           const { shape: own } = asked
           // Several lines: only those the text names; a line it skips stays open until the read.
@@ -242,8 +245,17 @@ export function createBotItemQuestionStepsHooks(
               ? botItemNamedAnswers(own, text)
               : [botItemAnswerWords(own, 0, { text })]
           setSent({ askId: asked.askId, text, answers })
+          intent = { askId: asked.askId, shape: own, answers }
         }
-        send(text, [], asked?.askId ?? answering?.askId, undefined, undefined, answering?.skipped)
+        send(
+          text,
+          [],
+          asked?.askId ?? answering?.askId,
+          undefined,
+          undefined,
+          answering?.skipped,
+          intent
+        )
       }
     )
     const stepLine = steps?.shape.decisions[steps.current]
