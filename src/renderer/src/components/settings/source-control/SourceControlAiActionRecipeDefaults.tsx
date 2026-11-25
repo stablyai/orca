@@ -31,6 +31,7 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository/repository-settings-targets'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
+import { getSourceControlAiActionRecipeSectionId } from './source-control-ai-settings-targets'
 import { SourceControlActionRepoOverrideNote } from './SourceControlActionRepoOverrideNote'
 import { retireActionLaunchPreferences } from './source-control-ai-action-recipe-draft'
 import { useSourceControlActionRecipeDraftState } from './source-control-action-recipe-draft-state'
@@ -237,6 +238,7 @@ export function SourceControlAiActionRecipeDefaults({
               setupDiscardSignal={customPromptDiscardSignal}
               key={actionId}
               actionId={actionId}
+              sectionId={getSourceControlAiActionRecipeSectionId(actionId)}
               selectedAgent={selectedAgent as TuiAgent | CustomAgentId | null}
               draftValue={actionRecipeDraftState.values[actionId]}
               baseValue={actionRecipeDraftState.baseValues[actionId]}

@@ -272,6 +272,12 @@ export type GlobalSettings = GlobalSettingsBase & {
    *  chats use the user's own signed-in agy or Orca's server, and chats already on agy run the
    *  user's own agy (same history) or, where there is none, refuse as agy not found. Absent means on. */
   antigravityManagedAgyEnabled?: boolean
+  /** Kill switch for Orca updating its installed Antigravity ACP server by itself when a newer Orca
+   *  pins a newer release. Off, the older server keeps running until Update in Settings, and an
+   *  automatic download in flight stops. Host-owned: each host (desktop, SSH, WSL) reads its own
+   *  value; there is no UI. Separate from antigravityManagedAgyEnabled: with that off, chats run on
+   *  this server. Absent means on. */
+  antigravityServerAutoUpdateEnabled?: boolean
   /** How chats on the Google account method sign in: agy's own login, or Orca's built-in sign-in
    *  on Google's ACP server. Absent or 'auto': the server where Orca's sign-in is already in use,
    *  else agy. */
@@ -455,7 +461,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalAgentDashboardPopout?: boolean
   /** Experimental: panel beside chats and terminals listing the agents each agent works with; off mounts nothing. */
   experimentalOrchestrationPanel?: boolean
-  /** Experimental: icon-only app rail left of the workspace list for switching between Orca destinations. */
+  /** Experimental: icon-only app rail left of the workspace list for switching between Orca destinations; on for new profiles, off for profiles saved before this default. */
   experimentalAppRail?: boolean
   /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
   agentsSidebarIntroShown?: boolean

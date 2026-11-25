@@ -13,6 +13,7 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'showTerminal'
     | 'resolveTerminalHandleByProcessIncarnation'
     | 'getTerminalPaneKey'
+    | 'getTerminalHandleForPaneKey'
     | 'getTerminalProcessIncarnation'
     | 'getTerminalLivenessVerdict'
     | 'checkTerminalAgentPresence'
@@ -24,4 +25,11 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'readTerminal'
     | 'notifyMessageArrived'
     | 'isWorkerAgentInTurn'
+  > &
+  // Lower runtime layers declare neither; without them a release closes its chat.
+  Partial<
+    Pick<
+      OrcaRuntimeService,
+      'sleepWorkspaces' | 'bots' | 'listMobileSessionTabs' | 'savedTabsForWorktree'
+    >
   >

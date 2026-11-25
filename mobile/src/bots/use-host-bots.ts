@@ -22,6 +22,7 @@ import { readHostAccessRequests } from './bot-access-request-operations'
 import { HOST_REFRESH_FALLBACK_MS } from '../worktree/execution-hosts/host-worktree-refresh'
 import { useKeptServerBotListings } from './use-kept-server-bot-listings'
 import { createHostCountTimers } from './host-bot-count-timers'
+import { createFailedReadRetries } from './host-bot-failed-read-retries'
 
 const NO_LISTINGS: readonly HostBotListing[] = []
 
@@ -35,27 +36,29 @@ export type ListingTarget = {
   installationId?: string
 }
 
-/** A host's bots with their workers' lineage; a server older than the page gets a line instead. */
+/** A host's bots with their workers' lineage; a host older than the page gets a line instead, and
+ *  this computer's failed read says so. */
 export async function readHostBotListing(
   target: ListingTarget,
   isServer: boolean,
   /** Whether to read thread links and side chats too. */
   threads = true
 ): Promise<HostBotListing | null> {
+  const named = { hostId: target.hostId, hostLabel: target.hostLabel }
+  // A server's failed read keeps its folders in Projects, as `shownHostBotListings` says.
+  const failed: HostBotListing | null = isServer ? null : { kind: 'read-failed', ...named }
   const bots = await readHostBots(target.client, target.key)
   if (bots.kind === 'no-capability') {
-    return isServer
-      ? { kind: 'update-needed', hostId: target.hostId, hostLabel: target.hostLabel }
-      : null
+    return { kind: 'update-needed', ...named }
   }
   if (bots.kind !== 'bots') {
-    return null
+    return failed
   }
   // Only a host with bots is asked for their workers' lineage.
   const lineageReply = await workspaceLineageRead.request(target.client).catch(() => null)
   const lineage = lineageReply && readHostMethodReply(lineageReply, workspaceLineageRead.interpret)
   if (lineage?.kind !== 'answered') {
-    return null
+    return failed
   }
   const links = lineage.value
   const [unseenReply, linksReply, ownChatsReply, accessRequests] = await Promise.all([
@@ -130,7 +133,11 @@ function startBotListingReads(args: {
     // A failed read keeps the host's last listing, and a failed groups read its last groups, so
     // neither flashes back into folders. Hosts this read doesn't cover keep theirs: a server that
     // went down lists its last read, dimmed. A read without threads keeps the last threads' facts.
-    if (listing) {
+    if (listing?.kind === 'read-failed') {
+      setListings((previous) =>
+        previous.some((entry) => entry.hostId === hostId) ? previous : [...previous, listing]
+      )
+    } else if (listing) {
       setListings((previous) => {
         const last = previous.find((entry) => entry.hostId === hostId)
         const kept = listing.kind === 'listed' && last && last.kind === 'listed' ? last : null
@@ -156,6 +163,7 @@ function startBotListingReads(args: {
     }
     setGroupsUnread(groupsUnread.size > 0)
   }
+  const retries = createFailedReadRetries((host: ListingTarget) => void readHost(host, true))
   const readHost = async (host: ListingTarget, threads: boolean): Promise<void> => {
     if (threads) {
       threadsOwed.add(host.hostId)
@@ -178,6 +186,7 @@ function startBotListingReads(args: {
       apply(host.hostId, listing, withThreads)
       // A failed or unlisted read drops the timer; the read that follows a reconnect sets it again.
       countTimers.readAfter(host, listing?.kind === 'listed' ? listing : null)
+      retries.readAfter(host, listing?.kind === 'read-failed')
     } while (askedAgain.get(host.hostId))
     askedAgain.delete(host.hostId)
   }
@@ -194,6 +203,7 @@ function startBotListingReads(args: {
     stop: () => {
       stopped = true
       countTimers.stop()
+      retries.stop()
     }
   }
 }

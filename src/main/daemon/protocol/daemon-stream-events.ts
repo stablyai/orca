@@ -60,6 +60,8 @@ export type DaemonTransientFact =
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }
   | { kind: '2031-subscribe' }
   | { kind: '2031-unsubscribe' }
+  /** The foreground process exited or a late lookup found an agent; older mains ignore unknown kinds. */
+  | { kind: 'foreground-changed' }
 
 export type TransientFactEvent = {
   type: 'event'

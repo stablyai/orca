@@ -16,6 +16,10 @@ import type {
 } from '../../shared/skills/bundled/bundled-skill-plan'
 import { isBundledSkillLeaveReason } from '../../shared/skills/bundled/bundled-skill-plan'
 import {
+  collapseHomePath,
+  skillBackupDirectory
+} from '../../shared/skills/bundled/bundled-skill-locations'
+import {
   BUNDLED_SKILL_LEAVE_REASON_TEXT,
   BUNDLED_SKILL_PLAN_OP_TEXT,
   summarizeBundledSkillOutcomes
@@ -134,6 +138,9 @@ function describePlanOp(op: BundledSkillOp): string {
 function describeOutcomeOp(op: BundledSkillOpOutcome): string | null {
   switch (op.status) {
     case 'done':
+      if (op.backupPath) {
+        return `Old copy moved to ${op.backupPath}`
+      }
       return op.kind === 'leave' ? leaveText(op.reason) : null
     case 'changed':
       return 'Changed since it was planned; nothing was written. Run it again to re-plan.'
@@ -236,8 +243,17 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
       (name) =>
         `${name}: not installed, so skipped. Install it with: orca skills install --skill ${name}`
     )
+    // Why the home's own separator: path.join would mix them for a home from another OS.
+    const backupFolder = collapseHomePath(
+      skillBackupDirectory(plan.homeDirectory),
+      plan.homeDirectory
+    )
     const forceHint = hasReplaceableLeave(plan)
-      ? ['', 'Rerun with --force to replace a copy that was skipped; Orca keeps a backup of it.']
+      ? [
+          '',
+          'Rerun with --force to replace skipped copies where possible. ' +
+            `Orca moves each copy it replaces, including any extra files, to ${backupFolder} first.`
+        ]
       : []
 
     if (flags.has('dry-run')) {

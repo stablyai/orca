@@ -17,7 +17,8 @@ import { useNativeChatQuestionStepHeight } from './use-native-chat-question-step
 import {
   useReportNativeChatQuestionDraft,
   foldNativeChatQuestionOnEscape,
-  confirmNativeChatQuestionOnCardEnter
+  confirmNativeChatQuestionOnCardEnter,
+  type NativeChatQuestionCardProps
 } from './NativeChatQuestionCardParts'
 import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
 import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/questions/native-chat-ask-dismiss-key'
@@ -27,9 +28,11 @@ import {
   askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
+  askUnansweredRequired,
   toggleAskOption
 } from '../../../../../shared/native-chat/input/questions/native-chat-ask-card-rules'
-import type { NativeChatQuestionCardProps } from './native-chat-question-card-props'
+
+export type { NativeChatQuestionCardProps } from './NativeChatQuestionCardParts'
 
 // Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1
@@ -134,24 +137,24 @@ function NativeChatQuestionCardState({
     }
   }
 
-  const answerFor = (qi: number, sel = selections, oth = otherText): string => {
-    const question = prompt.questions[qi]
-    const picked = pickedOptions(qi, sel)
-      .map((optionIndex) => question?.options[optionIndex]?.label ?? '')
-      .filter((label) => label.length > 0)
-    const other = typedAnswerChosen(qi, sel, oth) ? typedText(qi, oth) : ''
-    return [...picked, ...(other ? [other] : [])].join(', ')
-  }
-
-  const answered = (qi: number): boolean => answerFor(qi).length > 0 || acceptsEmpty(qi)
-  const currentAnswered = answered(index)
-  const anyAnswered = prompt.questions.some((_, i) => answered(i))
+  // By picked option, not label: a provider may offer a choice whose label is empty.
+  const answeredAt = (qi: number, sel = selections, oth = otherText): boolean =>
+    pickedOptions(qi, sel).length > 0 || typedAnswerChosen(qi, sel, oth)
+  const currentAnswered = answeredAt(index)
+  const anyAnswered = prompt.questions.some((_, i) => answeredAt(i))
   // With nothing to dismiss (an item's ask), only a whole answer goes: Submit waits for every step.
-  const nothingToSend =
-    !onCancel && isLast && prompt.questions.some((_, i) => !answerFor(i) && !acceptsEmpty(i))
-  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered || nothingToSend)
+  const nothingToSend = !onCancel && isLast && prompt.questions.some((_, i) => !answeredAt(i))
+  const waitsForAnswer = q.required === true && !currentAnswered
+  const unansweredRequired = askUnansweredRequired(prompt.questions, (i) => answeredAt(i))
+  const confirmLabel = askConfirmLabel(
+    currentAnswered || waitsForAnswer,
+    isLast,
+    anyAnswered || nothingToSend,
+    unansweredRequired !== -1 && unansweredRequired !== index
+  )
+  const confirmBlocked = askConfirmAction({ isLast, anyAnswered, waitsForAnswer }) === 'stay'
   // A caller that needs every answer sends Submit to the open step instead of skipping it.
-  const canSkipSteps = !nothingToSend && !requiresEveryAnswer
+  const canSkipSteps = !nothingToSend && !requiresEveryAnswer && !waitsForAnswer
   const skipAndSubmit = confirmLabel === 'submit' && !currentAnswered && total > 1 && canSkipSteps
   const outlinedConfirm =
     skipAndSubmit || nothingToSend || (requiresEveryAnswer && !currentAnswered)
@@ -184,7 +187,12 @@ function NativeChatQuestionCardState({
   // Submit from an explicit snapshot so the latest pick cannot be lost to asynchronous state updates.
   const advanceOrSubmit = (sel: number[][], oth: string[]): void => {
     if (isLast) {
-      submitAll(sel, oth)
+      const unanswered = askUnansweredRequired(prompt.questions, (i) => answeredAt(i, sel, oth))
+      if (unanswered === -1) {
+        submitAll(sel, oth)
+      } else {
+        setIndex(unanswered)
+      }
     } else {
       setIndex((i) => Math.min(i + 1, total - 1))
     }
@@ -228,7 +236,7 @@ function NativeChatQuestionCardState({
     if (blocked) {
       return
     }
-    const action = askConfirmAction({ isLast, anyAnswered, fromKeyboard })
+    const action = askConfirmAction({ isLast, anyAnswered, fromKeyboard, waitsForAnswer })
     if (action === 'proceed') {
       advanceOrSubmit(selections, otherText)
     } else if (action === 'cancel') {
@@ -292,18 +300,16 @@ function NativeChatQuestionCardState({
           ref={surfaceRef}
           data-native-chat-dock-clip
           className={cn(
-            'native-chat-question-card-surface relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-[14px] border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm',
+            'native-chat-question-card-surface relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-xl border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm',
             look?.surfaceClassName
           )}
         >
           <NativeChatQuestionCardHeader
             steps={prompt.questions.map((question, i) => ({
-              // Questions never reorder within a card, so their position is their identity.
-              id: `question-${i}`,
               header:
                 question.header ||
                 t('components.native-chat.question.step', 'Step {{value0}}', { value0: i + 1 }),
-              answered: answered(i)
+              answered: answeredAt(i)
             }))}
             index={index}
             disabled={isSubmitting}
@@ -326,9 +332,7 @@ function NativeChatQuestionCardState({
                 // The card's heading, one step above its body text and scaling with it; it fades while more lies below.
                 'native-chat-question-card-question min-h-[1lh] shrink overflow-y-auto px-3.5 text-[length:calc(var(--text-sm)*15/13)] leading-snug font-semibold text-foreground scrollbar-sleek',
                 // Capped at whole lines plus its own top padding, so a long question never shows a cut line.
-                total > 1
-                  ? 'max-h-[calc(4lh+var(--spacing)*0.5)] pt-0.5 [[data-native-chat-dock-fit~=card]_&]:max-h-[calc(2lh+var(--spacing)*0.5)]'
-                  : 'max-h-[calc(4lh+var(--spacing)*3)] pt-3 [[data-native-chat-dock-fit~=card]_&]:max-h-[calc(2lh+var(--spacing)*3)]',
+                'max-h-[calc(4lh+var(--spacing)*3)] pt-3 [[data-native-chat-dock-fit~=card]_&]:max-h-[calc(2lh+var(--spacing)*3)]',
                 // In a scrolling body the question keeps two lines (scrolling for the rest), so option 1 starts in view.
                 '[[data-native-chat-dock-fit~=card]_&]:shrink-0'
               )}
@@ -421,7 +425,7 @@ function NativeChatQuestionCardState({
               enterHint={
                 currentAnswered && !isSubmitting && !q.multiSelect && !freeTextInput?.multiline
               }
-              disabled={blocked || nothingToSend}
+              disabled={blocked || nothingToSend || confirmBlocked}
               onConfirm={() => confirm()}
             />
           </div>

@@ -22,6 +22,10 @@ import {
   SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID,
   SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS
 } from '../navigation/settings-navigation-foundations'
+import {
+  cancelPendingSettingsTargetFocus,
+  holdSettingsTargetFocusRequest
+} from '../navigation/settings-target-focus'
 
 export function useSettingsPageEffects(
   model: SettingsStoreModel,
@@ -56,6 +60,8 @@ export function useSettingsPageEffects(
     hasUnsavedSourceControlAiPromptChangesRef,
     pendingNavSectionRef,
     pendingScrollTargetRef,
+    pendingFocusTargetRef,
+    pendingFocusWatchRef,
     promptDiscardSourceControlAiPromptChanges,
     searchInputRef,
     shortcutsEscapeConfirmUntilRef
@@ -219,11 +225,19 @@ export function useSettingsPageEffects(
     }
     cancelSettingsListReveal()
     consumeSettingsNavigation(settingsNavigationTarget)
+    // A newer navigation supersedes any focus an earlier deep link is still waiting to give.
+    cancelPendingSettingsTargetFocus({ pendingFocusTargetRef, pendingFocusWatchRef })
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current =
       settingsNavigationTarget.pane === 'bots'
         ? paneSectionId
         : (settingsNavigationTarget.sectionId ?? paneSectionId)
+    if (settingsNavigationTarget.focusFirstControl && settingsNavigationTarget.sectionId) {
+      holdSettingsTargetFocusRequest(
+        { pendingFocusTargetRef, pendingFocusWatchRef },
+        settingsNavigationTarget.sectionId
+      )
+    }
     setHighlightedSettingsTarget(
       settingsNavigationTarget.pane === 'developer-permissions' &&
         settingsNavigationTarget.sectionId
@@ -259,6 +273,8 @@ export function useSettingsPageEffects(
     closeSettingsPageWithPromptGuard,
     pendingNavSectionRef,
     pendingScrollTargetRef,
+    pendingFocusTargetRef,
+    pendingFocusWatchRef,
     repoIdToHostSelection,
     repoIdToRepresentative,
     setHighlightedSettingsTarget,

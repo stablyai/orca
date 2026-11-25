@@ -124,7 +124,7 @@ export function MobileBotShareFlow(props: ShareFlowProps) {
         !retried &&
         (code === BOT_SHARE_ERRORS.expired || code === BOT_SHARE_ERRORS.prepareAgain)
       ) {
-        const rebuilt = await state.select({}, shown.bot.setupNote ?? '')
+        const rebuilt = await state.select({}, { setupNote: shown.bot.setupNote ?? '' })
         if (rebuilt) {
           if (rebuilt.botDigest !== shown.botDigest) {
             setPhase({ kind: 'idle' })
@@ -218,11 +218,6 @@ export function MobileBotShareFlow(props: ShareFlowProps) {
         ) : (
           <ShareListPage list={page.list} ctx={ctx} />
         )}
-        {page.kind === 'list' && page.list === 'memory' && secret?.part?.startsWith('memory:') ? (
-          <SettingsNote error>
-            {t('bots.share.removeSecret', 'Remove the secret to publish')}
-          </SettingsNote>
-        ) : null}
       </>
     )
   }

@@ -46,6 +46,10 @@ export type JournalConnectorReplyFill = JournalConnectorReplyKey & {
   links?: ConnectorWorkLink[]
   /** How long the answered turn ran, on the machine's own clock. */
   tookMs?: number
+  /** The answering turn's turn-started `at`, as its conversation was told; absent when unknown. */
+  turnStartedAt?: number
+  /** A turn done without an answer ran a tool call that may have acted, so its line asks to check. */
+  toolsRan?: true
 }
 
 /** An outbox row not yet accepted by the cloud. */
@@ -60,7 +64,21 @@ export type JournalConnectorReplyRow = JournalConnectorReplyKey & {
   claimMessageId?: string
   /** Unfilled: the usage-limit failure its cut keeps for a close without a continuation. */
   cutFailure?: ConnectorFailure
+  /** Its turn ended with no answer and was asked once more; never asked again. */
+  emptyRetried?: true
   fill?: Omit<JournalConnectorReplyFill, keyof JournalConnectorReplyKey> & { filledAt: number }
+  /** The quiet-marker rule in effect when it was admitted: 'trailing' drops only the trailing
+   *  marker. Absent (admitted by an older build): the marker silences the whole reply, except an
+   *  owner's own DM. */
+  quietRule?: 'trailing'
+}
+
+/** An empty turn's rows held for its one retry: its open rows and the rows its continuation
+ *  claimed, cut for the retry to claim, and marked retried. */
+export type JournalConnectorReplyRetryRows = {
+  keys: readonly JournalConnectorReplyKey[]
+  claims: readonly string[]
+  cut: JournalConnectorReplyCut
 }
 
 /** Open rows a cut now owes; a failure (a usage-limit cut's, with its reset) is kept for its close. */

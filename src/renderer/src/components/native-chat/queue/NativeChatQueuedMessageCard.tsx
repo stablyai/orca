@@ -1,7 +1,15 @@
 import { QueuedMessageImageCount } from '@/components/native-chat/queue/NativeChatQueuedMessageImageCount'
 import type { QueuedMessageDragPresentation } from '@/components/native-chat/queue/NativeChatQueuedMessageRows'
 import { useId, useState } from 'react'
-import { AlertCircle, CornerDownRight, ListEnd, Pencil, Send, Trash2 } from 'lucide-react'
+import {
+  AlertCircle,
+  ChevronDown,
+  CornerDownRight,
+  ListEnd,
+  Pencil,
+  Send,
+  Trash2
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
@@ -25,8 +33,8 @@ import type { QueuedMessagesPendingAction } from '@/components/native-chat/queue
 import { useNativeChatClippedLine } from '@/components/native-chat/queue/use-native-chat-clipped-line'
 import {
   QUEUED_ROW_REVEAL,
-  QueuedMessageExpandToggle,
-  QueuedMessageRowTool
+  QueuedMessageRowTool,
+  queuedRowToolsMask
 } from '@/components/native-chat/queue/NativeChatQueuedMessageRowTools'
 import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import {
@@ -80,7 +88,7 @@ export function queuedMessageCardCaption(
 
 /** Steer's or Send's label and tooltip: Steer only into a turn that is running (`queuedMessageCardSteers`). */
 export function queuedMessageCardSendNow(
-  card: QueuedMessageCard,
+  card: Pick<QueuedMessageCard, 'hold' | 'command'>,
   agentWorking: boolean,
   t: Translate = translate
 ): {
@@ -179,59 +187,28 @@ export function NativeChatQueuedMessageCard({
       </li>
     )
   }
-  const steer =
-    card.hold === 'sending' || card.waitsForAgent ? null : (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant={showsSteerShortcut ? 'queued-head-steer' : 'chat-tool'}
-            size="xs"
-            data-queued-message-send
-            onClick={onSteer}
-            disabled={steerHeld || busy}
-          >
-            <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
-              {failed && drag?.grip ? (
-                <AlertCircle className="size-3 text-destructive" />
-              ) : sendNow.steers ? (
-                <CornerDownRight className="size-3" />
-              ) : (
-                <Send className="size-3" />
-              )}
-            </NativeChatPendingIcon>
-            {failed ? t('components.native-chat.queuedMessages.retry', 'Retry') : sendNow.label}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          <span className="flex items-center gap-2">
-            <span>{failed ? caption : sendNow.hint}</span>
-            {showsSteerShortcut ? (
-              <ShortcutKeyCombo keys={isMac ? ['⌘', '⇧', '⏎'] : ['Ctrl', 'Shift', 'Enter']} />
-            ) : null}
-          </span>
-        </TooltipContent>
-      </Tooltip>
-    )
-  const editable = card.hold !== 'sending' && !card.notEditable && onEdit !== undefined
-  // Tools fade in over the line's end, so the row reserves no empty space for them at rest.
-  const toolCount =
-    (expanded || clipped ? 1 : 0) + (card.hold === 'sending' ? 0 : 1) + (editable ? 1 : 0)
-  // Shown while open or acting, so a pressed tool never vanishes under a pointer that left.
-  const toolsPinned = expanded || busy
-  const rowStyle: React.CSSProperties & { '--queued-tools-mask': string } = {
-    ...drag?.rowStyle,
-    '--queued-tools-mask': `linear-gradient(to left, transparent ${toolCount * 24}px, #000 ${toolCount * 24 + 16}px)`
-  }
+  // Nothing acts on a send still on its way: the host holds no card for it yet.
+  const actionable = card.hold !== 'sending'
+  // The host refuses these edits: a command would become a message, a run the owner's words.
+  const editable = actionable && !card.notEditable && onEdit !== undefined
+  // Edit and Delete wait for hover or keyboard focus; Steer stays on every row.
+  const toolCount = actionable ? (editable ? 2 : 1) : 0
+  const maskStyle: (React.CSSProperties & { '--queued-tools-mask': string }) | undefined =
+    toolCount > 0 ? { '--queued-tools-mask': queuedRowToolsMask(toolCount) } : undefined
   return (
     <li
       ref={drag?.rowRef}
-      style={rowStyle}
+      style={drag?.rowStyle}
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
       // Touch has no hover: a tap focuses the row, and focus-within reveals its tools there only, so a mouse click never pins them.
       tabIndex={-1}
-      className="group/queued relative rounded-md py-1 pr-1 pl-1.5 outline-none hover:bg-accent/50 has-[:focus-visible]:bg-accent/50 [@media(hover:none)]:focus-within:bg-accent/50"
+      className={cn(
+        'group/queued relative px-2.5 py-1.5 outline-none',
+        // Lit while the chat's composer shows Steer queued: the card that press would send.
+        showsSteerShortcut &&
+          '[[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-accent'
+      )}
     >
       {drag?.insertion ? (
         <span
@@ -242,7 +219,7 @@ export function NativeChatQueuedMessageCard({
           )}
         />
       ) : null}
-      <div className="flex min-h-6 items-center gap-2">
+      <div className="flex items-center gap-1">
         <span className="relative flex size-3.5 shrink-0 items-center justify-center">
           {attention && !drag?.grip ? (
             <AlertCircle className="size-3.5 text-destructive" aria-hidden />
@@ -261,11 +238,13 @@ export function NativeChatQueuedMessageCard({
         <div
           className={cn(
             'min-w-0 flex-1',
+            // The line fades out under the revealed tools; shown while acting, so a pressed tool never vanishes.
             toolCount > 0 &&
-              (toolsPinned
+              (busy
                 ? '[mask-image:var(--queued-tools-mask)]'
                 : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-has-[:focus-visible]/queued:[mask-image:var(--queued-tools-mask)] [@media(hover:none)]:group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
           )}
+          style={maskStyle}
         >
           {sender}
           {expanded ? null : (
@@ -291,21 +270,16 @@ export function NativeChatQueuedMessageCard({
             </p>
           ) : null}
         </div>
-        <div className="relative flex shrink-0 items-center gap-1">
+        {/* No gap: each glyph's own box spacing (an icon button's 5px, the image count's padding) sets
+            the even rhythm the hover-revealed tools, which sit outside this flow, already have. */}
+        <div className="relative flex shrink-0 items-center">
           {toolCount > 0 ? (
             <div
               className={cn(
                 'absolute inset-y-0 right-full flex items-center transition-opacity motion-reduce:transition-none',
-                !toolsPinned && QUEUED_ROW_REVEAL
+                !busy && QUEUED_ROW_REVEAL
               )}
             >
-              {expanded || clipped ? (
-                <QueuedMessageExpandToggle
-                  expanded={expanded}
-                  controls={expanded ? textId : undefined}
-                  onToggle={() => setExpanded(!expanded)}
-                />
-              ) : null}
               {editable ? (
                 <QueuedMessageRowTool
                   label={t('components.native-chat.queuedMessages.editMessage', 'Edit message')}
@@ -315,31 +289,63 @@ export function NativeChatQueuedMessageCard({
                   <Pencil className="size-3.5" />
                 </QueuedMessageRowTool>
               ) : null}
-              {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
-              {card.hold === 'sending' ? null : (
-                <QueuedMessageRowTool
-                  label={t('components.native-chat.queuedMessages.delete', 'Delete')}
-                  disabled={busy}
-                  onClick={onDelete}
-                >
-                  <NativeChatPendingIcon pending={pending === 'delete'} className="size-3.5">
-                    <Trash2 className="size-3.5" />
-                  </NativeChatPendingIcon>
-                </QueuedMessageRowTool>
-              )}
+              <QueuedMessageRowTool
+                label={t('components.native-chat.queuedMessages.delete', 'Delete')}
+                disabled={busy}
+                onClick={onDelete}
+              >
+                <NativeChatPendingIcon pending={pending === 'delete'} className="size-3.5">
+                  <Trash2 className="size-3.5" />
+                </NativeChatPendingIcon>
+              </QueuedMessageRowTool>
             </div>
           ) : null}
-          {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
-          {/* Steer keeps one column on every row; at rest it shows only where ⌘⇧⏎ or a retry would act. */}
-          {steer ? (
-            <div
-              className={cn(
-                'flex transition-opacity motion-reduce:transition-none',
-                !(showsSteerShortcut || attention || busy) && QUEUED_ROW_REVEAL
-              )}
-            >
-              {steer}
-            </div>
+          {card.images ? (
+            <QueuedMessageImageCount images={card.images} className="h-6 rounded-md px-[5px]" />
+          ) : null}
+          {expanded || clipped ? (
+            <QueuedMessageExpandToggle
+              expanded={expanded}
+              controls={expanded ? textId : undefined}
+              onToggle={() => setExpanded(!expanded)}
+            />
+          ) : null}
+          {/* Every row keeps its own Steer at rest, since each sends that one message. A command never
+              steers: its Send shows only while the agent is idle. */}
+          {actionable && !card.waitsForAgent ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
+                  size="xs"
+                  data-queued-message-send
+                  onClick={onSteer}
+                  disabled={steerHeld || busy}
+                >
+                  <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
+                    {failed && drag?.grip ? (
+                      <AlertCircle className="size-3 text-destructive" />
+                    ) : sendNow.steers ? (
+                      <CornerDownRight className="size-3" />
+                    ) : (
+                      <Send className="size-3" />
+                    )}
+                  </NativeChatPendingIcon>
+                  {failed
+                    ? t('components.native-chat.queuedMessages.retry', 'Retry')
+                    : sendNow.label}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                <span className="flex items-center gap-2">
+                  <span>{failed ? caption : sendNow.hint}</span>
+                  {showsSteerShortcut ? (
+                    <ShortcutKeyCombo keys={isMac ? ['⌘', '⇧', '⏎'] : ['Ctrl', 'Shift', 'Enter']} />
+                  ) : null}
+                </span>
+              </TooltipContent>
+            </Tooltip>
           ) : null}
         </div>
       </div>
@@ -353,5 +359,48 @@ export function NativeChatQueuedMessageCard({
         </p>
       ) : null}
     </li>
+  )
+}
+
+function QueuedMessageExpandToggle({
+  expanded,
+  controls,
+  onToggle
+}: {
+  expanded: boolean
+  /** The opened text element; absent while folded, when no such element exists. */
+  controls: string | undefined
+  onToggle: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const label = expanded
+    ? t('components.native-chat.queuedMessages.showLess', 'Show less')
+    : t('components.native-chat.queuedMessages.showFullMessage', 'Show full message')
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          // The chevron's ink is narrower than the other icons': a narrower box keeps its gaps even.
+          className="w-5"
+          aria-label={label}
+          aria-expanded={expanded}
+          aria-controls={controls}
+          onClick={onToggle}
+        >
+          <ChevronDown
+            className={cn(
+              'size-3.5 transition-transform motion-reduce:transition-none',
+              expanded && 'rotate-180'
+            )}
+          />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }

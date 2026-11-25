@@ -111,7 +111,8 @@ const PROJECT_SKILL_FOLDERS: readonly (readonly [AgentType, string, SkillProvide
   ['cursor', '.cursor', ['agent-skills']],
   ['copilot', '.github', ['agent-skills']],
   ['qoder', '.qoder', ['agent-skills']],
-  ['opencode', '.opencode', ['agent-skills']]
+  ['opencode', '.opencode', ['agent-skills']],
+  ['prime-agent', '.prime/agent', ['agent-skills']]
 ]
 
 export function buildSkillDiscoverySources(

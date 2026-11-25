@@ -34,6 +34,7 @@ import {
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
 import { createRendererShutdownCheckpointService } from './renderer-shutdown-checkpoint-service'
 import { initializeMainProcessPlugins } from '../startup/plugin-startup/main-process-plugins'
+import { scheduleStalePluginGitTempSweep } from '../plugins/installation/plugin-git-temp-sweep'
 import {
   collectWorktreeTrashSweepRoots,
   sweepStaleWorktreeTrash
@@ -73,6 +74,7 @@ export type DesktopCorePaths = {
 /** What the composing process supplies: native effects and facts the core cannot own. */
 export type DesktopCoreNative = {
   isQuitting(): boolean
+  isNativeUpdateInstallUnderWay(): boolean
   isServeMode(): boolean
   servedOrcaProfileId(): string | undefined
   openExternal(url: string): Promise<void>
@@ -261,7 +263,9 @@ export async function composeDesktopCore(
     claudeUsage: core.claudeUsage!,
     codexUsage: core.codexUsage!,
     // Remote clients mirror schedules; only server processes execute remote_host_service ownership.
-    allowRemoteHostScheduling: native.isServeMode()
+    allowRemoteHostScheduling: native.isServeMode(),
+    // A macOS update closes windows long before will-quit.
+    isHostQuitting: () => native.isQuitting() || native.isNativeUpdateInstallUnderWay()
   })
   startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(core, runtime, {
@@ -271,6 +275,7 @@ export async function composeDesktopCore(
   })
   installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
   await initializeMainProcessPlugins(core, store)
+  scheduleStalePluginGitTempSweep()
   core.starNag = new StarNagService(store, core.stats!)
   core.starNag.start()
   core.starNag.registerIpcHandlers()

@@ -30,8 +30,8 @@ export type ProcessSpec = {
   stdio?: NodeSpawnOptions['stdio']
   /** Bun and Node require JSON for an IPC channel shared between the two runtimes. */
   serialization?: NodeSpawnOptions['serialization']
-  /** Native POSIX stops require group proof; the final caller deadline never releases physical ownership. */
-  terminationBarrier?: boolean | ProcessTerminationBarrier
+  /** 'wait-for-posix-group' also keeps the runner alive until an interrupted group is quiescent. */
+  terminationBarrier?: boolean | 'wait-for-posix-group' | ProcessTerminationBarrier
   /** Normal close or verified termination; native POSIX close after stop alone is insufficient. */
   onChildTerminated?: () => void
   /** Every raw stderr chunk as it arrives, including any past the capture cap. */
