@@ -190,6 +190,19 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
               )
             ).id
     }
+    if (params.milestone !== undefined) {
+      fields.projectMilestoneId =
+        params.milestone === null
+          ? null
+          : (
+              await this.resolveLinearProjectMilestone(
+                params.milestone,
+                fields.projectId === undefined ? current.project?.id : fields.projectId,
+                workspaceId,
+                signal
+              )
+            ).id
+    }
     if (params.parentId !== undefined) {
       fields.parentId =
         params.parentId === null

@@ -129,6 +129,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear list-issues' && flag === 'priority') {
     return '--priority <0-4>       0=none, 1=urgent, 2=high, 3=medium, 4=low'
   }
+  if (command === 'linear list-issues' && flag === 'milestone') {
+    return '--milestone <name|id> Project milestone name or id; null lists issues without one'
+  }
   if (command === 'linear list-issues' && flag === 'limit') {
     return '--limit <n>            Max issues to return; omit to return every match'
   }
@@ -158,6 +161,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   }
   if (command.startsWith('linear ') && flag === 'workspace') {
     return '--workspace <id>      Connected Linear workspace id'
+  }
+  if (command.startsWith('linear ') && flag === 'milestone') {
+    return '--milestone <name|id> Project milestone name or id; needs the issue project or --project'
   }
   if (command.startsWith('linear ') && flag === 'body') {
     return '--body <text>         Linear comment or issue body'

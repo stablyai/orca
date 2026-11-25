@@ -234,3 +234,20 @@ export const PROJECT_TEAMS_QUERY = `
     }
   }
 `
+
+export const PROJECT_MILESTONES_QUERY = `
+  query OrcaLinearProjectMilestones($id: String!, $first: Int, $after: String) {
+    project(id: $id) {
+      projectMilestones(first: $first, after: $after) {
+        nodes {
+          id
+          name
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+`

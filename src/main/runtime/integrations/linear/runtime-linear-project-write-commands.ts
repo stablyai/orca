@@ -5,6 +5,7 @@ import {
   listProjectsByExactName as listLinearProjectsByExactName,
   listProjects as listLinearProjects
 } from '../../../linear/projects/linear-project-queries'
+import { listProjectMilestones as listLinearProjectMilestones } from '../../../linear/projects/linear-project-milestone-queries'
 import { listProjectTeams as listLinearProjectTeams } from '../../../linear/projects/linear-project-team-queries'
 import { getViewerForWorkspaceOrThrow as getLinearViewerForWorkspaceOrThrow } from '../../../linear/teams/linear-team-queries'
 import { linearError } from '../../../linear/issues/context/linear-access-errors'
@@ -104,6 +105,50 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
       })),
       nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
     })
+  }
+
+  public async resolveLinearProjectMilestone(
+    input: string,
+    projectId: string | null | undefined,
+    workspaceId: string,
+    signal?: AbortSignal
+  ): Promise<{ id: string; name: string }> {
+    signal?.throwIfAborted()
+    const trimmed = input.trim()
+    if (!trimmed) {
+      throw linearError('linear_invalid_milestone', 'Pass a non-empty Linear milestone id or name.')
+    }
+    if (!projectId) {
+      throw linearError(
+        'linear_invalid_milestone',
+        'A milestone belongs to a project. Pass --project, or set the issue project first.'
+      )
+    }
+    let read: Awaited<ReturnType<typeof listLinearProjectMilestones>>
+    try {
+      read = await listLinearProjectMilestones(projectId, workspaceId, signal)
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+    const normalized = trimmed.toLowerCase()
+    const matches = read.milestones.filter(
+      (milestone) =>
+        milestone.id.toLowerCase() === normalized || milestone.name.toLowerCase() === normalized
+    )
+    if (matches.length === 1) {
+      return matches[0]
+    }
+    throw linearError(
+      'linear_invalid_milestone',
+      matches.length === 0
+        ? `No milestone in the project exactly matched "${trimmed}".`
+        : `Multiple milestones in the project exactly matched "${trimmed}".`,
+      {
+        milestones: read.milestones,
+        truncated: read.hasMore,
+        nextSteps: ['Retry with a milestone id from this list.']
+      }
+    )
   }
 
   public async readLinearProjectByIdForCreate(

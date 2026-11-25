@@ -27,6 +27,7 @@ export const runLinearListIssues: CommandHandler = async ({ flags, client, json 
     cursor: getOptionalStringFlag(flags, 'cursor'),
     orderBy: getOrderBy(flags),
     project: getOptionalStringFlag(flags, 'project'),
+    milestone: getOptionalStringFlag(flags, 'milestone'),
     release: getOptionalStringFlag(flags, 'release'),
     assignee: getOptionalStringFlag(flags, 'assignee'),
     delegate: getOptionalStringFlag(flags, 'delegate'),

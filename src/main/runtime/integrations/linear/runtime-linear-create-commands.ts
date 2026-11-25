@@ -21,6 +21,7 @@ export class RuntimeLinearCreateCommands extends RuntimeLinearSaveFieldCommands 
       dueDate?: string
       labels?: string[]
       projectInput?: string
+      milestoneInput?: string
       parentInput?: string
       parentCurrent?: boolean
       workspaceId?: string

@@ -54,6 +54,12 @@ export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldComman
     if (fields.projectId !== undefined && (issue.project?.id ?? null) !== fields.projectId) {
       return false
     }
+    if (
+      fields.projectMilestoneId !== undefined &&
+      (issue.projectMilestone?.id ?? null) !== fields.projectMilestoneId
+    ) {
+      return false
+    }
     const issueLabelIds = issue.labelIds ?? issue.labels?.map((label) => label.id) ?? []
     return fields.labelIds === undefined || sameStringSet(issueLabelIds, fields.labelIds)
   }
@@ -67,6 +73,7 @@ export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldComman
       dueDate?: string
       labels?: string[]
       projectInput?: string
+      milestoneInput?: string
     },
     team: { id: string; workspaceId: string },
     signal?: AbortSignal
@@ -114,6 +121,15 @@ export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldComman
     if (params.projectInput) {
       const project = await this.resolveLinearCreateProject(params.projectInput, team, signal)
       fields.projectId = project.id
+    }
+    if (params.milestoneInput) {
+      const milestone = await this.resolveLinearProjectMilestone(
+        params.milestoneInput,
+        fields.projectId,
+        team.workspaceId,
+        signal
+      )
+      fields.projectMilestoneId = milestone.id
     }
     return fields
   }

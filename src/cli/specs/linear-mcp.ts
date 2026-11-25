@@ -6,7 +6,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
     path: ['linear', 'save-issue'],
     summary: 'Create or update a Linear issue',
     usage:
-      'orca linear save-issue [<id>] [--current] [--team <key|id>] [--title <title>] [--description <text> | --body-file <path|->] [--state <state>] [--assignee me|<user>|null] [--priority none|low|medium|high|urgent] [--estimate <number>|null] [--due-date <yyyy-mm-dd>|null] [--label <label>...] [--project <project>|null] [--parent-id <issue>|null] [--write-id <uuid>] [--workspace <id>] [--json]',
+      'orca linear save-issue [<id>] [--current] [--team <key|id>] [--title <title>] [--description <text> | --body-file <path|->] [--state <state>] [--assignee me|<user>|null] [--priority none|low|medium|high|urgent] [--estimate <number>|null] [--due-date <yyyy-mm-dd>|null] [--label <label>...] [--project <project>|null] [--milestone <milestone>|null] [--parent-id <issue>|null] [--write-id <uuid>] [--workspace <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'current',
@@ -22,6 +22,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
       'due-date',
       'label',
       'project',
+      'milestone',
       'parent-id',
       'write-id',
       'workspace',
@@ -36,14 +37,15 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Without <id> or --current, creates an issue and requires --team and --title.',
       'Labels replace the complete label set, matching Linear MCP save_issue semantics.',
-      'Use the literal null to clear assignee, estimate, due date, project, or parent.'
+      'Use the literal null to clear assignee, estimate, due date, project, milestone, or parent.',
+      '--milestone takes a milestone name or id from the issue project, or from --project when both are passed.'
     ]
   },
   {
     path: ['linear', 'list-issues'],
     summary: 'List Linear issues with MCP-compatible filters',
     usage:
-      'orca linear list-issues [--team <team>] [--cycle <cycle>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--order-by createdAt|updatedAt] [--project <project>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]',
+      'orca linear list-issues [--team <team>] [--cycle <cycle>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--order-by createdAt|updatedAt] [--project <project>] [--milestone <milestone|null>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'team',
@@ -55,6 +57,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
       'cursor',
       'order-by',
       'project',
+      'milestone',
       'release',
       'assignee',
       'delegate',
@@ -69,6 +72,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
       'orca linear list-issues --team ENG --state started --assignee me --json',
       'orca linear list-issues --query auth --updated-at -P7D --json',
       'orca linear list-issues --assignee me --priority 1 --limit 100 --json',
+      'orca linear list-issues --project Launch --milestone "Phase 1" --json',
       'orca linear list-issues --cursor <cursor> --json'
     ],
     notes: [
@@ -76,7 +80,8 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
       '--state takes a state name or type, or open for any state not done or canceled.',
       'JSON sets result.truncated when a cap held results back; text prints truncated: showing N.',
       'Reuse --cursor from the previous page. Issued cursors bind the workspace; raw Linear cursors still need --workspace.',
-      '--priority is 0=none, 1=urgent, 2=high, 3=medium, 4=low. JSON includes priorityLabel on each issue.'
+      '--priority is 0=none, 1=urgent, 2=high, 3=medium, 4=low. JSON includes priorityLabel on each issue.',
+      '--milestone matches a project milestone by name or id; null lists issues without one. JSON includes projectMilestone on each issue.'
     ]
   },
   {

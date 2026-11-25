@@ -11,6 +11,7 @@ export type LinearMcpIssueListRequest = {
   cursor?: string
   orderBy?: 'createdAt' | 'updatedAt'
   project?: string
+  milestone?: string
   release?: string
   assignee?: string
   delegate?: string

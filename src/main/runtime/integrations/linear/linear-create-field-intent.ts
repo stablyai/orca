@@ -6,4 +6,5 @@ export type LinearCreateFieldIntent = {
   dueDate?: string | null
   labelIds?: string[]
   projectId?: string
+  projectMilestoneId?: string
 }
