@@ -55,11 +55,15 @@ function candidates(body: string): string[][] {
     // from one running on.
     const rest = body.slice(from, from + LOCAL_PATH_LINE_MAX + 1)
     const newline = rest.indexOf('\n')
-    const atEnd = from + rest.length === body.length && rest.length <= LOCAL_PATH_LINE_MAX
+    const lookahead = rest.charAt(LOCAL_PATH_LINE_MAX)
+    // The body ends within the read: right at the cap, or one space, tab or CR past it.
+    const atEnd =
+      from + rest.length === body.length &&
+      (rest.length <= LOCAL_PATH_LINE_MAX || /[ \t\r]/.test(lookahead))
     // The line itself ends here (a newline or the body's end), or only its last word does (a space,
     // tab or CR just past the cap): a quote still open at the cap may close later on the line.
     const lineEnded = newline !== -1 || atEnd
-    const wordEnded = lineEnded || /[ \t\r]/.test(rest.charAt(LOCAL_PATH_LINE_MAX))
+    const wordEnded = lineEnded || /[ \t\r]/.test(lookahead)
     // A CRLF body's line ends in "\r", which no file name does.
     const line = (
       newline !== -1 ? rest.slice(0, newline) : rest.slice(0, LOCAL_PATH_LINE_MAX)

@@ -176,6 +176,14 @@ describe('local paths in mail to another computer', () => {
       expect(await warned(`${path}\r\nnext`, path)).toContain(`names ${path} on`)
       // A quote never closed before the line truly ends is no quoting.
       const short = join(dir, 'report')
+      // The body ends one space or tab past the cap: that is the line's true end, so the unclosed
+      // quote reads as unquoted, while the same text running on to a later close names nothing.
+      for (const gap of [' ', '\t']) {
+        const atEof = `"${short} ${'x'.repeat(LOCAL_PATH_LINE_MAX - short.length - 1)}${gap}`
+        expect(atEof.length - 1).toBe(LOCAL_PATH_LINE_MAX + 1)
+        expect(await warned(atEof, short)).toContain(`names ${short} on`)
+        expect(await warned(`${atEof}more.md"`, short)).toBeNull()
+      }
       expect(await warned(`See "${short}`, short)).toContain(`names ${short} on`)
       expect(await warned(`See "${short}\nnext"`, short)).toContain(`names ${short} on`)
       expect(await warned(`See "${short}".`, short)).toContain(`names ${short} on`)
