@@ -1,3 +1,4 @@
+import { JOURNAL_RUNNING_PREVIEW_LIMITS } from '../agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { requiresTerminalSettlement } from '../agent-session-journal/item-lifecycle/journal-terminal-settlement'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import { unhandledProviderFrameJournalItem } from '../agent-session-wire/providers/unhandled-provider-frame'
@@ -13,6 +14,9 @@ import type {
 } from './provider-timeline-decision'
 import { providerKey, turnOf } from './provider-timeline-rows'
 import type { ProviderTimelineOpenItem } from './provider-timeline-state'
+
+/** A saved running call's input and output previews, escaped, that `keepsSavedCall` merges in. */
+const SAVED_CALL_BYTES = 4 * JOURNAL_RUNNING_PREVIEW_LIMITS.inlineHeadBytes
 
 export function decideItem(
   input: ProviderTimelineDecisionInput,
@@ -37,7 +41,9 @@ export function decideItem(
   return {
     writes: [
       {
-        reservedBytes: estimateStructuredAgentSessionItemBytes(row.identity, event.body),
+        reservedBytes:
+          estimateStructuredAgentSessionItemBytes(row.identity, event.body) +
+          (event.keepsSavedCall ? SAVED_CALL_BYTES : 0),
         lifecycle: change !== 'update',
         options: { ...event.producer, turnScope: scope },
         resolution: {
