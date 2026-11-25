@@ -272,13 +272,14 @@ export function NativeChatQueuedMessageCard({
             </p>
           ) : null}
         </div>
-        {/* No gap: each glyph's own box spacing (an icon button's 5px, the image count's padding) sets
-            the even rhythm the hover-revealed tools, which sit outside this flow, already have. */}
-        <div className={cn('relative flex shrink-0 items-center', QUEUED_ROW_INSET_VAR)}>
+        {/* Each glyph's own box spacing (an icon button's 5px, the image count's padding) sets the even
+            rhythm. A 1px seam separates every target, the hover-revealed tools included: at a fractional x
+            the browser hit-tests a point up to 1px left of a box, so flush targets each lose a sliver. */}
+        <div className={cn('relative flex shrink-0 items-center gap-px', QUEUED_ROW_INSET_VAR)}>
           {toolCount > 0 ? (
             <div
               className={cn(
-                'absolute inset-y-0 right-full flex items-center transition-opacity motion-reduce:transition-none',
+                'absolute inset-y-0 right-[calc(100%+1px)] flex items-center gap-px transition-opacity motion-reduce:transition-none',
                 !busy && QUEUED_ROW_REVEAL
               )}
             >

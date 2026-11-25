@@ -15,9 +15,10 @@ export const QUEUED_ROW_TARGET = 'min-h-[24px] min-w-[24px]'
 export const QUEUED_ROW_INSET_VAR =
   '[--queued-row-inset:calc((max(24px,var(--spacing)*6)-var(--spacing)*3.5)/2)]'
 
-/** The text fades out under the revealed tools, one 24px button each, so the row reserves no space for them at rest. */
+/** The text fades out under the revealed tools, one 24px button and its 1px seam each, so the row reserves no
+ * space for them at rest. */
 export function queuedRowToolsMask(toolCount: number): string {
-  return `linear-gradient(to left, transparent ${toolCount * 24}px, #000 ${toolCount * 24 + 16}px)`
+  return `linear-gradient(to left, transparent ${toolCount * 25}px, #000 ${toolCount * 25 + 16}px)`
 }
 
 export function QueuedMessageRowTool({
