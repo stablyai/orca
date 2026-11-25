@@ -16,7 +16,7 @@ import {
   refuseUnmatchedWorkerSelector,
   workerStartTargetLabel
 } from './worker-start-selector-refusal'
-import { resolveWorkerStartModeOnHost } from '../../structured-workers/orchestration-worker-start-mode'
+import { preflightWorkerAgentOnHost } from './launch/worker-agent-host-preflight'
 import { lineageModeForResolvedAgent } from './worker-chat-lineage'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
@@ -133,8 +133,8 @@ export async function startLocalWorker(args: {
     })
   }
   const decided = lineageModeForResolvedAgent(runtime, args.mode, { ...args, params, agent })
-  const hostMode = resolveWorkerStartModeOnHost(runtime, decided, resolvedWorktree?.id, agent)
-  let mode = chatWorkerMode(await hostMode, chat)
+  const host = { runtime, agent, resolvedWorktree, creationTarget, terminal: params.terminal }
+  let mode = chatWorkerMode(await preflightWorkerAgentOnHost({ ...host, mode: decided }), chat)
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
   refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)
