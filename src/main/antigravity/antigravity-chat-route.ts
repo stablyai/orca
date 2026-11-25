@@ -136,6 +136,12 @@ export function lastAntigravityAgySignedOut(): boolean | null {
   return lastRoute === null ? null : lastRoute.agy === 'signedOut'
 }
 
+/** Whether the latest route answer runs new chats in a home Orca owns (its server, or agy on
+ *  Orca's home), which loads skill folders but not `~/.gemini`'s plugins; false before any. */
+export function lastAntigravityChatRunsInOrcaHome(): boolean {
+  return lastRoute?.agy === false
+}
+
 async function computeAntigravityChatRoute(
   input: AcpHostBackendInput,
   server: AcpLaunchSpec

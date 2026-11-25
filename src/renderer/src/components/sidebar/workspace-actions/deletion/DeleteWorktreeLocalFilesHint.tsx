@@ -2,16 +2,31 @@
 import type { JSX } from 'react'
 import { AlertTriangle, ChevronRight, File, Folder } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import { hasWorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import { DeleteWorktreeRelativePath, isDirectoryDisplayPath } from './delete-worktree-relative-path'
 import type { DeleteWorktreeLocalFilesState } from './use-delete-worktree-at-risk-local-files'
 
+export function getIgnoredFilesLossLabel(files: WorktreeAtRiskLocalFiles, t: Translate): string {
+  return files.complete
+    ? t('components.workspace.delete.ignoredFiles.lost', '{{count}} ignored files will be lost', {
+        count: files.count,
+        defaultValue_one: '{{count}} ignored file will be lost'
+      })
+    : t(
+        'components.workspace.delete.ignoredFiles.lostIncomplete',
+        '{{count}}+ ignored files will be lost',
+        { count: files.count }
+      )
+}
+
 export function DeleteWorktreeLocalFilesHint({
-  state
+  state,
+  inline = false
 }: {
   state: DeleteWorktreeLocalFilesState | undefined
+  inline?: boolean
 }): JSX.Element | null {
   const t = useTranslate()
   if (!state) {
@@ -26,8 +41,10 @@ export function DeleteWorktreeLocalFilesHint({
           ? t('components.workspace.delete.ignoredFiles.unavailable', 'Ignored files not checked')
           : t('components.workspace.delete.ignoredFiles.checking', 'Checking ignored files…')
     return (
-      <div className="mt-0.5 flex h-4 min-w-0 items-center text-muted-foreground">
-        <span className="truncate">{statusLabel}</span>
+      <div
+        className={inline ? 'text-muted-foreground' : 'mt-0.5 h-4 truncate text-muted-foreground'}
+      >
+        {statusLabel}
       </div>
     )
   }
@@ -41,23 +58,36 @@ export function DeleteWorktreeLocalFilesHint({
       'Ignored files could not be fully checked'
     )
     return (
-      <div className="mt-0.5 flex h-4 min-w-0 items-center gap-1.5 text-destructive">
-        <AlertTriangle className="size-3 shrink-0" />
-        <span className="min-w-0 truncate font-medium">{uncheckedLabel}</span>
+      <div
+        className={
+          inline
+            ? 'flex items-start gap-1.5 text-destructive'
+            : 'mt-0.5 flex h-4 min-w-0 items-center gap-1.5 text-destructive'
+        }
+      >
+        <AlertTriangle
+          aria-hidden="true"
+          className={inline ? 'mt-0.5 size-3 shrink-0' : 'size-3 shrink-0'}
+        />
+        <span className={inline ? 'font-medium' : 'min-w-0 truncate font-medium'}>
+          {uncheckedLabel}
+        </span>
       </div>
     )
   }
 
-  const countLabel = files.complete
-    ? t('components.workspace.delete.ignoredFiles.lost', '{{count}} ignored files will be lost', {
-        count: files.count,
-        defaultValue_one: '{{count}} ignored file will be lost'
-      })
-    : t(
-        'components.workspace.delete.ignoredFiles.lostIncomplete',
-        '{{count}}+ ignored files will be lost',
-        { count: files.count }
-      )
+  const countLabel = getIgnoredFilesLossLabel(files, t)
+  if (inline) {
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-start gap-1.5 font-medium text-destructive">
+          <AlertTriangle aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
+          <span>{countLabel}</span>
+        </div>
+        <DeleteWorktreeLocalFilesList files={files} />
+      </div>
+    )
+  }
   const inlinePreview = files.samplePaths.join(', ')
 
   return (

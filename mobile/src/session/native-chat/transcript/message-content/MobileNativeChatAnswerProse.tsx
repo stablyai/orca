@@ -13,7 +13,8 @@ export const MobileNativeChatQuietTurnContext = createContext({
   inActingTurn: false
 })
 
-/** An agent row's prose; in a bot's chat a quiet result shows as a line, not its marker, as on the desktop. */
+/** An agent row's prose; where a bot speaks (its chat, a group room's turn) a quiet result shows as
+ *  a line, not its marker, as on the desktop. */
 export function MobileNativeChatAnswerProse({
   blocks,
   fontScale,
@@ -23,7 +24,7 @@ export function MobileNativeChatAnswerProse({
   const bot = useContext(MobileNativeChatBotIdentityContext)
   // Paced prose is an assistant's own reply; another agent's message draws as its card.
   const answer = quietBotAnswerBlocks(blocks, {
-    botAnswer: prose.paced && bot?.botId !== undefined,
+    botAnswer: prose.paced && bot !== null,
     streaming: prose.growingBlock !== undefined,
     ...useContext(MobileNativeChatQuietTurnContext)
   })

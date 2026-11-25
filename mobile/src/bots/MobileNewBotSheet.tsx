@@ -1,24 +1,24 @@
 import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { Shuffle } from 'lucide-react-native'
+import { View } from 'react-native'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
+import { MessageBox } from '../components/composer-input/MessageBox'
 import { TextField } from '../components/composer-input/TextField'
 import { ListGroup, ListRow } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerError } from '../platform/haptics/haptics'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
+import { spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { isBotMascotId, mascotAvatar, randomMascotAvatar } from '../../../src/shared/bot-avatar'
 import {
-  isBotMascotId,
-  mascotAvatar,
-  parseBotAvatar,
-  randomMascotAvatar
-} from '../../../src/shared/bot-avatar'
-import { proposalCreateParams, type BotProposal } from '../../../src/shared/bots/bot-proposal'
+  BOT_PURPOSE_MAX_LENGTH,
+  proposalCreateParams,
+  type BotProposal
+} from '../../../src/shared/bots/bot-proposal'
 import { botTemplate } from '../../../src/shared/bots/bot-templates'
 import { botTemplateWord } from '../../../src/shared/bots/bot-template-text'
 import { MobileBotTemplatesSheet } from './MobileBotTemplatesSheet'
@@ -29,13 +29,16 @@ import { botImportNudge } from '../../../src/shared/bots/bot-import'
 import { BOT_NAME_MAX_LENGTH, type BotAgent } from '../../../src/shared/bot-types'
 import { botCreate } from './bot-sheet-operations'
 import type { ListedBot, PhoneBot } from './host-bots-operations'
-import { MobileBotAvatar } from './MobileBotAvatar'
+import { mobileBotAvatarSource } from './host-bot-row-facts'
 import type { NewBotComputer } from './new-bot-computers'
 import {
+  groupFieldStyles,
+  newBotComputerNote,
   NewBotAgentRow,
   NewBotAgentSheet,
   NewBotComputerSheet,
-  NewBotRunsOn,
+  NewBotPicture,
+  NewBotRunsOnRow,
   useNewBotAgentChoices,
   useOtherOrcaAccount
 } from './MobileNewBotPickers'
@@ -91,6 +94,7 @@ function NewBotForm(props: NewBotSheetProps) {
   const t = useMobileTranslation()
   const { seed } = props
   const [name, setName] = useState(seed?.proposal.name ?? '')
+  const [purpose, setPurpose] = useState('')
   const [computerId, setComputerId] = useState(props.computerId)
   const [picked, setPicked] = useState<BotAgent>(seed?.agent ?? 'claude')
   const [avatar, setAvatar] = useState(() =>
@@ -134,7 +138,6 @@ function NewBotForm(props: NewBotSheetProps) {
   )
   // Runs on shows when there is another computer to pick, and, locked, for a seed's pinned one.
   const choosesComputer = props.computers.length > 1 || seed !== undefined || !listed
-  const picture = parseBotAvatar(avatar)
   const trimmed = name.trim()
   const template = botTemplate(proposal?.value.templateId)
   // Until the computer says which agents it has, or when it has none, it makes no bot, as the desktop's New bot.
@@ -148,6 +151,8 @@ function NewBotForm(props: NewBotSheetProps) {
     }
     setCreating(true)
     setError(null)
+    // A typed purpose seeds SOUL.md as a template's does.
+    const made = proposal?.value ?? { name: trimmed, purpose: purpose.trim() }
     try {
       const { bot } = botCreate.interpret(
         await botCreate.request(
@@ -156,8 +161,8 @@ function NewBotForm(props: NewBotSheetProps) {
             ? { name: imported.name, agent, avatar, importFrom: imported.importFrom }
             : {
                 // A workspace with no note or branch words seeds no purpose: a plain bot, as on the desktop.
-                ...(proposal?.value.purpose.trim()
-                  ? proposalCreateParams({ ...proposal.value, name: trimmed }, agent, {
+                ...(made.purpose.trim()
+                  ? proposalCreateParams({ ...made, name: trimmed }, agent, {
                       templatePackages: computer?.templatePackages === true,
                       templateNameShown: template
                         ? botTemplateWord(template, 'name', t)
@@ -171,6 +176,7 @@ function NewBotForm(props: NewBotSheetProps) {
         )
       )
       setName('')
+      setPurpose('')
       setProposal(null)
       setAvatar(randomMascotAvatar(null))
       props.onCreated(bot, computer)
@@ -189,38 +195,36 @@ function NewBotForm(props: NewBotSheetProps) {
     setImporting(false)
   }
   const pictureView = (
-    <View>
-      {picture?.kind === 'mascot' ? (
-        <MobileBotAvatar avatar={{ kind: 'mascot', id: picture.id }} size={72} />
-      ) : null}
-      <Pressable
-        style={({ pressed }) => [styles.shuffle, pressed && styles.pressed]}
-        onPress={() => setAvatar(randomMascotAvatar(avatar))}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={t('bots.new.shuffle', 'Another picture')}
-      >
-        <Shuffle size={14} color={colors.textSecondary} />
-      </Pressable>
-    </View>
-  )
-  const runsOn = choosesComputer ? (
-    <NewBotRunsOn
-      computer={computer}
-      locked={seed !== undefined || Boolean(proposal?.value.worktrees?.length)}
-      reachable={client !== null}
-      otherAccount={otherAccount}
-      onPick={() => pick('computer')}
+    <NewBotPicture
+      avatar={mobileBotAvatarSource({ name, avatar })}
+      onShuffle={() => setAvatar(randomMascotAvatar(avatar))}
     />
-  ) : null
-  const agentRow = (
+  )
+  const pickerRows = [
+    ...(choosesComputer
+      ? [
+          <NewBotRunsOnRow
+            key="runs-on"
+            computer={computer}
+            locked={seed !== undefined || Boolean(proposal?.value.worktrees?.length)}
+            onPick={() => pick('computer')}
+          />
+        ]
+      : []),
     <NewBotAgentRow
+      key="agent"
       agent={choices?.length === 0 ? null : agent}
-      hostLabel={computer?.label ?? ''}
       loading={client !== null && choices === null}
       onPick={() => pick('agent')}
     />
-  )
+  ]
+  const note = newBotComputerNote(t, {
+    host: computer?.label ?? '',
+    reachable: client !== null,
+    otherAccount,
+    noAgents: choices?.length === 0
+  })
+  const pickerNote = note ? <SettingsNote>{note}</SettingsNote> : null
 
   return (
     // iOS cannot present over a closing sibling Modal; the form and its pickers share one.
@@ -267,12 +271,8 @@ function NewBotForm(props: NewBotSheetProps) {
         client={client}
         read={importRead}
         picture={pictureView}
-        runsOn={
-          <>
-            {runsOn}
-            {agentRow}
-          </>
-        }
+        pickerRows={pickerRows}
+        pickerNote={pickerNote}
         ready={agentsReady}
         bots={computer ? props.botsOn(computer.id) : []}
         onUpdate={
@@ -293,12 +293,8 @@ function NewBotForm(props: NewBotSheetProps) {
           client={client}
           bots={computer ? props.botsOn(computer.id) : []}
           agent={agent}
-          runsOn={
-            <>
-              {runsOn}
-              {agentRow}
-            </>
-          }
+          pickerRows={pickerRows}
+          pickerNote={pickerNote}
           ready={agentsReady}
           onBack={() => setReceiving(false)}
           onClose={props.onClose}
@@ -314,7 +310,6 @@ function NewBotForm(props: NewBotSheetProps) {
         onAfterClose={props.onAfterClose}
       >
         <SheetHeader
-          titleAboveActions
           title={t('bots.new.title', 'New bot')}
           {...(proposal || !choosesComputer
             ? {
@@ -335,8 +330,44 @@ function NewBotForm(props: NewBotSheetProps) {
             busy: creating
           }}
         />
+        <View style={styles.picture}>{pictureView}</View>
+        <ListGroup>
+          <TextField
+            key="name"
+            value={name}
+            onChangeText={setName}
+            placeholder={t('bots.new.namePlaceholder', 'Name your bot')}
+            maxLength={BOT_NAME_MAX_LENGTH}
+            autoFocus
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={() => void create()}
+            style={groupFieldStyles.line}
+          />
+          {proposal ? null : (
+            <MessageBox
+              key="purpose"
+              value={purpose}
+              onChangeText={setPurpose}
+              maxLength={BOT_PURPOSE_MAX_LENGTH}
+              placeholder={t('bots.new.purposePlaceholder', 'Who it is and what it does')}
+              accessibilityLabel={t('bots.new.purposeLabel', 'Identity')}
+              style={groupFieldStyles.lines}
+            />
+          )}
+          {pickerRows}
+        </ListGroup>
+        {pickerNote}
+        {proposal?.value.worktrees?.length ? (
+          <SettingsNote>
+            {t('bots.new.takesOverList', 'Takes over {{names}}. Their agents keep running.', {
+              names: proposal.value.worktrees.map((entry) => entry.name).join(', ')
+            })}
+          </SettingsNote>
+        ) : null}
+        {error ? <SettingsNote error>{error}</SettingsNote> : null}
         {proposal ? null : (
-          <ListGroup style={styles.templateGroup}>
+          <SettingsSection>
             <ListRow
               key="template"
               title={t('bots.new.fromTemplate', 'Use template')}
@@ -374,7 +405,6 @@ function NewBotForm(props: NewBotSheetProps) {
               <ListRow
                 key="link"
                 title={t('bots.share.receive.fromLink', 'From a link')}
-                subtitle={t('bots.share.receive.pasteDescription', 'Paste a link someone shared.')}
                 navigates
                 onPress={() => {
                   if (!creating) {
@@ -383,51 +413,13 @@ function NewBotForm(props: NewBotSheetProps) {
                 }}
               />
             ) : null}
-          </ListGroup>
+          </SettingsSection>
         )}
-        {runsOn}
-        <View style={styles.picture}>{pictureView}</View>
-        <TextField
-          value={name}
-          onChangeText={setName}
-          placeholder={t('bots.new.namePlaceholder', 'Name your bot')}
-          maxLength={BOT_NAME_MAX_LENGTH}
-          autoFocus
-          autoCorrect={false}
-          returnKeyType="done"
-          onSubmitEditing={() => void create()}
-        />
-        {proposal?.value.worktrees?.length ? (
-          <Text style={styles.takesOver}>
-            {t('bots.new.takesOverList', 'Takes over {{names}}. Their agents keep running.', {
-              names: proposal.value.worktrees.map((entry) => entry.name).join(', ')
-            })}
-          </Text>
-        ) : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {agentRow}
       </BottomDrawer>
     </BottomDrawerModalHost>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  picture: {
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md
-  },
-  shuffle: {
-    position: 'absolute',
-    right: -spacing.sm,
-    bottom: -spacing.sm,
-    padding: spacing.xs,
-    borderRadius: radii.pill,
-    backgroundColor: colors.bgRaised
-  },
-  templateGroup: { marginBottom: spacing.md },
-  takesOver: { fontSize: 13, color: colors.textMuted, marginTop: spacing.sm },
-  error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.sm },
-  pressed: { opacity: 0.7 }
+  picture: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.lg }
 }))

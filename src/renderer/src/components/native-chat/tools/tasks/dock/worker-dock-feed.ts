@@ -21,8 +21,11 @@ type State = {
   snapshot: WorkerDockSnapshot | null
   available: boolean
   rows: ReadonlyMap<string, WorkerDockEntry>
+  /** Counts every publication that lost the feed. It is read live, so a loss and a recovery
+   *  published before React renders still show as a change. */
+  losses: number
 }
-const EMPTY: State = { snapshot: null, available: true, rows: new Map() }
+const EMPTY: State = { snapshot: null, available: true, rows: new Map(), losses: 0 }
 
 class WorkerDockFeed {
   state = EMPTY
@@ -37,7 +40,7 @@ class WorkerDockFeed {
   get unused(): boolean {
     return this.listeners.size === 0
   }
-  private loading = new Set<string>()
+  private loading = new Map<string, Promise<void>>()
   constructor(
     readonly target: RuntimeClientTarget,
     readonly party: string
@@ -90,7 +93,12 @@ class WorkerDockFeed {
         }
       }
     }
-    this.state = { snapshot: snapshot ?? this.state.snapshot, available, rows }
+    this.state = {
+      snapshot: snapshot ?? this.state.snapshot,
+      available,
+      rows,
+      losses: this.state.losses + (available ? 0 : 1)
+    }
     for (const listener of this.listeners) {
       listener()
     }
@@ -180,11 +188,23 @@ class WorkerDockFeed {
     }
   }
   read = (): State => this.state
-  window = async (anchor: string): Promise<void> => {
-    if (!this.listeners.size || this.loading.has(anchor)) {
-      return
+  /** One read per anchor at a time: a second ask while it runs waits on the same read, so a caller
+   *  counting its tries counts real requests. */
+  window = (anchor: string): Promise<void> => {
+    if (!this.listeners.size) {
+      return Promise.resolve()
     }
-    this.loading.add(anchor)
+    const running = this.loading.get(anchor)
+    if (running) {
+      return running
+    }
+    const read = this.readWindow(anchor).finally(() => {
+      this.loading.delete(anchor)
+    })
+    this.loading.set(anchor, read)
+    return read
+  }
+  private async readWindow(anchor: string): Promise<void> {
     const generation = this.generation
     const revision = this.state.snapshot?.revision
     try {
@@ -201,8 +221,6 @@ class WorkerDockFeed {
       if (generation === this.generation && this.state.snapshot?.revision === revision) {
         this.publish(null, false)
       }
-    } finally {
-      this.loading.delete(anchor)
     }
   }
 }
@@ -245,7 +263,9 @@ export function useWorkerDockFeed(
   )
   const read = useCallback(() => feed?.read() ?? EMPTY, [feed])
   const value = useSyncExternalStore(subscribe, read)
-  return { ...value, party: feed?.party ?? null, loadWindow: feed?.window }
+  // The live loss count, not the rendered one: a press compares it from start to activation.
+  const readLosses = useCallback(() => feed?.read().losses ?? 0, [feed])
+  return { ...value, party: feed?.party ?? null, loadWindow: feed?.window, readLosses }
 }
 
 const seededSources = new Set<string>()

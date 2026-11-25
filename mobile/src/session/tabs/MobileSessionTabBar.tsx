@@ -49,7 +49,7 @@ function TabBarDot({ tabId, state }: { tabId: string; state: AgentDotState | und
   if (startedEmpty.tabId === tabId && startedEmpty.empty) {
     return <ArrivingTabBarDot state={state} />
   }
-  return state && state !== 'idle' ? <AgentStateDot state={state} /> : null
+  return state && state !== 'idle' ? <AgentStateDot state={state} decorative /> : null
 }
 
 // Mounted with the bare tab, so the motion preference is read before the dot arrives.
@@ -60,7 +60,7 @@ function ArrivingTabBarDot({ state }: { state: AgentDotState | undefined }) {
   }
   return (
     <ArrivalFade animate={reducedMotion === false}>
-      <AgentStateDot state={state} />
+      <AgentStateDot state={state} decorative />
     </ArrivalFade>
   )
 }

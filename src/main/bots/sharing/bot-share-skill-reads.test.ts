@@ -1,7 +1,42 @@
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import type * as FsPromises from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+/** Every path looked up, and a test's hook for the next lookup of one path: it may fail the lookup,
+ *  or move a link after it resolved. */
+const lookups = vi.hoisted(() => {
+  const paths: string[] = []
+  return {
+    paths,
+    next: new Map<string, (resolve: () => Promise<string>) => Promise<string>>(),
+    /** Runs once, before the next opening of its folder (the shape checks open each skill folder). */
+    opening: new Map<string, () => Promise<void>>()
+  }
+})
+vi.mock('node:fs/promises', async (original) => {
+  const fs = await original<typeof FsPromises>()
+  return {
+    ...fs,
+    realpath: async (path: string) => {
+      lookups.paths.push(path)
+      const hook = lookups.next.get(path)
+      lookups.next.delete(path)
+      const resolve = () => fs.realpath(path)
+      return hook ? hook(resolve) : resolve()
+    },
+    opendir: async (path: string) => {
+      const hook = lookups.opening.get(path)
+      lookups.opening.delete(path)
+      await hook?.()
+      return fs.opendir(path)
+    }
+  }
+})
+const notFound = async (): Promise<string> => {
+  throw Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' })
+}
 import type { BotShareLeftOut } from '../../../shared/bots/bot-package'
 import { BOT_SHARE_ERRORS } from '../../../shared/bots/bot-share-errors'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -79,6 +114,58 @@ describe('BotShareSkillReads', () => {
 
     opening.finish(listing('deploy'))
     await expect(replaced).rejects.toThrow(BOT_SHARE_ERRORS.prepareAgain)
+  })
+
+  // A pick resolves its sources before its read, so a pick asked earlier may reach it later.
+  it('never lets an older pick stop or replace a newer build it reaches last', async () => {
+    const reads = new BotShareSkillReads()
+    const pick = reads.forBuild('bot', { session: 'dialog', reuseSkills: true }).build
+    const newer = reads.forBuild('bot', { session: 'dialog' }).build
+    const opening = walk()
+    const rebuilt = reads.read('bot/dialog', 'now', false, opening.run, newer)
+
+    const late = reads.read('bot/dialog', 'before', true, async () => listing('old'), pick)
+
+    await expect(late).rejects.toThrow(BOT_SHARE_ERRORS.prepareAgain)
+    opening.finish(listing('deploy'))
+    await expect(rebuilt).resolves.toEqual(listing('deploy'))
+    expect(opening.stopped).toEqual([])
+    await expect(
+      reads.read('bot/dialog', 'now', true, async () => listing('unread'))
+    ).resolves.toEqual(listing('deploy'))
+  })
+
+  it('never lets an older pick stop the read a newer pick is waiting for', async () => {
+    const reads = new BotShareSkillReads()
+    const opening = walk()
+    const fresh = reads.forBuild('bot', { session: 'dialog' }).build
+    const built = reads.read('bot/dialog', 'now', false, opening.run, fresh)
+    const older = reads.forBuild('bot', { session: 'dialog', reuseSkills: true }).build
+    const newest = reads.forBuild('bot', { session: 'dialog', reuseSkills: true }).build
+    const joined = reads.read('bot/dialog', 'now', true, async () => listing('unread'), newest)
+
+    const late = reads.read('bot/dialog', 'before', true, async () => listing('old'), older)
+
+    await expect(late).rejects.toThrow(BOT_SHARE_ERRORS.prepareAgain)
+    opening.finish(listing('deploy'))
+    await expect(joined).resolves.toEqual(listing('deploy'))
+    await expect(built).resolves.toEqual(listing('deploy'))
+    expect(opening.stopped).toEqual([])
+  })
+
+  it("keeps a dialog's order while its builds run, however many dialogs open meanwhile", async () => {
+    const reads = new BotShareSkillReads()
+    const older = reads.forBuild('bot', { session: 'dialog', reuseSkills: true }).build
+    const newer = reads.forBuild('bot', { session: 'dialog' }).build
+    await reads.read('bot/dialog', 'now', false, async () => listing('deploy'), newer)
+    for (let index = 1; index <= 8; index += 1) {
+      const other = reads.forBuild('bot', { session: `other-${index}` }).build
+      await reads.read(`bot/other-${index}`, 'sources', false, async () => listing('other'), other)
+    }
+
+    await expect(
+      reads.read('bot/dialog', 'before', true, async () => listing('old'), older)
+    ).rejects.toThrow(BOT_SHARE_ERRORS.prepareAgain)
   })
 
   it('keeps only the dialogs opened most recently', async () => {
@@ -194,6 +281,135 @@ describe('a reused skill listing on disk', () => {
     }
   )
 
+  describe('a linked project behind a link', () => {
+    let skillReads: BotShareSkillReads
+    let walks: number
+    /** The dialog's skills, building afresh or as a pick. */
+    const build = async (reuseSkills: boolean): Promise<string[]> =>
+      (
+        await readBotShareable({
+          bot,
+          home,
+          automations: [],
+          repos: repos(),
+          skillReads,
+          session: 'dialog-1',
+          reuseSkills
+        })
+      ).skills.map((skill) => skill.name)
+    const pointAt = async (checkout: string): Promise<void> => {
+      await rm(project, { force: true })
+      await symlink(join(root, 'checkouts', checkout), project)
+    }
+
+    beforeEach(async () => {
+      for (const name of ['alpha', 'beta', 'gamma']) {
+        await write(root, `checkouts/${name}/.agents/skills/${name}/SKILL.md`, skillText(name))
+      }
+      await pointAt('alpha')
+      skillReads = new BotShareSkillReads()
+      walks = 0
+      const read = skillReads.read.bind(skillReads)
+      skillReads.read = (session, sources, reuse, run, place) =>
+        read(
+          session,
+          sources,
+          reuse,
+          (signal) => {
+            walks += 1
+            return run(signal)
+          },
+          place
+        )
+      lookups.paths.length = 0
+      lookups.next.clear()
+      lookups.opening.clear()
+    })
+
+    it.skipIf(process.platform === 'win32')(
+      'reuses the listing on a pick, looking the project up once per build',
+      async () => {
+        await expect(build(false)).resolves.toEqual(['alpha'])
+        await expect(build(true)).resolves.toEqual(['alpha'])
+
+        expect(walks).toBe(1)
+        expect(lookups.paths.filter((path) => path === project)).toHaveLength(2)
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'never keeps or reuses a listing read while the project could not be looked up',
+      async () => {
+        await build(false)
+        await pointAt('beta')
+        lookups.next.set(project, notFound)
+        await build(true)
+        await pointAt('gamma')
+        lookups.next.set(project, notFound)
+
+        await expect(build(true)).resolves.toEqual([])
+        await expect(build(true)).resolves.toEqual(['gamma'])
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'keeps a listing under the folder it was read from when the link moves back meanwhile',
+      async () => {
+        await build(false)
+        await pointAt('beta')
+        lookups.next.set(project, async (resolve) => {
+          const real = await resolve()
+          await pointAt('alpha')
+          return real
+        })
+        await build(true)
+        await pointAt('beta')
+
+        await expect(build(true)).resolves.toEqual(['beta'])
+      }
+    )
+
+    const alpha = () => join(root, 'checkouts/alpha')
+    const away = () => join(root, 'checkouts/alpha-away')
+    it.skipIf(process.platform === 'win32').each([
+      { change: 'goes missing', redirect: false },
+      { change: 'is swapped for a link to another project', redirect: true }
+    ])(
+      'never keeps a listing read while the project folder $change and is then put back',
+      async ({ redirect }) => {
+        lookups.next.set(project, async (resolve) => {
+          const real = await resolve()
+          await rename(alpha(), away())
+          if (redirect) {
+            await symlink(join(root, 'checkouts/beta'), alpha())
+          }
+          return real
+        })
+        await build(false)
+        if (redirect) {
+          await rm(alpha())
+        }
+        await rename(away(), alpha())
+
+        await expect(build(true)).resolves.toEqual(['alpha'])
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'never keeps a listing read while the project folder goes missing during its shape checks',
+      async () => {
+        const skill = await realpath(join(alpha(), '.agents/skills/alpha'))
+        lookups.opening.set(skill, () => rename(alpha(), away()))
+        await expect(build(false)).resolves.toEqual([])
+        await rename(away(), alpha())
+
+        await expect(build(true)).resolves.toEqual(['alpha'])
+        await expect(build(true)).resolves.toEqual(['alpha'])
+        expect(walks).toBe(2)
+      }
+    )
+  })
+
   it('stops a replaced read without recording anything', async () => {
     await write(home, 'skills/triage/SKILL.md', skillText('triage'))
     await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy'))
@@ -203,7 +419,7 @@ describe('a reused skill listing on disk', () => {
       bot,
       { path: home, real: await realpath(home) },
       leftOut,
-      [{ name: 'team-skills', path: project }],
+      [{ name: 'team-skills', path: project, real: project }],
       AbortSignal.abort()
     )
 

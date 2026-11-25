@@ -2,29 +2,15 @@ import type { AgentMessageSender } from '../journal/agent-session-message-source
 import type { OrchestrationPartyLocationResult } from '../../orchestration/orchestration-caller-status'
 import type { AgentSessionWorkspaceKind } from '../lifecycle/agent-session-record'
 import { workspaceKindForWorktreeId } from '../../agent-launch/contracts/workspace-launch-kind'
+import * as openFailure from './structured-session-open-failure-detail'
 
 /** `project`: the repo itself left the catalog, so its files may still be on disk. */
 export type StructuredSessionRemovedWorkspaceKind = AgentSessionWorkspaceKind | 'project'
 
-export type StructuredSessionWorkspaceRemovedDetails = {
-  workspaceKind: StructuredSessionRemovedWorkspaceKind
-}
-
-export function readStructuredSessionWorkspaceRemovedDetails(
-  value: unknown
-): StructuredSessionWorkspaceRemovedDetails | undefined {
-  if (value !== null && typeof value === 'object' && 'workspaceKind' in value) {
-    const { workspaceKind } = value
-    if (
-      workspaceKind === 'folder' ||
-      workspaceKind === 'git-worktree' ||
-      workspaceKind === 'project'
-    ) {
-      return { workspaceKind }
-    }
-  }
-  return undefined
-}
+export {
+  readStructuredSessionWorkspaceRemovedDetails,
+  type StructuredSessionWorkspaceRemovedDetails
+} from './structured-session-open-failure-detail'
 
 export type StructuredSessionOpenTarget = { sessionId: string; worktreeId: string; agent?: string }
 export type StructuredSessionOpenSource =
@@ -47,6 +33,7 @@ export type StructuredSessionOpenFailure = {
   code?: string
   surface?: 'terminal'
   workspaceKind?: StructuredSessionRemovedWorkspaceKind
+  detail?: string // Raw cause for a details disclosure; never decides a remedy.
 }
 export type StructuredSessionOpenTab = { id: string; sessionId: string; agent?: string }
 export type StructuredSessionOpenResult =
@@ -86,7 +73,7 @@ export function structuredSessionOpenFailure(error: unknown): StructuredSessionO
     return { reason: 'unsupported', beforeEffects: true, code }
   }
   if (code === 'agent_session_workspace_removed') {
-    const details = readStructuredSessionWorkspaceRemovedDetails(
+    const details = openFailure.readStructuredSessionWorkspaceRemovedDetails(
       error !== null && typeof error === 'object' && 'details' in error ? error.details : undefined
     )
     return { reason: 'workspace-missing', beforeEffects: true, ...details }
@@ -94,7 +81,7 @@ export function structuredSessionOpenFailure(error: unknown): StructuredSessionO
   if (code === 'agent_session_identity_required') {
     return { reason: 'gone', beforeEffects: true }
   }
-  return { reason: 'unreachable', beforeEffects: false }
+  return openFailure.unreachableOpenFailure(error)
 }
 
 export async function resolveStructuredSessionOpenSource(
@@ -289,7 +276,7 @@ export async function openStructuredAgentSession(
     }
     return tab
       ? { kind: 'opened', target: { ...target, agent: tab.agent ?? target.agent }, tab }
-      : { kind: 'failed', failure: { reason: 'unreachable', beforeEffects: false } }
+      : { kind: 'failed', failure: openFailure.TAB_NEVER_APPEARED }
   } catch (error) {
     return current()
       ? { kind: 'failed', failure: failure(structuredSessionOpenFailure(error)) }
