@@ -74,12 +74,10 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
         runtimeEnvironments: { call: runtimeEnvironmentTransportCallMock }
       }
     })
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
-      return setTimeout(() => callback(0), 0) as unknown as number
-    })
-    vi.stubGlobal('cancelAnimationFrame', (handle: number): void => {
-      clearTimeout(handle)
-    })
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      setTimeout(() => callback(0), 0)
+    )
+    vi.stubGlobal('cancelAnimationFrame', clearTimeout)
   })
 
   afterEach(() => {

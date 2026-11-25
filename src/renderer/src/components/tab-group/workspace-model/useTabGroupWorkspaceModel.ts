@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { workspaceBrowserTabs } from '@/store/slices/browser/tabs/workspace-browser-tabs'
+import type { AppState } from '@/store/types'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
@@ -17,6 +18,21 @@ const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: NonNullable<
   ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
 > = {}
 
+function createWorkspaceBrowserTabsSelector(worktreeId: string) {
+  let records: AppState['browserTabsByWorktree'] | undefined
+  let tabs: readonly Tab[] | undefined
+  let browserTabs: ReturnType<typeof workspaceBrowserTabs> = []
+  return (state: AppState) => {
+    const nextTabs = state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS
+    if (records !== state.browserTabsByWorktree || tabs !== nextTabs) {
+      records = state.browserTabsByWorktree
+      tabs = nextTabs
+      browserTabs = workspaceBrowserTabs(records, worktreeId, tabs)
+    }
+    return browserTabs
+  }
+}
+
 /** Resolve the tabs drawn in a group independently of their backing records’ workspace ownership. */
 export function useTabGroupWorkspaceModel({
   groupId,
@@ -32,7 +48,6 @@ export function useTabGroupWorkspaceModel({
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
       terminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS,
       openFiles: state.openFiles,
-      browserTabsByWorktree: state.browserTabsByWorktree,
       expandedPaneByTabId: state.expandedPaneByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID,
       generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
@@ -40,15 +55,11 @@ export function useTabGroupWorkspaceModel({
     }))
   )
 
-  const browserTabs = useMemo(
-    () =>
-      workspaceBrowserTabs(
-        selectedState.browserTabsByWorktree,
-        worktreeId,
-        selectedState.unifiedTabs
-      ),
-    [selectedState.browserTabsByWorktree, worktreeId, selectedState.unifiedTabs]
+  const selectBrowserTabs = useMemo(
+    () => createWorkspaceBrowserTabsSelector(worktreeId),
+    [worktreeId]
   )
+  const browserTabs = useAppStore(useShallow(selectBrowserTabs))
   const worktreeState = { ...selectedState, browserTabs }
 
   const focusGroup = useAppStore((state) => state.focusGroup)

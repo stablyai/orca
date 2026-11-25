@@ -106,7 +106,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     }
   )
   const storeState: TerminalLinkStoreState = {
-    settings: undefined as TerminalLinkStoreSettings | undefined,
+    settings: undefined,
     activeWorktreeId: null,
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock,
@@ -115,7 +115,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     revealInExplorer: revealInExplorerMock,
     setPendingEditorReveal: setPendingEditorRevealMock,
     setMarkdownViewMode: setMarkdownViewModeMock,
-    activeFileIdByWorktree: {} as Record<string, string | null>,
+    activeFileIdByWorktree: {},
     openFiles: [],
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},

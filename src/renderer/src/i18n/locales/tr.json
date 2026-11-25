@@ -21488,7 +21488,9 @@
         "noOtherChats": "Başka sohbet yok",
         "retryChats": "Yeniden dene",
         "modelAndEffortValue": "{{model}} · {{effort}}",
-        "modelAndEffort": "Model ve akıl yürütme düzeyi"
+        "modelAndEffort": "Model ve akıl yürütme düzeyi",
+        "modelsLoading": "Modeller yükleniyor…",
+        "signInForModels": "Kullanabileceğiniz modelleri görmek için oturum açın."
       },
       "tool": {
         "exitCode": "çıkış {{value0}}",
@@ -22734,6 +22736,7 @@
         "dismiss": "Kapat",
         "openWorker": "Çalışanı aç",
         "remoteOwner": "Bunu, çalıştığı bilgisayardan durdurun veya temizleyin",
+        "workspaceRemoved": "Bu çalışanın çalışma alanı kaldırıldı",
         "restore": "Listede yeniden göster",
         "alreadyStopped": "Zaten durduruldu",
         "cantStop": "Şu anda durdurulamıyor",

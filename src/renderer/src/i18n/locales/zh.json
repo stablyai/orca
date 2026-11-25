@@ -20268,6 +20268,8 @@
         "permissionAppliesNextMessage": "{{saved}} 从下一条消息起生效；当前使用 {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "模型和推理强度",
+        "modelsLoading": "正在加载模型…",
+        "signInForModels": "登录以查看你可以使用的模型",
         "draftNotSaved": "此草稿尚未保存成功，Orca 会继续尝试",
         "imageNotBroughtBack": "无法随此草稿恢复 {{name}}，请重新附加或将其移除",
         "pastedImageNotBroughtBack": "无法随此草稿恢复这张粘贴的图片，请将其移除，如仍需要请重新粘贴",
@@ -20591,7 +20593,15 @@
         "linkActions": "链接操作"
       },
       "imageGallery": {
-        "loadFailed": "无法加载 {{name}}"
+        "scopeHelp": "打开预览时聊天中此处附近的图片，更上方或更下方的图片不包含在内。关闭后重新打开即可更新",
+        "description": "此视图中的图片：第 {{position}} 张，共 {{count}} 张。{{help}}",
+        "stepAnnouncement": "此视图中第 {{position}} 张图片，共 {{count}} 张：{{title}}",
+        "firstImage": "第一张图片",
+        "lastImage": "最后一张图片",
+        "loading": "正在加载图片…",
+        "loadFailed": "无法加载 {{name}}",
+        "closedImageChanged": "由于图片已更改，预览已关闭。请打开缩略图以获取当前图片集",
+        "closedChatChanged": "由于聊天已切换，预览已关闭。请打开缩略图以获取当前图片集"
       },
       "launchPromptNotDelivered": "未送达 — 请检查终端",
       "taskList": {
@@ -20812,7 +20822,15 @@
           "handedOff": "已移交给",
           "task": "任务来自",
           "update": "更新来自",
-          "message": "消息来自"
+          "message": "消息来自",
+          "notSentYet": "尚未发送"
+        },
+        "kind": {
+          "started": "已启动",
+          "reopened": "已重新打开",
+          "followedUp": "跟进",
+          "handedOff": "已移交",
+          "task": "任务"
         },
         "goToAgent": "转到智能体"
       },
@@ -21251,6 +21269,7 @@
         "template": "模板",
         "nameTaken": "你已经有一个名为 {{name}} 的 bot",
         "open": "打开",
+        "openBot": "打开 {{name}}",
         "edit": "编辑",
         "rename": "重命名",
         "create": "创建 bot",
@@ -21296,6 +21315,7 @@
         "dismiss": "关闭",
         "openWorker": "打开工作者",
         "remoteOwner": "请在运行它的计算机上停止或清除",
+        "workspaceRemoved": "此工作者的工作区已被移除",
         "restore": "重新在停靠栏中显示",
         "alreadyStopped": "已停止",
         "cantStop": "暂时无法停止",

@@ -10,6 +10,9 @@ export function workspaceBrowserTabs(
   const ids = new Set(
     tabs?.filter((tab) => tab.contentType === 'browser').map((tab) => tab.entityId)
   )
+  if (tabs && ids.size === 0) {
+    return []
+  }
   return Object.values(records).flatMap((workspaces) =>
     (workspaces ?? []).filter((workspace) =>
       tabs === undefined ? workspace.worktreeId === workspaceId : ids.has(workspace.id)
