@@ -5,7 +5,11 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const { postConnectorAction, journal } = vi.hoisted(() => {
-  const journal: { items: unknown[]; submissions: unknown[] } = { items: [], submissions: [] }
+  const journal: { items: unknown[]; submissions: unknown[]; actsFor: unknown[] } = {
+    items: [],
+    submissions: [],
+    actsFor: []
+  }
   return { postConnectorAction: vi.fn(), journal }
 })
 vi.mock('../../../bots/bot-session-tabs', () => ({
@@ -66,6 +70,7 @@ const journalRow = (itemId: string, body: unknown, extra: Record<string, unknown
 
 /** Dana's finished turn, then a running turn opened by `opener` (sent by a person when `sent`). */
 function runningTurn(opener: unknown, sent: boolean, steered: unknown[] = []) {
+  journal.actsFor = [DANA]
   seq = 0
   journal.items = [
     journalRow('u0', fromDana),
@@ -106,7 +111,7 @@ function context(callerSessionId?: string) {
         })
       }),
       getOrchestrationDb: () => ({
-        getBotConversationActsFor: () => ({ actsFor: [DANA] }),
+        getBotConversationActsFor: () => ({ actsFor: journal.actsFor }),
         getBotRequest: () => undefined
       }),
       listAutomationRuns: () => []
@@ -167,5 +172,27 @@ describe('connector.act read on a chat a teammate started', () => {
     // The owner's turn, asked from a session other than the chat's own.
     runningTurn(typed, true)
     expect(await readSends(OTHER_CHAT)).toBeUndefined()
+  })
+})
+
+describe('connector.act read on the owner’s chat', () => {
+  beforeEach(() => {
+    postConnectorAction.mockReset()
+    postConnectorAction.mockResolvedValue({ ok: true, value: { ok: true, result: {} } })
+  })
+
+  it('says owner only when no device Orca can’t place as the owner typed the turn', async () => {
+    runningTurn({ ...message, typedBy: { by: 'device', deviceId: 'd1', own: true } }, true)
+    journal.actsFor = [{ kind: 'owner' }]
+    expect(await readSends(CHAT)).toBe('owner')
+    for (const typedBy of [
+      { by: 'device', deviceId: 'd2', accountId: 'a2', own: false },
+      { by: 'device', deviceId: 'd3', accountId: 'a3' },
+      { by: 'device', deviceId: 'd4' }
+    ]) {
+      runningTurn({ ...message, typedBy }, true)
+      journal.actsFor = [{ kind: 'owner' }]
+      expect(await readSends(CHAT)).toBeUndefined()
+    }
   })
 })

@@ -54,3 +54,14 @@ export function typedInOrcaByOwner(
   const typedBy = item.body.kind === 'message' ? item.body.typedBy : undefined
   return typedBy?.by === 'host' && typedInOrcaByPerson(item, submissions)
 }
+
+/** Typed on a paired device the host did not find on its own account (another account, or one it
+ *  couldn't compare), by a person or by an agent's CLI over its pairing. Such a message never acts
+ *  for the owner, whomever its conversation acts for. */
+export function typedOnAnotherDevice(item: Pick<AgentJournalRenderItem, 'body'>): boolean {
+  const typedBy = item.body.kind === 'message' ? item.body.typedBy : undefined
+  return (
+    (typedBy?.by === 'device' || (typedBy?.by === 'agent' && typedBy.deviceId !== undefined)) &&
+    typedBy.own !== true
+  )
+}
