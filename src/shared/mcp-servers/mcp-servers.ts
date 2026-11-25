@@ -35,10 +35,10 @@ export const McpServerWorkspacesSchema = z
     on: z.array(McpServerWorkspaceKey).max(1000),
     off: z.array(McpServerWorkspaceKey).max(1000)
   })
-  .refine(
-    (workspaces) => !workspaces.on.some((key) => workspaces.off.includes(key)),
-    'A workspace is either on or off'
-  )
+  .refine((workspaces) => {
+    const off = new Set(workspaces.off)
+    return !workspaces.on.some((key) => off.has(key))
+  }, 'A workspace is either on or off')
 export type McpServerWorkspaces = z.infer<typeof McpServerWorkspacesSchema>
 
 export const ALL_MCP_SERVER_WORKSPACES: McpServerWorkspaces = { later: true, on: [], off: [] }
@@ -168,11 +168,15 @@ export function mergeMcpServerWorkspaces(
   next: McpServerWorkspaces
 ): McpServerWorkspaces {
   const later = base.later === next.later ? stored.later : next.later
+  // Sets, not the lists' includes: up to 1000 keys a list, each looked up three times.
+  const lookup = ({ later: byDefault, on, off }: McpServerWorkspaces) => {
+    const onSet = new Set(on)
+    const offSet = new Set(off)
+    return (key: string): boolean => onSet.has(key) || (byDefault && !offSet.has(key))
+  }
+  const [inStored, inBase, inNext] = [lookup(stored), lookup(base), lookup(next)]
   const keys = new Set([stored, base, next].flatMap((value) => [...value.on, ...value.off]))
-  const isOn = (key: string): boolean =>
-    isMcpServerOnInWorkspace(base, key) === isMcpServerOnInWorkspace(next, key)
-      ? isMcpServerOnInWorkspace(stored, key)
-      : isMcpServerOnInWorkspace(next, key)
+  const isOn = (key: string): boolean => (inBase(key) === inNext(key) ? inStored(key) : inNext(key))
   return later
     ? { later, on: [], off: [...keys].filter((key) => !isOn(key)) }
     : { later, on: [...keys].filter(isOn), off: [] }
