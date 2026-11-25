@@ -27723,7 +27723,26 @@
         "setUpInFirstChat": "在首次聊天中设置"
       },
       "identityWatches": "关注{{what}}",
-      "identityReports": "汇报：{{what}}"
+      "identityReports": "汇报：{{what}}",
+      "wslSettingUp": "正在配置…",
+      "wslSetup": {
+        "cancel": "取消",
+        "chooseAnother": "选择另一台电脑",
+        "connecting": "正在连接",
+        "details": "详细信息",
+        "failedGeneric": "Orca 服务器没能在这个发行版中启动，详细信息里会说明原因。",
+        "failedTitle": "{{distro}} 配置失败",
+        "findingAgents": "正在 {{distro}} 中查找智能体",
+        "installing": "正在把 Orca 服务器安装到 ~/.orca-remote",
+        "installingHint": "首次使用时还会下载它的 Linux Node 运行时。",
+        "retry": "重试",
+        "starting": "正在启动 {{distro}}",
+        "subtitle": "首次大约需要一分钟。你的 Windows 文件和其他发行版不会受影响。",
+        "title": "正在把 {{distro}} 配置为主机",
+        "waiting": "正在等待 {{distro}}…"
+      },
+      "wslSetupFailedShort": "配置未完成",
+      "wslWaking": "正在唤醒 {{distro}}…"
     },
     "googleSetup": {
       "otherAccount": "切换账号",
