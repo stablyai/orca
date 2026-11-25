@@ -1,10 +1,10 @@
-import type { Repo } from '../../repo-types'
+import type { AgentStatusRows } from '../../agent-status/contracts/agent-status-rows'
+import type { Repo } from '../../repository/repo-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../worktree/types'
-import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../../agent-status/contracts/agent-status-ipc-payload'
-import { tabHasLivePty } from '../../tab-has-live-pty'
-import { getRuntimePathBasename } from '../../cross-platform-path'
+import { tabHasLivePty } from '../../workspace-layout/terminal-surfaces/tab-has-live-pty'
+import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 import {
   buildWorkspaceRowComparator,
   recentActivityWithCreateGrace,
@@ -14,13 +14,13 @@ import { compareCodePoints, compareSidebarText } from './text-order'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import {
   IDLE,
-  buildAttentionByWorktree,
   hasFreshAttributedAgentStatus,
   type SmartAttentionTab,
   type WorktreeAttention
 } from './smart-attention'
+import { buildAttentionByWorktree } from './smart-attention-scan'
 import { smartSortPhase } from './smart-sort-phase'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../feed/sidebar-inputs-switch'
 import { compareSmartStamps, recentStamp } from './stamp-order'
 
 /** Recent-sort rank: `lastActivityAt`, floored at `createdAt + CREATE_GRACE_MS` while that window is open. */
@@ -138,7 +138,7 @@ export function sortWorktreesSmart(
   worktrees: Worktree[],
   tabsByWorktree: Record<string, TerminalTab[]>,
   repoMap: Map<string, Repo>,
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  agentStatusByPaneKey: AgentStatusRows,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
   ptyIdsByTabId: Record<string, string[]>,
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>,
@@ -164,7 +164,12 @@ export function sortWorktreesSmart(
 /** What a Smart sort reads besides the rows; the window passes its store, main its own records. */
 export type SmartSortSources = {
   tabsByWorktree: Record<string, readonly SmartAttentionTab[]>
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  attentionForWorktree?: (
+    worktree: Pick<Worktree, 'id' | 'lastActivityAt'>,
+    now: number
+  ) => WorktreeAttention
+  hasFreshAttributedStatus?: () => boolean
+  agentStatusByPaneKey: AgentStatusRows
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   ptyIdsByTabId: Record<string, string[]>
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
@@ -213,7 +218,8 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
     )
     if (
       hasAnyLivePty ||
-      hasFreshAttributedAgentStatus(sources.agentStatusByPaneKey, now, sources.tabsByWorktree)
+      (sources.hasFreshAttributedStatus?.() ??
+        hasFreshAttributedAgentStatus(sources.agentStatusByPaneKey, now, sources.tabsByWorktree))
     ) {
       detectedLiveSmartSignal = true
     } else {
@@ -225,16 +231,20 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
   // Why precompute: hot sort — build the attention map once so the O(N log N) comparator does O(1) lookups.
   const attentionByWorktree =
     sortBy === 'smart'
-      ? buildAttentionByWorktree(
-          worktrees,
-          sources.tabsByWorktree,
-          sources.agentStatusByPaneKey,
-          sources.runtimePaneTitlesByTabId,
-          sources.ptyIdsByTabId,
-          now,
-          sources.migrationUnsupportedByPtyId,
-          sources.terminalLayoutsByTabId
-        )
+      ? sources.attentionForWorktree
+        ? new Map(
+            worktrees.map((worktree) => [worktree.id, sources.attentionForWorktree!(worktree, now)])
+          )
+        : buildAttentionByWorktree(
+            worktrees,
+            sources.tabsByWorktree,
+            sources.agentStatusByPaneKey,
+            sources.runtimePaneTitlesByTabId,
+            sources.ptyIdsByTabId,
+            now,
+            sources.migrationUnsupportedByPtyId,
+            sources.terminalLayoutsByTabId
+          )
       : new Map<string, WorktreeAttention>()
   worktrees.sort(buildWorktreeComparator(sortBy, args.repoMap, now, attentionByWorktree, labels))
   return { sorted: worktrees, detectedLiveSmartSignal }

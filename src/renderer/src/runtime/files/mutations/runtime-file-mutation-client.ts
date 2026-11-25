@@ -1,4 +1,4 @@
-import { normalizeRelativePath } from '../../../../../shared/cross-platform-path'
+import { normalizeRelativePath } from '../../../../../shared/file-access/cross-platform-path'
 
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import {

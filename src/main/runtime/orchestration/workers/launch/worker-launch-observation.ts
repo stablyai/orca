@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { AGENT_TYPE_MAX_LENGTH } from '../../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { salvagedOptional } from '../../../../../shared/zod-salvage'
+import { salvagedOptional } from '../../../../../shared/validation/zod-salvage'
 
 const object = z.record(z.string(), z.unknown())
 const selection = z.object({
@@ -21,6 +21,11 @@ export function workerLaunchAgent(value: unknown): string | null {
   return parsed.success
     ? parsed.data.effective?.agent || parsed.data.requested?.agent || null
     : null
+}
+
+export function workerLaunchModel(value: unknown): string | null {
+  const parsed = launch.safeParse(value)
+  return parsed.success ? parsed.data.effective?.model || null : null
 }
 
 function startOptions(json: string): Record<string, unknown> {

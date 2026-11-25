@@ -15,14 +15,23 @@ import { BrowserPageInputCredit } from '../../routing/input-ownership/browser-pa
 import { browserPopupPageId, browserPopupPageWebContentsId } from '../popups/browser-popup-page-id'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { RpcCallerIdentity } from '../../../runtime/rpc/callers/rpc-caller-identity'
+import { printForBrowserViewer } from '../prompts/browser-print-viewers'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
-  private readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
+  protected readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
   protected readonly agentActivity = new BrowserAgentActivity({
     pageIdForGuest: (guestWebContentsId) =>
       this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId),
     rendererForPage: (browserPageId) => this.resolveRendererForBrowserTab(browserPageId),
-    worktreeForPage: (browserPageId) => this.worktreeIdByTabId.get(browserPageId) ?? null
+    worktreeForPage: (browserPageId) => this.worktreeIdByTabId.get(browserPageId) ?? null,
+    // A server page's row carries the agent mark to viewers on other machines.
+    onPageActiveChanged: (browserPageId) => {
+      const guestId =
+        this.webContentsIdByTabId.get(browserPageId) ?? browserPopupPageWebContentsId(browserPageId)
+      if (guestId !== null) {
+        this.notifyBrowserGuestStateChanged(guestId)
+      }
+    }
   })
 
   private agentLeadListener: ((guestWebContentsId: number, led: boolean) => void) | null = null
@@ -41,6 +50,32 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   /** Holds the page's agent marking for one queued command, from queueing until it settles. */
   beginAgentCommand(browserPageId: string): AgentCommandLease {
     const lease = this.agentActivity.beginCommand(browserPageId)
+    if (!lease.agent) {
+      return lease
+    }
+    this.leadAgentOnPage(browserPageId)
+    return {
+      ...lease,
+      // A person's input queued ahead may have taken the page back; the agent leads again as it acts,
+      // and what the page does from here (a timed print, a popup) is not that input's.
+      run: (execute) =>
+        lease.run(() => {
+          this.leadAgentOnPage(browserPageId)
+          this.withdrawPageInputCredit(browserPageId)
+          return execute()
+        })
+    }
+  }
+
+  private withdrawPageInputCredit(browserPageId: string): void {
+    const pageGuestId =
+      this.webContentsIdByTabId.get(browserPageId) ?? browserPopupPageWebContentsId(browserPageId)
+    const ownerTabId =
+      pageGuestId === null ? null : this.resolveBrowserTabIdForGuestWebContentsId(pageGuestId)
+    this.pageInputCredit.withdraw(ownerTabId ?? browserPageId)
+  }
+
+  private leadAgentOnPage(browserPageId: string): void {
     const pageGuestId =
       this.webContentsIdByTabId.get(browserPageId) ?? browserPopupPageWebContentsId(browserPageId)
     // An SSH route popup has no guest policies, so its opener carries the lead.
@@ -49,10 +84,9 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
         ? null
         : (resolveBrowserRouteGuestPopupOpener(pageGuestId) ?? pageGuestId)
     // Only attached guests, whose teardown releases the lead.
-    if (lease.agent && guestId !== null && this.policyAttachedGuestIds.has(guestId)) {
+    if (guestId !== null && this.policyAttachedGuestIds.has(guestId)) {
       this.leadAgent(guestId)
     }
-    return lease
   }
 
   /** Tells the page's frames when the agent takes or gives up its lead, so they can refuse system dialogs. */
@@ -79,7 +113,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     }
   }
 
-  /** The desktop user's own input takes the page back from the agent. */
+  /** A person's own input takes the page back from the agent. */
   releaseAgentLead(guestWebContentsId: number): void {
     if (this.agentLedGuestIds.delete(guestWebContentsId)) {
       this.agentLeadListener?.(guestWebContentsId, false)
@@ -100,18 +134,32 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     return this.pageInputCredit.during(browserPageId, caller, execute)
   }
 
+  /** Input injected into this guest's page now is a person's: a paired viewer's relayed click or key press. */
+  isPersonCommandRunning(guestWebContentsId: number): boolean {
+    return this.pageInputCredit.isRunningPersonCommand(this.pageIdForGuest(guestWebContentsId))
+  }
+
   /** Credits a guest's activating input (or a DOM-activated tap) to the command delivering it, under the tab a link it opens would join. */
   creditPageInput(guestWebContentsId: number): void {
     if (this.pageInputCredit.idle) {
       return
     }
+    // A viewer's click or tap arrives injected, like an agent's, but is the person's own input.
+    if (this.isPersonCommandRunning(guestWebContentsId)) {
+      this.releaseAgentLead(
+        resolveBrowserRouteGuestPopupOpener(guestWebContentsId) ?? guestWebContentsId
+      )
+    }
     const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
     if (ownerTabId) {
-      this.pageInputCredit.creditInput(ownerTabId, this.pageIdForGuest(guestWebContentsId))
+      // While an agent command runs in the tab, what the page prints may be that command's.
+      this.pageInputCredit.creditInput(ownerTabId, this.pageIdForGuest(guestWebContentsId), {
+        printable: !this.isAgentCommandRunningInTab(ownerTabId)
+      })
     }
   }
 
-  /** An agent drove the page this guest shows since the desktop user last gave it input. */
+  /** An agent drove the page this guest shows since a person last gave it input. */
   isAgentLedGuest(guestWebContentsId: number): boolean {
     // SSH route popups skip guest policies, so they follow their opener's lead.
     return this.agentLedGuestIds.has(
@@ -119,7 +167,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     )
   }
 
-  /** An agent drives the page this guest shows (a tab or a popup), or drove it since the desktop user last gave it input. */
+  /** An agent drives the page this guest shows (a tab or a popup), or drove it since a person last gave it input. */
   isAgentLeadingGuest(guestWebContentsId: number): boolean {
     return (
       this.isAgentLedGuest(guestWebContentsId) ||
@@ -127,21 +175,74 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     )
   }
 
-  /** A page the agent leads refused its own print dialog, which would take the foreground; tell the agent. */
-  reportRefusedPrint(guestWebContentsId: number, origin: string): void {
+  /** An offscreen page, or a popup one opened: viewers list both as server tabs. */
+  abstract isListedAsServerPage(guestWebContentsId: number): boolean
+
+  /**
+   * A page's print() opened no dialog here. On a server page, the device whose own input just
+   * reached it saves it as a PDF; otherwise, the agent leading the page is told, as its dialog
+   * would take the foreground.
+   */
+  reportHeldPrint(
+    guestWebContentsId: number,
+    frame: Electron.WebFrameMain | null,
+    origin: string
+  ): void {
+    const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    // The credit is the tab's, shared with its popups, so a print while an agent command runs on
+    // any of them may be that agent's script.
+    const pairedDeviceId =
+      ownerTabId &&
+      frame &&
+      this.isListedAsServerPage(guestWebContentsId) &&
+      !this.isAgentCommandRunningInTab(ownerTabId)
+        ? this.pageInputCredit.printer(ownerTabId)
+        : null
+    if (pairedDeviceId && frame && ownerTabId) {
+      const title = webContents.fromId(guestWebContentsId)?.getTitle() ?? ''
+      if (
+        printForBrowserViewer(
+          guestWebContentsId,
+          frame,
+          pairedDeviceId,
+          title,
+          this.guestIdsInTab(ownerTabId)
+        )
+      ) {
+        return
+      }
+    }
     if (!this.isAgentLedGuest(guestWebContentsId)) {
       return
     }
     // Reach a command on the popup page itself as well as one on the tab that owns it.
-    const pageIds = new Set([
-      this.pageIdForGuest(guestWebContentsId),
-      this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    ])
+    const pageIds = new Set([this.pageIdForGuest(guestWebContentsId), ownerTabId])
     for (const pageId of pageIds) {
       if (pageId) {
         this.pageEvents.emit(pageId, { kind: 'print', origin })
       }
     }
+  }
+
+  /** The tab's page and the popups its page opened. */
+  private guestIdsInTab(browserTabId: string): number[] {
+    const tabGuestId = this.webContentsIdByTabId.get(browserTabId)
+    const popupIds = [...this.popupOwnerContextByGuestId]
+      .filter(([, owner]) => owner.browserTabId === browserTabId)
+      .map(([popupId]) => popupId)
+    return tabGuestId === undefined ? popupIds : [tabGuestId, ...popupIds]
+  }
+
+  private isAgentCommandRunningInTab(browserTabId: string): boolean {
+    if (this.agentActivity.isExecuting(browserTabId)) {
+      return true
+    }
+    for (const [popupId, owner] of this.popupOwnerContextByGuestId) {
+      if (owner.browserTabId === browserTabId && this.isAgentCommandRunning(popupId)) {
+        return true
+      }
+    }
+    return false
   }
 
   private pageIdForGuest(guestWebContentsId: number): string {
@@ -154,9 +255,21 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     this.agentActivity.handOver(fromPageId, toPageId)
   }
 
+  protected isAgentCommandRunning(guestWebContentsId: number): boolean {
+    return this.agentActivity.isExecuting(this.pageIdForGuest(guestWebContentsId))
+  }
+
   /** The page shows "An agent is using this page": a command is queued or one settled within the idle window. */
   isAgentUsingPage(browserPageId: string): boolean {
     return this.agentActivity.isActive(browserPageId)
+  }
+
+  /** A stream viewer draws the agent's pointer on the page until the returned stop runs. */
+  watchAgentCursor(
+    browserPageId: string,
+    listener: Parameters<BrowserAgentActivity['watchCursor']>[1]
+  ): () => void {
+    return this.agentActivity.watchCursor(browserPageId, listener)
   }
 
   // Show the agent's pointer landing before the input it precedes reaches the page.
@@ -221,9 +334,12 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   // Agent input moves Chromium focus into the guest; the pane restores the user's focus.
   guardUserFocusForAgentInput(guestWebContentsId: number): Promise<() => void> {
     const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    const renderer = browserPageId ? this.resolveRendererForBrowserTab(browserPageId) : null
-    if (!browserPageId || !renderer || renderer.isDestroyed()) {
-      return Promise.reject(focusGuardUnavailableError())
+    if (!browserPageId) {
+      return Promise.reject(focusGuardUnavailableError('missing_page'))
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserPageId)
+    if (!renderer) {
+      return Promise.reject(focusGuardUnavailableError('missing_renderer'))
     }
     return guardPaneFocusForAgentInput(renderer, browserPageId)
   }

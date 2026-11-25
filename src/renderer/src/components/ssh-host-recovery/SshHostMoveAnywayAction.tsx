@@ -1,5 +1,8 @@
 import { useState } from 'react'
-import type { SshManagedServerStatus, SshTarget } from '../../../../shared/ssh-types'
+import type {
+  SshManagedServerStatus,
+  SshTarget
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { sshHostServerReassurance } from '@/ssh/ssh-host-server-setup-copy'

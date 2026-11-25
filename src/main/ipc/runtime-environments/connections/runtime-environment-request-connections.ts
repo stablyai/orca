@@ -1,17 +1,15 @@
+import { createRuntimeEnvironmentStatusOwnerRegistry } from '../status/runtime-environment-status-owner-registry'
 import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runtime-environment-capability-evidence'
 import type { RuntimeEnvironmentCall } from '../requests/runtime-environment-call'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeHostStatusOwner } from '../../../../shared/remote-runtime/host-status/runtime-host-status-owner'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
-import { createRuntimeEnvironmentStatusOwner } from '../status/runtime-environment-status-owner'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import type {
   RuntimeOrchestrationEnvelope,
+  RuntimeRequestGuard,
   RuntimeRequestPreparation,
   RuntimeRpcResponse
-} from '../../../../shared/runtime-rpc-envelope'
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RemoteRuntimeRequestConnection } from '../../../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import { probeAllRemoteRuntimeSocketsNow } from '../../../../shared/remote-runtime/remote-runtime-socket-liveness'
@@ -32,6 +30,8 @@ import {
 } from './runtime-environment-transport-generation'
 import { noteRuntimeEnvironmentSharedControlContact } from '../status/runtime-environment-contact-loss'
 import { declareWslHostClient } from '../../../wsl/host-lifecycle/wsl-host-client-declaration'
+import { onWslHostIdleStopCleared } from '../../../wsl/host-lifecycle/wsl-host-idle-stop'
+import { declarePairedDesktopAccount } from './paired-desktop-account-declaration'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -46,7 +46,23 @@ type CachedSharedControlConnection = {
 
 const requestConnections = new Map<string, CachedRuntimeConnection>()
 const sharedControlConnections = new Map<string, CachedSharedControlConnection>()
-const statusOwners = new Map<string, { key: string; owner: RuntimeHostStatusOwner }>()
+
+export const {
+  getRuntimeEnvironmentStatusOwner,
+  withRuntimeEnvironmentStatusOwner,
+  resetRuntimeEnvironmentStatusOwners,
+  getRuntimeEnvironmentStatusSnapshot,
+  getRuntimeEnvironmentStatusSnapshots,
+  getOwnedRuntimeEnvironmentStatusOwner,
+  retireRuntimeEnvironmentStatusOwner
+} = createRuntimeEnvironmentStatusOwnerRegistry({
+  closeRemoteRuntimeRequestConnection,
+  getRemoteRuntimeSharedControlDiagnostics,
+  sendRemoteRuntimeSharedControlRequest,
+  ensureRemoteRuntimeSharedControlConnection,
+  reconnectRemoteRuntimeSharedControlConnection,
+  pauseRemoteRuntimeSharedControlRetry
+})
 
 /** Consult owned authenticated transports without acquiring another host channel. */
 export function isRemoteRuntimeConnectionReady(
@@ -57,59 +73,6 @@ export function isRemoteRuntimeConnectionReady(
   return [sharedControlConnections.get(environmentId), requestConnections.get(environmentId)].some(
     (cached) => cached?.pairingKey === pairingKey && cached.connection.isReady()
   )
-}
-
-export function getRuntimeEnvironmentStatusOwner(
-  userDataPath: string,
-  selector: string
-): RuntimeHostStatusOwner {
-  const environment = resolveEnvironment(userDataPath, selector)
-  const pairedConnection = getPreferredPairedRuntimeConnection(environment)
-  const key = `${userDataPath}\0${environment.pairingRevision ?? environment.createdAt}\0${getPairingKey(pairedConnection)}`
-  let cached = statusOwners.get(environment.id)
-  if (!cached || cached.key !== key || cached.owner.read().retired) {
-    if (cached) {
-      closeRemoteRuntimeRequestConnection(environment.id)
-    }
-    const owner = createRuntimeEnvironmentStatusOwner(userDataPath, environment, {
-      isReady: () => getRemoteRuntimeSharedControlDiagnostics(environment.id)?.state === 'ready',
-      request: (signal) =>
-        sendRemoteRuntimeSharedControlRequest<RuntimeStatus>(
-          environment.id,
-          pairedConnection,
-          'status.get',
-          undefined,
-          15_000,
-          undefined,
-          signal
-        ),
-      establish: () => {
-        ensureRemoteRuntimeSharedControlConnection(environment.id, pairedConnection)
-        reconnectRemoteRuntimeSharedControlConnection(environment.id)
-      },
-      pause: () => pauseRemoteRuntimeSharedControlRetry(environment.id)
-    })
-    cached = { key, owner }
-    statusOwners.set(environment.id, cached)
-    if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-      owner.dispose()
-    }
-  }
-  return cached.owner
-}
-
-export function resetRuntimeEnvironmentStatusOwners(): void {
-  for (const id of statusOwners.keys()) {
-    closeRemoteRuntimeRequestConnection(id)
-  }
-}
-
-export function getRuntimeEnvironmentStatusSnapshot(environmentId: string) {
-  return statusOwners.get(environmentId)?.owner.read() ?? null
-}
-
-export function getRuntimeEnvironmentStatusSnapshots() {
-  return [...statusOwners.values()].map(({ owner }) => owner.read())
 }
 
 export function sendRemoteRuntimeConnectionRequest<TResult>(
@@ -137,9 +100,7 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
 }
 
 export function closeRemoteRuntimeRequestConnection(environmentId: string): void {
-  const status = statusOwners.get(environmentId)
-  statusOwners.delete(environmentId)
-  status?.owner.dispose()
+  retireRuntimeEnvironmentStatusOwner(environmentId)
   const cached = requestConnections.get(environmentId)
   requestConnections.delete(environmentId)
   cached?.connection.close()
@@ -154,10 +115,18 @@ export function sendRemoteRuntimeSharedControlRequest<TResult>(
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
-  prepareRequest?: RuntimeRequestPreparation
+  prepareRequest?: RuntimeRequestPreparation,
+  prepareGuard?: RuntimeRequestGuard,
+  responseTimeoutMs?: number,
+  idlePassive?: boolean
 ): Promise<RuntimeRpcResponse<TResult>> {
   const connection = getSharedControlConnection(environmentId, pairedConnection)
-  return connection.request(method, params, timeoutMs, envelope, signal, { prepareRequest })
+  return connection.request(method, params, timeoutMs, envelope, signal, {
+    prepareRequest,
+    prepareGuard,
+    responseTimeoutMs,
+    idlePassive
+  })
 }
 
 /** Send only on the shared socket that proved expectedRuntimeId; return null if it changed or is unproven. */
@@ -175,7 +144,10 @@ export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
     call.timeoutMs,
     undefined,
     call.signal,
-    { beforeSend: () => void (statusSocket = shared.socketGeneration.peek()) }
+    {
+      beforeSend: () => void (statusSocket = shared.socketGeneration.peek()),
+      idlePassive: call.idlePassive
+    }
   )
   if (!status.ok || status.result.runtimeId !== expectedRuntimeId) {
     return null
@@ -194,7 +166,12 @@ export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
       call.timeoutMs,
       call.envelope,
       call.signal,
-      { beforeSend, prepareRequest: call.prepareRequest }
+      {
+        beforeSend,
+        prepareRequest: call.prepareRequest,
+        prepareGuard: call.prepareGuard,
+        idlePassive: call.idlePassive
+      }
     )
   } catch (error) {
     if (socketChanged) {
@@ -234,6 +211,17 @@ export function closeRemoteRuntimeSharedControlConnection(environmentId: string)
   cached?.connection.close()
 }
 
+/** This desktop signed in, out or switched: every paired host it holds open hears the new account. */
+export function redeclarePairedDesktopAccounts(): void {
+  for (const { connection } of sharedControlConnections.values()) {
+    if (connection.getDiagnostics().state === 'ready') {
+      declarePairedDesktopAccount((method, params, timeoutMs) =>
+        connection.request(method, params, timeoutMs)
+      )
+    }
+  }
+}
+
 export function getRemoteRuntimeSharedControlDiagnostics(
   environmentId: string
 ): RemoteRuntimeSharedConnectionDiagnostics | null {
@@ -257,6 +245,9 @@ export function ensureRemoteRuntimeSharedControlConnection(
   }
 }
 
+// A woken host's held control socket reopens at once, replaying its streams (#46567).
+onWslHostIdleStopCleared(reconnectRemoteRuntimeSharedControlConnection)
+
 export function retryRemoteRuntimeSharedControlConnectionsNow(): void {
   for (const { connection } of sharedControlConnections.values()) {
     connection.retryNow()
@@ -279,15 +270,17 @@ function getSharedControlConnection(
     const connection: RemoteRuntimeSharedControlConnection =
       new RemoteRuntimeSharedControlConnection(pairedConnection, {
         environmentId,
-        clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
         ...sharedControlEnvironmentPolicy(environmentId),
         // Ws pongs can come from a relay hop or a runtime whose request path is stuck (#39785).
         appHeartbeat: {},
-        // R39: every ready socket, including after a reconnect, re-declares this installation.
-        onReady: () =>
-          declareWslHostClient(environmentId, (method, params, timeoutMs) =>
+        // R39: every ready socket, including after a reconnect, re-declares this installation, and
+        // the Orca account it is signed in to.
+        onReady: async () => {
+          const request = (method: string, params: unknown, timeoutMs: number) =>
             connection.request(method, params, timeoutMs)
-          ),
+          declarePairedDesktopAccount(request)
+          await declareWslHostClient(environmentId, request)
+        },
         // Wall-clock time includes suspend, expiring pre-sleep answers.
         onAnswered: () => {
           answeredAt = Date.now()
@@ -302,16 +295,14 @@ function getSharedControlConnection(
             diagnostics
           })
           noteRuntimeEnvironmentSharedControlContact(environmentId, diagnostics)
-          statusOwners
-            .get(environmentId)
-            ?.owner.connectionChanged(
-              diagnostics.state === 'ready'
-                ? 'ready'
-                : diagnostics.state === 'closed' || diagnostics.state === 'reconnecting'
-                  ? 'disconnected'
-                  : 'connecting',
-              diagnostics
-            )
+          getOwnedRuntimeEnvironmentStatusOwner(environmentId)?.connectionChanged(
+            diagnostics.state === 'ready'
+              ? 'ready'
+              : diagnostics.state === 'closed' || diagnostics.state === 'reconnecting'
+                ? 'disconnected'
+                : 'connecting',
+            diagnostics
+          )
         }
       })
     cached = { pairingKey, answeredAt: () => answeredAt, connection }

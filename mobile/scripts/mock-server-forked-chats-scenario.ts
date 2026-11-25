@@ -2,12 +2,12 @@ import { structuredAgentSessionTabId } from '../../src/shared/agent-session/view
 import {
   DESKTOP_PROTOCOL_VERSION,
   MIN_COMPATIBLE_MOBILE_VERSION
-} from '../../src/shared/protocol-version'
+} from '../../src/shared/remote-runtime/protocol/protocol-version'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
-  RuntimeMobileSessionTabsResult,
   RuntimeWorktreeAgentRow,
   RuntimeWorktreePsSummary
-} from '../../src/shared/runtime-types'
+} from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { RpcRequest, RpcResponse } from './mock-server-rpc-handlers'
 
 type Respond = (response: RpcResponse) => void

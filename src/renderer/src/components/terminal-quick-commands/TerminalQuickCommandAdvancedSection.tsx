@@ -1,6 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { getTerminalQuickCommandScope } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { Button } from '@/components/ui/button'

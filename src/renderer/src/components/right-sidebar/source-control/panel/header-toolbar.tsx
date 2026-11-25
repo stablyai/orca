@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { Search, X } from 'lucide-react'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitBranchLineTotal } from '../../../../../../shared/git/status/git-status-types'
-import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
+import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PrimaryAction } from '../review/source-control-primary-action-types'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,7 @@ import {
   SuppressedGitHubPRToolbar
 } from './header-review-actions'
 import { SourceControlBranchContextRow } from './branch-context-row'
+import type { BaseRebaseActions } from './base-rebase-control'
 import { shouldShowSourceControlBranchContextChrome } from './branch-context-stats'
 import { SourceControlHeaderOverflowMenu } from './header-overflow-menu'
 import { useSourceControlHeaderActionsSlot } from './header-actions-slot'
@@ -49,6 +50,9 @@ type SourceControlHeaderToolbarProps = {
   headDisplay?: WorktreeGitIdentityDisplay | null
   manualReviewUrl?: string | null
   branchLineTotal?: GitBranchLineTotal | null
+  rebase?: BaseRebaseActions | null
+  /** Labeled Git Graph button; null where the context has no Git history (folders). */
+  graphControl?: React.ReactNode
 }
 
 function renderOverflowMenu(
@@ -93,7 +97,9 @@ export function SourceControlHeaderToolbar({
   headDisplay = null,
   headControl,
   manualReviewUrl,
-  branchLineTotal
+  branchLineTotal,
+  rebase,
+  graphControl
 }: SourceControlHeaderToolbarProps): React.JSX.Element {
   const t = useTranslate()
   const embedded = useSourceControlScope() !== null
@@ -225,7 +231,8 @@ export function SourceControlHeaderToolbar({
   const showBranchContext = shouldShowSourceControlBranchContextChrome(
     branchSummary,
     compareBaseRef,
-    headDisplay
+    headDisplay,
+    rebase?.state.kind === 'rebase_paused'
   )
   const branchContextRow = (reviewTrailing?: React.ReactNode) => (
     <SourceControlBranchContextRow
@@ -236,6 +243,7 @@ export function SourceControlHeaderToolbar({
       manualReviewUrl={manualReviewUrl}
       branchLineTotal={branchLineTotal}
       reviewControl={reviewTrailing}
+      rebase={rebase}
       onChangeBaseRef={onChangeBaseRef}
       onRetry={onRefreshBranchCompare}
     />
@@ -249,6 +257,7 @@ export function SourceControlHeaderToolbar({
         {actionsSlot
           ? createPortal(
               <>
+                {graphControl}
                 {filterToggle}
                 {renderOverflowMenu(overflowProps)}
               </>,
@@ -285,6 +294,7 @@ export function SourceControlHeaderToolbar({
               // Pin filter/overflow right without stretching Create PR.
               <span className="min-w-0 flex-1" aria-hidden="true" />
             ) : null}
+            {graphControl}
             {filterToggle}
             {renderOverflowMenu(overflowProps)}
           </>

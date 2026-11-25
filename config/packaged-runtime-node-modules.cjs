@@ -47,11 +47,13 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
 const DARWIN_PACKAGED_RUNTIME_PACKAGE_ROOTS = ['serve-sim']
 /** The compiled binary each workspace Windows addon loads, relative to its package. */
 const WORKSPACE_WINDOWS_ADDON_BINARIES = [
+  ['@orca/windows-notifications', 'build/Release/orca_windows_notifications.node'],
   ['@orca/windows-registry', 'build/Release/orca_windows_registry.node'],
   ['@orca/windows-security', 'build/Release/orca_windows_security.node']
 ]
 const WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@vscode/windows-process-tree',
+  '@orca/windows-notifications',
   '@orca/windows-registry',
   '@orca/windows-security'
 ]

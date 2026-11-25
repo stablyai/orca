@@ -1,5 +1,5 @@
 import type { ClientChannel } from 'ssh2'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { isOpenSshConfigBackedTarget } from '../system-transport/system-ssh-args'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
 import { createCancelledConnectAttemptError } from './reconnect/ssh-connect-attempt-cancellation'

@@ -1,8 +1,9 @@
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { selectWorktreeHostConnectionPhase } from '@/lib/workspace/ownership/worktree-host-connection-phase'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /**
  * Whether a fork's "Forked from" divider can open its source now. A fork and its source share a
@@ -12,19 +13,18 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
  */
 export function selectNativeChatForkSourceOpenable(
   state: AppState,
+  statuses: RuntimeStatuses,
   worktreeId: string,
   target: RuntimeClientTarget
 ): boolean {
-  const { phase } = selectWorktreeHostConnectionPhase(state, worktreeId)
+  const { phase } = selectWorktreeHostConnectionPhase(state, statuses, worktreeId)
   if (phase !== 'local' && phase !== 'connected') {
     return false
   }
   return (
     target.kind === 'local' ||
     isConnectedRuntimeHostState(
-      runtimeHostConnectionStateForEntry(
-        state.runtimeStatusByEnvironmentId?.get(target.environmentId)
-      )
+      runtimeHostConnectionStateForEntry(statuses.get(target.environmentId))
     )
   )
 }

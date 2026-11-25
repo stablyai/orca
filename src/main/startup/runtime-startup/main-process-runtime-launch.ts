@@ -1,5 +1,6 @@
+import { settleDesktopActivation } from './runtime-launch-activation'
 import { app, type BrowserWindow } from 'electron'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../../runtime/terminal/adoption/unshown-live-terminal-placement'
 import {
   getCanonicalUserDataPath,
@@ -8,16 +9,16 @@ import {
 import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import { resolveServePinnedBindHost } from '../serve-launch/serve-pinned-bind-host'
 import { isOrcadSidecarLaunch } from '../../window/activation/foreground-activation-policy'
+import type { MainWindowOpenOptions } from '../../window/main-window/main-window-contracts'
 import { registerMobileHandlers } from '../../ipc/mobile'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../../ipc/runtime-environments/mobile-relay/runtime-environment-mobile-relay-hosts'
-import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
 import { registerHeadlessPtyRuntime } from '../../ipc/pty/register-headless-runtime'
-import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
 import { publishHeadlessRuntimeGraph } from '../../runtime/session-graph/headless-runtime-graph'
 import { OffscreenBrowserBackend } from '../../browser/backends/offscreen-browser-backend'
+import { memorySaverIdleMs } from '../../browser/backends/offscreen-page-idle-freeing'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { getDesktopRelayStatus } from '../cloud-startup/main-process-relay-status'
-import { startDesktopRelayService } from '../cloud-startup/main-process-relay-startup'
+import { startMainProcessRelayService } from '../cloud-startup/main-process-relay-startup'
 import { getServeOptions } from '../serve-launch/serve-options'
 import { getBundledWebClientRoot, printServeReady } from '../serve-launch/main-process-serve'
 import {
@@ -33,24 +34,21 @@ import { repairKnownPoisonedInstallDirBeforeWindow } from '../windows-install-pe
 import { installServeQuitHandling } from '../serve-launch/serve-quit-handling'
 import { installCloudSessionShutdownFlush } from '../cloud-startup/cloud-session-shutdown-flush'
 import { registerHeadlessServeSshHandlers } from '../serve-launch/headless-serve-ssh-registration'
-import { settleServeDesktopActivation } from '../serve-launch/serve-desktop-activation'
-import {
-  recordRuntimeRpcStartFailure,
-  showRuntimeRpcStartupFailureDialog
-} from '../../runtime/rpc/server/runtime-rpc-startup-failure'
+import { recordRuntimeRpcStartFailure } from '../../runtime/rpc/server/runtime-rpc-startup-failure'
+import { showRuntimeRpcStartupFailureDialog } from '../../host/electron-runtime-rpc-startup-failure-dialog'
 import { registerCliForHeadlessServe } from '../serve-launch/serve-cli-registration'
 import { startAppImageCopyPreExtraction } from '../../cli/appimage/appimage-copy-pre-extraction'
 import { scheduleAllPendingHistoryTreeRemovals } from '../../pty/history/terminal-history-deletion'
-import { triggerStartupNotificationRegistration } from '../../ipc/startup-notification-registration'
+import { triggerStartupNotificationRegistration } from '../../ipc/notifications/startup-notification-registration'
 import { startDesktopPushService } from '../cloud-startup/main-process-push-startup'
 import {
-  connectDesktopConnectorCloud,
-  installDesktopConnectorCloud
+  connectMainProcessConnectorCloud,
+  installMainProcessConnectorCloud
 } from '../cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from '../main-process-state'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../../updater/lifecycle/main-window-updater'
-import { preserveStateBeforeUpdateRestart } from '../../updater/update-restart-preservation'
+import { preserveStateBeforeUpdateRestart } from '../../core-desktop/update-restart-preservation'
 import { resolveUpdateInstallMode } from '../../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from '../agent-accounts/agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../../server/serve-stdout-boundary'
@@ -58,21 +56,11 @@ import { getBrowserIdentityModeStatus } from '../../browser/identity/mode/browse
 import { beginChatJournalStartup, chatJournalHostServing } from './chat-journal-startup'
 import { e2eHeadlessServeWithoutBrowser } from '../serve-launch/e2e-headless-serve-without-browser'
 
-type RuntimeService = NonNullable<typeof state.runtime>
+type RuntimeService = NonNullable<typeof state.core.runtime>
 
 export type MainProcessRuntimeLaunchOptions = {
-  openMainWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
+  openMainWindow: (options?: MainWindowOpenOptions) => BrowserWindow | Promise<BrowserWindow>
   handleMacAppActivation: () => void
-}
-
-function settleDesktopActivation(): void {
-  const gate = state.desktopActivationGate
-  if (!gate) {
-    return
-  }
-  settleServeDesktopActivation(gate, {
-    hasPersistentPtyProvider: !(getLocalPtyProvider() instanceof LocalPtyProvider)
-  })
 }
 
 /** Construct the runtime RPC server with serve-specific bind and port exposure settings. */
@@ -124,7 +112,7 @@ function installRuntimeRpc(
       : {}),
     webClientRoot: getBundledWebClientRoot()
   })
-  state.runtimeRpc = runtimeRpc
+  state.core.runtimeRpc = runtimeRpc
   runtime.setAgentSenderPeerKey(() => runtimeRpc.getE2EEPublicKey())
   runtimeRpc.setMobileDesktopRelayHosts(createRuntimeEnvironmentMobileRelayHosts())
   registerMobileHandlers(runtimeRpc, {
@@ -134,18 +122,24 @@ function installRuntimeRpc(
         !state.mainWindow ||
         state.mainWindow.isDestroyed() ||
         state.mainWindow.webContents.id !== webContentsId ||
-        !state.pendingUnpairedDeviceAuthFailure
+        !state.core.pendingUnpairedDeviceAuthFailure
       ) {
         return false
       }
-      state.pendingUnpairedDeviceAuthFailure = false
+      state.core.pendingUnpairedDeviceAuthFailure = false
       return true
+    }
+  })
+  // Pairing and revocation complete in main with no renderer call, so push them to open lists.
+  runtimeRpc.setOnPairedDevicesChanged(() => {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send('mobile:devicesChanged')
     }
   })
   // Repeated direct-auth failures need a re-pairing explanation rather than silent nonconnection.
   runtimeRpc.setOnUnpairedDeviceAuthFailure(() => {
     // Retain the one-shot across the runtime-start/renderer-mount race.
-    state.pendingUnpairedDeviceAuthFailure = true
+    state.core.pendingUnpairedDeviceAuthFailure = true
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('mobile:unpairedDeviceAuthFailure')
     }
@@ -160,6 +154,7 @@ async function launchServeMode(
 ): Promise<void> {
   // Headless serve has no first paint to prioritize; apply persisted proxy before relay/CLI/RPC fetchers.
   await state.initialProxyApplicationReady
+  connectMainProcessConnectorCloud()
   // Give WSL registration brief migration time without letting slow repair hold all RPC readiness.
   logStartupMilestone('wsl-cli-barrier-start')
   await state.managedWslCliStartupBarrierReady
@@ -173,7 +168,7 @@ async function launchServeMode(
     runtime,
     prepareCodexRuntimeHomeForLaunch,
     () => state.store!.getSettings(),
-    (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+    (target) => state.core.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     state.store!,
     prepareCodexSessionResumeForLaunch,
     { onCodexHomePtySpawned: handleCodexHomePtySpawned, onPtyExit: handlePtyExit }
@@ -181,6 +176,7 @@ async function launchServeMode(
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
   runtime.startupWorkerAuthority.finish()
+  void runtime.reportWorkerStopsAcrossRestartOnce()
   // Main places unshown live terminals before any client attaches.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     await placeUnshownLiveTerminalsBestEffort(runtime)
@@ -190,34 +186,40 @@ async function launchServeMode(
     runtime.setOffscreenBrowserBackend(
       new OffscreenBrowserBackend(browserManager, {
         getAgentBrowserBridge: () => state.agentBrowserBridge,
-        onPageNavigated: (page) => runtime.serveBrowserPageNavigated(page)
+        onPageNavigated: (page) => runtime.serveBrowserPageNavigated(page),
+        isPageSaved: (page) => runtime.serveBrowserTabs.isSaved(page),
+        idleFreeMs: () => memorySaverIdleMs(state.store?.getSettings())
       })
     )
+    // Tabs saved under a profile an older build deleted would otherwise stay listed but never load.
+    void runtime.browserCloseServerPagesOfMissingProfiles()
   }
   publishHeadlessRuntimeGraph(runtime)
   // Register SSH before binding RPC so the first paired client sees targets.
-  registerHeadlessServeSshHandlers(state.store!, runtime)
+  await registerHeadlessServeSshHandlers(state.store!, runtime)
   await runtimeRpc.start().catch((error) => {
     console.error('[runtime] Failed to start headless RPC transport:', error)
     throw error
   })
+  // After RPC has its pairing identity, so a signed-in server reaches phones through the relay too.
+  startMainProcessRelayService(runtimeRpc)
   scheduleAgentLaunchRecordWarmup(null)
-  // Headless phones still register/unregister tokens, though this host dispatches no push notifications.
+  // Serve pushes like the desktop: its own attention (chat turns, bot runs) reaches paired phones through this service.
   startDesktopPushService(runtimeRpc)
   settleDesktopActivation()
   installServeQuitHandling()
   await registerCliForHeadlessServe()
   // Headless automation cannot wait for a renderer that never opens.
-  state.automations?.start()
+  state.core.automations?.start()
   // Arm history-removal GC without a window so interrupted serve deletions do not leak until desktop launch.
   void scheduleAllPendingHistoryTreeRemovals()
   emitServeBrowserIdentityActionLine(getBrowserIdentityModeStatus())
   await printServeReady(serveOptions)
   chatJournalHostServing()
   const store = state.store!
-  setupHeadlessServeAutoUpdater(store, {
+  setupHeadlessServeAutoUpdater(state.nativeSettings!, runtime, {
     onBeforeUpdateQuit: () =>
-      preserveStateBeforeUpdateRestart({ codexRuntimeHome: state.codexRuntimeHome, store }),
+      preserveStateBeforeUpdateRestart({ codexRuntimeHome: state.core.codexRuntimeHome, store }),
     onBeforeUpdateQuitFailure: 'abort',
     updateInstallMode: resolveUpdateInstallMode(true)
   })
@@ -255,8 +257,8 @@ async function launchDesktopMode(
     )
   }
   // Register before proxy await so concurrent token mints wait rather than fail provider_missing; installer requests are already guarded.
-  startDesktopRelayService(runtimeRpc)
-  connectDesktopConnectorCloud()
+  startMainProcessRelayService(runtimeRpc)
+  connectMainProcessConnectorCloud()
   // Create the window before awaiting proxy readiness; the request guard already fences fetches.
   await state.initialProxyApplicationReady
   // Apply persisted proxy before the push gateway's first request.
@@ -277,7 +279,7 @@ async function launchDesktopMode(
 export async function initializeMainProcessRuntimeLaunch(
   options: MainProcessRuntimeLaunchOptions
 ): Promise<void> {
-  const runtime = state.runtime
+  const runtime = state.core.runtime
   const shellPathHydration = state.windowsShellPathHydration
   if (!runtime || !shellPathHydration) {
     throw new Error('Runtime and shell-path services must be initialized before launch')
@@ -293,9 +295,7 @@ export async function initializeMainProcessRuntimeLaunch(
   state.serveOptions = serveOptions
   installCloudSessionShutdownFlush()
   const runtimeRpc = installRuntimeRpc(runtime, serveOptions)
-  if (!serveOptions) {
-    installDesktopConnectorCloud()
-  }
+  installMainProcessConnectorCloud(serveOptions !== null)
   const shellPathReady = shellPathHydration.whenReady()
   // Publish the same shell-PATH generation to renderer Git and terminal startup barriers.
   state.shellPathReady = shellPathReady
@@ -312,11 +312,16 @@ export async function initializeMainProcessRuntimeLaunch(
   if (process.platform === 'win32' && app.isPackaged && !serveOptions) {
     const desktopStartup = startWindowsDesktopBeforeShellPathReady({
       bindServices: bindTerminalRuntimeStartupServices,
-      openWindow: () => options.openMainWindow({ revealOnDidFinishLoad: true }),
+      openWindow: (onLoadSettled) =>
+        options.openMainWindow({
+          revealOnDidFinishLoad: true,
+          // A failed load has nothing left to protect, so terminals should not wait out the fallback.
+          loadObserver: { onLoaded: onLoadSettled, onError: onLoadSettled }
+        }),
       shellPathReady,
       startServices: startTerminalRuntimeStartupServices
     })
-    desktopWindow = desktopStartup.window
+    desktopWindow = await desktopStartup.window
   } else {
     // Start AppImage extraction before daemon host selection briefly awaits it; serve manages its own bounded extraction.
     if (!serveOptions) {

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { ModifierDoubleTapDetector } from '../../../../../shared/modifier-double-tap-detector'
+import { ModifierDoubleTapDetector } from '../../../../../shared/keybindings/modifier-double-tap-detector'
 import type {
   FloatingTerminalPanelBounds,
   FloatingTerminalPanelBoundsSource,

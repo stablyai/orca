@@ -4,7 +4,7 @@ import {
   commandLineLength,
   MAX_COMMAND_LINE_CHARS,
   WindowsCommandLineBudgetError
-} from '../../../../shared/windows-command-line-budget'
+} from '../../../../shared/shell/launch/windows-command-line-budget'
 import { resolveCommand, withWslPreparation } from './wsl-command-resolution'
 
 export function wslAwareSpawn(
@@ -13,6 +13,7 @@ export function wslAwareSpawn(
   options: SpawnOptions & {
     cwd?: string
     wslDistro?: string
+    literalArgIndices?: readonly number[]
     useWslLoginShell?: boolean
     wslShellCommand?: string
     cwdFailureExitCode?: number
@@ -22,6 +23,7 @@ export function wslAwareSpawn(
   const {
     wslDistro,
     useWslLoginShell,
+    literalArgIndices,
     wslShellCommand,
     cwdFailureExitCode,
     preparation,
@@ -29,6 +31,7 @@ export function wslAwareSpawn(
   } = options
   let resolved = resolveCommand(command, args, options.cwd, wslDistro, {
     useWslLoginShell,
+    literalArgIndices,
     wslShellCommand,
     ...(cwdFailureExitCode === undefined ? {} : { cwdFailureExitCode })
   })

@@ -12,6 +12,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import { restoreJournal } from './replay/journal-open'
+import { journalLegacyChatRevision } from './database/journal-legacy-source'
 import { failLoadOnUnloadableJournal } from './replay/journal-open-failure'
 import { restoredJournalPersonAcceptance } from './replay/journal-historical-inputs'
 import { readJournalLegacyCards } from './queued-messages/journal-queue-import'
@@ -95,6 +96,8 @@ export type JournalDomainImportHeader = {
   workspaceId: string
   epoch: string
   head: JournalDomainImportHead
+  /** The original chat's revision this conversion read; absent for chats founded here. */
+  sourceRevision?: string | null
 }
 
 export type JournalDomainImport = JournalDomainImportHeader & {
@@ -108,7 +111,7 @@ const PAGE_BYTES = 1024 * 1024
  * Restores a chat's frozen copied source once, as an open interprets it, and returns its current
  * domain records as bounded typed pages. The source never changes before its chat is ready, so
  * every read is its own short statement: no transaction may span the restore and pin the WAL.
- * Returns null for a chat with nothing saved; its first open founds the epoch.
+ * Returns null without transcript content; the reader separately preserves empty saved epochs.
  */
 export function prepareJournalDomainImport(
   db: Database.Database,
@@ -117,6 +120,8 @@ export function prepareJournalDomainImport(
   if (db.isTransaction) {
     throw new Error('journal domain import reads its frozen source outside a transaction')
   }
+  // Read before the restore: a later original write then leaves the recorded revision behind.
+  const sourceRevision = journalLegacyChatRevision(db, sessionId)
   const loaded = restoreJournal(db, sessionId)
   if (!loaded || (!loaded.newer && !loaded.damage && loaded.state.lastSequence === 0)) {
     return null
@@ -139,6 +144,7 @@ export function prepareJournalDomainImport(
         .workspace_id
     ),
     epoch: state.epoch,
+    sourceRevision,
     head: {
       lastSequence: state.lastSequence,
       highestFence: state.highestFence,

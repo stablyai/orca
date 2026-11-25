@@ -166,7 +166,8 @@ export async function runJournalSqlCommand(
     case 'queue-update':
     case 'queue-hold':
     case 'queue-withdraw':
-    case 'queue-move': {
+    case 'queue-move':
+    case 'queue-steer': {
       const result = applyJournalDomainQueueCommand(db, stateDirectory, target, operation, savedAt)
       const value =
         result.result.kind === 'queue-insert'
@@ -175,9 +176,11 @@ export async function runJournalSqlCommand(
             ? result.result.update
             : result.result.kind === 'queue-move'
               ? result.result.move
-              : result.result.kind === 'queue-withdraw'
-                ? result.result.cards
-                : undefined
+              : result.result.kind === 'queue-steer'
+                ? result.result.card
+                : result.result.kind === 'queue-withdraw'
+                  ? result.result.cards
+                  : undefined
       return finishJournalSqlCommand(
         db,
         stateDirectory,

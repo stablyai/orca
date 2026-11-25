@@ -1,6 +1,6 @@
 // Require gh >=2.40 multi-account support per execution runtime before offering bindings.
 import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import type { GhMultiAccountCapability } from '../../../shared/github/accounts/auth-types'
 import {
   createGhLogicalLifetime,
@@ -177,11 +177,4 @@ export function createGhMultiAccountUnsupportedError(): Error & {
     code: 'gh_multi_account_unsupported' as const,
     stderr: message
   })
-}
-
-/** @internal — test-only */
-export function clearGhCapabilityStateForTests(): void {
-  capabilityByExecutionHost.clear()
-  probesByExecutionHost.clear()
-  generationByExecutionHost.clear()
 }

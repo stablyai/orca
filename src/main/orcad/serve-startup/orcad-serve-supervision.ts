@@ -1,6 +1,6 @@
 // `orca serve --supervise` runs orcad under a service manager, which restarts it routinely.
 import process from 'node:process'
-import { ORCA_SERVE_SUPERVISED_ENV } from '../../../shared/serve-supervised-terminal-durability'
+import { ORCA_SERVE_SUPERVISED_ENV } from '../../../shared/remote-runtime/serve-supervisor/serve-supervised-terminal-durability'
 
 /** A supervised service must not hand out terminals that its next restart would kill. */
 export class OrcadTerminalsNotDurableError extends Error {

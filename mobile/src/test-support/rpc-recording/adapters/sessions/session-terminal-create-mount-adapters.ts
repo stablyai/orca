@@ -9,7 +9,7 @@ import type {
   MobileSessionTabType
 } from '../../../../session/tabs/mobile-session-tabs'
 import type { TerminalRecord as Terminal } from '../../../../terminal/session/inventory/mobile-terminal-records'
-import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../../src/shared/session-tabs-runtime-capabilities'
+import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 
 const PREVIOUS_HANDLE = 'terminal-0'
 

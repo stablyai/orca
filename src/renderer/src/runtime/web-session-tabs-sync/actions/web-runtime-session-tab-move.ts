@@ -1,8 +1,8 @@
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult
-} from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { useAppStore } from '../../../store/index'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
@@ -23,13 +23,11 @@ import {
 export async function moveWebRuntimeSessionTab(
   args: RuntimeMobileSessionTabMove & {
     worktreeId: string
-    environmentId?: string | null
+    /** The tab's owning runtime; a move never routes by the focused host. */
+    environmentId: string | null
   }
 ): Promise<boolean> {
-  const environmentId =
-    args.environmentId?.trim() ??
-    useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
-    null
+  const environmentId = args.environmentId?.trim() || null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
@@ -133,7 +131,7 @@ async function hostDropResolvers(
   resolveHostBackedTabId: (tabId: string) => string | null
 }> {
   const { resolveHostSessionGroupIdForWebSessionTab, resolveHostSessionTabIdForWebSessionTab } =
-    await import('../tracking-mappings')
+    await import('../identity/tracking-mappings')
   const state = useAppStore.getState()
   const groups = state.groupsByWorktree?.[worktreeId] ?? []
   const targetGroup = groups.find((group) => group.id === targetGroupId)

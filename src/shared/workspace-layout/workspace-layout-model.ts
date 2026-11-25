@@ -6,11 +6,11 @@ import type { AiVaultSessionTitle } from '../ai-vault/contracts/ai-vault-session
 import type { PersistedClientHostedBrowserPage } from '../workspace-session/client-hosted-browser-page-record'
 import type { ClosedTerminalPanesByPaneKey } from './terminal-surfaces/closed-terminal-panes'
 import type { ClosedTerminalTabTombstone } from './terminal-surfaces/closed-terminal-tab-tombstones'
-import type { ExecutionHostId } from '../execution-host'
-import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
+import type { ExecutionHostId } from '../execution-host/execution-host'
+import type { TabContentType, TabGroupLayoutNode } from './tab-groups/tab-types'
 import type { TerminalGrid, TerminalPaneLayoutNode, TerminalTab } from './terminal-tab-types'
 import type { PersistedOpenFile } from '../workspace-session/workspace-session-state-types'
-import type { BrowserWorkspace } from '../browser-workspace-types'
+import type { BrowserWorkspace } from '../browser/workspaces/browser-workspace-types'
 import type { LayoutEditorView } from './editor-tabs/layout-editor-view'
 
 export type LayoutTerminalPanes = {
@@ -48,6 +48,13 @@ export type LayoutTerminalTab = LayoutTabFields & {
 export type LayoutContentTab = LayoutTabFields & { kind: Exclude<TabContentType, 'terminal'> }
 
 export type LayoutTab = LayoutTerminalTab | LayoutContentTab
+
+export type TabContentReplacement = {
+  kind: 'browser-page'
+  browserTabId: string
+  pageId: string
+  newPageId: string
+}
 
 export type LayoutGroup = { id: string; tabOrder: string[] }
 

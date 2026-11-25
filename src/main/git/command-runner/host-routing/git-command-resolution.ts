@@ -1,7 +1,7 @@
-import { wslDistroForCommand } from '../../../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../../../shared/file-access/wsl-paths'
 
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { isWslDirectGitReadCommand } from '../../../../shared/git/commands/git-command-classification'
 import {
   disableWslGitReadEnvironment,
@@ -42,7 +42,7 @@ export function resolveGitCommand(
       return resolveCommand('git', wslGitArgs(args, options), options.cwd, distro, {
         wslGitReadEnvironment: environment,
         env: options.env,
-        terminationBarrier: options.terminationBarrier
+        terminationBarrier: Boolean(options.terminationBarrier)
       })
     }
     void getWslGitReadEnvironment(distro)
@@ -104,7 +104,7 @@ export function resolveGitCommandWithoutProbe(
     useWslLoginShell: Boolean(options.wslDistro),
     captureLoginShellOutput,
     env: options.env,
-    terminationBarrier: options.terminationBarrier
+    terminationBarrier: Boolean(options.terminationBarrier)
   })
 }
 

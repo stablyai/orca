@@ -1,4 +1,4 @@
-import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../../../shared/hidden-window-frame-pump'
+import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../../../shared/app-lifecycle/windows/hidden-window-frame-pump'
 
 type FramePumpWindow = {
   on(event: 'show', listener: () => void): unknown

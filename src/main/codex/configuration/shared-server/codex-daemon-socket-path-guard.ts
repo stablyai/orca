@@ -3,8 +3,8 @@ import {
   observeResolvedFilePath,
   observeResolvedFilePathError
 } from '../../../filesystem/file-content-observation'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { unixSocketPathFits } from '../../../../shared/unix-socket-path-limit'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { unixSocketPathFits } from '../../../../shared/network/unix-socket-path-limit'
 import { upsertTableSettingsInContent } from '../settings/codex-config-settings-upsert'
 import {
   createTomlLineScanState,
@@ -51,12 +51,12 @@ export function codexDaemonSocketPathExceedsLimit(
 const unguardableHomesWarned = new Set<string>()
 
 /** Applies (or removes) Orca's daemon override so it tracks the home's current path. */
-export function applyCodexDaemonSocketGuard(
+export function applyCodexDaemonOverride(
   config: string,
   homePath: string,
-  platform = process.platform
+  socketPathExceedsLimit: boolean
 ): string {
-  if (!codexDaemonSocketPathExceedsLimit(homePath, platform)) {
+  if (!socketPathExceedsLimit) {
     return stripCodexDaemonOverride(config)
   }
   const guarded = upsertTableSettingsInContent(
@@ -95,8 +95,11 @@ export function stripCodexDaemonOverride(config: string): string {
   let featuresHeaderIndex = -1
   let removedFromFeatures = false
   const dropEmptyFeaturesTable = (): void => {
-    const body = kept.slice(featuresHeaderIndex + 1)
-    if (featuresHeaderIndex !== -1 && removedFromFeatures && body.every((l) => l.trim() === '')) {
+    // Why: copying the kept lines at every header made large configs quadratic.
+    if (featuresHeaderIndex === -1 || !removedFromFeatures) {
+      return
+    }
+    if (kept.slice(featuresHeaderIndex + 1).every((l) => l.trim() === '')) {
       kept.length = featuresHeaderIndex
       while (kept.at(-1)?.trim() === '') {
         kept.pop()

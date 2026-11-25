@@ -10,7 +10,7 @@ import type {
   SkillCloudPublishResult,
   SkillCloudShare,
   SkillCloudVersion
-} from '../../../shared/skill-cloud-contract'
+} from '../../../shared/skills/sharing/skill-cloud-contract'
 import { resolveArtifactCloudApiUrl } from '../../artifacts/artifact-cloud-config'
 import { runSkillCloudOperation } from './skill-cloud-auth'
 import { uploadSkillPackageToSignedPolicy } from './skill-cloud-direct-upload'

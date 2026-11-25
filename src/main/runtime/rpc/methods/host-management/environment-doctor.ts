@@ -1,4 +1,4 @@
-import { ENVIRONMENT_DOCTOR_METHOD } from '../../../../../shared/environment-doctor-runtime'
+import { ENVIRONMENT_DOCTOR_METHOD } from '../../../../../shared/workspace-setup/environment-doctor/environment-doctor-runtime'
 import { EnvironmentDoctorParams } from '../../../../../shared/rpc-contract/host-management/environment-doctor-params'
 import { runEnvironmentDoctor } from '../../../../environment-doctor/environment-doctor'
 import { createHostEnvironmentDoctorDeps } from '../../../../environment-doctor/environment-doctor-host'

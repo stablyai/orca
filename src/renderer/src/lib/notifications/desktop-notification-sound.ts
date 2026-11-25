@@ -1,8 +1,10 @@
+import { usesCustomNotificationSound } from '../../../../shared/notifications/notification-settings-types'
+
 export async function playDesktopNotificationSound(
   customSoundId: string | null | undefined,
   customSoundVolume?: number | null
 ): Promise<boolean> {
-  if (!customSoundId || customSoundId === 'system') {
+  if (!usesCustomNotificationSound(customSoundId)) {
     return false
   }
 
@@ -10,7 +12,7 @@ export async function playDesktopNotificationSound(
     const result = await window.api.notifications.playSound({
       volume: customSoundVolume ?? undefined
     })
-    // Why: 'deduped' (burst coalescing) and 'focus-active' (macOS Focus) are expected — not failures.
+    // Why: 'deduped' (burst coalescing) and 'focus-active' (system Focus) are expected — not failures.
     if (!result.played && result.reason !== 'deduped' && result.reason !== 'focus-active') {
       console.warn('Failed to play custom notification sound:', result.reason)
     }

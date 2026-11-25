@@ -5,7 +5,7 @@ import {
   ProfileStateRecoveryCommandError,
   profileStateRepairSectionApproval,
   type ProfileStateRecoveryRepairSection
-} from '../../../../shared/profile-state-recovery-command'
+} from '../../../../shared/orca-profiles/profile-state-recovery-command'
 import type { ProfileStateMaintenance } from '../access/profile-state-access'
 import { profileHasPendingProjectMove } from '../../../orca-profiles/project-transfer/profile-project-move-record'
 import '../automation-runs/profile-state-automation-runs'

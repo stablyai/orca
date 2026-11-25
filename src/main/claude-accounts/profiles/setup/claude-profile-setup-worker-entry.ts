@@ -2,6 +2,9 @@ import { parentPort, workerData } from 'node:worker_threads'
 import { ClaudeHookService } from '../../../claude/hook-service'
 import { provisionClaudeAccountProfile } from './claude-profile-setup'
 import type { ClaudeProfileSetupJob } from './claude-profile-setup-worker'
+import { installWorkerSendLedger } from '../../../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-claude-profile-setup')
 
 if (!parentPort) {
   throw new Error('Claude account setup must run on a worker thread')

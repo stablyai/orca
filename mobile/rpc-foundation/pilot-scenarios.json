@@ -260,45 +260,6 @@
       ]
     },
     {
-      "id": "settings-bot-overrides-fulfilled",
-      "operation": "settings.bot-overrides",
-      "family": "settings.bot-overrides",
-      "sites": [
-        "mobile/src/source-control/review/pull-request/comments/use-pr-bot-author-overrides.ts"
-      ],
-      "schedules": ["settings-first"],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
       "id": "settings-workspace-context-fulfilled",
       "operation": "settings.workspace-context",
       "family": "settings.workspace-context",
@@ -1145,6 +1106,25 @@
         },
         {
           "checkpoint": "pr-base-resolved"
+        },
+        {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1",
+            "createSource": {
+              "kind": "base",
+              "baseBranch": "main"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": false,
+              "hooks": null,
+              "setupRunPolicy": "run-by-default",
+              "source": null
+            }
+          }
         },
         {
           "complete": "worktree.create#1",
@@ -3415,8 +3395,7 @@
           "params": {
             "trustedOrcaHooks": {
               "repo-1": {
-                "setup": {
-                  "contentHash": "hash-1",
+                "all": {
                   "approvedAt": 1767225600000
                 }
               }
@@ -3574,8 +3553,7 @@
           "params": {
             "trustedOrcaHooks": {
               "repo-1": {
-                "archive": {
-                  "contentHash": "archive-hash-1",
+                "all": {
                   "approvedAt": 1767225600000
                 }
               }
@@ -3654,8 +3632,7 @@
               "ui": {
                 "trustedOrcaHooks": {
                   "repo-1": {
-                    "archive": {
-                      "contentHash": "archive-hash-1",
+                    "all": {
                       "approvedAt": 1767225600000
                     }
                   }
@@ -3881,7 +3858,8 @@
             "linkedPRNumber": null,
             "fallbackPRNumber": 12,
             "acceptMergedFallbackPR": true,
-            "currentHeadOid": null
+            "currentHeadOid": null,
+            "reason": "active"
           },
           "paramsFollowDivergence": true,
           "reply": {
@@ -5936,6 +5914,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -5986,6 +5965,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6025,6 +6005,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6080,6 +6061,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6109,6 +6091,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": true,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6159,6 +6142,7 @@
           "complete": "aiVault.listSessions#1",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6210,6 +6194,7 @@
           "complete": "aiVault.listSessions#2",
           "params": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -6383,6 +6368,39 @@
         },
         {
           "checkpoint": "degraded-to-legacy"
+        }
+      ]
+    },
+    {
+      "id": "aivault-resume-prepare-chat-owned",
+      "operation": "aiVault.resume-preparation",
+      "family": "aiVault.resume-preparation",
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "claude",
+          "id": "claude"
+        },
+        {
+          "complete": "aiVault.prepareSessionResume#1",
+          "params": {
+            "agent": "claude",
+            "codexHome": null,
+            "executionHostId": "local",
+            "filePath": "/sessions/claude-session-1.jsonl",
+            "sessionId": "claude-session-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "agent_session_conflict",
+              "message": "agent_session_conflict"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-before-launch"
         }
       ]
     },
@@ -7049,8 +7067,8 @@
             "envelope": {
               "clientOperationId": "1767225600000-00000000000040008000000000000002",
               "expectedRuntimeFence": null,
-              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
-              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+              "payloadFingerprint": "dba3b1f06130eabd87f981191b8806da21ead488b99966d5070a08b0f8dec8dc",
+              "sessionId": "00000000-0000-4000-8000-000000000001"
             },
             "worktree": "id:workspace-1"
           },
@@ -7066,8 +7084,8 @@
             "envelope": {
               "clientOperationId": "1767225600000-00000000000040008000000000000002",
               "expectedRuntimeFence": null,
-              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
-              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+              "payloadFingerprint": "dba3b1f06130eabd87f981191b8806da21ead488b99966d5070a08b0f8dec8dc",
+              "sessionId": "00000000-0000-4000-8000-000000000001"
             },
             "worktree": "id:workspace-1"
           },
@@ -7076,7 +7094,7 @@
             "result": {
               "ok": true,
               "value": {
-                "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+                "sessionId": "00000000-0000-4000-8000-000000000001"
               }
             }
           }

@@ -1,4 +1,4 @@
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 
 type GpuInfoLevel = 'basic' | 'complete'
 const DEFAULT_GPU_CRASH_DIAGNOSTICS_WAIT_MS = 1_000

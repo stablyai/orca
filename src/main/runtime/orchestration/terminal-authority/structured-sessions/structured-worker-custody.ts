@@ -3,7 +3,7 @@
 
 import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration/orchestration-task-display'
-import { isOrcaSessionId } from '../../../../../shared/orca-session-address'
+import { isOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import type { RunningStructuredSession } from '../../addressing/session-lineage/structured-session-lineage'
 import type { OrchestrationDb } from '../../db/orchestration-db'

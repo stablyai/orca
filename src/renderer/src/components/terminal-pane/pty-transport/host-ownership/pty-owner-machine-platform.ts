@@ -1,12 +1,10 @@
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { PtyTransport } from '../pty-transport-types'
 
-export type PtyOwnerMachineState = Pick<
-  AppState,
-  'sshConnectionStates' | 'sshStateByEnvironment' | 'runtimeStatusByEnvironmentId'
->
+export type PtyOwnerMachineState = Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>
 
 /** OS an SSH target reports; a target reached through a paired server is in that server's SSH state. */
 export function sshTargetRemotePlatform(
@@ -22,13 +20,10 @@ export function sshTargetRemotePlatform(
 
 /** Last-verified OS of a paired server; outages keep it (ssh-execution-boundary.md). */
 export function runtimeHostPlatform(
-  state: PtyOwnerMachineState,
+  statuses: RuntimeStatuses,
   runtimeEnvironmentId: string
 ): NodeJS.Platform | null {
-  return (
-    lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId))
-      ?.hostPlatform ?? null
-  )
+  return lastVerifiedRuntimeStatus(statuses.get(runtimeEnvironmentId))?.hostPlatform ?? null
 }
 
 export type PaneOwnerTransport = Partial<
@@ -75,9 +70,10 @@ export function resolveRemotePtyOwnerMachine(
 /** OS of a remote PTY owner, or null until its SSH state or server status reports it. */
 export function remotePtyOwnerMachinePlatform(
   state: PtyOwnerMachineState,
+  statuses: RuntimeStatuses,
   machine: RemotePtyOwnerMachine
 ): NodeJS.Platform | null {
   return machine.kind === 'ssh'
     ? sshTargetRemotePlatform(state, machine.targetId, machine.runtimeEnvironmentId)
-    : runtimeHostPlatform(state, machine.environmentId)
+    : runtimeHostPlatform(statuses, machine.environmentId)
 }

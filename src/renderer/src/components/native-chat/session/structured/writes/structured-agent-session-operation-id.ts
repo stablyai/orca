@@ -1,5 +1,5 @@
 import { createStructuredAgentSessionOperationId } from '../../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../../shared/identifiers/non-secure-context-uuid'
 
 export function structuredSessionOperationId(): string {
   return createStructuredAgentSessionOperationId(createBrowserUuid)

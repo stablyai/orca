@@ -97,7 +97,7 @@ function SearchShortcutOfferPrompt({
     <div
       role="group"
       aria-label={t('searchShortcutOptIn.groupLabel', 'Search shortcut')}
-      className="flex min-w-0 flex-1 items-center gap-2"
+      className="flex min-w-0 flex-1 basis-80 items-center gap-2"
     >
       {/* Wraps instead of truncating: the terminal-clear cost must stay visible next to the button. */}
       <span className="min-w-0 leading-snug" aria-live="polite">

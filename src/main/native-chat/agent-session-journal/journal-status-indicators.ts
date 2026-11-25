@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionWorkScope } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/structured-agent-session-command-entry'
+import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import { structuredAgentSessionStoppingForMark } from '../agent-session-wire/termination/structured-agent-session-stopping'
 import type { JournalReducerState } from './projection/journal-reducer'
 import { renderJournalStatus, renderJournalStatusItem } from './projection/journal-public-read'

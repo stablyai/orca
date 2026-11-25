@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef } from 'react'
-import { DictationTranscript } from '../../../../shared/dictation-transcript'
+import { DictationTranscript } from '../../../../shared/speech/dictation/dictation-transcript'
 import type { DictationLiveText } from '@/store/slices/dictation/dictation'
 
 type DictationSpeechEventHandlers = {

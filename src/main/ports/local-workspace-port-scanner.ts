@@ -1,4 +1,7 @@
-import type { WorkspacePortProbe, WorkspacePortScanResult } from '../../shared/workspace-ports'
+import type {
+  WorkspacePortProbe,
+  WorkspacePortScanResult
+} from '../../shared/workspace/ports/workspace-ports'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
 import {
   attributePortsToWorkspaces,

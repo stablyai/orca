@@ -8,7 +8,6 @@ import {
 import {
   liftRouteQuarantine,
   quarantineRoute,
-  resetRouteQuarantinesForTests,
   routeIsBlocked
 } from './wsl-transcript-fs-route-quarantine'
 
@@ -259,22 +258,6 @@ function pumpTasks(): void {
         (error: unknown) => settleTask(task, { error })
       )
   }
-}
-
-export function resetWslTranscriptFsGateForTests(): void {
-  for (const task of [...activeTasks, ...queuedTasks]) {
-    task.state = 'settled'
-    clearTimeout(task.deadlineTimer)
-    for (const waiter of task.waiters) {
-      removeWaiter(task, waiter)
-    }
-  }
-  activeTasks.clear()
-  queuedTasks.length = 0
-  inFlightTasks.clear()
-  activeLaneKeys.clear()
-  resetRouteQuarantinesForTests()
-  activeScanCount = 0
 }
 
 export function runWslTranscriptFsTask<T>(

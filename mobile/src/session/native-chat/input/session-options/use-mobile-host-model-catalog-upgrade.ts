@@ -7,7 +7,7 @@ import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
-} from '../../../../../../src/shared/host-model-listing-waits'
+} from '../../../../../../src/shared/agent-session/options/model-catalog/host-model-listing-waits'
 import { callAgentSession } from '../../agent-session/mobile-structured-agent-session-rpc'
 import { usesModelSpecificAcpEfforts } from '../../../../../../src/shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type { HostModelCatalogLaunch } from '../../../../../../src/shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'

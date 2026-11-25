@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
-import type { CustomPet } from '../../../shared/pet-types'
-import type { PetImportFailure } from '../../../shared/pet-import-failure-copy'
+import type { CustomPet } from '../../../shared/pets/pet-types'
+import type { PetImportFailure } from '../../../shared/pets/pet-import-failure-copy'
 import type { PreloadApi } from '../../api-types'
 
 export const petApi = {

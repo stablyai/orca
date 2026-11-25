@@ -7,9 +7,20 @@ import type {
 import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
 import { runProfileStateBackupWorker } from './backup/profile-state-backup-worker'
 import { quarantineProfileStateDatabase } from './recovery/profile-state-database-quarantine'
-import { ProfileStateWriteWorkerClient } from './writer/profile-state-writer-worker-client'
-import { ProfileStateWriterError } from './writer/profile-state-writer-errors'
+import type { ProfileStateWriteWorkerClient } from './writer/profile-state-writer-worker-client'
+import {
+  closedProfileStateWriterError,
+  ProfileStateWriterError
+} from './writer/profile-state-writer-errors'
 import type { ProfileStateWriterInitialization } from './writer/profile-state-writer-protocol'
+import {
+  closeIndeterminateProfileStateWriter,
+  createProfileStateWriter
+} from './writer/profile-state-writer-failure-recovery'
+import {
+  closeIdleProfileStateWriter,
+  ProfileStateIdleWriterStop
+} from './writer/profile-state-idle-writer-stop'
 import {
   ProfileStateWriterReopenPolicy,
   reportTerminalReopenFailure
@@ -27,14 +38,12 @@ export type ProfileStateWorkerAuthorityOptions = {
 /** Main owns backup scheduling; the worker owns every live SQL command while it runs. */
 export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   readonly asynchronous = true
-  /** Null while idle-stopped: nothing is pending and `stoppedRevision` is what it acknowledged last. */
   private writer: ProfileStateWriteWorkerClient | null
   private stoppedRevision: number | undefined
   private stopping: Promise<void> | undefined
-  private idleTimer: ReturnType<typeof setTimeout> | undefined
+  private readonly idleStop: ProfileStateIdleWriterStop
   private inFlight = 0
   private readonly reopenPolicy = new ProfileStateWriterReopenPolicy()
-  /** Abort while idle-stopped has no writer to fault, so it is remembered here instead. */
   private stoppedFailure: Error | undefined
   private backups: ProfileStateBackupRotation
   private closing: Promise<void> | undefined
@@ -43,9 +52,15 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     private readonly initialization: ProfileStateWriterInitialization,
     private readonly options: ProfileStateWorkerAuthorityOptions = {}
   ) {
-    this.writer = new ProfileStateWriteWorkerClient(initialization, options)
+    this.idleStop = new ProfileStateIdleWriterStop({
+      delay: () => this.options.writerIdleStopMs,
+      getWriter: () => this.writer,
+      shouldSchedule: () => Boolean(this.closing || this.inFlight > 0),
+      stop: (writer) => this.stopIdleWriter(writer)
+    })
+    this.writer = this.createWriter(initialization)
     this.backups = this.createBackups()
-    this.scheduleIdleStopAfterReady()
+    this.idleStop.scheduleAfterReady()
   }
 
   get ready(): Promise<void> {
@@ -62,31 +77,34 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     } else if (this.stoppedFailure) {
       throw this.stoppedFailure
     } else if (this.closing) {
-      throw closedWriterError()
+      throw closedProfileStateWriterError()
     }
   }
 
   async abort(): Promise<void> {
-    this.cancelIdleStop()
+    this.idleStop.cancel()
+    // Set before waiting so neither this abort's fault nor a retirement under way is recovered by a reopen.
+    this.stoppedFailure ??= new ProfileStateWriterError(
+      'profile-state-writer-aborted',
+      'Profile state writer was aborted',
+      'known-failure'
+    )
     if (this.stopping) {
       await this.stopping
     }
     if (this.writer) {
       return this.writer.abort()
     }
-    this.stoppedFailure ??= new ProfileStateWriterError(
-      'profile-state-writer-aborted',
-      'Profile state writer was aborted',
-      'known-failure'
-    )
   }
 
   assertCurrentRevision(): Promise<void> {
     return this.run((writer) => writer.assertCurrentRevision()).then(() => {})
   }
 
-  writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<void> {
-    return this.run((writer) => writer.writeSerializedDomains(replacements)).then(() => {})
+  writeSerializedDomains(
+    ...args: Parameters<AsyncProfileStateAuthority['writeSerializedDomains']>
+  ): Promise<void> {
+    return this.run((writer) => writer.writeSerializedDomains(...args)).then(() => {})
   }
 
   writeSerializedAutomationRuns(
@@ -99,9 +117,9 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   writeCompleteSerializedDomains(
-    replacements: readonly ProfileStateDomainReplacement[]
+    ...args: Parameters<AsyncProfileStateAuthority['writeCompleteSerializedDomains']>
   ): Promise<void> {
-    return this.run((writer) => writer.writeCompleteSerializedDomains(replacements)).then(() => {})
+    return this.run((writer) => writer.writeCompleteSerializedDomains(...args)).then(() => {})
   }
 
   writeSerializedState(payload: Buffer): Promise<void> {
@@ -131,9 +149,8 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     return this.backups.drain()
   }
 
-  /** By default a graceful shutdown, which also brings the downgrade copy current. */
   close(options: { refreshLegacyDocuments?: boolean } = {}): Promise<void> {
-    this.cancelIdleStop()
+    this.idleStop.cancel()
     this.writer?.stopAdmission()
     this.closing ??= this.finishClose(options.refreshLegacyDocuments !== false)
     return this.closing
@@ -150,17 +167,18 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
         if (consumed || this.writer !== writer) {
           throw new Error('Profile maintenance resume has already been consumed')
         }
+        if (this.stoppedFailure) {
+          throw this.stoppedFailure
+        }
         consumed = true
-        this.writer = new ProfileStateWriteWorkerClient(
-          { ...this.initialization, revision },
-          { ...this.options, reportInitializationFailure: true }
-        )
+        this.writer = this.createWriter({ ...this.initialization, revision }, true)
         this.backups = this.createBackups()
         this.closing = undefined
-        this.scheduleIdleStopAfterReady()
+        this.idleStop.scheduleAfterReady()
         try {
           await this.writer.ready
           this.assertWritable()
+          this.reopenPolicy.recordSuccess()
         } catch (error) {
           await this.close({ refreshLegacyDocuments: false })
           throw error
@@ -203,22 +221,20 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     )
   }
 
-  /** A running writer dispatches synchronously, as before; only a stopped one is reopened first. */
   private run<T>(command: (writer: ProfileStateWriteWorkerClient) => Promise<T>): Promise<T> {
-    this.cancelIdleStop()
+    this.idleStop.cancel()
     this.inFlight += 1
     const writer = this.writer
     const result = writer && !this.stopping ? command(writer) : this.reopen().then(command)
     return result.finally(() => {
       this.inFlight -= 1
-      this.scheduleIdleStop()
+      this.idleStop.schedule()
     })
   }
 
   private async reopen(): Promise<ProfileStateWriteWorkerClient> {
     await this.stopping
     if (this.writer) {
-      // A concurrent caller already reopened it; dispatch only once it initialized.
       await this.writer.ready
       return this.writer
     }
@@ -226,13 +242,12 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       throw this.stoppedFailure
     }
     if (this.closing) {
-      throw closedWriterError()
+      throw closedProfileStateWriterError()
     }
     this.reopenPolicy.admit()
-    const writer = new ProfileStateWriteWorkerClient(
+    const writer = this.createWriter(
       { ...this.initialization, revision: this.requireStoppedRevision() },
-      // A retriable failure is not "saving has stopped"; forgetFailedReopen reports only terminal ones.
-      { ...this.options, reportInitializationFailure: false }
+      false
     )
     this.writer = writer
     this.reopenPolicy.recordAttempt()
@@ -246,84 +261,67 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     return writer
   }
 
-  /** A spawn or open failure must not wedge saving: go back to stopped so a later command retries. */
   private forgetFailedReopen(writer: ProfileStateWriteWorkerClient, error: unknown): void {
     if (this.writer !== writer) {
       return
     }
-    const retry = this.reopenPolicy.recordFailure(error)
-    if (!retry) {
-      reportTerminalReopenFailure(this.options.onFailure, error)
+    if (!this.reopenPolicy.recordFailure(error)) {
+      reportTerminalReopenFailure(this.options.onFailure, this.reopenPolicy.terminalFailure(error))
       return
     }
     this.writer = null
     void writer.abort().catch(() => {})
   }
 
-  get writerIdleStopPending(): boolean {
-    return this.idleTimer !== undefined
-  }
-
-  private scheduleIdleStopAfterReady(): void {
-    void this.writer?.ready.then(
-      () => this.scheduleIdleStop(),
-      () => {}
+  private createWriter(
+    initialization: ProfileStateWriterInitialization,
+    reportInitializationFailure = false
+  ): ProfileStateWriteWorkerClient {
+    return createProfileStateWriter(
+      initialization,
+      this.options,
+      reportInitializationFailure,
+      (writer, error) => this.handleIndeterminateWriterFailure(writer, error)
     )
   }
 
-  private scheduleIdleStop(): void {
-    const delay = this.options.writerIdleStopMs
-    if (
-      delay === undefined ||
-      this.idleTimer ||
-      this.closing ||
-      this.inFlight > 0 ||
-      !this.writer
-    ) {
-      return
+  private handleIndeterminateWriterFailure(
+    writer: ProfileStateWriteWorkerClient,
+    error: Error
+  ): void {
+    const stopping = closeIndeterminateProfileStateWriter(
+      writer,
+      () => this.writer === writer && !this.stopping && !this.closing && !this.stoppedFailure,
+      (revision) => {
+        if (this.writer !== writer || this.closing || this.stoppedFailure) {
+          return false
+        }
+        this.writer = null
+        this.stoppedRevision = revision
+        this.reopenPolicy.recoverFrom(error)
+        return true
+      },
+      () => reportTerminalReopenFailure(this.options.onFailure, error)
+    )
+    if (stopping) {
+      this.stopping = stopping.finally(() => (this.stopping = undefined))
     }
-    this.idleTimer = setTimeout(() => {
-      this.idleTimer = undefined
-      this.stopIdleWriter()
-    }, delay)
-    this.idleTimer.unref?.()
   }
 
-  private cancelIdleStop(): void {
-    clearTimeout(this.idleTimer)
-    this.idleTimer = undefined
-  }
-
-  private stopIdleWriter(): void {
-    const writer = this.writer
-    if (!writer || this.closing || this.inFlight > 0 || this.stopping) {
-      return
-    }
-    let revision: number
-    try {
-      // A faulted writer stays in place so assertWritable keeps reporting its failure.
-      writer.assertWritable()
-      revision = writer.acknowledgedRevision
-    } catch {
-      return
-    }
-    this.stopping = writer
-      .close({ refreshLegacyDocuments: true })
-      .then(() => {
+  private stopIdleWriter(writer: ProfileStateWriteWorkerClient): void {
+    const stopping = closeIdleProfileStateWriter(
+      writer,
+      () => this.writer === writer && !this.closing && this.inFlight === 0 && !this.stopping,
+      (revision) => {
         if (this.writer === writer) {
           this.writer = null
           this.stoppedRevision = revision
         }
-      })
-      // The writer's own fault handling reports a failed close; it stays as the faulted writer.
-      .catch(() => {})
-      .finally(() => {
-        this.stopping = undefined
-      })
-  }
-
-  get writerReopenCount(): number {
-    return this.reopenPolicy.count
+      }
+    )
+    if (stopping) {
+      this.stopping = stopping.finally(() => (this.stopping = undefined))
+    }
   }
 
   private requireStoppedRevision(): number {
@@ -332,12 +330,4 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     }
     return this.stoppedRevision
   }
-}
-
-function closedWriterError(): ProfileStateWriterError {
-  return new ProfileStateWriterError(
-    'profile-state-writer-closed',
-    'Profile state writer is closing',
-    'known-failure'
-  )
 }

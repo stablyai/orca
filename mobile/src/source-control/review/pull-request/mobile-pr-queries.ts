@@ -1,5 +1,5 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
-import type { PRComment } from '../../../../../src/shared/github/comments/comment-types'
+import { hostReadIntent } from '../../../query/host-read-intent'
 import type { PRCheckDetail } from '../../../../../src/shared/github/checks/check-types'
 import {
   acceptPRCheckObservation,
@@ -15,7 +15,7 @@ import {
   resolveGitHubWorkItemTarget
 } from '../../../../../src/shared/github/work-items/work-item-target'
 import type { GitHubWorkItemDetails } from '../../../../../src/shared/github/work-items/work-item-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../src/shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../src/shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../../../src/shared/worktree/id'
 import {
   defineHostQuery,
@@ -40,11 +40,7 @@ import {
   fetchPRForBranch,
   fetchWorkItemDetails
 } from '../github-operations/github-pr-rpc'
-import {
-  githubPrRequestParams,
-  type GitHubPrRepoSlug
-} from '../github-operations/github-pr-repo-slug'
-import { githubPrCommentsRead } from '../github-operations/github-pr-read-operations'
+import type { GitHubPrRepoSlug } from '../github-operations/github-pr-repo-slug'
 import { loadPrBranchReview, type PrBranchReview } from './mobile-pr-sidebar-state'
 import type { PrActionBusyKey } from './actions/pr-actions-engine'
 
@@ -59,7 +55,7 @@ export function prRepoParams(repo: GitHubOwnerRepo | GitHubPrRepoSlug | null | u
   } satisfies PrRepoParams
 }
 
-function prRepoSlug(params: PrRepoParams): GitHubPrRepoSlug | null {
+export function prRepoSlug(params: PrRepoParams): GitHubPrRepoSlug | null {
   return params.owner && params.name
     ? { owner: params.owner, repo: params.name, ...(params.host ? { host: params.host } : {}) }
     : null
@@ -175,6 +171,7 @@ export const prBranchReviewQuery = defineHostQuery({
           headSha: input.head,
           // Only an action's read re-learns host status; revalidations reuse what this connection knows.
           refresh: read.live,
+          intent: hostReadIntent(read, previous),
           previous
         }
       ),
@@ -188,19 +185,14 @@ export const prChecksQuery = defineHostQuery({
   refetchOnWindowFocus: true,
   // The event also fires when the checks rollup moves, which the summary alone can't list.
   signal: pullRequestChangedSignal,
-  fetch: async (
-    client,
-    target,
-    input: PrChecksInput,
-    _previous,
-    read
-  ): Promise<PRCheckDetail[]> => {
+  fetch: async (client, target, input: PrChecksInput, previous, read): Promise<PRCheckDetail[]> => {
     const outcome = await fetchPRChecks(client, target.worktree ?? '', {
       prNumber: input.number,
       headSha: input.head,
       // Fork checks must use the PR's own repo identity.
       prRepo: prRepoSlug(input),
-      refresh: read.live
+      refresh: read.live,
+      background: hostReadIntent(read, previous) === 'background'
     })
     if (!outcome.ok) {
       throw new Error(outcome.error)
@@ -260,46 +252,6 @@ export const prAssignableUsersQuery = defineHostQuery({
     return outcome.result
   }
 })
-
-/** The PR's comments alone, bypassing the host's 60 s comment cache: what a comment write changed. */
-export async function readPrComments(
-  client: RpcClient,
-  worktreeId: string,
-  input: PrDetailsInput
-): Promise<PRComment[]> {
-  const method = githubPrCommentsRead.operation.method
-  return githubPrCommentsRead.interpret(
-    await githubPrCommentsRead.request(
-      client,
-      githubPrRequestParams(
-        method,
-        worktreeId,
-        { prNumber: input.number, noCache: true },
-        { prRepo: prRepoSlug(input) }
-      )
-    )
-  )
-}
-
-/**
- * Puts re-read comments into the cached details. The host answers [] when every comment source failed,
- * so an empty list where comments were shown is not trusted: the whole details entry is re-read instead.
- */
-export function acceptPrComments(
-  queryClient: QueryClient,
-  detailsKey: QueryKey,
-  comments: PRComment[] | null
-): void {
-  const current = queryClient.getQueryData<GitHubWorkItemDetails>(detailsKey)
-  if (!current) {
-    return
-  }
-  if (comments === null || (comments.length === 0 && current.comments.length > 0)) {
-    void queryClient.invalidateQueries({ queryKey: detailsKey, exact: true })
-    return
-  }
-  queryClient.setQueryData<GitHubWorkItemDetails>(detailsKey, { ...current, comments })
-}
 
 /** Rewrites the cached details in place; a missing entry stays missing. */
 export function patchPrDetails(

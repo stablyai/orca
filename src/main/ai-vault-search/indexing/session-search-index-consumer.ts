@@ -1,3 +1,4 @@
+import { isCursorAcpSessionRow } from '../../../shared/ai-vault/session-display/cursor-acp-session-path'
 import { inSessionParseFileLane } from '../../ai-vault/parse-cache/session-parse-file-lane'
 import { requestWholeTranscriptRead } from '../../ai-vault/transcripts/session-transcript-reader'
 import { traceSessionSearch } from '../session-search-trace'
@@ -31,7 +32,7 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   opencode2: false,
   zcode: false,
   grok: false, // chat_history.jsonl supplies messages.
-  hermes: true,
+  hermes: false, // state.db supplies messages.
   rovo: false, // session_context.json supplies messages.
   openclaw: true,
   pi: true,
@@ -56,7 +57,11 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
 
   beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
     const { candidate } = start
-    if (this.store.acceptingReads === false) {
+    // A Cursor ACP session lists by its metadata alone; there is no conversation to index.
+    if (
+      this.store.acceptingReads === false ||
+      isCursorAcpSessionRow({ agent: candidate.agent, filePath: candidate.file.path })
+    ) {
       return null
     }
     // A fully covered self-contained transcript has nothing new to publish, even under another agent’s fold.

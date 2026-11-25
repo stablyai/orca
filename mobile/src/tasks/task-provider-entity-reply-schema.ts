@@ -1,7 +1,11 @@
 import { normalizePRCheckHeadSha } from '../../../src/shared/github/checks/pr-check-head'
 import * as z from 'zod'
 import type { GitHubPRFile } from '../../../src/shared/github/pull-requests/pull-request-types'
-import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import {
+  hostUnionArms,
+  salvagedOptional,
+  salvagingArray
+} from '../../../src/shared/validation/zod-salvage'
 import {
   prCount,
   prFlag,

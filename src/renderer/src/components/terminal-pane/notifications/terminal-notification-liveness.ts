@@ -120,8 +120,7 @@ export function isCurrentKnownPaneKey(
   if (terminalTabHasOwnerOutside(tabsByWorktree, parsed.tabId, worktreeId)) {
     return false
   }
-  const targetTabPtyId = getFirstTerminalTab(tabsByWorktree, parsed.tabId)?.ptyId
-  if (targetTabPtyId === undefined) {
+  if (!getFirstTerminalTab(tabsByWorktree, parsed.tabId)) {
     return false
   }
 
@@ -130,8 +129,6 @@ export function isCurrentKnownPaneKey(
     return false
   }
 
-  const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
-  // Before PTY-map hydration, accept known-tab snapshots unless explicitly suppressed; tab/leaf hints prove current inactive panes.
-  const ptyHints = [targetTabPtyId, leafPtyId].filter((ptyId): ptyId is string => Boolean(ptyId))
-  return ptyHints.length === 0 || ptyHints.some((ptyId) => !isSuppressedPtyHint(state, ptyId))
+  // Accepted completion survives an intentional stop; pane closure still revokes its address.
+  return true
 }

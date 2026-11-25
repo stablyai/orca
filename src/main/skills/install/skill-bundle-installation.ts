@@ -5,10 +5,10 @@ import type {
   SkillBundleInstallProgress,
   SkillBundleInstallResult,
   SkillBundleSkillResult
-} from '../../../shared/skill-bundle-install-contract'
-import { SkillBundleInstallResultSchema } from '../../../shared/skill-bundle-install-contract'
-import type { SkillBundleEntry } from '../../../shared/skill-bundle-manifest'
-import { parseSkillPackageManifest } from '../../../shared/skill-package-manifest'
+} from '../../../shared/skills/installation/skill-bundle-install-contract'
+import { SkillBundleInstallResultSchema } from '../../../shared/skills/installation/skill-bundle-install-contract'
+import type { SkillBundleEntry } from '../../../shared/skills/packages/skill-bundle-manifest'
+import { parseSkillPackageManifest } from '../../../shared/skills/packages/skill-package-manifest'
 import { extractSkillBundleArchive } from '../bundle-archive/skill-bundle-extraction'
 import {
   installSharedExtractedSkill,

@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import { isAbsoluteBrowserUrl } from '../browser/client-hosting/browser-expected-url'
-import { memoizeStringResult } from '../string-result-cache'
+import { memoizeStringResult } from '../collections/string-result-cache'
 
 // ~300 declarations repeat ~170 messages; zod schemas are immutable, so equal messages can share one instance.
 const MAX_CACHED_VALIDATION_MESSAGES = 256

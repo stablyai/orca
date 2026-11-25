@@ -14,10 +14,12 @@ import {
   closeTestAgentSessionRecordStores,
   closeTestAgentSessionDatabase,
   openTestAgentSessionDatabase,
-  openTestAgentSessionRecordStore,
+  openTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
+import {
   readPersistedTestAgentSessionStore,
   withTestAgentSessionDatabase
-} from './agent-session-record-store-test-harness'
+} from './agent-session-record-store-persistence.test-fixture'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 import {
   claudeProviderHandle,
@@ -446,5 +448,32 @@ describe('host and workspace isolation', () => {
         })
       )
     ).rejects.toThrow('agent_session_conflict')
+  })
+})
+
+describe('chat delete', () => {
+  it("never reuses a deleted chat's id, even after the store reopens", async () => {
+    const store = await open()
+    const owned = await establishOwner(store)
+    await store.evictProvenDeadOwner({
+      sessionId: 'session-alpha',
+      expectedFence: 1,
+      probe: { outcome: 'pid-absent' },
+      now: owned.lease.leaseDeadlineAt + 60 * 60 * 1000
+    })
+
+    expect(
+      await store.forgetChat({
+        chatId: 'session-alpha',
+        sessionIds: ['session-alpha'],
+        conversations: []
+      })
+    ).toBe(true)
+    expect(store.getRecord('session-alpha')).toBeNull()
+    await closeTestAgentSessionDatabase(directory)
+    const reopened = await open()
+
+    await expect(reopened.reserveOwner(reserveRequest())).rejects.toThrow('agent_session_deleted')
+    expect(reopened.getRecord('session-alpha')).toBeNull()
   })
 })

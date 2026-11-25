@@ -6,7 +6,12 @@ import {
 } from '../../../../../src/shared/github/checks/checks-detail-polling-policy'
 import type { PRCheckDetail } from '../../../../../src/shared/github/checks/check-types'
 import type { PRInfo } from '../../../../../src/shared/github/pull-requests/pull-request-types'
+import type { PRAutoRefreshCadence } from '../../../../../src/shared/source-control/hosted-review/review-refresh-policy'
 import { useHostQuery } from '../../../query/host-query'
+import {
+  NO_SOURCE_CONTROL_SETTINGS_INPUT,
+  sourceControlSettingsQuery
+} from '../../settings/mobile-source-control-settings'
 import {
   NO_BRANCH,
   NO_CHECKS,
@@ -17,6 +22,7 @@ import {
   type PrQueryScope
 } from './mobile-pr-queries'
 import { prSidebarResourceKey, type PrSidebarState } from './mobile-pr-sidebar-state'
+import { usePrCommentPolling } from './comments/pr-comment-polling'
 
 /** What is on screen: nothing to keep fresh, the PR and its checks, or its comments too. */
 export type PrTabLive = false | 'checks' | 'details'
@@ -26,6 +32,7 @@ type Input = {
   state: PrSidebarState
   live: PrTabLive
   connected: boolean
+  hasPendingCommentWrites?: () => boolean
 }
 
 type Cadence = {
@@ -40,8 +47,10 @@ type Cadence = {
 }
 
 const FIRST_BACKOFF_MS = 60_000
+const REVALIDATION_RETRY_FLOOR_MS = 10_000
 const NO_HOST = { hostId: '', client: null }
 const NO_TARGET = { exec: 'local' as const }
+const noPendingWrites = () => false
 
 function freshCadence(resource: string | null): Cadence {
   return {
@@ -85,10 +94,11 @@ function stepCadence(
   return cadence
 }
 
-function pollDelayMs(
+export function pollDelayMs(
   cadence: Cadence,
   state: PRInfo['state'],
-  checksStatus: PRInfo['checksStatus'] | undefined
+  checksStatus: PRInfo['checksStatus'] | undefined,
+  hostCadence: PRAutoRefreshCadence = 'default'
 ): number | null {
   const policy = new ChecksDetailPollingPolicy()
   if (cadence.failed) {
@@ -96,14 +106,21 @@ function pollDelayMs(
   } else if (cadence.checks) {
     policy.accept(cadence.checks)
   }
-  return policy.delayMs(state, checksStatus, cadence.backoffMs)
+  // The host that reads the PR owns the cadence; the phone's timer follows it (and the host caps it).
+  return policy.delayMs(state, checksStatus, cadence.backoffMs, hostCadence)
 }
 
 // Desktop's checks-panel cadence (shared policy): 1 min while open, backing off to 2 min when nothing
 // changes and up to 15 min on failures, stopping once a merged PR's checks settle. It runs only while
 // the PR is on screen, its route is focused, the host is connected and the app is in the foreground
 // (TanStack's focus manager pauses intervals in the background). Elsewhere details follow the PR's updatedAt.
-export function useMobilePrPolling({ queries, state, live, connected }: Input): {
+export function useMobilePrPolling({
+  queries,
+  state,
+  live,
+  connected,
+  hasPendingCommentWrites = noPendingWrites
+}: Input): {
   /** Polling is running for an open PR, so the screen can say "Live" instead of offering Refresh. */
   polling: boolean
 } {
@@ -125,25 +142,43 @@ export function useMobilePrPolling({ queries, state, live, connected }: Input): 
   const current = cadence.resource === resource ? cadence : freshCadence(resource)
   const prState = pr?.state
   const checksStatus = pr?.checksStatus
+  const hostSettings = useHostQuery(
+    sourceControlSettingsQuery,
+    host,
+    { exec: target.exec },
+    NO_SOURCE_CONTROL_SETTINGS_INPUT,
+    { enabled: running }
+  )
+  const hostCadence = hostSettings.data?.prAutoRefresh ?? 'default'
   const delay = useMemo(
-    () => (running && prState ? pollDelayMs(current, prState, checksStatus) : null),
-    [running, current, prState, checksStatus]
+    () => (running && prState ? pollDelayMs(current, prState, checksStatus, hostCadence) : null),
+    [running, current, prState, checksStatus, hostCadence]
   )
   const refetchInterval = delay ?? false
   useHostQuery(prBranchReviewQuery, host, target, queries?.branchInput ?? NO_BRANCH, {
     enabled: running && queries?.branchInput != null,
-    refetchInterval
+    // A host still revalidating the shown answer asks to be read again soon; "off" asks nothing.
+    refetchInterval: (review) =>
+      running && hostCadence !== 'off' && review?.retryAfterMs !== undefined
+        ? Math.max(REVALIDATION_RETRY_FLOOR_MS, review.retryAfterMs)
+        : refetchInterval
   })
   const checksRead = useHostQuery(prChecksQuery, host, target, queries?.checksInput ?? NO_CHECKS, {
     enabled: running && queries?.checksInput != null,
     refetchInterval
   })
-  // Thread resolution and comment edits leave the PR's updatedAt alone, so open Comments polls its details too.
-  const pollDetails = running && live === 'details' && queries?.detailsInput != null
+  const showComments = running && live === 'details' && queries?.detailsInput != null
   useHostQuery(prDetailsQuery, host, target, queries?.detailsInput ?? NO_PR, {
-    enabled: pollDetails,
-    refetchInterval: pollDetails ? refetchInterval : false
+    enabled: showComments
   })
+  // Thread resolution and comment edits can leave the PR's updatedAt alone.
+  usePrCommentPolling(
+    host,
+    target,
+    queries?.detailsInput ?? NO_PR,
+    showComments ? refetchInterval : false,
+    hasPendingCommentWrites
+  )
   const next = stepCadence(current, {
     data: checksRead.data,
     dataAt: checksRead.dataUpdatedAt,
@@ -153,5 +188,7 @@ export function useMobilePrPolling({ queries, state, live, connected }: Input): 
     setCadence(next)
   }
 
-  return { polling: pr !== null && running && (pr.state === 'open' || pr.state === 'draft') }
+  return {
+    polling: pr !== null && delay !== null && (pr.state === 'open' || pr.state === 'draft')
+  }
 }

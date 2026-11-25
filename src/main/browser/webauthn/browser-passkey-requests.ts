@@ -8,7 +8,7 @@ import {
 import {
   BROWSER_PASSKEY_REQUEST_CANCEL_CHANNEL,
   BROWSER_PASSKEY_REQUEST_PENDING_CHANNEL
-} from '../../../shared/browser-passkey-request'
+} from '../../../shared/browser/prompts/browser-passkey-request'
 import type { BrowserPasskeyRequest } from '../../../shared/browser/runtime/runtime-browser-contracts'
 // Frames waiting on a passkey request, by guest WebContents id and frame tree node.
 const pendingFramesByGuest = new Map<number, Map<number, WebFrameMain>>()

@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagingArray } from '../../../../../../src/shared/zod-salvage'
+import { salvagingArray } from '../../../../../../src/shared/validation/zod-salvage'
 
 const skillProviders = z.array(z.enum(['codex', 'claude', 'agent-skills']))
 

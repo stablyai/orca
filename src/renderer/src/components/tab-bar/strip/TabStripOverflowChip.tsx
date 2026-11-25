@@ -1,0 +1,369 @@
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Check, Laptop, Smartphone } from 'lucide-react'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
+import { useTabAgent } from '@/lib/agent-session/tab-identity/use-tab-agent'
+import { useStructuredChatTabConversationName } from '@/runtime/native-chat/naming/structured-conversation-name'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { formatKeybindingList } from '../../../../../shared/keybindings/formatting'
+import { getEffectiveKeybindingsForAction } from '../../../../../shared/keybindings/effective'
+import { parseKeybinding } from '../../../../../shared/keybindings/parser'
+import { captureTabStripMenuFocus, restoreTabStripFocus } from './tab-strip-focus-restore'
+import {
+  isGroupFocusedInStore,
+  useTabStripUnmountFocusRestore
+} from './use-tab-strip-unmount-focus-restore'
+import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
+import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { BotGroupTabIcon, useBotGroupTabMembers } from '../../bots/BotGroupTabIcon'
+import { ShellIcon } from '../../terminal/shells/ShellIcon'
+import { getTabDragLabel, type TabBarItem } from '../model/tab-bar-item-model'
+import { getClientHostedBrowserRowLabel } from '../browser-tabs/client-hosted-browser-row-label'
+
+export type TabStripEntry =
+  | { id: string; kind: 'item'; item: TabBarItem }
+  | { id: string; kind: 'paired'; row: ClientHostedBrowserRow }
+
+const MAX_SHORTCUT_ROWS = 9
+
+function TerminalEntryIcon({ tab }: { tab: TerminalTab }): React.JSX.Element {
+  const agent = useTabAgent(tab)
+  return agent ? (
+    <AgentIcon agent={agent} size={12} />
+  ) : (
+    <ShellIcon shell={tab.shellOverride} size={12} />
+  )
+}
+
+function RoomEntryIcon({ roomId }: { roomId: string }): React.JSX.Element {
+  return <BotGroupTabIcon members={useBotGroupTabMembers(roomId)} />
+}
+
+function EntryIcon({ entry }: { entry: TabStripEntry }): React.JSX.Element {
+  if (entry.kind === 'paired') {
+    return <Laptop className="size-3 shrink-0 text-callout-note" aria-hidden />
+  }
+  const { item } = entry
+  switch (item.type) {
+    case 'terminal':
+      return <TerminalEntryIcon tab={item.data} />
+    case 'agent-session':
+      return <AgentIcon agent={agentTypeToIconAgent(item.data.agentSessionAgent)} size={12} />
+    case 'room':
+      return <RoomEntryIcon roomId={item.data.entityId} />
+    case 'browser':
+      return (
+        <BrowserFavicon
+          faviconUrl={item.data.faviconUrl}
+          className="size-3"
+          fallbackClassName="text-callout-note"
+        />
+      )
+    case 'simulator':
+      return <Smartphone className="size-3 shrink-0" aria-hidden />
+    case 'editor':
+      return <FileTypeIcon filePath={item.data.filePath} className="size-3 shrink-0" />
+  }
+}
+
+function useEntryLabel(entry: TabStripEntry, generatedTabTitlesEnabled: boolean): string {
+  const t = useTranslate()
+  const conversationName = useStructuredChatTabConversationName(
+    entry.kind === 'item' && entry.item.type === 'agent-session' ? entry.item.data : undefined
+  )
+  return entry.kind === 'paired'
+    ? getClientHostedBrowserRowLabel(entry.row, t)
+    : getTabDragLabel(entry.item, generatedTabTitlesEnabled, conversationName, t)
+}
+
+function EntryRow({
+  entry,
+  isCurrent,
+  needsAttention,
+  shortcut,
+  generatedTabTitlesEnabled,
+  onSelect
+}: {
+  entry: TabStripEntry
+  isCurrent: boolean
+  needsAttention: boolean
+  shortcut: string | null
+  generatedTabTitlesEnabled: boolean
+  onSelect: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const label = useEntryLabel(entry, generatedTabTitlesEnabled)
+  return (
+    <DropdownMenuItem
+      data-tab-strip-list-entry={entry.id}
+      aria-current={isCurrent ? 'true' : undefined}
+      aria-label={
+        needsAttention
+          ? t('tabStrip.overflow.entryNeedsAttention', '{{title}}, needs attention', {
+              title: label
+            })
+          : label
+      }
+      onSelect={onSelect}
+    >
+      <span className="flex size-4 shrink-0 items-center justify-center">
+        <EntryIcon entry={entry} />
+      </span>
+      <span className={cn('min-w-0 flex-1 truncate', isCurrent && 'font-medium')}>{label}</span>
+      {needsAttention ? (
+        <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-status-warning" />
+      ) : null}
+      {/* Current is marked apart from the focus/hover background. */}
+      {isCurrent ? <Check className="size-3.5 shrink-0" aria-hidden /> : null}
+      {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+    </DropdownMenuItem>
+  )
+}
+
+/** tab.selectByIndex bindings are stored canonically on digit 1 and match any digit 1–9. */
+function useTabIndexBindings(): readonly string[] {
+  const keybindings = useAppStateValue((state) => state.keybindings)
+  return useMemo(
+    () =>
+      getEffectiveKeybindingsForAction(
+        'tab.selectByIndex',
+        getShortcutPlatform(),
+        keybindings
+      ).filter((binding) => parseKeybinding(binding)?.key === '1' && /(^|\+)1$/.test(binding)),
+    [keybindings]
+  )
+}
+
+/** Each row's own chord: substitute its digit into every effective binding, then format. Unset → none. */
+function shortcutForIndex(bindings: readonly string[], index: number): string | null {
+  if (index >= MAX_SHORTCUT_ROWS || bindings.length === 0) {
+    return null
+  }
+  return formatKeybindingList(
+    bindings.map((binding) => binding.replace(/1$/, String(index + 1))),
+    getShortcutPlatform()
+  )
+}
+
+/** "+N" (or, when nothing else fits, the active icon and tab count): opens every tab in strip order. */
+export function TabStripOverflowChip({
+  entries,
+  hiddenIds,
+  chipOnly,
+  activeId,
+  attentionIds,
+  generatedTabTitlesEnabled,
+  isGroupFocused,
+  worktreeId,
+  groupId,
+  surface,
+  onSelect
+}: {
+  entries: readonly TabStripEntry[]
+  hiddenIds: ReadonlySet<string>
+  chipOnly: boolean
+  activeId: string | null
+  attentionIds: ReadonlySet<string>
+  generatedTabTitlesEnabled: boolean
+  isGroupFocused: boolean
+  worktreeId: string
+  groupId: string
+  surface: HTMLElement | null
+  onSelect: (entry: TabStripEntry) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const [open, setOpen] = useState(false)
+  const menuId = useId()
+  const pendingPickRef = useRef<{ id: string; focusBefore: Element | null } | null>(null)
+  const floatingPanel = surface?.closest<HTMLElement>('[data-floating-terminal-panel]') ?? null
+  const indexBindings = useTabIndexBindings()
+  // tab.selectByIndex counts unified tabs in strip order; paired rows have no digit.
+  const unifiedIndexById = useMemo(
+    () =>
+      new Map(
+        entries.filter((entry) => entry.kind === 'item').map((entry, index) => [entry.id, index])
+      ),
+    [entries]
+  )
+  const activeEntry = entries.find((entry) => entry.id === activeId) ?? entries[0]
+  const activeLabel = useEntryLabel(activeEntry!, generatedTabTitlesEnabled)
+  const hiddenAttention = entries.filter(
+    (entry) => hiddenIds.has(entry.id) && attentionIds.has(entry.id)
+  )
+  const firstHiddenAttentionId = hiddenAttention[0]?.id ?? null
+  // Why: the strip stays mounted when focus or the workspace moves away; close so it can't act on a stale group.
+  if (!isGroupFocused && open) {
+    setOpen(false)
+  }
+
+  // Why: webview clicks miss the renderer pointerdown Radix uses for outside-click, so dismiss on window blur.
+  useEffect(() => {
+    if (!open) {
+      return undefined
+    }
+    const dismiss = (): void => setOpen(false)
+    window.addEventListener('blur', dismiss)
+    return () => window.removeEventListener('blur', dismiss)
+  }, [open])
+  const surfaceRef = useRef(surface)
+  useLayoutEffect(() => {
+    surfaceRef.current = surface
+  })
+  const chipRef = useRef<HTMLButtonElement>(null)
+  useTabStripUnmountFocusRestore({
+    open,
+    surface,
+    chip: chipRef,
+    activeId,
+    worktreeId,
+    groupId,
+    menuId
+  })
+
+  const count = chipOnly ? entries.length : hiddenIds.size
+  const countLabel = count > 99 ? '99+' : String(count)
+  const attentionSuffix =
+    hiddenAttention.length > 0
+      ? t('tabStrip.overflow.needAttention', ', {{count}} need attention', {
+          count: hiddenAttention.length,
+          defaultValue_one: ', {{count}} needs attention'
+        })
+      : ''
+  const name =
+    (chipOnly
+      ? t('tabStrip.overflow.chipOnlyName', '{{title}}, {{count}} tabs', {
+          title: activeLabel,
+          count: entries.length,
+          defaultValue_one: '{{title}}, {{count}} tab'
+        })
+      : t('tabStrip.overflow.moreTabs', '{{count}} more tabs', {
+          count: hiddenIds.size,
+          defaultValue_one: '{{count}} more tab'
+        })) + attentionSuffix
+
+  return (
+    <Tooltip>
+      <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              ref={chipRef}
+              type="button"
+              data-tab-strip-overflow-chip=""
+              aria-label={name}
+              className="relative mx-0.5 my-auto flex h-6 w-[34px] shrink-0 items-center justify-center gap-0.5 rounded-md text-xs tabular-nums text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-accent/60 data-[state=open]:text-foreground"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            >
+              {chipOnly && activeEntry ? (
+                <span className="flex size-3 shrink-0 items-center justify-center" aria-hidden>
+                  <EntryIcon entry={activeEntry} />
+                </span>
+              ) : null}
+              <span className="overflow-hidden" aria-hidden>
+                {chipOnly ? countLabel : `+${countLabel}`}
+              </span>
+              {hiddenAttention.length > 0 ? (
+                <span
+                  aria-hidden
+                  className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-status-warning"
+                />
+              ) : null}
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <DropdownMenuContent
+          portalContainer={floatingPanel}
+          data-tab-strip-menu={menuId}
+          data-floating-terminal-no-drag={floatingPanel ? '' : undefined}
+          align="end"
+          sideOffset={4}
+          className="w-64 max-w-[calc(100vw-1rem)]"
+          onOpenAutoFocus={(event) => {
+            if (firstHiddenAttentionId === null || !(event.target instanceof HTMLElement)) {
+              return
+            }
+            const row = event.target.querySelector<HTMLElement>(
+              `[data-tab-strip-list-entry="${CSS.escape(firstHiddenAttentionId)}"]`
+            )
+            if (row) {
+              event.preventDefault()
+              row.focus()
+              row.scrollIntoView({ block: 'nearest' })
+            }
+          }}
+          onCloseAutoFocus={(event) => {
+            const pick = pendingPickRef.current
+            pendingPickRef.current = null
+            // Closed because the group lost focus: leave focus where the user put it.
+            if (!isGroupFocused || !isGroupFocusedInStore(worktreeId, groupId)) {
+              event.preventDefault()
+              return
+            }
+            if (pick === null) {
+              return
+            }
+            event.preventDefault()
+            if (!pick.focusBefore) {
+              return
+            }
+            // Wait for the re-plan that brings the picked tab into view.
+            requestAnimationFrame(() =>
+              requestAnimationFrame(() =>
+                restoreTabStripFocus({
+                  strip: surfaceRef.current,
+                  slotId: pick.id,
+                  stillOwned: () => isGroupFocusedInStore(worktreeId, groupId),
+                  focusBefore: pick.focusBefore
+                })
+              )
+            )
+          }}
+        >
+          <DropdownMenuLabel>
+            {t('tabStrip.overflow.openTabs', '{{count}} open tabs', {
+              count: entries.length,
+              defaultValue_one: '{{count}} open tab'
+            })}
+          </DropdownMenuLabel>
+          {entries.map((entry) => {
+            const index = unifiedIndexById.get(entry.id) ?? MAX_SHORTCUT_ROWS
+            return (
+              <EntryRow
+                key={entry.id}
+                entry={entry}
+                isCurrent={entry.id === activeId}
+                needsAttention={attentionIds.has(entry.id)}
+                shortcut={isGroupFocused ? shortcutForIndex(indexBindings, index) : null}
+                generatedTabTitlesEnabled={generatedTabTitlesEnabled}
+                onSelect={() => {
+                  pendingPickRef.current = {
+                    id: entry.id,
+                    focusBefore: captureTabStripMenuFocus(surfaceRef.current, menuId)
+                  }
+                  onSelect(entry)
+                }}
+              />
+            )
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {name}
+      </TooltipContent>
+    </Tooltip>
+  )
+}

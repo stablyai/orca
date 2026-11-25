@@ -1,4 +1,5 @@
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
+import { storageCapacityErrorCode } from '../../../shared/errors/storage-capacity-error'
 import { AgentSessionJournalError, JournalOutcomeDecodeError } from './writing/journal-write-guards'
 import { JournalDamageError, JournalUnreleasedSchemaError } from './replay/journal-open-failure'
 import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
@@ -44,6 +45,11 @@ export function journalSqlSourceContent(error: unknown): JournalSourceContent | 
   return undefined
 }
 
+/** The original journal's own content failed, not the transport or this process's lifecycle. */
+export function isJournalSqlSourceContentFailure(error: unknown): boolean {
+  return journalSqlSourceContent(error) !== undefined
+}
+
 export function journalSqlSourceFailure(error: unknown): JournalSqlFailure {
   const failure = journalSqlFailure(error)
   if (isSqliteCorruption(error)) {
@@ -63,10 +69,11 @@ export function journalSqlFailure(error: unknown): JournalSqlFailure {
   return {
     name: error instanceof Error ? error.name : 'Error',
     message: error instanceof Error ? error.message : String(error),
+    // A wrapped SQLITE_FULL or ENOSPC keeps its code, so the host can tell a full disk.
     code:
       error instanceof Error && 'code' in error && typeof error.code === 'string'
         ? error.code
-        : undefined,
+        : (storageCapacityErrorCode(error) ?? undefined),
     errcode:
       error instanceof Error && 'errcode' in error && typeof error.errcode === 'number'
         ? error.errcode

@@ -2,8 +2,8 @@ import { isRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambigu
 import '../../../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../../../transport/connection/logical-client-cutover-error'
 import { RpcIncompatibleReplyError } from '../../../transport/rpc/rpc-incompatible-reply-error'
-import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../../src/shared/project-runtime-repair-message'
-import { SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY } from '../../../../../src/shared/session-tabs-runtime-capabilities'
+import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../../src/shared/execution-host/project-runtime-repair-message'
+import { SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY } from '../../../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
 import { createdTerminalDesktopWarning } from '../mobile-session-terminal-reply-schema'
 

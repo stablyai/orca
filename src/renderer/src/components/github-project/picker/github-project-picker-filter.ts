@@ -1,4 +1,4 @@
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 import type {
   GitHubProjectSettings,
   GitHubProjectSummary

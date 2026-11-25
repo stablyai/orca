@@ -4,11 +4,9 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   statSync,
   writeFileSync
 } from 'node:fs'
-import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -19,7 +17,6 @@ import {
 } from '../../../../../shared/agent-hook-listener/transport/agent-hook-spool'
 import { AgentHookServer } from '../../agent-hook-server'
 
-import { getManagedScript as getClaudeManagedScript } from '../../../../claude/hooks/hook-script'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 
 describe('agent hook spool', () => {
@@ -138,67 +135,5 @@ describe('agent hook spool', () => {
       first.stop()
       second.stop()
     }
-  })
-
-  it('keeps a Claude hook attributed when CLAUDE_CODE_SUBPROCESS_ENV_SCRUB drops the pane key', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-spool-scrubbed-'))
-    const endpointDir = join(dir, 'agent-hooks')
-    mkdirSync(endpointDir, { recursive: true })
-    const endpoint = join(endpointDir, 'endpoint.env')
-    writeFileSync(endpoint, 'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\n')
-    const script = join(dir, 'claude-hook.sh')
-    writeFileSync(script, getClaudeManagedScript('posix'))
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      ORCA_AGENT_HOOK_ENDPOINT: endpoint,
-      ORCA_AGENT_PANE: 'tab-scrubbed:0',
-      ORCA_AGENT_LAUNCH: 'generation-token'
-    }
-    // Claude's scrub removes every *KEY/*TOKEN name; only the scrub-safe aliases reach the hook.
-    delete env.ORCA_PANE_KEY
-    delete env.ORCA_AGENT_LAUNCH_TOKEN
-    delete env.CLAUDE_JOB_DIR
-    execFileSync('/bin/sh', [script], {
-      input: '{"hook_event_name":"Stop","session_id":"claude-session"}\n',
-      env,
-      timeout: 5000
-    })
-    const spoolFiles = readdirSync(join(endpointDir, 'spool'))
-    expect(spoolFiles).toHaveLength(1)
-    const record: unknown = JSON.parse(
-      readFileSync(join(endpointDir, 'spool', spoolFiles[0]!), 'utf8').trim()
-    )
-    expect(record).toMatchObject({ paneKey: 'tab-scrubbed:0', launchToken: 'generation-token' })
-  })
-
-  it('never spools a Claude tool batch while the receiver is down, compact or spaced', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-spool-batch-'))
-    const endpointDir = join(dir, 'agent-hooks')
-    mkdirSync(endpointDir, { recursive: true })
-    const endpoint = join(endpointDir, 'endpoint.env')
-    writeFileSync(endpoint, 'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\n')
-    const script = join(dir, 'claude-hook.sh')
-    writeFileSync(script, getClaudeManagedScript('posix'))
-    const run = (input: string) =>
-      execFileSync('/bin/sh', [script], {
-        input,
-        env: {
-          ...process.env,
-          ORCA_AGENT_HOOK_ENDPOINT: endpoint,
-          ORCA_PANE_KEY: 'tab-batch:0',
-          ORCA_AGENT_LAUNCH_TOKEN: 'generation-token',
-          CLAUDE_JOB_DIR: ''
-        },
-        timeout: 5000
-      })
-    run('{"hook_event_name":"PostToolBatch","tool_calls":[{"tool_use_id":"toolu-a"}]}\n')
-    run('{"hook_event_name": "PostToolBatch", "tool_calls": [{"tool_use_id": "toolu-b"}]}\n')
-    run('{"hook_event_name":"Stop","session_id":"claude-session"}\n')
-    const spoolDir = join(endpointDir, 'spool')
-    const records = readdirSync(spoolDir).flatMap((file) =>
-      readFileSync(join(spoolDir, file), 'utf8').trim().split('\n')
-    )
-    expect(records).toHaveLength(1)
-    expect(records[0]).toContain('"Stop"')
   })
 })

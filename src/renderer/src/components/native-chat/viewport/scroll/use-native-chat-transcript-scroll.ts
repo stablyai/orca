@@ -1,3 +1,4 @@
+import { useNativeChatViewDisconnect } from '../../pane/ownership/use-native-chat-view-disconnect'
 import { useNativeChatReaderReturn } from './use-native-chat-reader-return'
 import { useNativeChatTranscriptResize } from './use-native-chat-transcript-resize'
 
@@ -75,8 +76,7 @@ export function useNativeChatTranscriptScroll({
         forwardedFrameRef.current = window.requestAnimationFrame(() => {
           const resumePin = deferredPinRef.current && followingRef.current
           clearForwardedScroll()
-          const element = scrollRef.current
-          if (resumePin && isVisibleRef.current && hasMeasurableViewport(element)) {
+          if (resumePin && isVisibleRef.current && hasMeasurableViewport(scrollRef.current)) {
             performApplicationScroll(scrollToEnd)
           }
         })
@@ -189,7 +189,7 @@ export function useNativeChatTranscriptScroll({
         return
       }
       const geometry = geometryOf(element)
-      const programmatic = consumeProgrammaticScroll(event.nativeEvent)
+      const programmatic = consumeProgrammaticScroll(event.nativeEvent, previousGeometryRef.current)
       observeForwardedMovement(geometry, programmatic)
       followingRef.current = nextFollowingEnd({
         following: followingRef.current,
@@ -252,6 +252,11 @@ export function useNativeChatTranscriptScroll({
     [alignToViewportTop, clearForwardedScroll, onLeaveEnd]
   )
 
+  useNativeChatViewDisconnect(() => {
+    previousIsVisibleRef.current = isVisibleRef.current = false
+    observeVisibility(false, false)
+  })
+
   useLayoutEffect(() => {
     if (isVisible !== previousIsVisibleRef.current) {
       clearForwardedScroll()
@@ -284,7 +289,6 @@ export function useNativeChatTranscriptScroll({
     readerAtEnd,
     observeVisibility,
     restoreScrollOffset,
-    scrollRef,
     showsTailRow,
     scrollToEndWhenMeasurable,
     syncScrollState
@@ -308,6 +312,7 @@ export function useNativeChatTranscriptScroll({
     readerAtEnd: readerReturn.readerAtEnd,
     scrollMessageToTop,
     readerLeavesEnd,
+    isFollowingEnd: readerReturn.isFollowingEnd,
     forwardedGesture
   }
 }

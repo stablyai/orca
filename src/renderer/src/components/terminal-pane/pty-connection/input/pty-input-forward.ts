@@ -18,9 +18,13 @@ import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../../viewport/terminal-selection-fit-guard'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { recordAdmittedTerminalUserInput } from '@/diagnostics/telemetry/telemetry'
+import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-rebuild-interaction'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
+    if (wasUserInput) {
+      noteTerminalWebglAtlasTyping()
+    }
     // During replay, drop query replies and pointer-generated mouse/arrows but preserve typing; stale TUI modes could send reports or recall history in the fresh shell (replay-guard.ts).
     if (
       isPaneReplaying(session.deps.replayingPanesRef, session.pane.id) &&
@@ -80,7 +84,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     const acknowledgedIntent = intent ?? session.inferIntentFromExactTerminalInput(data)
     if (acknowledgedIntent && session.transport.sendInputAccepted) {
       const interruptStatusBaseline =
-        useAppStore.getState().agentStatusByPaneKey[session.cacheKey] ?? null
+        useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey) ?? null
       // Why: equal snapshots retain double-Escape semantics while older snapshots lose ack races.
       if (session.sequencedInterruptStatusBaseline !== interruptStatusBaseline) {
         session.sequencedInterruptStatusBaseline = interruptStatusBaseline

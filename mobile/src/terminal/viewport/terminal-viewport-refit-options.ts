@@ -21,8 +21,8 @@ export type TerminalViewportRefitOptions = {
   deviceTokenRef: RefObject<string | null>
   connState: ConnectionState
   tabStripVisible: boolean
-  // Why: text size (font scale); changing it changes cell size, so the PTY must be re-fitted to a new column count.
-  textScale: number
+  // Why: text size, font, spacing and weight; changing any changes cell size, so the PTY must be re-fitted.
+  fontMetricsKey: string
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
 }

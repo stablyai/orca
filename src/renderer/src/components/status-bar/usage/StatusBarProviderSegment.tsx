@@ -1,41 +1,41 @@
 import { useAppStore } from '@/store/index'
-import { resolveStatusBarUsageTemplate } from '../../../../../shared/status-bar-usage-format'
+import { resolveStatusBarUsageTemplate } from '../../../../../shared/status-bar/status-bar-usage-format'
 import { buildUsageFormatValues, renderUsageFormatTemplate } from './usage-format-template'
 import { AlertTriangle } from 'lucide-react'
 import React from 'react'
+import { useSectionOnScreen } from '../../right-sidebar/source-control/panel/section-viewport-presence'
 import type {
   OwnerNotSetUpPlaceholder,
   ProviderRateLimits,
   RateLimitWindow
-} from '../../../../../shared/rate-limit-types'
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
-  getDisplayedUsagePercentage,
   type UsagePercentageDisplay,
   clampUsedPercent
-} from '../../../../../shared/usage-percentage-display'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import { formatCurrencyAmount } from '../../../../../shared/currency-format'
-import { formatCreditCount } from '../../../../../shared/credit-count-format'
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+import { formatCurrencyAmount } from '../../../../../shared/agent-usage/display/currency-format'
+import { formatCreditCount } from '../../../../../shared/agent-usage/display/credit-count-format'
 import { ProviderIcon } from './provider-usage-panel'
-import { USAGE_URGENT_PERCENT, USAGE_WARNING_PERCENT } from './provider-extra-usage-section'
-
+import { USAGE_WARNING_PERCENT } from './usage-health-tone'
+import { UsageBar } from './usage-meter'
+import { getOwnerNotSetUpLabelParts } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
 import {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
   isClaudeUsageWaitingForClaude
-} from './usage-error-copy'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
-import { getOwnerNotSetUpLabelParts } from './owner-not-set-up-copy'
-
-import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
+} from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
+import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, useIntlLocale, type Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from '../composition/status-bar-usage-sections'
 import { GroupedPoolUsage } from './usage-grouped-pools'
-import { formatStatusBarSectionLabel, isGroupedUsagePool } from './usage-pool-label'
-import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
-import { useNow } from '@/hooks/use-now'
+import { formatStatusBarSectionLabel } from './usage-pool-label'
+import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
+import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
+import { useNow } from '@/lib/window-activity/use-now'
 
 const CALM_STALE_USAGE_MAX_AGE_MS = 30 * 60_000
 
@@ -46,17 +46,8 @@ function MiniBar({
   usedPct: number
   display: UsagePercentageDisplay
 }): React.JSX.Element {
-  return (
-    <div
-      data-usage-bar
-      className="w-[48px] h-[6px] rounded-full bg-muted overflow-hidden flex-shrink-0"
-    >
-      <div
-        className="h-full rounded-full transition-all duration-300 bg-muted-foreground/40"
-        style={{ width: `${getDisplayedUsagePercentage(usedPct, display)}%` }}
-      />
-    </div>
-  )
+  // Why plain: usage is colored only inside a provider's details card, never in the status bar.
+  return <UsageBar usedPercent={usedPct} display={display} className="h-[6px] w-[48px] shrink-0" />
 }
 
 function WindowLabel({
@@ -116,20 +107,16 @@ function OwnerNotSetUpLabel({
   )
 }
 
-export type UsageTone = 'urgent' | 'warning' | 'normal'
-
-/** Urgency by consumption, matching the usage bar colors, whatever % display the user chose. */
-export function getUsageTone(p: ProviderRateLimits): UsageTone {
-  const tightest = getTightestUsageSection(p)
-  const used = tightest ? clampUsedPercent(tightest.window.usedPercent) : 0
-  return used >= USAGE_URGENT_PERCENT
-    ? 'urgent'
-    : used >= USAGE_WARNING_PERCENT
-      ? 'warning'
-      : 'normal'
+/**
+ * A provider at 80%+ used keeps its chip when the status bar runs out of room, whatever % display
+ * the user chose. Why 80: the status bar's original threshold; it drives collapsing, not color.
+ */
+export function isUsageUrgent(p: ProviderRateLimits): boolean {
+  const tightest = getTightestUsageSection(p, undefined, 'all')
+  return tightest !== null && clampUsedPercent(tightest.window.usedPercent) >= USAGE_WARNING_PERCENT
 }
 
-/** Remain measurable at collapsing densities before hidden chips need the overflow count. */
+/** Stands in for the chips a narrow bar leaves out; its tooltip names them and the popover lists them. */
 export function UsageOverflowChip({
   hidden,
   providerCount,
@@ -140,15 +127,9 @@ export function UsageOverflowChip({
   display: UsagePercentageDisplay
 }): React.JSX.Element {
   const t = useTranslate()
-  const tones = hidden.map(getUsageTone)
-  const tone = tones.includes('urgent')
-    ? 'urgent'
-    : tones.includes('warning')
-      ? 'warning'
-      : 'normal'
   const names = hidden
     .map((p) => {
-      const tightest = getTightestUsageSection(p, t)
+      const tightest = getTightestUsageSection(p, t, 'all')
       const name = getProviderDisplayName(p.provider)
       return tightest
         ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, t)}`
@@ -157,16 +138,12 @@ export function UsageOverflowChip({
     .join(', ')
   return (
     <span
-      data-usage-more
-      data-usage-collapsed={hidden.length === 0}
-      data-tone={tone}
-      aria-hidden={hidden.length === 0}
       title={t('auto.components.status.bar.StatusBar.hiddenUsageProviders', 'Also: {{value0}}', {
         value0: names
       })}
-      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=urgent]:border-destructive/40 data-[tone=urgent]:text-destructive data-[tone=warning]:border-status-warning-border data-[tone=warning]:text-status-warning data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
+      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground"
     >
-      {/* Why: count changes must not invalidate density measurements and restart probing. */}
+      {/* Why: reserve the widest count so the measured width doesn't depend on how many are hidden. */}
       <span aria-hidden="true" className="invisible col-start-1 row-start-1">
         +{providerCount}
       </span>
@@ -262,17 +239,32 @@ function CustomUsageText({
   )
 }
 
-export function ProviderSegment({
-  p,
-  compact,
-  display,
-  mode = 'verbose'
-}: {
+type ProviderSegmentProps = {
   p: ProviderRateLimits | null
-  compact: boolean
+  /** Narrow bar: one percentage per window, no mini bar or status text. */
+  compact?: boolean
   display: UsagePercentageDisplay
   mode?: StatusBarUsageMode
-}): React.JSX.Element {
+  countdownActive?: boolean
+}
+
+/** A chip in the clipping status bar row: clipped chips stop their countdown wakes. */
+export function ClippedRowProviderSegment(props: ProviderSegmentProps): React.JSX.Element {
+  const [ref, onScreen] = useSectionOnScreen('viewport')
+  return (
+    <span ref={ref} className="inline-flex items-center">
+      <ProviderSegment {...props} countdownActive={onScreen} />
+    </span>
+  )
+}
+
+export function ProviderSegment({
+  p,
+  compact = false,
+  display,
+  mode = 'verbose',
+  countdownActive = true
+}: ProviderSegmentProps): React.JSX.Element {
   const t = useTranslate()
   const provider = p?.provider ?? 'claude'
   const usageFormat = useAppStore((state) => state.statusBarUsageFormat)
@@ -283,20 +275,23 @@ export function ProviderSegment({
   const calmClock = useNow(60_000, calm && p?.status === 'error')
   const tightest = p
     ? mode === 'compact'
-      ? getUsageHeadlineSection(p, t)
-      : getTightestUsageSection(p, t)
+      ? getUsageHeadlineSection(p, t, 'all')
+      : getTightestUsageSection(p, t, 'all')
     : null
   const sections = getStatusBarUsageSections(p, mode, t)
   const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
   const showLabels = mode === 'verbose' || !compact
+  // Why: gate only the clock, never the label, so visibility can't change width and re-trigger itself.
   const now = useResetCountdownClock(
-    template && p
-      ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
-      : showLabels
-        ? groupedBuckets
-            .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_URGENT_PERCENT)
-            .map((bucket) => bucket.resetsAt)
-        : []
+    !countdownActive
+      ? []
+      : template && p
+        ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
+        : showLabels
+          ? groupedBuckets
+              .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT)
+              .map((bucket) => bucket.resetsAt)
+          : []
   )
 
   // Why static: unfocused windows never poll, so a pending chip's pulse would redraw the compositor indefinitely.

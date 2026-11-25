@@ -2,7 +2,7 @@ import type { LocalExtractedSkillPackage } from './skill-extracted-package-inspe
 import { canonicalRoot } from './skill-install-paths'
 
 import { join } from 'node:path'
-import type { SkillInstallResult } from '../../../shared/skill-install-contract'
+import type { SkillInstallResult } from '../../../shared/skills/installation/skill-install-contract'
 import {
   installLocalExtractedSkillPackage,
   installLocalSkillPackage,

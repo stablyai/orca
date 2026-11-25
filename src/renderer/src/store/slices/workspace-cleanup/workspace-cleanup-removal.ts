@@ -1,5 +1,5 @@
 import type { AppState } from '../../types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 import {
   type WorkspaceCleanupCandidate,
@@ -27,6 +27,8 @@ export type WorkspaceCleanupFailure = {
   displayName: string
   message: string
   canDeleteAnyway?: boolean
+  /** A timed-out or blocked delete whose real outcome is still pending; not a final failure. */
+  provisional?: boolean
 }
 export type WorkspaceCleanupRemoveResult = {
   removedIds: string[]

@@ -1,6 +1,6 @@
 import { terminalStreamJsonByteLength } from '../../../../src/shared/terminal/stream/terminal-stream-json-byte-length'
 import { utf8ByteLength } from '../bridge/protocol/bridge-caps'
-import { MOBILE_BRIDGE_MAX_FRAME_BYTES as BRIDGE_MAX_MESSAGE_BYTES } from '../../../../src/shared/mobile-bridge-frame-bytes'
+import { MOBILE_BRIDGE_MAX_FRAME_BYTES as BRIDGE_MAX_MESSAGE_BYTES } from '../../../../src/shared/mobile-bridge/mobile-bridge-frame-bytes'
 import { bridgeEventEnvelopeBytes } from '../bridge/protocol/bridge-event-envelope-bytes'
 
 // Hold and merge terminal output rather than dropping bytes or killing ordinary cat bursts; measured host JSON (70.3 MiB/s) outruns xterm (2.2 MiB/s) and fills 4 MiB in 62 ms.

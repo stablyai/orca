@@ -1,9 +1,11 @@
+import type { TerminalFontStyle } from '../preferences/terminal-font-style'
 import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
-import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { TerminalOscLinkRange } from '../../../../src/shared/terminal/links/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
+import type { TerminalCellBox } from '../viewport/terminal-cell-box'
 import type { TerminalFitDimensions } from '../viewport/terminal-grid-fit'
-import type { TerminalFrame } from './terminal-webview-messages'
+import type { TerminalFrame, TerminalHostSettings } from './terminal-webview-messages'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 
@@ -88,8 +90,12 @@ export type TerminalSelectionEvents = {
 export type TerminalWebViewProps = {
   style?: StyleProp<ViewStyle>
   terminalTheme?: RuntimeMobileTerminalTheme
+  // Absent until the host's settings are read; the document keeps desktop defaults meanwhile.
+  hostSettings?: TerminalHostSettings
   // Persistent font-size preset; transient CSS pinch zoom is committed into it on release.
   textScale?: number
+  // Font, line spacing and weight; a change keeps the grid and reports a new cell box for native to refit.
+  fontStyle?: TerminalFontStyle
   // Only initially shown views build pre-ready engines, limiting WebGL context use.
   shownAtMount?: boolean
   interactionActive?: boolean
@@ -121,6 +127,8 @@ export type TerminalWebViewHandle = {
   clear: () => void
   scrollToBottom: () => void
   fitDimensions: (frame: TerminalFrame) => TerminalFitDimensions | null
+  /** The last cell box the document measured, at the text scale it names. */
+  measuredCellBox: () => TerminalCellBox | null
   resetZoom: () => void
   cancelSelect: () => void
   doSelectAll: () => void

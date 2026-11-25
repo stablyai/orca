@@ -1,6 +1,9 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
+import {
+  getRuntimeMetadataPath,
+  type RuntimeMetadata
+} from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { writeSecureJsonFile } from '../../../../shared/secure-storage/secure-file'
 
 export function writeRuntimeMetadata(userDataPath: string, metadata: RuntimeMetadata): void {

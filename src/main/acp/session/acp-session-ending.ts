@@ -73,9 +73,10 @@ export function endAcpStructuredSession(
       : {}),
     sessionId: session.sessionId,
     reason,
-    failure: session.closeRequested
-      ? agentSessionFailureFact('hostFault')
-      : agentSessionFailureFact('providerExited', detail ? { detail } : {}),
+    failure:
+      session.closeRequested || session.connection.exitStatus?.outcomeLost
+        ? agentSessionFailureFact('hostFault')
+        : agentSessionFailureFact('providerExited', detail ? { detail } : {}),
     cause: session.closeRequested ? 'requested-close' : 'unexpected-exit',
     ...(failureClose !== null && !session.closeRequested ? { closedByOrca: true as const } : {}),
     fence: session.fence,

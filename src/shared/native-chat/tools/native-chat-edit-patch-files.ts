@@ -29,35 +29,61 @@ export type NativeChatEditFileSummary = Pick<
   'path' | 'oldPath' | 'changeKind' | 'added' | 'removed' | 'truncated'
 >
 
+/** The Diff call's `paths`: every changed file, in patch order, when its path is a count. */
+export function nativeChatDiffChangedPaths(value: unknown): string[] | null {
+  return Array.isArray(value) && value.every((path): path is string => typeof path === 'string')
+    ? value
+    : null
+}
+
 export function editFilesFromPatchText(
   patchText: string,
-  callerPath: string | null
+  callerPath: string | null,
+  summaryOnly?: false,
+  changedPaths?: readonly string[] | null
 ): NativeChatEditFile[] | null
 export function editFilesFromPatchText(
   patchText: string,
   callerPath: string | null,
-  summaryOnly: true
+  summaryOnly: true,
+  changedPaths?: readonly string[] | null
 ): NativeChatEditFileSummary[] | null
 export function editFilesFromPatchText(
   patchText: string,
   callerPath: string | null,
-  summaryOnly = false
+  summaryOnly = false,
+  changedPaths: readonly string[] | null = null
 ): NativeChatEditFileSummary[] | null {
-  if (callerPath !== null && isNativeChatFileCountPath(callerPath)) {
-    // A file count cannot name a card, regardless of the patch contents.
-    return null
-  }
+  const fileCount =
+    callerPath !== null && isNativeChatFileCountPath(callerPath)
+      ? Number.parseInt(callerPath, 10)
+      : null
+  const fallbackPath = fileCount === null ? callerPath : null
   // Strip journal truncation markers so they cannot become numbered content or imply a complete patch.
   const bounded = stripBoundedTextMarker(patchText)
   const moved = splitMoveMarker(bounded.text)
   // Separate files into cards so later rows never inherit the first file’s name.
   const split = unifiedPatchSections(moved.body)
+  // A count names no file: accept only a whole patch whose git-headed sections match paths.
+  if (
+    fileCount !== null &&
+    (bounded.truncated ||
+      split.truncated ||
+      changedPaths?.length !== fileCount ||
+      split.sections.length !== fileCount ||
+      !split.sections.every(
+        (section, index) =>
+          section.fromGitHeader && (section.oldPath ?? section.path) === changedPaths[index]
+      ))
+  ) {
+    return null
+  }
   // Caller path wins for single-file patches; multiple files/rename destinations require headers. Ignore unnamed preambles when counting files.
   const namedSections = split.sections.filter((section) => section.path !== null).length
   const named = (section: UnifiedPatchSection): string =>
     (namedSections <= 1 && section.oldPath === null
-      ? (callerPath ?? section.path)
-      : (section.path ?? callerPath)) ?? 'file'
+      ? (fallbackPath ?? section.path)
+      : (section.path ?? fallbackPath)) ?? 'file'
   const files = split.sections.flatMap((section) => {
     const parsed = summaryOnly
       ? summarizeUnifiedPatch(section.body)

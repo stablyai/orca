@@ -3,12 +3,12 @@ import {
   type PtyListedSession
 } from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { projectGroupIdFromRepoId } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   makePaneKey,

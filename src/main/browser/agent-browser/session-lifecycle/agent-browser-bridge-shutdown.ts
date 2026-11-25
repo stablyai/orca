@@ -1,4 +1,4 @@
-import { mapSettledWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapSettledWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { sweepOrphanedAgentBrowserSessions } from './agent-browser-orphan-sweep'
 import { AgentBrowserBridgeLifecycle } from './agent-browser-bridge-lifecycle'
 import type { AgentBrowserCleanupOptions } from './agent-browser-cleanup-options'

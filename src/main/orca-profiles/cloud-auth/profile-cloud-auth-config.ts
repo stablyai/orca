@@ -1,9 +1,9 @@
-import { app } from 'electron'
 import {
   cleanCloudServiceUrl as cleanUrl,
   cleanCloudServiceOrigin as cleanOrigin
-} from '../../../shared/cloud-service-url'
+} from '../../../shared/network/cloud-service-url'
 import { resolvePushGatewayOrigin } from '../../runtime/push/push-gateway-origin'
+import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 
 export type OrcaCloudAuthConfig = {
   apiBaseUrl: string
@@ -27,12 +27,9 @@ const PRODUCTION_CLIENT_ID = 'orca-desktop'
 const PRODUCTION_RELAY_DIRECTOR_URL = 'https://relay.onorca.dev'
 
 // Packaged main omits NODE_ENV; use packaged status to gate development auth overrides.
-function isPackagedOrcaBuild(): boolean {
-  try {
-    return app?.isPackaged === true
-  } catch {
-    return false
-  }
+// No installed environment (a bare Node import) reads as unpackaged, as Electron's absent `app` did.
+export function isPackagedOrcaBuild(): boolean {
+  return hasAppEnvironment() && getAppEnvironment().isPackaged()
 }
 
 function endpoint(baseUrl: string, path: string): string {

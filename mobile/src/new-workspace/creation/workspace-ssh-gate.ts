@@ -1,5 +1,8 @@
-import type { SshConnectionState, SshConnectionStatus } from '../../../../src/shared/ssh-types'
-import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../../../src/shared/orcad-stale-lock-reclaim'
+import type {
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../../../src/shared/remote-runtime/ssh/ssh-types'
+import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../../../src/shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
 import { translate } from '../../i18n/mobile-i18n'
 
 // Keep unread SSH fields optional so an omitted member cannot drop auth-failed state into connected fallback.

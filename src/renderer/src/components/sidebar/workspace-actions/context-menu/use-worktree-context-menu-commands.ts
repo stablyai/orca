@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import {
@@ -21,8 +21,14 @@ import {
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
 import type { useAppStore } from '@/store/index'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
+import type { WorktreeDeleteIdentity } from '../deletion/worktree-delete-request'
+
+export type OpenedWorktreeDeleteTarget = {
+  worktree: WorktreeDeleteIdentity
+  folderWorkspaceId: string | null
+}
 
 function resolveChildWorktreeRepository(repos: readonly Repo[], worktree: Worktree): Repo | null {
   return resolveReviewRepository(repos, {
@@ -44,6 +50,7 @@ export function useWorktreeContextMenuCommands(args: {
   isMultiContext: boolean
   moveProjectToGroup: ReturnType<typeof useAppStore.getState>['moveProjectToGroup']
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
+  openedDeleteTarget: OpenedWorktreeDeleteTarget | null
   openModal: ReturnType<typeof useAppStore.getState>['openModal']
   repo: Repo | null | undefined
   scopeRef: React.RefObject<HTMLDivElement | null>
@@ -205,12 +212,16 @@ export function useWorktreeContextMenuCommands(args: {
     ])
   }, [args.worktree, args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleDelete = useCallback(() => {
+    if (!args.openedDeleteTarget) {
+      return
+    }
+    const { worktree, folderWorkspaceId } = args.openedDeleteTarget
     const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)
     const intent = createWorktreeContextMenuDeleteIntent({
-      worktree: args.worktree,
+      worktree,
       batchDeleteWorktrees: args.batchDeleteWorktrees,
       isMultiContext: args.isMultiContext,
-      ...(args.folderWorkspaceId ? { folderWorkspaceId: args.folderWorkspaceId } : {})
+      ...(folderWorkspaceId ? { folderWorkspaceId } : {})
     })
     deferWorktreeContextMenuDeleteIntent(intent, restoreSidebarPosition)
     args.setMenuOpenState(false)

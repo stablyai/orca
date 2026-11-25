@@ -10,7 +10,7 @@ import type {
   BrowserClientPagePlacementReservation,
   BrowserHostPagePlacementRegistry
 } from './browser-host-page-placement'
-import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { BrowserHostPageReconciliationActions as ActionHandlers } from './browser-host-page-reconciliation-executor'
 import type {
   BrowserHostPageReconciliationPlan,

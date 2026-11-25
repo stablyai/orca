@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { shouldShowUsagePercentageDisplayChangeNotice } from '../../../../../shared/usage-percentage-display-change-notice'
+import { shouldShowUsagePercentageDisplayChangeNotice } from '../../../../../shared/status-bar/usage-percentage-display-change-notice'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from '../../settings/appearance/appearance-usage-percentage-search'
 import { StatusBarUsageChangeNoticeCard } from './StatusBarUsageChangeNoticeCard'
 

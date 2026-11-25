@@ -1,10 +1,10 @@
 import type { OrcadOptions } from './orcad-start-contract'
 import { DEFAULT_WS_PORT } from '../../runtime/rpc/server/runtime-rpc-pairing-types'
-import { ORCAD_LOOPBACK_BIND_HOST } from '../../../shared/orcad-bind-address'
-import { getServeOptionValidationError } from '../../../shared/serve-option-validation'
+import { ORCAD_LOOPBACK_BIND_HOST } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-bind-address'
+import { getServeOptionValidationError } from '../../../shared/remote-runtime/serve-supervisor/serve-option-validation'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { WEB_CLIENT_INDEX_FILENAME } from '../../../shared/bundled-web-client-root'
+import { WEB_CLIENT_INDEX_FILENAME } from '../../../shared/web-client/bundled-web-client-root'
 
 export const ORCAD_USAGE = `orcad — the Orca runtime served without Electron.
 

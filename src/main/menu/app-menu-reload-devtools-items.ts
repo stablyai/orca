@@ -1,5 +1,6 @@
 import { BrowserWindow, MenuItem, webContents } from 'electron'
 import { translateMain } from '../i18n/main-i18n'
+import { reloadWithRendererCheckpoint } from '../window/renderer-relays/native-unload-coordinator'
 
 /** View > Reload, Force Reload and Toggle Developer Tools, which act on what has focus. */
 export function createAppMenuReloadAndDevToolsItems(options: {
@@ -15,14 +16,9 @@ export function createAppMenuReloadAndDevToolsItems(options: {
       return
     }
 
-    options.onBeforeReload?.({ ignoreCache, webContentsId: webContents.id })
-
-    if (ignoreCache) {
-      webContents.reloadIgnoringCache()
-      return
-    }
-
-    webContents.reload()
+    void reloadWithRendererCheckpoint(webContents, ignoreCache, options.onBeforeReload).catch(
+      () => {}
+    )
   }
 
   return [

@@ -3,8 +3,9 @@ import {
   BROWSER_AGENT_LEAD_CHANNEL,
   BROWSER_AGENT_LEAD_QUERY_CHANNEL,
   BROWSER_PRINT_REFUSED_CHANNEL,
+  BROWSER_PRINTS_HERE_CHANNEL,
   BROWSER_SYSTEM_DIALOGS_PRELOAD_FILE
-} from '../../../../shared/browser-system-dialogs'
+} from '../../../../shared/browser/guest-lifecycle/browser-system-dialogs'
 import {
   registerBrowserSessionFramePreload,
   unregisterBrowserSessionFramePreload
@@ -39,9 +40,11 @@ export function unwatchBrowserSystemDialogs(browserSession: Session): void {
 export function listenForBrowserSystemDialogs(): void {
   ipcMain.on(BROWSER_AGENT_LEAD_QUERY_CHANNEL, (event) => {
     event.reply(BROWSER_AGENT_LEAD_CHANNEL, browserManager.isAgentLedGuest(event.sender.id))
+    event.reply(BROWSER_PRINTS_HERE_CHANNEL, !browserManager.isListedAsServerPage(event.sender.id))
   })
   ipcMain.on(BROWSER_PRINT_REFUSED_CHANNEL, (event) => {
-    browserManager.reportRefusedPrint(event.sender.id, event.senderFrame?.origin ?? '')
+    const frame = event.senderFrame ?? null
+    browserManager.reportHeldPrint(event.sender.id, frame, frame?.origin ?? '')
   })
   browserManager.setAgentLeadListener((guestWebContentsId, led) => {
     // SSH route popups follow their opener's lead.

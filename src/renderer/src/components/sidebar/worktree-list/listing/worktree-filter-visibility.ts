@@ -1,11 +1,12 @@
 import { useAppStore } from '@/store'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import {
   getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import './visible-worktrees'
 import { computeVisibleWorktrees } from './compute-visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
@@ -23,7 +24,7 @@ export function worktreePassesSidebarFilters(
   return computeVisibleWorktrees(
     selectWorktreesByRepo(state),
     [],
-    buildVisibleWorktreeOptionsFromState(state, repoMap)
+    buildVisibleWorktreeOptionsFromState(state, readRuntimeStatuses(), repoMap)
   ).some((worktree) => {
     if (worktree.id !== worktreeId) {
       return false

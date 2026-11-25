@@ -39,7 +39,7 @@ export function bindInitialAgentStatus(session: ConnectPanePtySession): void {
     if (startup.resumeSource) {
       session.savedStartupStatus = {
         source: startup.resumeSource,
-        entry: useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+        entry: useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
       }
     }
   }

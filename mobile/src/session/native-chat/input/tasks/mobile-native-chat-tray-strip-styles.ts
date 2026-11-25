@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing } from '../../../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 
 /** The collapsible box every live-work strip above the composer shares. */
@@ -21,6 +21,14 @@ export const trayStripStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md
+  },
+  groupLabel: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontFamily: typography.monoFamily,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    paddingBottom: spacing.xs / 2
   },
   caretOpen: {
     transform: [{ rotate: '180deg' }]

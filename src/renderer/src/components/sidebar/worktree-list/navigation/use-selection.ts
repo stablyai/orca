@@ -5,13 +5,15 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   setVisibleWorktreeIds,
   setVisibleWorktreeShortcutTargets
 } from '../listing/visible-worktrees'
-import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
+import { useListMultiSelection } from '@/lib/list-interaction/use-list-multi-selection'
 import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
+import { useAppStore } from '@/store'
+import { focusActiveWorkspaceSurfaceFromSidebar } from './focus-workspace-surface'
 
 const getSidebarContainer = (): Element | null =>
   document.querySelector('[data-worktree-sidebar-container]')
@@ -63,13 +65,27 @@ export function useSidebarWorktreeSelection(args: {
   )
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktree: Worktree): boolean => {
-      const list = event.currentTarget?.closest<HTMLElement>('[data-worktree-sidebar]')
-      list?.focus({ preventScroll: true })
-      list?.setAttribute('data-keyboard-navigation', '')
       setFocusedKey(getWorktreeHostIdentity(worktree))
-      return updateSelection(event, worktree)
+      const selectionOnly = updateSelection(event, worktree)
+      const list = event.currentTarget?.closest<HTMLElement>('[data-worktree-sidebar]')
+      // Why: a plain click opens the workspace, whose terminal or chat takes the keys; only multi-select keeps them in the list.
+      if (selectionOnly) {
+        list?.focus({ preventScroll: true })
+        list?.setAttribute('data-keyboard-navigation', '')
+      } else if (list) {
+        const { activeWorktreeId, activeWorkspaceExecutionHostId } = useAppStore.getState()
+        // Re-clicking the open workspace activates nothing, so hand its surface the keys here.
+        if (
+          activeWorktreeId === worktree.id &&
+          activeWorkspaceExecutionHostId ===
+            getWorktreeExecutionHostId(worktree, repoByWorktree.get(worktree))
+        ) {
+          focusActiveWorkspaceSurfaceFromSidebar(list)
+        }
+      }
+      return selectionOnly
     },
-    [updateSelection]
+    [repoByWorktree, updateSelection]
   )
   const { selectForContextMenu: selectItemForContextMenu } = selection
   // Why keep the event arg: kanban and list cards share the onContextMenuSelect prop shape.

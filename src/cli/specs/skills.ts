@@ -1,5 +1,14 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
+import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
+
+const SKILL_UPDATE_NOTE =
+  'A copy that matches an older Orca release and has only SKILL.md can update in place. ' +
+  'A copy with extra files or other differences may be skipped.'
+const SKILL_REPLACE_NOTE =
+  'Use --force to replace skipped copies where possible. ' +
+  'Orca moves each copy it replaces, including any extra files, to ~/.agents/.orca-skill-backups first, ' +
+  'and prints where each one went.'
 
 export const SKILL_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -70,16 +79,15 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca skills install [--skill <name>]... [--all] [--agent <name>[,<name>]] ' +
       '[--local] [--force] [--dry-run] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'agent', 'local', 'force', 'dry-run'],
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'skill', 'all', 'agent', 'local', 'force', 'dry-run'],
     notes: [
       'Reads the bundled skill registry locally without contacting the Orca runtime, ' +
         'and needs no network, Node, Git or npx.',
       'Writes the copy this Orca build ships into the shared .agents/skills folder and ' +
         'links it into each detected agent\u2019s skills folder, the same way the app\u2019s ' +
         'Update skills does.',
-      'Only copies Orca wrote and nobody changed are updated. A copy you changed, or a ' +
-        'different skill with the same name, is skipped and is reported; --force replaces ' +
-        'it after moving it to a backup under ~/.agents/.orca-skill-backups.',
+      SKILL_UPDATE_NOTE,
+      SKILL_REPLACE_NOTE,
       'Installs globally (all projects) by default. Use --local to install into the ' +
         'current project; it links only into agent folders the project already has.',
       'Targets the coding agents Orca detects on this host. Use --agent <name>[,<name>...] ' +
@@ -102,12 +110,13 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca skills update [--skill <name>]... [--all] [--agent <name>[,<name>]] ' +
       '[--local] [--force] [--dry-run] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'agent', 'local', 'force', 'dry-run'],
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'skill', 'all', 'agent', 'local', 'force', 'dry-run'],
     notes: [
       'Runs the same planner as `orca skills install`, but only at locations that already ' +
         'hold the skill; it never adds a skill, or an existing skill for another agent.',
-      'Updates each untouched copy where it is; other copies are skipped unless you ' +
-        'pass --force. Use `orca skills install` to add a skill for a newly detected agent.',
+      SKILL_UPDATE_NOTE,
+      SKILL_REPLACE_NOTE,
+      'Use `orca skills install` to add a skill for a newly detected agent.',
       'Updates the global install by default. Use --local to update the current project.',
       'Use --dry-run to print what would change and the plan digest without writing.',
       'With --json, both dry runs and real runs print the plan, and real runs the result.',

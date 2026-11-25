@@ -16,7 +16,10 @@ import { AgentBrowserBridgeTabs } from '../session-routing/agent-browser-bridge-
 import { assertRemoteCliBrowserAccess } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { assertExpectedPageUrlForStep } from '../../cdp/input/browser-expected-page-url'
 import { ORCA_TAB_SESSION_PREFIX } from '../session-lifecycle/agent-browser-session-name'
-import { canSkipAgentBrowserSessionReset } from '../session-lifecycle/agent-browser-session-reset'
+import {
+  canSkipAgentBrowserSessionReset,
+  waitForAgentBrowserSessionExit
+} from '../session-lifecycle/agent-browser-session-reset'
 import {
   AGENT_BROWSER_CLEANUP_TIMEOUT_MS,
   type AgentBrowserCleanupOptions
@@ -184,7 +187,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     return new BrowserError('browser_tab_not_found', pageUnavailableMessageForSession(sessionName))
   }
 
-  protected closeStaleAgentBrowserSession(sessionName: string): Promise<void> {
+  protected async closeStaleAgentBrowserSession(sessionName: string): Promise<void> {
     if (
       canSkipAgentBrowserSessionReset({
         ownsSocketDirectory: this.ownsAgentBrowserSocketDirectory,
@@ -192,9 +195,9 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         sessionName
       })
     ) {
-      return Promise.resolve()
+      return
     }
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       let child: ReturnType<typeof execFile> | null = null
       let settled = false
 
@@ -250,6 +253,11 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
           )
         )
       }
+    })
+    await waitForAgentBrowserSessionExit({
+      ownsSocketDirectory: this.ownsAgentBrowserSocketDirectory,
+      socketDirectory: this.agentBrowserEnv.AGENT_BROWSER_SOCKET_DIR,
+      sessionName
     })
   }
 

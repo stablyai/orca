@@ -8,7 +8,7 @@ import type { AgentInterruptInputIntent } from '../../../../../../shared/agent-s
 import { markTerminalBracketedPasteInterrupted } from '../../input/paste/terminal-bracketed-paste'
 import { isPassiveTerminalInputReport } from '../../input/terminal-passive-input-report'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
-import { isRetainedProgramResult } from '@/lib/program-status/row'
+import { isRetainedProgramResult } from '../../../../../../shared/program-status/program-status-row'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
@@ -40,7 +40,7 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
   }
   session.interruptInference = createAgentInterruptInference({
     paneKey: session.cacheKey,
-    getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[session.cacheKey],
+    getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey),
     inferInterrupt: (request) => {
       // Hooks own active-turn state; Ctrl+C/Escape can reset Codex’s title without ending the turn.
       return window.api.agentStatus
@@ -59,7 +59,7 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
   })
   session.questionAnsweredInference = createAgentQuestionAnsweredInference({
     paneKey: session.cacheKey,
-    getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[session.cacheKey],
+    getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey),
     inferQuestionAnswered: (request) =>
       routeQuestionAnsweredInference(session.transport.getPtyId(), request).catch((err) => {
         console.warn('[agent-question] inferQuestionAnswered failed:', err)
@@ -76,7 +76,7 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
       state.clearAgentLaunchConfig(session.cacheKey)
       return
     }
-    const current = state.agentStatusByPaneKey[session.cacheKey]
+    const current = state.agentStatusByPaneKey.get(session.cacheKey)
     if (!current) {
       state.clearAgentLaunchConfig(session.cacheKey)
       return

@@ -1,159 +1,244 @@
+import { z } from 'zod'
 import {
+  LEGACY_SOURCE_ARTIFACTS,
   LEGACY_SOURCE_REFUSALS,
+  type LegacySourceArtifact,
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
-import type { LegacyCompanionManifest } from './journal-legacy-retirement-files'
 
-export const LEGACY_SOURCE_REFUSAL_POLICY = 2
-export const LEGACY_RETIREMENT_WEEK = 7 * 24 * 60 * 60 * 1000
-export type Retirement = {
-  version: 1
-  proof: string
-  proofId: string
-  completedAt: number
-  process: string
-  credit: number
-  creditRevision: number
-  lastWall: number
-  phase: 'grace' | 'prepared' | 'complete'
-  manifest?: LegacyCompanionManifest
+/**
+ * Saved beside the copy receipt. Builds from before on-update retirement read the v1 key, so this
+ * one never collides with their grace rows; those are left untouched.
+ */
+export const JOURNAL_LEGACY_RETIREMENT = 'journal.legacy-retirement.v2'
+export const LEGACY_SOURCE_REFUSAL_POLICY = 3
+/**
+ * Which inventory check a refusal saw. 2 accepts shapes earlier builds left behind; an inventory
+ * or recovery refusal saved below it is proven once more, and one saved at or above it stands. A
+ * separate field, not a policy bump, so earlier builds still honour this build's refusals.
+ */
+export const LEGACY_SOURCE_INVENTORY = 2
+const RECHECKED_WITHOUT_INVENTORY: readonly LegacySourceRefusalReason[] = [
+  'source-inventory',
+  'source-recovery'
+]
+/**
+ * Per chat, the original's record and waiting text where it and this store differ, kept verbatim
+ * once the original retires: no content says which side changed last, so neither is dropped.
+ */
+export const JOURNAL_LEGACY_ORIGINAL = 'journal.legacy-original:'
+
+/** What the writer reports before an attempt; "retired" itself is the original being absent. */
+export type JournalLegacyRetirementState = {
+  receipt: string | null
+  kept: boolean
+  convertedBy: string | null
+  retirement: string | null
+  /** What this store last reported about the cleanup, so a repeat isn't sent again. */
+  reported: string | null
 }
 
+/** Where to note what was last reported; nothing else reads it. */
+export const JOURNAL_LEGACY_RETIREMENT_REPORTED = 'journal.legacy-retirement-reported.v1'
+
+/** What one walk of the proof saw, for reporting only: it decides nothing. */
+export type LegacyProofCounts = {
+  chats: number
+  /** Converted here before the proof reached them. */
+  alreadyConverted: number
+  /** Converted by the proof itself: what the proof adds to the store. */
+  newlyConverted: number
+  /** Deleted here, so kept only as the original's version. */
+  deletedHere: number
+  /** Drafts: a record and no history, so nothing converts. */
+  drafts: number
+  originals: number
+  copies: number
+}
+
+/**
+ * The proof of this original into this store finished, and this build keeps the file. A later
+ * launch reads this instead of walking again; a build that deletes walks again in full.
+ */
+export type LegacySourceHeld = {
+  version: 2
+  phase: 'held'
+  layout: LegacyProofLayout
+  proof: string
+  store: string
+  /** Null when nothing was measured: a walk resumed at the copies of a deletion cut short. */
+  counts: LegacyProofCounts | null
+  /** The proof walked every page in one run rather than resuming saved progress. */
+  whole: boolean
+}
+
+/** A proof that failed for a reason the frozen original can't outgrow, keyed to that original. */
 export type LegacySourceRefusal = {
-  version: 1
+  version: 2
   phase: 'refused'
   policy: typeof LEGACY_SOURCE_REFUSAL_POLICY
   proof: string
-  observed: string
-  destination: string
+  store: string
   reason: LegacySourceRefusalReason
+  /** Which shapes builds left behind an inventory refusal saw; for reporting only. */
+  artifact?: LegacySourceArtifact
+  inventory?: number
 }
 
-export function decodeLegacySourceRefusal(value: string | null): LegacySourceRefusal | null {
-  const data: unknown = value ? JSON.parse(value) : null
-  if (!data || typeof data !== 'object' || !('phase' in data) || data.phase !== 'refused') {
+/** The proof's page layout; progress saved under another is walked again from the start. */
+export const LEGACY_PROOF_LAYOUT = 1
+/**
+ * Progress and retiring records for an original carrying a shape only this build accepts. Builds
+ * before it check inventory on the first page alone, so they must never resume such a proof.
+ */
+export const LEGACY_PROOF_HISTORICAL_LAYOUT = 2
+export type LegacyProofLayout = typeof LEGACY_PROOF_LAYOUT | typeof LEGACY_PROOF_HISTORICAL_LAYOUT
+
+export function isLegacyProofLayout(value: unknown): value is LegacyProofLayout {
+  return value === LEGACY_PROOF_LAYOUT || value === LEGACY_PROOF_HISTORICAL_LAYOUT
+}
+/** The proof's last phases, the reconcile's copies, start at this table (after content and claims). */
+export const LEGACY_PROOF_COPIES_TABLE = 7
+
+/**
+ * The commit that makes every converted row durable before the original is unlinked. It names
+ * the original it retires; a later launch whose deletion of the same original didn't go through
+ * resumes at the copies when the layout matches.
+ */
+export type LegacySourceRetiring = {
+  version: 2
+  phase: 'retiring'
+  layout: LegacyProofLayout
+  proof: string
+  store: string
+}
+
+/**
+ * How far the proof of this original into this store got, so a later launch resumes there instead
+ * of walking every chat again. Not durable: a lost write only repeats work.
+ */
+export type LegacySourceProving = {
+  version: 2
+  phase: 'proving'
+  layout: LegacyProofLayout
+  proof: string
+  store: string
+  cursor: { table: number; after: string | null; epoch?: string }
+  /** What the walk counted from its first page; absent when it began from older progress. */
+  counts?: LegacyProofCounts
+}
+
+export function decodeLegacySourceProving(value: string | null): LegacySourceProving | null {
+  let data: unknown
+  try {
+    data = value ? JSON.parse(value) : null
+  } catch {
     return null
   }
   if (
+    !data ||
+    typeof data !== 'object' ||
+    !('phase' in data) ||
+    data.phase !== 'proving' ||
     !('version' in data) ||
-    data.version !== 1 ||
+    data.version !== 2 ||
+    !('proof' in data) ||
+    typeof data.proof !== 'string' ||
+    !('store' in data) ||
+    typeof data.store !== 'string' ||
+    !('layout' in data) ||
+    !isLegacyProofLayout(data.layout) ||
+    !('cursor' in data) ||
+    !data.cursor ||
+    typeof data.cursor !== 'object'
+  ) {
+    return null
+  }
+  const cursor: object = data.cursor
+  const table = 'table' in cursor ? cursor.table : undefined
+  const after = 'after' in cursor ? cursor.after : undefined
+  const epoch = 'epoch' in cursor ? cursor.epoch : undefined
+  if (
+    typeof table !== 'number' ||
+    !Number.isInteger(table) ||
+    table < 0 ||
+    (after !== null && typeof after !== 'string') ||
+    (epoch !== undefined && typeof epoch !== 'string')
+  ) {
+    return null
+  }
+  return {
+    version: 2,
+    phase: 'proving',
+    layout: data.layout,
+    proof: data.proof,
+    store: data.store,
+    cursor: { table, after, ...(epoch === undefined ? {} : { epoch }) },
+    ...decodeCounts('counts' in data ? data.counts : undefined)
+  }
+}
+
+export function decodeLegacySourceRefusal(value: string | null): LegacySourceRefusal | null {
+  let data: unknown
+  try {
+    data = value ? JSON.parse(value) : null
+  } catch {
+    return null
+  }
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    !('phase' in data) ||
+    data.phase !== 'refused' ||
+    !('version' in data) ||
+    data.version !== 2 ||
     !('policy' in data) ||
     data.policy !== LEGACY_SOURCE_REFUSAL_POLICY ||
     !('proof' in data) ||
     typeof data.proof !== 'string' ||
-    !('observed' in data) ||
-    typeof data.observed !== 'string' ||
-    !('destination' in data) ||
-    typeof data.destination !== 'string' ||
+    !('store' in data) ||
+    typeof data.store !== 'string' ||
     !('reason' in data) ||
     typeof data.reason !== 'string'
   ) {
     return null
   }
-  const reason = LEGACY_SOURCE_REFUSALS.find((reason) => reason === data.reason)
-  return reason
+  const reason = LEGACY_SOURCE_REFUSALS.find((known) => known === data.reason)
+  const artifact = LEGACY_SOURCE_ARTIFACTS.find(
+    (known) => 'artifact' in data && known === data.artifact
+  )
+  const inventory =
+    'inventory' in data &&
+    typeof data.inventory === 'number' &&
+    data.inventory >= LEGACY_SOURCE_INVENTORY
+      ? data.inventory
+      : undefined
+  return reason && (inventory || !RECHECKED_WITHOUT_INVENTORY.includes(reason))
     ? {
-        version: 1,
+        version: 2,
         phase: 'refused',
         policy: LEGACY_SOURCE_REFUSAL_POLICY,
         proof: data.proof,
-        observed: data.observed,
-        destination: data.destination,
-        reason
+        store: data.store,
+        reason,
+        ...(artifact ? { artifact } : {}),
+        ...(inventory ? { inventory } : {})
       }
     : null
 }
 
-export function decodeRetirement(value: string | null): Retirement | null {
-  if (!value) {
-    return null
-  }
-  const data: Retirement | { phase: 'refused' } = JSON.parse(value)
-  if (data.phase === 'refused') {
-    return null
-  }
-  if (
-    data.version !== 1 ||
-    typeof data.proof !== 'string' ||
-    typeof data.proofId !== 'string' ||
-    typeof data.process !== 'string' ||
-    !['grace', 'prepared', 'complete'].includes(data.phase) ||
-    !Number.isFinite(data.credit) ||
-    data.credit < 0 ||
-    data.credit > LEGACY_RETIREMENT_WEEK ||
-    !Number.isSafeInteger(data.creditRevision) ||
-    data.creditRevision < 0
-  ) {
-    throw new Error('invalid legacy retirement receipt')
-  }
-  return data
-}
+const COUNT = z.number().int().nonnegative()
+const LEGACY_PROOF_COUNTS = z.object({
+  chats: COUNT,
+  alreadyConverted: COUNT,
+  newlyConverted: COUNT,
+  deletedHere: COUNT,
+  drafts: COUNT,
+  originals: COUNT,
+  copies: COUNT
+})
 
-export function advanceLegacyRetirementClock(
-  state: Retirement,
-  now: number,
-  elapsed: number,
-  processToken: string
-): Retirement {
-  if (
-    !Number.isFinite(state.completedAt) ||
-    !Number.isFinite(state.lastWall) ||
-    state.completedAt < 0 ||
-    state.lastWall < 0 ||
-    state.completedAt > now ||
-    state.lastWall > now
-  ) {
-    return {
-      ...state,
-      completedAt: now,
-      lastWall: now,
-      credit: 0,
-      process: processToken,
-      phase: 'grace'
-    }
-  }
-  return {
-    ...state,
-    credit: Math.min(
-      LEGACY_RETIREMENT_WEEK,
-      state.credit + Math.max(0, Number.isFinite(elapsed) ? elapsed : 0)
-    ),
-    lastWall: now
-  }
-}
-
-/** Absolute revisions discard ambiguous saved credit instead of counting one interval twice. */
-export class JournalLegacyGraceClock {
-  private anchor?: bigint
-  private revision?: string
-  private pending = 0
-
-  observe(state: Retirement, now: number, processToken: string): Retirement {
-    const revision = `${state.proofId}:${state.creditRevision}`
-    if (this.revision !== revision) {
-      this.pending = 0
-      this.anchor = undefined
-      this.revision = revision
-    }
-    const mono = process.hrtime.bigint()
-    if (this.anchor !== undefined && mono >= this.anchor) {
-      this.pending += Number(mono - this.anchor) / 1e6
-    }
-    this.anchor = mono
-    return advanceLegacyRetirementClock(state, now, this.pending, processToken)
-  }
-
-  persisted(state: Retirement): void {
-    this.revision = `${state.proofId}:${state.creditRevision}`
-    this.pending = 0
-    this.anchor = process.hrtime.bigint()
-  }
-
-  pause(): void {
-    const mono = process.hrtime.bigint()
-    if (this.anchor !== undefined && mono >= this.anchor) {
-      this.pending += Number(mono - this.anchor) / 1e6
-    }
-    this.anchor = undefined
-  }
+function decodeCounts(value: unknown): { counts?: LegacyProofCounts } {
+  const counts = LEGACY_PROOF_COUNTS.safeParse(value)
+  return counts.success ? { counts: counts.data } : {}
 }

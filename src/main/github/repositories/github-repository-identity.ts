@@ -14,7 +14,7 @@ import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-re
 import { isStableMissingGitRemoteError } from '../../git/remotes/stable-missing-git-remote-error'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { resolveGitHubProjectAccount } from '../accounts/github-project-account'
 
 export type GitHubRepoContext = {
@@ -24,6 +24,8 @@ export type GitHubRepoContext = {
   admissionTier?: GitAdmissionTier
   /** SSH keeps the binding even when cwd is omitted from gh options. */
   ghAccount?: GhAccountBinding
+  /** Captured authority; a known unbound project also overrides caller account input. */
+  ghAccountFromProject?: boolean
 }
 
 export type LocalGitExecOptions = {
@@ -90,9 +92,14 @@ export function githubRepoContext(
     scope.wslDistro === context.wslDistro
       ? scope
       : null
-  const account = pinned ?? resolveGitHubProjectAccount(context) ?? context
+  const project = pinned ? null : resolveGitHubProjectAccount(context)
+  const account = pinned ?? project ?? context
   const binding = account.ghAccount ? Object.freeze({ ...account.ghAccount }) : undefined
-  return Object.freeze({ ...context, ghAccount: binding })
+  return Object.freeze({
+    ...context,
+    ghAccount: binding,
+    ghAccountFromProject: pinned ? pinned.ghAccountFromProject === true : project !== null
+  })
 }
 
 export function ghRepoExecOptions(context: GitHubRepoContext): {
@@ -156,9 +163,10 @@ function pruneOwnerRepoCache(now: number): void {
 
 export async function getRemoteUrlForRepo(
   context: GitHubRepoContext,
-  remoteName: string
+  remoteName: string,
+  configSignature?: string
 ): Promise<string | null> {
-  return readRemoteUrl(context, remoteName)
+  return readRemoteUrl(context, remoteName, configSignature)
 }
 
 function getOwnerRepoCacheTtl(value: OwnerRepo | null, configSignature?: string): number {
@@ -232,7 +240,7 @@ async function resolveOwnerRepoForRemote(
 ): Promise<OwnerRepo | null> {
   const now = Date.now()
   try {
-    const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
+    const remoteUrl = await getRemoteUrlForRepo(context, remoteName, configSignature)
     if (!remoteUrl) {
       if (requireVerifiedSshProbe) {
         requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))

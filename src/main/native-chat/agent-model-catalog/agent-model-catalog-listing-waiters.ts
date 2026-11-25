@@ -1,7 +1,7 @@
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
 import type { AgentModelCatalogReadParams } from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
 import type { AgentModelCatalogRefresh } from './agent-model-catalog-refresh'
 

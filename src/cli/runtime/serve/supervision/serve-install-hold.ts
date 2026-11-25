@@ -1,9 +1,9 @@
 import { existsSync, statSync } from 'node:fs'
-import { dirname } from 'node:path'
 import {
   isShipItRunningForBundle,
   listProcessCommands
-} from '../../../../shared/shipit-process-listing'
+} from '../../../../shared/desktop-distribution/macos/shipit-process-listing'
+import { macAppBundleOf } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 
 export type ServeInstallEvidence =
   | { kind: 'clear' }
@@ -31,7 +31,7 @@ export async function readServeInstallEvidence(
   options: { platform?: NodeJS.Platform; listProcesses?: ListProcesses } = {}
 ): Promise<ServeInstallEvidence> {
   const platform = options.platform ?? process.platform
-  const bundlePath = platform === 'darwin' ? macBundlePathOf(executable) : null
+  const bundlePath = platform === 'darwin' ? macAppBundleOf(executable) : null
   // ShipIt temporarily removes the executable during swaps; do not treat that as uninstall.
   if (bundlePath) {
     const listing = await (options.listProcesses ?? listProcessCommands)()
@@ -43,11 +43,6 @@ export async function readServeInstallEvidence(
     }
   }
   return existsSync(executable) ? { kind: 'clear' } : { kind: 'hold', reason: 'bundle-missing' }
-}
-
-function macBundlePathOf(executable: string): string | null {
-  const bundle = dirname(dirname(dirname(executable)))
-  return bundle.endsWith('.app') ? bundle : null
 }
 
 /** Include the archive: Linux releases can share one Electron launcher binary. */

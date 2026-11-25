@@ -3,7 +3,7 @@ import type {
   RuntimeStatusStoreSetState,
   RuntimeStatusStoreState
 } from './runtime-status-types'
-import { replaceMapEntries } from '@/store/keyed-record-transitions'
+import { stageHostStatuses } from './host-status-transaction-draft'
 import { dismissRuntimeDisconnectedToast } from './runtime-environment-disconnect-toast'
 import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
 
@@ -21,11 +21,7 @@ export function createRuntimeEnvironmentStatusRetention(
         if (!s.runtimeStatusByEnvironmentId.has(environmentId)) {
           return s
         }
-        return {
-          runtimeStatusByEnvironmentId: replaceMapEntries(s.runtimeStatusByEnvironmentId, [
-            [environmentId, null]
-          ])
-        }
+        return stageHostStatuses(s, [[environmentId, null]], {})
       })
     },
 
@@ -39,12 +35,11 @@ export function createRuntimeEnvironmentStatusRetention(
       set((s) => {
         const removed = [...s.runtimeStatusByEnvironmentId.keys()].filter((id) => !keep.has(id))
         return removed.length > 0
-          ? {
-              runtimeStatusByEnvironmentId: replaceMapEntries(
-                s.runtimeStatusByEnvironmentId,
-                removed.map((id) => [id, null] as const)
-              )
-            }
+          ? stageHostStatuses(
+              s,
+              removed.map((id) => [id, null] as const),
+              {}
+            )
           : s
       })
     }

@@ -58,7 +58,9 @@ export function escalateWorkerFailure(
       type: escalation.notice ? 'status' : 'escalation',
       priority: escalation.notice ? 'normal' : 'high',
       payload: JSON.stringify(escalation.payload),
-      runId: dispatch.run_id
+      runId: dispatch.run_id,
+      // A peer Run's queue then carries the Dispatch home with it, as it does a worker's own mail.
+      senderDispatchId: dispatch.id
     })
     notify(message.to_handle, message.type)
     return message

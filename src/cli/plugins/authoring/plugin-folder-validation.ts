@@ -6,6 +6,7 @@ import {
   validateDeclaredPluginArtifacts,
   validatePluginInstallContent
 } from '../../../main/plugins/artifacts/plugin-artifact-validation'
+import { validatePluginHostCalls } from '../../../main/plugins/artifacts/plugin-host-call-validation'
 import { PLUGIN_CATALOG_FILENAME } from '../../../shared/plugins/catalog/plugin-catalog'
 import {
   pluginApprovalGrants,
@@ -113,8 +114,13 @@ export async function validatePluginTarget(target: string): Promise<PluginValida
     return { path: root, file, kind, valid: errors.length === 0, errors }
   }
   const { manifest } = parsed
-  errors.push(...(await contentErrors(root, manifest)))
-  const warnings = strictPluginArtifactWarnings(manifest, manifestTextReader(root))
+  const hostCalls = await validatePluginHostCalls(root, manifest)
+  errors.push(...(await contentErrors(root, manifest)), ...hostCalls.errors)
+  const warnings = [
+    ...strictPluginArtifactWarnings(manifest, manifestTextReader(root)),
+    ...hostCalls.warnings,
+    ...(parsed.warnings ?? [])
+  ]
   return {
     path: root,
     file,

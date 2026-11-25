@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../../../src/shared/zod-salvage'
+import { salvagedOptional, salvagingArray } from '../../../../../src/shared/validation/zod-salvage'
 import type {
   MobileGitBranchCompareReply as MobileGitBranchCompareResult,
   MobileGitBranchCompareSummary
@@ -109,9 +109,22 @@ const reviewTextDiffSchema = z
     modifiedContent: diff.modifiedContent
   }))
 
+// Keep what the image preview reads; a side past the host's 10 MiB read cap is too large, not binary.
 const reviewBinaryDiffSchema = z
-  .looseObject({ kind: z.literal('binary') })
-  .transform(() => ({ kind: 'binary' as const }))
+  .looseObject({
+    kind: z.literal('binary'),
+    originalContent: salvagedOptional('originalContent', z.string()),
+    modifiedContent: salvagedOptional('modifiedContent', z.string()),
+    isImage: salvagedOptional('isImage', z.boolean()),
+    modifiedDeleted: salvagedOptional('modifiedDeleted', z.boolean()),
+    mimeType: salvagedOptional('mimeType', z.string()),
+    tooLarge: salvagedOptional('tooLarge', z.boolean())
+  })
+  .transform(({ tooLarge, ...diff }) =>
+    tooLarge === true
+      ? { kind: 'too-large' as const, byteLength: undefined }
+      : { ...diff, kind: 'binary' as const }
+  )
 
 const reviewTooLargeDiffSchema = z
   .looseObject({

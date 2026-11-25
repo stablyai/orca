@@ -1,12 +1,15 @@
-import { getAppEnvironment } from '../../../../../shared/app-environment'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
+import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
-import type { ProjectHostSetup } from '../../../../../shared/project-types'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
+import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
 import type { OrcadMigrationSourceCutover } from '../../../../../shared/orcad-migration/orcad-migration-source-cutover'
-import type { Repo } from '../../../../../shared/repo-types'
-import type { SshTarget } from '../../../../../shared/ssh-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { SshTarget } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { Store } from '../../../loading-store/store'
 import {
   orcadSourceFolderWorkspaceIds,

@@ -3,8 +3,8 @@ import { getAiVaultWslHomeDirs } from '../../ai-vault/discovery/ai-vault-scan-ro
 import { listAiVaultSubagentSessionsInBackground } from '../../ai-vault/scan-service/session-scanner-background'
 import { claudeProjectsRootDirs } from '../../ai-vault/discovery/session-scanner-roots'
 import { sessionRowRootDirs } from '../../ai-vault/discovery/session-scanner-agent-sources'
-import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type {
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult

@@ -4,7 +4,7 @@ import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
 } from '../../../shared/file-import/native-file-drop-preparation'
-import type { SshMutationExpectation } from '../../../shared/ssh-types'
+import type { SshMutationExpectation } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import type { RemoteFilePreviewAddress } from '../../../shared/file-preview/remote-file-preview-address'
 import type { FileBytesWritePrecondition } from '../../../shared/file-write/file-bytes-write'
@@ -31,7 +31,7 @@ import type {
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
   LocalLogTailWatchArgs
-} from '../../../shared/local-log-tail-types'
+} from '../../../shared/file-content/local-log-tail-types'
 import type { PreloadApi } from '../../api-types'
 
 export const fsApi = {

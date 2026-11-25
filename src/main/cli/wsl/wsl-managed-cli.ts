@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { writeShellWrapperFiles } from '../../pty/shell-startup/shell-wrapper-file-writer'
 import {

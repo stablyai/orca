@@ -3,12 +3,13 @@ import type {
   CodexRateLimitResetResult,
   RateLimitRuntimeTarget,
   RateLimitState
-} from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { PreloadApi } from '../../api-types'
 
 export const rateLimitsApi = {
   get: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:get'),
   refresh: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refresh'),
+  refreshOnOwnerReturn: (): Promise<void> => ipcRenderer.invoke('rateLimits:refreshOnOwnerReturn'),
   refreshCodexForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
     ipcRenderer.invoke('rateLimits:refreshCodexForTarget', target),
   consumeCodexResetCredit: (): Promise<CodexRateLimitResetResult> =>

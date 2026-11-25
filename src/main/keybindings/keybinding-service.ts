@@ -1,11 +1,11 @@
-import {
-  LEGACY_TAB_SWITCH_BINDINGS,
-  type KeybindingActionId,
-  type KeybindingFileSnapshot,
-  type KeybindingOverrides,
-  type SearchShortcutChoice,
-  type SearchShortcutChoiceResult
-} from '../../shared/keybindings'
+import { LEGACY_TAB_SWITCH_BINDINGS } from '../../shared/keybindings/definitions'
+import type {
+  KeybindingActionId,
+  KeybindingFileSnapshot,
+  KeybindingOverrides,
+  SearchShortcutChoice,
+  SearchShortcutChoiceResult
+} from '../../shared/keybindings/types'
 import {
   getLegacyProfileSearchDefaults,
   planSearchShortcutOptInForSnapshot,

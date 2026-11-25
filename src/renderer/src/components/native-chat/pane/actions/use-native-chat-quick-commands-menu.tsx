@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react'
-import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
-import { useVisibleTerminalQuickCommandHosts } from '@/hooks/use-visible-terminal-quick-command-hosts'
+import { useTerminalQuickCommandHosts } from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
+import { useVisibleTerminalQuickCommandHosts } from '@/lib/terminal/quick-commands/use-visible-terminal-quick-command-hosts'
 import { useAppStore } from '@/store/index'
 import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import type { TerminalQuickCommand } from '../../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { runQuickCommandInNewTab } from '@/lib/terminal/quick-commands/run-quick-command-in-new-tab'
 import { TerminalQuickCommandsSubmenu } from '../../../terminal-pane/quick-commands/TerminalQuickCommandsSubmenu'
 import { TerminalQuickCommandEditorDialog } from '../../../terminal-pane/quick-commands/TerminalQuickCommandEditorDialog'
 import { createTerminalQuickCommandDraft } from '../../../terminal-quick-commands/TerminalQuickCommandDialog'
+import { useQuickCommandEditorPresence } from '../../../tab-bar/quick-commands/quick-command-editor-presence'
 
 type QuickCommandEditor = { hostId: ExecutionHostId; command: TerminalQuickCommand }
 type QuickCommandPane = { worktreeId: string; groupId: string }
@@ -19,9 +20,13 @@ type QuickCommandPane = { worktreeId: string; groupId: string }
 // state; menu data is read by components that live with the open menu content.
 export function useNativeChatQuickCommandsMenu(
   pane: QuickCommandPane | undefined,
-  close: () => void
+  close: () => void,
+  /** Where focus lands when the editor closes; its opener (a menu row) is gone by then. */
+  onEditorCloseAutoFocus?: (event: Event) => void
 ) {
   const [editor, setEditor] = useState<QuickCommandEditor | null>(null)
+  // The dialog's unsaved text lives here; while it's open its workspace must keep its layout mounted.
+  useQuickCommandEditorPresence(pane?.worktreeId ?? '', editor !== null && pane !== undefined)
   return {
     menu: pane ? (
       <NativeChatQuickCommandsMenuItems pane={pane} onAdd={setEditor} onClose={close} />
@@ -34,6 +39,7 @@ export function useNativeChatQuickCommandsMenu(
         onSave={(command) =>
           useAppStore.getState().upsertTerminalQuickCommand(editor.hostId, command)
         }
+        onCloseAutoFocus={onEditorCloseAutoFocus}
       />
     ) : null
   }

@@ -1,12 +1,15 @@
 import type {
   CodexManagedAccount,
   CodexManagedAccountSummary
-} from '../../../shared/managed-account-types'
+} from '../../../shared/agent-accounts/managed-account-types'
 import {
   buildCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
-} from '../../../shared/codex-reset-credit-scope'
-import type { RateLimitState, RateLimitRuntimeTarget } from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-accounts/codex/codex-reset-credit-scope'
+import type {
+  RateLimitState,
+  RateLimitRuntimeTarget
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { Store } from '../../persistence/loading-store/store'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexResetCreditRejectedBeforeProviderReason } from '../account-management/codex-account-service-types'
@@ -16,7 +19,7 @@ import {
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget
 } from '../account-management/runtime-selection'
-import { normalizeCodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import { normalizeCodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 
 export type CodexResetCreditScopeValidation =
   | { kind: 'settledReplay' }
@@ -44,12 +47,12 @@ function sameTarget(left: RateLimitRuntimeTarget, right: RateLimitRuntimeTarget)
   return left.runtime === right.runtime && left.wslDistro === right.wslDistro
 }
 
-export function validateCodexResetCreditScope(
+export async function validateCodexResetCreditScope(
   expectedScope: CodexResetCreditExpectedScope,
   validation: CodexResetCreditScopeValidation,
   dependencies: CodexResetCreditScopeDependencies
-): { managedHomePath: string; rateLimits: RateLimitState } {
-  const rateLimitState = dependencies.rateLimits.getState()
+): Promise<{ managedHomePath: string; rateLimits: RateLimitState }> {
+  const rateLimitState = await dependencies.rateLimits.getState()
   if (!sameTarget(rateLimitState.codexTarget, expectedScope.target)) {
     throw new CodexResetCreditScopeRejection(
       'targetChanged',

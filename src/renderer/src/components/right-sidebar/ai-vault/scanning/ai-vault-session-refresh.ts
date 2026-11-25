@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { aiVaultScanErrorText } from './ai-vault-scan-issue-copy'
-import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../../../../shared/execution-host/execution-host'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
 import { EMPTY_AI_VAULT_SESSIONS } from '../session-list/ai-vault-session-identity'
 import { useAppliedAiVaultScan } from './ai-vault-applied-scan'
 import { useAiVaultSessionHostRefreshEvents } from '../scope/ai-vault-host-scope'
-import {
-  aiVaultSessionResultCacheKey,
-  resetAiVaultSessionResultCacheForTest
-} from './ai-vault-session-result-cache'
+import { aiVaultSessionResultCacheKey } from './ai-vault-session-result-cache'
 import {
   refreshAiVaultSessionList,
   type AiVaultConditionalSnapshot,
@@ -18,26 +15,16 @@ import {
   readCachedAiVaultSessionList,
   readLastAiVaultSessionList
 } from './ai-vault-session-list-request'
-import { resetAgentSessionIdsRefreshKeys } from './ai-vault-agent-session-refresh-key'
 import { useAiVaultNewSessionRescan } from './ai-vault-new-session-rescan'
 import { saveAiVaultSessionList } from './ai-vault-saved-session-lists'
 import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
-import {
-  claimAiVaultForcedRescan,
-  resetAiVaultForcedRescanBudgetForTest
-} from './ai-vault-forced-rescan-budget'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
+import { claimAiVaultForcedRescan } from './ai-vault-forced-rescan-budget'
 import {
   type AiVaultListResult,
   type AiVaultSession,
   isAiVaultScanCancelledError as isAiVaultScanCancellation
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-
-export function resetAiVaultForcedRescanThrottleForTest(): void {
-  resetAiVaultForcedRescanBudgetForTest()
-  resetAgentSessionIdsRefreshKeys()
-  resetAiVaultSessionResultCacheForTest()
-}
 
 // Desktop IPC resolves cancellations; web/runtime RPC rejects, so recognize both.
 
@@ -58,7 +45,17 @@ export function useAiVaultSessionRefresh(
   /** The depth the sessions on screen came from, which trails the selected one during a rescan. */
   loadedSessionLimit: AiVaultSessionLimit | null
 } {
-  const { scan, applyScan } = useAppliedAiVaultScan()
+  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths, scopeOnly)}\n${sessionLimit}`
+  // A return to the panel opens on the list this scope already holds instead of a skeleton.
+  const { scan, applyScan } = useAppliedAiVaultScan(() => {
+    const result = readCachedAiVaultSessionList({
+      scopePaths,
+      scopeOnly,
+      executionHostScope,
+      sessionLimit
+    })
+    return result && { result, limit: sessionLimit, scopeKey: scanScopeKey, scopeOnly }
+  })
   const associations = useAiVaultAssociationObservation(executionHostScope)
   const associationsRef = useRef(associations)
   const [loading, setLoading] = useState(false)
@@ -77,7 +74,6 @@ export function useAiVaultSessionRefresh(
   const mountedRef = useRef(true)
   const publicationGateRef = useRef<AiVaultSessionPublicationGate>(undefined!)
   publicationGateRef.current ??= new AiVaultSessionPublicationGate()
-  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths, scopeOnly)}\n${sessionLimit}`
   // Workspace or Project rows would pass for All's list while it loads or after it fails; the filter narrows the rest.
   const shown = scan?.scopeOnly && !scopeOnly ? null : scan
   // Kept through rescans so a repeat failure doesn't blink; shown only for the scope that failed.
@@ -240,7 +236,6 @@ export function useAiVaultSessionRefresh(
 
   useEffect(() => {
     mountedRef.current = true
-    const requestToken = requestTokenRef.current
     const publicationGate = publicationGateRef.current
     return () => {
       mountedRef.current = false
@@ -250,9 +245,7 @@ export function useAiVaultSessionRefresh(
       pendingBackgroundRef.current = true
       refreshIdRef.current += 1
       refreshInFlightRef.current = false
-      void window.api.aiVault.cancelListSessions({
-        requestToken
-      })
+      // The scan keeps running so the host caches it; the next visit joins it rather than restarting.
     }
   }, [])
 

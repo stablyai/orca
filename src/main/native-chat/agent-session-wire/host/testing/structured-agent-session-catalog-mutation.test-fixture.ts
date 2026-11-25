@@ -10,7 +10,7 @@ import {
 } from '../../../agent-model-catalog/agent-model-catalog-fingerprint'
 import { agentModelCatalogStore } from '../../../agent-model-catalog/agent-model-catalog-store'
 import { closeTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { readPersistedTestAgentSessionStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { readPersistedTestAgentSessionStore } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import {
   hostTestOperationId,
   HOST_TEST_SESSION as SESSION

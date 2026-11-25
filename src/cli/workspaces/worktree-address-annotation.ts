@@ -1,7 +1,7 @@
 import type {
   RuntimeWorktreePsSummary,
   RuntimeWorktreeRecord
-} from '../../shared/runtime-worktree-contracts'
+} from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeClient } from '../runtime/client'
 import { addressableOfPsRow, addressableOfShowRecord, annotateListing } from './workspace-address'
 import { callerOrcaClient } from './worktree-parent-fields'

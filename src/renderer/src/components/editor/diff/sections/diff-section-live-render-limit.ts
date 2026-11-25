@@ -3,7 +3,7 @@ import type { DiffSection } from './diff-section-types'
 import {
   getLargeDiffRenderLimitFromCounts,
   type LargeDiffRenderLimit
-} from '../../../../../../shared/large-diff-render-limit'
+} from '../../../../../../shared/source-control/diff/large-diff-render-limit'
 
 export function getLiveDiffSectionRenderLimit({
   section,

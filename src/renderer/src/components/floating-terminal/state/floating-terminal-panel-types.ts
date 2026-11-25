@@ -3,7 +3,7 @@ import type {
   KeybindingActionId,
   PhysicalModifierToken
 } from '../../../../../shared/keybindings/types'
-import type { TerminalAgentTabShortcut } from '@/components/terminal-agent-tab-shortcut'
+import type { TerminalAgentTabShortcut } from '@/components/terminal/keyboard-shortcuts/terminal-agent-tab-shortcut'
 
 export type FloatingWorkspaceTourInteractionSnapshot = {
   wasPreviouslyInteracted?: boolean

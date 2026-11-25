@@ -1,4 +1,4 @@
-import { RuntimeRpcCallQueuePool } from '../../../../shared/runtime-rpc-call-queue'
+import { RuntimeRpcCallQueuePool } from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
 
 export const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
 

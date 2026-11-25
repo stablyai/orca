@@ -1,4 +1,4 @@
-import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import { isCodexLoginAuthUrl } from './codex-login-auth-url'
 
 const CODE_MARKER = 'one-time code'

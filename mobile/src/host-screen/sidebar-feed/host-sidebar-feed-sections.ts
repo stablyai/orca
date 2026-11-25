@@ -2,7 +2,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getWorktreeExecutionHostId,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import { folderWorkspaceToWorktree } from '../../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { getFolderWorkspaceHostId } from '../../../../src/shared/sidebar-list/hosts/folder-workspace-host-id'
 import type { HostSectionRow } from '../../../../src/shared/sidebar-list/hosts/host-section-rows'
@@ -29,7 +29,7 @@ import {
   rowFiltersForView,
   type MobileViewState
 } from '../../worktree/workspace-list/workspace-view-settings'
-import type { HiddenProjects } from '../../../../src/shared/hidden-projects'
+import type { HiddenProjects } from '../../../../src/shared/project/catalog/hidden-projects'
 
 export type HostFeedListSources = {
   rows: readonly HostSectionRow[]

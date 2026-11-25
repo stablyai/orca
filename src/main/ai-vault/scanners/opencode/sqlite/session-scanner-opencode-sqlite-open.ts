@@ -1,13 +1,16 @@
 import { basename } from 'node:path'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
+import {
+  aiVaultAgentLabel,
+  type AiVaultScanIssue
+} from '../../../../../shared/ai-vault/contracts/ai-vault-types'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import {
   aiVaultScanIssueText,
   type AiVaultScanIssueText
 } from '../../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import SyncDatabase from '../../../../sqlite/sync-database'
 import { classifySqliteReadFailure } from '../../../../sqlite/sqlite-read-failure'
-import { errorMessage } from '../../../../../shared/error-message'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 
 // Allow bounded contention waits for native reads without adding retries atop SQLite’s busy handler (#15036).
 const OPENCODE_SQLITE_BUSY_TIMEOUT_MS = 1_500
@@ -53,10 +56,10 @@ export function readOpenCodeDatabase<T>(args: {
 export function openCodeDatabaseScanIssue(
   dbPath: string,
   error: unknown,
-  agent: 'opencode' | 'zcode' = 'opencode'
+  agent: 'opencode' | 'zcode' | 'hermes' = 'opencode'
 ): AiVaultScanIssue {
   const name = basename(dbPath)
-  const label = agent === 'zcode' ? 'ZCode' : 'OpenCode'
+  const label = aiVaultAgentLabel(agent)
   // Avoid an extra synchronous existence probe that could hang on a WSL share.
   const kind = classifySqliteReadFailure({ error, databaseFileExists: true })
   // WSL-share lock errors do not establish writer contention; idle databases exhibit the same failure.

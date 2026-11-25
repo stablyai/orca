@@ -20,7 +20,7 @@ import { MobileSwitch } from '../components/controls/MobileSwitch'
 import {
   dictationShortcutMode,
   dictationShortcutModeSettings
-} from '../../../src/shared/dictation-shortcut-mode'
+} from '../../../src/shared/speech/dictation/dictation-shortcut-mode'
 import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
 import { VoiceTranscribeOnSection, voiceTranscribeOnShown } from './voice-transcribe-on-section'
 

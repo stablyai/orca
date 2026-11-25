@@ -7,7 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   SSH_CONFIG_HOST_RESULT_LIMIT,
   type SshConfigHostSummary
-} from '../../../../../../shared/ssh-types'
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { cn } from '@/lib/class-names'
 
 const EMPTY_CONFIG_HOSTS: SshConfigHostSummary[] = []
@@ -242,7 +242,7 @@ export function AddRemoteHostSshConfigPicker({
             : newHostCount > 0
               ? t(
                   'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerAddAll',
-                  'Add all {{value0}} to Orca',
+                  'Add all ({{value0}})',
                   { value0: newHostCount }
                 )
               : // Remaining hosts may be saved or tombstoned; copy must not assume either.

@@ -20,13 +20,13 @@ import {
 import type { ReadyOperationPlan } from './structured-agent-session-ready-operation-plan'
 import { mutationReplayContext } from './structured-agent-session-mutation-turn-context'
 import { commandReceiptScope } from '../../agent-session-journal/writing/command-receipt-schema'
-import { parseAgentSessionOperationTimestamp } from '../../../../shared/agent-session/agent-session-host-authority'
+import { parseAgentSessionOperationTimestamp } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { waitForStructuredAgentSessionStart } from '../startup/structured-agent-session-start-readiness'
 import type { StructuredAgentSessionDeliveryPlace } from '../delivery/structured-agent-session-delivery-order'
 import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
 
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 
 import {
   operationDidNotRun,

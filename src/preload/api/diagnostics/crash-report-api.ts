@@ -6,13 +6,13 @@ import type {
   CrashReportSubmitResult,
   ReactErrorBoundaryReportArgs,
   ReactErrorBoundaryReportResult
-} from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-reporting'
 import type {
   FeedbackSubmitArgs,
   FeedbackSubmitResult
-} from '../../../shared/feedback-submit-contract'
-import type { RendererHeapStatistics } from '../../../shared/renderer-heap-statistics'
-import type { RendererProcessMemory } from '../../../shared/renderer-process-memory'
+} from '../../../shared/feedback/feedback-submit-contract'
+import type { RendererHeapStatistics } from '../../../shared/crash-reporting/renderer-heap-statistics'
+import type { RendererProcessMemory } from '../../../shared/crash-reporting/renderer-process-memory'
 
 export type CrashReportsApi = {
   getLatestPending: () => Promise<CrashReportRecord | null>

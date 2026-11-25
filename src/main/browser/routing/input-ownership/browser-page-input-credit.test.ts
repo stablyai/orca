@@ -1,32 +1,37 @@
 import { describe, expect, it } from 'vitest'
 import { BrowserPageInputCredit } from './browser-page-input-credit'
-import type { RpcCallerIdentity } from '../../../runtime/rpc/callers/rpc-caller-identity'
 
-const desktop = { kind: 'paired-device', deviceId: 'desk-1' } as const
+const viewer = { kind: 'paired-device', deviceId: 'desk-a' } as const
+const agent = { kind: 'local-cli' } as const
 
-function setup() {
-  let now = 1_000
-  const credit = new BrowserPageInputCredit(() => now)
-  // A command that delivers activating input to the page while it runs, as a click does.
-  const click = (caller: RpcCallerIdentity, page = 'page-1') =>
-    credit.during(page, caller, async () => credit.creditInput('tab-1', page))
-  return { credit, click, advance: (ms: number) => (now += ms) }
-}
+describe('BrowserPageInputCredit print attribution', () => {
+  it('credits a print only to a viewer input no agent command has followed', async () => {
+    let now = 1_000
+    const credit = new BrowserPageInputCredit(() => now)
 
-describe('BrowserPageInputCredit', () => {
-  it('credits the paired client whose command delivered the input, once', async () => {
-    const { credit, click } = setup()
-    await click(desktop)
+    await credit.during('tab', viewer, async () => credit.creditInput('tab', 'tab'))
+    // The click also opened a tab; the print it makes is still the viewer's.
+    expect(credit.consume('tab')).toBe('desk-a')
+    expect(credit.printer('tab')).toBe('desk-a')
 
-    expect(credit.consume('tab-2')).toBeNull()
-    expect(credit.consume('tab-1')).toBe('desk-1')
-    expect(credit.consume('tab-1')).toBeNull()
-  })
+    // An agent command taking the tab withdraws it.
+    credit.withdraw('tab')
+    expect(credit.printer('tab')).toBeNull()
 
-  it("credits no one for an agent CLI's click over the desktop's pairing", async () => {
-    const { credit, click } = setup()
-    await click({ ...desktop, agent: true })
+    // An agent's own input credits no one.
+    await credit.during('tab', agent, async () => credit.creditInput('tab', 'tab'))
+    expect(credit.printer('tab')).toBeNull()
 
-    expect(credit.consume('tab-1')).toBeNull()
+    // A viewer's input while an agent command runs in the tab can't authorize a print.
+    await credit.during('tab', viewer, async () =>
+      credit.creditInput('tab', 'tab', { printable: false })
+    )
+    expect(credit.printer('tab')).toBeNull()
+    expect(credit.consume('tab')).toBe('desk-a')
+
+    // A viewer's credit lapses with the input gesture.
+    await credit.during('tab', viewer, async () => credit.creditInput('tab', 'tab'))
+    now += 5_000
+    expect(credit.printer('tab')).toBeNull()
   })
 })

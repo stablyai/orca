@@ -1,19 +1,8 @@
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../../../shared/remote-runtime/pairing/remote-pairing-verification'
-import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { getRuntimeEnvironmentStatusOwner } from '../connections/runtime-environment-request-connections'
+import { withRuntimeEnvironmentStatusOwner } from '../connections/runtime-environment-request-connections'
 import { clearRuntimeEnvironmentManualDisconnect } from '../connectivity/runtime-environment-manual-disconnect'
 
 type VerifiedPairing = Extract<VerifyAndAddRuntimeEnvironmentResult, { ok: true }>
-
-function savedPairingRevision(userDataPath: string, environmentId: string): number | undefined {
-  try {
-    return listEnvironments(userDataPath).find((entry) => entry.id === environmentId)
-      ?.pairingRevision
-  } catch {
-    // Pairing is already saved; an unreadable registry delays status until the next probe.
-    return undefined
-  }
-}
 
 /** Retire replaced owners before publishing verified status; reject overlapping saves by pairing revision. */
 export async function publishVerifiedPairing(
@@ -25,14 +14,17 @@ export async function publishVerifiedPairing(
   // Clear manual disconnect first so invalidation can create a fresh status owner.
   clearRuntimeEnvironmentManualDisconnect(environmentId)
   await replaced?.invalidateTransport(environmentId)
-  // Invalidation may yield to a newer pairing save.
-  if (savedPairingRevision(userDataPath, environmentId) !== result.environment.pairingRevision) {
-    return
-  }
-  getRuntimeEnvironmentStatusOwner(userDataPath, environmentId).acceptVerified({
-    id: 'status.get',
-    ok: true,
-    result: result.runtimeStatus,
-    _meta: { runtimeId: result.runtimeStatus.runtimeId }
+  await withRuntimeEnvironmentStatusOwner(userDataPath, environmentId, (environment, owner) => {
+    if (environment.pairingRevision !== result.environment.pairingRevision) {
+      return
+    }
+    owner.acceptVerified({
+      id: 'status.get',
+      ok: true,
+      result: result.runtimeStatus,
+      _meta: { runtimeId: result.runtimeStatus.runtimeId }
+    })
+  }).catch(() => {
+    /* A removed or unreadable registry delays status until the next probe. */
   })
 }

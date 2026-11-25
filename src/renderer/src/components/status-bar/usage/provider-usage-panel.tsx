@@ -1,8 +1,9 @@
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import {
-  formatResetCountdown,
-  formatResetDuration
-} from '../../../../../shared/rate-limit-reset-format'
+import type {
+  ProviderRateLimits,
+  RateLimitBucket,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import {
   ClaudeIcon,
@@ -12,23 +13,27 @@ import {
   OpenCodeGoIcon
 } from '../accounts/provider-icons'
 import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import {
   getProviderDisplayName,
   getUsageWindowSections,
   type UsageWindowSection
-} from '../../../../../shared/usage-provider-windows'
-import { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
+} from '../../../../../shared/agent-usage/display/usage-provider-windows'
+import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
+import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import {
-  clampUsedPercent,
-  getDisplayedUsagePercentage,
-  type UsagePercentageDisplay
-} from '../../../../../shared/usage-percentage-display'
-import { formatUsagePercentageLabel } from './usage-percentage-label'
-import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+  getProviderUsageErrorMessage,
+  getProviderUsageStatusLabel
+} from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { recomputeOn } from '@/lib/recompute-on'
-import { barColor, ProviderExtraUsageSection } from './provider-extra-usage-section'
+import { ProviderExtraUsageSection } from './provider-extra-usage-section'
+import { formatWindowLabel } from './rate-limit-window-localized-label'
+import { formatPoolCardLabel } from './usage-pool-label'
+import { formatResetsInCaption } from './usage-reset-caption'
+import { UsageBar, UsageValue } from './usage-meter'
 
 export function formatTimeAgo(ts: number, t: Translate = translate): string {
   const diff = Date.now() - ts
@@ -105,11 +110,14 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
 function ErrorMessage({
   message,
   label,
+  detail,
   stale = false,
   inverted = false
 }: {
   message: string
   label?: string
+  /** Raw provider error, kept as a hover detail when the message replaces it. */
+  detail?: string
   /** When true, prior data is still visible — show a softer "refresh failed" label. */
   stale?: boolean
   inverted?: boolean
@@ -128,9 +136,9 @@ function ErrorMessage({
       : (label ?? genericRefreshLabel)
 
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-0.5" title={detail}>
       <div className={`text-[11px] font-medium ${labelClass}`}>{resolvedLabel}</div>
-      <div className={detailClass}>{message}</div>
+      {message !== resolvedLabel ? <div className={detailClass}>{message}</div> : null}
     </div>
   )
 }
@@ -139,18 +147,28 @@ export function getWindowSections(
   p: ProviderRateLimits,
   t?: Translate
 ): { label: string; window: RateLimitWindow | null }[] {
+  const buckets = p.buckets ?? []
   return getUsageWindowSections(p).map((section) => ({
-    label: getWindowSectionLabel(section, t),
+    label: getWindowSectionLabel(section, buckets, t),
     window: section.window
   }))
 }
 
-function getWindowSectionLabel(section: UsageWindowSection, t: Translate = translate): string {
+function getWindowSectionLabel(
+  section: UsageWindowSection,
+  buckets: readonly RateLimitBucket[],
+  t: Translate = translate
+): string {
   switch (section.kind) {
     case 'bucket':
-      return section.name
+      return isGroupedUsagePool(section.window)
+        ? formatPoolCardLabel(section.window, buckets, t)
+        : section.name
     case 'session':
-      return t('auto.components.status.bar.tooltip.94038ad2fa', 'Session')
+      // Why: name the window by its length ("5h") when known, matching the roster and status bar.
+      return section.window && section.window.windowMinutes > 0
+        ? formatWindowLabel(section.window.windowMinutes)
+        : t('auto.components.status.bar.tooltip.94038ad2fa', 'Session')
     case 'weekly':
       return t('auto.components.status.bar.tooltip.252c096536', 'Weekly')
     case 'fableWeekly':
@@ -184,27 +202,33 @@ function ProviderRateLimitWindowSection({
   now: number
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   if (!window) {
     return null
   }
-  const usedPct = clampUsedPercent(window.usedPercent)
-  const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
-  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
+  const caption = formatResetsInCaption(window.resetsAt, now, intlLocale, t)
 
   return (
-    <div className="space-y-1">
-      <div className={`font-medium ${textClass}`}>{label}</div>
-      <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
-        {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
-        <div
-          className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
-          style={{ width: `${displayedPct}%` }}
+    <div className="space-y-1.5" data-usage-window={label}>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="min-w-0 truncate">
+          <span className={`font-semibold ${textClass}`}>{label}</span>
+          {caption ? <span className={mutedClass}>{` · ${caption}`}</span> : null}
+        </span>
+        <UsageValue
+          usedPercent={window.usedPercent}
+          display={usagePercentageDisplay}
+          className={`shrink-0 font-semibold ${textClass}`}
         />
       </div>
-      <div className={`flex justify-between ${mutedClass}`}>
-        <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay, t)}</span>
-        {resetLabel && <span>{resetLabel}</span>}
-      </div>
+      {/* Why: fill follows the selected percentage; only this card colors it by consumption. */}
+      <UsageBar
+        usedPercent={window.usedPercent}
+        display={usagePercentageDisplay}
+        tone="health"
+        className="h-[6px] w-full"
+        trackClassName={emptyBarClass}
+      />
     </div>
   )
 }
@@ -215,7 +239,9 @@ export function ProviderPanel({
   className,
   showResetCredits = true,
   usagePercentageDisplay = 'used',
-  embedded = false
+  embedded = false,
+  headerAction,
+  usageSignInHint
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
@@ -224,9 +250,13 @@ export function ProviderPanel({
   usagePercentageDisplay?: UsagePercentageDisplay
   /** Inside an account card that already names the provider; tracks must contrast with the card. */
   embedded?: boolean
+  /** Rendered at the right of the provider name line, e.g. the Used/Left column toggle. */
+  headerAction?: React.ReactNode
+  usageSignInHint?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const windowSections = p ? getWindowSections(p, t) : []
+  const signInRequired = p?.status === 'error' && isCodexUsageSignInRequired(p)
+  const windowSections = p && !signInRequired ? getWindowSections(p, t) : []
   const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
@@ -260,7 +290,10 @@ export function ProviderPanel({
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
+  if (
+    p.status === 'error' &&
+    (signInRequired || (!p.session && !p.weekly && !p.fableWeekly && !p.monthly))
+  ) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
         {embedded ? null : (
@@ -272,7 +305,8 @@ export function ProviderPanel({
         <div className={embedded ? undefined : 'mt-2'}>
           <ErrorMessage
             label={getProviderUsageStatusLabel(p, t)}
-            message={getProviderUsageErrorMessage(p, t)}
+            message={usageSignInHint ?? getProviderUsageErrorMessage(p, t)}
+            detail={signInRequired ? (p.error ?? undefined) : undefined}
             inverted={inverted}
           />
         </div>
@@ -302,9 +336,12 @@ export function ProviderPanel({
     <div className={`${className ?? 'w-full'} space-y-3 text-xs`}>
       {!embedded ? (
         <div>
-          <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
-            <ProviderIcon provider={p.provider} />
-            {name}
+          <div className="flex items-center justify-between gap-2">
+            <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
+              <ProviderIcon provider={p.provider} />
+              {name}
+            </div>
+            {headerAction}
           </div>
           <div className={faintClass}>{updatedAgo}</div>
           {resetCreditCount !== null && resetCreditCount !== undefined ? (

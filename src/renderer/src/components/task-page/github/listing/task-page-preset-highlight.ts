@@ -1,6 +1,7 @@
 import type { ParsedTaskQuery } from '../../../../../../shared/work-items/task-query'
 import type { GitHubTaskKind } from '../../../../../../shared/work-items/task-github-search'
-import type { TaskViewPresetId } from '../../../../../../shared/ui-chrome-types'
+import type { TaskViewPresetId } from '../../../../../../shared/ui-chrome/ui-chrome-types'
+import { isOnlyMeAuthor } from './task-page-pr-chips'
 export function deriveGitHubTaskPreset(
   kind: GitHubTaskKind,
   query: ParsedTaskQuery
@@ -9,7 +10,7 @@ export function deriveGitHubTaskPreset(
     return null
   }
   if (kind === 'prs') {
-    if (query.author?.toLowerCase() === '@me') {
+    if (isOnlyMeAuthor(query)) {
       return 'my-prs'
     }
     if (query.reviewRequested?.toLowerCase() === '@me') {
@@ -18,7 +19,7 @@ export function deriveGitHubTaskPreset(
   } else if (query.assignee?.toLowerCase() === '@me') {
     return 'my-issues'
   }
-  return query.author !== null ||
+  return query.authors.length > 0 ||
     query.assignee !== null ||
     query.reviewRequested !== null ||
     query.reviewedBy !== null

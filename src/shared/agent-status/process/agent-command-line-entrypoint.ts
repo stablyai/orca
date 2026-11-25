@@ -1,5 +1,5 @@
 /** Resolve the entrypoint within interpreter argv separately from recognizing which agent it names. */
-import { NODE_INTERPRETER_OPTIONS_WITH_VALUE } from '../../node-interpreter-options'
+import { NODE_INTERPRETER_OPTIONS_WITH_VALUE } from './node-interpreter-options'
 
 const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 

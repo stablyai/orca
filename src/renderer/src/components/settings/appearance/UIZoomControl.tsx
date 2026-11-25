@@ -7,7 +7,7 @@ import {
   UI_ZOOM_MIN as ZOOM_MIN,
   UI_ZOOM_MAX as ZOOM_MAX,
   zoomLevelToPercent
-} from '../../../../../shared/ui-zoom-level'
+} from '../../../../../shared/app-lifecycle/windows/ui-zoom-level'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function UIZoomControl(): React.JSX.Element {

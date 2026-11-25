@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { ClaudeAccountSwitchRunningSessions } from '../../../../../../shared/claude-account-switch-settings'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
@@ -25,7 +25,7 @@ export function ClaudeRunningSessionSwitchSetting({
   )
   const description = t(
     'accounts.claude.switchSessions.settingDescription',
-    'Restarting continues each terminal conversation on the new account.'
+    'Restarting continues each terminal conversation on the new account. Busy sessions stop their current work.'
   )
   return (
     <SearchableSetting

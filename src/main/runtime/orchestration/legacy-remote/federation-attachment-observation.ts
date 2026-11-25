@@ -1,4 +1,4 @@
-import type { RuntimeTerminalInteractiveWait } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalInteractiveWait } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { WorkerTerminalReleaseRuntime } from '../terminal-authority/release/worker-terminal-release-runtime'
 import { OrchestrationError } from '../orchestration-error'
 import { parseWorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'

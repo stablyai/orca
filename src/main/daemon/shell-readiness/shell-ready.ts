@@ -1,13 +1,13 @@
 import { tmpdir } from 'node:os'
 import { basename, join, win32 as pathWin32 } from 'node:path'
 import { statSync } from 'node:fs'
-import { encodePowerShellCommand } from '../../../shared/powershell-command-encoding'
+import { encodePowerShellCommand } from '../../../shared/shell/launch/powershell-command-encoding'
 import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../../pty/shell-startup/powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../../../shared/codex-shell-function'
-import { getFishClaudeShellFunction } from '../../../shared/claude-shell-function'
+import { getFishCodexShellLaunchPreflight } from '../../../shared/shell/launch/agents/codex-shell-function'
+import { getFishClaudeShellFunction } from '../../../shared/shell/launch/agents/claude-shell-function'
 import { getFishXdgDataDirsLaunchEnv } from '../../pty/shell-startup/fish-xdg-data-dirs-handoff'
 import { getFishShellReadyInitCommand } from '../../pty/shell-startup/shell-templates'
 import {

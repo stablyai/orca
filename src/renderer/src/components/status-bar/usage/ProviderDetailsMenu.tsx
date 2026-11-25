@@ -8,18 +8,18 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useAppStore } from '../../../store/index'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
-import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import { useAppStore } from '../../../store'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { ProviderPanel } from './provider-usage-panel'
 import { ProviderIdentityCard } from '../accounts/ProviderIdentityCard'
+import { UsageDisplayToggle } from './usage-meter'
 import { ProviderLetterBadge, ProviderSegment } from './StatusBarProviderSegment'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from '../composition/status-bar-context-menu-policy'
 
 export function ProviderDetailsMenu({
   provider,
-  compact,
-  iconOnly,
+  iconOnly = false,
   ariaLabel,
   topContent,
   open,
@@ -30,11 +30,12 @@ export function ProviderDetailsMenu({
   trigger,
   accountLabel,
   panelFooter,
+  usageSignInHint,
+  accountStatus,
   variant = 'default'
 }: {
   provider: ProviderRateLimits | null
-  compact: boolean
-  iconOnly: boolean
+  iconOnly?: boolean
   ariaLabel: string
   topContent?: React.ReactNode
   open?: boolean
@@ -45,7 +46,9 @@ export function ProviderDetailsMenu({
   triggerContent?: React.ReactNode
   trigger?: React.ReactElement
   accountLabel?: string
+  accountStatus?: React.ReactNode
   panelFooter?: React.ReactNode
+  usageSignInHint?: string
   variant?: 'default' | 'account'
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -72,10 +75,17 @@ export function ProviderDetailsMenu({
               p={provider}
               accountLabel={accountLabel}
               footer={panelFooter}
+              usageSignInHint={usageSignInHint}
+              statusContent={accountStatus}
               usagePercentageDisplay={usagePercentageDisplay}
+              inMenu
             />
           ) : (
-            <ProviderPanel p={provider} usagePercentageDisplay={usagePercentageDisplay} />
+            <ProviderPanel
+              p={provider}
+              usagePercentageDisplay={usagePercentageDisplay}
+              headerAction={<UsageDisplayToggle asMenuItem />}
+            />
           )}
         </div>
       ) : null}
@@ -99,7 +109,7 @@ export function ProviderDetailsMenu({
           {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
           collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
           scrollable
-          className={`${variant === 'account' ? 'w-[400px]' : 'w-[300px]'} max-w-[calc(100vw-1rem)]`}
+          className="w-[440px] max-w-[calc(100vw-1rem)]"
         >
           {panelBody}
         </DropdownMenuSubContent>
@@ -119,7 +129,7 @@ export function ProviderDetailsMenu({
             {!provider ? null : iconOnly ? (
               <ProviderLetterBadge p={provider} />
             ) : (
-              <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
+              <ProviderSegment p={provider} display={usagePercentageDisplay} />
             )}
           </button>
         )}
@@ -129,7 +139,7 @@ export function ProviderDetailsMenu({
         side="top"
         align="start"
         sideOffset={8}
-        className={`${variant === 'account' ? 'w-[400px]' : 'w-[260px]'} max-w-[calc(100vw-1rem)]`}
+        className="w-[440px] max-w-[calc(100vw-1rem)]"
         onPointerDownOutside={menuFocusHandoff.onPointerDownOutside}
         onCloseAutoFocus={menuFocusHandoff.onCloseAutoFocus}
       >

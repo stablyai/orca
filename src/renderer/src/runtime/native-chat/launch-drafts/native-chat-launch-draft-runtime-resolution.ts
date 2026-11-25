@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { RuntimeClientEvent } from '../../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 type LaunchDraftResolvedEvent = Extract<
   RuntimeClientEvent,

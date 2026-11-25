@@ -2,7 +2,7 @@ import type MarkdownIt from 'markdown-it'
 import {
   findProseUrlEnd,
   splitAtProseUrlTerminators
-} from '../../../../../src/shared/prose-url-boundary'
+} from '../../../../../src/shared/text/prose-url-boundary'
 
 type Linkify = MarkdownIt['linkify']
 

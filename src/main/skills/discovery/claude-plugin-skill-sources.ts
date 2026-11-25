@@ -1,10 +1,8 @@
-import { open, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, sep, type posix } from 'node:path'
 import { stablePathId } from './skill-discovery-classification'
 import type { SkillScanRoot } from './skill-discovery-sources'
-import { stripUnsafeDisplayCharacters } from '../../../shared/display-text-safety'
-
-const MAX_PLUGIN_METADATA_BYTES = 4 * 1024 * 1024
+import { readPluginMetadataFile, safePluginLabel } from './plugin-skill-metadata'
+import { parseJsonObject } from '../../../shared/workspace-setup/setup-script-import-parsers'
 
 export type SkillDiscoveryPathApi = Pick<
   typeof posix,
@@ -39,20 +37,6 @@ export function getClaudePluginMetadataPaths(
       pathApi.join(cwd, '.claude', 'settings.json'),
       pathApi.join(cwd, '.claude', 'settings.local.json')
     ]
-  }
-}
-
-function parseJsonObject(content: string | null): Record<string, unknown> | null {
-  if (!content) {
-    return null
-  }
-  try {
-    const parsed: unknown = JSON.parse(content)
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null
-  } catch {
-    return null
   }
 }
 
@@ -145,24 +129,24 @@ function selectActiveInstall(
   )
 }
 
-function safePluginLabel(pluginId: string, pathApi: SkillDiscoveryPathApi): string {
-  const packageName = pluginId.split('@')[0] || pathApi.basename(pluginId)
-  const safeLabel = stripUnsafeDisplayCharacters(packageName).slice(0, 80)
-  return safeLabel || 'plugin'
-}
+type ClaudePluginSkillInstall = { root: SkillScanRoot; installPath: string }
 
-export function resolveClaudePluginSkillSources(args: {
+type ClaudePluginResolveArgs = {
   metadata: ClaudePluginMetadata
   cwd: string
   pathApi?: SkillDiscoveryPathApi
-}): SkillScanRoot[] {
+}
+
+function resolveClaudePluginSkillInstalls(
+  args: ClaudePluginResolveArgs
+): ClaudePluginSkillInstall[] {
   const pathApi = args.pathApi ?? defaultPathApi
   const installed = parseJsonObject(args.metadata.installedPlugins)?.plugins
   if (!installed || typeof installed !== 'object' || Array.isArray(installed)) {
     return []
   }
   const enabled = readEnabledPlugins(args.metadata.settings)
-  const roots = new Map<string, SkillScanRoot>()
+  const roots = new Map<string, ClaudePluginSkillInstall>()
   for (const [pluginId, rawInstalls] of Object.entries(installed)) {
     if (enabled.get(pluginId) !== true || !Array.isArray(rawInstalls)) {
       continue
@@ -172,55 +156,68 @@ export function resolveClaudePluginSkillSources(args: {
       continue
     }
     const skillsPath = pathApi.join(install.installPath, 'skills')
+    // Fallback namespace when the plugin has no manifest name: the `<name>` of `<name>@<marketplace>`.
+    const pluginName = pluginId.split('@')[0]
     if (!roots.has(skillsPath)) {
       roots.set(skillsPath, {
-        id: `claude-plugin-${stablePathId(skillsPath)}`,
-        label: `Claude plugin ${safePluginLabel(pluginId, pathApi)}`,
-        path: skillsPath,
-        sourceKind: 'plugin',
-        providers: ['claude'],
-        owner: 'claude'
+        root: {
+          id: `claude-plugin-${stablePathId(skillsPath)}`,
+          label: `Claude plugin ${safePluginLabel(pluginName || pathApi.basename(pluginId))}`,
+          path: skillsPath,
+          sourceKind: 'plugin',
+          ...(pluginName ? { pluginName } : {}),
+          providers: ['claude'],
+          owner: 'claude'
+        },
+        installPath: install.installPath
       })
     }
   }
   return [...roots.values()]
 }
 
-async function readMetadataFile(pathValue: string, signal?: AbortSignal): Promise<string | null> {
-  try {
-    signal?.throwIfAborted()
-    const fileStat = await stat(pathValue)
-    signal?.throwIfAborted()
-    if (!fileStat.isFile() || fileStat.size > MAX_PLUGIN_METADATA_BYTES) {
-      return null
-    }
-    const file = await open(pathValue, 'r')
-    try {
-      signal?.throwIfAborted()
-      const buffer = Buffer.alloc(fileStat.size)
-      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
-      signal?.throwIfAborted()
-      return buffer.toString('utf8', 0, bytesRead)
-    } finally {
-      await file.close()
-    }
-  } catch {
-    signal?.throwIfAborted()
-    return null
-  }
+export function resolveClaudePluginSkillSources(args: ClaudePluginResolveArgs): SkillScanRoot[] {
+  return resolveClaudePluginSkillInstalls(args).map(({ root }) => root)
 }
 
-export async function discoverClaudePluginSkillSources(args: {
-  homeDir: string
-  cwd: string
-  signal?: AbortSignal
-}): Promise<SkillScanRoot[]> {
+type ClaudePluginDiscoveryArgs = { homeDir: string; cwd: string; signal?: AbortSignal }
+
+export async function discoverClaudePluginSkillInstalls(
+  args: ClaudePluginDiscoveryArgs
+): Promise<ClaudePluginSkillInstall[]> {
   const paths = getClaudePluginMetadataPaths(args.homeDir, args.cwd)
   const [installedPlugins, ...settings] = await Promise.all(
-    [paths.installedPlugins, ...paths.settings].map((path) => readMetadataFile(path, args.signal))
+    [paths.installedPlugins, ...paths.settings].map((path) =>
+      readPluginMetadataFile(path, args.signal)
+    )
   )
-  return resolveClaudePluginSkillSources({
+  return resolveClaudePluginSkillInstalls({
     metadata: { installedPlugins, settings },
     cwd: args.cwd
   })
+}
+
+export async function discoverClaudePluginSkillSources(
+  args: ClaudePluginDiscoveryArgs
+): Promise<SkillScanRoot[]> {
+  return (await discoverClaudePluginSkillInstalls(args)).map(({ root }) => root)
+}
+
+/** Claude namespaces plugin skills by the manifest `name`, which may differ from the plugin id. */
+export async function applyClaudePluginManifestNames(
+  installs: readonly ClaudePluginSkillInstall[],
+  signal?: AbortSignal
+): Promise<SkillScanRoot[]> {
+  return Promise.all(
+    installs.map(async ({ root, installPath }) => {
+      const manifest = await readPluginMetadataFile(
+        join(installPath, '.claude-plugin', 'plugin.json'),
+        signal
+      )
+      const manifestName = parseJsonObject(manifest)?.name
+      return typeof manifestName === 'string' && manifestName
+        ? { ...root, pluginName: manifestName }
+        : root
+    })
+  )
 }

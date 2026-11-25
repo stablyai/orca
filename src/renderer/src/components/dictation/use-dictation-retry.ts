@@ -1,8 +1,5 @@
 import { useCallback, type RefObject } from 'react'
-import type {
-  DictationSession,
-  DictationSessionEvent
-} from '../../../../shared/dictation-session-machine'
+import type { DictationSession, DictationSessionEvent } from './dictation-session-machine'
 import {
   canRetryDictation,
   transcribeKeptRecording,

@@ -1,9 +1,9 @@
-import type { SpeechModelManifest, SpeechModelState } from '../../../../../shared/speech-types'
-import { isOfferedSpeechModel } from '../../../../../shared/speech-model-retirement'
-import {
-  speechModelQuality,
-  type SpeechModelQuality
-} from '../../../../../shared/speech-model-quality'
+import type {
+  SpeechModelManifest,
+  SpeechModelState
+} from '../../../../../shared/speech/speech-types'
+import { isOfferedSpeechModel } from '../../../../../shared/speech/models/speech-model-retirement'
+import { speechModelQuality, type SpeechModelQuality } from './speech-model-quality'
 
 export type VoiceSpeechModelTab = 'local' | 'cloud'
 

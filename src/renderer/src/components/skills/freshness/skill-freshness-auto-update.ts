@@ -3,11 +3,11 @@ import type {
   BundledSkillInstallResult,
   BundledSkillPlan,
   BundledSkillPlanEntry
-} from '../../../../../shared/bundled-skill-plan'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   holdsCurrentBundledSkillCopy,
   isBundledSkillAutoUpdateOp
-} from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import {
   bundledSkillTargetKey,
@@ -16,7 +16,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import { autoUpdateBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { useAppStore } from '@/store/index'
+import { skillBackupDirectory } from '../../../../../shared/skills/bundled/bundled-skill-locations'
+import { skillHostLabel } from './skill-backup-location'
 import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-store'
 
 // Why per skill and observed bytes: a failed or raced update re-plans identically and must fall back to the nudge, without blocking other skills.
@@ -91,38 +92,18 @@ function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
   }
 }
 
-function targetLabel(target: BundledSkillTarget): string {
-  if (target.kind === 'local') {
-    return translate('auto.components.skills.host.local', 'This machine')
-  }
-  const environment =
-    target.kind === 'environment'
-      ? useAppStore
-          .getState()
-          .runtimeEnvironments.find((candidate) => candidate.id === target.environmentId)
-      : undefined
-  return environment?.name ?? translate('auto.components.skills.host.remote', 'Connected runtime')
-}
-
-/** The host-side folder where the executor preserves edits that raced a swap. */
-function skillBackupDirectory(homeDirectory: string): string {
-  const separator = /^[a-z]:[\\/]|^\\\\/iu.test(homeDirectory) ? '\\' : '/'
-  const home = homeDirectory.replace(/[\\/]+$/u, '')
-  return [home, '.agents', '.orca-skill-backups'].join(separator)
-}
-
 /** A lost or timed-out reply may follow a committed swap, so its backups must not go unmentioned. */
 function reportUncertainOutcome(target: BundledSkillTarget, plan: BundledSkillPlan): void {
   warnAboutEdits(
     translate(
       'auto.components.skills.skillFreshnessAutoUpdate.uncertainTitle',
       "Orca couldn't confirm the skill update on {{value0}}",
-      { value0: targetLabel(target) }
+      { value0: skillHostLabel(target) }
     ),
     translate(
       'auto.components.skills.skillFreshnessAutoUpdate.uncertainDescription',
       "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}.",
-      { value0: targetLabel(target), value1: skillBackupDirectory(plan.homeDirectory) }
+      { value0: skillHostLabel(target), value1: skillBackupDirectory(plan.homeDirectory) }
     )
   )
 }

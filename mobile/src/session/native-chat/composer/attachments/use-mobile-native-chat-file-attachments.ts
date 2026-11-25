@@ -1,4 +1,4 @@
-import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 import {
   useMobileNativeChatDraftInputs,
   updateMobileNativeChatDraftInputs,

@@ -6,7 +6,7 @@ import type {
   AgentJournalQuestionItem,
   AgentJournalFreeTextInput
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { isPlanApprovalSubject } from '../../../../shared/agent-session/agent-session-approval-subject'
+import { isPlanApprovalSubject } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { boundInlineText, boundPayload } from './journal-payload-bounds'
 
 export const MAX_JOURNAL_PROMPT_OPTIONS = 64
@@ -49,6 +49,7 @@ export function boundJournalPromptBody(
       ...body,
       title: boundPromptText(body.title),
       ...(body.displayName === undefined ? {} : { displayName: boundPromptText(body.displayName) }),
+      ...(body.toolName === undefined ? {} : { toolName: boundPromptText(body.toolName) }),
       ...(body.description === undefined ? {} : { description: boundPromptText(body.description) }),
       ...(body.decisionReason === undefined
         ? {}
@@ -111,7 +112,10 @@ function boundPromptQuestion(question: AgentJournalQuestion): AgentJournalQuesti
     ...(question.freeTextQuestionId
       ? { freeTextQuestionId: boundPromptIdentifier(question.freeTextQuestionId) }
       : {}),
-    ...(question.freeTextInput ? { freeTextInput: boundFreeTextInput(question.freeTextInput) } : {})
+    ...(question.freeTextInput
+      ? { freeTextInput: boundFreeTextInput(question.freeTextInput) }
+      : {}),
+    ...(question.skippable ? { skippable: true as const } : {})
   }
 }
 

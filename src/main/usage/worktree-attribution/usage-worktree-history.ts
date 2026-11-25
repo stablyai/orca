@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { UsageCacheSnapshotWriter } from '../cache/usage-cache-snapshot-writer'
 import type { UsageWorktreeSource } from './usage-worktree-metadata'

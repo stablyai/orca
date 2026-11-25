@@ -4,7 +4,7 @@ import {
 } from './worktree-preparation-disposal'
 import type { PreparationRemovalOutcome } from './worktree-preparation-discard'
 import { WorktreePreparationLockOwnershipError } from './worktree-preparation-lock'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { getLocalRepoRefMaintenance } from '../../refs/maintenance/local-repo-ref-maintenance'
 import {
   WORKTREE_CREATE_PREPARATION_TTL_MS,

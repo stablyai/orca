@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { ComputerAwakeStatus } from '../../../shared/computer-awake-mode'
+import type { ComputerAwakeStatus } from '../../../shared/app-lifecycle/computer-awake-mode'
 import type { PreloadApi } from '../../api-types'
 
 export const agentAwakeApi = {

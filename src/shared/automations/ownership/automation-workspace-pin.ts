@@ -6,7 +6,7 @@ import {
   resolveFolderWorkspaceHost,
   type FolderWorkspaceHostState
 } from '../../folder-workspaces/folder-workspace-execution-host'
-import { parseWorkspaceKey } from '../../workspace-scope'
+import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 
 /** A pinned SSH target plus the generation its registration currently carries. */
 export type AutomationWorkspaceSshPin = { targetId: string; generation: number | undefined }

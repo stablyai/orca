@@ -1,11 +1,11 @@
 import { insertJournalDomainQueueRow } from '../journal-domain-queue-rows'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import {
-  withTestAgentSessionDatabase,
   openTestAgentSessionDatabase,
   closeTestAgentSessionDatabase,
   closeTestAgentSessionRecordStores
 } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import type { AgentSessionJournalProviderHandle } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'

@@ -11,7 +11,7 @@ import type {
   BrowserPasswordSavePrompt,
   BrowserPasswordSavePromptResponse,
   BrowserPasswordsStatus
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 
 type ProfileArgs = { browserProfileId: string }
 type EntryArgs = ProfileArgs & { entryId: string }

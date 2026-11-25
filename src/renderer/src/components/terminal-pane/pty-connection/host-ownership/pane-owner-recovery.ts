@@ -1,4 +1,6 @@
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import type { PendingStartupCommand } from '../startup/fresh-spawn-types'
+import { skipPaneResumeOwnedElsewhere } from '../startup/pane-resume-owned-elsewhere'
 
 export function isPaneOwnerRefusal(message: string): boolean {
   return (
@@ -10,7 +12,8 @@ export function isPaneOwnerRefusal(message: string): boolean {
 export function armPaneOwnerRetry(
   session: ConnectPanePtySession,
   generation: number,
-  retry: () => unknown
+  retry: () => unknown,
+  startupOverride?: PendingStartupCommand | null
 ): void {
   if (session.runtimeEnvironmentId) {
     return
@@ -22,6 +25,9 @@ export function armPaneOwnerRetry(
       session.deps.paneTransportsRef.current.get(session.pane.id) !== session.transport
     ) {
       return false
+    }
+    if (skipPaneResumeOwnedElsewhere(session, startupOverride)) {
+      return true
     }
     void retry()
     return true

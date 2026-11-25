@@ -1,5 +1,5 @@
 import type { SearchFileResult, SearchResult } from './code-search-types'
-import { remoteRpcResultExceedsContentBudget } from '../remote-rpc-content-budget'
+import { remoteRpcResultExceedsContentBudget } from '../remote-runtime/rpc/remote-rpc-content-budget'
 
 /**
  * `result` cut to whole files that fit one remote reply, marked truncated: a search past the reply

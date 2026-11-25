@@ -2,7 +2,7 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces
 import type { WorktreeSetupLaunch } from '../../../../../../shared/worktree/creation/launch-types'
 import type { InitialTerminalOptions } from '@/lib/workspace/activation/worktree-activation-store-contract'
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { useAppStore } from '@/store/index'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 

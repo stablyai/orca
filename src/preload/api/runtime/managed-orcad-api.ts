@@ -16,12 +16,12 @@ import type {
   OrcadManagedRollbackResult,
   OrcadManagedRuntimeStatus,
   OrcadManagedStopResult
-} from '../../../shared/orcad-managed-runtime'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
   RuntimeSshAccessLinkRequest,
   RuntimeSshAccessUnlinkRequest
-} from '../../../shared/runtime-ssh-access'
+} from '../../../shared/remote-runtime/host-catalog/runtime-ssh-access'
 
 export type ManagedOrcadPreloadApi = {
   deploy: (args: {

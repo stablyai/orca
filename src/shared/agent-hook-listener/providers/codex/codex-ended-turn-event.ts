@@ -1,4 +1,4 @@
-import { codexTranscriptTurnEnd } from '../../../codex-subagent-transcript'
+import { codexTranscriptTurnEnd } from './codex-subagent-transcript'
 import type { HookListenerState } from '../../listener-state'
 import { readString } from '../../tool-input-preview'
 

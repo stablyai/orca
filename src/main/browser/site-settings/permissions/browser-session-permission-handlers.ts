@@ -1,7 +1,11 @@
+import {
+  protectBrowserGuestMedia,
+  registerBrowserSessionNotificationGrant
+} from '../../guest-lifecycle/manager/registration/browser-guest-discard-protection'
 import { isRemoteCliDrivenGuest } from '../../desktop-browser-bridge/remote-cli-driven-workspaces'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import type { Session } from 'electron'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import {
   isAutoGrantedBrowserSessionPermission,
@@ -14,6 +18,7 @@ import {
   isBrowserSitePermissionAllowed
 } from './browser-site-permission-prompt'
 import {
+  registerBrowserSessionSitePermissions,
   savedBrowserSitePermissions,
   sessionBrowserSitePermissions
 } from './browser-site-permission-memory'
@@ -22,9 +27,16 @@ import {
   installBrowserWebAuthnAccessHandlers
 } from '../../webauthn/browser-webauthn-access'
 
-// SSH-driven pages must not read the desktop clipboard.
-function deniesRemoteCliDrivenClipboardRead(permission: string, webContentsId?: number): boolean {
-  return permission === 'clipboard-read' && isRemoteCliDrivenGuest(webContentsId)
+// Pages another machine drives must not read the desktop clipboard.
+function deniesRemoteDrivenClipboardRead(
+  permission: string,
+  webContentsId: number | undefined,
+  options: BrowserSessionPermissionOptions
+): boolean {
+  return (
+    permission === 'clipboard-read' &&
+    (options.clipboardRead === false || isRemoteCliDrivenGuest(webContentsId))
+  )
 }
 
 type RestrictedFileSystemAccessListener = (
@@ -75,6 +87,8 @@ export type BrowserSessionPermissionOptions = {
   fileSystemAccess?: boolean
   /** Session-only answers are not persisted to a browser profile. */
   sitePermissions?: 'saved' | 'session'
+  /** Off where another machine can script every page; a person's own paste still works. */
+  clipboardRead?: boolean
 }
 
 export function installBrowserSessionPermissionHandlers(
@@ -93,6 +107,14 @@ export function installBrowserSessionPermissionHandlers(
     options.sitePermissions === 'session'
       ? sessionBrowserSitePermissions(partition)
       : savedBrowserSitePermissions(profile.id)
+  registerBrowserSessionSitePermissions(sess, siteMemory)
+  registerBrowserSessionNotificationGrant(sess, (pageUrl) =>
+    isBrowserSitePermissionAllowed({
+      source: { pageUrl, frameOrigin: pageUrl },
+      memory: siteMemory,
+      permissions: ['notifications']
+    })
+  )
   sess.setPermissionRequestHandler((webContents, permission, callback, details) => {
     if (
       permission === 'openExternal' &&
@@ -114,7 +136,7 @@ export function installBrowserSessionPermissionHandlers(
         permission,
         rawUrl
       })
-    if (deniesRemoteCliDrivenClipboardRead(permission, webContents.id)) {
+    if (deniesRemoteDrivenClipboardRead(permission, webContents.id, options)) {
       notifyDenied()
       callback(false)
       return
@@ -148,13 +170,21 @@ export function installBrowserSessionPermissionHandlers(
       }
       return granted
     }
-    void decide().then(callback, (error: unknown) => {
-      console.error('[permissions] Browser site permission failed:', error)
-      callback(false)
-    })
+    void decide().then(
+      (allowed) => {
+        if (allowed && permission === 'media') {
+          protectBrowserGuestMedia(webContents)
+        }
+        callback(allowed)
+      },
+      (error: unknown) => {
+        console.error('[permissions] Browser site permission failed:', error)
+        callback(false)
+      }
+    )
   })
   sess.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
-    if (deniesRemoteCliDrivenClipboardRead(permission, webContents?.id)) {
+    if (deniesRemoteDrivenClipboardRead(permission, webContents?.id, options)) {
       return false
     }
     if (allowsBrowserWebAuthnPermission(permission, details)) {
@@ -178,14 +208,17 @@ export function installBrowserSessionPermissionHandlers(
           memory: siteMemory
         })
       }
-      return (
+      const allowed =
         isBrowserSitePermissionAllowed({
           source,
           memory: siteMemory,
           permissions: sitePermissions
         }) &&
         (permission !== 'media' || hasSystemMediaAccess(details?.mediaType))
-      )
+      if (allowed && permission === 'media' && webContents) {
+        protectBrowserGuestMedia(webContents)
+      }
+      return allowed
     }
     return isAutoGranted(permission)
   })

@@ -1,6 +1,6 @@
 import { stat } from 'node:fs'
 import { performance } from 'node:perf_hooks'
-import type { DaemonAsyncIoHealth } from '../../../shared/daemon-async-io-health'
+import type { DaemonAsyncIoHealth } from '../../../shared/terminal/daemon/daemon-async-io-health'
 
 const DAEMON_ASYNC_IO_TIMEOUT_MS = 5_000
 const HEALTH_CACHE_MS = 30_000

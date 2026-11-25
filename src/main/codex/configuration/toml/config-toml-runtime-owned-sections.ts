@@ -1,11 +1,16 @@
 import { stripCodexDaemonOverride } from '../shared-server/codex-daemon-socket-path-guard'
+import { stripCodexSharedSqliteHome } from './config-toml-shared-sqlite-home'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
   isTomlStructuralLine,
   updateTomlLineScanState
 } from './config-toml-line-scan'
-import { parseTomlTableHeaderPath, type ParsedTomlTableHeaderPath } from './config-toml-key-path'
+import {
+  parseTomlKeyPath,
+  parseTomlTableHeaderPath,
+  type ParsedTomlTableHeaderPath
+} from './config-toml-key-path'
 import { findProjectTrustLevelEntries } from '../../trust/toml/config-toml-project-trust-level'
 import { CODEX_HOOK_TRUST_KEY } from './config-toml-syntax'
 import '../../trust/toml/config-toml-trust'
@@ -31,7 +36,7 @@ export type SharedHookTrustCarry = {
 
 export function stripRuntimeOwnedTomlSections(
   config: string,
-  runtimeProjectHeaders = new Set<string>(),
+  runtimeOwnedHeaders = new Set<string>(),
   sharedHookTrust?: SharedHookTrustCarry
 ): string {
   const lines = config.split('\n')
@@ -49,12 +54,14 @@ export function stripRuntimeOwnedTomlSections(
           (sharedHookTrust !== undefined &&
             claimSharedHookTrustSection(section, sharedHookTrust, carriedHookTrustKeys))
       )
-      .filter(
-        (section) =>
-          !isRuntimeProjectTomlSection(section) ||
-          !runtimeProjectHeaders.has(getTomlSectionHeaderKey(section)) ||
-          getProjectTrustLevel(section.block) === 'untrusted'
-      )
+      .filter((section) => {
+        const project = isRuntimeProjectTomlSection(section)
+        return (
+          (!project && !isCodexTuiBookkeepingTomlSection(section)) ||
+          !runtimeOwnedHeaders.has(getTomlSectionHeaderKey(section)) ||
+          (project && getProjectTrustLevel(section.block) === 'untrusted')
+        )
+      })
       .map((section) => section.block)
   ])
 }
@@ -98,7 +105,52 @@ export function getTomlSections(config: string): TomlSection[] {
 }
 
 export function isRuntimePreservedTomlSection(section: TomlSection): boolean {
-  return isRuntimeHookTrustTomlSection(section) || isRuntimeProjectTomlSection(section)
+  return (
+    isRuntimeHookTrustTomlSection(section) ||
+    isRuntimeProjectTomlSection(section) ||
+    isCodexTuiBookkeepingTomlSection(section)
+  )
+}
+
+// Codex counts its model tip per session here; replacing it each launch restarts the count.
+export function isCodexTuiBookkeepingTomlSection(section: TomlSection): boolean {
+  return sectionLeafKey(section, ['tui']) === 'model_availability_nux'
+}
+
+/** False when the config defines the tip table any other way, which a kept copy would redefine. */
+export function definesCodexTuiBookkeepingOnlyAsTable(config: string): boolean {
+  const target = ['tui', 'model_availability_nux']
+  const overlaps = (path: readonly string[]): boolean =>
+    path.length > 0 &&
+    target.every((segment, index) => index >= path.length || path[index] === segment)
+  let table: string[] = []
+  let state = createTomlLineScanState()
+  for (const line of config.split('\n')) {
+    const structural = isTomlStructuralLine(state)
+    state = updateTomlLineScanState(state, line)
+    if (!structural) {
+      continue
+    }
+    const header = getTomlTableHeader(line)
+    if (header) {
+      const parsed = parseTomlTableHeaderPath(header)
+      table = parsed?.segments ?? []
+      const exact = !!parsed && !parsed.isArray && table.join('\0') === target.join('\0')
+      if (!parsed || (!exact && table.length >= target.length && overlaps(table))) {
+        return false
+      }
+      continue
+    }
+    const key = parseTomlKeyPath(line)
+    if (!key || line[key.end] !== '=') {
+      continue
+    }
+    const path = [...table, ...key.segments]
+    if (table.join('\0') !== target.join('\0') && overlaps(path)) {
+      return false
+    }
+  }
+  return true
 }
 
 export function isRuntimeHookTrustTomlSection(section: TomlSection): boolean {
@@ -180,6 +232,9 @@ export function getMcpServerTomlSectionName(section: TomlSection): string | null
 }
 
 export function getTomlSectionHeaderKey(section: TomlSection): string {
+  if (isCodexTuiBookkeepingTomlSection(section)) {
+    return 'tui:model_availability_nux'
+  }
   const projectPath = sectionLeafKey(section, ['projects'])
   return projectPath === null
     ? section.header.trim()
@@ -240,6 +295,8 @@ export function extractOrdinaryCodexSettings(config: string): string {
       .filter((section) => isRuntimeProjectTomlSection(section))
       .map((section) => getTomlSectionHeaderKey(section))
   )
-  // The daemon override belongs to the managed home and must not be promoted.
-  return stripCodexDaemonOverride(stripRuntimeOwnedTomlSections(config, projectHeaders)).trimEnd()
+  // The daemon override and shared sqlite_home belong to the managed home and must not be promoted.
+  return stripCodexSharedSqliteHome(
+    stripCodexDaemonOverride(stripRuntimeOwnedTomlSections(config, projectHeaders))
+  ).trimEnd()
 }

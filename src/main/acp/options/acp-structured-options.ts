@@ -1,10 +1,8 @@
-import { acpSelectChoices } from './acp-select-choices'
+import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
+import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
-import type {
-  AgentSessionModelOption,
-  AgentSessionOptionChoice,
-  AgentSessionSlashCommand
-} from '../../../shared/agent-session/agent-session-wire'
+import { acpSessionSlashCommand } from './acp-session-slash-command'
+import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
@@ -37,15 +35,22 @@ export class AcpStructuredOptions {
     private readonly dialect: Pick<
       AcpDialect,
       | 'modelEfforts'
+      | 'familyEfforts'
       | 'withheldCommands'
+      | 'chatModelIds'
       | 'effortChangesModel'
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
+      | 'skillDescription'
+      | 'fastConfigId'
+      | 'thinkingConfigId'
+      | 'interactionModes'
     > = {}
   ) {}
 
   private forkSupport: AgentSessionOptionsResult['forkSupport'] = 'unknown'
-  private configOptions: SessionConfigOption[] = []
+  /** As the agent last reported them; replace through `adoptConfigOptions`. */
+  configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private commands: AgentSessionSlashCommand[] | undefined
   private reportedCommands: readonly AvailableCommand[] | undefined
@@ -92,7 +97,10 @@ export class AcpStructuredOptions {
       this.unobservedCurrent.add(key)
     }
     if (key === 'model') {
+      // Each model has its own effort, thinking and Fast defaults, so all are written again.
       this.appliedInput.delete('effort')
+      this.appliedInput.delete('fastMode')
+      this.appliedInput.delete('thinking')
       this.unobservedCurrent.add('effort')
     }
     if (key === 'effort' && this.dialect.effortChangesModel) {
@@ -140,7 +148,8 @@ export class AcpStructuredOptions {
     if (this.resolvesConfig || this.picked.has(key) || this.unobservedCurrent.has(key)) {
       return false
     }
-    return value.length > 0 && this.currentValues()[key] === value
+    const native = (key === 'model' && this.dialect.chatModelIds?.get(value)) || value
+    return value.length > 0 && this.currentValues()[key] === native
   }
 
   notePick(key: string): void {
@@ -156,7 +165,7 @@ export class AcpStructuredOptions {
       if (this.select('model')) {
         this.unobservedCurrent.delete('model')
       }
-      if (this.select('thought_level')) {
+      if (this.effortOption()) {
         this.unobservedCurrent.delete('effort')
       }
     }
@@ -195,13 +204,7 @@ export class AcpStructuredOptions {
     this.reportedCommands = commands
     this.commands = commands
       .filter((command) => !withheld.includes(command.name))
-      .map((command) => ({
-        name: command.name,
-        kind: 'command',
-        ...(command.description ? { description: command.description } : {}),
-        ...(command.input?.hint ? { argumentHint: command.input.hint } : {}),
-        ...(this.isBuiltin(command) ? { builtin: true as const } : {})
-      }))
+      .map((command) => acpSessionSlashCommand(command, this.dialect, this.isBuiltin(command)))
   }
 
   readCommands(): AgentSessionSlashCommand[] | undefined {
@@ -209,7 +212,7 @@ export class AcpStructuredOptions {
   }
 
   offersEffort(value: string): boolean {
-    const option = this.select('thought_level')
+    const option = this.effortOption()
     return !!(
       option &&
       (this.dialect.clampsUnlistedEffort ||
@@ -217,68 +220,61 @@ export class AcpStructuredOptions {
     )
   }
 
+  refusesEffort = (value: string) => this.effortOption() !== null && !this.offersEffort(value)
+
   write(key: string, value: string): AcpOptionWrite | null {
+    if (key === 'fastMode' || key === 'thinking') {
+      const option = this.idSelect(
+        key === 'fastMode' ? this.dialect.fastConfigId : this.dialect.thinkingConfigId
+      )
+      return option ? { method: 'config', configId: option.id, value } : null
+    }
     if (key === 'model') {
       const option = this.select('model')
+      const model = this.dialect.chatModelIds?.get(value) ?? value
       if (option) {
-        return { method: 'config', configId: option.id, value }
+        return { method: 'config', configId: option.id, value: model }
       }
-      return this.models ? { method: 'model', modelId: value } : null
+      return this.models ? { method: 'model', modelId: model } : null
     }
     if (key === 'effort') {
-      const option = this.select('thought_level')
+      const option = this.effortOption()
       return option ? { method: 'config', configId: option.id, value } : null
+    }
+    if (key === 'interactionMode') {
+      const option = this.select('mode')
+      const native = acpInteractionModeValue(this.dialect.interactionModes, option, value)
+      return option && native ? { method: 'config', configId: option.id, value: native } : null
     }
     return null
   }
 
+  /** Unrunnable Plan is refused, unrunnable Build skipped; only Orca's confirmed write proves the mode. */
+  needsInteractionMode(value: string): boolean {
+    const write = this.write('interactionMode', value)
+    return write?.method === 'config'
+      ? this.appliedInput.get('interactionMode') !== value ||
+          this.select('mode')?.currentValue !== write.value
+      : value === 'plan'
+  }
+
   /** Native choices never establish an unobserved model's capability or configured default. */
-  read(): Pick<AgentSessionOptionsResult, 'models' | 'current' | 'forkSupport'> {
+  read(): Pick<
+    AgentSessionOptionsResult,
+    'models' | 'current' | 'forkSupport' | 'fastModeSupport'
+  > {
     const modelOption = this.select('model')
-    const effortOption = this.select('thought_level')
-    const sessionEfforts: AgentSessionOptionChoice[] = effortOption
-      ? acpSelectChoices(effortOption).map((choice) => ({
-          value: choice.value,
-          label: choice.name,
-          ...(choice.description ? { description: choice.description } : {})
-        }))
-      : []
+    const effortOption = this.effortOption()
     const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
-    const listed: { id: string; label: string; description?: string }[] = modelOption
-      ? acpSelectChoices(modelOption).map((choice) => ({
-          id: choice.value,
-          label: choice.name,
-          ...(choice.description ? { description: choice.description } : {})
-        }))
-      : (this.models?.availableModels.map((model) => ({
-          id: model.modelId,
-          label: model.name,
-          ...(model.description ? { description: model.description } : {})
-        })) ?? [])
-    const models: AgentSessionModelOption[] = listed.map((model) => {
-      const info = this.models?.availableModels.find((entry) => entry.modelId === model.id)
-      const advertised = info ? this.dialect.modelEfforts?.(info) : undefined
-      // A current-session menu supplies no negative evidence about an unobserved model.
-      const sessionMenu =
-        model.id === currentModel
-          ? { efforts: sessionEfforts }
-          : (modelOption || effortOption) && !advertised
-            ? { efforts: [], effortsKnown: false as const }
-            : { efforts: [] }
-      return {
-        ...model,
-        isDefault: false,
-        // Fall back to the running session's menu when the advertised menu is empty.
-        ...(advertised && (advertised.efforts.length > 0 || model.id !== currentModel)
-          ? advertised
-          : sessionMenu),
-        ...(advertised?.declaredDefaultEffort !== undefined
-          ? { declaredDefaultEffort: advertised.declaredDefaultEffort }
-          : {})
-      }
+    const models = acpModelMenuModels({
+      dialect: this.dialect,
+      modelOption,
+      effortOption,
+      state: this.models,
+      currentModel
     })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
-    return {
+    const menu = {
       models,
       forkSupport: this.forkSupport,
       current: {
@@ -287,6 +283,7 @@ export class AcpStructuredOptions {
         confirmed
       }
     }
+    return withFastModeOption(menu, this.idSelect(this.dialect.fastConfigId))
   }
 
   /** Unpicked new-session default: null if unlisted, undefined if the session cannot establish it. */
@@ -337,8 +334,17 @@ export class AcpStructuredOptions {
   private currentValues(): Readonly<Record<string, string | undefined>> {
     return {
       model: (this.select('model')?.currentValue ?? this.models?.currentModelId) || undefined,
-      effort: this.select('thought_level')?.currentValue
+      effort: this.effortOption()?.currentValue
     }
+  }
+
+  private effortOption(): SelectOption | null {
+    return acpEffortOption(this.configOptions)
+  }
+
+  private idSelect(id: string | undefined): SelectOption | null {
+    const option = id ? this.configOptions.find((entry) => entry.id === id) : undefined
+    return option && isSelect(option) ? option : null
   }
 
   private select(category: string): SelectOption | null {

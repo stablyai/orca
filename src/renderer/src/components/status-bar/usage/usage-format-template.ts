@@ -1,10 +1,13 @@
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import { formatResetDuration } from '../../../../../shared/rate-limit-reset-format'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 import {
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
-} from '../../../../../shared/usage-percentage-display'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { formatPlanLabel } from './usage-roster-formatting'
 
 export type UsageFormatValues = Record<string, string>
@@ -78,7 +81,7 @@ export function buildUsageFormatValues(
 ): UsageFormatValues {
   const values: UsageFormatValues = {
     provider: getProviderDisplayName(p.provider),
-    plan: formatPlanLabel(p.planType) ?? ''
+    plan: formatPlanLabel(p.planType, p.provider) ?? ''
   }
   for (const [key, minutes, pick] of WINDOW_KEYS) {
     const candidate = pick(p)

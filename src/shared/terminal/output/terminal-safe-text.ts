@@ -1,7 +1,7 @@
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
-} from '../../ansi-escape-sequences'
+} from '../protocol/escape/ansi-escape-sequences'
 
 // Strip terminal controls from untrusted remote text, including OSC 52 clipboard writes.
 export function terminalSafe(value: string): string {

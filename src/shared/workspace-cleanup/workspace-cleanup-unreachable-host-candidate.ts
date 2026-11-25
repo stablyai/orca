@@ -1,5 +1,5 @@
-import { getRepoRoutingConnectionId, type ExecutionHostId } from '../execution-host'
-import type { Repo } from '../repo-types'
+import { getRepoRoutingConnectionId, type ExecutionHostId } from '../execution-host/execution-host'
+import type { Repo } from '../repository/repo-types'
 import {
   createWorkspaceCleanupFingerprint,
   getWorkspaceCleanupInactivityReasons,
@@ -62,8 +62,7 @@ export function createUnreachableHostCleanupCandidate(
       cleanEditorTabCount: 0,
       browserTabCount: 0,
       diffCommentCount: workspace.diffComments?.length ?? 0,
-      newestDiffCommentAt: getNewestWorkspaceCleanupDiffCommentAt(workspace.diffComments),
-      retainedDoneAgentCount: 0
+      newestDiffCommentAt: getNewestWorkspaceCleanupDiffCommentAt(workspace.diffComments)
     },
     git: {
       clean: null,

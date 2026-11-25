@@ -1,5 +1,5 @@
 import { isRemovedRuntimeHostId } from '../../../host-catalog/removed-runtime-host-rows'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export type DropRuntimeRowsResult<T> = {
   rowsByRepo: Record<string, T[]>

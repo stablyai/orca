@@ -10,7 +10,7 @@ import type {
   NotificationSoundPathResult,
   NotificationSoundResult,
   StructuredNotificationRead
-} from '../../../shared/notification-settings-types'
+} from '../../../shared/notifications/notification-settings-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { PreloadApi } from '../../api-types'
 
@@ -68,7 +68,7 @@ export const notificationsApi = {
         { force: options?.force === true }
       )
       if (!resolved.ok) {
-        // Focus suppression is transient; keep the decoded sound for later plays.
+        // System Focus suppression is transient; keep the decoded sound for later plays.
         if (resolved.reason !== 'focus-active' && cachedNotificationSound) {
           disposeCachedNotificationSound()
         }

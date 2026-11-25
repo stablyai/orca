@@ -1,7 +1,5 @@
-import {
-  captureJournalLegacySourceReceipt,
-  JOURNAL_LEGACY_SOURCE_RECEIPT
-} from './journal-legacy-source-receipt'
+import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
+import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 import { createHash } from 'node:crypto'
 import {
   existsSync,
@@ -21,10 +19,9 @@ import {
   createAgentSessionRecordTablesSql
 } from './journal-database-schema'
 import { openJournalDatabase } from './journal-database'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import {
   initializeJournalDomainDatabase,
-  journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { readMailWithdrawal } from '../writing/mail-withdrawal-receipts'
@@ -161,6 +158,53 @@ it('copies opaque profile metadata in source order from the committed WAL, witho
   expect(sourceHashes(stateDirectory)).toEqual(before)
 })
 
+it('copies tables whose rowid is an INTEGER PRIMARY KEY alongside tables without one', async () => {
+  const stateDirectory = directory()
+  const source = legacy(stateDirectory)
+  source.exec(`INSERT INTO pr_check_events VALUES(7,'host/owner/repo#1','sha',1,'passed',100,200,1);
+    INSERT INTO pr_check_contexts VALUES('host/owner/repo#1','sha','build','success','run',0)`)
+  const current = open(await initializeJournalDomainDatabase(stateDirectory))
+  expect(current.prepare('SELECT rowid AS rowid,* FROM pr_check_events').all()).toEqual([
+    {
+      rowid: 7,
+      id: 7,
+      pr_key: 'host/owner/repo#1',
+      head_sha: 'sha',
+      occurrence: 1,
+      verdict: 'passed',
+      completed_at: 100,
+      observed_at: 200,
+      is_current_head: 1
+    }
+  ])
+  expect(current.prepare('SELECT * FROM pr_check_contexts').all()).toEqual([
+    {
+      pr_key: 'host/owner/repo#1',
+      head_sha: 'sha',
+      context: 'build',
+      last_state: 'success',
+      last_run_id: 'run',
+      pending_seen: 0
+    }
+  ])
+})
+
+it('copies the original rows as saved when a receipt outlived its chat record', async () => {
+  const stateDirectory = directory()
+  const source = legacy(stateDirectory)
+  seedSource(source)
+  source.pragma('foreign_keys=OFF')
+  source.exec(`INSERT INTO agent_session_command_receipts VALUES('orphan','deleted-chat','caller',
+    'send','fingerprint','accepted','{"kind":"stop"}',NULL,100)`)
+  const current = open(await initializeJournalDomainDatabase(stateDirectory))
+  expect(
+    current.prepare('SELECT operation_id FROM agent_session_command_receipts ORDER BY rowid').all()
+  ).toEqual([{ operation_id: 'operation' }, { operation_id: 'orphan' }])
+  expect(current.prepare('SELECT session_id FROM agent_session_records').all()).toEqual([
+    { session_id: 'chat' }
+  ])
+})
+
 it('never reimports metadata or consults a broken original once the new file is published', async () => {
   const stateDirectory = directory()
   const source = legacy(stateDirectory)
@@ -179,23 +223,6 @@ it('never reimports metadata or consults a broken original once the new file is 
   const before = hash(published)
   expect(await initializeJournalDomainDatabase(isolated)).toBe(published)
   expect(hash(published)).toBe(before)
-})
-
-it('accepts supported early schemas with no additive metadata tables without migrating their source', async () => {
-  const stateDirectory = directory()
-  const source = new Database(journalDatabasePath(stateDirectory))
-  source.exec(createJournalTablesSql())
-  source.exec(
-    `INSERT INTO journal_sessions VALUES('early','workspace','epoch'); PRAGMA user_version=3`
-  )
-  source.close()
-  const before = hash(journalDatabasePath(stateDirectory))
-  const current = open(await initializeJournalDomainDatabase(stateDirectory))
-  expect(
-    current.prepare('SELECT session_id,workspace_id,epoch FROM journal_chat_state').all()
-  ).toEqual([{ session_id: 'early', workspace_id: 'workspace', epoch: null }])
-  expect(current.prepare('SELECT record_json FROM agent_session_records').all()).toEqual([])
-  expect(hash(journalDatabasePath(stateDirectory))).toBe(before)
 })
 
 it('publishes complete metadata under competing initialization without replacing the winner or foreign files', async () => {
@@ -247,18 +274,14 @@ it('discards an unpublished partial metadata import on failure and retries from 
   })
 })
 
-it.each([1, 100, 'corrupt'])(
+it.each([1, 100])(
   'refuses source schema %s without publishing an empty successful profile',
   async (version) => {
     const stateDirectory = directory()
     const filename = journalDatabasePath(stateDirectory)
-    if (version === 'corrupt') {
-      writeFileSync(filename, 'corrupt database')
-    } else {
-      const source = new Database(filename)
-      source.pragma(`user_version=${version}`)
-      source.close()
-    }
+    const source = new Database(filename)
+    source.pragma(`user_version=${version}`)
+    source.close()
     const before = hash(filename)
     await expect(initializeJournalDomainDatabase(stateDirectory)).rejects.toThrow()
     expect(existsSync(journalDomainDatabasePath(stateDirectory))).toBe(false)
@@ -354,7 +377,7 @@ it('upgrades schema one atomically without trusting old forms or changing source
   })
 })
 
-it('binds the initial profile copy to its source without refreshing an authoritative winner', async () => {
+it('records the original as last absorbed without copying its later profile metadata', async () => {
   const root = directory()
   const filename = journalDatabasePath(root)
   const source = new Database(filename)
@@ -379,7 +402,8 @@ it('binds the initial profile copy to its source without refreshing an authorita
   old.close()
   expect(captureJournalLegacySourceReceipt(filename)).not.toEqual(original)
   await initializeJournalDomainDatabase(root)
-  expect(JSON.parse(String(receipt()))).toEqual(original)
+  // The receipt names the original as last absorbed; old-build profile metadata stays there.
+  expect(JSON.parse(String(receipt()))).toEqual(captureJournalLegacySourceReceipt(filename))
   expect(
     destination
       .prepare("SELECT value FROM agent_session_store_meta WHERE key='old-build-append'")

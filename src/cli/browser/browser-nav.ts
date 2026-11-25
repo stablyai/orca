@@ -20,7 +20,7 @@ import {
 } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { getBrowserCommandTarget } from './browser-command-target'
-import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
+import { browserWaitRequestTimeoutMs } from '../../shared/browser/automation/browser-wait-timeout'
 
 export const BROWSER_NAV_HANDLERS: Record<string, CommandHandler> = {
   snapshot: async ({ flags, client, cwd, json }) => {

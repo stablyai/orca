@@ -1,6 +1,7 @@
 import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { createRuntimeAutomationService } from '../../automations/runtime-automation-service'
+import type { OrcadUsageClients } from './orcad-usage-service'
 import { isFinalAutomationRunStatus } from '../../../shared/automations/history/automation-run'
 
 type AutomationStore = Pick<Store, 'listAutomations' | 'listAutomationRuns'>
@@ -10,11 +11,13 @@ let stopScheduler: (() => void) | null = null
 export function startOrcadAutomations(
   runtime: OrcaRuntimeService,
   store: Store,
+  usage: OrcadUsageClients,
   registerCleanup: (cleanup: () => void) => void
 ): void {
   const service = createRuntimeAutomationService({
     store,
     runtime,
+    ...usage,
     allowRemoteHostScheduling: true
   })
   stopScheduler = () => service.stop()

@@ -1,8 +1,5 @@
-import {
-  ORCAD_BROWSER_PARK_LABEL,
-  SERVE_SUPERVISOR_HEARTBEAT_MS
-} from '../../../shared/serve-bundle-coordination'
-import { openServeBundlePark, type ServeBundlePark } from '../../../shared/serve-bundle-park'
+import { SERVE_SUPERVISOR_HEARTBEAT_MS } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
+import type { ServeBundlePark } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 
 const PARK_POLL_MS = 1_000
 const RESTART_RETRY_MIN_MS = 5_000
@@ -22,6 +19,8 @@ export function watchOrcadBrowserInstallPark(
   helper: OrcadBrowserHelper,
   deps: {
     park: ServeBundlePark
+    /** The helper was never started because an install held the bundle. */
+    parked?: boolean
     setRepeating?: (callback: () => void, ms: number) => () => void
     now?: () => number
     log?: (message: string, error: unknown) => void
@@ -32,7 +31,7 @@ export function watchOrcadBrowserInstallPark(
   const log = deps.log ?? ((message, error) => console.warn(message, error))
   const acked = new Set<string>()
   // Retain parked state until restart succeeds so failures retry.
-  let parked = false
+  let parked = deps.parked ?? false
   let restartAt = 0
   let restartDelayMs = RESTART_RETRY_MIN_MS
   let closed = false
@@ -132,13 +131,4 @@ function setRepeatingTimer(callback: () => void, ms: number): () => void {
   const timer = setInterval(callback, ms)
   timer.unref?.()
   return () => clearInterval(timer)
-}
-
-/** Register only helpers launched from macOS app bundles. */
-export function openOrcadBrowserInstallPark(
-  executable: string,
-  helper: OrcadBrowserHelper
-): OrcadBrowserInstallPark | null {
-  const park = openServeBundlePark({ executable, label: ORCAD_BROWSER_PARK_LABEL })
-  return park ? watchOrcadBrowserInstallPark(helper, { park }) : null
 }

@@ -13,8 +13,17 @@ export type JournalStatusItemSelection =
       first?: true
       direction?: 'asc' | 'desc'
     }
-  | { kind: 'users'; floor?: number; unknown?: true }
-  | { kind: 'assistant-prose'; floor?: number }
+  /** Newest first, or oldest first from `after`; fromPerson leaves out another agent's messages. */
+  | {
+      kind: 'users'
+      floor?: number
+      unknown?: true
+      fromPerson?: true
+      after?: JournalStatusPosition
+      before?: JournalStatusPosition
+    }
+  | { kind: 'assistant-prose'; floor?: number; turnItemId?: string }
+  | { kind: 'async-question-candidates'; floor?: number }
   | { kind: 'assistant-exists' }
   | { kind: 'prompt' }
   | { kind: 'pending-prompts'; floor?: number }

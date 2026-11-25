@@ -4,7 +4,7 @@ import { basename, dirname, join } from 'node:path'
 import type {
   SkillInstallResult,
   SkillPlacementResult
-} from '../../../shared/skill-install-contract'
+} from '../../../shared/skills/installation/skill-install-contract'
 import {
   acquireSkillInstallLock,
   skillInstallLockPath

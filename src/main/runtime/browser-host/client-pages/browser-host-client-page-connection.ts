@@ -12,7 +12,7 @@ import type { BrowserHostPagePlacementRegistry } from '../reconciliation/browser
 import {
   sameRuntimeBrowserPlacement,
   type RuntimeBrowserClientPlacement
-} from '../../../../shared/runtime-browser-placement'
+} from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { requireBrowserHostLeaseState } from '../leases/browser-host-lease-state-resolution'
 import { pendingBrowserHostProfileSwitches } from '../profiles/browser-host-client-profile-switch'
 

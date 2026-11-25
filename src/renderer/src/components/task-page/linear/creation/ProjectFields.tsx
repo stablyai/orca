@@ -3,7 +3,7 @@ import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-
 import { useTranslate } from '@/i18n/use-translate'
 import { linearLabelCountLabel, linearMemberCountLabel } from './linear-attribute-count-labels'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { LinearPriorityIcon } from '@/components/linear-priority-icon'
+import { LinearPriorityIcon } from '@/components/task-page/linear/issues/linear-priority-icon'
 import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
 import { ChevronDown, Check, UserRound, LoaderCircle, Users, Tag, Clock3 } from 'lucide-react'
 import { cn } from '@/lib/class-names'

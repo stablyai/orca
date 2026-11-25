@@ -1,17 +1,16 @@
 import type { BrowserPageInitializationAction } from '../../../../../shared/browser/client-hosting/browser-page-initialization-action'
 import { useCallback, useMemo, useState, type MutableRefObject } from 'react'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useLatestHandler } from '@/lib/use-latest-handler'
-import { useTranslate } from '@/i18n/use-translate'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import { useBrowserReloadControlLabels } from './use-browser-reload-control-labels'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   type BrowserReloadTrigger,
   reloadBrowserPageWebview,
-  resolveBrowserReloadButtonLabelKind,
   resolveBrowserReloadIntent
 } from './browser-reload-action'
 import { retryBrowserTabLoad } from '../describe-page/browser-page-url-display'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
+import { isBrowserPageAttachWaiting } from '../host-guest/lifecycle/browser-page-deferred-attach'
 
 export function useBrowserPageReloadActions({
   browserTab,
@@ -29,15 +28,12 @@ export function useBrowserPageReloadActions({
   reloadWebviewOrRecoverGuest: (ignoreCache: boolean) => void
   runReloadTrigger: (trigger: BrowserReloadTrigger) => void
   reloadButtonLabel: string
-  reloadButtonLabelKind: ReturnType<typeof resolveBrowserReloadButtonLabelKind>
+  reloadButtonLabelKind: ReturnType<typeof useBrowserReloadControlLabels>['reloadButtonLabelKind']
   reloadMenuOpen: boolean
   setReloadMenuOpen: React.Dispatch<React.SetStateAction<boolean>>
   reloadShortcut: string
   hardReloadShortcut: string
 } {
-  const t = useTranslate()
-  const reloadShortcut = useShortcutLabel('browser.reload')
-  const hardReloadShortcut = useShortcutLabel('browser.hardReload')
   const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
   const reloadState = useMemo(
     () => ({ loading: browserTab.loading, loadErrorCode: browserTab.loadError?.code ?? null }),
@@ -78,7 +74,8 @@ export function useBrowserPageReloadActions({
         return
       }
       const webview = webviewRef.current
-      if (!webview) {
+      // No page yet while it waits for its profile's extensions (at most 5 s): nothing to stop or reload.
+      if (!webview || isBrowserPageAttachWaiting(webview)) {
         return
       }
       switch (resolveBrowserReloadIntent(trigger, reloadState)) {
@@ -111,22 +108,11 @@ export function useBrowserPageReloadActions({
     ]
   )
 
-  const reloadButtonLabelKind = resolveBrowserReloadButtonLabelKind(reloadState)
-  const reloadButtonLabel =
-    reloadButtonLabelKind === 'stop'
-      ? t('auto.components.browser.pane.BrowserPane.b7e4d9c1a2', 'Stop')
-      : reloadButtonLabelKind === 'retry'
-        ? t('auto.components.browser.pane.BrowserPane.781d6459ad', 'Retry')
-        : t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')
-
   return {
     reloadWebviewOrRecoverGuest,
     runReloadTrigger,
-    reloadButtonLabel,
-    reloadButtonLabelKind,
+    ...useBrowserReloadControlLabels(reloadState),
     reloadMenuOpen,
-    setReloadMenuOpen,
-    reloadShortcut,
-    hardReloadShortcut
+    setReloadMenuOpen
   }
 }

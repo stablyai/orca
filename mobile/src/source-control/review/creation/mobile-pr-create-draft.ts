@@ -1,4 +1,4 @@
-import { legacyBaseRefSearchResult } from '../../../../../src/shared/base-ref-search-result'
+import { legacyBaseRefSearchResult } from '../../../../../src/shared/worktree/base-refs/base-ref-search-result'
 import { translate } from '../../../i18n/mobile-i18n'
 import { refusedRpcMessageOrFallback } from '../../../transport/rpc/rpc-refusal-message'
 import type { UnvalidatedRpcRequestPort } from '../../../transport/rpc/unvalidated-rpc-request-port'
@@ -7,7 +7,7 @@ import {
   normalizeCreateReviewBaseSearchResults,
   normalizeHostedReviewBaseRef
 } from '../../../../../src/shared/source-control/hosted-review/hosted-review-refs'
-import { TEXT_GENERATION_CLIENT_TIMEOUT_MS } from '../../../../../src/shared/text-generation-client-timeout'
+import { TEXT_GENERATION_CLIENT_TIMEOUT_MS } from '../../../../../src/shared/text-generation/text-generation-client-timeout'
 import type { HostedReviewProvider } from '../../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { MobileGitStatusHostPayload as MobileGitStatusResult } from '../../git/git-status-reply-schema'
 import { fetchMobileGitHistory } from '../../history/mobile-git-history'

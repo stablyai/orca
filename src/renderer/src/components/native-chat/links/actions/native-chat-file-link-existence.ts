@@ -13,7 +13,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import {
   createNativeChatFileLinkChecker,
   type NativeChatFileLinkExistence
-} from '../../../../../../shared/native-chat/native-chat-file-link-existence'
+} from '../../../../../../shared/native-chat/file-access/native-chat-file-link-existence'
 
 export const NativeChatFileLinkExistenceContext = createContext<NativeChatFileLinkExistence | null>(
   null

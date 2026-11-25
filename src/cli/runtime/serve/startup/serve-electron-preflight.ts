@@ -1,14 +1,14 @@
 import { runProcessSync } from '@orca/process-host'
-import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
-import type { RuntimeRpcFailure } from '../../../../shared/runtime-rpc-envelope'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../../shared/single-instance-exit-code'
+import type { RuntimeMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
+import type { RuntimeRpcFailure } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../../shared/app-lifecycle/launch/single-instance-exit-code'
 import {
   clearServeAbortPark,
   isServeAbortParkActive,
   readServeAbortPark,
   SERVE_ABORT_PARK_EXIT_CODE,
   writeServeAbortPark
-} from '../../../../shared/serve-abort-park'
+} from '../../../../shared/remote-runtime/serve-supervisor/serve-abort-park'
 import { tryReadMetadata } from '../../profile/metadata'
 import {
   probeRuntimeListener,

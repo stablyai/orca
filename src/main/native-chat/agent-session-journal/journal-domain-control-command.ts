@@ -25,6 +25,7 @@ import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalDomainSubmissionCommit } from './journal-domain-submission-records'
 import type { JournalDomainInputCoordinate } from './journal-domain-input-commit'
 import { applyJournalDomainInputRecovery } from './journal-domain-input-recovery'
+import { withdrawStopTakenBackReplies } from './connector-replies/journal-connector-stop-withdrawal'
 import { applyJournalDomainItem } from './journal-domain-item'
 import { observeJournalDomainInputStop } from './journal-domain-input-ends'
 import { writeJournalDomainQueueReopenMark } from './journal-domain-queue-pauses'
@@ -35,6 +36,7 @@ import {
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -176,7 +178,9 @@ function acceptStop(
   const mark = writeMark(db, target, operation.fence, savedAt, result, (sequence) =>
     writeStop(db, target, sequence, operation.fence, event)
   )
-  result.value = { mark, withdrawn: Array.isArray(settled.value) ? settled.value : [], turnId }
+  const withdrawn = Array.isArray(settled.value) ? settled.value : []
+  withdrawStopTakenBackReplies(db, target, withdrawn, savedAt)
+  result.value = { mark, withdrawn, turnId }
   return result
 }
 
@@ -299,7 +303,7 @@ function visibleItem(
     WHERE session_id=? AND epoch=? AND hidden=0 AND item_id=COALESCE((SELECT item_id FROM journal_item_aliases
       WHERE session_id=? AND epoch=? AND provider_item_id=?),?)`)
     .get(target.sessionId, target.epoch, target.sessionId, target.epoch, key, key)
-  return row ? JSON.parse(String(row.payload_json)) : null
+  return row ? readJournalStoredItem(db, [target.sessionId, target.epoch], row.payload_json) : null
 }
 
 function physicalCoordinate(position: JournalDomainInputCoordinate): JournalWriterCoordinate {

@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
-import type { ConflictReviewEntry } from '../../../../../shared/editor-tab-view-types'
+import type { ConflictReviewEntry } from '../../../../../shared/editor/views/editor-tab-view-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type {
   GitConflictKind,

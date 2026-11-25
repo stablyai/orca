@@ -1,3 +1,4 @@
+import type { GitBlameResult } from '../../../shared/git/blame/git-blame-types'
 import type {
   GitCommitAction,
   GitCommitActionResult
@@ -7,7 +8,14 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult
 } from '../../../shared/git/remotes/git-fork-sync'
-import type { GitStagingArea, GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
+import type {
+  ContinueRebaseAction,
+  ContinueRebaseRequest,
+  ContinueRebaseResult,
+  GitStagingArea,
+  RebaseFromBaseResult,
+  GitUpstreamStatus
+} from '../../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../../shared/source-control/listing/source-control-entry-actions'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/removal/at-risk-local-files'
@@ -82,6 +90,15 @@ export const gitApi = {
     ipcRenderer.invoke('git:abortMerge', args),
   abortRebase: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
     ipcRenderer.invoke('git:abortRebase', args),
+  continueRebase: (
+    args: {
+      worktreePath: string
+      connectionId?: string
+      action?: ContinueRebaseAction
+    } & ContinueRebaseRequest
+  ): Promise<ContinueRebaseResult> => ipcRenderer.invoke('git:continueRebase', args),
+  rebaseAutoStash: (args: { worktreePath: string; connectionId?: string }): Promise<boolean> =>
+    ipcRenderer.invoke('git:rebaseAutoStash', args),
   diff: (args: {
     worktreePath: string
     filePath: string
@@ -135,7 +152,7 @@ export const gitApi = {
     worktreePath: string
     baseRef: string
     connectionId?: string
-  }): Promise<void> => ipcRenderer.invoke('git:rebaseFromBase', args),
+  }): Promise<RebaseFromBaseResult> => ipcRenderer.invoke('git:rebaseFromBase', args),
   branchDiff: (args: {
     worktreePath: string
     compare: { baseRef: string; baseOid: string; headOid: string; mergeBase: string }
@@ -271,5 +288,11 @@ export const gitApi = {
     worktreePath: string
     sha: string
     connectionId?: string
-  }): Promise<string | null> => ipcRenderer.invoke('git:remoteCommitUrl', args)
+  }): Promise<string | null> => ipcRenderer.invoke('git:remoteCommitUrl', args),
+  blame: (args: {
+    worktreePath: string
+    filePath: string
+    knownHeadOid?: string
+    connectionId?: string
+  }): Promise<GitBlameResult> => ipcRenderer.invoke('git:blame', args)
 } satisfies PreloadApi['git']

@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 /** Tells clients which top-level settings changed, so a phone re-reads only what it shows. */

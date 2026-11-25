@@ -1,4 +1,4 @@
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { LegacyRelayClient, LegacyRelayOwnerClaim } from './legacy-relay-client'
 import type {
   LegacyRelayEndpoint,

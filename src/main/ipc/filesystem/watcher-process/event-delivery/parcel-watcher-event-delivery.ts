@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
-import { PrioritySemaphore } from '../../../../../shared/priority-semaphore'
-import { mapWithConcurrency } from '../../../../../shared/map-with-concurrency'
+import { PrioritySemaphore } from '../../../../../shared/concurrency/priority-semaphore'
+import { mapWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import type { Event as ParcelWatcherEvent } from '@parcel/watcher'
 import { MAX_BATCHED_WATCHER_EVENTS } from '../../watchers/filesystem-watcher-event-batch'
 import type {

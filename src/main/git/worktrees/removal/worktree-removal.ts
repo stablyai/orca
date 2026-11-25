@@ -3,8 +3,8 @@ import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-environment/g
 import { pruneGitWorktrees } from './worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
-import { removeHostTree } from '../../../filesystem/host-tree-removal'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
+import { removeUnregisteredHostCheckout } from '../../../filesystem/host-tree-removal'
 import { withSpan } from '../../../observability/tracer'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
@@ -98,6 +98,8 @@ async function performRemoveWorktree(
   }
   args.push(worktreePath)
   await runUnderWorktreeDeleteLimit(async () => {
+    // Inside the slot: a checkout swapped in while this request queued must still be refused.
+    await options.beforeCheckoutDelete?.()
     if (usesNativeWindowsRemoval(worktreePath, options)) {
       await removeWindowsCheckout(repoPath, worktreePath, force, {
         ...options,
@@ -232,7 +234,7 @@ export async function localBranchExists(
   }
 }
 
-// Git for Windows can exit 0 leaving junctions and parent directories; finish that accepted delete.
+// Git can exit 0 leaving the emptied checkout directory; finish that accepted delete.
 async function removeCheckoutLeftByGit(
   worktreePath: string,
   options: RemoveWorktreeOptions
@@ -249,6 +251,9 @@ async function removeCheckoutLeftByGit(
     }
     throw error
   }
-  console.warn(`[git] worktree remove left files at "${worktreePath}"; deleting them`)
-  await removeHostTree(worktreePath, { signal: options.checkoutDeleteSignal })
+  // Git removed the accepted checkout; files here now cannot be told from a folder recreated in place.
+  await removeUnregisteredHostCheckout(worktreePath, options.checkoutDeleteSignal, {
+    forbidAnyMarker: true,
+    requireMarker: true
+  })
 }

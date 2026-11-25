@@ -18,7 +18,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { JournalTransactionalDatabase } from './database/journal-host-database'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
@@ -89,7 +89,12 @@ export type ResolveDispatchInput = {
 } &
   /** Null identity means the provider accepted without echoing an item, e.g. an in-place command. */
   (
-    | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity | null }
+    | {
+        state: 'accepted'
+        providerIdentity: AgentJournalItemIdentity | null
+        /** The running turn it joined, which another send opened; absent when it opened its own. */
+        answeredInTurn?: AgentJournalAnsweredTurnIdentity
+      }
     /** Handover scope: live root turn, otherwise thread. */
     | {
         state: 'pending'

@@ -7,7 +7,7 @@ import {
 import { AGENT_EFFORT_LEVEL } from '../agent-launch/choices/agent-effort-level'
 import { isValidTerminalTabId } from '../workspace-layout/terminal-surfaces/terminal-tab-id'
 import { normalizeMainAgentStatusField } from '../agent-status/contracts/agent-status-types'
-import { salvagingRecord } from '../zod-salvage'
+import { salvagingRecord } from '../validation/zod-salvage'
 
 const terminalTabIdSchema = z
   .string()

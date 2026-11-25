@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional } from '../../../../../src/shared/zod-salvage'
+import { salvagedOptional } from '../../../../../src/shared/validation/zod-salvage'
 import type { RelayHostReachability } from '../../../transport/relay/relay-host-reachability'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { MobileConnectionPath } from '../../../transport/connection/stable-logical-rpc-client'

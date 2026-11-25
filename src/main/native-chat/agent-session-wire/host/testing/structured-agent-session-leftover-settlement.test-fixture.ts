@@ -4,7 +4,7 @@ import type { AgentJournalItemIdentity } from '../../../../../shared/agent-sessi
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
-import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import type { StructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-current-work'
 import { hostStructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-host-current-work'
 import {

@@ -22,6 +22,7 @@ import {
   speedButtonTiers
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
+import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
@@ -92,12 +93,17 @@ function TintedValue({ value, color }: { value: string; color: string }): React.
 export function SessionOptionSummaryRow({
   label,
   value,
+  subtitle,
+  accessibleValue,
   valueColor,
   disabled,
   onPress
 }: {
   label: string
   value: string
+  /** Wraps under the label, for context too long for the one-line value. */
+  subtitle?: string
+  accessibleValue?: string
   valueColor?: string
   disabled: boolean
   onPress?: () => void
@@ -106,19 +112,20 @@ export function SessionOptionSummaryRow({
   const row = (
     <ListRow
       title={label}
+      subtitle={subtitle}
       value={tinted ? undefined : value}
       accessory={tinted}
       navigates={onPress !== undefined}
       onPress={onPress}
       disabled={onPress !== undefined && disabled}
-      accessibilityLabel={`${label}, ${value}`}
+      accessibilityLabel={`${label}, ${accessibleValue ?? value}`}
     />
   )
   if (onPress) {
     return row
   }
   return (
-    <View accessible accessibilityLabel={`${label}, ${value}`}>
+    <View accessible accessibilityLabel={`${label}, ${accessibleValue ?? value}`}>
       {row}
     </View>
   )
@@ -209,7 +216,12 @@ export function descriptorRowElements(
       />
     ]
   }
-  const { currentValue, choices } = descriptor.kind
+  // A provider fallback is what runs, so the saved model stays pickable.
+  const currentValue = descriptor.fallbackModel ?? descriptor.kind.currentValue
+  const choices =
+    descriptor.category === 'thought_level'
+      ? orderEffortLevels(descriptor.kind.choices)
+      : descriptor.kind.choices
   const choiceRow = (choice: (typeof choices)[number]) => (
     <ListRow
       key={choice.value}
@@ -222,7 +234,12 @@ export function descriptorRowElements(
     />
   )
   // No search here, so search-only rows stay out; folded ones follow a More models toggle.
-  const listed = choices.filter((choice) => !choice.hidden || choice.value === currentValue)
+  const listed = choices.filter(
+    (choice) =>
+      !choice.hidden ||
+      choice.value === currentValue ||
+      choice.value === descriptor.kind.currentValue
+  )
   const more = moreChoices ? listed.filter((choice) => choice.legacy) : []
   return [
     ...listed.filter((choice) => !choice.legacy).map(choiceRow),
@@ -253,6 +270,7 @@ const styles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    maxWidth: '100%',
     height: 38,
     paddingHorizontal: 14,
     borderRadius: radii.pill,

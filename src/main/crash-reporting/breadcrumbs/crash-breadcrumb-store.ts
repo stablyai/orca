@@ -1,15 +1,14 @@
 import {
   sanitizeCrashReportBreadcrumbs,
   sanitizeCrashReportDetails
-} from '../../../shared/crash-report-redaction'
+} from '../../../shared/crash-reporting/crash-report-redaction'
 import type {
   CrashReportBreadcrumbData,
   CrashReportBreadcrumb
-} from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-reporting'
 
 const MAX_BREADCRUMBS = 30
 const MAX_RETAINED_BREADCRUMBS = 10
-export const RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB = 'renderer_heap_allocation_profile'
 // Keys include arbitrary agent types, so cap the map for long multi-agent/SSH sessions.
 const MAX_COALESCE_KEYS = 128
 
@@ -37,10 +36,6 @@ let retainedBreadcrumbs = new Map<string, CrashReportBreadcrumb>()
 let coalescedBreadcrumbs = new Map<string, CoalescedBreadcrumbState>()
 
 function retainedBreadcrumbKey(breadcrumb: CrashReportBreadcrumb): string | null {
-  if (breadcrumb.name === RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB) {
-    // Retain allocation profiles across ring rotations until a possible later OOM.
-    return `${breadcrumb.name}:${String(breadcrumb.data?.rendererSurface)}:${breadcrumb.origin ?? 'global'}`
-  }
   if (breadcrumb.name !== 'renderer_memory_highwater') {
     return null
   }
@@ -308,14 +303,4 @@ export function getCrashBreadcrumbSnapshot(reporterOrigin?: string): CrashReport
       ...breadcrumb,
       ...(breadcrumb.data ? { data: { ...breadcrumb.data } } : {})
     }))
-}
-
-export function clearCrashBreadcrumbsForTest(): void {
-  breadcrumbs = []
-  retainedBreadcrumbs = new Map()
-  coalescedBreadcrumbs = new Map()
-}
-
-export function getCoalescedKeyCountForTest(): number {
-  return coalescedBreadcrumbs.size
 }

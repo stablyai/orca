@@ -1,6 +1,10 @@
 import { normalizePRCheckHeadSha } from '../../../../../src/shared/github/checks/pr-check-head'
 import * as z from 'zod'
-import { openEnum, salvagedOptional, salvagingArray } from '../../../../../src/shared/zod-salvage'
+import {
+  openEnum,
+  salvagedOptional,
+  salvagingArray
+} from '../../../../../src/shared/validation/zod-salvage'
 import type {
   GitHubReaction,
   PRComment
@@ -22,7 +26,7 @@ export const CHECK_STATUS = ['pending', 'success', 'failure', 'neutral'] as cons
 export const MERGEABLE_STATE = ['MERGEABLE', 'CONFLICTING', 'UNKNOWN'] as const
 export const REVIEW_DECISION = ['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED'] as const
 const CHECK_RUN_STATUS = ['queued', 'in_progress', 'completed'] as const
-// Keep action_required: the shared classifier treats approval gates as failure, not pending.
+// Keep action_required: dropping it would turn a pending approval gate into a neutral check.
 const CHECK_RUN_CONCLUSION = [
   'success',
   'failure',

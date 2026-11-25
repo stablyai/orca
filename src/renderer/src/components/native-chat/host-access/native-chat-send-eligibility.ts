@@ -1,4 +1,4 @@
-import type { RuntimeTerminalDriverState } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 /** Mirror terminal mobile-driver locks; unresolved driver state stays usable until send-time PTY validation. */
 export function deriveNativeChatCanSend(

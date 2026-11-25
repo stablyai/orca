@@ -1,451 +1,707 @@
-import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
-import {
-  existsSync,
-  writeFileSync,
-  readFileSync,
-  statSync,
-  readdirSync,
-  unlinkSync,
-  statfsSync
-} from 'node:fs'
-import { join, basename } from 'node:path'
-import { ChildProcess } from 'node:child_process'
-import { PassThrough } from 'node:stream'
-import { spawnProcess } from '@orca/process-host'
+import { existsSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { journalLegacyFileIdentity } from './database/journal-legacy-source-receipt'
-import { JournalSqlDatabase } from './database/journal-sql-database'
+import { journalDomainImportState } from './journal-domain-import-rows'
+import { initializeJournalDomainDatabase } from './database/journal-domain-database'
 import {
-  journalSqlWorkerPath,
-  journalSqlReaderPath
-} from './journal-sql-worker-bundle.test-fixture'
-import { message } from './journal-sql-message.test-fixture'
-import { createJournalLegacyFileEligibility } from './journal-legacy-file-lock'
-import {
-  advanceLegacyRetirementClock,
-  JournalLegacyGraceClock
-} from './journal-legacy-retirement-state'
-import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
-import { insertJournalRow } from './durable-rows/journal-row-table'
-import { profile, cleanup } from './journal-legacy-retirement.test-fixture'
+  cleanup,
+  companions,
+  continueInOlderOrca,
+  fakeLease,
+  olderOrcaChat,
+  profile,
+  queue
+} from './journal-legacy-retirement.test-fixture'
+import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
+import { setLegacyJournalRetirementHost } from './journal-legacy-retirement-outcome'
+import { readLegacyProofSessions } from './journal-legacy-content-proof'
 
-vi.mock('@orca/process-host', { spy: true })
+function rename(filename: string, sessionId: string, name: string) {
+  const db = new Database(filename)
+  db.prepare(
+    `UPDATE agent_session_records SET record_json=json_set(record_json,
+    '$.conversationName',?,'$.conversationNameSource','user') WHERE session_id=?`
+  ).run(name, sessionId)
+  db.close()
+}
 
-it('accounts for an unopened folder chat, removes only the certified file and keeps current history', async () => {
-  const test = await profile((legacy) => {
-    legacy.exec(`INSERT INTO journal_outcome_generations VALUES(900,'unopened','retired-epoch');
-      INSERT INTO journal_outcomes VALUES(900,1,'retired','key',1,'0','"unreachable retired text"',0)`)
-    legacy
-      .prepare(
-        `INSERT INTO queued_messages(session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state,hold_reason,queued_epoch,queued_sequence)
-         VALUES('unopened','saved-card',1,?,'f',1,'h','waiting','manual','epoch',1)`
-      )
-      .run(
-        JSON.stringify({
-          kind: 'message',
-          role: 'user',
-          blocks: [{ type: 'text', text: 'saved queued text survives retirement' }]
-        })
-      )
-  })
-  const allocated = () => ({
-    files: Object.fromEntries(
-      readdirSync(test.root).map((name) => {
-        const file = statSync(join(test.root, name))
-        return [name, { logical: Number(file.size), allocated: Number(file.blocks) * 512 }]
-      })
-    ),
-    freeBytes: Number(statfsSync(test.root).bfree) * Number(statfsSync(test.root).bsize)
-  })
-  const before = allocated()
-  const proofStart = performance.now()
-  await test.retirement.run()
-  expect(test.errors).toEqual([])
-  expect(existsSync(test.filename)).toBe(true)
-  const proofMs = performance.now() - proofStart
-  const proof = test.receiptState()
-  test.saveState({ ...proof, credit: 604800000 })
-  await test.retirement.run()
-  expect(existsSync(test.filename)).toBe(true)
-  test.arm()
-  const deletionStart = performance.now()
-  await test.retirement.run()
-  expect(test.errors).toEqual([])
-  expect(existsSync(test.filename)).toBe(false)
+/** Every original version kept here for a chat, oldest key first. */
+const originals = (db: Database.Database, sessionId: string) =>
+  db
+    .prepare('SELECT value FROM agent_session_store_meta WHERE key LIKE ? ORDER BY key')
+    .all(`journal.legacy-original:${sessionId}:%`)
+    .map((row) => JSON.parse(String(row.value)))
+
+const original = (db: Database.Database, sessionId: string) => originals(db, sessionId)[0] ?? null
+
+function tabsAndRecords(db: Database.Database) {
+  return {
+    tabs: db
+      .prepare('SELECT tab_id,session_id,position FROM agent_session_tabs ORDER BY tab_id')
+      .all(),
+    records: db.prepare('SELECT session_id FROM agent_session_records ORDER BY session_id').all()
+  }
+}
+
+it('retires the converted original and clears leftover WAL and SHM on a later launch', async () => {
+  const { root, filename, db, launch, errors } = await profile()
+  writeFileSync(`${filename}-shm`, '')
+  expect(journalDomainImportState(db, 'unopened').state).toBe('converting')
+
+  await launch().run()
+
+  expect(errors).toEqual([])
+  expect(companions(filename)).toEqual([])
+  expect(journalDomainImportState(db, 'unopened').state).toBe('ready')
   expect(
-    test.db
-      .prepare(
-        "SELECT payload_json FROM journal_items WHERE session_id='unopened' AND payload_json LIKE '%compact%' LIMIT 1"
-      )
-      .get()
-  ).toBeDefined()
-  expect(
-    test.db
-      .prepare(
-        "SELECT payload_json FROM journal_queue_cards WHERE session_id='unopened' AND message_id='saved-card'"
-      )
-      .get()!.payload_json
-  ).toContain('saved queued text survives retirement')
-  await test.retirement.run()
-  expect(existsSync(test.filename)).toBe(false)
-  test.db.pragma('wal_checkpoint(TRUNCATE)')
-  test.closeDomain()
-  const after = allocated()
-  const total = (files: typeof before.files) =>
-    Object.values(files).reduce((sum, value) => sum + value.allocated, 0)
-  console.info('synthetic allocated bytes after checkpoint and handle closure', {
-    before,
-    after,
-    grossLegacyRemoved: before.files[basename(test.filename)]!.allocated,
-    netRemoved: total(before.files) - total(after.files),
-    proofMs,
-    retireAndCheckpointMs: performance.now() - deletionStart
-  })
-  const options = {
-    writerPath: journalSqlWorkerPath(),
-    readerPath: journalSqlReaderPath(),
-    onMaintenanceError: () => {}
-  }
-  const current = await JournalSqlDatabase.open(test.root, options)
-  try {
-    const { target } = await current.openSession({
-      sessionId: 'new-current-chat',
-      workspaceId: 'folder-without-git',
-      hostId: 'synthetic-host',
-      agent: 'codex',
-      providerHandle: null
-    })
-    const step = message('saved after legacy retirement')
-    await current.write({
-      target,
-      savedAt: 100,
-      operation: {
-        kind: 'steps',
-        steps: [
-          {
-            kind: 'resolved-item',
-            reservedBytes: 1024,
-            resolution: { kind: 'text-snapshot', identity: step.identity, body: step.body },
-            options: step.options
-          }
-        ]
-      }
-    })
-  } finally {
-    await current.close()
-  }
-  const reopened = await JournalSqlDatabase.open(test.root, options)
-  try {
-    expect(
-      await reopened.readers.domainHistory({
-        sessionId: 'new-current-chat',
-        direction: 'after',
-        limit: 10
-      })
-    ).toMatchObject({
-      page: { items: [{ body: { blocks: [{ text: 'saved after legacy retirement' }] } }] }
-    })
-    expect(existsSync(test.filename)).toBe(false)
-  } finally {
-    await reopened.close()
-  }
+    db.prepare('SELECT COUNT(*) AS n FROM journal_items WHERE session_id=?').get('unopened')!.n
+  ).toBeGreaterThan(0)
+  const before = tabsAndRecords(db)
+  // The next launch's older-Orca pass sees no original: no rescan, no tab or record change.
+  await initializeJournalDomainDatabase(root)
+  expect(tabsAndRecords(db)).toEqual(before)
+  writeFileSync(`${filename}-wal`, '')
+  writeFileSync(`${filename}-shm`, 'index')
+  await launch().run()
+  expect(errors).toEqual([])
+  expect(companions(filename)).toEqual([])
+  expect(tabsAndRecords(db)).toEqual(before)
 })
 
-it('retains downgrade writes, a rollback journal and a nonempty WAL without changing their bytes', async () => {
-  for (const kind of ['append', 'journal', 'wal'] as const) {
-    const test = await profile()
-    await test.retirement.run()
-    test.arm()
-    if (kind === 'append') {
-      const old = new Database(test.filename)
-      old
-        .prepare('INSERT INTO journal_sessions VALUES(?,?,?)')
-        .run('old-new-chat', 'folder', 'new-epoch')
-      const savedItem = journalSqlRetryRows(true).find((row) => row.kind === 'item')!
-      insertJournalRow(old, 'unopened', {
-        ...savedItem,
-        seq: journalSqlRetryRows(true).length + 1,
-        itemId: 'downgraded-text',
-        body: {
-          kind: 'message',
-          role: 'user',
-          blocks: [{ type: 'text', text: 'saved by the downgraded build' }]
+it('keeps the original whenever the store cannot prove it holds all of it', async () => {
+  // The version that copied the profile keeps it until an update.
+  const same = await profile({ copiedBy: '1.0.1' })
+  await same.launch('1.0.1').run()
+  expect(companions(same.filename)).toContain(same.filename)
+
+  // So does an older version, after a downgrade.
+  const older = await profile()
+  await older.launch('0.9.0').run()
+  expect(companions(older.filename)).toContain(older.filename)
+
+  // A launch that doesn't own the profile never deletes.
+  const foreign = await profile()
+  await foreign.launch('1.0.1', false).run()
+  expect(companions(foreign.filename)).toContain(foreign.filename)
+
+  // Content the proof can't account for is refused, and the refusal is not re-proven.
+  // The smallest possible key is still read: an empty session id sorts before every other.
+  const orphan = await profile({
+    seed: (legacy) =>
+      legacy.exec("INSERT INTO journal_rows VALUES('','',1,1,'unaccounted user text')")
+  })
+  await orphan.launch().run()
+  expect(companions(orphan.filename)).toContain(orphan.filename)
+  expect(
+    JSON.parse(
+      String(
+        orphan.db
+          .prepare(
+            "SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v2'"
+          )
+          .get()!.value
+      )
+    )
+  ).toMatchObject({ phase: 'refused', reason: 'source-orphan' })
+
+  // History an older Orca added to a converted chat without a record (as every chat in a journal
+  // from before records is): no pass absorbs it.
+  const unrecorded = await profile()
+  await unrecorded.convert('unopened')
+  const legacy = new Database(unrecorded.filename)
+  legacy.exec(`DELETE FROM agent_session_records WHERE session_id='unopened';
+    INSERT INTO journal_rows SELECT session_id,epoch,seq+1,ts,row_json FROM journal_rows
+      WHERE session_id='unopened' ORDER BY seq DESC LIMIT 1`)
+  legacy.close()
+  await initializeJournalDomainDatabase(unrecorded.root)
+  await unrecorded.launch().run()
+  expect(companions(unrecorded.filename)).toContain(unrecorded.filename)
+  expect(String(unrecorded.errors.at(-1))).toContain('history this store lacks')
+})
+
+it('after a downgrade to an older Orca, the re-upgrade takes its new chat and then retires that journal too', async () => {
+  const { root, filename, db, launch } = await profile()
+  await launch().run()
+  expect(existsSync(filename)).toBe(false)
+  const before = tabsAndRecords(db).records.length
+
+  // The older Orca finds no journal, starts a new one and saves one chat in it.
+  olderOrcaChat(filename, 'made-after-downgrade')
+  await initializeJournalDomainDatabase(root)
+  expect(tabsAndRecords(db).records.length).toBe(before + 1)
+
+  // Once the reconcile took that chat, the store holds everything the new journal has.
+  await launch('1.0.2').run()
+  expect(companions(filename)).toEqual([])
+  expect(journalDomainImportState(db, 'made-after-downgrade').state).toBe('ready')
+})
+
+it('retires a store from its content, keeping chats deleted here deleted', async () => {
+  // A chat deleted here is not converted back from the original, and doesn't block retirement.
+  const deleted = await profile()
+  deleted.db.exec("DELETE FROM agent_session_records WHERE session_id='unopened'")
+  deleted.db.exec("DELETE FROM journal_chat_state WHERE session_id='unopened'")
+  await deleted.launch().run()
+  expect(companions(deleted.filename)).toEqual([])
+  expect(
+    deleted.db.prepare("SELECT 1 FROM journal_chat_state WHERE session_id='unopened'").get()
+  ).toBeUndefined()
+
+  // An upload the original claims for a kept chat stays claimed here once the original goes.
+  const claimed = await profile({
+    seed: (legacy) =>
+      legacy.exec("INSERT INTO agent_session_attachment_claims VALUES('upload-1','unopened',1000)")
+  })
+  claimed.db.exec('DELETE FROM agent_session_attachment_claims')
+  await claimed.launch().run()
+  expect(companions(claimed.filename)).toEqual([])
+  expect(
+    claimed.db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
+  ).toEqual([{ upload_id: 'upload-1', session_id: 'unopened' }])
+
+  // A rename made here, with the original as copied, is this store's newer edit.
+  const renamedHere = await profile()
+  renamedHere.db
+    .prepare(
+      `UPDATE agent_session_records SET record_json=json_set(record_json,
+        '$.conversationName','Renamed here','$.conversationNameSource','user')`
+    )
+    .run()
+  await renamedHere.launch().run()
+  expect(companions(renamedHere.filename)).toEqual([])
+})
+
+it('accepts finished per-chat import markers earlier builds left behind', async () => {
+  const { filename, launch, errors } = await profile({
+    seed: (legacy) => legacy.exec("INSERT INTO journal_imports VALUES('unopened','epoch',1)")
+  })
+  await launch().run()
+  expect(errors).toEqual([])
+  expect(companions(filename)).toEqual([])
+})
+
+it('reopens the source to conversions when the lock helper fails', async () => {
+  const { filename, launch, errors, readers } = await profile()
+  const release = vi.spyOn(readers, 'releaseSourceReaders')
+  await launch('1.0.1', true, async () => ({
+    held: () => true,
+    retire: async () => {
+      throw new Error('helper stopped')
+    },
+    close: async () => {
+      throw new Error('helper stopped')
+    }
+  })).run()
+  expect(release).toHaveBeenCalledTimes(1)
+  expect(errors).toHaveLength(1)
+  expect(existsSync(filename)).toBe(true)
+})
+
+it('keeps the original version of what both sides changed, then retires, with no file times', async () => {
+  // An older Orca renamed a chat after the copy, with no new turn, and then the profile was
+  // restored with the journal written first: no file time can say which side is newer.
+  const renamed = await profile()
+  const before = statSync(renamed.filename)
+  rename(renamed.filename, 'unopened', 'Renamed in the older Orca')
+  utimesSync(renamed.filename, before.atime, before.mtime)
+  await initializeJournalDomainDatabase(renamed.root)
+  await renamed.launch().run()
+  expect(renamed.errors).toEqual([])
+  expect(companions(renamed.filename)).toEqual([])
+  expect(original(renamed.db, 'unopened').record).toContain('Renamed in the older Orca')
+
+  // Text an older Orca queued after the copy, on a converted chat this store doesn't hold.
+  const queued = await profile()
+  await queued.convert('unopened')
+  queue(queued.filename, 'unopened', 'queued in the older Orca')
+  await initializeJournalDomainDatabase(queued.root)
+  await queued.launch().run()
+  expect(companions(queued.filename)).toEqual([])
+  expect(JSON.stringify(original(queued.db, 'unopened').queued)).toContain(
+    'queued in the older Orca'
+  )
+
+  // Text an older Orca queued in a chat deleted here moves no revision; it is kept all the same.
+  const deletedQueued = await profile()
+  await deletedQueued.convert('unopened')
+  await initializeJournalDomainDatabase(deletedQueued.root)
+  deletedQueued.db.exec("DELETE FROM agent_session_records WHERE session_id='unopened'")
+  deletedQueued.db.exec("DELETE FROM journal_chat_state WHERE session_id='unopened'")
+  queue(deletedQueued.filename, 'unopened', 'queued after the chat was deleted here')
+  rename(deletedQueued.filename, 'unopened', 'Renamed after the chat was deleted here')
+  await initializeJournalDomainDatabase(deletedQueued.root)
+  await deletedQueued.launch().run()
+  expect(companions(deletedQueued.filename)).toEqual([])
+  expect(JSON.stringify(original(deletedQueued.db, 'unopened').queued)).toContain(
+    'queued after the chat was deleted here'
+  )
+  expect(original(deletedQueued.db, 'unopened').record).toContain(
+    'Renamed after the chat was deleted here'
+  )
+
+  // An older Orca rewrites lease bookkeeping in every record each launch; until the original goes,
+  // that keeps no further copy of a chat deleted here.
+  const churn = await profile()
+  churn.db.exec("DELETE FROM agent_session_records WHERE session_id='unopened'")
+  churn.db.exec("DELETE FROM journal_chat_state WHERE session_id='unopened'")
+  const tables = new Set(['agent_session_records', 'queued_messages', 'journal_outcome_epochs'])
+  const kept = readLegacyProofSessions(churn.source(), churn.db, tables, null)[0]!.original!
+  const legacyChurn = new Database(churn.filename)
+  legacyChurn.exec(`UPDATE agent_session_records
+    SET record_json=json_set(record_json,'$.lease.lastRenewedAt',2000)`)
+  legacyChurn.close()
+  await churn.readers.recycleSourceReaders()
+  const after = readLegacyProofSessions(churn.source(), churn.db, tables, null)[0]!.original!
+  expect(after.value).not.toBe(kept.value)
+  expect(after.identity).toBe(kept.identity)
+
+  // Text an older Orca queued in a converted chat it no longer records is kept the same way.
+  const unrecordedQueued = await profile()
+  await unrecordedQueued.convert('unopened')
+  const legacy = new Database(unrecordedQueued.filename)
+  legacy.exec("DELETE FROM agent_session_records WHERE session_id='unopened'")
+  legacy.close()
+  queue(unrecordedQueued.filename, 'unopened', 'queued in an unrecorded chat')
+  await initializeJournalDomainDatabase(unrecordedQueued.root)
+  await unrecordedQueued.launch().run()
+  expect(companions(unrecordedQueued.filename)).toEqual([])
+  expect(JSON.stringify(original(unrecordedQueued.db, 'unopened').queued)).toContain(
+    'queued in an unrecorded chat'
+  )
+
+  // A later retirement of a restored original keeps its own version beside the first one.
+  olderOrcaChat(queued.filename, 'unopened')
+  queue(queued.filename, 'unopened', 'queued in a restored original')
+  await initializeJournalDomainDatabase(queued.root)
+  await queued.launch('1.0.2').run()
+  expect(companions(queued.filename)).toEqual([])
+  expect(JSON.stringify(originals(queued.db, 'unopened').map((kept) => kept.queued))).toMatch(
+    /queued in the older Orca.*queued in a restored original|queued in a restored original.*queued in the older Orca/
+  )
+
+  // Where both sides already agree, nothing extra is kept.
+  const same = await profile()
+  await same.launch().run()
+  expect(companions(same.filename)).toEqual([])
+  expect(original(same.db, 'unopened')).toBeNull()
+})
+
+it('accepts an import marker for an epoch a /clear replaced', async () => {
+  const { filename, launch, errors } = await profile({
+    seed: (legacy) => legacy.exec("INSERT INTO journal_imports VALUES('unopened','replaced',9)")
+  })
+  await launch().run()
+  expect(errors).toEqual([])
+  expect(companions(filename)).toEqual([])
+})
+
+it('finishes removing the absorbed WAL a removal left behind its main file, and no other', async () => {
+  const { filename, db, launch } = await profile()
+  await launch().run()
+  writeFileSync(`${filename}-wal`, 'absorbed frames')
+  const wal = statSync(`${filename}-wal`, { bigint: true })
+  const retiring = (ino: bigint) =>
+    JSON.stringify({
+      version: 2,
+      phase: 'retiring',
+      store: 'store',
+      proof: JSON.stringify({
+        wal: {
+          kind: 'nonempty',
+          size: String(wal.size),
+          ino: String(ino),
+          mtimeNs: String(wal.mtimeNs)
         }
       })
-      insertJournalRow(old, 'old-new-chat', {
-        ...journalSqlRetryRows(true)[0]!,
-        epoch: 'new-epoch',
-        seq: 1
-      })
-      old.close()
-    } else {
-      writeFileSync(test.filename + (kind === 'wal' ? '-wal' : '-journal'), 'owed recovery bytes')
-    }
-    const before = readFileSync(test.filename)
-    await test.retirement.run()
-    expect(existsSync(test.filename)).toBe(true)
-    expect(readFileSync(test.filename)).toEqual(before)
-    if (kind === 'append') {
-      expect(
-        test
-          .source()
-          .prepare("SELECT session_id FROM journal_sessions WHERE session_id='old-new-chat'")
-          .get()
-      ).toBeDefined()
-      expect(
-        test
-          .source()
-          .prepare(
-            "SELECT row_json FROM journal_rows WHERE session_id='unopened' ORDER BY seq DESC LIMIT 1"
-          )
-          .get()!.row_json
-      ).toContain('saved by the downgraded build')
-    } else {
-      expect(readFileSync(test.filename + (kind === 'wal' ? '-wal' : '-journal'), 'utf8')).toBe(
-        'owed recovery bytes'
-      )
-      if (kind === 'journal') {
-        unlinkSync(`${test.filename}-journal`)
-        const now = performance.now()
-        const clock = vi.spyOn(performance, 'now').mockReturnValue(now + 3600001)
-        await test.retirement.run()
-        expect(existsSync(test.filename)).toBe(false)
-        clock.mockRestore()
-      }
-    }
-  }
-})
-
-it('does not earn grace from forward wall-clock steps and re-stamps a future completion', () => {
-  const state = {
-    version: 1 as const,
-    proof: 'proof',
-    proofId: 'id',
-    completedAt: 100,
-    process: 'prior',
-    credit: 0,
-    creditRevision: 0,
-    lastWall: 100,
-    phase: 'grace' as const
-  }
-  expect(advanceLegacyRetirementClock(state, 691200100, 3600000, 'next').credit).toBe(3600000)
-  expect(
-    advanceLegacyRetirementClock(
-      { ...state, completedAt: 9000, credit: 604800000 },
-      1000,
-      10,
-      'next'
-    )
-  ).toMatchObject({ completedAt: 1000, credit: 0, process: 'next' })
-
-  let mono = 0n
-  vi.spyOn(process.hrtime, 'bigint').mockImplementation(() => mono)
-  const clock = new JournalLegacyGraceClock()
-  clock.persisted(state)
-  mono = 3600000000000n
-  expect(clock.observe(state, 691200100, 'next').credit).toBe(3600000)
-  clock.pause()
-  expect(clock.observe(state, 691200100, 'next').credit).toBe(3600000)
-  const ambiguousCommit = { ...state, credit: 3600000, creditRevision: 1 }
-  mono = 7200000000000n
-  expect(clock.observe(ambiguousCommit, 691200100, 'next').credit).toBe(3600000)
-})
-
-it('retains queued-only text, recovery obligations and orphan history', async () => {
-  for (const kind of [
-    'queue',
-    'repair',
-    'orphan',
-    'orphan-outcome',
-    'extra-profile-column',
-    'malformed-queue'
-  ] as const) {
-    const test = await profile((legacy) => {
-      if (kind === 'queue') {
-        legacy.exec(
-          'DELETE FROM journal_rows; INSERT INTO queued_messages(session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state,hold_reason) VALUES(\'unopened\',\'held\',1,\'{"kind":"message","role":"user","blocks":[{"type":"text","text":"held user text"}]}\',\'f\',1,\'h\',\'waiting\',\'manual\')'
-        )
-      } else if (kind === 'malformed-queue') {
-        legacy.exec(
-          "INSERT INTO queued_messages(session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state,hold_reason) VALUES('unopened','held',1,'unreadable saved text','f',1,'h','waiting','manual')"
-        )
-      } else if (kind === 'orphan-outcome') {
-        legacy.exec(
-          `INSERT INTO journal_outcomes VALUES(901,1,'orphan','key',1,'0','"orphan user text"',0)`
-        )
-      } else if (kind === 'repair') {
-        legacy.exec("INSERT INTO journal_repairs VALUES('unopened','epoch',1,100)")
-      } else if (kind === 'extra-profile-column') {
-        legacy.exec(
-          "ALTER TABLE agent_session_records ADD COLUMN future_text TEXT; INSERT INTO agent_session_records VALUES('unopened','{}','saved future field')"
-        )
-      } else {
-        legacy.exec("INSERT INTO journal_rows VALUES('orphan','old',1,1,'orphan user text')")
-      }
     })
-    if (kind === 'malformed-queue') {
-      test.db
-        .prepare(
-          "UPDATE journal_chat_state SET epoch='epoch',last_sequence=1,highest_fence=0 WHERE session_id='unopened'"
-        )
-        .run()
-    }
-    if (kind === 'queue') {
-      const current = await JournalSqlDatabase.open(test.root, {
-        writerPath: journalSqlWorkerPath(),
-        readerPath: journalSqlReaderPath(),
-        onMaintenanceError: () => {}
-      })
-      try {
-        await current.openSession({
-          sessionId: 'unopened',
-          workspaceId: 'folder-without-git',
-          hostId: 'synthetic-host',
-          agent: 'codex',
-          providerHandle: null
-        })
-      } finally {
-        await current.close()
-      }
-    }
-    const before = readFileSync(test.filename)
-    await test.retirement.run()
-    expect(test.errors.length).toBeGreaterThan(0)
-    if (kind === 'malformed-queue') {
-      expect(test.receiptState()).toMatchObject({ phase: 'refused', reason: 'source-queue' })
-    }
-    expect(readFileSync(test.filename)).toEqual(before)
-    if (kind === 'queue') {
-      expect(test.source().prepare('SELECT body_json FROM queued_messages').get()).toEqual({
-        body_json:
-          '{"kind":"message","role":"user","blocks":[{"type":"text","text":"held user text"}]}'
-      })
-    }
-  }
+  const save = (value: string) =>
+    db
+      .prepare(
+        "UPDATE agent_session_store_meta SET value=? WHERE key='journal.legacy-retirement.v2'"
+      )
+      .run(value)
+  save(retiring(wal.ino + 1n))
+  await launch().run()
+  expect(existsSync(`${filename}-wal`)).toBe(true)
+  save(retiring(wal.ino))
+  // Finishing the removal deletes too, so a build that keeps the file keeps these, and says so.
+  const deferred: string[] = []
+  setLegacyJournalRetirementHost({ report: async (event) => deferred.push(event.defer) > 0 })
+  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
+  await launch('1.0.1', true, undefined, undefined, false).run()
+  expect(existsSync(`${filename}-wal`)).toBe(true)
+  expect(deferred).toEqual(['leftover_files'])
+  await launch().run()
+  expect(existsSync(`${filename}-wal`)).toBe(false)
 })
 
-it('resumes only the prepared empty companions and preserves a recreated main', async () => {
-  for (const recreate of [false, true]) {
-    const test = await profile()
-    await test.retirement.run()
-    await test.recycle()
-    const shm = `${test.filename}-shm`
-    writeFileSync(shm, 'derived index')
-    const state = {
-      ...test.receiptState(),
-      phase: 'prepared',
-      manifest: {
-        '-shm': journalLegacyFileIdentity(shm),
-        ...(existsSync(`${test.filename}-wal`)
-          ? { '-wal': journalLegacyFileIdentity(`${test.filename}-wal`) }
-          : {})
-      }
-    }
-    test.saveState(state)
-    unlinkSync(test.filename)
-    if (recreate) {
-      writeFileSync(test.filename, 'new old-build history')
-    }
-    await test.retirement.run()
-    if (recreate) {
-      expect(readFileSync(shm, 'utf8')).toBe('derived index')
-    }
-    if (recreate) {
-      expect(readFileSync(test.filename, 'utf8')).toBe('new old-build history')
-    } else {
-      expect(test.errors).toEqual([])
-      expect(existsSync(shm)).toBe(false)
-    }
-  }
-})
-
-it('retires in the same owner after a missing helper is restored', async () => {
-  let available = false
-  let now = 0
-  vi.spyOn(performance, 'now').mockImplementation(() => now)
-  const test = await profile(undefined, {
-    check: async () => {},
-    present: () => {
-      if (!available) {
-        throw new JournalLegacyRetentionError('legacy journal lock asset is unavailable')
-      }
-    }
+it('checks unsupported storage once per launch, not on every retry', async () => {
+  const { filename, launch, errors } = await profile()
+  const check = vi.fn(async () => {
+    throw new JournalLegacyIneligibleError('legacy storage or file identity is unsupported')
   })
-  await test.retirement.run()
-  expect(test.errors).toHaveLength(1)
-  expect(existsSync(test.filename)).toBe(true)
-  available = true
-  now = 60_001
-  await test.retirement.run()
-  expect(test.receiptState().phase).toBe('grace')
-  test.arm()
-  await test.retirement.run()
-  expect(test.errors).toHaveLength(1)
-  expect(existsSync(test.filename)).toBe(false)
-})
-
-it('keeps eligibility pending until a termination-resistant check exits, then retires', async () => {
-  let now = 0
-  vi.spyOn(performance, 'now').mockImplementation(() => now)
-  const test = await profile(undefined, {
-    ...createJournalLegacyFileEligibility(),
+  const retirement = launch('1.0.1', true, undefined, {
+    check,
     present: () => {}
   })
-  const proof = vi.spyOn(test.readers, 'legacyProof')
-  const recycle = vi.spyOn(test.readers, 'recycleSourceReaders')
-  const child = () => {
-    const helper = Object.assign(new ChildProcess(), {
-      stdin: new PassThrough(),
-      stdout: new PassThrough(),
-      stderr: new PassThrough(),
-      kill: vi.fn(() => false)
-    })
-    cleanup.push(() => {
-      helper.emit('exit', null, 'SIGKILL')
-      helper.stdin.destroy()
-      helper.stdout.destroy()
-      helper.stderr.destroy()
-    })
-    return helper
+  const now = vi.spyOn(performance, 'now')
+  for (let hour = 0; hour < 48; hour++) {
+    now.mockReturnValue(hour * 60 * 60_000)
+    await retirement.run()
   }
-  const stuck = child()
-  const started = Promise.withResolvers<void>()
-  const spawn = vi.mocked(spawnProcess).mockClear()
-  spawn.mockImplementationOnce(() => {
-    started.resolve()
-    return stuck
-  })
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  const attempt = test.retirement.run()
-  await started.promise
-  await vi.advanceTimersByTimeAsync(5_250)
-  await attempt
-  vi.useRealTimers()
-  expect(stuck.kill).toHaveBeenCalledWith('SIGKILL')
-  for (now of [60_001, 180_002, 420_003]) {
-    await test.retirement.run()
-    expect(test.errors.at(-1)).toMatchObject({ message: 'legacy journal eligibility pending' })
-  }
-  expect(spawn).toHaveBeenCalledOnce()
-  expect(proof).not.toHaveBeenCalled()
-  expect(recycle).not.toHaveBeenCalled()
-  expect(existsSync(test.filename)).toBe(true)
+  expect(check).toHaveBeenCalledTimes(1)
+  expect(errors).toHaveLength(1)
+  expect(existsSync(filename)).toBe(true)
+})
 
-  stuck.emit('exit', null, 'SIGKILL')
-  const recovered = child()
-  spawn.mockImplementationOnce(() => {
-    queueMicrotask(() => {
-      recovered.stdout.write('eligible\n')
-      recovered.emit('exit', 0)
-    })
-    return recovered
+it('backs off, with no durable commit, while the source readers stay busy', async () => {
+  const { filename, db, launch, readers } = await profile()
+  const recycle = vi.spyOn(readers, 'recycleSourceReaders').mockResolvedValue(null)
+  const retirement = launch()
+  const now = vi.spyOn(performance, 'now')
+  for (let minute = 0; minute < 10; minute++) {
+    now.mockReturnValue(minute * 60_000)
+    await retirement.run()
+  }
+  // 1, 2 and 4 minute waits: four tries in ten minutes, never one per tick.
+  expect(recycle.mock.calls.length).toBeLessThanOrEqual(4)
+  const saved = db
+    .prepare("SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v2'")
+    .get()
+  expect(saved && JSON.parse(String(saved.value)).phase).not.toBe('retiring')
+  expect(existsSync(filename)).toBe(true)
+})
+
+it('weighs drafts and queued text from content, keeping only what only the original holds', async () => {
+  // Text waiting in a chat not converted yet converts with it, so it doesn't block retirement.
+  const unopened = await profile()
+  queue(unopened.filename, 'unopened', 'queued before the copy')
+  await initializeJournalDomainDatabase(unopened.root)
+  await unopened.launch().run()
+  expect(companions(unopened.filename)).toEqual([])
+
+  // A draft (record, no history) an older Orca renamed after the copy is kept the same way.
+  const draft = await profile({
+    seed: (legacy) =>
+      legacy
+        .prepare('INSERT INTO agent_session_records VALUES(?,?)')
+        .run('draft', JSON.stringify({ sessionId: 'draft', lease: { sessionId: 'draft' } }))
   })
-  now = 900_004
-  await test.retirement.run()
-  expect(test.receiptState().phase).toBe('grace')
-  test.arm()
-  await test.retirement.run()
-  expect(test.errors).toHaveLength(2)
-  expect(existsSync(test.filename)).toBe(false)
+  rename(draft.filename, 'draft', 'Draft renamed in the older Orca')
+  await initializeJournalDomainDatabase(draft.root)
+  await draft.launch().run()
+  expect(companions(draft.filename)).toEqual([])
+  expect(original(draft.db, 'draft').record).toContain('Draft renamed in the older Orca')
+})
+
+it('finds queue cards by key, never by reading every card a chat has', async () => {
+  const { root, filename, db, launch, convert } = await profile()
+  await convert('unopened')
+  queue(filename, 'unopened', 'still waiting')
+  await initializeJournalDomainDatabase(root)
+  const statements = new Set<string>()
+  const prepare = db.prepare.bind(db)
+  vi.spyOn(db, 'prepare').mockImplementation((sql: string) => {
+    statements.add(sql)
+    return prepare(sql)
+  })
+  await launch().run()
+  vi.mocked(db.prepare).mockRestore()
+  const cardReads = [...statements].filter((sql) => sql.includes('FROM journal_queue_cards'))
+  expect(cardReads.length).toBeGreaterThan(0)
+  for (const sql of cardReads) {
+    const plan = db
+      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(...Array.from({ length: (sql.match(/\?/g) ?? []).length }, () => 'x'))
+      .map((row) => String(row.detail))
+      .join('\n')
+    // A seek on the key, on (session, epoch), or one covering-index entry; never a read of every
+    // card the chat has, payloads included.
+    const firstEntry = /LIMIT 1/.test(sql) && plan.includes('COVERING INDEX')
+    expect(firstEntry || /PRIMARY KEY|session_id=\? AND epoch[>=]\?/.test(plan)).toBe(true)
+  }
+})
+
+it('converts the copies the reconcile keeps, and keeps the original while a chat is unsettled', async () => {
+  // An older Orca continued a converted chat: the reconcile keeps its version as a copy whose
+  // history still lives only in the original, so the copy converts before the original goes.
+  const continued = await profile()
+  await continued.convert('unopened')
+  continueInOlderOrca(continued.filename, 'unopened')
+  await initializeJournalDomainDatabase(continued.root)
+  const copy = String(
+    continued.db
+      .prepare(
+        "SELECT key FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-copy-source:%'"
+      )
+      .get()!.key
+  ).slice('journal.legacy-copy-source:'.length)
+  expect(journalDomainImportState(continued.db, copy).state).toBe('converting')
+  await continued.launch().run()
+  expect(continued.errors).toEqual([])
+  expect(companions(continued.filename)).toEqual([])
+  expect(journalDomainImportState(continued.db, copy).state).toBe('ready')
+
+  // A chat the reconcile recorded as failed took its revision without its content.
+  const failed = await profile()
+  await failed.convert('unopened')
+  failed.db.exec(`INSERT INTO agent_session_store_meta VALUES('journal.legacy-failed:unopened',
+    '{"revision":null,"error":"original chat unreadable"}')`)
+  await failed.launch().run()
+  expect(companions(failed.filename)).toContain(failed.filename)
+  expect(String(failed.errors.at(-1))).toContain('could not be kept')
+
+  // A compare still due hasn't said whether this store holds the chat; once it settles, the same
+  // launch retires the original.
+  const comparing = await profile()
+  await comparing.convert('unopened')
+  comparing.db.exec(`INSERT INTO agent_session_store_meta
+    VALUES('journal.legacy-compare:unopened','["epoch",9,null,null]')`)
+  vi.useFakeTimers({ toFake: ['performance'] })
+  const retirement = comparing.launch()
+  await retirement.run()
+  expect(companions(comparing.filename)).toContain(comparing.filename)
+  expect(String(comparing.errors.at(-1))).toContain('still being compared')
+  comparing.db.exec(
+    "DELETE FROM agent_session_store_meta WHERE key='journal.legacy-compare:unopened'"
+  )
+  vi.advanceTimersByTime(60_000)
+  await retirement.run()
+  vi.useRealTimers()
+  expect(companions(comparing.filename)).toEqual([])
+
+  // A copy whose conversion failed is left for an open to retry; the proof only refuses.
+  const failedCopy = await profile()
+  await failedCopy.convert('unopened')
+  continueInOlderOrca(failedCopy.filename, 'unopened')
+  await initializeJournalDomainDatabase(failedCopy.root)
+  const failedCopyId = String(
+    failedCopy.db
+      .prepare(
+        "SELECT key FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-copy-source:%'"
+      )
+      .get()!.key
+  ).slice('journal.legacy-copy-source:'.length)
+  failedCopy.db
+    .prepare('INSERT INTO agent_session_store_meta VALUES(?,?)')
+    .run(`journal.legacy-failed:${failedCopyId}`, '{"revision":null,"error":"reply too large"}')
+  failedCopy.ensured.length = 0
+  await failedCopy.launch().run()
+  expect(companions(failedCopy.filename)).toContain(failedCopy.filename)
+  expect(failedCopy.ensured).not.toContain(failedCopyId)
+  expect(String(failedCopy.errors.at(-1))).toContain('could not be converted')
+
+  // A copy whose chat an older Orca then deleted from the original has nothing left to take.
+  const goneCopy = await profile()
+  await goneCopy.convert('unopened')
+  continueInOlderOrca(goneCopy.filename, 'unopened')
+  await initializeJournalDomainDatabase(goneCopy.root)
+  const gone = new Database(goneCopy.filename)
+  gone.exec(`DELETE FROM journal_rows WHERE session_id='unopened';
+    DELETE FROM journal_sessions WHERE session_id='unopened';
+    DELETE FROM agent_session_records WHERE session_id='unopened'`)
+  gone.close()
+  await initializeJournalDomainDatabase(goneCopy.root)
+  await goneCopy.launch().run()
+  expect(goneCopy.errors).toEqual([])
+  expect(companions(goneCopy.filename)).toEqual([])
+
+  // A chat too large for one reply fails the same way at every retry: refused once, not reconverted.
+  const oversized = await profile({
+    failConversion: {
+      sessionId: 'unopened',
+      error: new Error('journal read reply (rows) exceeds 67108864 bytes')
+    }
+  })
+  vi.useFakeTimers({ toFake: ['performance'] })
+  const oversizedRetirement = oversized.launch()
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await oversizedRetirement.run()
+    vi.advanceTimersByTime(60 * 60_000)
+  }
+  vi.useRealTimers()
+  expect(companions(oversized.filename)).toContain(oversized.filename)
+  expect(oversized.ensured.filter((id) => id === 'unopened')).toHaveLength(1)
+  expect(String(oversized.errors.at(-1))).toContain('too large to convert')
+
+  // A copy whose conversion fails once is converted on the next attempt, with none skipped.
+  const twoCopies = await profile()
+  olderOrcaChat(twoCopies.filename, 'second')
+  await initializeJournalDomainDatabase(twoCopies.root)
+  await twoCopies.convert('unopened')
+  await twoCopies.convert('second')
+  continueInOlderOrca(twoCopies.filename, 'unopened')
+  continueInOlderOrca(twoCopies.filename, 'second')
+  await initializeJournalDomainDatabase(twoCopies.root)
+  const copies = twoCopies.db
+    .prepare(
+      `SELECT substr(key,28) AS id FROM agent_session_store_meta
+      WHERE key LIKE 'journal.legacy-copy-source:%' ORDER BY key`
+    )
+    .all()
+    .map((row) => String(row.id))
+  expect(copies).toHaveLength(2)
+  twoCopies.failOnce.set(copies[1]!, new Error('journal SQL reader exited'))
+  vi.useFakeTimers({ toFake: ['performance'] })
+  const twoCopiesRetirement = twoCopies.launch()
+  await twoCopiesRetirement.run()
+  expect(companions(twoCopies.filename)).toContain(twoCopies.filename)
+  vi.advanceTimersByTime(60_000)
+  await twoCopiesRetirement.run()
+  vi.useRealTimers()
+  expect(companions(twoCopies.filename)).toEqual([])
+  for (const copy of copies) {
+    expect(journalDomainImportState(twoCopies.db, copy).state).toBe('ready')
+  }
+
+  // A compare due on a chat the original holds refuses before any chat converts; one left for a
+  // chat the original no longer holds doesn't keep it.
+  const dueFirst = await profile()
+  // More chats than one proof page holds, so the due chat is on a later page.
+  for (let chat = 0; chat < 32; chat++) {
+    olderOrcaChat(dueFirst.filename, `a${String(chat).padStart(2, '0')}`)
+  }
+  olderOrcaChat(dueFirst.filename, 'zz-later')
+  await initializeJournalDomainDatabase(dueFirst.root)
+  dueFirst.db.exec(`INSERT INTO agent_session_store_meta
+    VALUES('journal.legacy-compare:zz-later','["epoch",9,null,null]')`)
+  dueFirst.ensured.length = 0
+  await dueFirst.launch().run()
+  expect(dueFirst.ensured).toEqual([])
+  expect(companions(dueFirst.filename)).toContain(dueFirst.filename)
+  const stale = await profile()
+  stale.db.exec(`INSERT INTO agent_session_store_meta
+    VALUES('journal.legacy-compare:deleted-in-older-orca','["epoch",9,null,null]')`)
+  await stale.launch().run()
+  expect(stale.errors).toEqual([])
+  expect(companions(stale.filename)).toEqual([])
+})
+
+it('resumes the proof where an earlier launch stopped, not from the first chat', async () => {
+  // More drafts than 16 proof pages hold, so the first launch saves progress before it stops.
+  const many = await profile({
+    seed: (legacy) => {
+      const insert = legacy.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+      for (let draft = 0; draft < 600; draft++) {
+        const id = `draft-${String(draft).padStart(3, '0')}`
+        insert.run(id, JSON.stringify({ sessionId: id }))
+      }
+    }
+  })
+  const read = many.readers.legacyProof
+  const cursors: Parameters<typeof read>[0][] = []
+  let stopAfter = 17
+  many.readers.legacyProof = async (cursor) => {
+    cursors.push(cursor)
+    if (cursors.length > stopAfter) {
+      throw new Error('Orca quit')
+    }
+    return read(cursor)
+  }
+  await many.launch().run()
+  expect(companions(many.filename)).toContain(many.filename)
+  // The next launch starts at the saved page and checks compares due again; then it finishes.
+  cursors.length = 0
+  stopAfter = Number.POSITIVE_INFINITY
+  await many.launch().run()
+  expect(cursors[0]).toMatchObject({ table: 0, check: true })
+  expect(cursors[0]!.after).not.toBeNull()
+  expect(many.errors.at(-1)).toMatchObject({ message: 'Orca quit' })
+  expect(companions(many.filename)).toEqual([])
+})
+
+it('resumes after a deletion that did not go through, and checks what an older Orca pass added since', async () => {
+  // The proof finished and saved 'retiring', but the delete failed: the next launch starts at the
+  // copies, not the first chat.
+  const retried = await profile()
+  let failDelete = true
+  const flaky = async (filename: string) => {
+    const lease = await fakeLease(filename)
+    return { ...lease, retire: async () => (failDelete ? false : lease.retire()) }
+  }
+  await retried.launch('1.0.1', true, flaky).run()
+  expect(companions(retried.filename)).toContain(retried.filename)
+  const read = retried.readers.legacyProof
+  const cursors: Parameters<typeof read>[0][] = []
+  retried.readers.legacyProof = async (cursor) => {
+    cursors.push(cursor)
+    return read(cursor)
+  }
+  failDelete = false
+  await retried.launch('1.0.1', true, flaky).run()
+  expect(cursors[0]).toMatchObject({ table: 7, after: null, check: true })
+  expect(companions(retried.filename)).toEqual([])
+
+  // A failure the reconcile records between launches refuses a resumed proof too.
+  const failedSince = await profile()
+  await failedSince
+    .launch('1.0.1', true, async (filename) => {
+      const lease = await fakeLease(filename)
+      return { ...lease, retire: async () => false }
+    })
+    .run()
+  failedSince.db.exec(`INSERT INTO agent_session_store_meta VALUES('journal.legacy-failed:unopened',
+    '{"revision":null,"error":"original chat unreadable"}')`)
+  await failedSince.launch().run()
+  expect(companions(failedSince.filename)).toContain(failedSince.filename)
+  expect(String(failedSince.errors.at(-1))).toContain('could not be kept')
+})
+
+it('keeps a chat deleted here from a journal written before some queue columns existed', async () => {
+  const older = await profile({
+    seed: (legacy) =>
+      legacy.exec(`ALTER TABLE queued_messages DROP COLUMN options_json;
+        ALTER TABLE queued_messages DROP COLUMN carried_from`)
+  })
+  queue(older.filename, 'unopened', 'queued in an older journal')
+  await initializeJournalDomainDatabase(older.root)
+  const columns = older
+    .source()
+    .prepare('PRAGMA table_info(queued_messages)')
+    .all()
+    .map((column) => column.name)
+  expect(columns).not.toContain('options_json')
+  older.db.exec("DELETE FROM agent_session_records WHERE session_id='unopened'")
+  older.db.exec("DELETE FROM journal_chat_state WHERE session_id='unopened'")
+  await older.launch().run()
+  expect(older.errors).toEqual([])
+  expect(companions(older.filename)).toEqual([])
+  expect(JSON.stringify(original(older.db, 'unopened').queued)).toContain(
+    'queued in an older journal'
+  )
+})
+
+it('converts nothing for the proof or its copies below the disk floor, and both with room', async () => {
+  const GB = 1024 ** 3
+  const low = async () => ({ freeBytes: 20 * GB, totalBytes: 100 * GB, remainingBytes: 20 * GB })
+  const room = async () => ({ freeBytes: 60 * GB, totalBytes: 100 * GB, remainingBytes: 20 * GB })
+  async function copied(storage: typeof low) {
+    const continued = await profile({ storage })
+    // An open converts below the floor; the older Orca's later turns then need a copy.
+    await continued.convert('unopened')
+    continueInOlderOrca(continued.filename, 'unopened')
+    await initializeJournalDomainDatabase(continued.root)
+    const copy = String(
+      continued.db
+        .prepare(
+          "SELECT key FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-copy-source:%'"
+        )
+        .get()!.key
+    ).slice('journal.legacy-copy-source:'.length)
+    await continued.launch().run()
+    return { ...continued, state: journalDomainImportState(continued.db, copy).state }
+  }
+  for (const storage of [low, room]) {
+    const chat = await profile({ storage })
+    await chat.launch().run()
+    const copy = await copied(storage)
+    const converted = storage === room
+    expect(journalDomainImportState(chat.db, 'unopened').state).toBe(
+      converted ? 'ready' : 'converting'
+    )
+    expect(companions(chat.filename).length > 0).toBe(!converted)
+    expect(copy.state).toBe(converted ? 'ready' : 'converting')
+    expect(companions(copy.filename).length > 0).toBe(!converted)
+    expect(String(copy.errors.at(-1) ?? '')).toContain(converted ? '' : 'deferred for storage')
+  }
 })

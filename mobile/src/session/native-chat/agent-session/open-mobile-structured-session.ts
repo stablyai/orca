@@ -1,10 +1,11 @@
+import type { BotLinkOpenTarget } from '../../../../../src/shared/bots/bot-link-open-target'
 import {
   openStructuredAgentSession,
   structuredSessionOpenFailure,
   type StructuredSessionOpenSource,
   type StructuredSessionOpenTab,
   type StructuredSessionOpenTarget
-} from '../../../../../src/shared/open-structured-agent-session'
+} from '../../../../../src/shared/agent-session/view/open-structured-agent-session'
 import { isStructuredAgentId } from '../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { structuredAgentSessionPaneKey } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
@@ -15,12 +16,16 @@ import {
   structuredOpenTabs
 } from './mobile-structured-session-open-rpc'
 import { sessionTabActivate } from '../../tabs/mobile-session-tab-write-operations'
+import { readWhileBotLinkConnected } from '../../../bots/bot-link-connection-read'
+import type { SendRequestOptions } from '../../../transport/rpc/unvalidated-rpc-request-port'
 
 /** The workspace client already carries executionHost; a single budget includes connect waits. */
 export async function openMobileStructuredSession(args: {
+  botLinkTarget?: BotLinkOpenTarget
   client: RpcClient
   source: StructuredSessionOpenSource
   current: () => boolean
+  signal?: AbortSignal
   inventory?: { worktreeId: string; tabs: readonly StructuredSessionOpenTab[] }
 }) {
   const agent = args.source.kind === 'sender' ? args.source.fallback?.agent : args.source.agent
@@ -32,33 +37,44 @@ export async function openMobileStructuredSession(args: {
   }
   const deadline = Date.now() + 15_000
   const generation = args.client.getGeneration?.()
+  // A bot link's open stops when the desktop reports its server connection reset, rather than
+  // letting advisory inventory failures carry it on to activate or reveal through the next one.
+  let relayReset = false
   const current = () =>
+    !relayReset &&
+    !args.signal?.aborted &&
     args.current() &&
     args.client.getState() === 'connected' &&
     args.client.getGeneration?.() === generation &&
     Date.now() < deadline
-  const stage = async <T>(
-    request: (options: {
-      timeoutMs: number
-      budgetSpansConnect: boolean
-      failWhenDisconnected: boolean
-    }) => Promise<T>
-  ): Promise<T> => {
+  const stage = async <T>(request: (options: SendRequestOptions) => Promise<T>): Promise<T> => {
     if (!current()) {
       throw new Error('Opening no longer belongs to this view')
     }
     const timeoutMs = Math.min(5_000, deadline - Date.now())
-    let timer: ReturnType<typeof setTimeout> | undefined
-    try {
-      return await Promise.race([
-        request({ timeoutMs, budgetSpansConnect: true, failWhenDisconnected: true }),
-        new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(() => reject(new Error('Opening timed out')), timeoutMs)
-        })
-      ])
-    } finally {
-      clearTimeout(timer)
+    const reply = await readWhileBotLinkConnected(
+      args.client,
+      (signal) =>
+        request({
+          signal,
+          timeoutMs,
+          budgetSpansConnect: true,
+          failWhenDisconnected: true,
+          beforeSend: () => {
+            if (!current() || signal.aborted) {
+              throw new Error('Opening cancelled')
+            }
+          }
+        }),
+      { signal: args.signal, timeoutMs }
+    )
+    if (args.botLinkTarget && isRelayResetReply(reply)) {
+      relayReset = true
     }
+    if (!current()) {
+      throw new Error('Opening cancelled')
+    }
+    return reply
   }
   const tabs = new Map<string, readonly StructuredSessionOpenTab[]>(
     args.inventory ? [[args.inventory.worktreeId, args.inventory.tabs]] : []
@@ -78,13 +94,19 @@ export async function openMobileStructuredSession(args: {
     if (!reply.ok) {
       return structuredSessionOpenFailure(reply.error)
     }
-    return operation.interpret(reply)
+    const found = operation.interpret(reply)
+    if (
+      args.botLinkTarget &&
+      (found.location?.kind !== 'chat' ||
+        found.location.sessionId !== args.botLinkTarget.sessionId ||
+        found.location.worktreeId !== args.botLinkTarget.worktreeId)
+    ) {
+      return { reason: 'gone', beforeEffects: true } as const
+    }
+    return found
   }
   return openStructuredAgentSession(args.source, {
-    current: () =>
-      args.current() &&
-      args.client.getState() === 'connected' &&
-      args.client.getGeneration?.() === generation,
+    current,
     locate: (address, messageIds) => party(structuredOpenLocation, address, messageIds),
     open: (address, messageIds) => party(structuredOpenParty, address, messageIds),
     tabs: (target) => tabs.get(target.worktreeId) ?? [],
@@ -118,7 +140,8 @@ export async function openMobileStructuredSession(args: {
             tabId: tab.id,
             navigation: 'caller',
             notifyClients: false,
-            intent: 'user'
+            intent: 'user',
+            ...(args.botLinkTarget ? { botLinkTarget: args.botLinkTarget } : {})
           },
           options
         )
@@ -135,7 +158,11 @@ export async function openMobileStructuredSession(args: {
       const reply = await stage((options) =>
         structuredOpenReveal.request(
           args.client,
-          { sessionId: target.sessionId, navigation: 'caller' },
+          {
+            sessionId: target.sessionId,
+            navigation: 'caller',
+            ...(args.botLinkTarget ? { botLinkTarget: args.botLinkTarget } : {})
+          },
           options
         )
       )
@@ -148,6 +175,20 @@ export async function openMobileStructuredSession(args: {
         : structuredSessionOpenFailure(result.refusal)
     }
   })
+}
+
+function isRelayResetReply(reply: unknown): boolean {
+  return (
+    typeof reply === 'object' &&
+    reply !== null &&
+    'ok' in reply &&
+    reply.ok === false &&
+    'error' in reply &&
+    typeof reply.error === 'object' &&
+    reply.error !== null &&
+    'code' in reply.error &&
+    reply.error.code === 'remote_runtime_unavailable'
+  )
 }
 
 export function mobileStructuredSessionHref(

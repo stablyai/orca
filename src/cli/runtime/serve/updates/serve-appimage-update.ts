@@ -6,7 +6,7 @@ import {
   readAppImageSourceOfNamespace,
   resolveAppImageCacheKey,
   resolveAppImageGenerationOfExecutable
-} from '../../../../shared/appimage-cache-identity'
+} from '../../../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import type { SupervisedAppImageUpdate } from '../supervision/serve-supervised-service'
 import { SERVE_SUPERVISOR_APP_ROOT_ENV } from '../supervision/serve-supervisor-relocation'
 
