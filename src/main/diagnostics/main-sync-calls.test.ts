@@ -16,7 +16,8 @@ it('names the slowest SQLite statement main ran during a gap of a second or more
   const db = new SyncDatabase(':memory:')
   const windows: EventLoopStallWindow[] = []
   // Whole ms keep tick arithmetic exact, so no float rounding decides whether the window reports.
-  const startedAt = Math.floor(performance.now())
+  // Started a tick ago, so the first tick is due now and the statements below run inside its gap.
+  const startedAt = Math.floor(performance.now()) - 500
   const summary = createEventLoopStallSummary(
     startedAt,
     {
@@ -58,8 +59,7 @@ it('names only a call that ran into the gap, not a longer one that finished befo
     },
     (window) => windows.push(window)
   )
-  // As the tick at 0 would: the next tick is due at 500, so the gap starts there.
-  resetSyncCalls(500)
+  // The summary started at 0, so its first tick is due at 500 and the gap starts there.
   recordSyncCall('a.db', 'SELECT a', 100, 400)
   recordSyncCall('b.db', 'SELECT b', 600, 700)
   recordSyncCall('c.db', 'SELECT c', 450, 560)

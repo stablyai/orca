@@ -120,6 +120,8 @@ export function createEventLoopStallSummary(
   let idleTickMaxCpuMs = 0
   let longGapStartedAtMs: number | undefined
   let longGapSyncCall: SyncCallRecord | undefined
+  // The first tick measures a gap too: only calls running past its due time count.
+  options.syncCalls?.reset(startedAt + intervalMs)
   return {
     tick: (now, cpuMs = 0) => {
       const elapsedMs = now - lastTick
