@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpAgentError } from '../transport/acp-errors'
 import type { AcpCompactionReply, AcpDialect, AcpModelCommandReply } from './acp-dialect'
+import { ompToolSubagents } from './omp-subagents'
 
 // Read raw result text instead of the repeated command echo in content.
 // Only timed foreground completion implies exit zero; service/background launches prove no exit.
@@ -143,6 +144,7 @@ export const OMP_ACP_DIALECT: AcpDialect = {
   // OMP offers its `ask` tool and extension dialogs only to clients that answer forms.
   clientCapabilities: { elicitation: { form: {} } },
   normalizeToolUpdate,
+  toolSubagents: ompToolSubagents,
   compactionReply,
   modelCommand: {
     // #setModelById (acp-agent.ts) takes listed provider/id values only.
