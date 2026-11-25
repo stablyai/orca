@@ -194,7 +194,11 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
     state.remoteAgentOrchestrationByHost ?? EMPTY
   )) {
     for (const [key, context] of Object.entries(hostContexts)) {
-      adapt(key, context, host)
+      // A terminal pane this window runs on another host is not this host's pane, whatever its key.
+      const terminalHost = terminals.ptys.get(parseAgentStatusPaneIdentity(key)?.tabId ?? '')
+      if (!terminalHost || terminalHost === host) {
+        adapt(key, context, host)
+      }
     }
   }
   const embedded = (
@@ -258,6 +262,14 @@ export function selectVisibleAgentOrchestration(state: VisibleOrchestrationState
     return state.runtimeAgentOrchestrationByPaneKey ?? EMPTY
   }
   return projection(state).contexts
+}
+
+/** The contexts status rows read by their own pane key: this computer's map until a remote host has any. */
+export function orchestrationForStatusRows(state: VisibleOrchestrationState): Contexts {
+  const remote = state.remoteAgentOrchestrationByHost
+  return remote && Object.keys(remote).length > 0
+    ? selectVisibleAgentOrchestration(state)
+    : (state.runtimeAgentOrchestrationByPaneKey ?? EMPTY)
 }
 
 /** The same row identity joins graph enrichment and first status paint, without translating stored parents. */

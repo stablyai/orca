@@ -1,4 +1,5 @@
 import type { AppState } from '../../../types'
+import { orchestrationForStatusRows } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusChange } from '../contracts/agent-status-contract'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
@@ -20,6 +21,29 @@ const SEAM_AGENT_PRESENTATION_FIELDS = [
   'ptyIdsByTabId',
   'terminalLayoutsByTabId'
 ] as const
+
+/** Pane keys whose remote context appeared, changed or left since the previous projection input. */
+function changedRemoteContextKeys(state: AppState, previous: AppState | null): Set<string> {
+  const keys = new Set<string>()
+  const before = previous?.remoteAgentOrchestrationByHost ?? {}
+  const after = state.remoteAgentOrchestrationByHost ?? {}
+  if (before === after) {
+    return keys
+  }
+  for (const host of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    const old = before[host] ?? {}
+    const next = after[host] ?? {}
+    if (old === next) {
+      continue
+    }
+    for (const key of new Set([...Object.keys(old), ...Object.keys(next)])) {
+      if (old[key] !== next[key]) {
+        keys.add(key)
+      }
+    }
+  }
+  return keys
+}
 
 export function stageProjectionTopology(
   data: AgentStatusProjectionState,
@@ -142,6 +166,14 @@ export function stageProjectionTopology(
       }
     }
   }
+  // A remote host's contexts re-place the panes its changed keys name, as the local map's do.
+  for (const key of changedRemoteContextKeys(state, previous)) {
+    changedKeys.add(key)
+    const identity = parseAgentStatusPaneIdentity(key, represented.get(key))
+    if (identity) {
+      changedTabs.add(identity.tabId)
+    }
+  }
   const nextUnsupported = new Map<string, AgentStatusEntry | null>()
   if (state.migrationUnsupportedByPtyId !== previous?.migrationUnsupportedByPtyId) {
     const diff = previous
@@ -189,7 +221,7 @@ export function stageProjectionTopology(
       ptyIdsByTabId: state.ptyIdsByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId,
       paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
-      runtimeAgentOrchestrationByPaneKey: state.runtimeAgentOrchestrationByPaneKey,
+      runtimeAgentOrchestrationByPaneKey: orchestrationForStatusRows(state),
       now,
       seenPaneKeys: new Set()
     })) {

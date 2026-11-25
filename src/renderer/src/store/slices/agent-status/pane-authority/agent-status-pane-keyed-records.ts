@@ -179,3 +179,24 @@ export function closedAgentStatusRetirementKeys(
   }
   return [...keys]
 }
+
+/** One pane-keyed edit across every remote host's contexts; unchanged hosts and maps keep identity. */
+export function editRemoteHostRecords<T>(
+  byHost: Record<string, Record<string, T>>,
+  edit: (record: Record<string, T>) => Record<string, T>
+): Record<string, Record<string, T>> {
+  let next: Record<string, Record<string, T>> | null = null
+  for (const [host, record] of Object.entries(byHost)) {
+    const edited = edit(record)
+    if (edited === record) {
+      continue
+    }
+    next ??= { ...byHost }
+    if (Object.keys(edited).length > 0) {
+      next[host] = edited
+    } else {
+      delete next[host]
+    }
+  }
+  return next ?? byHost
+}

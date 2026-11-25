@@ -4,7 +4,7 @@ import type { RuntimeClientEvent } from '../../../../../shared/remote-runtime/se
 import { emitPeerMailReturnedWindowEvent } from '@/lib/peer-mail-returned-window-event'
 import { emitMcpServersChangedWindowEvent } from '@/lib/mcp-servers-changed-window-event'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { refreshRemoteAgentOrchestration } from '@/runtime/agent-orchestration/remote-agent-orchestration'
+import { noteRemoteAgentOrchestrationChanged } from '@/runtime/agent-orchestration/remote-agent-orchestration'
 
 /** Re-emits a server's events that renderer pages listen for as window events; true when handled. */
 export function emitRuntimeClientWindowEvent(
@@ -29,7 +29,7 @@ export function emitRuntimeClientWindowEvent(
     return true
   }
   if (event.type === 'agentOrchestrationChanged') {
-    refreshRemoteAgentOrchestration(environmentId)
+    noteRemoteAgentOrchestrationChanged(environmentId)
     return true
   }
   if (event.type === 'workspaceCleanupRunFinished') {

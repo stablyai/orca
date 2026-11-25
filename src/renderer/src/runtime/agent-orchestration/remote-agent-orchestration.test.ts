@@ -14,9 +14,11 @@ import {
   selectVisibleAgentOrchestration
 } from './visible-agent-orchestration'
 import {
+  noteRemoteAgentOrchestrationChanged,
   parseRemoteAgentOrchestration,
   refreshRemoteAgentOrchestration
 } from './remote-agent-orchestration'
+import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
 const callRuntimeRpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc }))
@@ -80,7 +82,7 @@ describe('remote host worker lineage', () => {
 
   it('nests a remote host chat worker under its coordinator after a local graph reply', async () => {
     callRuntimeRpc.mockResolvedValue({ contexts: structuredClone(HOST_CONTEXTS) })
-    refreshRemoteAgentOrchestration(ENVIRONMENT, { reconnected: true })
+    refreshRemoteAgentOrchestration(ENVIRONMENT)
     await settle()
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: ENVIRONMENT },
@@ -106,7 +108,7 @@ describe('remote host worker lineage', () => {
     callRuntimeRpc.mockResolvedValue({ contexts: structuredClone(HOST_CONTEXTS) })
     for (let round = 0; round < 2; round += 1) {
       useAppStore.getState().setRuntimeAgentOrchestrationByPaneKey({ [WORKER]: { ...local } })
-      refreshRemoteAgentOrchestration(ENVIRONMENT, { reconnected: true })
+      refreshRemoteAgentOrchestration(ENVIRONMENT)
       await settle()
     }
     useAppStore.getState().setRuntimeAgentOrchestrationByPaneKey({ [WORKER]: { ...local } })
@@ -118,7 +120,7 @@ describe('remote host worker lineage', () => {
     expect(selectVisibleAgentOrchestration(state)[WORKER]?.parentPaneKey).toBe(ORCHESTRATOR)
   })
 
-  it('stops asking a host without the method until it reconnects', async () => {
+  it('stops asking a host without the method until its connection changes', async () => {
     callRuntimeRpc.mockRejectedValue(
       new RuntimeRpcCallError({
         id: 'r1',
@@ -126,20 +128,34 @@ describe('remote host worker lineage', () => {
         error: { code: 'method_not_found', message: 'missing' }
       })
     )
-    refreshRemoteAgentOrchestration(ENVIRONMENT, { reconnected: true })
+    refreshRemoteAgentOrchestration('old-host')
     await settle()
-    refreshRemoteAgentOrchestration(ENVIRONMENT)
+    // A repo change or worker event on the same connection must not re-ask it.
+    refreshRemoteAgentOrchestration('old-host')
     await settle()
     expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
-    refreshRemoteAgentOrchestration(ENVIRONMENT, { reconnected: true })
+    advanceRuntimeEnvironmentConnectionGeneration('old-host')
+    refreshRemoteAgentOrchestration('old-host')
     await settle()
     expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+  })
+
+  it('answers a burst of host writes with one read after it settles', async () => {
+    vi.useFakeTimers()
+    callRuntimeRpc.mockResolvedValue({ contexts: {} })
+    for (let index = 0; index < 5; index += 1) {
+      noteRemoteAgentOrchestrationChanged('busy-host')
+      await vi.advanceTimersByTimeAsync(100)
+    }
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(250)
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
   })
 
   it('retries a failed read twice with backoff, then waits for the next event', async () => {
     vi.useFakeTimers()
     callRuntimeRpc.mockRejectedValue(new Error('timeout'))
-    refreshRemoteAgentOrchestration('retry-host', { reconnected: true })
+    refreshRemoteAgentOrchestration('retry-host')
     await settle()
     expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(1_000)
@@ -161,7 +177,7 @@ describe('remote host worker lineage', () => {
     })
     useAppStore.getState().setRuntimeEnvironments([])
     expect(useAppStore.getState().remoteAgentOrchestrationByHost[HOST]).toBeUndefined()
-    refreshRemoteAgentOrchestration(ENVIRONMENT, { reconnected: true })
+    refreshRemoteAgentOrchestration(ENVIRONMENT)
     await settle()
     expect(callRuntimeRpc).not.toHaveBeenCalled()
   })

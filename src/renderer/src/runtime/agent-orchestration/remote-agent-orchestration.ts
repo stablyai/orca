@@ -10,35 +10,49 @@ import {
   AGENT_ACTIVITY_ORCHESTRATION_MAX_CONTEXTS,
   AGENT_ACTIVITY_ORCHESTRATION_METHOD
 } from '../../../../shared/rpc-contract/agent-activity/agent-activity-params'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
 type HostRead = {
   reading: boolean
   queued: boolean
-  unsupported: boolean
+  /** The connection that answered method_not_found; a host only gains the method by restarting. */
+  unsupportedAt: number | null
   retryTimer: ReturnType<typeof setTimeout> | null
 }
 
 // A failed read retries twice, still in the background; the next host event or reconnect reads again after.
 const RETRY_DELAYS_MS = [1_000, 4_000]
 const MAX_PANE_KEY_LENGTH = 512
+// A busy host writes Dispatches back to back; one trailing read answers the whole burst.
+const CHANGE_DEBOUNCE_MS = 250
+const changeTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 const reads = new Map<string, HostRead>()
 
-/** Re-read one host's contexts, coalescing overlaps; `reconnected` re-asks a host that lacked the method. */
-export function refreshRemoteAgentOrchestration(
-  environmentId: string,
-  options?: { reconnected?: boolean }
-): void {
+/** The host wrote a Dispatch: re-read once its burst of writes settles. */
+export function noteRemoteAgentOrchestrationChanged(environmentId: string): void {
+  clearTimeout(changeTimers.get(environmentId))
+  changeTimers.set(
+    environmentId,
+    setTimeout(() => {
+      changeTimers.delete(environmentId)
+      refreshRemoteAgentOrchestration(environmentId)
+    }, CHANGE_DEBOUNCE_MS)
+  )
+}
+
+/** Re-read one host's contexts, coalescing overlaps; a host without the method waits for a new connection. */
+export function refreshRemoteAgentOrchestration(environmentId: string): void {
   let read = reads.get(environmentId)
   if (!read) {
-    read = { reading: false, queued: false, unsupported: false, retryTimer: null }
+    read = { reading: false, queued: false, unsupportedAt: null, retryTimer: null }
     reads.set(environmentId, read)
   }
-  if (options?.reconnected) {
-    read.unsupported = false
-  }
-  if (read.unsupported) {
-    return
+  if (read.unsupportedAt !== null) {
+    if (read.unsupportedAt === getRuntimeEnvironmentConnectionGeneration(environmentId)) {
+      return
+    }
+    read.unsupportedAt = null
   }
   if (read.reading) {
     read.queued = true
@@ -114,7 +128,7 @@ async function readHost(environmentId: string, read: HostRead, attempt: number):
   } catch (error) {
     // An older host has no such method; its rows stay flat as before rather than being asked again.
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      read.unsupported = true
+      read.unsupportedAt = getRuntimeEnvironmentConnectionGeneration(environmentId)
     } else {
       failed = true
     }
@@ -125,7 +139,7 @@ async function readHost(environmentId: string, read: HostRead, attempt: number):
     reads.delete(environmentId)
     return
   }
-  if (read.unsupported) {
+  if (read.unsupportedAt !== null) {
     return
   }
   if (read.queued) {

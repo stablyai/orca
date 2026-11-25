@@ -20,7 +20,7 @@ export function createRuntimeProjectCatalogRefreshScheduler(): RuntimeProjectRef
       // A bot's link to its home changes with this event, as for this app's own catalog; unlisted hosts skip it.
       void refreshBotHost(toRuntimeExecutionHostId(environmentId))
       // Workers that started while this window was away, or the host slept, announced themselves to no one here.
-      refreshRemoteAgentOrchestration(environmentId, { reconnected: true })
+      refreshRemoteAgentOrchestration(environmentId)
       const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
       // Group/folder edits share reposChanged; refresh groups before folders to resolve their owners.
       const runtimeOwner = { runtimeEnvironmentId: environmentId }

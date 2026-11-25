@@ -3,6 +3,7 @@ import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environm
 import { OrcaRuntimeWithPtyForegroundProcessReads } from '../../client/runtime-client-state'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import { createAgentOrchestrationChangeNotice } from './agent-orchestration-change-notice'
 
 // Keyed by runtime, not a field: the database can open while the runtime is still constructing.
 const runtimesWatchingAutoReleaseSetting = new WeakSet<object>()
@@ -18,18 +19,10 @@ export abstract class OrcaRuntimeWithOrchestrationDatabaseBinding extends OrcaRu
     this.emitClientEvent({ type: 'peerMailReturned' })
   }
 
-  private agentOrchestrationNoticeQueued = false
-  /** One notice per tick, after the writes commit, for every Dispatch however its creator ran. */
-  private noteAgentOrchestrationChanged(): void {
-    if (this.agentOrchestrationNoticeQueued) {
-      return
-    }
-    this.agentOrchestrationNoticeQueued = true
-    queueMicrotask(() => {
-      this.agentOrchestrationNoticeQueued = false
-      this.emitClientEvent({ type: 'agentOrchestrationChanged' })
-    })
-  }
+  // Paired desktops re-read this host's worker lineage on it, whether a chat or a terminal created the Dispatch.
+  private readonly noteAgentOrchestrationChanged = createAgentOrchestrationChangeNotice(() =>
+    this.emitClientEvent({ type: 'agentOrchestrationChanged' })
+  )
 
   protected bindWorkerTerminalAutoRelease(db: OrchestrationDb): void {
     // A worker can settle with no agent phase change (a failed start, a release); bots re-read.

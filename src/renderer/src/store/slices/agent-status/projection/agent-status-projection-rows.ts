@@ -1,4 +1,5 @@
 import type { AppState } from '../../../types'
+import { orchestrationForStatusRows } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import {
   parseAgentStatusPaneIdentity,
   resolveAgentStatusWorktreeId,
@@ -41,6 +42,8 @@ export function stageProjectionRows(
     ownerOf,
     sourceEntry
   } = topology
+  // Remote hosts' contexts join by the same row identity the sidebar uses.
+  const contexts = orchestrationForStatusRows(state)
   const nextSuppressions = new Map<string, readonly string[]>(),
     suppressionDeltas = new Map<string, number>()
   const delta = (key: string, sign: number) =>
@@ -62,10 +65,7 @@ export function stageProjectionRows(
       if (titleRowKey) {
         keys.push(titleRowKey)
       }
-      const orchestration = mergeAgentStatusOrchestration(
-        entry,
-        state.runtimeAgentOrchestrationByPaneKey[key]
-      )
+      const orchestration = mergeAgentStatusOrchestration(entry, contexts[key])
       const parent = orchestration?.parentPaneKey
       const parsed = parent ? parsePaneKey(parent) : null
       const owner = resolveAgentStatusWorktreeId(entry, { get: ownerOf }, orchestration)
@@ -111,13 +111,7 @@ export function stageProjectionRows(
     const suppressed = (data.suppressed.get(key) ?? 0) + (suppressionDeltas.get(key) ?? 0) > 0
     const rows =
       entry && displayTab && worktreeId
-        ? buildExplicitWorktreeAgentRows(
-            entry,
-            displayTab,
-            now,
-            hasLivePty,
-            state.runtimeAgentOrchestrationByPaneKey
-          )
+        ? buildExplicitWorktreeAgentRows(entry, displayTab, now, hasLivePty, contexts)
         : fallback && worktreeId && !suppressed
           ? [fallback]
           : []
@@ -126,7 +120,7 @@ export function stageProjectionRows(
       ? resolveAgentStatusWorktreeId(
           entry,
           { get: ownerOf },
-          mergeAgentStatusOrchestration(entry, state.runtimeAgentOrchestrationByPaneKey[key])
+          mergeAgentStatusOrchestration(entry, contexts[key])
         )
       : undefined
     if (entry && summaryWorktreeId && identity) {
@@ -146,8 +140,7 @@ export function stageProjectionRows(
         const parent =
           entry.state === 'done'
             ? parseAgentStatusPaneIdentity(
-                mergeAgentStatusOrchestration(entry, state.runtimeAgentOrchestrationByPaneKey[key])
-                  ?.parentPaneKey
+                mergeAgentStatusOrchestration(entry, contexts[key])?.parentPaneKey
               )
             : null
         if (parent && ownerOf(parent.tabId) === summaryWorktreeId) {
