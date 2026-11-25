@@ -120,6 +120,12 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     slashCommand: '/login',
     installCommand: 'npm install -g @tencent-ai/codebuddy-code'
   },
+  // DSH configures providers and credentials inside dsh-tui via `/provider`.
+  {
+    agent: 'dsh',
+    loginCommand: ['dsh-tui'],
+    slashCommand: '/provider'
+  },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',

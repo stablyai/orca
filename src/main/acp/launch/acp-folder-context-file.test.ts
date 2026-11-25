@@ -114,6 +114,30 @@ describe('Hermes context file', () => {
     expect(content).toContain('fresh')
     expect(content).not.toContain('old')
   })
+
+  it('takes its block back out and keeps the text the user wrote, indentation included', async () => {
+    const path = join(dir, HERMES_CONTEXT_FILE)
+    await writeFile(path, '    indented first line\n\nMy own rules.\n')
+    await expect(writeHermesContextFile(dir, 'text')).resolves.toBe(true)
+    await removeFolderContextFile(dir, HERMES_CONTEXT_FILE, 'Hermes')
+    expect(await readFile(path, 'utf8')).toBe('    indented first line\n\nMy own rules.\n')
+  })
+
+  it('keeps indentation on the user line that follows a removed Orca block', async () => {
+    const path = join(dir, HERMES_CONTEXT_FILE)
+    await writeFile(
+      path,
+      'intro\n<!-- orca:begin -->\ntext\n<!-- orca:end -->\n\n    indented after\n'
+    )
+    await removeFolderContextFile(dir, HERMES_CONTEXT_FILE, 'Hermes')
+    expect(await readFile(path, 'utf8')).toBe('intro\n\n    indented after\n')
+  })
+
+  it('removes the file Orca wrote when the block was all it held', async () => {
+    await expect(writeHermesContextFile(dir, 'text')).resolves.toBe(true)
+    await removeFolderContextFile(dir, HERMES_CONTEXT_FILE, 'Hermes')
+    expect(await lstat(join(dir, HERMES_CONTEXT_FILE)).catch(() => null)).toBeNull()
+  })
 })
 
 it("takes Orca's text back out of a context file and keeps the user's", async () => {

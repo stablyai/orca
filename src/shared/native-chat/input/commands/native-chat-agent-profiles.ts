@@ -130,7 +130,9 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   codebuddy: {
     skillPrefix: '/',
     skillSourceOwner: 'codebuddy'
-  }
+  },
+  // DSH's ACP reports no commands and sends a `/word` to the model as text.
+  dsh: null
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots unless the profile sets

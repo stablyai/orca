@@ -49,5 +49,6 @@ export const BOT_AGENTS_LISTING_LINKED_SKILLS: readonly string[] = [
   'qwen-code',
   'cline',
   'devin',
-  'codebuddy'
+  'codebuddy',
+  'dsh'
 ]
