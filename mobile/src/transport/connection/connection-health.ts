@@ -21,7 +21,11 @@ export function isEarlyConnectRetry(
 // Relay verdicts describe the desktop directly; Tailscale advice would misdiagnose offline/signed-out hosts.
 function relayHostCopy(): Record<
   Exclude<RelayHostReachability, 'connecting'>,
-  { kind: 'warning' | 'unreachable'; label: (host: string) => string; detail: string }
+  {
+    kind: 'warning' | 'unreachable'
+    label: (host: string) => string
+    detail: (host: string) => string
+  }
 > {
   return {
     'signed-out': {
@@ -30,21 +34,23 @@ function relayHostCopy(): Record<
         translate('connection.connectionHealth.signInRequired', 'Sign-in required on {{host}}', {
           host
         }),
-      detail: translate(
-        'connection.connectionHealth.signInDetail',
-        'Sign in to Orca on your desktop to reconnect'
-      )
+      detail: () =>
+        translate(
+          'connection.connectionHealth.signInDetail',
+          'Sign in to Orca on your desktop to reconnect'
+        )
     },
     'host-offline': {
       kind: 'unreachable',
       label: (host) =>
         translate('connection.connectionHealth.hostOffline', '{{host}} is offline', { host }),
-      detail: translate(
-        'connection.connectionHealth.hostOfflineDetail',
-        "Check it's awake, Orca is running, and you're signed in"
-      )
+      detail: () =>
+        translate(
+          'connection.connectionHealth.hostOfflineDetail',
+          "Check it's awake, Orca is running, and you're signed in"
+        )
     },
-    // Re-pairing repairs refused credentials even when direct rotation is unavailable.
+    // Relay refuses missing, expired and revoked credentials alike; one direct connection refreshes the first two.
     'credential-refused': {
       kind: 'unreachable',
       label: (host) =>
@@ -55,13 +61,19 @@ function relayHostCopy(): Record<
             host
           }
         ),
-      detail: translate('connection.connectionHealth.rePairDetail', 'Re-pair with your desktop')
+      detail: (host) =>
+        translate(
+          'connection.connectionHealth.relayAccessRefreshDetail',
+          'Connect once on the same network as {{host}} to refresh Relay access, or re-pair',
+          { host }
+        )
     },
     // Cell reachability failure says nothing about desktop health, so keep it amber.
     unreachable: {
       kind: 'warning',
       label: () => translate('connection.connectionHealth.relayUnreachable', "Can't reach Relay"),
-      detail: translate('connection.connectionHealth.checkConnection', 'Check your connection')
+      detail: () =>
+        translate('connection.connectionHealth.checkConnection', 'Check your connection')
     }
   }
 }
@@ -131,12 +143,12 @@ export function classifyConnection(args: {
   if (reachability !== 'connecting') {
     const copy = relayHostCopy()[reachability]
     return copy.kind === 'warning'
-      ? { kind: 'warning', label: copy.label(host), detail: copy.detail, relay: reachability }
+      ? { kind: 'warning', label: copy.label(host), detail: copy.detail(host), relay: reachability }
       : {
           kind: 'unreachable',
           label: copy.label(host),
           reason: staleReason,
-          detail: copy.detail,
+          detail: copy.detail(host),
           relay: reachability
         }
   }

@@ -56,7 +56,7 @@ function diagnoseFailure(
   if (/relay director resolve failed \(401\)/i.test(evidence)) {
     return {
       likelyCause: 'Relay rejected the saved resume credential.',
-      nextStep: 'Try a direct connection; if Relay keeps returning 401, pair this device again.',
+      nextStep: RELAY_DIAL_ADVICE['credential-refused'].nextStep,
       reportability: 'none'
     }
   }
@@ -175,8 +175,11 @@ const RELAY_DIAL_ADVICE: Record<
     nextStep: 'Check the desktop is awake, Orca is running, and it is signed in to Orca Cloud.'
   },
   'credential-refused': {
-    likelyCause: (code) => `Relay refused this device’s relay credential (close code ${code}).`,
-    nextStep: 'Re-pair this phone with the desktop.'
+    // Relay checks the credential before the desktop, so a refusal says nothing about whether the desktop is online.
+    likelyCause: (code) =>
+      `Relay refused this device’s relay credential (close code ${code}), so it could not check whether the desktop is online.`,
+    nextStep:
+      'Connect this phone once on the same network as the desktop to refresh Relay access, or re-pair it.'
   },
   unreachable: {
     likelyCause: (code) => `The phone could not reach the Relay cell (transport close ${code}).`,

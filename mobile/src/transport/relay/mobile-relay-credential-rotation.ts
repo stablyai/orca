@@ -98,11 +98,55 @@ export function mobileRelayCredentialNeedsRotation(
   )
 }
 
+// A committed install can only follow `expectedCurrentHash`, so the relay numbered it current + 1.
+// The relay alone knows its expiry; the lease stays dialable until the relay answers.
+export function pendingRelayCredentialLease(
+  bundle: MobileRelayCredentialBundle
+): MobileRelayCredentialBundle['current'] | null {
+  if (!bundle.pending) {
+    return null
+  }
+  return {
+    token: bundle.pending.token,
+    hash: bundle.pending.hash,
+    version: bundle.current.version + 1,
+    expiresAt: Number.MAX_SAFE_INTEGER
+  }
+}
+
+// Dial order: the pending install is tried only after the relay refuses current and grace.
+export function relayDialCandidates(
+  bundle: MobileRelayCredentialBundle
+): (MobileRelayCredentialBundle['current'] | null | undefined)[] {
+  return [bundle.current, bundle.grace, pendingRelayCredentialLease(bundle)]
+}
+
 export function applyResumeConfirmation(
   bundle: MobileRelayCredentialBundle,
   usedCredentialVersion: number,
   confirmation: DeviceResumeConfirmed
 ): MobileRelayCredentialBundle {
+  const pending = pendingRelayCredentialLease(bundle)
+  if (
+    pending?.version === usedCredentialVersion &&
+    confirmation.acceptedAs === 'current' &&
+    confirmation.currentVersion === usedCredentialVersion
+  ) {
+    // The rotation committed but its reply was lost; adopt it exactly as direct reconciliation would.
+    return MobileRelayCredentialBundleSchema.parse({
+      ...bundle,
+      current: {
+        token: pending.token,
+        hash: pending.hash,
+        version: usedCredentialVersion,
+        expiresAt: confirmation.resumeExpiresAt
+      },
+      grace: confirmation.graceExpiresAt
+        ? { ...bundle.current, expiresAt: confirmation.graceExpiresAt }
+        : undefined,
+      pending: undefined
+    })
+  }
   if (
     confirmation.acceptedAs === 'current' &&
     confirmation.renewed &&

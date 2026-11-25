@@ -16,6 +16,7 @@ import { NATIVE_APP_LOG_ID } from './native-render-log'
 import { submitConnectionDiagnostics } from './connection-diagnostics-submission'
 import type { DiagnosticsDeviceOperations } from './diagnostics-device-operations'
 import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/protocol/bridge-frame-fields'
+import { readMobileRelayCredentialBundle } from '../host-credentials/mobile-relay-credential-bundle'
 
 export function createNativeDiagnosticsOperations(
   host: HostProfile | null,
@@ -41,6 +42,9 @@ export function createNativeDiagnosticsOperations(
         }
       }
       const snapshot = await readConnectionDiagnosticsSnapshot(context, connectionLogStore, host.id)
+      const relayCredential = host.relay
+        ? await readMobileRelayCredentialBundle(host.id).catch(() => null)
+        : undefined
       return {
         report: buildConnectionDiagnosticsReport({
           hostName: host.name,
@@ -57,7 +61,8 @@ export function createNativeDiagnosticsOperations(
           entries: [...snapshot.entries, ...appEntries].sort((a, b) => a.ts - b.ts),
           activePath: snapshot.activePath,
           pendingPath: snapshot.pendingPath,
-          bridgeProtocolVersion: BRIDGE_PROTOCOL_VERSION
+          bridgeProtocolVersion: BRIDGE_PROTOCOL_VERSION,
+          relayCredential
         }),
         appVersion,
         platform,

@@ -1964,7 +1964,7 @@
       "hostOfflineDetail": "Bilgisayarınızın uyanık, Orca'nın çalışır durumda ve oturumunuzun açık olduğunu kontrol edin",
       "labelWithHint": "{{label}} — {{hint}}",
       "pairingInvalid": "Eşleştirme geçersiz — bilgisayarınızla yeniden eşleştirin",
-      "rePairDetail": "Bilgisayarınızla yeniden eşleştirin",
+      "relayAccessRefreshDetail": "Relay erişimini yenilemek için {{host}} ile aynı ağda bir kez bağlanın veya yeniden eşleştirin",
       "reconnecting": "Yeniden bağlanılıyor…",
       "relayAccessRefused": "Relay, {{host}} için erişimi reddetti",
       "relayConnectFailed": "Relay üzerinden bağlanılamadı",

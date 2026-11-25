@@ -9,6 +9,7 @@ import { normalizeHostAppVersion } from '../host-descriptors/host-app-version'
 import { formatEndpoint } from './host-reachability'
 import { diagnoseConnection } from './connection-diagnostics-analysis'
 import { redactConnectionLogEntry, redactConnectionLogText } from './connection-log-redaction'
+import type { MobileRelayCredentialBundle } from '../host-credentials/mobile-relay-credential-bundle'
 
 const MAX_EVENT_LINE_BYTES = 2 * 1024
 const EVENT_TRUNCATION_MARKER = ' … [truncated]'
@@ -27,6 +28,8 @@ export function buildConnectionDiagnosticsReport(args: {
   activePath?: MobileConnectionDiagnosticPath
   pendingPath?: MobileConnectionDiagnosticPath | null
   bridgeProtocolVersion: number
+  // Undefined for hosts without Relay; null when Relay is set up but no credential could be read.
+  relayCredential?: MobileRelayCredentialBundle | null
   nowMs?: number
 }): string {
   const now = args.nowMs ?? Date.now()
@@ -57,6 +60,9 @@ export function buildConnectionDiagnosticsReport(args: {
     lines.push(
       `Path: active=${args.activePath}${args.pendingPath ? `; recovery=${args.pendingPath}` : ''}`
     )
+  }
+  if (args.relayCredential !== undefined) {
+    lines.push(formatRelayCredential(args.relayCredential, now))
   }
   lines.push(
     args.lastConnectedAt == null
@@ -91,6 +97,20 @@ export function formatConnectionLogHistory(entries: readonly ConnectionLogEntry[
     }
   }
   return lines.join('\n')
+}
+
+// Versions, expiries and pending state only: never the tokens or hashes.
+function formatRelayCredential(bundle: MobileRelayCredentialBundle | null, now: number): string {
+  if (!bundle) {
+    return 'Relay credential: not found'
+  }
+  const lease = (credential: { version: number; expiresAt: number }) =>
+    `v${credential.version} ${credential.expiresAt > now ? 'expires' : 'expired'} ${new Date(credential.expiresAt).toISOString()}`
+  return [
+    `Relay credential: current ${lease(bundle.current)}`,
+    bundle.grace ? `grace ${lease(bundle.grace)}` : 'no grace',
+    `pending ${bundle.pending ? 'yes' : 'no'}`
+  ].join('; ')
 }
 
 function truncateUtf8WithMarker(value: string, maxBytes: number, marker: string): string {

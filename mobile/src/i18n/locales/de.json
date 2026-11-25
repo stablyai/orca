@@ -1214,7 +1214,7 @@
       "hostOfflineDetail": "Prüfen, ob der Computer wach ist, Orca läuft und du angemeldet bist",
       "labelWithHint": "{{label}} – {{hint}}",
       "pairingInvalid": "Kopplung ungültig – erneut mit dem Computer koppeln",
-      "rePairDetail": "Erneut mit dem Computer koppeln",
+      "relayAccessRefreshDetail": "Verbinde dich einmal im selben Netzwerk wie {{host}}, um den Relay-Zugriff zu erneuern, oder kopple erneut",
       "reconnecting": "Verbindung wird wiederhergestellt…",
       "relayAccessRefused": "Relay hat den Zugriff für {{host}} verweigert",
       "relayConnectFailed": "Verbindung über Relay fehlgeschlagen",
