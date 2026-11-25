@@ -43,12 +43,13 @@ export const listStyles = themedStyleSheet(() => ({
     lineHeight: 18
   },
   // ListRow's measures (48 pt, 60 with a folder line). Opaque so a left swipe uncovers Discard only as the row slides.
+  // 2 pt either side of the 44 pt stage button keeps one-line rows at 48.
   fileRow: {
     minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.sm,
+    paddingVertical: 2,
     backgroundColor: colors.bgBase,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle

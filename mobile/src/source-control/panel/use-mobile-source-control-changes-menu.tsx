@@ -78,7 +78,8 @@ export function useMobileSourceControlChangesMenu({
       confirmLabel={mobileConflictAbortLabel(confirming ?? 'merge', false)}
       destructive
       onConfirm={() => {
-        if (confirming) {
+        // The merge may have finished or changed while the confirm was up.
+        if (confirming && confirming === operation && !ioBusy) {
           void abortConflictOperation(confirming)
         }
         setConfirming(null)

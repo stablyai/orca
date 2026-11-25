@@ -99,7 +99,8 @@ export function buildMobileSourceControlActions(
     iconKey,
     disabled: busy || item.disabled,
     // Force push stays, last and red; when it is blocked, one line says why. The rest show only when they apply.
-    inapplicable: item.disabled && item.kind !== 'force_push',
+    // Rows disabled only because something is running stay, greyed, so the menu keeps its shape.
+    inapplicable: !busy && item.disabled && item.kind !== 'force_push',
     hint: item.disabled && item.kind === 'force_push' ? item.title : undefined,
     loading: args.busyAction === actionId,
     skipAutoClose: true,

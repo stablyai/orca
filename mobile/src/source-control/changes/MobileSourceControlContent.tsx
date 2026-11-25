@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Animated, Easing, Text, View } from 'react-native'
+import { ActivityIndicator, Animated, Easing, ScrollView, Text, View } from 'react-native'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -167,10 +167,12 @@ export function MobileSourceControlContent({
             action={commitFailureRecoveryAction}
           />
         ) : actionError ? (
-          // Whole, not clipped: a git error's useful part ("hint: …") is usually its last lines.
-          <Text style={[styles.feedbackText, styles.feedbackError]} selectable>
-            {actionError}
-          </Text>
+          // Whole but bounded: a git error's useful part ("hint: …") is usually its last lines.
+          <ScrollView style={styles.feedbackScroll} nestedScrollEnabled>
+            <Text style={[styles.feedbackText, styles.feedbackError]} selectable>
+              {actionError}
+            </Text>
+          </ScrollView>
         ) : null}
       </View>
     ) : null
