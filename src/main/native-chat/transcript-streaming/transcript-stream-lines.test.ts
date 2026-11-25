@@ -19,6 +19,23 @@ describe('bounded transcript records', () => {
     expect((await collect(['\ud83d', '\ude00'], 4))[0]).toBe('😀')
   })
 
+  it('counts an oversized record the caller replaces without buffering it', async () => {
+    const standIn = (head: string) => (head.startsWith('{"big"') ? '{}' : undefined)
+    const read = async (chunks: string[]) => {
+      const records = []
+      for await (const record of splitTranscriptStreamLines(Readable.from(chunks), 8, standIn)) {
+        records.push(record)
+      }
+      return records
+    }
+    expect(await read(['{"big":"', 'x'.repeat(20), 'y"}\n{"a":1}\n{"big":"zz'])).toEqual([
+      { line: '{}', byteLength: 32, terminated: true },
+      { line: '{"a":1}', byteLength: 8, terminated: true },
+      { line: '{}', byteLength: 10, terminated: false }
+    ])
+    await expect(read(['{"a":"', 'x'.repeat(20)])).rejects.toThrow('record exceeds 8 byte limit')
+  })
+
   it('checks the decoder tail before emitting it', async () => {
     await expect(collect([Buffer.from([0x61, 0xf0, 0x9f])], 3)).rejects.toThrow(
       'record exceeds 3 byte limit'
