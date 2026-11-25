@@ -40,7 +40,6 @@ import {
   stripSizeClassName
 } from './rendered-tab-strip'
 
-
 export function renderTabBarSurface(
   {
     props,
@@ -110,8 +109,13 @@ export function renderTabBarSurface(
     showStaticCreateMenuItems
   } = createMenu
   const { activeVisibleTabId } = itemProjection
-  const { orderedItems, sortableIds, dropIndicatorByVisibleId, clientHostedBrowserRows, pinnedCount } =
-    strip
+  const {
+    orderedItems,
+    sortableIds,
+    dropIndicatorByVisibleId,
+    clientHostedBrowserRows,
+    pinnedCount
+  } = strip
   const {
     tabStripRef,
     tabStripOverflowState,
