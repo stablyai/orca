@@ -1,5 +1,6 @@
 import { app, session } from 'electron'
 import { configureMacMenuDeadKeyGuard } from '../menu/macos-menu-dead-key'
+import { configureMacWindowResizeGuard } from '../window/desktop-integration/macos-window-resize-guard'
 import { applyBackgroundActivationPolicy } from '../window/activation/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
@@ -67,6 +68,7 @@ import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
   configureMacMenuDeadKeyGuard()
+  configureMacWindowResizeGuard()
   // Background automation and a windowless serve must not claim the macOS Dock/menu bar.
   applyBackgroundActivationPolicy({
     serveWithoutDesktopWindow: state.isServeMode,
