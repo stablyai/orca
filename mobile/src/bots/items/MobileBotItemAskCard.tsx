@@ -17,6 +17,11 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatAsk } from '../../session/native-chat/input/prompts/MobileNativeChatAsk'
 import type { MobileNativeChatCollapsedPrompt } from '../../session/native-chat/input/prompts/MobileNativeChatPromptStrip'
 import { BotItemCommentMicContext } from './bot-item-comment-mic'
+import {
+  readBotItemAskCardDraft,
+  retireBotItemAskCardDraft,
+  saveBotItemAskCardDraft
+} from './bot-item-ask-card-drafts'
 
 type OpenAsk = { askId: string; shape: BotItemQuestionShape; open: number[] }
 
@@ -83,13 +88,17 @@ function answerOf(
 }
 
 export function useMobileBotItemAskSlot({
+  itemKey,
   ask,
   online,
   replying,
   loaded,
+  host,
   onOpenWithCard,
   send
 }: {
+  /** The item on its host, whose card keeps its unsent picks and words when the page closes. */
+  itemKey: string
   /** Null while nothing waits. */
   ask: OpenAsk | null
   online: boolean
@@ -98,6 +107,9 @@ export function useMobileBotItemAskSlot({
   replying: boolean
   /** The item is read, so the page has opened. */
   loaded: boolean
+  /** The host's read of the item and the events loaded so far, which retire its kept card; null
+   *  until read. */
+  host: { item: BotItem; events: readonly BotItemEvent[] } | null
   /** The page opened with the card up: it starts at its title, not at the end of Activity. */
   onOpenWithCard: () => void
   send: (text: string, answering: { askId: string; skipped: readonly number[] }) => void
@@ -134,6 +146,15 @@ export function useMobileBotItemAskSlot({
       Keyboard.dismiss()
     }
   }, [askShown])
+  const hostItem = host?.item ?? null
+  const hostEvents = host?.events ?? null
+  useEffect(() => {
+    // Each read: a card kept for a replaced, answered or closed ask goes; the open ask's stays
+    // across Back, offline, Not now, a failed Send and history still loading.
+    if (hostItem && hostEvents) {
+      retireBotItemAskCardDraft(itemKey, hostItem, hostEvents)
+    }
+  }, [itemKey, hostItem, hostEvents])
   const fold = (): void => setFolded(key)
   if (!ask) {
     return { card: null, askOpen, askShown, strip: null, fold }
@@ -154,6 +175,10 @@ export function useMobileBotItemAskSlot({
         key={ask.askId}
         prompt={askPrompt(ask)}
         questionKeys={ask.open.map(String)}
+        drafts={{
+          saved: readBotItemAskCardDraft(itemKey, ask.askId),
+          onChange: (questions) => saveBotItemAskCardDraft(itemKey, ask.askId, questions)
+        }}
         answerPending={!online}
         onAnswer={async (selections) => {
           const { text, skipped } = answerOf(ask, selections)

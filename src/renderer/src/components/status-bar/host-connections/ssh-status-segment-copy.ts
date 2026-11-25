@@ -1,13 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
-export function connectedHostCountLabel(count: number, t: Translate = translate): string {
-  return t('auto.components.status.bar.SshStatusSegment.connectedHostCount', '{{count}} hosts', {
-    count,
-    defaultValue_one: '{{count}} host'
-  })
-}
-
 export function moreSshHostsLabel(count: number, t: Translate = translate): string {
   return t(
     'auto.components.status.bar.SshStatusSegment.moreSshHosts',

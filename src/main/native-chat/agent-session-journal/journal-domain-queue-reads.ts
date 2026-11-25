@@ -46,8 +46,9 @@ export function readJournalDomainReturnedCards(
       (SELECT attempt.submitted_at FROM journal_submission_attempts AS attempt
         WHERE attempt.session_id=card.session_id AND attempt.epoch=card.epoch
           AND attempt.message_id=card.message_id AND attempt.current=1) AS submitted_at
-    FROM journal_queue_cards AS card
-    WHERE card.session_id=? AND card.epoch=? AND card.state='returned'
+    FROM journal_queue_cards AS card INDEXED BY journal_queue_order
+    WHERE card.session_id=? AND card.epoch=? AND card.state IN ('waiting','returned')
+      AND card.state='returned'
     ORDER BY card.position, card.message_id`)
     .all(now, target.sessionId, target.epoch)
     .map((row) => ({

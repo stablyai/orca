@@ -166,7 +166,8 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
         const gap = c.y - (a.y + a.height)
         assert(Math.abs(gap - 8) <= 1, `Jump to latest sits ${gap}px above the open card`)
         const hit = await page.evaluate(
-          ([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.textContent ?? '',
+          ([x, y]) =>
+            document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? '',
           [a.x + a.width / 2, a.y + a.height / 2]
         )
         assert(hit.includes('Jump to latest'), `the point over Jump hits "${hit}"`)

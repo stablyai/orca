@@ -1,19 +1,22 @@
 // Tells the host's clients a sign-in's shown state changed (signed in or out, lost, why it couldn't
 // start), so every window and phone reads the bot's tools again. A refreshed token changes nothing shown.
+import { resolve } from 'node:path'
 import type { BotToolOAuthEntry } from './bot-tool-credentials'
 
 type Shown = Pick<BotToolOAuthEntry, 'url' | 'grant' | 'record'> | null
-const listeners = new Set<() => void>()
+/** `folder`: the resolved tools folder whose sign-in changed. */
+type Listener = (folder: string) => void
+const listeners = new Set<Listener>()
 
-export function onBotToolSignInChanged(listener: () => void): () => void {
+export function onBotToolSignInChanged(listener: Listener): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
 
-export function announceBotToolSignInChanged(): void {
+function announceBotToolSignInChanged(folder: string): void {
   for (const listener of listeners) {
     try {
-      listener()
+      listener(resolve(folder))
     } catch (error) {
       console.warn('[bot-tool-credentials] a sign-in change listener failed:', error)
     }
@@ -36,8 +39,8 @@ function shownState(entry: Shown): string {
 }
 
 /** Announces a commit that changed what a row shows of the sign-in. */
-export function announceIfShownChanged(before: Shown, after: Shown): void {
+export function announceIfShownChanged(folder: string, before: Shown, after: Shown): void {
   if (shownState(before) !== shownState(after)) {
-    announceBotToolSignInChanged()
+    announceBotToolSignInChanged(folder)
   }
 }

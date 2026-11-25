@@ -16,7 +16,7 @@ const CARDS: QueuedMessageCard[] = [
 
 const noop = async (): Promise<void> => {}
 
-function Queue({ cards }: { cards: QueuedMessageCard[] }) {
+function Queue({ cards, fontSize }: { cards: QueuedMessageCard[]; fontSize?: number }) {
   const controller: StructuredAgentSessionQueuedMessagesController = {
     cards,
     queueCapable: true,
@@ -43,7 +43,10 @@ function Queue({ cards }: { cards: QueuedMessageCard[] }) {
     <div
       data-native-chat-root="true"
       className="native-chat-appearance flex flex-col bg-chat-pane"
-      style={{ ...nativeChatAppearanceStyle({}), height: 700 }}
+      style={{
+        ...nativeChatAppearanceStyle(fontSize ? { nativeChatAppearance: { fontSize } } : {}),
+        height: 700
+      }}
     >
       <div className="flex-1 p-4 text-sm text-muted-foreground">The tests pass on this branch.</div>
       <NativeChatDock>
@@ -154,5 +157,34 @@ export const narrowFailedToolsShown = defineFixture({
   ),
   interact: (frame) => {
     frame.querySelectorAll<HTMLElement>('li [aria-label="Edit message"]')[1]?.focus()
+  }
+})
+
+// The smallest text size shrinks the chat's spacing unit; every target in the row keeps 24px.
+export const narrowImagesSmallestText = defineFixture({
+  width: 380,
+  render: () => <Queue cards={IMAGE_CARDS} fontSize={12} />
+})
+
+export const narrowFailedSmallestText = defineFixture({
+  width: 380,
+  render: () => (
+    <Queue
+      fontSize={12}
+      cards={CARDS.map((card, i) =>
+        i === 1
+          ? { ...card, hold: 'paused', pausedReason: QUEUED_MESSAGE_PAUSED_SEND_FAILED }
+          : card
+      )}
+    />
+  )
+})
+
+// Tab onto the image count of a row whose text fits: its ring sits beside its neighbors' boxes.
+export const narrowImageCountFocused = defineFixture({
+  width: 380,
+  render: () => <Queue cards={IMAGE_CARDS} />,
+  interact: (frame) => {
+    frame.querySelectorAll<HTMLElement>('li [role="img"]')[2]?.focus()
   }
 })
