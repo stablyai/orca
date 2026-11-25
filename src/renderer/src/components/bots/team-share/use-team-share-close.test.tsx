@@ -12,9 +12,15 @@ import { useTeamShareClose } from './use-team-share-close'
 const bot = { id: 'b1', name: 'Ada', hostId: 'local', members: [] } as unknown as Bot
 const DANA: TeamShareSuggestion = { kind: 'invite', key: 'dana@acme.co', email: 'dana@acme.co' }
 
-function Harness({ onClose }: { onClose: () => void }): React.JSX.Element {
+function Harness({
+  onClose,
+  sharing
+}: {
+  onClose: () => void
+  sharing: boolean
+}): React.JSX.Element {
   const [staged, setStaged] = useState<TeamShareSuggestion[]>([DANA])
-  const close = useTeamShareClose(staged, '', onClose)
+  const close = useTeamShareClose(staged, '', onClose, sharing)
   return (
     <BotTeamShareDialog
       bot={bot}
@@ -37,11 +43,11 @@ function Harness({ onClose }: { onClose: () => void }): React.JSX.Element {
   )
 }
 
-function show(): ReturnType<typeof vi.fn> {
+function show(sharing = false): ReturnType<typeof vi.fn> {
   const onClose = vi.fn()
   render(
     <ConfirmationDialogProvider>
-      <Harness onClose={onClose} />
+      <Harness onClose={onClose} sharing={sharing} />
     </ConfirmationDialogProvider>
   )
   return onClose
@@ -69,6 +75,14 @@ describe('closing the Share dialog with picks not shared', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Keep editing')).toBeNull()
+  })
+
+  it('never closes or asks while Share is saving, so its confirmations cannot close it', async () => {
+    const onClose = show(true)
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(onClose).not.toHaveBeenCalled()
     expect(screen.queryByText('Keep editing')).toBeNull()
   })
 })

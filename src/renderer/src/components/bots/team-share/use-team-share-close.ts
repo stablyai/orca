@@ -5,17 +5,22 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { TeamShareSuggestion } from './bot-team-share-people'
 import { stagedName } from './BotTeamShareStagedChip'
 
-/** ✕, Esc, a press outside and Done: closes at once with nothing picked or typed, else on Discard. */
+/** ✕, Esc, a press outside and Done: closes at once with nothing picked or typed, else on Discard.
+ *  Never while `sharing`: Share's own confirmations sit on top and read as a press outside. */
 export function useTeamShareClose(
   staged: readonly TeamShareSuggestion[],
   query: string,
-  onClose: () => void
+  onClose: () => void,
+  sharing: boolean
 ): () => void {
   const t = useTranslate()
   const confirm = useConfirmationDialog()
   // A press on the confirm also reads as outside the Share dialog; one ask at a time.
   const asking = useRef(false)
   return () => {
+    if (sharing) {
+      return
+    }
     const typed = query.trim()
     const names = staged.length > 0 ? staged.map(stagedName) : typed ? [typed] : []
     if (names.length === 0) {

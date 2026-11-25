@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
-import type { Bot, BotMember } from '../../../../../shared/bot-types'
+import type { Bot } from '../../../../../shared/bot-types'
 import { botErrorMessage } from '../bot-presentation'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { BotTeamShareDialog } from './BotTeamShareDialog'
@@ -17,17 +17,15 @@ import {
 import {
   TeamShareConnectorPeople,
   useTeamShareConnectors,
-  type TeamShareConnectorAdds,
   type TeamShareFoundByConnector
 } from './BotTeamShareConnectorPeople'
 import { addBotTeamShare, removeBotTeamShare, resendBotTeamShare } from './bot-team-share-rpc'
+import {
+  shareStagedPeople,
+  type StagedPerson,
+  type TeamShareConnectorAdds
+} from './share-staged-people'
 import { useTeamShareClose } from './use-team-share-close'
-
-/** A pick waiting for Share; a Slack or GitHub person keeps the member their connector saves. */
-type StagedPerson = {
-  suggestion: TeamShareSuggestion
-  connector?: { key: string; member: BotMember }
-}
 
 export function BotTeamShareDialogHost({
   bot,
@@ -41,6 +39,8 @@ export function BotTeamShareDialogHost({
   const [found, setFound] = useState<TeamShareFoundByConnector>({})
   const [staged, setStaged] = useState<StagedPerson[]>([])
   const [adds] = useState<TeamShareConnectorAdds>(() => new Map())
+  // While Share saves, its confirmations sit on top; the dialog and its picks stay until it settles.
+  const [sharing, setSharing] = useState(false)
   const connectors = useTeamShareConnectors(bot)
   const account = useBotHostOrcaAccount(bot.hostId)
   const hostLabel = useBotHostLabel(bot.hostId)
@@ -62,7 +62,7 @@ export function BotTeamShareDialogHost({
   const offered = invite === null ? null : [...invite, ...fromConnectors]
   // Nothing shows while a connector still searches and nobody is found yet, so No match never flashes.
   const stagedPeople = staged.map((entry) => entry.suggestion)
-  const close = useTeamShareClose(stagedPeople, query, onClose)
+  const close = useTeamShareClose(stagedPeople, query, onClose, sharing)
   const stagedKeys = new Set(staged.map((entry) => entry.suggestion.key))
   const unpicked = offered?.filter((suggestion) => !stagedKeys.has(suggestion.key)) ?? null
   const suggestions: TeamShareSuggestion[] | null =
@@ -81,22 +81,23 @@ export function BotTeamShareDialogHost({
       }
     }
   }
-  // Invites go to the host in one call; each connector then confirms and saves its own people.
+  // Only those saved leave the field; a declined or failed one stays picked to try again.
   const share = async (): Promise<void> => {
-    setStaged([])
-    const emails = staged.flatMap(({ suggestion }) =>
-      suggestion.kind === 'invite' ? [suggestion.email] : []
+    setSharing(true)
+    const saved = await shareStagedPeople(
+      staged,
+      (emails) =>
+        addBotTeamShare(bot, emails).then(
+          () => true,
+          (error: unknown) => {
+            failed(error)
+            return false
+          }
+        ),
+      adds
     )
-    if (emails.length > 0) {
-      void addBotTeamShare(bot, emails).catch(failed)
-    }
-    const byConnector = Map.groupBy(
-      staged.flatMap(({ connector }) => (connector ? [connector] : [])),
-      (connector) => connector.key
-    )
-    for (const [key, picked] of byConnector) {
-      await adds.get(key)?.(picked.map((connector) => connector.member))
-    }
+    setStaged((current) => current.filter((entry) => !saved.has(entry.suggestion.key)))
+    setSharing(false)
   }
   return (
     <BotTeamShareDialog
@@ -112,8 +113,12 @@ export function BotTeamShareDialogHost({
       onUnstage={(suggestion) =>
         setStaged((current) => current.filter((entry) => entry.suggestion.key !== suggestion.key))
       }
+      sharing={sharing}
       onShare={() => void share()}
-      onCancelStaged={() => setStaged([])}
+      onCancelStaged={() => {
+        setStaged([])
+        setQuery('')
+      }}
       onRemove={(person) => void removeBotTeamShare(bot, person.key).catch(failed)}
       onResend={(person) =>
         void resendBotTeamShare(bot, person.key)

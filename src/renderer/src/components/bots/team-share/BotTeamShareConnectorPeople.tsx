@@ -10,6 +10,7 @@ import { useGitHubCard } from '../github/BotGitHubCard'
 import { useSlackWhoCanAsk } from '../slack/use-slack-who-can-ask'
 import { useBotWhoCanAsk } from '../use-bot-who-can-ask'
 import type { TeamSharePerson, TeamShareSuggestion } from './bot-team-share-people'
+import type { TeamShareConnectorAdds } from './share-staged-people'
 import { TeamSharePersonRow } from './BotTeamShareRows'
 
 type PeopleEntry = Extract<BotConnectorEntry, { kind: 'slack' | 'github' }>
@@ -30,9 +31,6 @@ export type TeamShareConnectorFound =
     }
 
 export type TeamShareFoundByConnector = Readonly<Record<string, TeamShareConnectorFound>>
-
-/** Each connector's add, by entry key, for Share to save the people picked from it. */
-export type TeamShareConnectorAdds = Map<string, (members: BotMember[]) => Promise<void>>
 
 type Report = (update: (found: TeamShareFoundByConnector) => TeamShareFoundByConnector) => void
 

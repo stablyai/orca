@@ -7,9 +7,9 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
 import {
   TeamShareConnectorPeople,
-  type TeamShareConnectorAdds,
   type TeamShareFoundByConnector
 } from './BotTeamShareConnectorPeople'
+import type { TeamShareConnectorAdds } from './share-staged-people'
 
 const { updateBot } = vi.hoisted(() => ({
   updateBot: vi.fn(async (): Promise<never> => {

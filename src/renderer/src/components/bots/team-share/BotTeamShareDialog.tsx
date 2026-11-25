@@ -31,6 +31,7 @@ export function BotTeamShareDialog({
   onStage,
   onUnstage,
   onShare,
+  sharing = false,
   onCancelStaged,
   onRemove,
   onResend,
@@ -53,6 +54,8 @@ export function BotTeamShareDialog({
   onStage: (suggestion: TeamShareSuggestion) => void
   onUnstage: (suggestion: TeamShareSuggestion) => void
   onShare: () => void
+  /** Share is saving; its buttons wait until it settles. */
+  sharing?: boolean
   onCancelStaged: () => void
   onRemove: (person: TeamSharePerson) => void
   onResend: (person: Extract<TeamSharePerson, { kind: 'invite' }>) => void
@@ -234,10 +237,12 @@ export function BotTeamShareDialog({
           </p>
           {staged.length > 0 ? (
             <>
-              <Button variant="ghost" onClick={onCancelStaged}>
+              <Button variant="ghost" disabled={sharing} onClick={onCancelStaged}>
                 {t('bots.teamShare.cancel', 'Cancel')}
               </Button>
-              <Button onClick={onShare}>{t('bots.teamShare.shareStaged', 'Share')}</Button>
+              <Button disabled={sharing} onClick={onShare}>
+                {t('bots.teamShare.shareStaged', 'Share')}
+              </Button>
             </>
           ) : (
             <Button onClick={onClose}>{t('bots.teamShare.done', 'Done')}</Button>
