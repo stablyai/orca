@@ -15,6 +15,8 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-session/identity/orca-session-address-prefix'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   canCreateChildWorktree,
   planWorkspaceStatusAssignment,
@@ -79,6 +81,13 @@ export function useWorktreeContextMenuCommands(args: {
   const handleCopyName = useCallback(() => {
     window.api.ui.writeClipboardText(resolveWorktreeDisplayName(args.worktree))
   }, [args])
+  // The tab bar's orcaTabId: form and the session address form, so pasted ids land where consumers read them.
+  const handleCopyAgentTabId = useCallback((tab: Tab) => {
+    window.api.ui.writeClipboardText(`orcaTabId: ${tab.id}`)
+  }, [])
+  const handleCopyAgentSessionId = useCallback((tab: Tab) => {
+    window.api.ui.writeClipboardText(`${ORCA_SESSION_ADDRESS_PREFIX}${tab.entityId}`)
+  }, [])
   const handleToggleRead = useCallback(() => {
     args.setWorkspaceUnreadByUser(
       args.worktree.id,
@@ -242,6 +251,8 @@ export function useWorktreeContextMenuCommands(args: {
     }),
     handleAssignWorkspaceStatus,
     handleCloseTerminals,
+    handleCopyAgentSessionId,
+    handleCopyAgentTabId,
     handleCopyName,
     handleCopyPath,
     handleCreateGroupDialogOpenChange,
