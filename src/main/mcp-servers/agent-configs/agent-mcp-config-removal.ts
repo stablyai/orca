@@ -16,10 +16,11 @@ import {
 } from './agent-mcp-config-read'
 import { removeTomlMcpServers } from './toml-mcp-server-removal'
 import { removeJsonProperty } from './json-property-removal'
+import { withClaudeGlobalConfigLock } from '../../claude/configuration/claude-global-config-lock'
 
 export class AgentMcpConfigEditError extends Error {
   constructor(
-    readonly reason: 'changed' | 'unparseable' | 'not-editable',
+    readonly reason: 'changed' | 'unparseable' | 'not-editable' | 'locked',
     readonly path: string
   ) {
     super(`${path}: ${reason}`)
@@ -34,6 +35,31 @@ function deleteKeyPath(root: unknown, path: readonly string[]): void {
   if (typeof parent === 'object' && parent !== null) {
     Reflect.deleteProperty(parent, path.at(-1) ?? '')
   }
+}
+
+/**
+ * `expected` minus the removed entries, and minus the tables that held only them when the edit
+ * dropped those too: a TOML file whose last `[mcp_servers.x]` goes has no `mcp_servers` left.
+ */
+function withoutRemoved(
+  expected: unknown,
+  actual: unknown,
+  removed: readonly (readonly string[])[]
+): unknown {
+  for (const path of removed) {
+    deleteKeyPath(expected, path)
+    for (let depth = path.length - 1; depth > 0; depth--) {
+      const parentPath = path.slice(0, depth)
+      const parent = valueAtKeyPath(expected, parentPath)
+      const emptied =
+        typeof parent === 'object' && parent !== null && Object.keys(parent).length === 0
+      if (!emptied || valueAtKeyPath(actual, parentPath) !== undefined) {
+        break
+      }
+      deleteKeyPath(expected, parentPath)
+    }
+  }
+  return expected
 }
 
 function editedText(body: string, sources: readonly AgentMcpConfigSource[]): string | null {
@@ -52,7 +78,7 @@ function removalFrom(
   differing: RemovalOptions['differing']
 ): string | null {
   const path = sources[0]!.path
-  const bom = raw.startsWith('﻿') ? '﻿' : ''
+  const bom = raw.startsWith('\uFEFF') ? '\uFEFF' : ''
   const body = raw.slice(bom.length)
   const current = agentMcpConfigServersIn(sources[0]!, raw)
   if (!current) {
@@ -76,11 +102,14 @@ function removalFrom(
     throw new AgentMcpConfigEditError('not-editable', path)
   }
   // The splice must leave exactly the parsed config minus these entries.
-  const expected = parseAgentMcpConfigText(body, removing[0]!.format)
-  for (const source of removing) {
-    deleteKeyPath(expected, source.keyPath)
-  }
-  if (!isDeepStrictEqual(parseAgentMcpConfigText(edited, removing[0]!.format), expected)) {
+  const format = removing[0]!.format
+  const actual = parseAgentMcpConfigText(edited, format)
+  const expected = withoutRemoved(
+    parseAgentMcpConfigText(body, format),
+    actual,
+    removing.map((source) => source.keyPath)
+  )
+  if (!isDeepStrictEqual(actual, expected)) {
     throw new AgentMcpConfigEditError('not-editable', path)
   }
   return bom + edited
@@ -91,16 +120,36 @@ type RemovalOptions = {
   differing: 'refuse' | 'skip'
 }
 
+/** Edits one file until it publishes; false when another writer kept changing it. */
+function removeFromFile(
+  path: string,
+  sources: readonly AgentMcpConfigSource[],
+  mergeKey: string,
+  differing: RemovalOptions['differing']
+): boolean {
+  for (let attempt = 0; attempt < PUBLISH_ATTEMPTS; attempt++) {
+    const raw = readRawTomlConfig(path)
+    const next = raw === null ? null : removalFrom(raw, sources, mergeKey, differing)
+    if (next === null) {
+      return false
+    }
+    if (writeTomlConfigAtomically(path, next, raw, { backup: true })) {
+      return true
+    }
+  }
+  throw new ConcurrentFileEditError(path)
+}
+
 /**
- * Removes the entries of one discovered server (`mergeKey`) from every file in `sources`, keeping
- * a backup of each file's previous bytes beside it. Entries already gone are skipped. Returns the
- * files it changed.
+ * Removes the entries of one discovered server (`mergeKey`, its whole definition) from every file
+ * in `sources`, keeping a backup of each file's previous bytes beside it. Entries already gone are
+ * skipped. Claude's files are edited under Claude's own lock. Returns the files it changed.
  */
-export function removeAgentMcpServerEntries(
+export async function removeAgentMcpServerEntries(
   sources: readonly AgentMcpConfigSource[],
   mergeKey: string,
   options: RemovalOptions = { differing: 'refuse' }
-): string[] {
+): Promise<string[]> {
   const byFile = new Map<string, AgentMcpConfigSource[]>()
   for (const source of sources) {
     if (source.scope !== 'user') {
@@ -110,19 +159,14 @@ export function removeAgentMcpServerEntries(
   }
   const changed: string[] = []
   for (const [path, fileSources] of byFile) {
-    let published = false
-    for (let attempt = 0; attempt < PUBLISH_ATTEMPTS && !published; attempt++) {
-      const raw = readRawTomlConfig(path)
-      const next = raw === null ? null : removalFrom(raw, fileSources, mergeKey, options.differing)
-      if (next === null) {
-        published = true
-      } else if (writeTomlConfigAtomically(path, next, raw, { backup: true })) {
-        changed.push(path)
-        published = true
-      }
+    const edit = (): boolean => removeFromFile(path, fileSources, mergeKey, options.differing)
+    const outcome =
+      fileSources[0]!.agent === 'claude' ? await withClaudeGlobalConfigLock(path, edit) : edit()
+    if (outcome === 'locked') {
+      throw new AgentMcpConfigEditError('locked', path)
     }
-    if (!published) {
-      throw new ConcurrentFileEditError(path)
+    if (outcome) {
+      changed.push(path)
     }
   }
   return changed

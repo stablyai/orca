@@ -121,7 +121,7 @@ function pastedLineServer(
       throw new Error(
         t(
           'mcpServers.paste.unsupported',
-          'Orca can’t add this server: it uses SSE or reads its token from the environment.'
+          'Orca can’t add this server as written: it uses SSE, its own OAuth client, or a value read from the environment.'
         )
       )
     }
@@ -143,7 +143,8 @@ export function parseMcpServersPaste(
 ): BotToolServer[] {
   const text = source.trim()
   let servers: BotToolServer[]
-  if (/^[{"]/.test(text)) {
+  // A quoted executable path (a Windows "Program Files" one) is a command, not a JSON fragment.
+  if (text.startsWith('{') || /^"[^"\\]*"\s*:/.test(text)) {
     const read = pastedConfigServers(text)
     if (read === null) {
       throw new Error(t('mcpServers.paste.badJson', 'Check the pasted JSON: it doesn’t parse.'))
@@ -163,7 +164,7 @@ export function parseMcpServersPaste(
     throw new Error(
       t(
         'mcpServers.paste.none',
-        'Orca found no server it can add. SSE servers and servers that read tokens from the environment aren’t supported.'
+        'Orca found no server it can add. SSE servers, servers with their own OAuth client or tool filters, and values read from the environment (${VAR}) aren’t supported.'
       )
     )
   }

@@ -95,11 +95,70 @@ function commandFields(command: unknown, args: unknown, env: unknown): ServerFie
   return { command, args: argList, ...(envMap ? { env: envMap } : {}) }
 }
 
+// Keys each dialect may hold beside the ones read into Orca's shape. Anything else (tool filters,
+// OAuth clients, token files, working folders, exposure) changes what the server does, so the
+// entry stays in its agent rather than being moved without it.
+const HARMLESS_KEYS: Record<AgentMcpConfigDialect, ReadonlySet<string>> = {
+  'mcp-json': new Set(['type', 'transport', 'enabled', 'disabled', 'timeout', 'description']),
+  gemini: new Set(['type', 'timeout', 'description', 'trust']),
+  'opencode-v1': new Set(['type', 'enabled', 'timeout']),
+  'opencode-v2': new Set(['type', 'disabled', 'timeout']),
+  'codex-toml': new Set([
+    'enabled',
+    'startup_timeout_sec',
+    'startup_timeout_ms',
+    'tool_timeout_sec'
+  ]),
+  'grok-toml': new Set([
+    'type',
+    'enabled',
+    'startup_timeout_sec',
+    'tool_timeout_sec',
+    'tool_timeouts'
+  ])
+}
+
+const READ_KEYS: Record<AgentMcpConfigDialect, ReadonlySet<string>> = {
+  'mcp-json': new Set(['command', 'args', 'env', 'url', 'httpUrl', 'serverUrl', 'headers']),
+  gemini: new Set(['command', 'args', 'env', 'url', 'httpUrl', 'headers']),
+  'opencode-v1': new Set(['command', 'environment', 'url', 'headers']),
+  'opencode-v2': new Set(['command', 'environment', 'url', 'headers']),
+  'codex-toml': new Set(['command', 'args', 'env', 'url', 'http_headers']),
+  'grok-toml': new Set(['command', 'args', 'env', 'url', 'headers'])
+}
+
+function carriesEveryKey(entry: Record<string, unknown>, dialect: AgentMcpConfigDialect): boolean {
+  return Object.entries(entry).every(
+    ([key, value]) =>
+      READ_KEYS[dialect].has(key) ||
+      HARMLESS_KEYS[dialect].has(key) ||
+      // Copilot writes `tools: ["*"]` for "every tool".
+      (key === 'tools' && Array.isArray(value) && value.length === 1 && value[0] === '*')
+  )
+}
+
+// Values the agent fills in from its environment or a command when it starts: `${VAR}` (Claude,
+// Cursor's `${env:VAR}`, Pi), OpenCode's `{env:VAR}`, Gemini's `$VAR`, Pi's `!command`.
+function substitutes(value: string, dialect: AgentMcpConfigDialect): boolean {
+  return (
+    /\$\{[^}]*\}|\{env:[^}]*\}/.test(value) ||
+    (dialect === 'gemini' && /\$[A-Za-z_]/.test(value)) ||
+    (dialect === 'mcp-json' && value.startsWith('!'))
+  )
+}
+
+function fieldsSubstitute(fields: ServerFields, dialect: AgentMcpConfigDialect): boolean {
+  const values =
+    'url' in fields
+      ? [fields.url, ...Object.values(fields.headers ?? {})]
+      : [fields.command, ...fields.args, ...Object.values(fields.env ?? {})]
+  return values.some((value) => substitutes(value, dialect))
+}
+
+const STREAMABLE_HTTP = new Set([undefined, 'http', 'streamable-http'])
+
 function mcpJsonFields(entry: Record<string, unknown>, dialect: AgentMcpConfigDialect) {
   const type = entry.type ?? entry.transport
-  if (type !== undefined && typeof type !== 'string') {
-    return null
-  }
   if (typeof entry.command === 'string') {
     // `local` is Copilot's name for stdio.
     return type === undefined || type === 'stdio' || type === 'local'
@@ -107,13 +166,13 @@ function mcpJsonFields(entry: Record<string, unknown>, dialect: AgentMcpConfigDi
       : null
   }
   if (entry.httpUrl !== undefined) {
-    return remoteFields(entry.httpUrl, entry.headers)
+    return type === undefined ? remoteFields(entry.httpUrl, entry.headers) : null
   }
   // Gemini reads a bare `url` as SSE; Orca's servers speak streamable HTTP only.
   if (dialect === 'gemini' && type !== 'http') {
     return null
   }
-  return type === undefined || type === 'http' || type === 'streamable-http'
+  return STREAMABLE_HTTP.has(type as string | undefined)
     ? remoteFields(entry.url ?? entry.serverUrl, entry.headers)
     : null
 }
@@ -131,23 +190,18 @@ function openCodeFields(entry: Record<string, unknown>): ServerFields | null {
 }
 
 function tomlFields(entry: Record<string, unknown>, dialect: AgentMcpConfigDialect) {
-  // Codex reads these from its own environment at start; Orca can't carry that indirection.
-  if (
-    entry.bearer_token_env_var !== undefined ||
-    entry.env_http_headers !== undefined ||
-    entry.env_vars !== undefined
-  ) {
-    return null
-  }
   if (typeof entry.command === 'string') {
-    return commandFields(entry.command, entry.args, entry.env)
+    return entry.type === undefined || entry.type === 'stdio'
+      ? commandFields(entry.command, entry.args, entry.env)
+      : null
   }
-  return remoteFields(entry.url, dialect === 'codex-toml' ? entry.http_headers : entry.headers)
+  return STREAMABLE_HTTP.has(entry.type as string | undefined)
+    ? remoteFields(entry.url, dialect === 'codex-toml' ? entry.http_headers : entry.headers)
+    : null
 }
 
 function entryFields(entry: Record<string, unknown>, dialect: AgentMcpConfigDialect) {
-  // A working folder of its own can't be carried by Orca's server shape.
-  if (entry.cwd !== undefined) {
+  if (!carriesEveryKey(entry, dialect)) {
     return null
   }
   switch (dialect) {
@@ -168,7 +222,10 @@ function entryDisabled(entry: Record<string, unknown>, dialect: AgentMcpConfigDi
     : entry.enabled === false || entry.disabled === true
 }
 
-/** Null when the entry isn't a server Orca can run as written (SSE, env indirection, cwd, bad values). */
+/**
+ * Null when Orca can't run the entry exactly as its agent does: SSE, a key Orca would drop (tool
+ * filters, OAuth client, token file, working folder), a value the agent substitutes, a bad value.
+ */
 export function agentMcpConfigEntry(
   configName: string,
   raw: unknown,
@@ -176,7 +233,7 @@ export function agentMcpConfigEntry(
 ): AgentMcpConfigEntry | null {
   const entry = record(raw)
   const fields = entry ? entryFields(entry, dialect) : null
-  if (!entry || !fields) {
+  if (!entry || !fields || fieldsSubstitute(fields, dialect)) {
     return null
   }
   const detail = 'url' in fields ? fields.url : [fields.command, ...fields.args].join(' ')
@@ -189,12 +246,19 @@ export function agentMcpConfigEntry(
     : null
 }
 
-/** One server across agents: the same name and the same URL or command line. */
+function sorted(value: Record<string, string> | undefined): [string, string][] {
+  return Object.entries(value ?? {}).sort(([left], [right]) => left.localeCompare(right))
+}
+
+/**
+ * One server across agents: the same name and the whole definition (URL or command line, headers,
+ * environment). Two copies that differ anywhere are two rows, so moving one never drops the other.
+ */
 export function agentMcpServerMergeKey(configName: string, server: BotToolServer): string {
   return JSON.stringify(
     'url' in server
-      ? [configName, 'url', server.url]
-      : [configName, 'command', server.command, ...server.args]
+      ? [configName, 'url', server.url, sorted(server.headers)]
+      : [configName, 'command', server.command, server.args, sorted(server.env)]
   )
 }
 

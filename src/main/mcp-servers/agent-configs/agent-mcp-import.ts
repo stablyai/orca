@@ -38,9 +38,15 @@ export type AgentMcpServerWorkspaces = { later: false; on: string[]; off: [] } |
 /** The host's workspace key and name for a project folder, or null when Orca doesn't know it. */
 export type WorkspaceForPath = (projectPath: string) => { key: string; name: string } | null
 
+export type ImportedMcpServerScope = {
+  workspaces: AgentMcpServerWorkspaces
+  /** Agents whose own copy was switched off: the server stays off for them in Orca. */
+  agentsOff: string[]
+}
+
 export type AddImportedMcpServer<T> = (
   server: BotToolServer,
-  workspaces: AgentMcpServerWorkspaces
+  scope: ImportedMcpServerScope
 ) => Promise<T>
 
 export class AgentMcpServerImportError extends Error {
@@ -85,7 +91,7 @@ function isOrcaDataProject(projectPath: string): boolean {
 type ImportRow = {
   found: DiscoveredAgentMcpServer
   row: AgentMcpServerRow
-  workspaces: AgentMcpServerWorkspaces
+  scope: ImportedMcpServerScope
 }
 
 function importRow(found: DiscoveredAgentMcpServer, workspaceFor: WorkspaceForPath): ImportRow {
@@ -96,15 +102,21 @@ function importRow(found: DiscoveredAgentMcpServer, workspaceFor: WorkspaceForPa
     ? projectPaths.map((path) => ({ path: path!, workspace: workspaceFor(path!) }))
     : []
   const keys = [...new Set(mapped.flatMap(({ workspace }) => (workspace ? [workspace.key] : [])))]
+  const agents = [...new Set(found.sources.map((source) => source.agent))]
   return {
     found,
-    workspaces: limited ? { later: false, on: keys, off: [] } : null,
+    scope: {
+      workspaces: limited ? { later: false, on: keys, off: [] } : null,
+      agentsOff: agents.filter((agent) =>
+        found.sources.every((source) => source.agent !== agent || source.disabled)
+      )
+    },
     row: {
       key: found.key,
       name: found.server.name,
       detail: botToolDetail(found.server),
       transport: 'url' in found.server ? 'http' : 'command',
-      agents: [...new Set(found.sources.map((source) => source.agent))],
+      agents,
       files: [...new Set(found.sources.map((source) => source.path))],
       projectNames: [
         ...new Set(mapped.map(({ path, workspace }) => workspace?.name ?? basename(path)))
@@ -142,8 +154,8 @@ export async function copyAgentMcpServer<T>(
   key: string,
   add: AddImportedMcpServer<T>
 ): Promise<T> {
-  const { found, workspaces } = await movableRow(host, key)
-  return add(found.server, workspaces)
+  const { found, scope } = await movableRow(host, key)
+  return add(found.server, scope)
 }
 
 // Orca's managed Claude accounts copy ~/.claude.json's servers forward and never drop one.
@@ -176,13 +188,13 @@ export async function moveAgentMcpServer<T>(
   key: string,
   add: AddImportedMcpServer<T>
 ): Promise<T> {
-  const { found, workspaces } = await movableRow(host, key)
-  const added = await add(found.server, workspaces)
+  const { found, scope } = await movableRow(host, key)
+  const added = await add(found.server, scope)
   const configName = found.sources[0]!.keyPath.at(-1)!
   const mergeKey = agentMcpServerMergeKey(configName, found.server)
-  removeAgentMcpServerEntries(found.sources, mergeKey)
+  await removeAgentMcpServerEntries(found.sources, mergeKey)
   // A profile entry the user changed in that account is theirs to keep.
-  removeAgentMcpServerEntries(await claudeProfileCopies(host, found.sources), mergeKey, {
+  await removeAgentMcpServerEntries(await claudeProfileCopies(host, found.sources), mergeKey, {
     differing: 'skip'
   })
   return added

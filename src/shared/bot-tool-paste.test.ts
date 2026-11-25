@@ -85,6 +85,12 @@ describe('parseMcpServersPaste', () => {
     ])
   })
 
+  it('reads a quoted Windows executable as a command, not JSON', () => {
+    expect(parseMcpServersPaste('"C:\\Program Files\\mcp\\server.exe" --stdio', 'win32')).toEqual([
+      { name: 'tool', command: 'C:\\Program Files\\mcp\\server.exe', args: ['--stdio'] }
+    ])
+  })
+
   it('refuses what Orca cannot carry instead of guessing', () => {
     expect(() => paste('claude mcp add --transport sse linear https://mcp.linear.app/sse')).toThrow(
       /SSE/
@@ -95,6 +101,12 @@ describe('parseMcpServersPaste', () => {
     expect(() => paste('{"mcpServers": {"a": {"type": "sse", "url": "https://x.dev"}}}')).toThrow(
       /no server/
     )
+    expect(() =>
+      paste('{"mcpServers": {"gh": {"url": "https://x.dev/mcp", "headers": {"A": "Bearer ${T}"}}}}')
+    ).toThrow(/no server/)
+    expect(() =>
+      paste('claude mcp add --client-id abc --transport http x https://x.dev/mcp')
+    ).toThrow(/OAuth/)
     expect(() => paste('{"mcpServers": ')).toThrow(/doesn’t parse/)
     expect(() => paste('claude mcp add onlyname')).toThrow(/mcp add command/)
   })

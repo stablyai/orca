@@ -62,7 +62,7 @@ function userFiles(agent: McpConfigAgent, context: AgentMcpConfigContext): strin
     case 'codex':
       return [join(codexSourceHome(context), 'config.toml')]
     case 'opencode': {
-      const dir = join(xdgConfigHome(context), 'opencode')
+      const dir = envDir(env, 'OPENCODE_CONFIG_DIR') ?? join(xdgConfigHome(context), 'opencode')
       const explicit = envDir(env, 'OPENCODE_CONFIG')
       return [
         join(dir, 'opencode.json'),

@@ -64,8 +64,14 @@ beforeEach(() => {
     '.copilot/mcp-config.json',
     '{ "mcpServers": { "cp": { "type": "local", "command": "cp-mcp", "tools": ["*"] } } }'
   )
-  write('.pi/agent/mcp.json', '{ "mcpServers": { "pi": { "url": "https://pi.dev/mcp" } } }')
-  write('.grok/config.toml', '[mcp_servers.grk]\ncommand = "grk"\nargs = ["a"]\nenabled = false\n')
+  write(
+    '.pi/agent/mcp.json',
+    '{ "mcpServers": { "pi": { "url": "https://pi.dev/mcp" }, "env": { "url": "https://e.dev/mcp", "headers": { "Authorization": "Bearer ${TOKEN}" } }, "filtered": { "command": "f", "exposure": "direct" } } }'
+  )
+  write(
+    '.grok/config.toml',
+    'theme = "dark"\n\n[mcp_servers.grk]\ncommand = "grk"\nargs = ["a"]\nenabled = false\n'
+  )
   write(
     '.cursor/mcp.json',
     '{ "mcpServers": { "cur": { "url": "https://cur.dev/mcp" }, "orca-linear": { "command": "/Applications/Orca.app/Contents/Resources/bin/orca", "args": ["mcp", "connect", "linear"] } } }'
@@ -115,13 +121,13 @@ describe('agent MCP config discovery and move', () => {
   })
 
   it('moves a server: removes exactly its entries, keeps formatting, and backs each file up', async () => {
-    const profile = (id: string, url: string) =>
+    const profile = (id: string, auth: string) =>
       write(
         `orca-data/claude-profiles/${id}/home/.claude.json`,
-        `{\n  "mcpServers": {\n    "github": { "type": "http", "url": "${url}" },\n    "own": { "command": "own" }\n  }\n}\n`
+        `{\n  "mcpServers": {\n    "github": { "type": "http", "url": "${GITHUB}"${auth} },\n    "own": { "command": "own" }\n  }\n}\n`
       )
-    profile('same', GITHUB)
-    profile('edited', 'https://elsewhere.dev/mcp')
+    profile('same', '')
+    profile('edited', ', "headers": { "Authorization": "Bearer mine" }')
     const host: AgentMcpImportHost = {
       context: context(),
       userDataPath: join(home, 'orca-data'),
@@ -142,13 +148,23 @@ describe('agent MCP config discovery and move', () => {
     const add = async (...args: unknown[]) => added.push(args)
     await moveAgentMcpServer(host, row('github').key, add)
     await moveAgentMcpServer(host, row('db').key, add)
+    await moveAgentMcpServer(host, row('grk').key, add)
     expect(added).toEqual([
-      [{ name: 'github', url: GITHUB }, null],
+      [
+        { name: 'github', url: GITHUB },
+        { workspaces: null, agentsOff: [] }
+      ],
       [
         { name: 'db', command: 'pg-mcp', args: [] },
-        { later: false, on: ['repo-1'], off: [] }
+        { workspaces: { later: false, on: ['repo-1'], off: [] }, agentsOff: [] }
+      ],
+      [
+        { name: 'grk', command: 'grk', args: ['a'] },
+        { workspaces: null, agentsOff: ['grok'] }
       ]
     ])
+    // The last server out of a TOML file takes its emptied table with it.
+    expect(read('.grok/config.toml')).toBe('theme = "dark"\n')
     expect(read('.claude.json')).toBe(
       CLAUDE_JSON.replace(`\n    "github": { "type": "http", "url": "${GITHUB}" },`, '').replace(
         `\n    "/work/orca": { "mcpServers": { "db": { "command": "pg-mcp", "args": [] } } },`,
@@ -168,9 +184,9 @@ describe('agent MCP config discovery and move', () => {
     const github = found.find((row) => row.server.name === 'github')!
     write('.codex/config.toml', CODEX_TOML.replace(GITHUB, 'https://other.dev/mcp'))
     const codex = github.sources.filter((source) => source.agent === 'codex')
-    expect(() =>
+    await expect(
       removeAgentMcpServerEntries(codex, agentMcpServerMergeKey('github', github.server))
-    ).toThrow(AgentMcpConfigEditError)
+    ).rejects.toThrow(AgentMcpConfigEditError)
     expect(read('.codex/config.toml')).toContain('https://other.dev/mcp')
   })
 })

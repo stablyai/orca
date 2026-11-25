@@ -103,13 +103,13 @@ function parseClaudeAdd(tokens: readonly string[]): AgentMcpConfigEntry {
         break
       case '-s':
       case '--scope':
-      case '--client-id':
-      case '--callback-port':
         value()
         break
+      case '--client-id':
       case '--client-secret':
-        index += 1
-        break
+      case '--callback-port':
+        // A pre-registered OAuth client of the agent's own; Orca signs in with its own client.
+        throw new McpAddCommandError('unsupported')
       case '-e':
       case '--env':
         for (const word of values((next) => ENV_ASSIGNMENT.test(next))) {
@@ -157,7 +157,9 @@ function parseClaudeAddJson(tokens: readonly string[]): AgentMcpConfigEntry {
     const token = tokens[index]!
     if (token === '-s' || token === '--scope') {
       index += 1
-    } else if (!token.startsWith('--scope=') && token !== '--client-secret') {
+    } else if (token === '--client-secret') {
+      throw new McpAddCommandError('unsupported')
+    } else if (!token.startsWith('--scope=')) {
       positional.push(token)
     }
   }
