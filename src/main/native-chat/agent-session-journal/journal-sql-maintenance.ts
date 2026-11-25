@@ -47,12 +47,14 @@ import {
   cutJournalConnectorReplies,
   fillJournalConnectorReplies,
   recutJournalConnectorReplies,
+  holdJournalConnectorRepliesForRetry,
   releaseJournalConnectorClaim,
   sentJournalConnectorReplies
 } from './connector-replies/journal-connector-replies'
 import type {
   JournalConnectorReplyCut,
   JournalConnectorReplyCutRows,
+  JournalConnectorReplyRetryRows,
   JournalConnectorReplyFill,
   JournalConnectorReplyKey
 } from '../../../shared/agent-session/journal/journal-connector-reply'
@@ -107,6 +109,7 @@ export type JournalSqlMaintenance =
       failure?: ConnectorFailure
     }
   | { kind: 'connector-replies-release'; claimMessageId: string }
+  | { kind: 'connector-replies-retry-hold'; rows: JournalConnectorReplyRetryRows }
 
 export type JournalSqlProjectionState = JournalDomainImportState
 
@@ -222,6 +225,8 @@ export function applyJournalSqlMaintenance(
       )
     case 'connector-replies-release':
       return releaseJournalConnectorClaim(db, operation.claimMessageId) > 0
+    case 'connector-replies-retry-hold':
+      return holdJournalConnectorRepliesForRetry(db, operation.rows) > 0
     case 'import-page':
       return insertJournalDomainImportPage(db, operation.target, operation.page)
     case 'import-finish':

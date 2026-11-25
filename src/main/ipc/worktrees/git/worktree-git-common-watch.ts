@@ -29,7 +29,9 @@ export async function startGitCommonWatch(
   onFullScan?: () => void,
   getStatusRefPaths: () => readonly string[] = () => [],
   onWatchError?: (error: Error) => void,
-  onOverflow?: () => void
+  onOverflow?: () => void,
+  // Membership is replaced on watcher sync; read it live.
+  getRepos: () => ReadonlyMap<string, unknown> = () => target.repos
 ): Promise<WorktreeBaseSubscription> {
   if (supportsNarrowWatch(platform)) {
     const [narrowWatch, primaryWatch] = await Promise.all([
@@ -41,7 +43,8 @@ export async function startGitCommonWatch(
         visibility,
         onFullScan,
         onWatchError,
-        onOverflow
+        onOverflow,
+        getRepos
       ),
       startGitCommonPrimaryWatch(
         target.path,

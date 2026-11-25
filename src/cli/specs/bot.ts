@@ -244,6 +244,8 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
       'every-day',
       'focus'
     ],
+    // Global --focus is a boolean; here it takes text, so `--focus "a b"` and `--focus ""` work.
+    valueFlags: ['focus'],
     notes: [
       'Run from a bot’s chat it changes that bot; the chat shows what changed.',
       '--focus "" clears it, so the bot looks for anything waiting on its owner.'
