@@ -23032,7 +23032,8 @@
         "keptWhileEditing": "Notes kept with {{name}}. Finish editing the queued message to add them.",
         "keptWhileGoal": "Notes kept with {{name}}. Your message box is setting a goal.",
         "annotateTooLarge": "This image is too large to draw notes on (over 33 megapixels).",
-        "sendWhileEditing": "Close the image you’re editing notes on, then send."
+        "sendWhileEditing": "Close the image you’re editing notes on, then send.",
+        "undoUnsaved": "Couldn’t undo: the earlier notes couldn’t be saved. These stay in your message."
       }
     },
     "tab": {

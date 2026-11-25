@@ -20511,7 +20511,8 @@
         "keptWhileEditing": "Notas guardadas con {{name}}. Termina de editar el mensaje en cola para añadirlas.",
         "keptWhileGoal": "Notas guardadas con {{name}}. Tu cuadro de mensaje está fijando un objetivo.",
         "annotateTooLarge": "Esta imagen es demasiado grande para dibujar notas (más de 33 megapíxeles).",
-        "sendWhileEditing": "Cierra la imagen cuyas notas estás editando y luego envía."
+        "sendWhileEditing": "Cierra la imagen cuyas notas estás editando y luego envía.",
+        "undoUnsaved": "No se pudo deshacer: no se pudieron guardar las notas anteriores. Estas se quedan en tu mensaje."
       }
     },
     "tab": {

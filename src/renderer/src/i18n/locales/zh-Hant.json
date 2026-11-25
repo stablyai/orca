@@ -20394,7 +20394,8 @@
         "keptWhileEditing": "備註已隨 {{name}} 保留。完成佇列中訊息的編輯後即可加入。",
         "keptWhileGoal": "備註已隨 {{name}} 保留。訊息框正在設定目標。",
         "annotateTooLarge": "這張圖片太大，無法繪製備註（超過 3300 萬像素）。",
-        "sendWhileEditing": "請先關閉正在編輯備註的圖片，再傳送。"
+        "sendWhileEditing": "請先關閉正在編輯備註的圖片，再傳送。",
+        "undoUnsaved": "無法復原：先前的備註無法儲存。這些備註會保留在你的訊息中。"
       }
     },
     "tab": {

@@ -23027,7 +23027,8 @@
         "keptWhileEditing": "Notlar {{name}} ile tutuldu. Eklemek için sıradaki mesajı düzenlemeyi bitirin.",
         "keptWhileGoal": "Notlar {{name}} ile tutuldu. Mesaj kutunuz bir hedef belirliyor.",
         "annotateTooLarge": "Bu görsel not çizmek için çok büyük (33 megapikselden fazla).",
-        "sendWhileEditing": "Notlarını düzenlediğiniz görseli kapatın, sonra gönderin."
+        "sendWhileEditing": "Notlarını düzenlediğiniz görseli kapatın, sonra gönderin.",
+        "undoUnsaved": "Geri alınamadı: önceki notlar kaydedilemedi. Bu notlar mesajınızda kalıyor."
       }
     },
     "tab": {

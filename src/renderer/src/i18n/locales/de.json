@@ -20811,7 +20811,8 @@
         "keptWhileEditing": "Notizen bei {{name}} behalten. Bearbeite die Nachricht in der Warteschlange fertig, um sie hinzuzufügen.",
         "keptWhileGoal": "Notizen bei {{name}} behalten. Dein Nachrichtenfeld legt gerade ein Ziel fest.",
         "annotateTooLarge": "Dieses Bild ist zu groß, um Notizen darauf zu zeichnen (über 33 Megapixel).",
-        "sendWhileEditing": "Schließe das Bild, dessen Notizen du bearbeitest, und sende dann."
+        "sendWhileEditing": "Schließe das Bild, dessen Notizen du bearbeitest, und sende dann.",
+        "undoUnsaved": "Rückgängig nicht möglich: Die früheren Notizen konnten nicht gespeichert werden. Diese bleiben in deiner Nachricht."
       }
     },
     "tab": {

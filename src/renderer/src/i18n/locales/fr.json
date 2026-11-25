@@ -20736,7 +20736,8 @@
         "keptWhileEditing": "Notes conservées avec {{name}}. Terminez la modification du message en attente pour les ajouter.",
         "keptWhileGoal": "Notes conservées avec {{name}}. Votre zone de message définit un objectif.",
         "annotateTooLarge": "Cette image est trop grande pour y dessiner des notes (plus de 33 mégapixels).",
-        "sendWhileEditing": "Fermez l’image dont vous modifiez les notes, puis envoyez."
+        "sendWhileEditing": "Fermez l’image dont vous modifiez les notes, puis envoyez.",
+        "undoUnsaved": "Impossible d’annuler : les notes précédentes n’ont pas pu être enregistrées. Celles-ci restent dans votre message."
       }
     },
     "tab": {

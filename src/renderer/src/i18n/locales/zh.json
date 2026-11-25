@@ -21781,7 +21781,8 @@
         "keptWhileEditing": "备注已随 {{name}} 保留。完成队列中消息的编辑后即可添加。",
         "keptWhileGoal": "备注已随 {{name}} 保留。消息框正在设置目标。",
         "annotateTooLarge": "这张图片太大，无法绘制备注（超过 3300 万像素）。",
-        "sendWhileEditing": "请先关闭正在编辑备注的图片，再发送。"
+        "sendWhileEditing": "请先关闭正在编辑备注的图片，再发送。",
+        "undoUnsaved": "无法撤销：之前的备注无法保存。这些备注会保留在你的消息中。"
       }
     },
     "tab": {
