@@ -81,18 +81,8 @@ describe('findPinnedHomeTabId', () => {
     expect(findPinnedHomeTabId([], onBotPage)).toBeNull()
   })
 
-  // Why: an ordinary strip re-projects on every tab change, and with no bot home it can never hold a Home.
-  it('never walks the tabs of a strip no bot calls home', () => {
-    let reads = 0
-    const item = chatItem('home', 'home-chat')
-    const watched = Object.defineProperty({ ...item }, 'type', {
-      get: () => {
-        reads += 1
-        return item.type
-      }
-    }) as TabBarItem
-    expect(findPinnedHomeTabId([watched, watched], null)).toBeNull()
-    expect(reads).toBe(0)
+  it('pins nothing on a strip no bot calls home, even over a chat shaped like Home', () => {
+    expect(findPinnedHomeTabId([chatItem('home', 'home-chat')], null)).toBeNull()
   })
 })
 

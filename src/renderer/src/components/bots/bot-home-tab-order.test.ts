@@ -65,4 +65,12 @@ describe('homeBotLookupFor', () => {
     expect(lookup?.('runtime:other')).toBe(remote)
     expect(lookup?.('local')).toBeNull()
   })
+
+  it('keeps each host to its own bot when two hosts share a home id', () => {
+    const local = bot('b1', 'bot-home', 'local')
+    const remote = bot('b2', 'bot-home', 'runtime:other')
+    const lookup = homeBotLookupFor([local, remote], 'folder:bot-home')
+    expect(lookup?.('local')).toBe(local)
+    expect(lookup?.('runtime:other')).toBe(remote)
+  })
 })
