@@ -8,7 +8,7 @@ import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { structuredAgentSessionTurnAssistantMessage } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
+import { structuredAgentSessionTurnReply } from '../../shared/agent-session/requests/structured-agent-session-turn-reply'
 import { structuredAgentSessionTurnFailure } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
 import { connectorFailure } from './external-conversation-failure'
 import type { ConversationReplyFill } from './external-conversation-reply-fill'
@@ -53,7 +53,7 @@ export async function fillRecoveredTurn(
       stamps,
       ...(opener ? { openerItemId: opener.itemId } : {}),
       outcome,
-      prose: structuredAgentSessionTurnAssistantMessage(snapshot.items, turn.itemId),
+      ...structuredAgentSessionTurnReply(snapshot.items, turn.itemId),
       bot: deps.isBot(sessionId),
       links: [],
       ...(outcome === 'failure'

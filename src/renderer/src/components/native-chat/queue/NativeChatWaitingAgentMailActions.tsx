@@ -60,7 +60,8 @@ export function NativeChatWaitingAgentMailActions({
   const editLabel = t('components.native-chat.queuedMessages.editMessage', 'Edit message')
   const deleteLabel = t('components.native-chat.queuedMessages.delete', 'Delete')
   return (
-    <span ref={ref} className="flex items-center gap-0.5">
+    // No gap, as on a queued card's tool row: the buttons' own padding spaces their glyphs evenly.
+    <span ref={ref} className="flex items-center">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

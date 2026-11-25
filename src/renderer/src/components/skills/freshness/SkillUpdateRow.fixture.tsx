@@ -7,6 +7,9 @@ import type {
 } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import { summarizeBundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { SkillUpdateRow } from './SkillUpdateRow'
+import { useIntlLocale } from '@/i18n/use-translate'
+import type { BuiltInUiLanguage } from '../../../../../shared/i18n/ui-language'
+import { pinFixtureLanguage, waitForFixtureLanguage } from '../skill-fixture-language'
 import { skillBackupLocation, type SkillBackupHost } from './skill-backup-location'
 
 // Seeded data only: a made-up home.
@@ -42,12 +45,28 @@ function leave(path: string, observed: BundledSkillObserved, extra: Partial<Bund
   } satisfies BundledSkillOp
 }
 
+// Why remount per locale: the row's reason lines are memoized on the location, not the language,
+// so a row first rendered before the pinned language applied would keep the earlier one.
+function LocalizedRow({
+  plan,
+  ...props
+}: { plan: BundledSkillPlan } & Omit<
+  React.ComponentProps<typeof SkillUpdateRow>,
+  'skill'
+>): React.JSX.Element {
+  const locale = useIntlLocale()
+  return (
+    <SkillUpdateRow key={locale} skill={summarizeBundledSkillPlan(plan).skills[0]} {...props} />
+  )
+}
+
 function rowFixture(
   ops: BundledSkillOp[],
   replaced = false,
   width = 576,
   host: SkillBackupHost = LOCAL,
-  outcome?: BundledSkillOutcome
+  outcome?: BundledSkillOutcome,
+  language: BuiltInUiLanguage = 'en'
 ) {
   const plan: BundledSkillPlan = {
     scope: 'global',
@@ -55,13 +74,12 @@ function rowFixture(
     skills: [{ name: NAME, digest: 'a'.repeat(64), ops }],
     planDigest: 'b'.repeat(64)
   }
-  const skill = summarizeBundledSkillPlan(plan).skills[0]
   return defineFixture({
     width,
     render: () => (
       <div className="px-3">
-        <SkillUpdateRow
-          skill={skill}
+        <LocalizedRow
+          plan={plan}
           phase={outcome ? 'result' : 'plan'}
           showLocations={!outcome}
           replace={{ isReplaced: () => replaced, onReplaceChange: () => undefined }}
@@ -69,7 +87,9 @@ function rowFixture(
           {...(outcome ? { outcome } : {})}
         />
       </div>
-    )
+    ),
+    setup: () => pinFixtureLanguage(language),
+    interact: (frame) => waitForFixtureLanguage(frame, language)
   })
 }
 
@@ -135,3 +155,24 @@ export const fileCopy = rowFixture([
 export const formerNameCopy = rowFixture([
   leave(FORMER, WITH_EXTRAS, { role: 'agent', agents: ['codex'], replaceable: false })
 ])
+
+// Long locales at the dialog's narrow width: the backup lines must wrap, not clip.
+const KEEP = [leave(SHARED, WITH_EXTRAS, { kind: 'keep', reason: undefined })]
+export const olderReleaseRemoteGerman = rowFixture(
+  [leave(SHARED, WITH_EXTRAS, {})],
+  false,
+  400,
+  REMOTE,
+  undefined,
+  'de'
+)
+export const olderReleaseRemoteRussian = rowFixture(
+  [leave(SHARED, WITH_EXTRAS, {})],
+  false,
+  400,
+  REMOTE,
+  undefined,
+  'ru'
+)
+export const replacedResultRemoteGerman = rowFixture(KEEP, false, 400, REMOTE, REPLACED, 'de')
+export const replacedResultRemoteRussian = rowFixture(KEEP, false, 400, REMOTE, REPLACED, 'ru')

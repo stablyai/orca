@@ -7,7 +7,9 @@ import {
   gitOptionsForWorktree
 } from '../../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { trackGitOperationWriters } from '../../command-runner/git-writer-lifetime'
 import { runWithGitReadCacheInvalidation } from '../git-read-cache-invalidation'
+import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
 import { resolveGitDir } from '../resolve-git-dir'
 
 // HEAD detection races may yield unknown for one poll; rebase directories persist more reliably than REBASE_HEAD.
@@ -67,7 +69,38 @@ export async function abortRebase(
   worktreePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await runWithGitReadCacheInvalidation(() =>
-    gitExecFileAsync(['rebase', '--abort'], gitOptionsForWorktree(worktreePath, options))
+  const lifetime = trackGitOperationWriters(options, true)
+  // Queued Abort runs once in this worktree after any Orca operation already holding the lane.
+  await runWithGitWorktreeOperationLock(
+    worktreePath,
+    options.signal,
+    () =>
+      runWithGitReadCacheInvalidation(() =>
+        gitExecFileAsync(['rebase', '--abort'], {
+          ...gitOptionsForWorktree(worktreePath, lifetime.options),
+          terminationBarrier: 'wait-for-posix-group'
+        })
+      ),
+    lifetime.waitForWriters
   )
+}
+
+// Git 2.55 reworded "Applying autostash resulted in conflicts"; match both.
+export const AUTOSTASH_REAPPLY_CONFLICT =
+  /Applying autostash resulted in conflicts|local changes are stashed, however applying them\s+resulted in conflicts|could not apply autostash/i
+
+/** Git refuses to rebase over tracked changes unless rebase.autoStash is on. */
+export async function readRebaseAutoStash(
+  worktreePath: string,
+  options: GitRuntimeOptions = {}
+): Promise<boolean> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['config', '--bool', '--get', '--default=false', 'rebase.autoStash'],
+      gitOptionsForWorktree(worktreePath, options)
+    )
+    return stdout.trim() === 'true'
+  } catch {
+    return false
+  }
 }
