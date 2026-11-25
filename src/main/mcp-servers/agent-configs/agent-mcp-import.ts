@@ -167,9 +167,15 @@ async function importRows(
 ): Promise<ImportRow[]> {
   const limits = found.map(limitedTo)
   const workspaceFor = limits.some((paths) => paths !== null) ? await host.workspaceFor() : null
-  const asked = (agent: string): boolean =>
-    removals === true || (removals !== false && removals.includes(agent))
-  const agents = [...new Set(found.flatMap((server) => agentsOf(server.sources)))].filter(asked)
+  const sourceAgents = (): string[] => [
+    ...new Set(found.flatMap((server) => agentsOf(server.sources)))
+  ]
+  const agents =
+    removals === false
+      ? []
+      : removals === true
+        ? sourceAgents()
+        : sourceAgents().filter((agent) => removals.includes(agent))
   const reaches = agents.length > 0 ? await host.listReaches(agents) : () => false
   return found.map((server, index) =>
     importRow(
