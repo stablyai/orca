@@ -92,8 +92,9 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
   const shownThread =
     openThread === null
       ? null
-      : ([...controller.threadsByLine.values()]
-          .flat()
+      : // The PR's threads, not the inline ones: a moved local head hides those but not the thread.
+        ([...(github?.threadsByPath.values() ?? [])]
+          .flatMap((byLine) => [...byLine.values()].flat())
           .find((thread) => thread.threadId === openThread.id) ?? null)
   // Dock GitHub sidebar only when wide; otherwise showPRSidebar toggles RightDrawer overlay.
   const showInlineDock = presentationMode === 'inline' && controller.prSidebarIsGithubRepo
@@ -115,7 +116,13 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
 
   return (
     <View style={styles.screen}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={['top']}
+        // Covered by an open thread, the diff leaves the accessibility tree so VoiceOver reads only the thread.
+        aria-hidden={openThread !== null}
+        importantForAccessibility={openThread !== null ? 'no-hide-descendants' : 'auto'}
+      >
         <MobileDiffReviewHeader
           actions={overflowActions}
           fileName={item ? getRuntimePathBasename(item.filePath) : null}

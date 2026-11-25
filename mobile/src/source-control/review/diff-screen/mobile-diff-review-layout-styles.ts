@@ -8,16 +8,6 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  iconButtonPressed: {
-    backgroundColor: colors.borderSubtle
-  },
   staleText: {
     color: colors.statusAmber,
     fontSize: typography.metaSize,
