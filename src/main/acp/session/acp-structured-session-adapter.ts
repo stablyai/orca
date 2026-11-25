@@ -260,11 +260,18 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       : undefined
   }
 
-  /** The open work a detached agent's idle stop counts; OMP's, like its open-app idle, is unknown. */
-  relayOpenWork = (sessionId: string): Record<string, string[][]> | null => {
+  /** The open work a detached agent's idle stop counts; OMP's, like its open-app idle, is unknown,
+   *  as is a turn the agent began itself: no line the daemon reads ends it (a sent prompt's answer
+   *  does), and its quiet commands may still run. */
+  relayOpenWork = (
+    sessionId: string,
+    rootTurnRunning: boolean
+  ): Record<string, string[][]> | null => {
     const session = this.children.sessions.get(sessionId)
     const translator = session?.lane?.translator
-    return !translator || session.spec.agent === 'omp'
+    const agentTurn =
+      rootTurnRunning && childState.isAcpReadySession(session) && !session.turns.running
+    return !translator || session.spec.agent === 'omp' || agentTurn
       ? null
       : acpRelayOpenWork({
           tasks: translator.backgroundTasks.runningIds,

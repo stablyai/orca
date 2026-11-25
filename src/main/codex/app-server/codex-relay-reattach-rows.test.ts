@@ -258,6 +258,51 @@ describe('codex rows across a reattach', () => {
     expect(rows.get(saved[0]![0])).toContain('Hello world')
   })
 
+  it('a replay that starts mid-command keeps its saved row whole until the command ends', () => {
+    const rows = new Map<string, string>()
+    const translatorFor = () =>
+      createCodexJournalTranslator({
+        sink: {
+          appendItem: (identity, body) =>
+            rows.set(agentJournalItemKey(identity), JSON.stringify(body)),
+          appendTombstone: (identity) => rows.delete(agentJournalItemKey(identity)),
+          publish: () => {}
+        }
+      })
+    const at = { threadId: 't', turnId: 'turn-a' }
+    const command = { type: 'commandExecution', id: 'cmd', command: 'seq 1 9', cwd: '/w' }
+    const send = (
+      translator: ReturnType<typeof translatorFor>,
+      method: string,
+      params: Record<string, unknown>
+    ) =>
+      translator.handle({
+        type: 'notification',
+        sessionId: 's',
+        threadId: 't',
+        method,
+        params: { ...at, ...params }
+      })
+    const first = translatorFor()
+    send(first, 'turn/started', { turn: { id: 'turn-a' } })
+    send(first, 'item/started', { item: { ...command, status: 'inProgress' } })
+    first.flush()
+    const saved = [...rows.entries()].find(([, body]) => body.includes('seq 1 9'))
+    expect(saved).toBeDefined()
+    // The next launch replays from its cursor, past the command's start.
+    const next = translatorFor()
+    next.seedTurnOrdinals('t', 'turn-a', ['cmd'])
+    send(next, 'item/commandExecution/outputDelta', { itemId: 'cmd', delta: '1\n2\n' })
+    next.flush()
+    expect(rows.get(saved![0])).toBe(saved![1])
+    send(next, 'item/completed', {
+      item: { ...command, status: 'completed', aggregatedOutput: '1\n2\n3\n', exitCode: 0 }
+    })
+    next.flush()
+    expect(rows.get(saved![0])).toContain('seq 1 9')
+    expect(rows.get(saved![0])).toContain('3')
+  })
+
   it("numbers a kept chat's and its subagents' running turns as the live run did", async () => {
     const turns: Record<string, unknown> = {
       main: {

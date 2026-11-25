@@ -15,14 +15,14 @@ const chunk = (text: string, messageId?: string): string =>
     ...(messageId ? { messageId } : {})
   })
 
-function rig() {
+function rig(durable: (force: boolean) => Promise<boolean> = async () => true) {
   const acks: number[] = []
   const cuts: number[] = []
   const turns = new AcpRelayTurns()
   const output = new RelayedProviderOutput({
     stdout: new Readable({ read() {} }),
     ackFloor: turns.ackFloor(),
-    durable: async () => true,
+    durable,
     // Where a reattach would replay from, less one: the daemon keeps lines from `keepFrom` on, and
     // never gets back lines it already dropped.
     ack: async (seq, keepFrom, flags) => {
@@ -66,7 +66,7 @@ describe('ACP relay ack floor', () => {
     // A chunk with an id shows the agent numbers no messages, so only open items hold.
     await send(chunk('a', 'm1'))
     expect(await send(chunk('b', 'm1'))).toEqual([])
-    // A call ends the message; the call holds until the connection reads its final status.
+    // A message goes on past a call under its id (OpenCode's step), so it still holds.
     await send(
       update('tool_call', {
         toolCallId: 'c1',
@@ -74,16 +74,16 @@ describe('ACP relay ack floor', () => {
         rawOutput: { status: 'completed' }
       })
     )
-    expect(await send(update('tool_call_update', { toolCallId: 'c1', content: [] }))).toEqual([2])
+    await send(chunk('b2', 'm1'))
     const done = update('tool_call_update', { toolCallId: 'c1', status: 'completed' })
     await send(done)
     parsed(done)
-    expect(await send()).toEqual([2, 5])
-    // An open message holds until its prompt's answer.
-    expect(await send(chunk('c', 'm2'))).toEqual([2, 5])
+    expect(await send()).toEqual([])
+    // Another message ends it; that one holds until its prompt's answer.
+    expect(await send(chunk('c', 'm2'))).toEqual([5])
     answer.resolve()
     await vi.waitFor(async () =>
-      expect(await send(update('plan', { entries: [] }))).toEqual([2, 5, 7])
+      expect(await send(update('plan', { entries: [] }))).toEqual([5, 7])
     )
   })
 
@@ -118,15 +118,19 @@ describe('ACP relay ack floor', () => {
     await output.settle(true)
     await send(chunk('c', 'm1'))
     expect(cuts).toEqual([2, 3])
-    // A call ends the message: acks after it are plain again.
+    // A call doesn't end it (it may go on under its id); the next message does.
     await send(update('plan', { entries: [] }))
     await send(chunk('d', 'm2'))
-    expect(cuts).toEqual([2, 3])
-    // Nor does a released message outlast the next message: a replay would move that one instead.
-    await output.settle(true)
-    await send(chunk('e', 'm2'))
-    await send(chunk('f', 'm3'))
-    expect(cuts).toEqual([2, 3, 5, 6])
+    expect(cuts).toEqual([2, 3, 4])
+  })
+
+  it('acks every line handed on at a hand-off, saving streamed text first', async () => {
+    // Streamed text is saved only on a forced flush; a plain settle can't ack past it.
+    const { output, acks, send } = rig(async (force) => force)
+    await send(chunk('a'), chunk('b'))
+    expect(acks).toEqual([])
+    await output.flush()
+    expect(acks).toEqual([2])
   })
 
   it("holds an OpenCode child's open message until its session reports a status", async () => {

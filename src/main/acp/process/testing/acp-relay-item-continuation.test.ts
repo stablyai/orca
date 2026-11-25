@@ -61,7 +61,7 @@ describe('ACP relay item continuation', () => {
     ).toBeNull()
   })
 
-  it("moves each session's cut message, whatever another session's lines replay first", () => {
+  it("moves each session's cut message, however their lines interleave", () => {
     const hook = new AcpRelayItemContinuation()
     const child = (fields: Record<string, unknown>) =>
       JSON.stringify({
@@ -71,7 +71,7 @@ describe('ACP relay item continuation', () => {
       })
     const text = { type: 'text', text: 'x' }
     const replay = [
-      child({ sessionUpdate: 'tool_call', toolCallId: 'c1' }),
+      child({ sessionUpdate: 'agent_message_chunk', messageId: 'k1', content: text }),
       chunk('m1', 'root tail'),
       child({ sessionUpdate: 'agent_message_chunk', messageId: 'k2', content: text })
     ]
@@ -85,7 +85,7 @@ describe('ACP relay item continuation', () => {
       const [out = ''] = cut?.lines(11 + at, line, undefined) ?? [line]
       return JSON.parse(out).params.update.messageId
     })
-    // The child's boundary came first, so its next message starts whole; the root's tail moves.
-    expect(ids).toEqual([undefined, 'relay:r1:12:m1', 'k2'])
+    // Each session's first message is its cut one; a later one of the child starts whole.
+    expect(ids).toEqual(['relay:r1:11:k1', 'relay:r1:12:m1', 'k2'])
   })
 })

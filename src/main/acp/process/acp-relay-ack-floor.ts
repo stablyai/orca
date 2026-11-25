@@ -23,16 +23,11 @@ const FIELD_WINDOW_CHARS = 4096
 /** More open items than this can't be real; the oldest stay held, so nothing is acked past them. */
 const MAX_OPEN_ITEMS = 256
 export const ACP_MESSAGE_CHUNKS = new Set(['agent_message_chunk', 'agent_thought_chunk'])
-/** Updates after which a session's message chunks don't continue (as the translator numbers them). */
 /** An OpenCode child's status report, read as an update of its session. */
 const CHILD_STATUS = 'orca:child_status'
-export const ACP_MESSAGE_ENDS = new Set([
-  CHILD_STATUS,
-  'user_message_chunk',
-  'tool_call',
-  'tool_call_update',
-  'plan'
-])
+/** Updates after which no message of a session continues. A message with an id goes on past calls
+ *  under that id (OpenCode keeps one per step), so only another message or these end it. */
+export const ACP_MESSAGE_ENDS = new Set([CHILD_STATUS, 'user_message_chunk'])
 
 export type AcpUpdateFields = {
   sessionId?: string
@@ -100,7 +95,8 @@ const first = (open: Map<string, { seq: number }>): number | null =>
 
 /**
  * One attach's floor. Acks stay below the start of each open call (until its final status or its
- * prompt's end) and each open message (until a call, plan or user chunk of its session, or its
+ * prompt's end) and each open message (until another message, a user chunk or a child status of
+ * its session, or its
  * prompt's end), so a reattach replays each from its first line and rewrites its row whole.
  * Messages without ids are numbered within their prompt's turn, so while a prompt runs, until the
  * agent shows it gives ids (and in any turn with one without), the turn's first line holds too:
@@ -154,7 +150,13 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
         this.numbered = true
       } else {
         this.givesIds = true
-        // Another message started: the continuation moves only the first one a replay meets.
+        // Another message started: earlier ones of its session are done, and the continuation
+        // moves only the first one a replay meets.
+        for (const [id, message] of this.messages) {
+          if (id !== update.messageId && message.session === update.sessionId) {
+            this.messages.delete(id)
+          }
+        }
         for (const [id, session] of this.cutMessages) {
           if (id !== update.messageId && session === update.sessionId) {
             this.cutMessages.delete(id)
