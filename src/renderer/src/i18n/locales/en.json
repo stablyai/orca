@@ -27623,7 +27623,8 @@
         "chooseAnother": "Choose another computer",
         "title": "Setting up {{distro}} as a host",
         "subtitle": "About a minute the first time. Your Windows files and other distros aren’t touched.",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "failedGeneric": "Orca’s server didn’t start in the distro. Details say what stopped it."
       },
       "wslNoAgent": {
         "field": "No agent in {{distro}}",

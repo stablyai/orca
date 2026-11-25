@@ -89,7 +89,11 @@ function FailedBody({
           })}
         </p>
         <p role="alert" className="text-xs wrap-anywhere text-muted-foreground">
-          {state.message}
+          {state.message ??
+            t(
+              'bots.new.wslSetup.failedGeneric',
+              'Orca’s server didn’t start in the distro. Details say what stopped it.'
+            )}
         </p>
         {state.detail ? (
           <Collapsible>

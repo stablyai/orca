@@ -82,6 +82,7 @@ export function WslDistroSubmenuRow({
           role="listbox"
           aria-label={t('auto.components.RunTargetCombobox.wslDistro', 'WSL distro')}
           aria-busy={loading || undefined}
+          className="max-h-72 overflow-y-auto scrollbar-sleek"
           onMouseLeave={() => setHoveredKey(null)}
         >
           {loading ? (

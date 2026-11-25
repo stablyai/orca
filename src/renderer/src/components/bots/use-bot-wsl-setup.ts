@@ -23,7 +23,8 @@ export type BotWslSetupState =
     }
   /** The host exists; New bot is learning its agents. */
   | { phase: 'finding-agents'; distro: WslHostDistro; environmentId: string }
-  | { phase: 'failed'; distro: WslHostDistro; message: string; detail: string | null }
+  /** `message` is a coded refusal's copy; null for main's verbatim error, which only `detail` holds. */
+  | { phase: 'failed'; distro: WslHostDistro; message: string | null; detail: string | null }
 
 export type BotWslSetup = {
   state: BotWslSetupState
@@ -38,15 +39,13 @@ export type BotWslSetup = {
 const IDLE: BotWslSetupState = { phase: 'idle' }
 
 function failure(result: Extract<WslHostAddResult, { ok: false }>): {
-  message: string
+  message: string | null
   detail: string | null
 } {
-  const message = wslHostAddRefusalMessage(result)
-  // An uncoded failure is main's verbatim error: its first line leads, the rest sits behind Details.
-  const [first, ...rest] = message.split(/\r?\n/)
-  const summary = result.errorCode ? message : first.trim() || message
-  const detail = result.message !== summary ? result.message : rest.length ? message : null
-  return { message: summary, detail }
+  // An uncoded failure is main's verbatim error (often a command line): it sits behind Details.
+  return result.errorCode
+    ? { message: wslHostAddRefusalMessage(result), detail: null }
+    : { message: null, detail: result.message }
 }
 
 /** `onAdded` must be stable (a state setter): it picks the new host. */
@@ -101,7 +100,7 @@ export function useBotWslSetup(onAdded: (environmentId: string) => void): BotWsl
         })
         .catch((cause: unknown) => {
           const detail = readIpcErrorDetail(cause) ?? String(cause)
-          settle({ phase: 'failed', distro, message: detail.split(/\r?\n/)[0], detail })
+          settle({ phase: 'failed', distro, message: null, detail })
         })
     },
     [onAdded]
