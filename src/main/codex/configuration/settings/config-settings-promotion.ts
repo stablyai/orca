@@ -186,14 +186,15 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
       return { writeTarget: { error }, guest: false }
     }
   }
+  // Without a trusted mark, resolve first so a guest source skips the native promotion reads.
+  const hostSource = knownNative ? null : resolveHostSource()
+  if (hostSource?.guest) {
+    return regenerateFromGuestPlan(baselineObservation)
+  }
   if (runtimeTomlObservation.kind === 'absent') {
-    if (knownNative) {
-      return { ...emptyPromotionPlan(), nativeSource: true, confirmNativeSource: systemTomlPath }
-    }
-    const hostSource = resolveHostSource()
-    return hostSource.guest
-      ? regenerateFromGuestPlan(baselineObservation)
-      : { ...emptyPromotionPlan(), nativeSource: 'path' in hostSource.writeTarget }
+    return hostSource
+      ? { ...emptyPromotionPlan(), nativeSource: 'path' in hostSource.writeTarget }
+      : { ...emptyPromotionPlan(), nativeSource: true, confirmNativeSource: systemTomlPath }
   }
   if (baselineObservation.kind === 'indeterminate') {
     // An unreadable baseline cannot authorize mirroring over possible runtime edits.
@@ -238,7 +239,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   if (clean && knownNative) {
     return { ...pending, nativeSource: true, confirmNativeSource: systemTomlPath }
   }
-  const { writeTarget, guest } = resolveHostSource()
+  const { writeTarget, guest } = hostSource ?? resolveHostSource()
   if (guest) {
     return regenerateFromGuestPlan(baselineObservation)
   }
