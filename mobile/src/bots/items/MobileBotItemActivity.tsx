@@ -29,10 +29,8 @@ import {
   type BotItem,
   type BotItemEvent
 } from '../../../../src/shared/bots/bot-items'
-import {
-  isBotItemReplyingTo,
-  type BotItemPendingComments
-} from '../../../../src/shared/bots/bot-item-pending-comments'
+import type { BotItemPendingComments } from '../../../../src/shared/bots/bot-item-pending-comments'
+import { botItemRepliedAsks } from '../../../../src/shared/bots/bot-item-replying'
 import {
   isBotItemSentComment,
   type BotItemSentAnswers
@@ -303,6 +301,8 @@ export function MobileBotItemActivity({
           })
         }
       : null
+  // The questions replies on their way answer, read once rather than per row.
+  const replied = botItemRepliedAsks(pending.shown)
   return (
     <View>
       {entries.map((entry) =>
@@ -314,7 +314,7 @@ export function MobileBotItemActivity({
               item={item}
               // A reply already sent for this question answers it, before the host's read says so.
               entry={
-                pending.shown.some((sent) => isBotItemReplyingTo(sent, entry.event.id))
+                entry.waiting && (replied.unknown || replied.asks.has(entry.event.id))
                   ? { ...entry, waiting: false }
                   : entry
               }

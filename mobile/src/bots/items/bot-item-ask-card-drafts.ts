@@ -2,7 +2,11 @@ import {
   botItemHostWaitingAsk,
   botItemQuestionPairing
 } from '../../../../src/shared/bots/bot-item-question-answers'
-import type { BotItem, BotItemEvent } from '../../../../src/shared/bots/bot-items'
+import {
+  parseBotItemEventId,
+  type BotItem,
+  type BotItemEvent
+} from '../../../../src/shared/bots/bot-items'
 import type { MobileNativeChatAskDraft } from '../../session/native-chat/input/prompts/use-mobile-native-chat-ask-answers'
 
 // Each item's unsent answer card, for this app session: leaving the item and opening it again shows
@@ -39,8 +43,9 @@ export function saveBotItemAskCardDraft(
 }
 
 /** Drops the item's card once the host's read shows its ask over: the item closed, the read names
- *  another ask, or it names none and the loaded events hold the ask with no line still waiting.
- *  An ask whose event isn't loaded yet (older history still reading) keeps its card. */
+ *  a newer ask, or it names none and the loaded events hold the ask with no line still waiting.
+ *  An ask whose event isn't loaded yet (older history still reading) keeps its card, and so does
+ *  one newer than the ask an older item read still names (a read split across two moments). */
 export function retireBotItemAskCardDraft(
   itemKey: string,
   item: BotItem,
@@ -55,7 +60,7 @@ export function retireBotItemAskCardDraft(
     item.status === 'done' ||
     item.status === 'canceled' ||
     (named !== null
-      ? named !== draft.askId
+      ? (parseBotItemEventId(named) ?? 0) > (parseBotItemEventId(draft.askId) ?? 0)
       : botItemQuestionPairing(item, events).questions.get(draft.askId)?.waiting === false)
   if (over) {
     drafts.delete(itemKey)

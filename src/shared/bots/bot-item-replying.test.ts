@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest'
 import {
   createBotItemPendingCommentsHook,
-  isBotItemReplyingTo,
   type BotItemPendingCommentDelivery
 } from './bot-item-pending-comments'
+import { botItemRepliedAsks, isBotItemReplyingTo } from './bot-item-replying'
 
 // The shared store, called outside React: one render's reads, as the page's hook gets them.
 const pendingCommentsOutsideReact = createBotItemPendingCommentsHook({
@@ -62,4 +62,19 @@ it('a refused reply no longer answers anything', async () => {
   await new Promise((resolve) => setTimeout(resolve, 0))
   const shown = pendingCommentsOutsideReact('refused', [], store).shown
   expect(shown.every((entry) => !isBotItemReplyingTo(entry, 'A'))).toBe(true)
+})
+
+it('reads every reply on its way once, by the question each answers', () => {
+  const store = delivery(held, false)
+  const send = pendingCommentsOutsideReact('list', [], store).send
+  send('Yes', [], null, 'A')
+  send('Yes', [], null, undefined, true)
+  expect(botItemRepliedAsks(pendingCommentsOutsideReact('list', [], store).shown)).toEqual({
+    unknown: false,
+    asks: new Set(['A'])
+  })
+  send('Maybe', [], null)
+  expect(botItemRepliedAsks(pendingCommentsOutsideReact('list', [], store).shown).unknown).toBe(
+    true
+  )
 })
