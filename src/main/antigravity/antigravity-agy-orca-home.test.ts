@@ -230,31 +230,28 @@ it("reports Orca's server as what Install adds, so older clients keep the method
   expect(await ANTIGRAVITY_LAUNCH_SPEC.hostBackend.installsManagedRuntime(input)).toBe(true)
 })
 
-it("removes only a model listing's own session, and only in the home Orca owns", async () => {
-  const { discardAgyOrcaListingSession } = await import('./antigravity-agy-orca-home')
+it("removes only a model listing's own session, and only from agy's homes", async () => {
+  const { discardAgyListingSession } = await import('./agy-listing-session-discard')
   const id = '1b17d8f7-7efa-4b20-8476-7d9ce7b27848'
+  const other = '2c28e9f8-8fc0-4c31-9587-8e0df38c3959'
   const runAgent = async () => ''
-  const make = (root: string) => {
-    mkdirSync(join(root, 'antigravity-acp', 'conversations'), { recursive: true })
-    writeFileSync(join(root, 'antigravity-acp', 'conversations', `${id}.db`), '')
-    return join(root, 'antigravity-acp', 'conversations', `${id}.db`)
+  const make = (root: string, appData: string, session = id) => {
+    mkdirSync(join(root, appData, 'conversations'), { recursive: true })
+    writeFileSync(join(root, appData, 'conversations', `${session}.db`), '')
+    return join(root, appData, 'conversations', `${session}.db`)
   }
   const orcaHome = join(folder(), 'antigravity-agy-chat')
   const ownHome = join(folder(), '.gemini')
-  const listed = make(orcaHome)
-  const kept = make(ownHome)
-  await discardAgyOrcaListingSession({
-    sessionId: id,
-    cwd: '/tmp',
-    accountHomePath: orcaHome,
-    runAgent
-  })
-  await discardAgyOrcaListingSession({
-    sessionId: id,
-    cwd: '/tmp',
-    accountHomePath: ownHome,
-    runAgent
-  })
-  expect(() => readFileSync(listed)).toThrow()
-  expect(readFileSync(kept, 'utf8')).toBe('')
+  const elsewhere = join(folder(), 'antigravity-chat')
+  const listed = [make(orcaHome, 'antigravity-acp'), make(ownHome, 'antigravity-cli')]
+  const kept = [make(ownHome, 'antigravity-cli', other), make(elsewhere, 'antigravity-acp')]
+  for (const accountHomePath of [orcaHome, ownHome, elsewhere]) {
+    await discardAgyListingSession({ sessionId: id, cwd: '/tmp', accountHomePath, runAgent })
+  }
+  for (const path of listed) {
+    expect(() => readFileSync(path)).toThrow()
+  }
+  for (const path of kept) {
+    expect(readFileSync(path, 'utf8')).toBe('')
+  }
 })

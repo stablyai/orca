@@ -1,6 +1,6 @@
 // Settings › Google, read and changed on the host whose Google it is: this computer, or the paired
 // server Settings points at. That host keeps the sign-ins; this window sees emails and states only.
-import { botTarget, callBotRpc, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
+import { botTarget, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
@@ -25,7 +25,6 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import type { Bot } from '../../../../../shared/bot-types'
 import { errorMessage } from '../../../../../shared/errors/error-message'
 import { googleReachAreas, type GoogleReachArea } from '../../../../../shared/bots/bot-access-reach'
-import { botConnectorRowKey, forgetBotConnectorPage } from '../bot-connector-page'
 
 export type GoogleHostView =
   | { status: 'loading' }
@@ -201,15 +200,6 @@ export async function disconnectGoogle(
 ): Promise<void> {
   await callRuntimeRpc(target, 'google.disconnect', { account, revoke })
   await refreshGoogle(target)
-}
-
-/** The bot toggle lives with the bot, on its host. */
-export async function setBotGoogle(bot: BotRef, on: boolean): Promise<void> {
-  await callBotRpc(bot, 'google.bot.set', { botId: bot.id, on })
-  if (!on) {
-    forgetBotConnectorPage(botConnectorRowKey(bot, 'google'))
-  }
-  await refreshGoogle(botTarget(bot))
 }
 
 /** Google sign-in and "Open in my browser": the person's default browser, where their accounts are. */

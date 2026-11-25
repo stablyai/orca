@@ -108,8 +108,8 @@ export function fillJournalConnectorReplies(
 ): number {
   const fillWhere = (expect: string) =>
     db.prepare(`UPDATE journal_connector_replies SET outcome=?,answer_delivery_id=?,
-    turn_item_id=?,prose=?,failure_json=?,links_json=?,took_ms=?,turn_started_at=?,filled_at=?
-    WHERE account=? AND delivery_id=? AND outcome IS NULL AND ${expect}`)
+    turn_item_id=?,prose=?,failure_json=?,links_json=?,took_ms=?,turn_started_at=?,tools_ran=?,
+    filled_at=? WHERE account=? AND delivery_id=? AND outcome IS NULL AND ${expect}`)
   const open = fillWhere(EXPECT_OPEN)
   const claimed = fillWhere(EXPECT_CLAIMED)
   const owed = fillWhere(EXPECT_CUT)
@@ -132,6 +132,7 @@ export function fillJournalConnectorReplies(
         row.links?.length ? JSON.stringify(row.links) : null,
         row.tookMs ?? null,
         row.turnStartedAt ?? null,
+        row.toolsRan ? 1 : null,
         now,
         row.account,
         row.deliveryId,

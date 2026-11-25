@@ -64,7 +64,8 @@ async function handleUpgrade(env: Env, request: Request): Promise<Response> {
       metric(env, 'upgrade', 1, 'keys_unavailable', [], '', place)
       return reject(503, 5)
     }
-    metric(env, 'refuse', 1, '401', [], 'token', place)
+    // detail: which check failed (jwt.ts WAKE_REFUSE_CODES), never token contents or ids.
+    metric(env, 'refuse', 1, '401', [], 'token', place, verified ? verified.code : 'missing')
     return reject(401)
   }
   const gapHeader = request.headers.get(CONNECTOR_WAKE_GAP_HEADER) ?? ''

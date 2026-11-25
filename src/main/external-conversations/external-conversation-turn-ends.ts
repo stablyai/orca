@@ -13,6 +13,7 @@ import type { ExternalConversationLink } from '../../shared/connectors/external-
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import { connectorReplyWords } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-message'
+import type { TurnLeave } from './external-conversation-thread-leaves'
 export type { SlackMirrorTurn } from './slack-mirror'
 
 export type ChatTurnEnd = {
@@ -26,6 +27,8 @@ export type ChatTurnEnd = {
   workersChecked: () => Promise<unknown>
   /** Still the same signed-in account: false after a reset, so the end reaches no one. */
   current: () => boolean
+  /** A leave of its thread made in this turn, confirmed once as the turn ends. */
+  leave: TurnLeave
 }
 
 /** An adopted turn's end: how it went, never what it said or the links its work opened. A success
@@ -81,6 +84,8 @@ export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): vo
         ? { failure: connectorFailure(read.failure, end.agent) }
         : {})
     })
+    // Its line posts on its own once its end is let go and taken, kept owed until it posts.
+    end.leave.settle('held')
   })
 }
 
@@ -143,6 +148,7 @@ export async function endRepliedTurn(
     ...(turn.opener ? { openerItemId: turn.opener.itemId } : {}),
     outcome: end.news.outcome,
     prose: turn.turnProse ?? '',
+    toolsRan: turn.turnToolsRan === true,
     bot: Boolean(link.bot),
     links: link.bot ? await links() : [],
     ...turnTimesOf(end.ended),
@@ -182,7 +188,10 @@ export async function endRepliedTurn(
           }
         : {})
     })
+    end.leave.settle('end')
+    return 'told'
   }
+  end.leave.settle()
   return 'told'
 }
 

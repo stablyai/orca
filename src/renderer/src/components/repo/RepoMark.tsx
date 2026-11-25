@@ -72,8 +72,8 @@ function glyphTileStyle(color: string): React.CSSProperties {
 
 const MARK_SIZES = {
   // Why: emoji glyphs scale with font size (0.9em), so the text size pins them to the icon box.
-  sm: { box: 'size-4 rounded-[4px] text-2xs', icon: 'size-3' },
-  md: { box: 'size-4 rounded-[4px] text-xs', icon: 'size-3.5' }
+  sm: { box: 'size-[18px] rounded-[4px] text-xs', icon: 'size-3.5' },
+  md: { box: 'size-[18px] rounded-[4px] text-[13px]', icon: 'size-4' }
 } as const
 
 export function RepoMarkView({
@@ -89,7 +89,7 @@ export function RepoMarkView({
   const repoIcon = appearance.icon
   // Letters and pictures fill the mark; icons and emoji sit inset on a tile.
   const fills = repoIcon.type === 'letters' || repoIcon.type === 'image'
-  const glyphSize = repoIcon.type === 'letters' ? 'size-4' : sizes.icon
+  const glyphSize = fills ? 'size-full' : sizes.icon
   return (
     <span
       aria-hidden="true"
