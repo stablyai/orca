@@ -21,6 +21,7 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'ensureStructuredAgentSessionHost'
     | 'inspectTerminalProcessIncarnationLiveness'
     | 'closeTerminal'
+    | 'isSetupTerminalRunning'
     | 'getExactWorkerProviderSession'
     | 'readTerminal'
     | 'notifyMessageArrived'

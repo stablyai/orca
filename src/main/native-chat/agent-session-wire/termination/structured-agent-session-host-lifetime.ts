@@ -71,9 +71,20 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     return
   }
   const cause = 'recorded' in ending ? ending.recorded : ending.cause
+  const onlyIf = 'onlyIf' in ending ? ending.onlyIf : undefined
+  if (onlyIf && child.close) {
+    return
+  }
   if (!child.close) {
+    const endsWork = await stopEndsWork(context, sessionId, session, ending)
+    if (
+      onlyIf &&
+      (session.child !== child || context.runtimeState.hasPendingIngress(sessionId) || !onlyIf())
+    ) {
+      return
+    }
     // Issue ordered Stop bookkeeping before kill without waiting for its persistence.
-    const recorded = (await stopEndsWork(context, sessionId, session, ending))
+    const recorded = endsWork
       ? recordStopEvent(context, sessionId, session, ending)
       : Promise.resolve(null)
     child.close = {

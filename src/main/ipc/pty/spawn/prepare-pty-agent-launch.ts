@@ -15,6 +15,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { alignManagedAgentLaunchAtSpawn } from '../../../managed-agent-cli/managed-agent-spawn-program'
+import { withSpawnTerminalMcpServers } from '../../../mcp-servers/terminal/terminal-mcp-spawn-step'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
 import type { PtySpawnLaunchOptionsInput } from './spawn-options-assembly'
@@ -68,11 +69,18 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     settings?.terminalInlineImages,
     input.headlessHost
   )
+  const mcp = await withSpawnTerminalMcpServers(input, {
+    launchAgent,
+    command: openCodeLaunch.command,
+    env,
+    shell,
+    connectionId
+  })
   const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const agentCommand =
-    pluginDir && openCodeLaunch.command
-      ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)
-      : openCodeLaunch.command
+    pluginDir && mcp.command
+      ? withClaudeAgentViewPlugin(mcp.command, pluginDir, shell)
+      : mcp.command
   const local = !connectionId && input.codexRuntime !== 'wsl'
   const images = inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
   const prepared =
@@ -87,7 +95,8 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     launchAgent,
     launchCommand: sequenced ? input.launchCommand : agentCommand,
     startup: sequenced ? input.launchCommand : prepared,
-    settings
+    settings,
+    terminalMcp: mcp.pane
   }
 }
 

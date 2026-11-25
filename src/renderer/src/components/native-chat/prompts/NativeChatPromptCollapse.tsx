@@ -1,10 +1,21 @@
-import { useLayoutEffect, useRef, type Ref } from 'react'
+import { useContext, useLayoutEffect, useRef, type Ref } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { useTranslate } from '@/i18n/use-translate'
 import type { InteractivePromptCard } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import { cn } from '@/lib/class-names'
+import { NativeChatInSubagentSheet } from '../subagents/native-chat-subagent-sheet-context'
+
+/** A prompt card's centered column: its slot's own inset, or the rows' text column inside a subagent sheet. */
+export function usePromptCardColumn(slotInset: string): string {
+  const inSheet = useContext(NativeChatInSubagentSheet)
+  return cn(
+    'mx-auto w-full max-w-(--chat-content-max-width) pt-2',
+    inSheet ? 'px-[5px]' : slotInset
+  )
+}
 
 /** A prompt card's one collapse affordance; folding or unfolding writes nothing to the agent. */
 export function NativeChatPromptCollapseToggle({
