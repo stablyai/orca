@@ -11,10 +11,8 @@ import {
 } from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentJournalCursor } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
-import type {
-  AgentJournalSubmission,
-  AgentJournalRenderItem
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { AgentSessionOptionsResult } from '../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -75,7 +73,7 @@ export function useNativeChatFork(input: {
   target: RuntimeClientTarget
   worktreeId: string | null
   items: readonly AgentJournalRenderItem[]
-  submissions?: readonly AgentJournalSubmission[]
+  submissions?: readonly StructuredAgentSubmission[]
   latestTurn?: AgentSessionLatestTurn | null
   epoch: string | null
   contextFloor: AgentJournalCursor | undefined
@@ -232,7 +230,7 @@ export function useNativeChatPaneFork(
   pane: Pick<NativeChatStructuredViewProps, 'sessionId' | 'tabId' | 'agent' | 'target'>,
   chat: {
     journalItems: readonly AgentJournalRenderItem[]
-    submissions?: readonly AgentJournalSubmission[]
+    submissions?: readonly StructuredAgentSubmission[]
     latestTurn?: AgentSessionLatestTurn | null
     epoch: string | null
     contextFloor: AgentJournalCursor | undefined

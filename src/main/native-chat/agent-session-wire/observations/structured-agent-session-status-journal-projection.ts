@@ -1,3 +1,4 @@
+import { withHostTurnEnd } from './structured-agent-session-work-policy'
 import {
   copyJournalWorkAuthority,
   copyJournalCurrentWorkAuthority
@@ -17,6 +18,12 @@ import type { HostUsageLimitCut } from '../recovery/structured-agent-session-usa
 import { sameJournalCursor } from '../../agent-session-journal/replay/journal-cursor'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
+import {
+  advanceJournalStatusActivity,
+  advanceJournalStatusWork,
+  journalStatusCursorIsCurrent,
+  journalStatusReceiptProgress
+} from '../../agent-session-journal/journal-status-receipt-progress'
 export type StructuredAgentSessionStatusState = JournalObserverResult['state']
 
 export type StructuredAgentSessionJournalProjection = {
@@ -79,8 +86,8 @@ export class StructuredAgentSessionJournalProjections {
       projection &&
       physicalCursor &&
       !journal.isClosed &&
-      sameJournalCursor(projection, journal.cursor()) &&
-      sameJournalCursor(physicalCursor, journal.physicalCursor()) &&
+      journalStatusCursorIsCurrent(journal, projection, journal.cursor()) &&
+      journalStatusCursorIsCurrent(journal, physicalCursor, journal.physicalCursor()) &&
       authority.handle === journal.observationHandle() &&
       sameJournalCursor(authority.openedThrough, journal.openingCursor())
       ? entry
@@ -123,9 +130,13 @@ export class StructuredAgentSessionJournalProjections {
               result: { kind: 'state', state: entry.projection.work }
             }
           : undefined
-    return answer &&
-      journalSqlWorkAnswerIsCurrent(journal, () => captured.authority, authority, answer)
-      ? answer
+    // Receipt metadata cannot change projected work. Validate live authority and give the
+    // transcript reader the current coordinates for its snapshot check.
+    const current =
+      answer && advanceJournalStatusWork(answer, journal.cursor(), journal.physicalCursor())
+    return current &&
+      journalSqlWorkAnswerIsCurrent(journal, () => captured.authority, authority, current)
+      ? current
       : undefined
   }
 
@@ -219,8 +230,7 @@ export class StructuredAgentSessionJournalProjections {
     }
     const currentProjection = this.currentSql(journal, captured)
     if (currentProjection) {
-      observed?.(currentProjection)
-      return currentProjection
+      return advanceJournalStatusActivity(journal, currentProjection, journal.cursor(), observed)
     }
     const contextId = captured.contextId
     const authority = copyJournalWorkAuthority(captured.authority)
@@ -237,9 +247,10 @@ export class StructuredAgentSessionJournalProjections {
       firstInputSubmissionKey: sameContext?.firstInputSubmissionKey ?? null,
       ...(turnEnd?.botSession ? { botSession: true as const } : {})
     }
+    const sequence = journalStatusReceiptProgress(journal)?.after ?? cursor.sequence
     const key = JSON.stringify({
-      cursor,
-      physicalCursor: journal.physicalCursor(),
+      cursor: { epoch: cursor.epoch, sequence },
+      physicalEpoch: journal.physicalCursor().epoch,
       contextId,
       input
     })
@@ -261,8 +272,8 @@ export class StructuredAgentSessionJournalProjections {
     if (
       !current ||
       journal.isClosed ||
-      !sameJournalCursor(result.cursor, journal.cursor()) ||
-      !sameJournalCursor(result.physicalCursor, journal.physicalCursor()) ||
+      !journalStatusCursorIsCurrent(journal, result.cursor, journal.cursor()) ||
+      !journalStatusCursorIsCurrent(journal, result.physicalCursor, journal.physicalCursor()) ||
       authority.handle !== journal.observationHandle() ||
       !sameJournalCursor(authority.openedThrough, journal.openingCursor()) ||
       current.contextId !== contextId ||
@@ -294,8 +305,7 @@ export class StructuredAgentSessionJournalProjections {
       physicalCursor: result.physicalCursor,
       savedStop
     })
-    observed?.(projection)
-    return projection
+    return advanceJournalStatusActivity(journal, projection, journal.cursor(), observed)
   }
 }
 
@@ -304,22 +314,4 @@ export class StructuredAgentSessionJournalProjections {
 export type StructuredAgentSessionTurnEndPolicy = {
   botSession: boolean
   quietEnd: (outcome: 'success' | 'failure', usageLimited?: boolean) => boolean
-}
-
-/** Whether its alert stays quiet: a turn that succeeded on a bot's quiet marker, or one that ended
- *  in a way its host keeps quiet (a look-around that already failed last time). */
-export function withHostTurnEnd(
-  state: StructuredAgentSessionStatusState,
-  quietEnd?: (outcome: 'success' | 'failure', usageLimited?: boolean) => boolean,
-  usageLimited = false
-): StructuredAgentSessionStatusState {
-  const outcome = state.summary.turnOutcome
-  const request = state.latestRequest
-  const quiet =
-    outcome === 'failure'
-      ? quietEnd?.('failure', usageLimited) === true
-      : request?.kind === 'turn' &&
-        request.outcome === 'success' &&
-        (state.quietAnswer === true || quietEnd?.('success') === true)
-  return quiet ? { ...state, quiet: true } : state
 }

@@ -35,13 +35,11 @@ const NO_TURN_KEYS: readonly undefined[] = []
 
 export function useMobileNativeChatTurnDisclosure({
   messages,
-  hasDisplayedMessage,
   enabled,
   isWorking,
   workingStartedAt,
   settledTurns,
   turnJournal = null,
-  sendingItemIds,
   thinking = false,
   activityText = null,
   stopping = false,
@@ -51,13 +49,11 @@ export function useMobileNativeChatTurnDisclosure({
   showsTurnDiffs = true
 }: {
   messages: readonly NativeChatMessage[]
-  hasDisplayedMessage: (id: string) => boolean
   enabled: boolean
   isWorking: boolean
   workingStartedAt?: number | null
   settledTurns?: NativeChatSettledTurns | null
   turnJournal?: NativeChatTurnJournal | null
-  sendingItemIds?: ReadonlySet<string>
   thinking?: boolean
   activityText?: string | null
   stopping?: boolean
@@ -107,8 +103,7 @@ export function useMobileNativeChatTurnDisclosure({
     active,
     activeTurnKey,
     completedByTurn,
-    isWorking: drawsActiveTurn,
-    turnWorking
+    isWorking: drawsActiveTurn
   } = useMobileNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
@@ -118,11 +113,8 @@ export function useMobileNativeChatTurnDisclosure({
     settledTurns,
     thinking,
     scopeKey,
-    journal: turnJournal,
-    sendingItemIds,
-    hasDisplayedMessage
+    journal: turnJournal
   })
-  const hideWorking = drawsActiveTurn && !turnWorking
   const rows = useMobileNativeChatGeneratedImageAnswers(
     enabled,
     sourceRows,
@@ -191,7 +183,6 @@ export function useMobileNativeChatTurnDisclosure({
     expandedReasoning
   })
   const liveReasoningId = liveLine?.reasoning?.message.id
-  const drawnLiveReasoningId = turnWorking || stopping ? liveReasoningId : undefined
   const { fold, trailingRunIndex, workRuns, activityJoins } = useMobileNativeChatTranscriptRows({
     enabled,
     rows,
@@ -219,15 +210,13 @@ export function useMobileNativeChatTurnDisclosure({
       const turnStatus =
         enabled && turnKey !== undefined && bar?.index === index && !quiet?.turns.has(turnKey)
           ? turnKey === activeTurnKey
-            ? hideWorking
-              ? null
-              : active
+            ? active
             : (completedByTurn[turnKey] ?? null)
           : null
       return {
         turnDiff: summaries.get(message.id),
         turnStatus,
-        ...(sendingItemIds?.has(message.id) ? { sending: true } : {}),
+        ...(turnStatus && turnKey === activeTurnKey ? { gateWorking: true as const } : {}),
         ...(bar?.above === true && turnStatus !== null ? { turnStatusAbove: true } : {}),
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
         // Pass row keys to one stable handler; per-row closures defeat memoization and render-time ref caches can leak discarded state.
@@ -253,7 +242,9 @@ export function useMobileNativeChatTurnDisclosure({
         ...(workRuns.joined.has(index) ? { joinsWorkRun: true } : {}),
         ...(activityJoins.has(index) ? { activityJoin: activityJoins.get(index) } : {}),
         mayStillGrow: !lineYields && message.id === latestAssistantId,
-        reasoningIsLive: message.id === drawnLiveReasoningId,
+        ...(message.id === liveReasoningId
+          ? { liveReasoning: stopping ? 'stopping' : 'working' }
+          : {}),
         reasoningExpanded:
           message.role === 'reasoning' &&
           expandedReasoning.has(nativeChatReasoningDisclosureKey(message.id)),
@@ -264,7 +255,6 @@ export function useMobileNativeChatTurnDisclosure({
     },
     [
       turnKeys,
-      sendingItemIds,
       automationTurns,
       actingTurns,
       summaries,
@@ -274,7 +264,6 @@ export function useMobileNativeChatTurnDisclosure({
       enabled,
       activeTurnKey,
       active,
-      hideWorking,
       completedByTurn,
       expandedTurnIds,
       inLiveWorkingTurn,
@@ -285,7 +274,8 @@ export function useMobileNativeChatTurnDisclosure({
       rows,
       latestAssistantId,
       lineYields,
-      drawnLiveReasoningId,
+      liveReasoningId,
+      stopping,
       expandedReasoning,
       toggleReasoning,
       isWorking,
@@ -295,14 +285,14 @@ export function useMobileNativeChatTurnDisclosure({
   )
 
   return {
-    active: hideWorking ? null : active,
+    active,
     presentation,
     activeActivityText,
     onToggleTurn: toggleExpandedTurn,
     resolveRow,
     listMessages: waiting.listMessages,
     waitingRows: waiting.waitingRows,
-    liveLine: turnWorking || stopping ? liveLine : null,
+    liveLine,
     onToggleReasoning: toggleReasoning
   }
 }

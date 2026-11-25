@@ -431,8 +431,7 @@ it('settles a dropped prompt as rejected and suppresses the already-opened turn 
         providerItemId: null,
         reason: 'cancelled',
         submittedAt: 1000,
-        resolvedAt: 5000,
-        writtenAt: 2000
+        resolvedAt: 5000
       }
     ]).get('orca:client-1')
   ).toBeNull()

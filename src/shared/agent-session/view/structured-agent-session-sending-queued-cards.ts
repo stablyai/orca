@@ -1,4 +1,4 @@
-import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from './structured-agent-session-submissions'
 import type { StructuredAgentSessionOptimisticMessage } from './structured-agent-session-message-projection'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
 import {
@@ -12,7 +12,7 @@ export function sendingQueuedMessageCards(
   pending: readonly StructuredAgentSessionOptimisticMessage[],
   heldIds: readonly string[],
   isWorking: boolean,
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly StructuredAgentSubmission[]
 ): QueuedMessageCard[] {
   if (!isWorking || pending.length === 0) {
     return []

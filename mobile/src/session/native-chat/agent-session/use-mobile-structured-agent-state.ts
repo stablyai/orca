@@ -48,7 +48,7 @@ import {
   unconfirmedStructuredStateSavedAt
 } from '../transcript/persistence/mobile-native-chat-transcript-writer'
 import { useStoredChatTranscript } from '../transcript/persistence/use-stored-chat-transcript'
-import type { MobileStructuredReceiptSource } from '../transcript/ingestion/use-mobile-structured-sending-item-ids'
+import type { SubmissionReceiptSource } from '../../../../../src/shared/agent-session/view/use-structured-agent-sending'
 
 import { createMobileStructuredChatStateCache } from './mobile-structured-chat-state-cache'
 
@@ -66,7 +66,7 @@ export function useMobileStructuredAgentState(args: {
 }): {
   state: StructuredAgentSessionState
   stateRef: { readonly current: StructuredAgentSessionState }
-  submissionReceipts: MobileStructuredReceiptSource
+  submissionReceipts: SubmissionReceiptSource
   /** Null until the host publishes a queue (older hosts never do). */
   queuedMessages: AgentSessionQueuedMessage[] | null
   queuePause: AgentSessionQueuePause | null
@@ -92,20 +92,16 @@ export function useMobileStructuredAgentState(args: {
   const stored =
     enabled && sessionKey && !retained ? storedStructuredSessionState(sessionKey) : null
   const state = retained ?? stored ?? EMPTY_STRUCTURED_AGENT_SESSION
-  const subscribeDelivery = useCallback(
-    (listener: () => void) => (readKey ? cache.subscribeDelivery(readKey, listener) : () => {}),
-    [cache, readKey]
-  )
+  const { epoch, working, latestTurn, items, submissions, fence } = state
+  const publishedRef = useRef(state)
+  useLayoutEffect(() => {
+    publishedRef.current = state
+  }, [state])
   const submissionReceipts = useMemo(
-    () => ({
-      subscribe: subscribeDelivery,
-      // A view awaiting new journal props still has the previous attempt records.
-      getSnapshot: () => cache.currentForSnapshot(readKey, state).writtenAtById
-    }),
-    [cache, readKey, state, subscribeDelivery]
+    () => cache.receiptsFor(readKey, epoch, submissions, stored, publishedRef),
+    [cache, epoch, readKey, stored, submissions]
   )
   const liveRead = enabled && sessionKey !== null && state.status === 'ready'
-  const { working, latestTurn, items, submissions, fence } = state
   const turnSettled = useMemo(
     () =>
       liveRead &&
@@ -118,10 +114,6 @@ export function useMobileStructuredAgentState(args: {
     turnSettled
   })
   const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
-  const publishedRef = useRef(state)
-  useLayoutEffect(() => {
-    publishedRef.current = state
-  }, [state])
   const stateRef = useMemo(
     () => ({
       get current() {

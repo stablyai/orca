@@ -1,4 +1,4 @@
-import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { AgentSessionQueuedMessage } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { handedOffQueuedMessageIds } from '../../../../../shared/agent-session/view/structured-agent-session-draft-hand-off'
@@ -8,7 +8,7 @@ import type { StructuredAgentSessionPendingSend } from '../session/structured/de
 /** Steers the running turn has yet to take in read as sent messages, as when the host steers at once. */
 export function steeringQueuedMessageEchoes(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly StructuredAgentSubmission[],
   pending: readonly Pick<StructuredAgentSessionPendingSend, 'clientMessageId' | 'queuedAt'>[],
   session: { agentWorking: boolean; queuePaused: boolean }
 ): StructuredAgentSessionOptimisticMessage[] {

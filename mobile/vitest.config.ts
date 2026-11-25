@@ -8,6 +8,7 @@ export default defineConfig({
   // Tests are excluded from the app tsconfig; disable that config for OXC so test modules still transform.
   oxc: vitestOxcConfig,
   resolve: {
+    dedupe: ['react'],
     // A faithful Node stand-in for the native module, rather than a mock in every test that reaches it.
     alias: [
       {

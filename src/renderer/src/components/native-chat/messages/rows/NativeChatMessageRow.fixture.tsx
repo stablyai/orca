@@ -1,7 +1,7 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import type { StructuredAgentSubmission } from '../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import { agentJournalSubmissionKey } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { useStructuredAgentSendingItemIds } from '../../session/structured/delivery/use-structured-agent-sending-item-ids'
+import { structuredAgentSessionSendingItemIds } from '../../../../../../shared/agent-session/view/structured-agent-session-sending'
 import { MessageRow } from './NativeChatMessageRow'
 import { useStructuredAgentSessionDeliveryNotices } from '../../session/structured/delivery/use-structured-agent-session-delivery-notices'
 import { NativeChatHostSetupContext } from '../../host-access/native-chat-host-setup'
@@ -28,7 +28,7 @@ function RecordedSteer({ state }: { state: StructuredAgentSubmission['dispatchSt
     agentName: 'Codex',
     startFailures: []
   })
-  const sending = useStructuredAgentSendingItemIds(undefined, [], submissions)
+  const sending = structuredAgentSessionSendingItemIds([], submissions, new Map())
   const id = agentJournalSubmissionKey('steer')
   return (
     <MessageRow

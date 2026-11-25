@@ -1,8 +1,6 @@
 import { useMemo } from 'react'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { NativeChatSubagentRow } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
@@ -14,7 +12,7 @@ import type { NativeChatLiveSession } from '../../session/terminal/read/native-c
 export function useNativeChatTranscriptProjection(
   session: NativeChatLiveSession,
   journalItems: readonly AgentJournalRenderItem[] | undefined,
-  journalSubmissions: readonly AgentJournalSubmission[] | undefined,
+  journalSubmissions: readonly StructuredAgentSubmission[] | undefined,
   latestTurn?: AgentSessionLatestTurn | null
 ): {
   messages: NativeChatMessage[]

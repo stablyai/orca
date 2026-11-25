@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { AgentSessionQueuedMessage } from '../../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { pendingSendsOutsideQueuedCards } from '../../../../../../../shared/agent-session/view/structured-agent-session-sending'
@@ -11,7 +11,7 @@ export function useStructuredAgentSessionTranscriptPending(
   chat: {
     queuedMessages: readonly AgentSessionQueuedMessage[] | null
     queuePause: unknown
-    submissions: readonly AgentJournalSubmission[]
+    submissions: readonly StructuredAgentSubmission[]
   },
   pending: readonly StructuredAgentSessionPendingSend[],
   isWorking: boolean

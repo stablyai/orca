@@ -3,9 +3,9 @@
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission,
   AgentJournalTurnLifecycleState
 } from '../journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from './structured-agent-session-submissions'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
@@ -81,7 +81,7 @@ type StructuredAgentJournalTurns = {
 
 function readStructuredAgentJournalTurns(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = []
+  submissions: readonly StructuredAgentSubmission[] = []
 ): StructuredAgentJournalTurns {
   const anchors = structuredAgentTurnAnchors(items, submissions)
   const byAnchor = new Map<string, StructuredAgentTurnTiming | null>()
@@ -103,7 +103,7 @@ function readStructuredAgentJournalTurns(
 
 export function selectStructuredAgentTurnTimings(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = []
+  submissions: readonly StructuredAgentSubmission[] = []
 ): ReadonlyMap<string, StructuredAgentTurnTiming | null> {
   return readStructuredAgentJournalTurns(items, submissions).byAnchor
 }
@@ -158,14 +158,14 @@ export function structuredAgentTurnLocalStartedAt(
  * Rejected sends suppress timing even when the provider reported a start. */
 export function selectStructuredAgentSettledTurns(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = []
+  submissions: readonly StructuredAgentSubmission[] = []
 ): NativeChatSettledTurns {
   return settledTurnsOf(readStructuredAgentJournalTurns(items, submissions), submissions)
 }
 
 function settledTurnsOf(
   turns: StructuredAgentJournalTurns,
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly StructuredAgentSubmission[]
 ): NativeChatSettledTurns {
   const settled = new Map<string, NativeChatSettledTurn | null>()
   for (const [userItemId, timing] of turns.byAnchor) {
@@ -196,7 +196,7 @@ function settledTurnsOf(
 /** Scan once for settled/running timings; nativeChatTurnMembership separately chooses the running bar. */
 export function selectStructuredAgentTurnBars(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly StructuredAgentSubmission[],
   turnId: string | null,
   /** The host's newest turn record, which times a running turn whose row is not loaded. */
   latestTurn?: AgentSessionLatestTurn | null
@@ -221,7 +221,7 @@ export function selectStructuredAgentTurnBars(
 export function createStructuredAgentTurnBarsSelector(): typeof selectStructuredAgentTurnBars {
   let previous: {
     items: readonly AgentJournalRenderItem[]
-    submissions: readonly AgentJournalSubmission[]
+    submissions: readonly StructuredAgentSubmission[]
     turnId: string | null
     latestTurn: AgentSessionLatestTurn | null | undefined
     bars: ReturnType<typeof selectStructuredAgentTurnBars>

@@ -10,8 +10,18 @@ import {
 
 /** Resolve collaborators only when called: host fields are wired before constructor initialization. */
 export function createStructuredAgentSessionPublicationWiring(input: {
-  client: () => StructuredAgentSessionClientDelivery
-  delivery: () => StructuredAgentSessionConversationDelivery
+  client: () => {
+    requestFailures: Pick<
+      StructuredAgentSessionClientDelivery['requestFailures'],
+      'observe' | 'forget'
+    >
+    subscribers: Pick<StructuredAgentSessionClientDelivery['subscribers'], 'deliverFrames'>
+    publishJournal: StructuredAgentSessionClientDelivery['publishJournal']
+  }
+  delivery: () => Pick<
+    StructuredAgentSessionConversationDelivery,
+    'afterCommit' | 'afterSettleEdge'
+  >
   opened: (id: string) => void
   workChanged?: (id: string) => void
   logger: () => StructuredAgentSessionLogger
@@ -27,9 +37,7 @@ export function createStructuredAgentSessionPublicationWiring(input: {
     forget: (id) => input.client().requestFailures.forget(id),
     deliver: (id, journal, inputChanged, receiptsAfter) => {
       input.client().subscribers.deliverFrames(id, journal, undefined, inputChanged, receiptsAfter)
-      if (receiptsAfter) {
-        input.client().publishStatus(id)
-      } else {
+      if (!receiptsAfter) {
         input.client().publishJournal(id, journal, true, inputChanged)
       }
       if (inputChanged) {

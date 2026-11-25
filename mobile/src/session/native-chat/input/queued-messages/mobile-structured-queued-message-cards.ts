@@ -1,7 +1,7 @@
 import { stripSentImagePromptMarkers } from '../../../../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import type { AgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { mobileAgentSessionWriteNoticeText } from '../../agent-session/agent-session-write-notice-copy'
-import type { AgentJournalSubmission } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../src/shared/agent-session/view/structured-agent-session-submissions'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage
@@ -55,7 +55,7 @@ function queuedMessageCardCaption(
 
 export function mobileQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly StructuredAgentSubmission[],
   facts: {
     agentWorking?: boolean
     queuePaused?: boolean

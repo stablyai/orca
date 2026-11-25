@@ -24,7 +24,10 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
 import { MobileNativeChatComposerMenuHost } from './composer/menus/MobileNativeChatComposerMenuHost'
 import { MobileNativeChatEmptyStateView } from './transcript/viewport/MobileNativeChatEmptyStateView'
-import { mobileNativeChatListFooter } from './transcript/viewport/mobile-native-chat-list-footer'
+import {
+  mobileNativeChatListFooter,
+  mobileNativeChatFooterStatus
+} from './transcript/viewport/mobile-native-chat-list-footer'
 import { mobileNativeChatListHeader } from './transcript/viewport/mobile-native-chat-list-header'
 import { mobileNativeChatEmptyState } from './transcript/projection/mobile-native-chat-render-data'
 import { useMobileNativeChatTransientData } from './transcript/projection/use-mobile-native-chat-transient-data'
@@ -34,8 +37,6 @@ import { useNativeChatTextSettings } from './preferences/native-chat-text-settin
 import { useMobileNativeChatTailFollow } from './transcript/viewport/use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './transcript/turn-state/use-mobile-native-chat-turn-disclosure'
 import { mobileNativeChatComposerPlaceholder } from './composer/field/use-mobile-native-chat-input-lease'
-import { MobileNativeChatLiveLine } from './transcript/messages/MobileNativeChatLiveLine'
-import { MobileNativeChatAwaitingInputRow } from './transcript/messages/MobileNativeChatAwaitingInputRow'
 import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeChatFloatingControls'
 import { MobileNativeChatDraftComposer } from './composer/MobileNativeChatDraftComposer'
 import { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
@@ -59,6 +60,7 @@ import { MobileNativeChatQueueAbovePromptContext } from './lower-region/mobile-n
 import { MobileNativeChatPromptStrip } from './input/prompts/MobileNativeChatPromptStrip'
 import { MobileNativeChatOfflineQueue } from './input/queued-messages/MobileNativeChatOfflineQueue'
 import { useMobileNativeChatOfflineQueue } from './composer/delivery/use-mobile-native-chat-offline-sends'
+import { StructuredAgentSendingScope } from '../../../../src/shared/agent-session/view/use-structured-agent-sending'
 
 export type { MobileNativeChatInputLockReason } from './mobile-native-chat-view-props'
 
@@ -157,8 +159,8 @@ export function MobileNativeChatView({
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   const { font, lineSpacing } = useNativeChatTextSettings()
 
-  const { data, hasDisplayedMessage, sendingItemIds } = useMobileNativeChatTransientData(
-    { folded, streaming, pending, imagePreviewsByMessageId, structuredSending },
+  const { data, hasDisplayedMessage } = useMobileNativeChatTransientData(
+    { folded, streaming, pending, imagePreviewsByMessageId },
     sendSurfaceId
   )
   const tail = useMobileNativeChatTailFollow({ hasItems: data.length > 0, scopeKey: sendSurfaceId })
@@ -225,13 +227,11 @@ export function MobileNativeChatView({
   )
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
-    hasDisplayedMessage,
     enabled: true,
     isWorking: agentWorking === true,
     workingStartedAt,
     settledTurns,
     turnJournal,
-    sendingItemIds,
     thinking: turnIndicator?.thinking === true,
     activityText: turnIndicator?.activityText ?? null,
     stopping: turnIndicator?.stopping === true,
@@ -269,23 +269,18 @@ export function MobileNativeChatView({
     actionablePromptIds
   })
 
-  const liveStatus =
-    awaitingInput === 'unshown' ? (
-      <MobileNativeChatAwaitingInputRow subject={null} pending fontScale={fontScale} />
-    ) : turns.liveLine ? (
-      <MobileNativeChatLiveLine
-        line={turns.liveLine}
-        onToggleReasoning={turns.onToggleReasoning}
-        fontScale={fontScale}
-      />
-    ) : null
-
   const header = mobileNativeChatListHeader(hasMore, olderPages, loadEarlier)
   // Changing text size, face or spacing relays out every row, so preserve the page’s reading anchor.
   const layoutKey = `${fontScale}:${font}:${lineSpacing}`
   const mailRows = mobileWaitingAgentMailRows(tray.waitingAgentMail, fontScale, tail.viewport)
-  const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem, mailRows)
+  const footer = mobileNativeChatListFooter(
+    mobileNativeChatFooterStatus(turns, fontScale, awaitingInput, turnIndicator?.stopping),
+    turns.waitingRows,
+    renderItem,
+    mailRows
+  )
   const emptyState = mobileNativeChatEmptyState(status, agent, error, sessionLive, clearing)
+  const listLayout = { tail, rowKeys, renderItem, footer, onScroll, layoutKey }
 
   const composerPlaceholder = mobileNativeChatComposerPlaceholder(
     offlineQueue.lockReason,
@@ -384,26 +379,26 @@ export function MobileNativeChatView({
                     roots={disclosures.roots}
                     runPlacements={rowKeys.runPlacements}
                   >
-                    <MobileWorkerApprovalReceiptsContext value={workerReceipts}>
-                      <MobileNativeChatRowList
-                        {...{
-                          tail,
-                          rowKeys,
-                          renderItem,
-                          footer,
-                          emptyStateView,
-                          onScroll,
-                          layoutKey
-                        }}
-                        {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
-                        itemJump={itemJump}
-                        rows={turns.listMessages}
-                        runs={turns.presentation.workRuns.heads}
-                        roots={disclosures.roots}
-                        contentContainerStyle={styles.listContent}
-                        pinchGesture={pinchGesture}
-                      />
-                    </MobileWorkerApprovalReceiptsContext>
+                    <StructuredAgentSendingScope
+                      source={structuredSending}
+                      isDisplayed={hasDisplayedMessage}
+                    >
+                      <MobileWorkerApprovalReceiptsContext value={workerReceipts}>
+                        <MobileNativeChatRowList
+                          {...listLayout}
+                          emptyStateView={emptyStateView}
+                          header={header}
+                          hasHeader={hasMore === true}
+                          onNearTop={loadEarlierNearTop}
+                          itemJump={itemJump}
+                          rows={turns.listMessages}
+                          runs={turns.presentation.workRuns.heads}
+                          roots={disclosures.roots}
+                          contentContainerStyle={styles.listContent}
+                          pinchGesture={pinchGesture}
+                        />
+                      </MobileWorkerApprovalReceiptsContext>
+                    </StructuredAgentSendingScope>
                   </MobileNativeChatScrollRootsBoundary>
                 </MobileMarkdownBotCardContext.Provider>
               </MobileBotCardSendContext.Provider>

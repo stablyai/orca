@@ -1,5 +1,8 @@
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
-import type { MobileStructuredReceiptSource } from './use-mobile-structured-sending-item-ids'
+import {
+  createStructuredAgentSendingSource,
+  type SubmissionReceiptSource
+} from '../../../../../../src/shared/agent-session/view/use-structured-agent-sending'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   agentSessionContextClearOutstanding,
@@ -53,7 +56,7 @@ export function useMobileStructuredTranscript(
         | 'hostClock'
         | 'queuedMessages'
       >
-      submissionReceipts: MobileStructuredReceiptSource
+      submissionReceipts: SubmissionReceiptSource
     }
     optimistic: readonly StructuredAgentSessionOptimisticMessage[]
     sessionKey: string
@@ -127,11 +130,8 @@ export function useMobileStructuredTranscript(
     [projectedMessages]
   )
   const sending = useMemo(
-    () => ({
-      receipts: submissionReceipts,
-      submissions: state.submissions,
-      pending: transcriptPending
-    }),
+    () =>
+      createStructuredAgentSendingSource(submissionReceipts, transcriptPending, state.submissions),
     [state.submissions, submissionReceipts, transcriptPending]
   )
   return {

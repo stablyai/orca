@@ -36,14 +36,14 @@ import type { MobileNativeChatUsageLimit } from '../status/use-mobile-native-cha
 import type { MobileStructuredMcpPanel } from '../mcp/use-mobile-structured-mcp-panel'
 import type { MobileStructuredAccountUsage } from '../usage/use-mobile-structured-account-usage'
 import type { MobileStructuredAsyncQuestionSkip } from './use-mobile-structured-async-questions'
-import type { MobileStructuredSending } from '../transcript/ingestion/use-mobile-structured-sending-item-ids'
+import type { StructuredAgentSendingSource } from '../../../../../src/shared/agent-session/view/use-structured-agent-sending'
 
 export type StructuredMobileSession = Omit<
   ReturnType<typeof useMobileStructuredAgentOptions>,
   'contextUsageSupport' | 'accountUsageReported'
 > &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
-    sending: MobileStructuredSending
+    sending: StructuredAgentSendingSource
     journal: Pick<AgentJournalSnapshot, 'items'> & { submissions: StructuredAgentSubmission[] }
     /** The composer ring's readout; null until the session reports usage. */
     contextUsage: NativeChatContextUsageSummary | null

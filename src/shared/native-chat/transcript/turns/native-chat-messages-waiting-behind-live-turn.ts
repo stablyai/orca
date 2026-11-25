@@ -1,7 +1,5 @@
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../agent-session/view/structured-agent-session-submissions'
 import type { AgentSessionLatestTurn } from '../../../agent-session/agent-session-wire'
 import { readAgentJournalTurn } from '../../../agent-session/lifecycle/records/agent-session-turn-record'
 import type { NativeChatRole } from '../../native-chat-types'
@@ -24,7 +22,7 @@ export function nativeChatMessagesWaitingBehindLiveTurn(
   }[],
   items: readonly AgentJournalRenderItem[] | null | undefined,
   stopping = false,
-  submissions?: readonly AgentJournalSubmission[],
+  submissions?: readonly StructuredAgentSubmission[],
   /** Host current-work view excludes ended generations’ stale turns/sends. Older hosts omit it; fall back to rows. */
   host: { latestTurn?: AgentSessionLatestTurn | null; working?: boolean } = {}
 ): ReadonlySet<string> {
@@ -78,7 +76,7 @@ export function nativeChatOpeningTurnKey(
   turnKeys: readonly (string | undefined)[],
   journal: {
     items: readonly AgentJournalRenderItem[]
-    submissions: readonly AgentJournalSubmission[]
+    submissions: readonly StructuredAgentSubmission[]
   }
 ): string | undefined {
   const opening = structuredAgentSessionOpeningSendIn(journal.items, journal.submissions)

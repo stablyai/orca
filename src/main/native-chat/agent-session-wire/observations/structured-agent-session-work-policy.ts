@@ -1,3 +1,4 @@
+import type { JournalObserverResult } from '../../agent-session-journal/journal-observer-read'
 import type { JournalStatusState } from '../../agent-session-journal/journal-status-state'
 import type {
   StructuredAgentSessionWorkEvidence,
@@ -269,4 +270,22 @@ export function withStructuredAgentSessionDiedTurnVerdict(
     request.turnState === 'running'
     ? { ...state, summary: { ...state.summary, turnOutcome: 'interruption' } }
     : state
+}
+
+/** Whether its alert stays quiet: a turn that succeeded on a bot's quiet marker, or one that ended
+ *  in a way its host keeps quiet (a look-around that already failed last time). */
+export function withHostTurnEnd(
+  state: JournalObserverResult['state'],
+  quietEnd?: (outcome: 'success' | 'failure', usageLimited?: boolean) => boolean,
+  usageLimited = false
+): JournalObserverResult['state'] {
+  const outcome = state.summary.turnOutcome
+  const request = state.latestRequest
+  const quiet =
+    outcome === 'failure'
+      ? quietEnd?.('failure', usageLimited) === true
+      : request?.kind === 'turn' &&
+        request.outcome === 'success' &&
+        (state.quietAnswer === true || quietEnd?.('success') === true)
+  return quiet ? { ...state, quiet: true } : state
 }

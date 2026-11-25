@@ -14,10 +14,8 @@ import { agentSessionWriteNotDoneParts } from '../failures/agent-session-refusal
 import type { AgentSessionWriteNoticePart } from '../failures/agent-session-write-notice-copy'
 import { dispatchWasWithdrawn } from '../requests/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionAttemptFailureParts } from '../failures/structured-agent-session-rejection-words'
-import type {
-  AgentJournalItemBody,
-  AgentJournalSubmission
-} from '../journal/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from './structured-agent-session-submissions'
 import { pendingPromptsAllUnanswerableHere } from '../requests/prompts/agent-session-approval-subject'
 import type { NativeChatImageRefBlock } from '../../native-chat/native-chat-types'
 import {
@@ -109,7 +107,7 @@ export function queuedMessageSteersIn(
 /** Hide waiting cards after live submission hand-off to avoid catch-up duplicates; rejected hand-offs restore cards, and returned cards never hide. */
 export function projectQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly StructuredAgentSubmission[],
   session: QueuedMessageCardSession
 ): QueuedMessageCard[] {
   const handedOff = handedOffQueuedMessageIds(

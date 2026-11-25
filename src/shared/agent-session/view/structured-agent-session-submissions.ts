@@ -1,9 +1,7 @@
 import { structuralValuesEqual } from '../../collections/structural-value-equality'
 import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
 
-export type StructuredAgentSubmission = Omit<AgentJournalSubmission, 'writtenAt'> & {
-  writtenAt?: never
-}
+export type StructuredAgentSubmission = Omit<AgentJournalSubmission, 'writtenAt'>
 export type SubmissionReceipts = Pick<ReadonlyMap<string, number>, 'get'>
 
 const indexes = new WeakMap<readonly StructuredAgentSubmission[], ReadonlyMap<string, number>>()

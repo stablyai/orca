@@ -1,10 +1,8 @@
 // Date status from own turn/send/prompt edges, never newest-row time: child output would keep redating an idle lead.
 // Turn records need no producer filter because they never carry child linkage (structured-agent-session-live-turn.ts).
 
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from './structured-agent-session-submissions'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../lifecycle/records/agent-session-turn-record'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
@@ -18,7 +16,7 @@ import { isUnansweredStructuredAgentSessionDispatch } from '../requests/structur
 export function structuredAgentSessionStatusStartedAt(
   status: StructuredAgentSessionProjectedStatus,
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly StructuredAgentSubmission[],
   currentFence: number | null | undefined,
   latestRequest: Pick<StructuredAgentSessionLatestRequest, 'settledAt'> | null
 ): number | undefined {

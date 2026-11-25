@@ -1,8 +1,8 @@
 import type {
   AgentJournalMessageItem,
-  AgentJournalSkillRef,
-  AgentJournalSubmission
+  AgentJournalSkillRef
 } from '../../../agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../agent-session/view/structured-agent-session-submissions'
 import type { AgentSessionQueuedMessage } from '../../../agent-session/requests/agent-session-queued-message-wire'
 import {
   pickedSkillsInText,
@@ -286,7 +286,7 @@ export function queuedEditStanding(
   view: {
     messages: readonly AgentSessionQueuedMessage[] | null
     cards: readonly { messageId: string }[]
-    submissions: readonly AgentJournalSubmission[]
+    submissions: readonly StructuredAgentSubmission[]
   },
   sessionId: string,
   messageId: string,

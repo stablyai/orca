@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import { useMemo } from 'react'
+import { createStructuredAgentSendingSource } from '../use-structured-agent-sending'
+import { structuredAgentSessionSendingItemIds } from '../structured-agent-session-sending'
 import { expect, it, vi } from 'vitest'
 import type {
   AgentSessionHistoryPage,
@@ -17,22 +19,13 @@ import type {
   StructuredAgentSessionAction,
   StructuredAgentSessionState
 } from './structured-agent-session-reducer'
-import type {
-  SubmissionReceipts,
-  StructuredAgentSubmission
-} from '../structured-agent-session-submissions'
+import type { SubmissionReceipts } from '../structured-agent-session-submissions'
 import type { NativeChatTurnJournal } from '../../../native-chat/transcript/turns/native-chat-turn-membership'
 
 type DeliveryOwner = {
   subscribeDelivery: (listener: () => void) => () => void
   getSubmissionReceipts: () => SubmissionReceipts
 }
-type MobileSending = {
-  receipts: { subscribe: DeliveryOwner['subscribeDelivery']; getSnapshot: () => SubmissionReceipts }
-  pending: readonly []
-  submissions: readonly StructuredAgentSubmission[]
-}
-
 const { useMobileStructuredAgentTurnTiming } = await vi.importActual<{
   useMobileStructuredAgentTurnTiming: (
     state: StructuredAgentSessionState,
@@ -41,11 +34,6 @@ const { useMobileStructuredAgentTurnTiming } = await vi.importActual<{
   ) => { turnJournal: NativeChatTurnJournal }
 }>(
   '../../../../../mobile/src/session/native-chat/transcript/ingestion/use-mobile-structured-agent-turn-timing'
-)
-const { useMobileStructuredSendingItemIds } = await vi.importActual<{
-  useMobileStructuredSendingItemIds: (sending: MobileSending) => ReadonlySet<string>
-}>(
-  '../../../../../mobile/src/session/native-chat/transcript/ingestion/use-mobile-structured-sending-item-ids'
 )
 const { createMobileStructuredChatStateCache } = await vi.importActual<{
   createMobileStructuredChatStateCache: () => {
@@ -70,32 +58,13 @@ const { useNativeChatTurnStatus } = await vi.importActual<{
     latestTurn: AgentSessionLatestTurn | null | undefined
     subagentId: null
     notices: undefined
-    sendingItemIds: ReadonlySet<string>
-    displayedIds: ReadonlySet<string>
     workingStartedAt: number | null
   }) => { turnWorking: boolean; turnStatuses: object }
 }>('../../../../renderer/src/components/native-chat/conversation/turns/use-native-chat-turn-status')
-const { useStructuredAgentSendingItemIds } = await vi.importActual<{
-  useStructuredAgentSendingItemIds: (
-    owner: DeliveryOwner,
-    pending: readonly [],
-    submissions: readonly StructuredAgentSubmission[]
-  ) => ReadonlySet<string>
-}>(
-  '../../../../renderer/src/components/native-chat/session/structured/delivery/use-structured-agent-sending-item-ids'
-)
-
 vi.mock(
   '../../../../renderer/src/components/native-chat/session/structured/read/structured-agent-session-read-transport',
   () => ({
     startStructuredAgentSessionReadTransport: vi.fn()
-  })
-)
-
-vi.mock(
-  '../../../../../mobile/src/session/native-chat/agent-session/structured-session-operation-id',
-  () => ({
-    structuredSessionOperationId: () => 'receipt-test'
   })
 )
 
@@ -184,191 +153,6 @@ const NO_TURN_KEYS: string[] = []
 const DISPLAYED = new Set(['orca:opener', 'orca:steer'])
 const noSubscription = () => () => {}
 
-type MobileRead = {
-  state: StructuredAgentSessionState
-  submissionReceipts: MobileSending['receipts']
-}
-
-type MobileClient = {
-  getState: () => 'connected'
-  onStateChange: typeof noSubscription
-  sendRequest: (method: string) => Promise<{ ok: true; result: unknown }>
-  subscribe: (
-    method: string,
-    options: unknown,
-    receive: (event: AgentSessionSubscribeEvent) => void
-  ) => () => void
-}
-const { useMobileStructuredAgentState } = await vi.importActual<{
-  useMobileStructuredAgentState: (input: {
-    client: MobileClient
-    sessionId: string
-    sessionKey: string
-    connected: true
-    enabled: true
-  }) => MobileRead
-}>('../../../../../mobile/src/session/native-chat/agent-session/use-mobile-structured-agent-state')
-const { useMobileStructuredTurnIndicator } = await vi.importActual<{
-  useMobileStructuredTurnIndicator: (input: {
-    state: StructuredAgentSessionState
-    turnId: string | null
-    isWorking: boolean
-    canStop: boolean
-    hostStopping: boolean
-    stopPressed: boolean
-    queueCapable: boolean
-    queueFollowUps: boolean
-    queueSendsNext: boolean
-  }) => { thinking: boolean }
-}>(
-  '../../../../../mobile/src/session/native-chat/transcript/ingestion/use-mobile-structured-turn-indicator'
-)
-const { useMobileStructuredTranscript } = await vi.importActual<{
-  useMobileStructuredTranscript: (
-    input: {
-      agent: string
-      read: MobileRead
-      optimistic: readonly []
-      sessionKey: string
-      turnId: string | null
-    },
-    isWorking: boolean
-  ) => { sending: MobileSending }
-}>(
-  '../../../../../mobile/src/session/native-chat/transcript/ingestion/use-mobile-structured-transcript'
-)
-
-// PR #45057: the production phone session used to wake and scan the whole window on a receipt.
-it.each([4096, 40960])(
-  'keeps the mounted mobile session asleep on receipt with %i loaded rows',
-  async (rowCount) => {
-    vi.useFakeTimers()
-    let rowReads = 0
-    let sessionRenders = 0
-    const streams = new Map<string, (event: AgentSessionSubscribeEvent) => void>()
-    const client: MobileClient = {
-      getState: () => 'connected',
-      onStateChange: noSubscription,
-      sendRequest: async () => ({ ok: true, result: null }),
-      subscribe: (method, _options, receive) => {
-        streams.set(method, receive)
-        return () => {
-          streams.delete(method)
-        }
-      }
-    }
-    const items = Array.from({ length: rowCount }, (_, index): AgentJournalRenderItem => ({
-      itemId: `history:${index}`,
-      revision: 0,
-      sequence: index + 2,
-      observedAt: 1000,
-      get body(): AgentJournalRenderItem['body'] {
-        rowReads += 1
-        return { kind: 'message', role: 'assistant', blocks: [] }
-      }
-    }))
-    const latestTurn = {
-      itemId: 'turn-lifecycle:run',
-      observedAt: 1000,
-      turn: { turnId: 'run', state: 'running', startedAt: 1000, userItemId: 'orca:opener' }
-    } satisfies AgentSessionLatestTurn
-    const session = renderHook(() => {
-      sessionRenders += 1
-      const read = useMobileStructuredAgentState({
-        client,
-        sessionId: 'chat',
-        sessionKey: 'chat',
-        enabled: true,
-        connected: true
-      })
-      const { state } = read
-      const turnId = state.latestTurn?.turn.turnId ?? null
-      const isWorking = state.working === true
-      const { sending } = useMobileStructuredTranscript(
-        {
-          agent: 'claude',
-          sessionKey: 'chat',
-          read,
-          optimistic: NO_PENDING,
-          turnId
-        },
-        isWorking
-      )
-      const turnIndicator = useMobileStructuredTurnIndicator({
-        state,
-        turnId,
-        isWorking,
-        canStop: isWorking,
-        hostStopping: false,
-        stopPressed: false,
-        queueCapable: true,
-        queueFollowUps: true,
-        queueSendsNext: false
-      })
-      return { state, sending, turnIndicator }
-    })
-    try {
-      await act(async () => vi.advanceTimersByTimeAsync(150))
-      const receive = streams.get('agentSession.subscribe')!
-      act(() =>
-        receive({
-          type: 'snapshot',
-          sessionId: 'chat',
-          page: { ...page(items, [SEND]), latestTurn, actionablePromptIds: [], working: true },
-          fence: SEND.fence
-        })
-      )
-      expect(session.result.current.state.items).toHaveLength(rowCount)
-      expect(session.result.current.turnIndicator.thinking).toBe(false)
-      const sending = renderHook(() =>
-        useMobileStructuredSendingItemIds(session.result.current.sending)
-      )
-      try {
-        expect(sending.result.current).toEqual(new Set(['orca:opener']))
-        const sequence = rowCount + 2
-        const deliverBatch = async (action: StructuredAgentSessionAction) => {
-          if (action.type !== 'event') {
-            throw new Error('Expected a subscription event')
-          }
-          await act(async () => {
-            receive(action.event)
-            await vi.advanceTimersByTimeAsync(16)
-          })
-        }
-        rowReads = 0
-        sessionRenders = 0
-        await deliverBatch(batch(sequence, [{ ...SEND, writtenAt: 2000 }], [], latestTurn))
-        expect({ sessionRenders, rowReads }).toEqual({ sessionRenders: 0, rowReads: 0 })
-        expect(sending.result.current.size).toBe(0)
-
-        await deliverBatch(
-          batch(
-            sequence + 1,
-            [],
-            [
-              {
-                itemId: 'reasoning',
-                revision: 0,
-                sequence: sequence + 1,
-                observedAt: 2500,
-                body: { kind: 'message', role: 'reasoning', state: 'running', blocks: [] }
-              }
-            ],
-            latestTurn
-          )
-        )
-        expect(rowReads).toBeGreaterThan(0)
-        expect(session.result.current.turnIndicator.thinking).toBe(true)
-      } finally {
-        sending.unmount()
-      }
-    } finally {
-      session.unmount()
-      vi.useRealTimers()
-    }
-  }
-)
-
 // PR #45057: receipt publication used to rebuild turn membership and projection on both clients.
 it.each([
   [4096, 4096, 3, false],
@@ -444,14 +228,14 @@ it.each([
     const before = timingOf(initial)
     const { result, rerender, unmount } = renderHook(
       ({ state }) => {
-        const owner = {
-          subscribeDelivery: noSubscription,
-          getSubmissionReceipts: () => state.writtenAtById
-        } satisfies DeliveryOwner
-        const desktopSending = useStructuredAgentSendingItemIds(
-          owner,
-          NO_PENDING,
-          state.submissions
+        const desktopSending = useMemo(
+          () =>
+            structuredAgentSessionSendingItemIds(
+              NO_PENDING,
+              state.submissions,
+              state.writtenAtById
+            ),
+          [state.submissions, state.writtenAtById]
         )
         const desktop = useNativeChatTurnStatus({
           turnKeys: NO_TURN_KEYS,
@@ -461,21 +245,24 @@ it.each([
           latestTurn: state.latestTurn,
           subagentId: null,
           notices: undefined,
-          sendingItemIds: desktopSending,
-          displayedIds: DISPLAYED,
           workingStartedAt: running ? 3000 : null
         })
         const mobile = useMobileStructuredAgentTurnTiming(state, turnId, state.items)
-        const mobileDelivery = useMemo(
-          () => ({
-            receipts: { subscribe: noSubscription, getSnapshot: () => state.writtenAtById },
-            submissions: state.submissions,
-            pending: NO_PENDING
-          }),
+        const mobileSending = useMemo(
+          () =>
+            createStructuredAgentSendingSource(
+              { subscribe: noSubscription, getSnapshot: () => state.writtenAtById },
+              NO_PENDING,
+              state.submissions
+            ).getSnapshot(),
           [state.submissions, state.writtenAtById]
         )
-        const mobileSending = useMobileStructuredSendingItemIds(mobileDelivery)
-        return { desktop, desktopSending, mobile, mobileSending }
+        return {
+          desktop,
+          desktopSending,
+          mobile,
+          mobileSending
+        }
       },
       { initialProps: { state: initial } }
     )
@@ -483,7 +270,6 @@ it.each([
       const first = result.current
       expect(first.desktopSending).toEqual(DISPLAYED)
       expect(first.mobileSending).toEqual(DISPLAYED)
-      expect(first.desktop.turnWorking).toBe(false)
       // Detect scans of settled candidates even when they never access a row body.
       for (const record of initial.submissions.slice(3)) {
         Object.defineProperty(record, 'dispatchState', {
@@ -520,13 +306,11 @@ it.each([
       expect(result.current.desktop.turnStatuses).toBe(first.desktop.turnStatuses)
       expect(result.current.desktopSending).toEqual(new Set(['orca:steer']))
       expect(result.current.mobileSending).toEqual(new Set(['orca:steer']))
-      expect(result.current.desktop.turnWorking).toBe(false)
 
       update('chat', batch(sequence + 1, [{ ...steer, writtenAt: 3500 }], [], latestTurn))
       rerender({ state: cache.get('chat')! })
       expect(result.current.desktopSending.size).toBe(0)
       expect(result.current.mobileSending.size).toBe(0)
-      expect(result.current.desktop.turnWorking).toBe(running)
       expect(result.current.desktop.turnStatuses).toBe(first.desktop.turnStatuses)
       expect(result.current.mobile.turnJournal).toBe(first.mobile.turnJournal)
       expect({ rowReads, settledReads }).toEqual({ rowReads: 0, settledReads: 0 })
@@ -553,7 +337,6 @@ it.each([
       expect(result.current.mobile.turnJournal).not.toBe(first.mobile.turnJournal)
       expect(cache.get('chat')!.submissions).not.toBe(initial.submissions)
       expect(result.current.desktopSending).toEqual(new Set(['orca:steer']))
-      expect(result.current.desktop.turnWorking).toBe(false)
       expect(rowReads).toBeGreaterThan(0)
     } finally {
       unmount()

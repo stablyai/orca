@@ -21,8 +21,6 @@ export function useNativeChatTurnStatus({
   latestTurn,
   subagentId,
   notices,
-  sendingItemIds,
-  displayedIds,
   workingStartedAt,
   settledTurns
 }: {
@@ -35,8 +33,6 @@ export function useNativeChatTurnStatus({
   latestTurn: AgentSessionLatestTurn | null | undefined
   subagentId: string | null
   notices: ReadonlyMap<string, NativeChatDeliveryNotice> | undefined
-  sendingItemIds?: ReadonlySet<string>
-  displayedIds: ReadonlySet<string>
   workingStartedAt?: number | null
   /** Recorded durations (the host's journal or the transcript); they outrank what this client observed. */
   settledTurns?: NativeChatSettledTurns | null
@@ -55,23 +51,11 @@ export function useNativeChatTurnStatus({
       isStructuredAgentSessionThinking({ items: journalItems ?? [], latestTurn }),
     [journalItems, latestTurn, subagentId]
   )
-  const sendPending = useMemo(() => {
-    if (subagentId !== null) {
-      return false
-    }
-    if (!structured) {
-      return (
-        liveTurnKey !== undefined &&
-        (sendingItemIds?.has(liveTurnKey) === true || notices?.get(liveTurnKey)?.sending === true)
-      )
-    }
-    for (const id of sendingItemIds ?? []) {
-      if (displayedIds.has(id)) {
-        return true
-      }
-    }
-    return false
-  }, [notices, displayedIds, liveTurnKey, sendingItemIds, structured, subagentId])
+  const sendPending =
+    subagentId === null &&
+    !structured &&
+    liveTurnKey !== undefined &&
+    notices?.get(liveTurnKey)?.sending === true
   const { isWorking, turnWorking } = nativeChatWorkingPresentation(
     working,
     workingStartedAt,

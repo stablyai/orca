@@ -12,11 +12,14 @@ import {
 } from '../../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import { isNativeChatProviderTurnStart } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-provider-turn-start'
-import { MobileNativeChatReasoningRow } from '../message-content/MobileNativeChatReasoningRow'
+import {
+  MobileNativeChatReasoningRow,
+  mobileNativeChatStandaloneReasoning
+} from '../message-content/MobileNativeChatReasoningRow'
 import { useMobileNativeChatRunAsides } from '../use-mobile-native-chat-run-asides'
 import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
 import { nativeChatWorkRunEntries } from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-work-run'
-import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import { mobileNativeChatMessageTurnBar } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from '../notices/MobileNativeChatNoticeRow'
 import { mobileNativeChatBotCardRow } from '../bot-cards/mobile-native-chat-bot-card-row'
 import { useMobileFoldedIntoBotRequest } from '../bot-cards/mobile-bot-request-folded-mail'
@@ -61,6 +64,7 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   turnStatus,
   turnStatusAbove = false,
+  gateWorking,
   turnExpanded,
   turnKey,
   rewindable,
@@ -72,11 +76,10 @@ function MobileNativeChatMessageImpl({
   foldedAway = false,
   openReasoning,
   structuredActivityUi = false,
-  reasoningIsLive = false,
+  liveReasoning,
   reasoningExpanded,
   onToggleReasoning,
   unsentNotice,
-  sending,
   receipt,
   awaiting,
   userMessageOpen,
@@ -94,6 +97,7 @@ function MobileNativeChatMessageImpl({
   fontScale?: number
   turnStatus?: NativeChatTurnStatus | null
   turnStatusAbove?: boolean
+  gateWorking?: true
   turnExpanded?: boolean
   turnKey?: string
   /** The chat may rewind to this row, by desktop's `nativeChatRowOffersRewind`. */
@@ -108,11 +112,10 @@ function MobileNativeChatMessageImpl({
   openReasoning?: ReadonlySet<string>
   structuredActivityUi?: boolean
   // Hide the reasoning row while the live activity line discloses the same block.
-  reasoningIsLive?: boolean
+  liveReasoning?: 'working' | 'stopping'
   reasoningExpanded?: boolean
   onToggleReasoning?: (key: string) => void
   unsentNotice?: string
-  sending?: boolean
   receipt?: NativeChatResolvedPrompt
   awaiting?: boolean
   userMessageOpen?: boolean
@@ -182,15 +185,12 @@ function MobileNativeChatMessageImpl({
       ? message.blocks.at(-1)
       : undefined
 
-  const statusRow = turnStatus ? (
-    <MobileNativeChatTurnStatus
-      startedAt={turnStatus.startedAt}
-      workedSeconds={turnStatus.workedSeconds}
-      verdict={turnStatus.verdict}
-      expanded={turnExpanded ?? false}
-      onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
-    />
-  ) : null
+  const statusRow = mobileNativeChatMessageTurnBar(turnStatus, {
+    gateWorking,
+    turnExpanded,
+    turnKey,
+    onToggleTurn
+  })
   const rowId = rowKey ?? message.id
   const withStatus = (row: React.ReactNode) => (
     <>
@@ -235,23 +235,21 @@ function MobileNativeChatMessageImpl({
   }
   if (isReasoning && !workRun) {
     const markdown = deriveNativeChatRowContent(message.blocks).markdown
-    const draws = markdown.trim().length > 0 && !reasoningIsLive
-    return withStatus(
-      draws && (
-        <View style={styles.row} testID={mobileNativeChatRowId(rowId)}>
-          <MobileNativeChatReasoningRow
-            message={message}
-            markdown={markdown}
-            fontScale={fontScale}
-            live={activeTurnIsWorking === true}
-            expanded={reasoningExpanded}
-            onToggle={onToggleReasoning}
-            onLongPress={onLongPress}
-          />
-          {showFull}
-        </View>
-      )
+    const reasoning = (
+      <View style={styles.row} testID={mobileNativeChatRowId(rowId)}>
+        <MobileNativeChatReasoningRow
+          message={message}
+          markdown={markdown}
+          fontScale={fontScale}
+          live={activeTurnIsWorking === true}
+          expanded={reasoningExpanded}
+          onToggle={onToggleReasoning}
+          onLongPress={onLongPress}
+        />
+        {showFull}
+      </View>
     )
+    return withStatus(mobileNativeChatStandaloneReasoning(liveReasoning, markdown, reasoning))
   }
   const isChatTurn = message.role === 'user' || message.role === 'assistant'
   // Paced prose calls this from its own renders too, so the key must not depend on earlier calls.
@@ -403,7 +401,6 @@ function MobileNativeChatMessageImpl({
             rowKey={rowKey ?? message.id}
             fontScale={fontScale}
             rewindable={rewindable}
-            deliveryStatus={sending ? t('chat.message.sending', 'Sending…') : undefined}
           />
         ) : null}
       </View>

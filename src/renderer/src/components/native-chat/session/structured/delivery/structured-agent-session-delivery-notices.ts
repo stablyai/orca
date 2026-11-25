@@ -6,7 +6,7 @@ import {
 import { agentSessionFailureStatedByRow } from '../../../../../../../shared/agent-session/failures/agent-session-visible-failures'
 import { classifyDispatchRejection } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { agentJournalSubmissionKey } from '../../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import { structuredAgentSessionRejectionParts } from '../../../../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
 import { structuredAgentSessionRejectedShownInPlace } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
@@ -17,7 +17,7 @@ const NO_COMMANDS: ReadonlySet<string> = new Set()
 
 /** Host-worded rejections that draw on their own message row. */
 export function structuredAgentSessionDeliveryNotices(args: {
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly StructuredAgentSubmission[]
   agentName: string
   startFailures: readonly AgentSessionFailureFact[]
   commandItemIds?: ReadonlySet<string>

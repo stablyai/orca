@@ -2,10 +2,8 @@ import type { DragReorderMove } from '../../../../components/reorder/drag-reorde
 import { useMobileQueuedMessageComposerActions } from './use-mobile-queued-message-composer-actions'
 import { useCallback, useMemo } from 'react'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../src/shared/agent-session/view/structured-agent-session-submissions'
 import { agentSessionVisibleFailureFacts } from '../../../../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { mapSettledWithConcurrency } from '../../../../../../src/shared/concurrency/map-with-concurrency'
 import type {
@@ -85,7 +83,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
   queueCurrent: boolean
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   queuePause: AgentSessionQueuePause | null
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly StructuredAgentSubmission[]
   sending?: readonly QueuedMessageCard[]
   agentWorking?: boolean
   mutate: MobileStructuredAgentMutate

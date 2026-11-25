@@ -1,7 +1,5 @@
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import {
   type StructuredAgentSessionOptimisticMessage,
   projectStructuredAgentSessionMessages as projectMessages
@@ -18,7 +16,7 @@ export const desktopStructuredTranscript = createStructuredQuestionProjection(
 export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly StructuredAgentSubmission[]
 ) {
   return projectMessages(items, optimistic, submissions, desktopStructuredTranscript.messages)
 }

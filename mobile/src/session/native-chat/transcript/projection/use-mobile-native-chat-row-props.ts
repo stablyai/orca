@@ -13,7 +13,7 @@ import type { NativeChatActivityJoin } from '../../../../../../src/shared/native
 export type MobileNativeChatTurnRow = {
   turnDiff?: NativeChatTurnDiff
   turnStatus: NativeChatTurnStatus | null
-  sending?: boolean
+  gateWorking?: true
   turnStatusAbove?: boolean
   turnExpanded: boolean
   turnKey?: string
@@ -32,7 +32,7 @@ export type MobileNativeChatTurnRow = {
   foldedAway?: boolean
   openReasoning?: ReadonlySet<string>
   mayStillGrow: boolean
-  reasoningIsLive: boolean
+  liveReasoning?: 'working' | 'stopping'
   reasoningExpanded: boolean
   onToggleReasoning: (key: string) => void
   // Hold expanded user messages above recycled rows so scrolling away cannot collapse them.

@@ -23,8 +23,6 @@ export function useMobileNativeChatTurnStatus({
   enabled,
   working,
   journal,
-  sendingItemIds,
-  hasDisplayedMessage,
   workingStartedAt,
   settledTurns,
   thinking = false,
@@ -35,8 +33,6 @@ export function useMobileNativeChatTurnStatus({
   enabled: boolean
   working: boolean
   journal: NativeChatTurnJournal | null
-  sendingItemIds?: ReadonlySet<string>
-  hasDisplayedMessage: (id: string) => boolean
   workingStartedAt?: number | null
   settledTurns?: NativeChatSettledTurns | null
   thinking?: boolean
@@ -46,22 +42,9 @@ export function useMobileNativeChatTurnStatus({
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   activeTurnKey: string
   isWorking: boolean
-  turnWorking: boolean
 } {
   const structured = journal !== null
-  let sendPending = false
-  for (const id of sendingItemIds ?? []) {
-    if (hasDisplayedMessage(id)) {
-      sendPending = true
-      break
-    }
-  }
-  const { isWorking, turnWorking } = nativeChatWorkingPresentation(
-    working,
-    workingStartedAt,
-    structured,
-    sendPending
-  )
+  const { isWorking } = nativeChatWorkingPresentation(working, workingStartedAt, structured, false)
   const activeTurnKey = (enabled ? liveTurnKey : undefined) ?? NATIVE_CHAT_UNANCHORED_TURN_KEY
   const [scopedTiming, setScopedTiming] = useState<ScopedTurnTiming>(() => ({
     scopeKey,
@@ -130,7 +113,6 @@ export function useMobileNativeChatTurnStatus({
   return {
     ...statuses,
     activeTurnKey,
-    isWorking,
-    turnWorking
+    isWorking
   }
 }

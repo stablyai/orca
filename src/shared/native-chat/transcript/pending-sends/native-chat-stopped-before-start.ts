@@ -6,9 +6,9 @@ import {
 } from '../../../agent-session/journal/agent-session-journal-position'
 import type {
   AgentJournalPosition,
-  AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalRenderItem
 } from '../../../agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../agent-session/view/structured-agent-session-submissions'
 import { inSendOrder } from './native-chat-send-order'
 import {
   stoppedTurnOpeners,
@@ -49,8 +49,8 @@ export type StoppedSendPlace = { opensTurn: boolean; position?: AgentJournalPosi
  * latestRowsSentBefore also puts them below earlier sends, harmless when newer hosts already moved them. */
 export function placeStoppedSends(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[],
-  stopped: ReadonlyMap<string, AgentJournalSubmission>
+  submissions: readonly StructuredAgentSubmission[],
+  stopped: ReadonlyMap<string, StructuredAgentSubmission>
 ): (itemId: string) => StoppedSendPlace {
   const anchors = structuredAgentTurnAnchors(items, submissions)
   const turnOpenedBy = new Map([...anchors].map(([turnItemId, anchorId]) => [anchorId, turnItemId]))
@@ -105,7 +105,7 @@ function openerPosition(
 function unloadedTurnsOpened(
   items: readonly AgentJournalRenderItem[],
   itemsById: ReadonlyMap<string, AgentJournalRenderItem>,
-  stopped: ReadonlyMap<string, AgentJournalSubmission>
+  stopped: ReadonlyMap<string, StructuredAgentSubmission>
 ): ReadonlyMap<string, AgentJournalPosition> {
   const openers = new Map(
     [...stoppedTurnOpeners([...stopped.values()])].filter(
@@ -187,7 +187,7 @@ function turnEndsByOpener(
 
 /** Legacy-only latest loaded send before each submission, by submittedAt with stable ties; removable after the submittedSequence host floor. */
 function latestRowsSentBefore(
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly StructuredAgentSubmission[],
   itemsById: ReadonlyMap<string, AgentJournalRenderItem>
 ): ReadonlyMap<string, AgentJournalRenderItem> {
   const byAcceptTime = submissions
@@ -215,7 +215,7 @@ function latestRowsSentBefore(
  * Temporary until a host floor: absent sequence falls back to submittedAt with stable list-order ties. */
 export function keepStoppedSendsInSendOrder(
   messages: NativeChatMessage[],
-  stopped: ReadonlyMap<string, AgentJournalSubmission>,
+  stopped: ReadonlyMap<string, StructuredAgentSubmission>,
   shown: ReadonlySet<string>
 ): boolean {
   const indexById = new Map<string, number>()
