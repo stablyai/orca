@@ -25830,19 +25830,6 @@
       }
     }
   },
-  "tabStrip": {
-    "overflow": {
-      "chipOnlyName_one": "{{title}}, {{count}} sekme",
-      "chipOnlyName_other": "{{title}}, {{count}} sekme",
-      "entryNeedsAttention": "{{title}}, ilgilenmeniz gerekiyor",
-      "moreTabs_one": "{{count}} sekme daha",
-      "moreTabs_other": "{{count}} sekme daha",
-      "needAttention_one": ", {{count}} sekme ilgilenmenizi bekliyor",
-      "needAttention_other": ", {{count}} sekme ilgilenmenizi bekliyor",
-      "openTabs_one": "{{count}} açık sekme",
-      "openTabs_other": "{{count}} açık sekme"
-    }
-  },
   "updates": {
     "installOnQuit": {
       "title": "Güncelleme yüklenmeye hazır",
@@ -28674,6 +28661,7 @@
     "errors": {
       "unsavedDrafts": "Klasöründe kaydedilmemiş düzenleyici değişiklikleri var. Bunları kaydedin veya kapatın, ardından silmeyi tekrar deneyin.",
       "nameTaken": "Bu ad başka bir bot tarafından kullanılıyor.",
+      "purposeTooLongForHost": "{{host}} üzerindeki Orca, amaç için en fazla 200 karakter kabul ediyor. Kısaltın veya {{host}} üzerindeki Orca'yı güncelleyin.",
       "generic": "Bir sorun oluştu. Tekrar deneyin.",
       "avatarHomeUnreadable": "Kaydedilen resim okunamadı. Resmi yeniden seçin.",
       "folderNotOwned": "Bu botun klasörü doğrulanamadı.",

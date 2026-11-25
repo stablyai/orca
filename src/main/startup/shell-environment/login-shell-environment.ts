@@ -208,7 +208,6 @@ export function captureLoginShellEnvironment(
   const fellBack: LoginShellEnvironmentCapture = { status: 'fallback', env }
   // process.env PATH already holds the profile's entries (hydrateShellPath); rerunning rc files on it doubles them.
   const fromLaunchPath = options.env === undefined && process.platform !== 'win32'
-  const probeEnv = fromLaunchPath ? withLaunchPath(env) : env
   if (!shell) {
     return Promise.resolve(fellBack)
   }
@@ -221,6 +220,7 @@ export function captureLoginShellEnvironment(
   const entry = cachedEnvironment(`${shell}\0${fallback ?? ''}\0${envKey}`)
   const run = (): Promise<LoginShellEnvironmentCapture> => {
     const startedAt = Date.now()
+    const probeEnv = fromLaunchPath ? withLaunchPath(env) : env
     const spawner =
       options.spawner ??
       ((probeShell: string, probeEnv: NodeJS.ProcessEnv) =>

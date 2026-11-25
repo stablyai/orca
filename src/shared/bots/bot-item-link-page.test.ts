@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { BotItemLinkView } from './bot-items'
 import { BOT_ITEM_LINK_ROWS, botItemLinkPage, botItemLinkRows } from './bot-item-link-rows'
 
-const worker = (i: number, pr: number | null = null): BotItemLinkView => ({
+const worker = (
+  i: number,
+  pr: number | null = null
+): Extract<BotItemLinkView, { kind: 'dispatch' }> => ({
   kind: 'dispatch',
   ref: `ctx_${i}`,
   latest: null,
@@ -70,5 +73,18 @@ describe('a Links list page', () => {
   it('keeps a list that fits one page in its grouped order', () => {
     const links: BotItemLinkView[] = [worker(0), { kind: 'file', ref: 'a.md' }, worker(1)]
     expect(opened(links, 1)).toEqual({ rows: botItemLinkRows(links), more: 0 })
+  })
+})
+
+describe('a worker chain on a Links page', () => {
+  it('dates its PR by the chain’s newest step, as its worker row is', () => {
+    const step = (ref: string): BotItemLinkView => ({ ...worker(0, 7), ref, latest: 'ctx_next' })
+    const links: BotItemLinkView[] = [
+      step('ctx_first'),
+      ...Array.from({ length: 59 }, (_, i): BotItemLinkView => ({ kind: 'file', ref: `f${i}.md` })),
+      step('ctx_next')
+    ]
+    const keys = opened(links, 1).rows.map((row) => row.key)
+    expect(keys.slice(0, 2)).toEqual(['dispatch:ctx_first', 'pr:acme/app#7'])
   })
 })

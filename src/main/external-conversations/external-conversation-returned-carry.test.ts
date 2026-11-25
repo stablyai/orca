@@ -422,3 +422,38 @@ it('carries the oldest cards whose images fit one message; the rest wait for the
   expect(next.admit()).toBe(true)
   expect(returnedIds()).toEqual(['c'])
 })
+
+/** Who each message of a chain of 20 failed starts carries, the senders taking turns. */
+function failedChainStamps(senders: ConnectorMessageAsker[]): (string | undefined)[][] {
+  failedStart('m0', asked('d0', 'm0', THREAD, [], senders[0]), 'notSignedIn', NOW)
+  const stamps: (string | undefined)[][] = []
+  for (let i = 1; i <= 20; i++) {
+    const at = NOW + i * 60_000
+    const next = sendNext(`m${i}`, `m${i}`, at, { asker: senders[i % senders.length] })
+    stamps.push((next.body.carriedAskers ?? []).map((asker) => asker?.userId))
+    expect(next.admit()).toBe(true)
+    refuseStart(`m${i}`, 'notSignedIn', at)
+  }
+  return stamps
+}
+
+it('a chain of failed starts from one sender keeps one stamp', () => {
+  expect(failedChainStamps([OWNER]).every((stamps) => stamps.join() === 'U_OWNER')).toBe(true)
+})
+
+it('a chain of failed starts from two senders keeps one stamp each, newest first', () => {
+  const stamps = failedChainStamps([person('U_DANA', 'member'), OWNER])
+  expect(stamps.slice(0, 3)).toEqual([['U_DANA'], ['U_OWNER', 'U_DANA'], ['U_DANA', 'U_OWNER']])
+  expect(stamps.every((each) => each.length <= 2)).toBe(true)
+})
+
+it('a card an earlier Orca saved with repeated stamps carries each sender once', () => {
+  const dana = person('U_DANA', 'member')
+  failedStart('old', {
+    ...asked('d-old', 'old', THREAD, [], OWNER),
+    carriedAskers: [dana, dana, OWNER, null, dana, null]
+  })
+  const next = sendNext('next', 'again', NOW + 60_000, { asker: OWNER })
+  expect(next.body.carriedAskers).toEqual([OWNER, dana, null])
+  expect(turnActsForOwner(next.body)).toBe(false)
+})
