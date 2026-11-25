@@ -1836,8 +1836,7 @@
         "title": "Provedores",
         "searchAgents": "agentes",
         "searchCli": "CLI",
-        "searchTerminal": "terminal",
-        "antigravityAccount": "Conta"
+        "searchTerminal": "terminal"
       },
       "permissionsDescriptionOwnAgents": "Novos chats seguem a permissão de cada agente em Configurações → Agentes.",
       "launch": {
@@ -23713,22 +23712,16 @@
       "description": "Os agentes lá usam as contas padrão do Claude e do Codex da distribuição até que o Orca no WSL seja atualizado."
     },
     "antigravity": {
-      "chatSignIn": "Entrar",
-      "chatChangeAccount": "Trocar conta",
-      "chatRetry": "Tentar entrar novamente",
       "chatCancel": "Cancelar",
       "chatCopyLink": "Copiar link de login",
       "chatCopyFailed": "Não foi possível copiar o link.",
       "chatStarting": "Iniciando login…",
-      "chatWaiting": "Conclua o login no navegador.",
       "chatOpenFailed": "Copie o link e abra-o no navegador.",
       "chatVerifying": "Concluindo login…",
-      "chatPasteHelp": "Se a última página após o login não carregar, copie o endereço completo do navegador e cole aqui.",
       "chatContinue": "Continuar",
       "chatCancelled": "Login cancelado.",
       "chatExpired": "O tempo para entrar esgotou. Tente novamente.",
       "chatFailed": "Falha ao entrar. Tente novamente.",
-      "chatOtherClient": "O login está em andamento em outro cliente.",
       "chatReadFailed": "Não foi possível verificar o login em {{host}}.",
       "retry": "Tentar novamente",
       "changed": "A conta nativa mudou. Selecione uma conta salva novamente antes de iniciar o agy.",
@@ -23760,8 +23753,6 @@
       "enterpriseOption": "Licença da sua organização",
       "apiKeyGet": "Obter chave de API",
       "location": "Localização",
-      "enterpriseFieldsShort": "Informe um projeto e uma localização.",
-      "chatUseMethod": "Entre novamente para usar {{method}}",
       "loadFailed": "Não foi possível carregar as contas do agy",
       "loading": "Carregando contas…",
       "notSignedIn": "Não conectado",
@@ -23772,8 +23763,7 @@
       "noEmailNotSaved": "agy não informou um e-mail · não salvo",
       "saveShort": "Salvar",
       "readAt": "Lido {{time}}",
-      "active": "Ativo",
-      "chatDescriptionKeyOnAgy": "Novos chats são executados no agy com o login abaixo, separado do agy no terminal."
+      "active": "Ativo"
     },
     "claude": {
       "added": "Conta adicionada. Selecione-a para usar no próximo Claude que iniciar.",
