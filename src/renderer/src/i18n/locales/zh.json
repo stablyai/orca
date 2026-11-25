@@ -1349,6 +1349,31 @@
     },
     "artifacts": {
       "teamDisabled": "你的团队已关闭产物分享"
+    },
+    "mcpServers": {
+      "empty": {
+        "copied": "已从 {{host}} 复制 {{count}} 个服务器",
+        "copyFrom": "从 {{host}} 复制",
+        "title": "{{host}} 上没有 MCP 服务器"
+      },
+      "found": {
+        "actions": "{{name}} 的操作",
+        "copied": "已将 {{name}} 复制到 Orca",
+        "copy": "复制到 Orca",
+        "move": "移到 Orca",
+        "moveAll": "全部移到 Orca",
+        "onlyIn": "仅限 {{agents}} · {{projects}}",
+        "open": "打开",
+        "summary": "在 {{agents}} 中找到 {{count}} 个服务器",
+        "title": "在你的智能体中"
+      },
+      "move": {
+        "allLine": "Orca 会把它们从 {{agents}} 的设置中移除，并保留一份备份。",
+        "allTitle": "将 {{count}} 个服务器移到 Orca？",
+        "confirm": "移动",
+        "line": "Orca 会把它从 {{agents}} 的设置中移除，并保留一份备份。",
+        "title": "将 {{name}} 移到 Orca？"
+      }
     }
   },
   "menu": {
