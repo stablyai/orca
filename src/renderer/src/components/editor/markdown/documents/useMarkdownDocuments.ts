@@ -11,7 +11,7 @@ import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runt
 import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import {
-  createMarkdownDocumentIndex,
+  getMarkdownDocumentIndex,
   getMarkdownDocLinkAnchor,
   resolveMarkdownDocLink
 } from './markdown-doc-links'
@@ -290,21 +290,16 @@ export function useMarkdownDocuments(
     [activeFile.filePath, isListed, onSave, refreshMarkdownDocuments, worktreePath]
   )
 
-  const docIndex = useMemo(
-    () => createMarkdownDocumentIndex(markdownDocuments),
-    [markdownDocuments]
-  )
-
   const onOpenDocLink = useCallback(
     (target: string) => {
-      const resolution = resolveMarkdownDocLink(target, docIndex)
+      const resolution = resolveMarkdownDocLink(target, getMarkdownDocumentIndex(markdownDocuments))
       if (resolution.status === 'resolved') {
         void openMarkdownDocument(resolution.document, {
           anchor: getMarkdownDocLinkAnchor(target)
         })
       }
     },
-    [docIndex, openMarkdownDocument]
+    [markdownDocuments, openMarkdownDocument]
   )
 
   return { markdownDocuments, openMarkdownDocument, onOpenDocLink, previewProps, mdSave }
