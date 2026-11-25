@@ -1,6 +1,6 @@
 // Host ⋯ › MCP servers: the host's own list, a server's page pushed over it, its Workspaces pushed
-// over that, and Add and Sign in as sheets. Shown only when the host lists mcp-servers.v1, which it
-// does only while its MCP servers switch is on.
+// over that, and Add and Sign in as sheets. Shown only when the host lists mcp-servers.v1 (an older
+// host doesn't).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'

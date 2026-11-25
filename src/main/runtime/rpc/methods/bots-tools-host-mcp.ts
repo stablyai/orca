@@ -5,7 +5,6 @@
 import { BotToolsSetHostMcpServers } from '../../../../shared/rpc-contract/bots-tools-params'
 import { botHomeFolder } from '../../../bots/bot-home'
 import { advanceBotToolsEpoch } from '../../../bots/bot-tools-revision'
-import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { isAgentRpcCaller } from '../callers/rpc-caller-identity'
 import { targetBot } from './bots-tools-target'
@@ -16,7 +15,6 @@ export const BOT_TOOLS_HOST_MCP_METHODS = [
     permission: 'workspace',
     params: BotToolsSetHostMcpServers,
     handler: async (params, context) => {
-      assertMcpServersFeatureEnabled()
       if (!context.caller || isAgentRpcCaller(context.caller)) {
         throw new InvalidArgumentError('Change which servers a bot gets in Orca.')
       }

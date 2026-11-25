@@ -150,7 +150,7 @@ export function HostScreenHeader({
   )
   const showRefreshLine = useRefreshHint(controller.catalog.revalidating)
   const disconnected = connState !== 'connected'
-  // Only while the host's MCP servers switch is on; a host that hasn't answered yet lists nothing.
+  // Only on a host that serves MCP servers; a host that hasn't answered yet lists nothing.
   const mcpServers = useRouteCapability(MCP_SERVERS_RUNTIME_CAPABILITY)
   const hostPath = `/h/${encodeURIComponent(hostId)}`
 

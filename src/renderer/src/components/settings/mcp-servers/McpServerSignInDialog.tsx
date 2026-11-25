@@ -43,10 +43,7 @@ const RETRY_MS = 2_000
 
 /** The host answered, and will keep refusing: MCP servers went off there, or the server went. */
 function hostRefuses(error: unknown): boolean {
-  return (
-    error instanceof RuntimeRpcCallError &&
-    (error.code === 'mcp_servers_off' || error.code === 'mcp_server_gone')
-  )
+  return error instanceof RuntimeRpcCallError && error.code === 'mcp_server_gone'
 }
 
 function SignInFlow({

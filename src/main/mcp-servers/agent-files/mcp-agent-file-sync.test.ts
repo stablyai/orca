@@ -11,7 +11,7 @@ import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { parse } from 'jsonc-parser'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setMcpAgentFileAllowed } from '../mcp-host-list'
 import { addMcpServers } from '../mcp-host-list-add'
 import { mcpAgentFileHeldPath } from './mcp-agent-file-entry'
@@ -52,17 +52,7 @@ const CURSOR_BEFORE = `{
 }`
 const GROK_BEFORE = 'model = "grok-4"\r\n\r\n[mcp_servers.github]\r\ncommand = "gh-mcp"'
 
-let previousSwitch: string | undefined
-beforeEach(() => {
-  previousSwitch = process.env.ORCA_MCP_SERVERS
-  process.env.ORCA_MCP_SERVERS = '1'
-})
 afterEach(() => {
-  if (previousSwitch === undefined) {
-    delete process.env.ORCA_MCP_SERVERS
-  } else {
-    process.env.ORCA_MCP_SERVERS = previousSwitch
-  }
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -250,16 +240,5 @@ describe("Orca's servers in Grok's, Cursor's and Droid's own MCP files", () => {
     await syncMcpAgentFiles(app)
     expect(read(paths.droid)).toBe(save)
     expect(readdirSync(dirname(paths.droid))).toEqual(['mcp.json'])
-  })
-
-  it('writes nothing while the MCP servers switch is off', async () => {
-    const { homeDir, folder, paths } = await setUp()
-    await setMcpAgentFileAllowed('cursor', true, folder)
-    await setMcpAgentFileAllowed('droid', true, folder)
-    delete process.env.ORCA_MCP_SERVERS
-    await syncMcpAgentFiles(instance(folder, homeDir, join(homeDir, 'orca')))
-    expect(read(paths.cursor)).toBe(CURSOR_BEFORE)
-    expect(read(paths.grok)).toBe(GROK_BEFORE)
-    expect(existsSync(paths.droid)).toBe(false)
   })
 })

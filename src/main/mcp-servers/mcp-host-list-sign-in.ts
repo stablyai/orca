@@ -19,7 +19,6 @@ import { signOutBotTool } from '../bots/tool-oauth/bot-tool-oauth-revoke'
 import { entryById, storedView } from './mcp-host-list'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { McpServersError } from './mcp-servers-error'
-import { isMcpServersFeatureEnabled } from './mcp-servers-feature'
 
 export const noSignIn = (): McpServersError =>
   new McpServersError('mcp_server_no_sign_in', 'Orca doesn’t sign in to this server.')
@@ -79,10 +78,10 @@ export async function signOutMcpServer(
   return view
 }
 
-/** Calls `changed` when a sign-in in the host's list changes what its row shows, while the switch is on. */
+/** Calls `changed` when a sign-in in the host's list changes what its row shows. */
 export function onMcpHostListSignInChanged(changed: () => void): () => void {
   return onBotToolSignInChanged((folder) => {
-    if (isMcpServersFeatureEnabled() && folder === resolve(mcpHostListFolder())) {
+    if (folder === resolve(mcpHostListFolder())) {
       changed()
     }
   })

@@ -66,7 +66,6 @@ const tempDir = (prefix: string): string => {
 const relay = { grant: async () => ({ origin: 'http://127.0.0.1:4100', token: 'the-token' }) }
 
 beforeEach(() => {
-  process.env.ORCA_MCP_SERVERS = '1'
   useBotToolCredentialsRoot(tempDir('mcp-credentials-'))
   setSecretStore({
     isEncryptionAvailable: () => true,
@@ -76,7 +75,6 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
-  delete process.env.ORCA_MCP_SERVERS
   useBotToolCredentialsRoot(null)
   _resetSecretStoreForTests()
   for (const dir of dirs.splice(0)) {

@@ -1,0 +1,64 @@
+---
+title: MCP servers
+description: Add an MCP server once in Orca, sign in once, and every agent on that computer or server can use it.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+MCP (Model Context Protocol) servers give agents extra tools: an issue tracker, a database, current library docs. In Orca you add a server once, in **Settings → MCP servers**, and new agent sessions on that host get it. You don't set it up again in each agent.
+
+<Callout>
+  Changes apply to new sessions. A chat picks them up on its next turn. A terminal agent that's
+  already running keeps the servers it started with, and Orca offers to restart it.
+</Callout>
+
+## One list per host
+
+Each computer or [Remote Orca Server](/docs/remote-servers) that runs agents keeps its own list. Pick the host with the host picker at the top of the page. A host with no servers offers **Copy from** this computer: Orca adds the same addresses and commands there. Saved values and sign-ins aren't copied, so sign in again on that host.
+
+## Add a server
+
+**Add a server** opens a catalog of popular servers (GitHub, Linear, Sentry, Vercel, Notion and more). Choose **Add**; a server that needs a sign-in opens your browser right away.
+
+**Custom server** takes anything that isn't in the catalog. Paste one of:
+
+- a server URL, such as `https://mcp.example.com/mcp`;
+- the command that starts it, such as `npx -y @modelcontextprotocol/server-postgres`;
+- an `mcpServers` block from another tool's config;
+- `claude mcp add …` or `codex mcp add …` lines.
+
+When the paste names several servers, Orca lists them; uncheck any you don't want and choose **Add**. **Edit details** sets headers, arguments and environment variables by hand. Values you enter there stay private: Orca stores them and never writes them into an agent's settings file.
+
+## Sign in once
+
+For a server that needs a sign-in, Orca signs in itself and every agent uses that sign-in. Its row says **Needs sign-in** until you do. On a server's page, the **⋯** menu next to **Signed in** has **Sign in again** and **Sign out**.
+
+## Choose agents and workspaces
+
+Click a server to open its page.
+
+- **Agents**: a switch per installed agent. Every agent gets a new server.
+- **Workspaces**: a checklist of the host's repositories and folders, plus **Workspaces added later**. Unchecking one workspace gives "All but …"; unchecking **Workspaces added later** gives "Only …".
+- **Launch** (a command server) and **Connection** (a URL server Orca doesn't sign in to): edit the details in place. A change saves when you leave the field.
+- **Advanced → Share one process across agents** (command servers): Orca runs one copy and every agent connects to it. It uses less memory, but the server doesn't run inside the workspace folder.
+
+Grok, Cursor and Droid only read their own MCP file. The first time you turn a server on for one of them, Orca asks before it keeps your servers in that file. Your own entries there stay as they are.
+
+## Servers already in your agents
+
+**In your agents** lists servers you set up inside an agent's own settings, such as Claude Code's `~/.claude.json` or Codex's `config.toml`, merged across agents. **Move to Orca** adds the server to Orca's list and removes it from those agents' settings, keeping a backup of each file it edits. The **⋯** menu has **Copy to Orca**, which leaves the agents' copies in place, and opens each settings file.
+
+## In a repository and for bots
+
+**Settings → Repository → MCP servers** lists the host's servers with a switch each, for that repository. The switch is the same choice as the server's Workspaces checklist. Under **From this repo's files**, the servers defined in the repository's own `.mcp.json` (or `.cursor/mcp.json`) are listed read-only, with a button to open the file.
+
+A bot gets the host's servers when you turn on **Your MCP servers** in its **Tools**. It's off by default; the tools only that bot has stay as they are.
+
+## Problems
+
+A server that can't work says why on its row: **Needs sign-in**, **Command not found**, or **Can't reach** its host. A whole agent can be blocked too, for example by an organization's Claude settings; its row on a server's page says so.
+
+## Related
+
+- [Chat UI](/docs/agents/native-chat): the `/mcp` tray in a chat shows Orca's servers next to the agent's own.
+- [Settings](/docs/settings)

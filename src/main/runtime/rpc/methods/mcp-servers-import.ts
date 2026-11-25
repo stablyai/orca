@@ -1,5 +1,5 @@
 // mcpServers.discover/move/copy: the "In your agents" servers on this host, and bringing one into
-// the host list. Only reached through mcpServers.*, which refuses while the switch is off.
+// the host list.
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { MCP_FILE_AGENTS, type McpServer } from '../../../../shared/mcp-servers/mcp-servers'

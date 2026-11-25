@@ -65,7 +65,7 @@ export function McpStaleTerminalsStartupOffer(): null {
     if (!localReady || isWebClientLocation()) {
       return
     }
-    // A host without the MCP switch on has no such terminals: it isn't asked at all.
+    // A host too old for MCP servers has no such terminals: it isn't asked at all.
     void ensureLocalRuntimeCapabilities().then((capabilities) => {
       if (capabilities?.includes(MCP_SERVERS_RUNTIME_CAPABILITY)) {
         askOnce('local', { run: 'local', contact: 0 }, { kind: 'local' }, null)

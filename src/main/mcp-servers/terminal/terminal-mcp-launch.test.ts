@@ -38,7 +38,6 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
-  delete process.env.ORCA_MCP_SERVERS
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -116,24 +115,7 @@ const launch = (agent: TuiAgent, command: string): TerminalMcpLaunchInput => ({
 })
 
 describe('the host list in an agent terminal', () => {
-  it('leaves the launch exactly as it was while the switch is off', async () => {
-    const hostFolder = await hostList()
-    for (const [agent, command] of [
-      ['claude', 'claude --foo'],
-      ['codex', 'codex --foo'],
-      ['claude-agent-teams', 'orca claude-teams --foo']
-    ] as const) {
-      const input = launch(agent, command)
-      const before = structuredClone({ env: input.env, envToDelete: input.envToDelete })
-      const result = await withTerminalMcpServers(input, { relay, hostFolder })
-      expect(result).toEqual({ command, pane: null })
-      expect({ env: input.env, envToDelete: input.envToDelete }).toEqual(before)
-    }
-    expect(teammateEnv({ ORCA_MCP_TOKEN: TOKEN })).not.toHaveProperty('ORCA_MCP_TOKEN')
-  })
-
   it('gives an Agent Teams lead the config after its claude-teams subcommand, which forwards it to claude', async () => {
-    process.env.ORCA_MCP_SERVERS = '1'
     const hostFolder = await hostList()
     const input = launch('claude-agent-teams', 'orca claude-teams --foo')
     const { command, pane } = await withTerminalMcpServers(input, { relay, hostFolder })
@@ -153,53 +135,40 @@ describe('the host list in an agent terminal', () => {
     })
   })
 
-  it('gives a team made before its lead’s spawn the lead’s relay env, only with the switch on and the team’s token', async () => {
+  it('gives a team made before its lead’s spawn the lead’s relay env, only with the team’s token', async () => {
     const hostFolder = await hostList()
-    for (const enabled of [false, true]) {
-      process.env.ORCA_MCP_SERVERS = enabled ? '1' : '0'
-      const service = new ClaudeAgentTeamsService()
-      const team = service.createLaunchEnv({
-        leaderHandle: 'term_lead',
-        baseEnv: { PATH: '/usr/bin:/bin' },
-        shimDir: '/shim',
-        shimBin: null
-      })
-      const input = launch('claude', 'claude --teammate-mode auto')
-      Object.assign(input.env, team.env)
-      await withTerminalMcpServers(input, { relay, hostFolder })
-      if (enabled) {
-        service.shareLeadMcpRelayEnv(input.env)
-        expect(await teammateSplitEnv(service, team)).toMatchObject({
-          ORCA_MCP_TOKEN: TOKEN,
-          NO_PROXY: expect.any(String)
-        })
-      } else {
-        expect(input.env).not.toHaveProperty('ORCA_MCP_TOKEN')
-        // Even a lead env that holds a token shares nothing while the switch is off.
-        service.shareLeadMcpRelayEnv({ ...input.env, ORCA_MCP_TOKEN: TOKEN, NO_PROXY: '127.0.0.1' })
-        const env = await teammateSplitEnv(service, team)
-        expect(env).not.toHaveProperty('ORCA_MCP_TOKEN')
-        expect(env).not.toHaveProperty('NO_PROXY')
-      }
-    }
-    // Another team's env, or one that only names this team, adds nothing to it.
     const service = new ClaudeAgentTeamsService()
     const team = service.createLaunchEnv({
+      leaderHandle: 'term_lead',
+      baseEnv: { PATH: '/usr/bin:/bin' },
+      shimDir: '/shim',
+      shimBin: null
+    })
+    const input = launch('claude', 'claude --teammate-mode auto')
+    Object.assign(input.env, team.env)
+    await withTerminalMcpServers(input, { relay, hostFolder })
+    service.shareLeadMcpRelayEnv(input.env)
+    expect(await teammateSplitEnv(service, team)).toMatchObject({
+      ORCA_MCP_TOKEN: TOKEN,
+      NO_PROXY: expect.any(String)
+    })
+    // Another team's env, or one that only names this team, adds nothing to it.
+    const other = new ClaudeAgentTeamsService()
+    const otherTeam = other.createLaunchEnv({
       leaderHandle: 'term_lead',
       baseEnv: {},
       shimDir: '/shim',
       shimBin: null
     })
-    service.shareLeadMcpRelayEnv({
-      ORCA_AGENT_TEAMS_TEAM_ID: team.teamId,
+    other.shareLeadMcpRelayEnv({
+      ORCA_AGENT_TEAMS_TEAM_ID: otherTeam.teamId,
       ORCA_AGENT_TEAMS_TOKEN: 'not-the-team-token',
       ORCA_MCP_TOKEN: TOKEN
     })
-    expect(await teammateSplitEnv(service, team)).not.toHaveProperty('ORCA_MCP_TOKEN')
+    expect(await teammateSplitEnv(other, otherTeam)).not.toHaveProperty('ORCA_MCP_TOKEN')
   })
 
   it('never puts a saved value or the relay token on the command line or in the launch file', async () => {
-    process.env.ORCA_MCP_SERVERS = '1'
     const hostFolder = await hostList()
     const input = launch('claude', 'claude --foo')
     const { command } = await withTerminalMcpServers(input, { relay, hostFolder })
@@ -234,7 +203,6 @@ describe('the host list in an agent terminal', () => {
   })
 
   it('gives a Codex terminal the secret-env server through orca mcp exec, never its value', async () => {
-    process.env.ORCA_MCP_SERVERS = '1'
     const folder = tempDir('mcp-host-list-')
     await changeBotToolEntries(folder, () => [
       {
@@ -255,7 +223,6 @@ describe('the host list in an agent terminal', () => {
   })
 
   it('reaches a shared command server through the relay instead of starting its own copy', async () => {
-    process.env.ORCA_MCP_SERVERS = '1'
     const folder = tempDir('mcp-host-list-')
     await changeBotToolEntries(folder, () => [
       {

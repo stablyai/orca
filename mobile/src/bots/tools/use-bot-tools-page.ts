@@ -24,7 +24,7 @@ import {
 export type PhoneBotTools = {
   own: PhoneOwnTool[]
   inherited: { name: string; plugin?: true }[]
-  /** Whether its sessions also take the host's MCP servers; absent while the host's switch is off. */
+  /** Whether its sessions also take the host's MCP servers; absent from a host without MCP servers. */
   hostMcpServers?: boolean
 }
 
