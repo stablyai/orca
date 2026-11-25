@@ -7,9 +7,14 @@ export const WSL_HOST_CAPABILITY_CHANNEL = 'wslHosts:capabilityChanged'
 /** What an in-flight Add waits for, before the host has a status of its own. */
 export const WSL_HOST_ADD_PROGRESS_CHANNEL = 'wslHosts:addProgress'
 
+/** Where an Add's first connect is; deploy can't tell a fresh install from a no-op one, so both read as installing. */
+export type WslHostAddStage = 'starting-distro' | 'installing-server' | 'connecting'
+
 /** `detail` is null once the Add no longer waits on anything it can name. */
 export type WslHostAddProgress = {
   distro: string
+  /** Absent from older mains. */
+  stage?: WslHostAddStage
   detail: string | null
   detailCode?: string
   detailParams?: WslHostCopyParams

@@ -7,9 +7,20 @@ import { connectRuntimeHostAndReloadProjects } from '@/components/status-bar/hos
 import type { Translate } from '@/i18n/use-translate'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { botCreateHostRows, type BotCreateHostAction } from './bot-create-host-rows'
 import { useServerUpdatable, type BotCreateHostChoice } from './bot-create-hosts'
+import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
+import { selectWslHostDistro } from '@/components/wsl-host-mark/WslHostMark'
+import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import { wslHostEnvironmentLabel } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+
+const PENGUIN = <LinuxPenguinIcon className="size-3.5 shrink-0 text-muted-foreground" />
+/** The row a distro shows as while it is set up, before it is a host. */
+const SETTING_UP_ID = 'wsl-setup'
 
 function actionLabel(action: BotCreateHostAction, t: Translate): string {
   switch (action) {
@@ -42,7 +53,8 @@ export function BotComputerPicker({
   const listOpen = readyAtOpen !== null
   const [reconnecting, setReconnecting] = useState<ReadonlySet<string>>(new Set())
   const refreshUpdates = useAppStore((s) => s.refreshRemoteServerUpdates)
-  const { setListing } = hostChoice
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const { setListing, wslSetup } = hostChoice
   useEffect(() => {
     setListing(listOpen)
     return () => setListing(false)
@@ -87,7 +99,13 @@ export function BotComputerPicker({
     const { host: rowHost, action } = row
     const environmentId = rowHost.environmentId
     const onSelect = !rowHost.blocked
-      ? () => hostChoice.setHostId(rowHost.hostId)
+      ? () => {
+          hostChoice.setHostId(rowHost.hostId)
+          // Picking a sleeping host is the user using it: wake it now, not at Create.
+          if (rowHost.sleeping && environmentId) {
+            void startWslHostAndReloadProjects(environmentId)
+          }
+        }
       : action === 'reconnect' && environmentId
         ? () => reconnect(environmentId)
         : action === 'update'
@@ -101,6 +119,7 @@ export function BotComputerPicker({
       description: row.meta ? (row.hint ?? undefined) : undefined,
       group: row.group,
       available: !rowHost.blocked,
+      icon: selectWslHostDistro({ runtimeEnvironments }, rowHost.hostId) ? PENGUIN : undefined,
       onSelect,
       keepOpen: action === 'reconnect',
       trailing:
@@ -110,9 +129,27 @@ export function BotComputerPicker({
     }
   })
 
+  const setup = wslSetup.state
+  // Until the add makes it a host, the distro stands in for the pick so the field shows it at once.
+  const settingUp = setup.phase === 'running' || setup.phase === 'failed' ? setup.distro : null
+  if (settingUp) {
+    options.unshift({
+      id: SETTING_UP_ID,
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      label: wslHostEnvironmentLabel(settingUp.name),
+      detail:
+        setup.phase === 'failed'
+          ? t('bots.new.wslSetupFailedShort', 'Setup didn’t finish')
+          : t('bots.new.wslSettingUp', 'Setting up…'),
+      available: true,
+      icon: PENGUIN
+    })
+  }
+  const selectedId = settingUp ? SETTING_UP_ID : host.hostId
+
   return (
     <RunTargetCombobox
-      selectedHostId={host.hostId}
+      selectedHostId={selectedId}
       fieldName={t('bots.new.computer', 'Computer')}
       errorId={errorId}
       emptyMessage={noHostsMatchLabel(t)}
@@ -126,6 +163,7 @@ export function BotComputerPicker({
       hostOptions={options}
       onAddSshHost={onAddHost ? () => onAddHost('ssh') : undefined}
       onAddRemoteServer={onAddHost ? () => onAddHost('server') : undefined}
+      onAddWslDistro={onAddHost ? wslSetup.start : undefined}
       truncateMiddle
     />
   )

@@ -10,6 +10,13 @@ import {
   type EphemeralVmRecipeOption
 } from './run-target-options'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
+import type { WslHostDistro } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import {
+  useWslHostsAcceptNewWork,
+  useWslHostsPaused
+} from '@/runtime/hosts/wsl/use-wsl-hosts-enabled'
+import { getWslHostsPausedShortLabel } from '@/components/sidebar/host-admission/wsl/wsl-host-row-status'
+import { WslDistroSubmenuRow } from './WslDistroSubmenuRow'
 
 const SUBMENU_CONTENT = cn('w-72 p-1', COMBOBOX_POPOVER_SURFACE)
 
@@ -97,7 +104,8 @@ export function AddHostSubmenuRow({
   optionId,
   onArm,
   onAddSshHost,
-  onAddRemoteServer
+  onAddRemoteServer,
+  onAddWslDistro
 }: {
   open: boolean
   focusOnOpen: boolean
@@ -108,9 +116,15 @@ export function AddHostSubmenuRow({
   onArm: () => void
   onAddSshHost?: () => void
   onAddRemoteServer?: () => void
+  /** Sets up a distro found on this PC; shown only where WSL hosts take new work (Windows, setting on). */
+  onAddWslDistro?: (distro: WslHostDistro) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [hoveredKey, setHoveredKey] = React.useState<string | null>(null)
+  const wslAcceptsNewWork = useWslHostsAcceptNewWork()
+  const wslPaused = useWslHostsPaused()
+  const showWsl = Boolean(onAddWslDistro) && wslAcceptsNewWork
+  const wslOpen = open && showWsl && hoveredKey === 'wsl'
   const listRef = React.useRef<HTMLDivElement>(null)
   React.useEffect(() => {
     if (open && focusOnOpen) {
@@ -188,6 +202,15 @@ export function AddHostSubmenuRow({
             }
           }}
         >
+          {showWsl && onAddWslDistro ? (
+            <WslDistroSubmenuRow
+              open={wslOpen}
+              onOpenChange={(next) => setHoveredKey(next ? 'wsl' : null)}
+              armed={hoveredKey === 'wsl'}
+              onArm={() => setHoveredKey('wsl')}
+              onPickDistro={onAddWslDistro}
+            />
+          ) : null}
           {onAddSshHost ? (
             <RunTargetRow
               icon={<Server className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -224,6 +247,11 @@ export function AddHostSubmenuRow({
               onArm={() => setHoveredKey('remote')}
               onCommit={onAddRemoteServer}
             />
+          ) : null}
+          {onAddWslDistro && !wslAcceptsNewWork && wslPaused ? (
+            <p className="px-2 py-1.5 text-2xs text-muted-foreground">
+              {getWslHostsPausedShortLabel(t)}
+            </p>
           ) : null}
         </div>
       </PopoverContent>

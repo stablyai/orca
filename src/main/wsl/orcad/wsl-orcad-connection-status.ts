@@ -1,5 +1,6 @@
 import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import type {
+  WslHostAddStage,
   WslHostUpdateIntent,
   WslHostDeferredUpdate,
   WslHostPastUncountedTerminals
@@ -14,6 +15,8 @@ export type WslOrcadConnectionStatus =
       state: 'connecting'
       /** Another install holds this server version's install lock. */
       installLockWait?: InstallLockWait
+      /** Set only while an Add's first connect runs. */
+      addStage?: WslHostAddStage
     }
   | { state: 'ready'; census: OrcadTerminalCensus | null }
   | {
@@ -49,8 +52,34 @@ export type WslOrcadConnectionStatus =
     }
   | { state: 'closed' }
 
-export function wslConnectingStatus(wait: InstallLockWait | null): WslOrcadConnectionStatus {
-  return wait ? { state: 'connecting', installLockWait: wait } : { state: 'connecting' }
+export function wslConnectingStatus(
+  wait: InstallLockWait | null,
+  addStage?: WslHostAddStage
+): WslOrcadConnectionStatus {
+  return {
+    state: 'connecting',
+    ...(wait ? { installLockWait: wait } : {}),
+    ...(addStage ? { addStage } : {})
+  }
+}
+
+/** An Add's lock waits and steps, each published with the other's latest; a null wait (lock taken) clears it. */
+export function wslAddProgressReporter(publish: (status: WslOrcadConnectionStatus) => void): {
+  onInstallLockWait: (wait: InstallLockWait | null) => void
+  onStage: (stage: WslHostAddStage) => void
+} {
+  let wait: InstallLockWait | null = null
+  let stage: WslHostAddStage | undefined
+  return {
+    onInstallLockWait: (next) => {
+      wait = next
+      publish(wslConnectingStatus(wait, stage))
+    },
+    onStage: (next) => {
+      stage = next
+      publish(wslConnectingStatus(wait, stage))
+    }
+  }
 }
 
 /** What a user-initiated connect asks of the host's update. */
