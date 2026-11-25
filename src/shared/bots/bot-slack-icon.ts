@@ -6,7 +6,7 @@ import { parseBotAvatar } from '../bot-avatar'
 import type { Bot } from '../bot-types'
 import { DEFAULT_BOT_AVATAR_COLOR } from './bot-avatar-color'
 
-// An unchanged look keeps its version so only updated artwork is drawn again.
+// Bump the version of an affected look when its artwork changes.
 const SLACK_ICON_ART_VERSION = 'v1'
 
 // As BotAvatarColorSchema and BotStoredOutfitSchema take them.

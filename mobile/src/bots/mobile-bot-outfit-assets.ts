@@ -32,6 +32,7 @@ export function mobileBotOutfitAsset(
 ): { sheet: ImageSourcePropType; left: number; top: number } {
   const index = BOT_MASCOT_IDS.indexOf(id)
   // Coral is in the first column, so shifting its hard hat right exposes only empty space.
+  // Remove this offset when the sheet itself uses the corrected anchor.
   const offset = id === 'G1' && outfit === 'hard-hat' ? 16 / 128 : 0
   return {
     sheet: OUTFIT_SHEETS[outfit](),
