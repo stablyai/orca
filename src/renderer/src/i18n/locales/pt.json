@@ -22065,6 +22065,7 @@
         "paused": "Pausada",
         "replied": "{{actor}} respondeu",
         "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenAt": "Executa uma vez às {{time}}",
         "thenLine": "Depois",
         "thenOnce": "Executa uma vez, quando acontecer",
         "thenOnceBy": "Executa uma vez; às {{time}} se nada chegar",

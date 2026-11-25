@@ -21209,6 +21209,7 @@
         "paused": "Приостановлена",
         "replied": "Ответ: {{actor}}",
         "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenAt": "Выполняется один раз в {{time}}",
         "thenLine": "Затем",
         "thenOnce": "Выполняется один раз, когда это произойдёт",
         "thenOnceBy": "Выполняется один раз; в {{time}}, если ничего не пришло",

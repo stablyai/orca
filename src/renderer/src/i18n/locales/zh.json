@@ -21473,6 +21473,7 @@
         "paused": "已暂停",
         "replied": "{{actor}} 已回复",
         "rowAccessibleName": "{{label}}：{{name}}。{{details}}",
+        "thenAt": "在 {{time}} 运行一次",
         "thenLine": "然后",
         "thenOnce": "发生时运行一次",
         "thenOnceBy": "运行一次；如果到 {{time}} 还没发生，就在那时运行",

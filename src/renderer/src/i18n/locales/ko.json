@@ -21682,6 +21682,7 @@
         "paused": "일시중지됨",
         "replied": "{{actor}}이(가) 답변함",
         "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenAt": "{{time}}에 한 번 실행",
         "thenLine": "그다음",
         "thenOnce": "발생하면 한 번 실행",
         "thenOnceBy": "한 번 실행. 아무것도 오지 않으면 {{time}}에 실행",
