@@ -23718,9 +23718,6 @@
       "workspaceCleanup": {
         "title": "Çalışma Alanı Temizliği",
         "description": "İşinizin bittiği çalışma alanlarını kaldırın. Orca herhangi bir şeyi kaldırmadan önce kaydedilmemiş çalışma olup olmadığını yeniden denetler.",
-        "unsupportedHost": "Bu bilgisayardaki Orca sürümü otomatik temizlemeyi desteklemiyor. Bu ayarları kullanmak için o bilgisayarda Orca’yı güncelleyin.",
-        "previewFailed": "Bu değişiklikten hangi çalışma alanlarının etkileneceği denetlenemedi.",
-        "pinFailed": "{{name}} korunamadı.",
         "rules": {
           "branchNote": "Merge edilmiş branch'ler çalışma alanlarıyla birlikte silinir. Merge edilmemiş branch'ler korunur.",
           "recommended": "Önerilen",
@@ -23750,8 +23747,8 @@
           "inactiveDescription_other": "{{count}} gündür etkinlik yok.",
           "matchesCount_one": "Şu anda 1 çalışma alanı eşleşiyor",
           "matchesCount_other": "Şu anda {{count}} çalışma alanı eşleşiyor",
-          "checking": "Hangi çalışma alanlarının eşleştiği denetleniyor…",
-          "checkFailed": "Eşleşen çalışma alanları denetlenemedi."
+          "checking": "Eşleşmeler denetleniyor…",
+          "checkFailed": "Eşleşmeler denetlenemedi."
         },
         "protection": {
           "title": "Koruma",
@@ -23789,8 +23786,8 @@
         "updateFailed": "Temizleme kuralları kaydedilemedi.",
         "enable": {
           "title": "{{rule}} kuralı etkinleştirilsin mi?",
-          "description_one": "Şu anda 1 çalışma alanı bu kuralla eşleşiyor. Kuralı açtıktan birkaç saniye sonra bu alan silinecek.",
-          "description_other": "Şu anda {{count}} çalışma alanı bu kuralla eşleşiyor. Kuralı açtıktan birkaç saniye sonra bu alanlar silinecek.",
+          "description_one": "Şu anda 1 çalışma alanı bu kuralla eşleşiyor.",
+          "description_other": "Şu anda {{count}} çalışma alanı bu kuralla eşleşiyor.",
           "summary": "{{count}} çalışma alanı silinecek",
           "cancel": "İptal",
           "turnOn": "Aç"
@@ -23870,8 +23867,6 @@
         },
         "change": {
           "title": "{{rule}} kuralı değiştirilsin mi?",
-          "description_one": "Bu değişiklikle 1 çalışma alanı daha kuralla eşleşiyor. Değişikliği uyguladıktan birkaç saniye sonra bu alan silinecek.",
-          "description_other": "Bu değişiklikle {{count}} çalışma alanı daha kuralla eşleşiyor. Değişikliği uyguladıktan birkaç saniye sonra bu alanlar silinecek.",
           "apply": "Uygula"
         },
         "rulesLoadFailed": "Bu bilgisayarın temizleme kuralları yüklenemedi: {{error}}",
@@ -23888,13 +23883,10 @@
         "disableIgnoredFiles": {
           "title": "Yok sayılan dosyaların korunması kapatılsın mı?",
           "description": "Bu kuralları kullanan projelerde, yok sayılan dosyaların bulunması artık otomatik temizlemeyi engellemeyecek. .env ve yerel yapılandırma dosyaları gibi dosyalar silinebilir. Silinen dosyalar kurtarılamaz.",
-          "matches_one": "Sabitlenmezse {{count}} çalışma alanı daha, korumayı kapattıktan birkaç saniye sonra silinecek.",
-          "matches_other": "Sabitlenmezse {{count}} çalışma alanı daha, korumayı kapattıktan birkaç saniye sonra silinecek.",
           "noMatches": "Şu anda eşleşen başka çalışma alanı yok. Bu ayar, bu kuralları kullanan projelerde bundan sonraki temizlemeleri etkiler.",
           "turnOff": "Korumayı kapat"
         },
         "pinAndKeep": {
-          "description": "Onayladığınızda seçili çalışma alanları sabitlenir. Siz sabitlemeyi kaldırana kadar bu alanlar otomatik temizlemenin dışında kalır.",
           "named": "{{name}} çalışma alanını sabitle ve koru",
           "label": "Sabitle ve koru"
         },
