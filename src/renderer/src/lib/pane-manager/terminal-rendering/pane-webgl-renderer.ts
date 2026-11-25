@@ -33,7 +33,10 @@ import {
   trackTerminalWebglAtlasPane,
   untrackTerminalWebglAtlasPane
 } from './terminal-webgl-atlas-memory-rebuild'
-import { verifyPaneWebglAtlasIntegrity } from './terminal-webgl-atlas-integrity'
+import {
+  requestAtlasChangeIntegrityCheck,
+  verifyPaneWebglAtlasIntegrity
+} from './terminal-webgl-atlas-integrity'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
@@ -285,7 +288,10 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       disposeWebgl(pane, { refreshDimensions: true })
     })
     addon.onAddTextureAtlasCanvas((page) => handleTerminalWebglAtlasPage(page, pane))
-    addon.onChangeTextureAtlas(() => noteTerminalWebglAtlasChange(pane))
+    addon.onChangeTextureAtlas(() => {
+      noteTerminalWebglAtlasChange(pane)
+      requestAtlasChangeIntegrityCheck(pane)
+    })
     pane.terminal.loadAddon(addon)
     pane.webglAddon = addon
     trackTerminalWebglAtlasPane(pane)

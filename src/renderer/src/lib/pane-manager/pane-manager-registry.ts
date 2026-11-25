@@ -123,20 +123,21 @@ export function rebuildAllTerminalWebglRenderers(reason: string): void {
   }
 }
 
-/** Presents matching panes of on-screen managers only; hidden owners repaint on their own next frame. */
-export function presentVisiblePanesWhere(
-  matches: (pane: ManagedPaneInternal) => boolean,
-  present: (pane: ManagedPaneInternal) => void
-): void {
+/** Visits leaves of on-screen managers until `visit` returns true; one manager's teardown never stops the rest. */
+export function forEachVisibleInternalPane(visit: (pane: ManagedPaneInternal) => boolean | void): void {
   for (const manager of visibleManagers) {
+    let stop = false
     try {
       manager.forEachInternalPane?.((pane) => {
-        if (matches(pane)) {
-          present(pane)
+        if (!stop && visit(pane) === true) {
+          stop = true
         }
       })
     } catch {
-      // One manager's teardown must not block the rest.
+      // Continue with the remaining managers.
+    }
+    if (stop) {
+      return
     }
   }
 }
