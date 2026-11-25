@@ -20,10 +20,12 @@ export class ProviderRelayCarriedWork {
     this.reader = new ProviderRelayWorkReader(markers)
   }
 
+  /** Only work a marker can end is followed; the session restates the rest itself. */
   take(open: OpenWork | undefined): void {
+    const readable = open && this.reader.endable(open)
     this.work =
-      open && Object.values(open).some((keys) => keys.length > 0)
-        ? new ProviderRelayOpenWork(open)
+      readable && Object.values(readable).some((keys) => keys.length > 0)
+        ? new ProviderRelayOpenWork(readable)
         : null
   }
 
