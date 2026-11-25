@@ -1,4 +1,5 @@
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { isLaunchConfigClaudeAccountId } from '../../../shared/claude/project-claude-account-preference'
 
 /** The Orca launch running in a session, kept by the daemon so it outlives a main restart. */
 export type DaemonLaunchNote = { launchToken: string; launchConfig: SleepingAgentLaunchConfig }
@@ -41,7 +42,7 @@ function parseDaemonLaunchNote(raw: unknown): DaemonLaunchNote | null {
   if (!isRecord(config)) {
     return null
   }
-  const { agentArgs, agentEnv, agentCommand, ompResumeFilePath } = config
+  const { agentArgs, agentEnv, agentCommand, ompResumeFilePath, claudeAccountId } = config
   if (
     !isString(agentArgs) ||
     !isStringRecord(agentEnv) ||
@@ -56,7 +57,8 @@ function parseDaemonLaunchNote(raw: unknown): DaemonLaunchNote | null {
       agentArgs,
       agentEnv: { ...agentEnv },
       ...(agentCommand ? { agentCommand } : {}),
-      ...(ompResumeFilePath ? { ompResumeFilePath } : {})
+      ...(ompResumeFilePath ? { ompResumeFilePath } : {}),
+      ...(isLaunchConfigClaudeAccountId(claudeAccountId) ? { claudeAccountId } : {})
     }
   }
 }

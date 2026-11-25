@@ -4,6 +4,7 @@ import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/s
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { heldLaunchConfig } from '../../terminal/launch/launch-evidence'
 import { getPinnedClaudeAccountIdForPty } from '../../../claude-accounts/claude-pinned-pty-registry'
+import { isPinnableClaudeAccountId } from '../../../../shared/claude/project-claude-account-preference'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeSleepResumeRecorder } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -78,7 +79,15 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
           })
         )
         .catch(() => null)
-      if (!resume) {
+      const resumeAccountId = resume?.launchConfig?.claudeAccountId
+      // The spawn refuses a removed account, but only after the stop; WSL spawns ignore it.
+      const accountRemoved =
+        !pty.isWsl &&
+        isPinnableClaudeAccountId(resumeAccountId) &&
+        !this.store
+          ?.getSettings()
+          .claudeManagedAccounts?.some((account) => account.id === resumeAccountId)
+      if (!resume || accountRemoved) {
         return { ok: false, reason: 'no_resume_command' }
       }
       const ownPaneKey = makePaneKey(tabId, pane.leafId)
