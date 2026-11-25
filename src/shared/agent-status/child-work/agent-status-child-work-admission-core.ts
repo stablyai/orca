@@ -29,6 +29,7 @@ import {
   parseAgentChildWorkProviderTiming
 } from './agent-status-child-work-codec'
 import {
+  isChildWorkCost,
   isChildWorkTokenCount,
   normalizeChildWorkText
 } from './agent-status-child-work-value-guards'
@@ -182,6 +183,7 @@ function parseObservationFacts(
     model: normalizeChildWorkText(request.model, AGENT_CHILD_WORK_LABEL_MAX_LENGTH),
     effort: normalizeChildWorkText(request.effort, AGENT_CHILD_WORK_LABEL_MAX_LENGTH),
     totalTokens: isChildWorkTokenCount(request.totalTokens) ? request.totalTokens : undefined,
+    cost: isChildWorkCost(request.cost) ? request.cost : undefined,
     providerTiming: timing ?? undefined,
     parentChildWorkId: isAgentChildWorkOwner(request.parentChildWorkId, host.childWorkId)
       ? request.parentChildWorkId
@@ -194,6 +196,10 @@ function parseObservationFacts(
     )
   }
 }
+
+/** Cumulative, so a late or duplicate frame never shrinks it. */
+const cumulative = (said?: number, prior?: number): number | undefined =>
+  said !== undefined && prior !== undefined ? Math.max(said, prior) : (said ?? prior)
 
 /** Sparse observations preserve known facts; run supplies the stored record only for the same invocation. */
 function mergeObservationFacts(
@@ -209,11 +215,8 @@ function mergeObservationFacts(
     model: said.model ?? prior?.model,
     effort: said.effort ?? prior?.effort,
     residency: said.residency ?? prior?.residency,
-    // Cumulative, so a late or duplicate frame never shrinks it.
-    totalTokens:
-      said.totalTokens !== undefined && prior?.totalTokens !== undefined
-        ? Math.max(said.totalTokens, prior.totalTokens)
-        : (said.totalTokens ?? prior?.totalTokens),
+    totalTokens: cumulative(said.totalTokens, prior?.totalTokens),
+    cost: cumulative(said.cost, prior?.cost),
     // Whoever started this run owns it; a restart names its own spawner, or none for the main agent.
     parentChildWorkId: said.parentChildWorkId ?? run?.parentChildWorkId,
     lastMessage: said.lastMessage ?? run?.lastMessage,

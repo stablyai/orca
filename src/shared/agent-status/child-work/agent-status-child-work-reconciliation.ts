@@ -48,7 +48,8 @@ function applyEnded(ctx: ReconcileContext, edge: AgentChildWorkEndedEvidence): v
   // Admission preserves definite outcomes against unknown evidence and refuses contradictory definite endings as stale-invocation.
   settleAgentChildWork(ctx, existing, edge.outcome, edge.observedAt, {
     ...(edge.lastMessage !== undefined ? { lastMessage: edge.lastMessage } : {}),
-    ...(edge.totalTokens !== undefined ? { totalTokens: edge.totalTokens } : {})
+    ...(edge.totalTokens !== undefined ? { totalTokens: edge.totalTokens } : {}),
+    ...(edge.cost !== undefined ? { cost: edge.cost } : {})
   })
 }
 

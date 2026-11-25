@@ -35,35 +35,33 @@ function replay(fixture: string): string[] {
     }
     evidence.push(...lane.subagents.drainEvidence())
   })
-  // Each subagent's last word: its final live description or its ending.
-  const last = new Map<string, string>()
+  // Each subagent's ending, with the model it last reported running on.
+  const models = new Map<string, string>()
+  const endings = new Map<string, string>()
   for (const edge of evidence) {
-    if (edge.type === 'live') {
-      const tokens = edge.child.totalTokens === undefined ? '' : ` ${edge.child.totalTokens}`
-      last.set(edge.child.handle.id, `working ${edge.child.description}${tokens}`)
+    if (edge.type === 'live' && edge.child.model) {
+      models.set(edge.child.handle.id, `${edge.child.model}:${edge.child.effort}`)
     } else if (edge.type === 'ended') {
-      last.set(
-        edge.handle.id,
-        `${edge.outcome} ${edge.totalTokens} ${edge.lastMessage ?? ''}`.trim()
-      )
+      const spent = `${edge.totalTokens} $${edge.cost?.toFixed(5)}`
+      endings.set(edge.handle.id, `${edge.outcome} ${spent} ${edge.lastMessage ?? ''}`.trim())
     }
   }
-  return [...last].map(([id, state]) => `${id}: ${state}`)
+  return [...endings].map(([id, ending]) => `${id} on ${models.get(id)}: ${ending}`)
 }
 
 describe('OMP task subagents', () => {
-  it('ends each subagent of a blocking task call with its reply and tokens', () => {
+  it('ends each subagent of a blocking task call with its reply, tokens, cost and model', () => {
     expect(replay('omp-v19-task-subagents.jsonl')).toEqual([
-      'Count: succeeded 13008 1',
-      'Ping: succeeded 11244 PONG',
-      'Refuse: succeeded 11393 Status: aborted\nError: refused on purpose'
+      'Ping on claude-haiku-5-5:high: succeeded 11244 $0.00225 PONG',
+      'Refuse on claude-haiku-5-5:high: succeeded 11393 $0.00232 Status: aborted\nError: refused on purpose',
+      'Count on claude-haiku-5-5:high: succeeded 13008 $0.00308 1'
     ])
   })
 
   it('ends background subagents from the progress their call keeps reporting', () => {
     expect(replay('omp-v19-task-subagents-async.jsonl')).toEqual([
-      'Ping: succeeded 6745',
-      'Count: succeeded 7636'
+      'Ping on gpt-6-luna:medium: succeeded 6745 $0.00068',
+      'Count on gpt-6-luna:medium: succeeded 7636 $0.00104'
     ])
   })
 })

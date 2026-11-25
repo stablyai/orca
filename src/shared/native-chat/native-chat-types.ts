@@ -161,6 +161,8 @@ export type NativeChatSubagentEntry = {
   state: NativeChatSubagentState
   /** Latest total tokens the provider reported FOR THIS CHILD, never a running sum. */
   tokens?: number
+  /** Latest spend the provider reported for this child, in US dollars. */
+  cost?: number
   /** Epoch ms the child's latest run started; a resumed child restarts it. */
   startedAt?: number
   /** Epoch ms the entry latched terminal. */

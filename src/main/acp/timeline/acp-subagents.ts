@@ -146,6 +146,9 @@ function subagentEvidence(
         state: update.state === 'idle' ? 'idle' : 'working',
         ...(update.label !== undefined ? { description: boundSubagentLabel(update.label) } : {}),
         ...(update.tokens !== undefined ? { totalTokens: update.tokens } : {}),
+        ...(update.cost !== undefined ? { cost: update.cost } : {}),
+        ...(update.model !== undefined ? { model: update.model } : {}),
+        ...(update.effort !== undefined ? { effort: update.effort } : {}),
         ...(update.ownerId !== undefined ? { ownerId: subagentHandle(update.ownerId).id } : {}),
         // Hashed handles cannot address provider cancellation.
         stoppable: handle.id === update.id
@@ -160,7 +163,8 @@ function subagentEvidence(
     handle,
     outcome,
     ...(lastMessage ? { lastMessage } : {}),
-    ...(update.tokens !== undefined ? { totalTokens: update.tokens } : {})
+    ...(update.tokens !== undefined ? { totalTokens: update.tokens } : {}),
+    ...(update.cost !== undefined ? { cost: update.cost } : {})
   }
 }
 

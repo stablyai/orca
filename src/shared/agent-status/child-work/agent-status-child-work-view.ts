@@ -39,6 +39,8 @@ export type AgentChildWorkView = {
   observedAt: number
   settledAt?: number
   totalTokens?: number
+  /** Spend so far, in US dollars. */
+  cost?: number
   stoppable: boolean
   invocation: AgentChildWorkInvocationFence
 }
@@ -138,6 +140,7 @@ export function projectAgentChildWorkViews(
       observedAt: record.observedAt,
       ...(record.settledAt !== undefined ? { settledAt: record.settledAt } : {}),
       ...(record.totalTokens !== undefined ? { totalTokens: record.totalTokens } : {}),
+      ...(record.cost !== undefined ? { cost: record.cost } : {}),
       stoppable: record.stoppable,
       invocation: { ...record.invocation }
     }

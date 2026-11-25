@@ -30,6 +30,8 @@ export type AgentChildWorkLiveObservation = {
   model?: string
   effort?: string
   totalTokens?: number
+  /** Spend so far, in US dollars. */
+  cost?: number
   /** `null`: the operation that was open has ended. Absent: this edge says nothing about it. */
   operation?: AgentChildWorkOperation | null
   lastMessage?: string
@@ -66,6 +68,7 @@ export type AgentChildWorkEndedEvidence = {
   outcome: AgentChildWorkOutcome
   lastMessage?: string
   totalTokens?: number
+  cost?: number
 }
 
 /** Accepted Stop settles only its captured run provisionally as cancelled/stop-acknowledged unless already ended. Prefer any provider-reported outcome; never settle a later run. */

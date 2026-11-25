@@ -61,6 +61,11 @@ export type AcpSubagentUpdate = {
   state?: NativeChatSubagentState
   label?: string
   tokens?: number
+  /** Its spend so far, in US dollars. */
+  cost?: number
+  model?: string
+  /** Reasoning effort, in the provider's own words. */
+  effort?: string
   /** Spawning provider turn. */
   turn?: string
   result?: string

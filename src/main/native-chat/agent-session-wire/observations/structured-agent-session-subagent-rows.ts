@@ -227,7 +227,7 @@ export class StructuredAgentSessionSubagentRows {
   }
 }
 
-/** Retain saved name, tokens, parent, role and model when a later run lacks them. */
+/** Retain saved name, tokens, cost, parent, role and model when a later run lacks them. */
 function subagentRowBlock(
   child: AgentChildWorkRowView,
   id: string,
@@ -239,6 +239,7 @@ function subagentRowBlock(
   const run = child.invocation.invocationId
   const state = running ? (child.state === 'idle' ? 'idle' : 'working') : subagentEnding(child)
   const tokens = child.totalTokens ?? saved?.tokens
+  const cost = child.cost ?? saved?.cost
   const parent = parentId ?? saved?.parentId
   // Later runs start at first observation; the initial run starts at child creation.
   const startedAt =
@@ -259,6 +260,7 @@ function subagentRowBlock(
     label: child.description ?? child.name ?? saved?.label ?? UNNAMED,
     state,
     ...(tokens !== undefined ? { tokens } : {}),
+    ...(cost !== undefined ? { cost } : {}),
     startedAt,
     ...(state !== 'working' && child.settledAt !== undefined ? { settledAt: child.settledAt } : {}),
     ...(agentType !== undefined ? { agentType } : {}),

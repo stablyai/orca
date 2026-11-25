@@ -10,20 +10,28 @@ import type { AcpSubagentUpdate } from './acp-dialect'
 
 const idSchema = z.string().trim().min(1)
 const tokenCount = z.number().int().nonnegative()
-const progressSchema = z.looseObject({
+const costSchema = z.number().nonnegative()
+// Fields AgentProgress and SingleResult share.
+const subagentFields = {
   id: idSchema,
-  status: z.string(),
   description: z.string().optional(),
-  tokens: tokenCount.optional()
+  tokens: tokenCount.optional(),
+  // Provider/id; `resolvedModel` may add a thinking suffix.
+  resolvedModelIdentity: z.string().optional(),
+  resolvedThinkingLevel: z.string().optional()
+}
+const progressSchema = z.looseObject({
+  ...subagentFields,
+  status: z.string(),
+  cost: costSchema.optional()
 })
 const resultSchema = z.looseObject({
-  id: idSchema,
-  description: z.string().optional(),
+  ...subagentFields,
   exitCode: z.number().int(),
   output: z.string().optional(),
   error: z.string().optional(),
   aborted: z.boolean().optional(),
-  tokens: tokenCount.optional()
+  usage: z.looseObject({ cost: z.looseObject({ total: costSchema }) }).optional()
 })
 const taskOutputSchema = z.looseObject({
   details: z.looseObject({
@@ -43,12 +51,22 @@ const PROGRESS_STATES: ReadonlyMap<string, NativeChatSubagentState> = new Map([
 ] satisfies [string, NativeChatSubagentState][])
 
 function described(
-  id: string,
-  description: string | undefined,
-  tokens: number | undefined
+  subagent: z.infer<z.ZodObject<typeof subagentFields>>,
+  cost: number | undefined
 ): AcpSubagentUpdate {
-  // A cancelled run can report zero; keep the running total.
-  return { id, label: description?.trim() || id, ...(tokens ? { tokens } : {}) }
+  const { id, description, tokens, resolvedModelIdentity, resolvedThinkingLevel } = subagent
+  // The row names the model, not the provider OMP routed it through.
+  const model = resolvedModelIdentity?.split('/').at(-1)?.trim()
+  const effort = resolvedThinkingLevel?.trim()
+  return {
+    id,
+    label: description?.trim() || id,
+    // A cancelled run can report zero; keep the running totals.
+    ...(tokens ? { tokens } : {}),
+    ...(cost ? { cost } : {}),
+    ...(model ? { model } : {}),
+    ...(effort ? { effort } : {})
+  }
 }
 
 function progressUpdate(value: unknown): AcpSubagentUpdate[] {
@@ -56,9 +74,8 @@ function progressUpdate(value: unknown): AcpSubagentUpdate[] {
   if (!progress.success) {
     return []
   }
-  const { id, status, description, tokens } = progress.data
-  const state = PROGRESS_STATES.get(status)
-  return state ? [{ ...described(id, description, tokens), state }] : []
+  const state = PROGRESS_STATES.get(progress.data.status)
+  return state ? [{ ...described(progress.data, progress.data.cost), state }] : []
 }
 
 function resultUpdate(value: unknown): AcpSubagentUpdate[] {
@@ -66,8 +83,8 @@ function resultUpdate(value: unknown): AcpSubagentUpdate[] {
   if (!result.success) {
     return []
   }
-  const { id, description, exitCode, output, error, aborted, tokens } = result.data
-  const update = described(id, description, tokens)
+  const { exitCode, output, error, aborted, usage } = result.data
+  const update = described(result.data, usage?.cost.total)
   if (aborted) {
     return [{ ...update, state: 'stopped' }]
   }

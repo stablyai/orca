@@ -87,6 +87,8 @@ export type AgentChildWorkInput = {
   /** Reasoning effort, in the provider's own words (`high`, `medium`). */
   effort?: string
   totalTokens?: number
+  /** Spend so far, in US dollars. */
+  cost?: number
   providerTiming?: AgentChildWorkProviderTiming
   /** Invocation owner (spawner or launching agent); absence identifies the session lead. */
   parentChildWorkId?: AgentChildWorkId
