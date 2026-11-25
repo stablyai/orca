@@ -20294,11 +20294,9 @@
         "unnamed": "サブ Agent",
         "started_other": "{{count}} 個のサブ Agent を起動しました",
         "ran_other": "{{count}} 個のサブ Agent を実行しました",
-        "backToMain": "メイン Agent に戻る",
         "mainAgent": "メイン Agent",
-        "promptFromMain": "メイン Agent からのプロンプト",
-        "backTo": "{{value0}} に戻る",
         "path": "サブ Agent の階層",
+        "backTo": "{{value0}} に戻る",
         "stateHeading": {
           "completed": "完了",
           "working": "実行中",
@@ -20310,7 +20308,14 @@
         "noSteps": "まだステップはありません",
         "beforeClear": "このサブ Agent はチャットがクリアされる前に実行されました",
         "stoppedBeforeReply": "返信する前に停止しました",
-        "noReply": "返信なしで終了しました"
+        "noReply": "返信なしで終了しました",
+        "prompt": "プロンプト",
+        "result": "結果",
+        "close": "閉じる",
+        "needsYou": "対応が必要",
+        "agentNeedsYou": "{{name}} が対応を待っています",
+        "mainNeedsYou": "メイン Agent が対応を待っています",
+        "show": "表示"
       },
       "drop": {
         "messageTitle": "ドロップしてこのメッセージに添付",

@@ -20906,11 +20906,9 @@
         "started_other": "하위 에이전트 {{count}}개 시작",
         "ran_one": "서브에이전트 {{count}}개 실행함",
         "ran_other": "하위 에이전트 {{count}}개 실행",
-        "backToMain": "메인 에이전트로 돌아가기",
         "mainAgent": "메인 에이전트",
-        "promptFromMain": "메인 에이전트의 프롬프트",
-        "backTo": "{{value0}}(으)로 돌아가기",
         "path": "서브에이전트 경로",
+        "backTo": "{{value0}}(으)로 돌아가기",
         "stateHeading": {
           "completed": "완료됨",
           "working": "작업 중",
@@ -20922,7 +20920,14 @@
         "noSteps": "아직 단계 없음",
         "beforeClear": "이 서브에이전트는 채팅을 지우기 전에 실행되었습니다",
         "stoppedBeforeReply": "응답하기 전에 중단됨",
-        "noReply": "응답 없이 종료됨"
+        "noReply": "응답 없이 종료됨",
+        "prompt": "프롬프트",
+        "result": "결과",
+        "close": "닫기",
+        "needsYou": "확인 필요",
+        "agentNeedsYou": "{{name}}에서 확인이 필요합니다",
+        "mainNeedsYou": "메인 에이전트에서 확인이 필요합니다",
+        "show": "보기"
       },
       "drop": {
         "messageTitle": "놓아서 이 메시지에 첨부",

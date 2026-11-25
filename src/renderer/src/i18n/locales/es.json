@@ -19685,11 +19685,9 @@
         "ran_one": "Ejecutó {{count}} subagente",
         "ran_other": "Ejecutó {{count}} subagentes",
         "ran_many": "Ejecutó {{count}} subagentes",
-        "backToMain": "Volver al agente principal",
         "mainAgent": "Agente principal",
-        "promptFromMain": "Prompt del agente principal",
-        "backTo": "Volver a {{value0}}",
         "path": "Ruta del subagente",
+        "backTo": "Volver a {{value0}}",
         "stateHeading": {
           "completed": "Completado",
           "working": "Trabajando",
@@ -19701,7 +19699,14 @@
         "noSteps": "Todavía no hay pasos",
         "beforeClear": "Este subagente se ejecutó antes de que se borrara el chat",
         "stoppedBeforeReply": "Detenido antes de responder",
-        "noReply": "Terminó sin responder"
+        "noReply": "Terminó sin responder",
+        "prompt": "Prompt",
+        "result": "Resultado",
+        "close": "Cerrar",
+        "needsYou": "Te necesita",
+        "agentNeedsYou": "{{name}} te necesita",
+        "mainNeedsYou": "El agente principal te necesita",
+        "show": "Mostrar"
       },
       "queuedMessages": {
         "alreadySent": "Este mensaje ya se envió.",

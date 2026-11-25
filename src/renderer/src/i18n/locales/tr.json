@@ -21849,11 +21849,9 @@
         "started_other": "{{count}} alt ajan başlatıldı",
         "ran_one": "{{count}} alt ajan çalıştırıldı",
         "ran_other": "{{count}} alt ajan çalıştırıldı",
-        "backToMain": "Ana ajana dön",
         "mainAgent": "Ana ajan",
-        "promptFromMain": "Ana ajandan gelen istem",
-        "backTo": "Geri dön: {{value0}}",
         "path": "Alt ajan yolu",
+        "backTo": "Geri dön: {{value0}}",
         "stateHeading": {
           "completed": "Tamamlandı",
           "working": "Çalışıyor",
@@ -21865,7 +21863,14 @@
         "noSteps": "Henüz adım yok",
         "beforeClear": "Bu alt ajan, sohbet temizlenmeden önce çalıştı",
         "stoppedBeforeReply": "Yanıt vermeden önce durduruldu",
-        "noReply": "Yanıt vermeden sona erdi"
+        "noReply": "Yanıt vermeden sona erdi",
+        "prompt": "İstem",
+        "result": "Sonuç",
+        "close": "Kapat",
+        "needsYou": "Yanıtınız gerekiyor",
+        "agentNeedsYou": "{{name}} yanıtınızı bekliyor",
+        "mainNeedsYou": "Ana ajan yanıtınızı bekliyor",
+        "show": "Göster"
       },
       "rewind": {
         "unsupported": "Bu sohbette önceki bir mesaja dönülemiyor.",

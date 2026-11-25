@@ -62,6 +62,7 @@
   --color-foreground: var(--foreground);
   --color-chat-canvas: var(--chat-canvas);
   --color-chat-pane: var(--chat-pane);
+  --color-chat-sheet: var(--chat-sheet);
   --color-chat-foreground: var(--chat-foreground);
   --color-chat-foreground-strong: var(--chat-foreground-strong);
   --color-chat-foreground-faint: var(--chat-foreground-faint);
@@ -550,6 +551,7 @@
 .native-chat-appearance[data-native-chat-scheme='light'] {
   /* Native scrollbars and form controls follow the scheme instead of Chromium's light default. */
   color-scheme: light;
+  --chat-sheet-mix: 0%;
   --destructive: #e40014;
   --destructive-foreground: #fff;
   --status-success: #147638;
@@ -591,6 +593,7 @@
 .dark,
 .native-chat-appearance[data-native-chat-scheme='dark'] {
   color-scheme: dark;
+  --chat-sheet-mix: 3%;
   --destructive: #ff6568;
   /* Dark --destructive is a light red, so its label needs dark ink to clear AA. */
   --destructive-foreground: #450a0a;
@@ -883,6 +886,12 @@ body[data-modal-overlay-open]
   );
   /* Full-bleed strips; clear where the chat root alone paints over a theme image (native-chat-appearance.css). */
   --chat-pane: var(--chat-canvas);
+  /* Lifted over the pane so a subagent sheet's edge reads on a near-black canvas. */
+  --chat-sheet: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-sheet-mix),
+    var(--chat-canvas)
+  );
   --chat-foreground: color-mix(
     in srgb,
     var(--chat-source-foreground) var(--chat-foreground-mix),

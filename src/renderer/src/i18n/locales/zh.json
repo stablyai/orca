@@ -20760,11 +20760,9 @@
         "unnamed": "子代理",
         "started_other": "已启动 {{count}} 个子智能体",
         "ran_other": "已运行 {{count}} 个子智能体",
-        "backToMain": "返回主智能体",
         "mainAgent": "主智能体",
-        "promptFromMain": "来自主智能体的提示词",
-        "backTo": "返回 {{value0}}",
         "path": "子智能体路径",
+        "backTo": "返回 {{value0}}",
         "stateHeading": {
           "completed": "已完成",
           "working": "工作中",
@@ -20776,7 +20774,14 @@
         "noSteps": "暂无步骤",
         "beforeClear": "此子智能体在聊天被清空之前运行",
         "stoppedBeforeReply": "回复前已停止",
-        "noReply": "已结束，没有回复"
+        "noReply": "已结束，没有回复",
+        "prompt": "提示词",
+        "result": "结果",
+        "close": "关闭",
+        "needsYou": "需要你处理",
+        "agentNeedsYou": "{{name}} 需要你处理",
+        "mainNeedsYou": "主代理需要你处理",
+        "show": "查看"
       },
       "drop": {
         "messageTitle": "拖放以附加到此消息",

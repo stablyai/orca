@@ -21440,11 +21440,9 @@
         "ran_one": "Executou {{count}} subagente",
         "ran_other": "Executou {{count}} subagentes",
         "ran_many": "Executou {{count}} subagentes",
-        "backToMain": "Voltar ao agente principal",
         "mainAgent": "Agente principal",
-        "promptFromMain": "Prompt do agente principal",
-        "backTo": "Voltar para {{value0}}",
         "path": "Caminho do subagente",
+        "backTo": "Voltar para {{value0}}",
         "stateHeading": {
           "completed": "Concluído",
           "working": "Trabalhando",
@@ -21456,7 +21454,14 @@
         "noSteps": "Nenhuma etapa ainda",
         "beforeClear": "Este subagente foi executado antes de o chat ser limpo",
         "stoppedBeforeReply": "Interrompido antes de responder",
-        "noReply": "Encerrado sem resposta"
+        "noReply": "Encerrado sem resposta",
+        "prompt": "Prompt",
+        "result": "Resultado",
+        "close": "Fechar",
+        "needsYou": "Precisa de você",
+        "agentNeedsYou": "{{name}} precisa de você",
+        "mainNeedsYou": "O agente principal precisa de você",
+        "show": "Mostrar"
       },
       "drop": {
         "title": "Solte para anexar a este chat",

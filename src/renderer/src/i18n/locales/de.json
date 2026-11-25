@@ -20150,11 +20150,9 @@
         "started_other": "{{count}} Unteragenten gestartet",
         "ran_one": "{{count}} Unteragent ausgeführt",
         "ran_other": "{{count}} Unteragenten ausgeführt",
-        "backToMain": "Zurück zum Hauptagenten",
         "mainAgent": "Hauptagent",
-        "promptFromMain": "Prompt vom Hauptagenten",
-        "backTo": "Zurück zu {{value0}}",
         "path": "Unteragenten-Pfad",
+        "backTo": "Zurück zu {{value0}}",
         "stateHeading": {
           "completed": "Abgeschlossen",
           "working": "Arbeitet",
@@ -20166,7 +20164,14 @@
         "noSteps": "Noch keine Schritte",
         "beforeClear": "Dieser Unteragent lief, bevor der Chat geleert wurde",
         "stoppedBeforeReply": "Vor der Antwort gestoppt",
-        "noReply": "Ohne Antwort beendet"
+        "noReply": "Ohne Antwort beendet",
+        "prompt": "Prompt",
+        "result": "Ergebnis",
+        "close": "Schließen",
+        "needsYou": "Braucht dich",
+        "agentNeedsYou": "{{name}} braucht dich",
+        "mainNeedsYou": "Haupt-Agent braucht dich",
+        "show": "Anzeigen"
       },
       "rewind": {
         "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",
