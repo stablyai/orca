@@ -102,6 +102,10 @@
       "reason": "The shell renders this page for the accounts screen, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and one throwing route module takes the whole bundle down because the manifest imports them all."
     },
     {
+      "file": "app/h/[hostId]/mcp.web.tsx",
+      "reason": "The shell renders this page for the MCP servers screen, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and one throwing route module takes the whole bundle down because the manifest imports them all."
+    },
+    {
       "file": "app/h/[hostId]/automations.web.tsx",
       "reason": "The served automation route renders its screen directly; the native sibling mounts the shell and imports a native view manager unavailable in the page."
     },

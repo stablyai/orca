@@ -1,3 +1,4 @@
+import { orchestrationForStatusRows } from '@/runtime/agent-orchestration/remote-row-orchestration'
 import type { AppState } from '@/store/types'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -8,6 +9,9 @@ import {
 } from '../../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { currentWorkerLineage } from '../../../../shared/orchestration/workers/worker-tab-stamp'
+
+type WorkerTabRunState = Parameters<typeof orchestrationForStatusRows>[0] &
+  Partial<Pick<AppState, 'agentStatusByPaneKey'>>
 
 const paneKeys = new WeakMap<Tab, string | null>()
 
@@ -37,15 +41,15 @@ export function workerTabPaneKey(tab: Tab): string | null {
 
 /** The live orchestration context for the tab's worker pane, when the projection still has it. */
 export function workerTabContext(
-  state: Pick<AppState, 'runtimeAgentOrchestrationByPaneKey'> &
-    Partial<Pick<AppState, 'agentStatusByPaneKey'>>,
+  state: WorkerTabRunState,
   tab: Tab
 ): AgentStatusOrchestrationContext | undefined {
   const paneKey = workerTabPaneKey(tab)
+  const contexts = orchestrationForStatusRows(state)
   if (!tab.workerTab) {
-    for (const key in state.runtimeAgentOrchestrationByPaneKey) {
+    for (const key in contexts) {
       const pane = parsePaneKey(key)
-      const context = state.runtimeAgentOrchestrationByPaneKey[key]
+      const context = contexts[key]
       if (
         context?.coordinatorIdentity &&
         (pane?.tabId === tab.id || pane?.tabId === tab.entityId)
@@ -66,29 +70,20 @@ export function workerTabContext(
     return undefined
   }
   const context = paneKey
-    ? (state.runtimeAgentOrchestrationByPaneKey[paneKey] ??
-      state.agentStatusByPaneKey?.get(paneKey)?.orchestration)
+    ? (contexts[paneKey] ?? state.agentStatusByPaneKey?.get(paneKey)?.orchestration)
     : undefined
   const dispatchId = tab.workerTab?.current?.dispatchId ?? tab.workerTab?.origin.dispatchId
   return context?.dispatchId === dispatchId ? context : undefined
 }
 
 /** Known running: the worker pane's own live context says its Dispatch is still open. */
-export function isWorkerTabKnownRunning(
-  state: Pick<AppState, 'runtimeAgentOrchestrationByPaneKey'> &
-    Partial<Pick<AppState, 'agentStatusByPaneKey'>>,
-  tab: Tab
-): boolean {
+export function isWorkerTabKnownRunning(state: WorkerTabRunState, tab: Tab): boolean {
   const status = workerTabContext(state, tab)?.dispatchStatus
   return status === 'pending' || status === 'dispatched'
 }
 
 /** Known finished: the worker pane's own live context reports a settled Dispatch. */
-export function isWorkerTabKnownFinished(
-  state: Pick<AppState, 'runtimeAgentOrchestrationByPaneKey'> &
-    Partial<Pick<AppState, 'agentStatusByPaneKey'>>,
-  tab: Tab
-): boolean {
+export function isWorkerTabKnownFinished(state: WorkerTabRunState, tab: Tab): boolean {
   const context = workerTabContext(state, tab)
   const status = context?.dispatchStatus
   return (

@@ -11,16 +11,12 @@ import {
   type BotOwnTool,
   type BotToolServer
 } from '../../shared/bot-tools'
-import type { Bot } from '../../shared/bot-types'
-import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import { BotLaunchTools } from './bot-launch-tools'
 import {
   advanceBotToolsEpoch,
   botToolsEpoch,
   botToolsRevision,
   type BotLaunchedTools
 } from './bot-tools-revision'
-import { botToolRelay, type BotToolRelay } from './tool-relay/bot-tool-relay'
 import { botToolsPath } from './bot-tools-path'
 import { botToolEntryExtras, type BotToolEntry } from './bot-tool-entry-extras'
 import {
@@ -313,33 +309,17 @@ export function botOwnTool(server: BotToolServer, folder: string): BotOwnTool {
   }
 }
 
-/** Any agent's session in a bot's home folder gets that bot's own tools and token; any other session none.
- *  `launched` comes from the same read as the tools, so a write during launch can't look applied. */
-export async function botSessionToolServers(
-  bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[],
-  record: { provider: string; location: { workspaceId: string } },
-  launchDirectory: string,
-  relay: Pick<BotToolRelay, 'grant'> = botToolRelay
-): Promise<{ tools: BotLaunchTools; launched: BotLaunchedTools | null }> {
-  const bot = bots.find(
-    (entry) => folderWorkspaceKey(entry.folderWorkspaceId) === record.location.workspaceId
-  )
-  if (!bot) {
-    return { tools: BotLaunchTools.none, launched: null }
-  }
+/** A bot's own servers for a launch in its home folder. `launched` comes from the same read, so a
+ *  write during launch can't look applied. */
+export async function readBotLaunchServers(folder: string): Promise<{
+  servers: BotToolServer[]
+  launched: BotLaunchedTools
+}> {
   // Read before the file: a write in between makes this launch look stale, never current.
-  const epoch = botToolsEpoch(launchDirectory)
-  const snapshot = await readBotToolsSnapshot(launchDirectory)
+  const epoch = botToolsEpoch(folder)
+  const snapshot = await readBotToolsSnapshot(folder)
   return {
-    tools: await BotLaunchTools.for(
-      relay,
-      { botId: bot.id, folder: launchDirectory, agent: record.provider },
-      snapshot.servers
-    ),
-    launched: {
-      folder: launchDirectory,
-      revision: botToolsRevision(snapshot.version, epoch),
-      epoch
-    }
+    servers: snapshot.servers,
+    launched: { folder, revision: botToolsRevision(snapshot.version, epoch), epoch }
   }
 }

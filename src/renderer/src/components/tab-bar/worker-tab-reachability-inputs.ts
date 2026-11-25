@@ -7,6 +7,7 @@ const SEAM_WORKER_ROW_INPUT_FIELDS = [
   'ptyIdsByTabId',
   'terminalLayoutsByTabId',
   'runtimeAgentOrchestrationByPaneKey',
+  'remoteAgentOrchestrationByHost',
   'paneForegroundAgentByPaneKey',
   'runtimePaneTitlesByTabId',
   'agentStatusEpoch',

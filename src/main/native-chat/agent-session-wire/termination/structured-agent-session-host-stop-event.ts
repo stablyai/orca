@@ -21,6 +21,9 @@ export type StructuredAgentSessionStopEnding =
       quit?: AgentSessionResumeTrigger
       /** Idle retirement of unanswered sends records no active-work Stop. */
       resting?: true
+      /** Decided at the instant the child would be marked closing: false, or provider work still
+       *  entering the journal, leaves it running. */
+      onlyIf?: () => boolean
     }
 
 const STOP_EVENT_DRAIN_TIMEOUT_MS = 1_000

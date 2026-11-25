@@ -31,7 +31,7 @@ export function resolveTabNumberShortcutTarget(
   state: TabNumberShortcutState,
   index: number,
   /** Defaults to the bot catalog, as the tab bar reads it. */
-  homeBotFor?: HomeBotLookup,
+  homeBotFor?: HomeBotLookup | null,
   /** Cmd+1–9 counts only the tabs the strip shows. */
   foldedTabIds?: (worktreeId: string, groupId: string) => ReadonlySet<string>
 ): Tab | null {

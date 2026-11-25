@@ -1,3 +1,4 @@
+import { orchestrationForStatusRows } from '@/runtime/agent-orchestration/remote-row-orchestration'
 import type { AppState } from '@/store/types'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
@@ -55,9 +56,7 @@ export class CoordinatorWorkerIndex {
   private readonly live = new CoordinatorContextIndex<AgentStatusEntry>(
     (value) => value?.orchestration
   )
-  private readonly mark = (entry: IndexedCoordinatorTab) => {
-    this.pending.add(entry)
-  }
+  private readonly mark = (entry: IndexedCoordinatorTab) => this.pending.add(entry)
   private readonly markUnstamped = (entry: IndexedCoordinatorTab) => {
     if (!entry.tab.workerTab) {
       this.pending.add(entry)
@@ -71,11 +70,12 @@ export class CoordinatorWorkerIndex {
     if (this.membership && workerRowMembershipInputsUnchanged(this.membership, state)) {
       return
     }
+    const orchestration = orchestrationForStatusRows(state)
     if (
       this.tabs === state.unifiedTabsByWorktree &&
       this.layouts === state.terminalLayoutsByTabId &&
       this.statuses === state.agentStatusByPaneKey &&
-      this.orchestration === state.runtimeAgentOrchestrationByPaneKey
+      this.orchestration === orchestration
     ) {
       this.membership = captureWorkerRowMembership(state)
       return
@@ -86,7 +86,7 @@ export class CoordinatorWorkerIndex {
     }
     // A layout change can retire a stamp (its worker pane closed), so re-read those tabs too.
     this.identities.syncLayouts(state, this.mark)
-    this.runtime.update(state.runtimeAgentOrchestrationByPaneKey, this.changedContext)
+    this.runtime.update(orchestration, this.changedContext)
     this.live.updateMap(
       state.agentStatusByPaneKey,
       state.agentStatusByPaneKey.projection,
@@ -99,7 +99,7 @@ export class CoordinatorWorkerIndex {
     this.tabs = state.unifiedTabsByWorktree
     this.layouts = state.terminalLayoutsByTabId
     this.statuses = state.agentStatusByPaneKey
-    this.orchestration = state.runtimeAgentOrchestrationByPaneKey
+    this.orchestration = orchestration
     this.membership = captureWorkerRowMembership(state)
   }
 

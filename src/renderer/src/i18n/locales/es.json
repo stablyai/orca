@@ -598,32 +598,6 @@
       "info": "Acerca de las actualizaciones automáticas",
       "saveFailed": "No se pudo guardar la configuración de actualizaciones automáticas."
     },
-    "general": {
-      "about": {
-        "title": "Acerca de",
-        "version": "Orca {{version}}"
-      }
-    },
-    "updateDelay": {
-      "1b4d825e0e": "Retraso de las actualizaciones",
-      "ab7e864374": "Acerca del retraso de las actualizaciones",
-      "ee1d96f74a": "Omitir el retraso una vez",
-      "description": "Orca espera este número de días desde la publicación de una versión antes de ofrecerla.",
-      "none": "Ninguno",
-      "availableSoon": "Disponible para ti {{relative}}",
-      "availableOn": "Disponible para ti el {{date}} ({{relative}})",
-      "clearedTitle": "Orca {{version}} ya está disponible",
-      "heldTitle": "Orca {{version}} está aplazado",
-      "released": "Publicación: {{released}}",
-      "progress": "Tiempo hasta que Orca {{version}} esté disponible",
-      "skipDelayOnceHint": "Busca esta versión ahora. La configuración del retraso no cambia.",
-      "upToDateWithHeld": "Estás al día. Hay una versión más reciente aplazada hasta el {{date}}.",
-      "heldReleaseReady": "Hay una versión más reciente lista. Busca actualizaciones para obtenerla.",
-      "keywordDelay": "retraso",
-      "keywordCooldown": "espera",
-      "keywordSecurity": "seguridad",
-      "teamManaged": "Establecido por tu equipo"
-    },
     "cloudConsole": {
       "manageInBrowser": "Gestionar en el navegador",
       "openFailed": "No se pudo abrir el navegador. Vuelve a intentarlo.",
@@ -642,6 +616,32 @@
     },
     "artifacts": {
       "teamDisabled": "Tu equipo desactivó el uso compartido de artefactos."
+    },
+    "general": {
+      "about": {
+        "title": "Acerca de",
+        "version": "Orca {{version}}"
+      }
+    },
+    "updateDelay": {
+      "1b4d825e0e": "Retraso de las actualizaciones",
+      "ab7e864374": "Acerca del retraso de las actualizaciones",
+      "ee1d96f74a": "Omitir el retraso una vez",
+      "teamManaged": "Establecido por tu equipo",
+      "description": "Orca espera este número de días desde la publicación de una versión antes de ofrecerla.",
+      "none": "Ninguno",
+      "availableSoon": "Disponible para ti {{relative}}",
+      "availableOn": "Disponible para ti el {{date}} ({{relative}})",
+      "clearedTitle": "Orca {{version}} ya está disponible",
+      "heldTitle": "Orca {{version}} está aplazado",
+      "released": "Publicación: {{released}}",
+      "progress": "Tiempo hasta que Orca {{version}} esté disponible",
+      "skipDelayOnceHint": "Busca esta versión ahora. La configuración del retraso no cambia.",
+      "upToDateWithHeld": "Estás al día. Hay una versión más reciente aplazada hasta el {{date}}.",
+      "heldReleaseReady": "Hay una versión más reciente lista. Busca actualizaciones para obtenerla.",
+      "keywordDelay": "retraso",
+      "keywordCooldown": "espera",
+      "keywordSecurity": "seguridad"
     }
   },
   "menu": {
@@ -1474,7 +1474,8 @@
         "projectRemoved": "Se quitó el proyecto de Orca.",
         "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta.",
         "chatStillStarting": "El chat aún se está iniciando. Reintenta en breve.",
-        "chatOpenFailed": "No se pudo abrir este chat.",
+        "chatOpenFailed": "No se pudo abrir este chat",
+        "chatOpenDismiss": "Descartar",
         "chatOpenRetry": "Reintentar",
         "chatOpenShowDetails": "Mostrar detalles",
         "chatOpenHideDetails": "Ocultar detalles"
@@ -3846,9 +3847,9 @@
             "copyLinkFailed": "No se pudo copiar el enlace",
             "downloadOpenWithDefaultApp": "Descargar y abrir con la aplicación predeterminada",
             "downloadOpenFailed": "No se pudo descargar '{{value0}}'.",
+            "openLinkInThisGroupRefused": "No se pudo abrir el enlace en este grupo",
             "openInNewTab": "Abrir en una pestaña nueva",
-            "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo",
-            "openLinkInThisGroupRefused": "No se pudo abrir el enlace en este grupo"
+            "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Anfitrión no disponible",
@@ -4286,15 +4287,15 @@
             "cursorUsageMenu": "Uso de Cursor",
             "hiddenUsageProviders": "También: {{value0}}",
             "zcodeUsageMenu": "Uso del código Z",
+            "rateLimitResetsUnsupportedWsl_one": "{{count}} reinicio disponible · aún no en WSL",
+            "rateLimitResetsUnsupportedWsl_other": "{{count}} reinicios disponibles · aún no en WSL",
+            "rateLimitResetsUnsupportedWsl_many": "{{count}} reinicios disponibles · aún no en WSL",
             "rateLimitResetsAvailable_one": "{{count}} reinicio de rate limit disponible",
             "rateLimitResetsAvailable_other": "{{count}} reinicios de rate limit disponibles",
             "rateLimitResetsAvailable_many": "{{count}} reinicios de rate limit disponibles",
             "staleCodexSessions_one": "{{count}} sesión de Codex sigue en la cuenta anterior.",
             "staleCodexSessions_other": "{{count}} sesiones de Codex siguen en la cuenta anterior.",
-            "staleCodexSessions_many": "{{count}} sesiones de Codex siguen en la cuenta anterior.",
-            "rateLimitResetsUnsupportedWsl_one": "{{count}} reinicio disponible · aún no en WSL",
-            "rateLimitResetsUnsupportedWsl_other": "{{count}} reinicios disponibles · aún no en WSL",
-            "rateLimitResetsUnsupportedWsl_many": "{{count}} reinicios disponibles · aún no en WSL"
+            "staleCodexSessions_many": "{{count}} sesiones de Codex siguen en la cuenta anterior."
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -4484,6 +4485,12 @@
                 "message": "El uso de Claude se actualizará la próxima vez que ejecutes Claude."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Se actualiza cuando Codex se ejecuta",
+                "message": "El uso de Codex se actualizará la próxima vez que ejecutes Codex."
+              }
+            },
             "remoteOwnerNotConfigured": "No configurado en {{server}}",
             "remoteOwnerSignInSavedHere": "Su inicio de sesión solo está guardado en este equipo.",
             "claudeNoUsageFromHost": "Sin uso desde {{server}}",
@@ -4497,8 +4504,8 @@
             "notYetUpdated": "Aún no se ha actualizado",
             "rateLimitResetsAvailable_one": "{{count}} reinicio de rate limit disponible",
             "rateLimitResetsAvailable_other": "{{count}} reinicios de rate limit disponibles",
-            "rateLimitResetsAvailable_many": "{{count}} reinicios de rate limit disponibles",
-            "unsupportedOwner": "Uso no disponible para {{server}}"
+            "unsupportedOwner": "Uso no disponible para {{server}}",
+            "rateLimitResetsAvailable_many": "{{count}} reinicios de rate limit disponibles"
           },
           "SshTargetStatusRow": {
             "sshHost": "Host SSH"
@@ -4524,6 +4531,7 @@
             "gotIt": "Got it"
           },
           "UsageRosterPanel": {
+            "wslUsageNotShown": "El uso de WSL aún no se muestra",
             "title": "Usage",
             "openDetails": "Open usage details",
             "notSignedIn": "not signed in",
@@ -4540,8 +4548,7 @@
             "notChecked": "Sin comprobar",
             "modelWeeklyLimit": "Límite semanal de {{model}}: {{usage}}",
             "resetsIn": "Se restablece en {{duration}}",
-            "resetsNow": "Se restablece ahora",
-            "wslUsageNotShown": "El uso de WSL aún no se muestra"
+            "resetsNow": "Se restablece ahora"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -11712,9 +11719,9 @@
           "pathLabel": "Ruta de la carpeta del plugin de desarrollo",
           "placeholder": "Ruta a una carpeta de plugin",
           "add": "Añadir ruta",
+          "teamDisabled": "Tu equipo desactivó las carpetas de desarrollo.",
           "reviewHelp": "Se revisa una vez. Los cambios de código posteriores se ejecutan sin preguntar.",
-          "dialogTitle": "Carpetas de desarrollo",
-          "teamDisabled": "Tu equipo desactivó las carpetas de desarrollo."
+          "dialogTitle": "Carpetas de desarrollo"
         },
         "PluginInstallDialog": {
           "localRequired": "Introduce la ruta de la carpeta del plugin.",
@@ -12132,6 +12139,11 @@
           "title": "Cuenta Orca",
           "description": "Comparte tu trabajo al instante y accede a tu escritorio desde Orca Mobile estés donde estés.",
           "searchDescription": "Iniciar o cerrar sesión en la cuenta utilizada por Artifacts y Orca Relay.",
+          "managed": "Tu equipo gestiona algunos ajustes de Orca.",
+          "deviceReportNamedViewers": "Los propietarios y administradores de {{teams}} pueden ver los informes de este dispositivo.",
+          "deviceReportViewers": "Los propietarios y administradores del equipo pueden ver los informes de este dispositivo.",
+          "reportingDetails": "Detalles del informe del dispositivo",
+          "reportingDisclosure": "La vista Dispositivos muestra la versión de Orca, el canal de versiones, el nombre del dispositivo, la plataforma, el estado de las actualizaciones, los plugins obligatorios que Orca no pudo instalar y cuándo informó el dispositivo por última vez.",
           "benefitsTitle": "Incluido con tu cuenta",
           "artifactsTitle": "Compartir artefactos",
           "artifactsDescription": "Publique archivos HTML y Markdown, luego administre cada enlace compartido desde Orca.",
@@ -12143,12 +12155,7 @@
           "keywordLogout": "cerrar sesión",
           "keywordSignIn": "iniciar sesión",
           "keywordSignOut": "desconectar",
-          "keywordRelay": "relé",
-          "managed": "Tu equipo gestiona algunos ajustes de Orca.",
-          "deviceReportNamedViewers": "Los propietarios y administradores de {{teams}} pueden ver los informes de este dispositivo.",
-          "deviceReportViewers": "Los propietarios y administradores del equipo pueden ver los informes de este dispositivo.",
-          "reportingDetails": "Detalles del informe del dispositivo",
-          "reportingDisclosure": "La vista Dispositivos muestra la versión de Orca, el canal de versiones, el nombre del dispositivo, la plataforma, el estado de las actualizaciones, los plugins obligatorios que Orca no pudo instalar y cuándo informó el dispositivo por última vez."
+          "keywordRelay": "relé"
         },
         "automations": {
           "title": "Automatizaciones",
@@ -12755,6 +12762,10 @@
           "defaultHostWebHelp": "Este navegador abre los proyectos nuevos en el servidor elegido.",
           "updateAll": "Actualizar todo",
           "updatesCount_other": "{{count}} actualizaciones disponibles",
+          "shareRowHint": "Permite que otro Orca se conecte aquí.",
+          "manageShare": "Gestionar",
+          "share": "Compartir",
+          "serversCaption": "Servidores",
           "updatesCount_one": "{{count}} actualizaciones disponibles",
           "updatesCount_many": "{{count}} actualizaciones disponibles",
           "addServer": "Añadir servidor",
@@ -12793,11 +12804,7 @@
           "setUpOnSshHost": "Configurar Orca en un host SSH",
           "setUp": "Configurar",
           "overYourSsh": "Mediante tu conexión SSH",
-          "installViaSsh": "Instalar por SSH",
-          "shareRowHint": "Permite que otro Orca se conecte aquí.",
-          "manageShare": "Gestionar",
-          "share": "Compartir",
-          "serversCaption": "Servidores"
+          "installViaSsh": "Instalar por SSH"
         },
         "networkAddress": {
           "tailscale": "Tailscale · {{address}}",
@@ -12945,6 +12952,7 @@
           "customEditor": "Editor"
         },
         "PluginManagerRows": {
+          "requiredByTeam": "Requerido por tu equipo",
           "reinstall": "Reinstalar",
           "crashedCount": "Falló {{value0}} veces seguidas",
           "crashed": "Falló al iniciar",
@@ -12970,8 +12978,7 @@
           "reviewUpdate": "Revisar actualización",
           "dataLoadFailed": "No se pudieron cargar sus archivos",
           "updateNeedsReview": "la actualización {{value0}} requiere revisión",
-          "updatedTo": "actualizado a {{value0}}",
-          "requiredByTeam": "Requerido por tu equipo"
+          "updatedTo": "actualizado a {{value0}}"
         },
         "PluginSettingsOverview": {
           "offTitle": "Los plugins están desactivados",
@@ -14319,10 +14326,8 @@
                   "titlePublishBranchFirst": "Publica la rama primero para sincronizar commits",
                   "titleUseForcePush": "Usa Commit y Force Push — el remoto solo tiene copias antiguas de commits locales",
                   "titleCommitThenPullPush": "Haz commit y luego pull y push",
-                  "rebaseFromNamedBase": "Rebase desde {{baseRef}}",
                   "rebaseFromBase": "Rebase desde la base",
                   "rebaseChooseRemoteBase": "Elige una rama base remota desde la que hacer rebase",
-                  "rebaseDirtyHint": "Intenta hacer rebase; git puede requerir hacer commit o stash de los cambios locales primero",
                   "rebaseWithLatestFrom": "Hacer rebase de la rama actual con los commits más recientes de {{baseRef}}",
                   "blockedCommitFirst": "Haz commit de los cambios primero",
                   "blockedCheckOutBranchFirst": "Haz checkout de una rama primero",
@@ -14339,7 +14344,9 @@
                   "rebaseOntoNamedBase": "Hacer rebase sobre {{base}}",
                   "rebaseCommitOrStashFirst": "Haz commit o stash de los cambios primero",
                   "continueRebase": "Continuar rebase",
-                  "titleContinueRebase": "Continuar el rebase en pausa"
+                  "titleContinueRebase": "Continuar el rebase en pausa",
+                  "rebaseFromNamedBase": "Rebase desde {{baseRef}}",
+                  "rebaseDirtyHint": "Intenta hacer rebase; git puede requerir hacer commit o stash de los cambios locales primero"
                 }
               },
               "primary": {
@@ -19545,12 +19552,12 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Actualiza Orca en este host para continuar en la interfaz de chat.",
-        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
-        "exitUnconfirmed": "{{agent}} está ejecutando esta conversación en otra terminal. Ciérralo allí o cierra esa terminal y vuelve a intentarlo.",
         "exitUnconfirmedFromTerminal": "{{agent}} todavía está ejecutando esta conversación en esta terminal. Cierra {{agent}} aquí y luego abre esta conversación desde el historial de sesiones.",
+        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
         "terminalChanged": "La terminal que ejecutaba {{agent}} cambió antes de cerrarse, así que Orca la dejó abierta. Inténtalo de nuevo.",
         "terminalExitUnproven": "Orca cerró la terminal de {{agent}}, pero no pudo confirmar que se detuviera, así que el chat no se abrió. Comprueba la conexión con el host y luego abre la conversación desde el historial de sesiones.",
-        "resumeFailed": "{{agent}} no pudo continuar en el chat. Revisa esta terminal y la conexión con el host y vuelve a intentarlo."
+        "resumeFailed": "{{agent}} no pudo continuar en el chat. Revisa esta terminal y la conexión con el host y vuelve a intentarlo.",
+        "exitUnconfirmed": "{{agent}} está ejecutando esta conversación en otra terminal. Ciérralo allí o cierra esa terminal y vuelve a intentarlo."
       },
       "state": {
         "loading": {
@@ -19678,11 +19685,9 @@
         "ran_one": "Ejecutó {{count}} subagente",
         "ran_other": "Ejecutó {{count}} subagentes",
         "ran_many": "Ejecutó {{count}} subagentes",
-        "backToMain": "Volver al agente principal",
         "mainAgent": "Agente principal",
-        "promptFromMain": "Prompt del agente principal",
-        "backTo": "Volver a {{value0}}",
         "path": "Ruta del subagente",
+        "backTo": "Volver a {{value0}}",
         "stateHeading": {
           "completed": "Completado",
           "working": "Trabajando",
@@ -19694,7 +19699,14 @@
         "noSteps": "Todavía no hay pasos",
         "beforeClear": "Este subagente se ejecutó antes de que se borrara el chat",
         "stoppedBeforeReply": "Detenido antes de responder",
-        "noReply": "Terminó sin responder"
+        "noReply": "Terminó sin responder",
+        "prompt": "Prompt",
+        "result": "Resultado",
+        "close": "Cerrar",
+        "needsYou": "Te necesita",
+        "agentNeedsYou": "{{name}} te necesita",
+        "mainNeedsYou": "El agente principal te necesita",
+        "show": "Mostrar"
       },
       "queuedMessages": {
         "alreadySent": "Este mensaje ya se envió.",
@@ -19725,19 +19737,19 @@
         "imageCount_many": "{{count}} imágenes",
         "queued": "En cola",
         "clearAll": "Borrar todo",
+        "editReturned": "Tu edición está en el cuadro de chat.",
+        "commandsUnsupported": "Los comandos no se pueden guardar en un mensaje en cola.",
         "moveChanged": "La cola cambió antes de este movimiento. Intenta arrastrar el mensaje de nuevo.",
         "reorderHint": "Arrastra para reordenar o usa las teclas de flecha arriba y abajo.",
         "reorderMessage": "Reordenar mensaje",
         "imageCount": "{{count}} imágenes",
+        "queuedCount_one": "{{count}} en cola",
+        "queuedCount_other": "{{count}} en cola",
+        "queuedCount_many": "{{count}} en cola",
         "couldNotSend": "No se pudo enviar",
         "retry": "Reintentar",
         "showLessRows": "Mostrar menos",
-        "moreRows": "+{{value0}} más",
-        "editReturned": "Tu edición está en el cuadro de chat.",
-        "commandsUnsupported": "Los comandos no se pueden guardar en un mensaje en cola.",
-        "queuedCount_one": "{{count}} en cola",
-        "queuedCount_other": "{{count}} en cola",
-        "queuedCount_many": "{{count}} en cola"
+        "moreRows": "+{{value0}} más"
       },
       "thought": "Pensó",
       "thoughtForDuration": "Pensó durante {{duration}}",
@@ -19894,6 +19906,10 @@
       "railLabel": "Tus mensajes",
       "railImageMessage": "Imagen adjunta",
       "railEmptyMessage": "Mensaje",
+      "railFilterPlaceholder": "Filtrar tus mensajes",
+      "railNoMatches": "Ningún mensaje coincide",
+      "railTickLabel": "Mensaje {{index}} de {{count}}: {{text}}",
+      "railMatchCount": "{{count}} de {{total}}",
       "ask": {
         "awaiting": "Esperando entrada del usuario:",
         "awaitingUnnamed": "Esperando entrada del usuario",
@@ -19939,11 +19955,11 @@
         "blocked": "Objetivo bloqueado",
         "limited": "Objetivo limitado",
         "attachmentsUnsupported": "Elimina los adjuntos antes de establecer un objetivo.",
-        "set": "Objetivo establecido",
         "checks_one": "{{count}} comprobación",
         "checks_other": "{{count}} comprobaciones",
         "checks_many": "{{count}} comprobaciones",
-        "last-check": "Última comprobación del objetivo"
+        "last-check": "Última comprobación del objetivo",
+        "set": "Objetivo establecido"
       },
       "structuredSessionHostDeclined": "Se abrió {{value0}} en una terminal",
       "structuredSessionHostDeclinedDescription": "Este servidor no puede ejecutar un chat de {{value0}} en este espacio de trabajo.",
@@ -20018,6 +20034,14 @@
         "pauseUnconfirmed": "Codex dejó de ejecutarse, pero no se confirmó la pausa del objetivo. Revisa el objetivo antes de continuar.",
         "stopUnconfirmed": "Codex no pudo confirmar la detención. Revisa el chat antes de continuar.",
         "noGoal": "Codex no tiene ningún objetivo que cambiar en este chat. Establece uno con /goal seguido del objetivo."
+      },
+      "automationResult": {
+        "openRun": "Abrir ejecución",
+        "notRead": "{{name}} aún no ha leído esto. Se enviará con tu próximo mensaje.",
+        "read": "{{name}} leyó esto con tu siguiente mensaje.",
+        "sentWithOne": "Enviado con 1 resultado de automatización",
+        "sentWithMany": "Enviado con {{count}} resultados de automatización",
+        "cleared": "Llegó antes de que se borrara el chat. No se enviará a {{name}}."
       },
       "slashCommandDescriptions": {
         "clearConversation": "Borrar la conversación",
@@ -20141,6 +20165,9 @@
         "modelApplyFailed": "No se pudo aplicar el modelo {{value}}.",
         "effortApplyFailed": "No se pudo aplicar el esfuerzo {{value}}."
       },
+      "workers": {
+        "stopUnconfirmed": "Orca no pudo confirmar que el trabajador se detuviera."
+      },
       "usageLimitActions": {
         "switchAccount": "Cambiar de cuenta",
         "addAccount": "Añadir cuenta…",
@@ -20188,122 +20215,15 @@
         "failed": "{{agent}} no pudo crear una rama de este chat",
         "hostUnsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo.",
         "failedDetail": "Tu chat no ha cambiado. Inténtalo de nuevo.",
+        "commandDescription": "Crear una rama de este chat desde su última respuesta",
         "commandWorking": "No se puede crear una rama mientras {{agent}} responde. Vuelve a ejecutar /fork cuando termine.",
+        "commandNothing": "Todavía no hay ninguna respuesta desde la que crear una rama.",
+        "commandTakesNoText": "Envía /fork solo y luego escribe en el chat nuevo.",
         "mark": "Rama ·",
         "markedName": "{{mark}} {{name}}",
         "accessibleName": "Rama: {{name}}",
         "sourceTooltip": "Rama de {{name}}",
-        "unknownSourceTooltip": "Rama de otro chat",
-        "commandDescription": "Crear una rama de este chat desde su última respuesta",
-        "commandNothing": "Todavía no hay ninguna respuesta desde la que crear una rama.",
-        "commandTakesNoText": "Envía /fork solo y luego escribe en el chat nuevo."
-      },
-      "cardKindHidden": {
-        "description": "Puedes cambiar esto en cualquier momento en",
-        "settingsLink": "Ajustes > Interfaz de chat > Actividad de turnos",
-        "failed": "No se pudo guardar. Puedes desactivarlo en Ajustes > Interfaz de chat > Actividad de turnos."
-      },
-      "openedPullRequests": {
-        "one": "Solicitud de extracción creada: {{name}}",
-        "hide": "No mostrar solicitudes de extracción creadas",
-        "hidden": "Orca ya no mostrará las solicitudes de extracción creadas",
-        "many_one": "{{count}} solicitud de extracción creada",
-        "many_other": "{{count}} solicitudes de extracción creadas",
-        "many_many": "{{count}} solicitudes de extracción creadas"
-      },
-      "splitRight": "Dividir a la derecha",
-      "splitDown": "Dividir hacia abajo",
-      "dock": {
-        "label": "Cuadro de mensaje y solicitudes"
-      },
-      "automationSaved": {
-        "openFullPage": "Abrir página",
-        "resultsInRuns": "resultados en cada ejecución",
-        "paused": "en pausa",
-        "webhookHint": "Dirige tu servicio a esta URL",
-        "gettingUrl": "Obteniendo la URL…",
-        "editDraft": "Cambia «{{name}}» para que ",
-        "resultsInEachRun": "En cada ejecución",
-        "resultsChat": "Chat",
-        "noRuns": "Aún no hay ejecuciones",
-        "recentRuns": "Ejecuciones recientes",
-        "when": "Cuándo",
-        "results": "Resultados",
-        "agent": "Agente",
-        "runNow": "Ejecutar ahora",
-        "loading": "Cargando",
-        "deleted": "Esta automatización se eliminó",
-        "loadFailed": "No se pudo leer esta automatización",
-        "onAgent": "con {{name}}"
-      },
-      "mcp": {
-        "status": {
-          "notStarted": "Sin iniciar",
-          "connected": "Conectado",
-          "disabled": "Desactivado",
-          "failed": "Error",
-          "failedReason": "Error: {{error}}",
-          "needsAuth": "Sesión requerida",
-          "needsAuthAfterSend": "Sesión requerida. Envía un mensaje para iniciar sesión aquí.",
-          "pending": "Conectando…",
-          "tools_many": "{{count}} herramientas",
-          "tools_one": "{{count}} herramienta",
-          "tools_other": "{{count}} herramientas"
-        },
-        "signIn": {
-          "external": "Completa el proceso en la página que se abrió",
-          "waiting": "Esperando el inicio de sesión…",
-          "waitingBrowser": "Esperando tu navegador…",
-          "action": "Iniciar sesión",
-          "remote": "Después de iniciar sesión, el navegador llega a una página que no se carga. Copia la dirección de esa página y pégala aquí.",
-          "done": "Listo",
-          "finish": "Finalizar",
-          "openAgain": "Volver a abrir",
-          "addressLabel": "Dirección de la página de inicio de sesión",
-          "unfinished": "El inicio de sesión aún no ha terminado. Complétalo en la página que se abrió y luego pulsa «Listo»."
-        },
-        "title": "Servidores MCP",
-        "close": "Cerrar",
-        "loading": "Cargando…",
-        "notRunning": "Se conectan al enviar tu próximo mensaje",
-        "unsupported": "Actualiza Orca en el host de este chat para administrarlos aquí",
-        "readFailed": "No se pudo cargar",
-        "retry": "Reintentar",
-        "empty": "No hay ninguno configurado para este chat",
-        "cancel": "Cancelar",
-        "reconnect": "Reconectar",
-        "toggle": "Usar {{name}}",
-        "actionFailed": "No se pudo realizar la acción. Inténtalo de nuevo.",
-        "summary": {
-          "connected": "Conectados: {{count}}",
-          "needsAuth_one": "{{count}} requiere iniciar sesión",
-          "needsAuth_other": "{{count}} requieren iniciar sesión",
-          "failed": "Fallidos: {{count}}",
-          "signingIn": "iniciando sesión en {{name}}",
-          "needsAuth_many": "{{count}} requieren iniciar sesión"
-        },
-        "source": {
-          "project": "Proyecto",
-          "local": "Local",
-          "user": "Usuario",
-          "plugin": "Plugin",
-          "session": "Sesión"
-        }
-      },
-      "railFilterPlaceholder": "Filtrar tus mensajes",
-      "railNoMatches": "Ningún mensaje coincide",
-      "railTickLabel": "Mensaje {{index}} de {{count}}: {{text}}",
-      "railMatchCount": "{{count}} de {{total}}",
-      "automationResult": {
-        "openRun": "Abrir ejecución",
-        "notRead": "{{name}} aún no ha leído esto. Se enviará con tu próximo mensaje.",
-        "read": "{{name}} leyó esto con tu siguiente mensaje.",
-        "sentWithOne": "Enviado con 1 resultado de automatización",
-        "sentWithMany": "Enviado con {{count}} resultados de automatización",
-        "cleared": "Llegó antes de que se borrara el chat. No se enviará a {{name}}."
-      },
-      "workers": {
-        "stopUnconfirmed": "Orca no pudo confirmar que el trabajador se detuviera."
+        "unknownSourceTooltip": "Rama de otro chat"
       },
       "importPlan": {
         "comes": "Se importará",
@@ -20326,6 +20246,21 @@
         "unchanged": "No se cambió nada en {{app}}.",
         "paused": "Las automatizaciones están en pausa para que nada se ejecute dos veces. Actívalas cuando hayas desactivado el bot antiguo en {{app}}."
       },
+      "cardKindHidden": {
+        "description": "Puedes cambiar esto en cualquier momento en",
+        "settingsLink": "Ajustes > Interfaz de chat > Actividad de turnos",
+        "failed": "No se pudo guardar. Puedes desactivarlo en Ajustes > Interfaz de chat > Actividad de turnos."
+      },
+      "openedPullRequests": {
+        "one": "Solicitud de extracción creada: {{name}}",
+        "hide": "No mostrar solicitudes de extracción creadas",
+        "hidden": "Orca ya no mostrará las solicitudes de extracción creadas",
+        "many_one": "{{count}} solicitud de extracción creada",
+        "many_other": "{{count}} solicitudes de extracción creadas",
+        "many_many": "{{count}} solicitudes de extracción creadas"
+      },
+      "splitRight": "Dividir a la derecha",
+      "splitDown": "Dividir hacia abajo",
       "sideChat": {
         "description": "Haz una pregunta aparte en una rama junto a este chat",
         "argumentHint": "<pregunta>",
@@ -20474,6 +20409,9 @@
         "running": "En ejecución",
         "failed": "Fallido"
       },
+      "dock": {
+        "label": "Cuadro de mensaje y solicitudes"
+      },
       "workerDock": {
         "commandOutputPending": "La salida del comando aún no está disponible.",
         "notNow": "Ahora no",
@@ -20518,7 +20456,7 @@
         "workerCount_one": "{{count}} trabajador",
         "workerCount_other": "{{count}} trabajadores",
         "workerCount_many": "{{count}} trabajadores",
-        "stoppedByYou": "Detenido por ti",
+        "stopped": "Detenido",
         "finished": "Terminado",
         "failedCount": "{{count}} con error",
         "needsYouCount": "Esperando tu respuesta: {{count}}",
@@ -20539,6 +20477,80 @@
         "unread": "No se pudieron cargar los trabajadores",
         "unreadDetail": "Los trabajadores aparecerán aquí cuando se carguen",
         "chipLabel": "{{label}}, el más reciente: {{title}}"
+      },
+      "automationSaved": {
+        "resultsInRuns": "resultados en cada ejecución",
+        "paused": "en pausa",
+        "webhookHint": "Dirige tu servicio a esta URL",
+        "gettingUrl": "Obteniendo la URL…",
+        "editDraft": "Cambia «{{name}}» para que ",
+        "resultsInEachRun": "En cada ejecución",
+        "resultsChat": "Chat",
+        "noRuns": "Aún no hay ejecuciones",
+        "recentRuns": "Ejecuciones recientes",
+        "when": "Cuándo",
+        "results": "Resultados",
+        "agent": "Agente",
+        "runNow": "Ejecutar ahora",
+        "loading": "Cargando",
+        "deleted": "Esta automatización se eliminó",
+        "loadFailed": "No se pudo leer esta automatización",
+        "openFullPage": "Abrir página",
+        "onAgent": "con {{name}}"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "Sin iniciar",
+          "connected": "Conectado",
+          "disabled": "Desactivado",
+          "failed": "Error",
+          "failedReason": "Error: {{error}}",
+          "needsAuth": "Sesión requerida",
+          "needsAuthAfterSend": "Sesión requerida. Envía un mensaje para iniciar sesión aquí.",
+          "pending": "Conectando…",
+          "tools_many": "{{count}} herramientas",
+          "tools_one": "{{count}} herramienta",
+          "tools_other": "{{count}} herramientas"
+        },
+        "signIn": {
+          "external": "Completa el proceso en la página que se abrió",
+          "waiting": "Esperando el inicio de sesión…",
+          "waitingBrowser": "Esperando tu navegador…",
+          "action": "Iniciar sesión",
+          "remote": "Después de iniciar sesión, el navegador llega a una página que no se carga. Copia la dirección de esa página y pégala aquí.",
+          "done": "Listo",
+          "finish": "Finalizar",
+          "openAgain": "Volver a abrir",
+          "addressLabel": "Dirección de la página de inicio de sesión",
+          "unfinished": "El inicio de sesión aún no ha terminado. Complétalo en la página que se abrió y luego pulsa «Listo»."
+        },
+        "title": "Servidores MCP",
+        "close": "Cerrar",
+        "loading": "Cargando…",
+        "notRunning": "Se conectan al enviar tu próximo mensaje",
+        "unsupported": "Actualiza Orca en el host de este chat para administrarlos aquí",
+        "readFailed": "No se pudo cargar",
+        "retry": "Reintentar",
+        "empty": "No hay ninguno configurado para este chat",
+        "cancel": "Cancelar",
+        "reconnect": "Reconectar",
+        "toggle": "Usar {{name}}",
+        "actionFailed": "No se pudo realizar la acción. Inténtalo de nuevo.",
+        "summary": {
+          "connected": "Conectados: {{count}}",
+          "needsAuth_one": "{{count}} requiere iniciar sesión",
+          "needsAuth_other": "{{count}} requieren iniciar sesión",
+          "failed": "Fallidos: {{count}}",
+          "signingIn": "iniciando sesión en {{name}}",
+          "needsAuth_many": "{{count}} requieren iniciar sesión"
+        },
+        "source": {
+          "project": "Proyecto",
+          "local": "Local",
+          "user": "Usuario",
+          "plugin": "Plugin",
+          "session": "Sesión"
+        }
       }
     },
     "tab": {
@@ -21397,7 +21409,9 @@
       "downloading": "Descargando {{done}} MB.",
       "downloadingOf": "Descargando {{done}} MB de {{total}} MB.",
       "external": "Usa tu propio {{agent}}",
+      "externalShort": "Usa tu propia copia",
       "extracting": "Descomprimiendo {{agent}}…",
+      "extractingShort": "Descomprimiendo…",
       "failed": "La instalación falló. Inténtalo de nuevo.",
       "cancelFailed": "No se pudo cancelar la instalación. Inténtalo de nuevo.",
       "install": "Instalar {{agent}}",
@@ -21418,6 +21432,7 @@
       "unavailable": "{{agent}} no está disponible en este host.",
       "update": "Actualizar",
       "verifying": "Verificando…",
+      "verifyingAgent": "Verificando {{agent}}…",
       "installTitle": "Instala {{agent}} para empezar a chatear",
       "continueTitle": "Instala {{agent}} para continuar",
       "heroBody": "Descarga única de {{size}} MB. La comparten los chats de {{agent}} en el equipo que ejecuta este chat.",
@@ -21438,10 +21453,7 @@
       "checkingDetail": "Verificando {{agent}}…",
       "stepDownload": "Descargar",
       "stepUnpack": "Descomprimir",
-      "stepCheck": "Comprobar",
-      "externalShort": "Usa tu propia copia",
-      "extractingShort": "Descomprimiendo…",
-      "verifyingAgent": "Verificando {{agent}}…"
+      "stepCheck": "Comprobar"
     },
     "linearWorkspacePicker": {
       "search": "Buscar espacios de trabajo de Linear",
@@ -21453,9 +21465,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Mantener abierto",
-        "bannerRunning": "Trabajador de orquestación · Se cierra 2 minutos después de terminar",
-        "bannerFinished": "Trabajador de orquestación finalizado · Se cierra en {{countdown}}",
-        "bannerFinishedStatus": "Trabajador de orquestación finalizado · Se cerrará pronto",
+        "bannerRunning": "Se cierra {{minutes}} min después de terminar",
+        "bannerFinished": "Finalizado · se cierra en {{countdown}}",
+        "bannerFinishedStatus": "Trabajador finalizado · se cerrará pronto",
         "boundRunning": "Se cierra con {{worker}}",
         "boundFinished": "{{worker}} finalizó · Se cierra en {{countdown}}",
         "boundFallbackName": "su trabajador"
@@ -21712,6 +21724,19 @@
       "title": "La página del navegador se detuvo",
       "failed": "La página del navegador se detuvo inesperadamente. Reintenta para restaurarla."
     },
+    "serverPage": {
+      "download": {
+        "started": "Descargando en {{path}} en {{host}}",
+        "saveHere": "Guardar en este equipo",
+        "copying": "Descargando {{filename}} en este equipo…",
+        "copied": "Guardado en {{path}}",
+        "copyFailed": "No se pudo guardar {{filename}} en este equipo.",
+        "showInFolder": "Mostrar en la carpeta"
+      },
+      "print": {
+        "failed": "No se pudo guardar la página como PDF"
+      }
+    },
     "clientHosted": {
       "preparationFailed": "No se pudo iniciar el navegador remoto en este escritorio. Comprueba la conexión emparejada y vuelve a intentarlo.",
       "unavailableTitle": "Navegador alojado en el cliente no disponible",
@@ -21746,6 +21771,12 @@
       "pending": "Reabriendo…",
       "caveat": "Esto abre una nueva página en el host remoto en la última dirección de esta página. El estado de sesión iniciada y otros estados transitorios pueden diferir, y una página que provenga del envío de un formulario se abrirá en blanco.",
       "failed": "No se pudo abrir esta página en el host remoto. Comprueba la conexión y vuelve a intentarlo."
+    },
+    "deviceMove": {
+      "toThisComputer": "Abrir en este ordenador",
+      "toHost": "Abrir en {{host}}",
+      "tooltip": "Abre esta dirección en una pestaña nueva en el otro lado y cierra esta. Puede que tengas que volver a iniciar sesión.",
+      "failedToThisComputer": "No se pudo abrir esta página en este ordenador."
     },
     "sshRoute": {
       "preparingTitle": "Conectando a través del host SSH",
@@ -21905,25 +21936,6 @@
         "title": "Inicios de sesión guardados",
         "otherLogins": "Otros inicios de sesión en este sitio"
       }
-    },
-    "serverPage": {
-      "download": {
-        "started": "Descargando en {{path}} en {{host}}",
-        "saveHere": "Guardar en este equipo",
-        "copying": "Descargando {{filename}} en este equipo…",
-        "copied": "Guardado en {{path}}",
-        "copyFailed": "No se pudo guardar {{filename}} en este equipo.",
-        "showInFolder": "Mostrar en la carpeta"
-      },
-      "print": {
-        "failed": "No se pudo guardar la página como PDF"
-      }
-    },
-    "deviceMove": {
-      "toThisComputer": "Abrir en este ordenador",
-      "toHost": "Abrir en {{host}}",
-      "tooltip": "Abre esta dirección en una pestaña nueva en el otro lado y cierra esta. Puede que tengas que volver a iniciar sesión.",
-      "failedToThisComputer": "No se pudo abrir esta página en este ordenador."
     },
     "profileCookieClear": {
       "label": "Cookies",
@@ -22417,6 +22429,11 @@
       "organizationSuffix": "Organización ···{{suffix}}",
       "personalOrganization": "Personal"
     },
+    "codex": {
+      "usageSignInLabel": "Sesión cerrada",
+      "usageSignInMessage": "Inicia sesión para ver el uso.",
+      "usageSignInSettingsMessage": "Abre Ajustes → Cuentas para iniciar sesión."
+    },
     "hostSignIn": {
       "copied": "Copiado",
       "continue": "Continuar",
@@ -22437,12 +22454,7 @@
         "failed": "No se pudo iniciar sesión. Vuelve a intentarlo."
       }
     },
-    "remoteScopeAccountsAddHere": "Mostrando cuentas administradas por {{value0}}. Las cuentas nuevas inician sesión allí; terminas en el navegador de este dispositivo.",
-    "codex": {
-      "usageSignInLabel": "Sesión cerrada",
-      "usageSignInMessage": "Inicia sesión para ver el uso.",
-      "usageSignInSettingsMessage": "Abre Ajustes → Cuentas para iniciar sesión."
-    }
+    "remoteScopeAccountsAddHere": "Mostrando cuentas administradas por {{value0}}. Las cuentas nuevas inician sesión allí; terminas en el navegador de este dispositivo."
   },
   "osDocumentOpen": {
     "failed": "No se pudo abrir el archivo."
@@ -23680,6 +23692,12 @@
     }
   },
   "updates": {
+    "installOnQuit": {
+      "title": "Actualización lista para instalar",
+      "summary": "Sal de Orca. Vuelve a abrirlo tras la instalación.",
+      "quit": "Salir de Orca",
+      "later": "Más tarde"
+    },
     "installBlock": {
       "instancesLabel": "Instancias que usan Orca",
       "browserLabel": "Navegador en segundo plano",
@@ -23743,17 +23761,11 @@
       "rateLimitedInMinutes_many": "Se alcanzó el límite de velocidad de GitHub. Inténtalo de nuevo en aproximadamente {{count}} minutos.",
       "rateLimitedInMinutesSignedOut_one": "Se alcanzó el límite de velocidad de GitHub. Inténtalo de nuevo en aproximadamente {{count}} minuto o ejecuta `gh auth login` para que Orca pueda usar el límite más alto de tu cuenta.",
       "rateLimitedInMinutesSignedOut_other": "Se alcanzó el límite de velocidad de GitHub. Inténtalo de nuevo en aproximadamente {{count}} minutos o ejecuta `gh auth login` para que Orca pueda usar el límite más alto de tu cuenta.",
+      "teamUpdatePolicy": "Tu equipo gestiona las actualizaciones de Orca.",
       "rateLimitedInMinutesSignedOut_many": "Se alcanzó el límite de velocidad de GitHub. Inténtalo de nuevo en aproximadamente {{count}} minutos o ejecuta `gh auth login` para que Orca pueda usar el límite más alto de tu cuenta.",
       "automaticInstallCheckpointFailed": "Orca no pudo guardar la ventana actual antes de reiniciarse. Intenta instalar la actualización de nuevo.",
       "automaticInstallTerminalBusy": "Algunos terminales se cerrarían al reiniciar. Orca lo volverá a intentar en una comprobación posterior.",
-      "macStagingTimeout": "macOS sigue preparando la actualización. Si el problema continúa, cierra Orca y vuelve a abrirlo.",
-      "teamUpdatePolicy": "Tu equipo gestiona las actualizaciones de Orca."
-    },
-    "installOnQuit": {
-      "title": "Actualización lista para instalar",
-      "summary": "Sal de Orca. Vuelve a abrirlo tras la instalación.",
-      "quit": "Salir de Orca",
-      "later": "Más tarde"
+      "macStagingTimeout": "macOS sigue preparando la actualización. Si el problema continúa, cierra Orca y vuelve a abrirlo."
     },
     "emergencyRequired": {
       "title": "Se requiere Orca {{version}}",
@@ -24463,6 +24475,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Actualizar modelos",
     "catalogUnsupportedLaunch": "Los modelos de {{agent}} no están disponibles en este equipo. Tus opciones actuales se siguen aplicando.",
     "catalogEmpty": "{{agent}} no tiene modelos disponibles.",
     "search": "Buscar, p. ej., Opus 5.5…",
@@ -24484,8 +24497,7 @@
     "sameAsTextDefault": "Igual que el predeterminado · {{value0}}",
     "effortDefault": "Predeterminado",
     "chatChoicesNote": "Las opciones de modelo o esfuerzo de {{agent}} sin una marca de CLI se aplican a los chats.",
-    "composedChoicesNote": "Las opciones de esfuerzo y velocidad de {{agent}} se incluyen en el argumento del modelo.",
-    "refreshModels": "Actualizar modelos"
+    "composedChoicesNote": "Las opciones de esfuerzo y velocidad de {{agent}} se incluyen en el argumento del modelo."
   },
   "wslMove": {
     "entry": {
@@ -24679,10 +24691,10 @@
       },
       "botProviderErrorNotSaved": "El turno del bot falló, pero esta ejecución no guardó el error del proveedor. El chat original puede contener más detalles.",
       "botsOff": "Los bots están desactivados en Ajustes, así que Orca omitió esta ejecución.",
+      "botsOffByTeam": "Tu equipo desactivó los bots, así que Orca omitió esta ejecución.",
       "botMissing": "El bot con el que se ejecuta esta automatización ya no existe.",
       "botFolderMissing": "La carpeta del bot ya no está disponible.",
-      "botPaused": "{{bot}} está en pausa, así que Orca omitió esta ejecución.",
-      "botsOffByTeam": "Tu equipo desactivó los bots, así que Orca omitió esta ejecución."
+      "botPaused": "{{bot}} está en pausa, así que Orca omitió esta ejecución."
     },
     "extraAgentArgs": {
       "errors": {
@@ -25260,7 +25272,11 @@
           "hostLabel": "Dirección de GitLab (opcional)",
           "hostHint": "Para instalaciones autogestionadas o Dedicated. Déjalo vacío para GitLab.com."
         },
+        "intercom": {
+          "siteLabel": "Región de Intercom"
+        },
         "place": {
+          "unitedStates": "Estados Unidos",
           "usEast": "Este de Estados Unidos",
           "usWest": "Oeste de Estados Unidos",
           "usCentral": "Centro de Estados Unidos",
@@ -25290,7 +25306,13 @@
         "github": "Menciones y eventos en issues y PR",
         "slack": "Mensajes y menciones",
         "linear": "Issues asignados y menciones",
-        "google": "Gmail, Calendar y Drive, como tú"
+        "google": "Gmail, Calendar y Drive, como tú",
+        "clickup": "Gestiona tareas, listas y documentos",
+        "airtable": "Consulta y edita bases, tablas y registros",
+        "todoist": "Añade, ordena y completa tareas",
+        "zapier": "Ejecuta acciones en las apps que configuraste en Zapier",
+        "granola": "Busca notas y transcripciones de reuniones",
+        "intercom": "Busca conversaciones, contactos y artículos"
       },
       "composioLine": {
         "outlook": "Correo, calendario y contactos",
@@ -25412,7 +25434,9 @@
       "untitled": "Nuevo chat",
       "searchRetry": "Probar de nuevo",
       "loading": "Cargando chats…",
-      "readFailed": "No se pudieron leer los chats de este bot."
+      "readFailed": "No se pudieron leer los chats de este bot.",
+      "older": "Mostrar {{count}} anteriores",
+      "hideOlder": "Ocultar anteriores"
     },
     "needs": {
       "chat": "Tu chat con {{name}}",
@@ -25444,7 +25468,8 @@
       "startFromScratch": "Empezar de cero"
     },
     "errors": {
-      "unsavedDrafts": "Su carpeta tiene cambios sin guardar en el editor. Guarda los cambios o cierra los archivos y vuelve a intentar eliminarlo."
+      "unsavedDrafts": "Su carpeta tiene cambios sin guardar en el editor. Guarda los cambios o cierra los archivos y vuelve a intentar eliminarlo.",
+      "purposeTooLongForHost": "Orca en {{host}} admite hasta 200 caracteres para el propósito. Acórtalo o actualiza Orca en {{host}}."
     },
     "automations": {
       "paused": "En pausa",
@@ -25718,6 +25743,13 @@
     }
   },
   "plugins": {
+    "blockedByTeam": "Bloqueado por tu equipo.",
+    "requiredFailures": {
+      "toast": "No se pudo instalar un plugin obligatorio",
+      "open": "Abrir Plugins",
+      "label": "Requerido por tu equipo",
+      "body": "Orca no pudo instalar {{plugin}}."
+    },
     "actionConfirmation": {
       "cancel": "Cancelar",
       "deleteAutomation": "{{plugin}} quiere eliminar la automatización «{{automation}}»",
@@ -25731,13 +25763,6 @@
       "unknownProject": "un proyecto desconocido",
       "automationNewWorkspaces": "Automatización {{id}}: un nuevo espacio de trabajo de {{project}} en cada ejecución; programación: {{schedule}}.",
       "automationInWorkspace": "Automatización {{id}}: en {{project}} / {{workspace}}; programación: {{schedule}}."
-    },
-    "blockedByTeam": "Bloqueado por tu equipo.",
-    "requiredFailures": {
-      "toast": "No se pudo instalar un plugin obligatorio",
-      "open": "Abrir Plugins",
-      "label": "Requerido por tu equipo",
-      "body": "Orca no pudo instalar {{plugin}}."
     },
     "catalog": {
       "managedByTeam": "Gestionado por tu equipo",
@@ -25795,9 +25820,22 @@
     "sendReport": "Enviar informe"
   },
   "agentCliUpdate": {
-    "thisComputer": "Este equipo",
     "devinProduct": "Devin CLI",
-    "codebuddyProduct": "CodeBuddy Code"
+    "codebuddyProduct": "CodeBuddy Code",
+    "thisComputer": "Este equipo"
+  },
+  "activityBar": {
+    "moveUp": "Mover hacia arriba",
+    "moveDown": "Mover hacia abajo",
+    "hide": "Ocultar",
+    "show": "Mostrar {{name}}",
+    "dragStart": "Se levantó {{name}}",
+    "dragOver": "{{name}} sobre {{target}}",
+    "dragEnd": "Se soltó {{name}}",
+    "dragCancel": "Se canceló el movimiento de {{name}}",
+    "moveLeft": "Mover a la izquierda",
+    "moveRight": "Mover a la derecha",
+    "reset": "Restablecer el orden de las pestañas"
   },
   "workerTabs": {
     "keep": "Mantener pestaña",
@@ -25875,18 +25913,5 @@
       "bulk_other": "Se mantuvieron {{count}} pestañas con trabajadores",
       "bulk_many": "Se mantuvieron {{count}} pestañas con trabajadores"
     }
-  },
-  "activityBar": {
-    "moveUp": "Mover hacia arriba",
-    "moveDown": "Mover hacia abajo",
-    "hide": "Ocultar",
-    "show": "Mostrar {{name}}",
-    "dragStart": "Se levantó {{name}}",
-    "dragOver": "{{name}} sobre {{target}}",
-    "dragEnd": "Se soltó {{name}}",
-    "dragCancel": "Se canceló el movimiento de {{name}}",
-    "moveLeft": "Mover a la izquierda",
-    "moveRight": "Mover a la derecha",
-    "reset": "Restablecer el orden de las pestañas"
   }
 }
