@@ -18,6 +18,7 @@ import {
 import { getWslHostsPausedShortLabel } from '@/components/sidebar/host-admission/wsl/wsl-host-row-status'
 import { WslDistroSubmenuRow } from './WslDistroSubmenuRow'
 import { stepSubmenuOptionFocus } from './submenu-option-focus'
+import { useDelayedSubmenuClose } from './use-delayed-submenu-close'
 
 /** How long a pointer may cross other Add host rows on its way into the WSL list. */
 const WSL_CLOSE_DELAY_MS = 200
@@ -135,19 +136,14 @@ export function AddHostSubmenuRow({
   const wslOpen = open && showWsl && wslOpenedBy !== null
   const listRef = React.useRef<HTMLDivElement>(null)
   // A pointer heading diagonally for a lower distro crosses SSH and Remote; close only if it stays.
-  const wslCloseTimer = React.useRef<number | undefined>(undefined)
-  const keepWslOpen = (): void => {
-    window.clearTimeout(wslCloseTimer.current)
-    wslCloseTimer.current = undefined
-  }
-  React.useEffect(() => () => window.clearTimeout(wslCloseTimer.current), [])
+  const closeWsl = React.useCallback(() => setWslOpenedBy(null), [])
+  const { schedule: scheduleWslClose, cancel: keepWslOpen } = useDelayedSubmenuClose(
+    closeWsl,
+    WSL_CLOSE_DELAY_MS
+  )
   const armOther = (key: string): void => {
     setHoveredKey(key)
-    // Every pointer move re-arms the row; the first one starts the countdown, later ones keep it.
-    wslCloseTimer.current ??= window.setTimeout(() => {
-      wslCloseTimer.current = undefined
-      setWslOpenedBy(null)
-    }, WSL_CLOSE_DELAY_MS)
+    scheduleWslClose()
   }
   React.useEffect(() => {
     if (open && focusOnOpen) {
