@@ -172,3 +172,28 @@ it("wraps Tab from the subagent's own prompt card back to the sheet's first cont
   expect(sheet.contains(document.activeElement)).toBe(true)
   expect(document.activeElement).not.toBe(deny)
 })
+
+it("takes focus back into the sheet when answering disables the subagent's focused prompt", async () => {
+  act(() => openNativeChatSubagent(PANE, 'a1'))
+  render(<Pane>{approval(() => {})}</Pane>)
+  const allow = screen.getByRole('button', { name: 'Allow' })
+  allow.focus()
+
+  // Chromium blurs a focused button as it becomes disabled.
+  allow.blur()
+  allow.setAttribute('disabled', '')
+  await act(() => new Promise((resolve) => requestAnimationFrame(resolve)))
+
+  expect(document.activeElement).toBe(screen.getByRole('dialog'))
+})
+
+it("takes focus back into the sheet when the subagent's focused prompt card unmounts", async () => {
+  act(() => openNativeChatSubagent(PANE, 'a1'))
+  const { rerender } = render(<Pane>{approval(() => {})}</Pane>)
+  screen.getByRole('button', { name: 'Allow' }).focus()
+
+  rerender(<Pane>{null}</Pane>)
+  await act(() => new Promise((resolve) => requestAnimationFrame(resolve)))
+
+  expect(document.activeElement).toBe(screen.getByRole('dialog'))
+})

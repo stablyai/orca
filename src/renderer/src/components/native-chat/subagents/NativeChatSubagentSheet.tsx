@@ -1,4 +1,4 @@
-import { useContext, useLayoutEffect, useRef } from 'react'
+import { useContext, useEffect, useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   closeNativeChatSubagentOnEscape,
@@ -31,6 +31,7 @@ export function NativeChatSubagentSheet({
   const sheetRef = useRef<HTMLDivElement>(null)
   const setShown = host?.setShown
   const element = host?.element ?? null
+  const promptSlot = host?.promptSlot ?? null
   useLayoutEffect(() => {
     if (!element) {
       return undefined
@@ -46,6 +47,52 @@ export function NativeChatSubagentSheet({
       sheet.focus({ preventScroll: true })
     }
   }, [agentId, element])
+  // An answered prompt disables or removes the control that had focus, which drops focus to the body
+  // (a removed node may not even fire focusout); the sheet takes it back so Esc and Tab still reach it.
+  useEffect(() => {
+    const sheet = sheetRef.current
+    if (!sheet) {
+      return undefined
+    }
+    let last: Element | null = null
+    let frame = 0
+    const onFocusIn = (event: FocusEvent): void => {
+      last = event.target instanceof Element ? event.target : null
+    }
+    const reclaim = (): void => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const active = document.activeElement
+        const lost = active === null || active === document.body
+        // Only a control that is gone or disabled; a click elsewhere in the app keeps its focus.
+        const gone = last !== null && (!sheet.contains(last) || last.matches(':disabled'))
+        if (lost && gone && sheet.isConnected) {
+          sheet.focus({ preventScroll: true })
+        }
+      })
+    }
+    const onFocusOut = (event: FocusEvent): void => {
+      if (event.relatedTarget === null) {
+        reclaim()
+      }
+    }
+    sheet.addEventListener('focusin', onFocusIn)
+    sheet.addEventListener('focusout', onFocusOut)
+    const observer = new MutationObserver(reclaim)
+    if (promptSlot) {
+      observer.observe(promptSlot, {
+        childList: true,
+        subtree: true,
+        attributeFilter: ['disabled']
+      })
+    }
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+      sheet.removeEventListener('focusin', onFocusIn)
+      sheet.removeEventListener('focusout', onFocusOut)
+    }
+  }, [element, promptSlot])
   if (!element) {
     return null
   }
