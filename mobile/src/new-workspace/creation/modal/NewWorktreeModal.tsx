@@ -36,7 +36,7 @@ import {
   getNewWorkspaceRunTarget
 } from '../../source-selection/presentation/new-workspace-project-targets'
 import { NewWorktreeForm } from '../forms/NewWorktreeForm'
-import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
+import { WorkspaceCreationDrawer } from './WorkspaceCreationDrawer'
 import { useNewChatWorkspaceForm } from '../../use-new-chat-workspace-form'
 import { NewWorktreeModalDrawers } from './NewWorktreeModalDrawers'
 import { useNewWorkspaceAgentSelection } from '../runtime/use-new-workspace-agent-selection'
@@ -85,18 +85,26 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const isChat = props.creationKind === 'chat' && !folderLaunch
   const worktreeVisible = visible && !isChat
   const chat = useNewChatWorkspaceForm({ ...props, visible: visible && isChat })
-  const { repos, allRepos, selectedRepo, setSelectedRepo, loading, loadError, retryLoad } =
-    useNewWorkspaceRepositories({
-      client: desktopClient,
-      serverClients,
-      hostId,
-      visible: worktreeVisible,
-      ...(folderLaunch
-        ? {
-            initialRepo: { id: folderLaunch.repoId, executionHostId: folderLaunch.executionHostId }
-          }
-        : {})
-    })
+  const {
+    repos,
+    allRepos,
+    selectedRepo,
+    setSelectedRepo,
+    loading,
+    presentationReady,
+    loadError,
+    retryLoad
+  } = useNewWorkspaceRepositories({
+    client: desktopClient,
+    serverClients,
+    hostId,
+    visible: worktreeVisible,
+    ...(folderLaunch
+      ? {
+          initialRepo: { id: folderLaunch.repoId, executionHostId: folderLaunch.executionHostId }
+        }
+      : {})
+  })
   // Route picked-repo operations to its host; desktop settings/accounts stay on desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
   const client = repoServer ? (serverClients?.get(repoServer) ?? null) : desktopClient
@@ -292,8 +300,10 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       visible={visible}
       onRequestClose={isChat ? chat.requestClose : requestClose}
     >
-      <BottomDrawer
+      <WorkspaceCreationDrawer
         visible={visible}
+        ready={isChat || presentationReady}
+        onCancelLoading={isChat ? chat.requestClose : requestClose}
         interactive={isChat ? chat.interactive : navigation.formSheetInteractive}
         dismissible={isChat ? chat.dismissible : undefined}
         onClose={isChat ? chat.onClose : onClose}
@@ -354,7 +364,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
             onCreate={() => void createSubmit.create()}
           />
         )}
-      </BottomDrawer>
+      </WorkspaceCreationDrawer>
 
       {isChat ? (
         chat.drawers
