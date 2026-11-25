@@ -1,5 +1,7 @@
 import { useRef } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
@@ -21,8 +23,11 @@ import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disc
 import { NativeChatAutomationCardDetails } from '../NativeChatAutomationCardDetails'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { requestNativeChatComposerFocus } from '../composer/focus/native-chat-composer-focus-intent'
-import { NativeChatAutomationRowFrame, ROW_NOTE } from './NativeChatAutomationRowFrame'
-import { RUN_LINK_BUTTON } from './automation-run-link-button'
+import { ROW_NOTE } from './NativeChatAutomationRowFrame'
+import { NativeChatAutomationMark } from './NativeChatAutomationMark'
+import { NativeChatCardAvatar, NativeChatCardFrame } from '../NativeChatCardFrame'
+import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
+import { NativeChatExpandable } from '../messages/disclosure/NativeChatExpandable'
 import { NativeChatWebhookSetupCard } from './NativeChatWebhookSetupCard'
 
 // Every automation card in a chat shares this prefix, so opening one closes the rest.
@@ -61,8 +66,8 @@ function draftChangeInChat(owner: NativeChatVisualOwner, name: string): void {
   })
 }
 
-/** The automation this chat's agent created or edited, as its row: what it saved; opens in place to
- *  its live settings. */
+/** The automation this chat's agent created or edited, as a card: its name, the trigger it was saved
+ *  with and Open; the disclosure opens in place to its live settings. */
 export function NativeChatAutomationSavedRow({
   saved,
   timestamp,
@@ -94,7 +99,15 @@ export function NativeChatAutomationSavedRow({
     ...(automation.enabled ? [] : [t('components.native-chat.automationSaved.paused', 'paused')])
   ].filter(Boolean)
   const label = wording.say(saved.change === 'updated' ? 'updatedAutomation' : 'createdAutomation')
-  const status = automation.enabled ? when : wording.say('paused')
+  // One folded line: the trigger as saved, and that it was saved paused.
+  const saving = [
+    when
+      ? t('components.native-chat.automationSaved.savedWhen', 'Saved: {{when}}', { when })
+      : null,
+    automation.enabled ? null : t('components.native-chat.automationSaved.paused', 'paused')
+  ]
+    .filter(Boolean)
+    .join(' · ')
   if (hookId && owner) {
     // Its URL is what the user needs next, so a webhook automation is a card, not a folded row.
     return (
@@ -106,6 +119,7 @@ export function NativeChatAutomationSavedRow({
       />
     )
   }
+  const Chevron = open ? ChevronUp : ChevronDown
   return (
     <div
       onKeyDown={(event) => {
@@ -117,46 +131,77 @@ export function NativeChatAutomationSavedRow({
         }
       }}
     >
-      <NativeChatAutomationRowFrame
-        mark={automationRowMark(automation)}
-        lead={label}
-        name={automation.name}
-        status={status}
-        timestamp={timestamp}
-        open={open}
-        onToggle={() => setOpen(!open)}
-        toggleRef={toggle}
-        // Live settings and controls, never cut.
-        clampDetails={false}
-      >
-        <>
-          <p className={ROW_NOTE}>{facts.join(' · ')}</p>
-          {open ? (
-            <NativeChatAutomationCardDetails
-              automationId={automation.id}
-              environmentId={
-                owner?.target.kind === 'environment' ? owner.target.environmentId : null
-              }
-              onEditInChat={owner ? () => draftChangeInChat(owner, automation.name) : null}
+      <NativeChatCardFrame
+        className="native-chat-automation-saved"
+        headingClassName="mb-0.5 text-2xs"
+        avatar={
+          <NativeChatCardAvatar className="native-chat-automation-saved-avatar">
+            <NativeChatAutomationMark
+              mark={automationRowMark(automation)}
+              className="size-4 text-foreground"
             />
+          </NativeChatCardAvatar>
+        }
+        heading={label}
+        trailing={
+          <NativeChatMessageTimestamp
+            timestamp={timestamp}
+            className="text-2xs text-muted-foreground"
+          />
+        }
+      >
+        <div className="flex items-end justify-between gap-3">
+          <button
+            ref={toggle}
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+            className="flex min-w-0 flex-1 items-end justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="min-w-0">
+              <span
+                className="block truncate text-sm font-semibold text-foreground"
+                title={automation.name}
+              >
+                {automation.name}
+              </span>
+              {saving ? (
+                <span className="line-clamp-2 text-2xs text-muted-foreground">{saving}</span>
+              ) : null}
+            </span>
+            <Chevron className="mb-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+          </button>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            aria-label={wording.say('openAutomation')}
+            onClick={() =>
+              openBotAutomation(
+                getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
+                automation.id,
+                null
+              )
+            }
+          >
+            {t('components.native-chat.automationSaved.open', 'Open')}
+          </Button>
+        </div>
+        <NativeChatExpandable open={open}>
+          {open ? (
+            <div className="mt-2 border-t border-border pt-2">
+              <p className={ROW_NOTE}>{facts.join(' · ')}</p>
+              <NativeChatAutomationCardDetails
+                automationId={automation.id}
+                environmentId={
+                  owner?.target.kind === 'environment' ? owner.target.environmentId : null
+                }
+                onEditInChat={owner ? () => draftChangeInChat(owner, automation.name) : null}
+              />
+            </div>
           ) : null}
-          <div className="mt-2">
-            <button
-              type="button"
-              className={RUN_LINK_BUTTON}
-              onClick={() =>
-                openBotAutomation(
-                  getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
-                  automation.id,
-                  null
-                )
-              }
-            >
-              {wording.say('openAutomation')}
-            </button>
-          </div>
-        </>
-      </NativeChatAutomationRowFrame>
+        </NativeChatExpandable>
+      </NativeChatCardFrame>
     </div>
   )
 }

@@ -21962,7 +21962,9 @@
         "deleted": "此自动化已被删除",
         "loadFailed": "无法读取此自动化",
         "openFullPage": "打开页面",
-        "onAgent": "由 {{name}} 运行"
+        "onAgent": "由 {{name}} 运行",
+        "open": "打开",
+        "savedWhen": "已保存：{{when}}"
       },
       "botContext": {
         "soul": "已应用更新后的灵魂",

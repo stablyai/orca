@@ -21701,7 +21701,9 @@
         "deleted": "このオートメーションは削除されました",
         "loadFailed": "このオートメーションを読み込めませんでした",
         "openFullPage": "ページを開く",
-        "onAgent": "{{name}} で実行"
+        "onAgent": "{{name}} で実行",
+        "open": "開く",
+        "savedWhen": "保存時: {{when}}"
       },
       "connectorOffer": {
         "heading": "サービスに接続",

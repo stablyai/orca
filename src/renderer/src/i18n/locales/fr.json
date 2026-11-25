@@ -22514,7 +22514,9 @@
         "deleted": "Cette automatisation a été supprimée",
         "loadFailed": "Impossible de lire cette automatisation",
         "openFullPage": "Ouvrir la page",
-        "onAgent": "avec {{name}}"
+        "onAgent": "avec {{name}}",
+        "open": "Ouvrir",
+        "savedWhen": "Enregistrée : {{when}}"
       },
       "connectorOffer": {
         "heading": "Connecter un service",

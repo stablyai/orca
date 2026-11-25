@@ -22619,7 +22619,9 @@
         "deleted": "Diese Automatisierung wurde gelöscht",
         "loadFailed": "Diese Automatisierung konnte nicht geladen werden",
         "openFullPage": "Seite öffnen",
-        "onAgent": "mit {{name}}"
+        "onAgent": "mit {{name}}",
+        "open": "Öffnen",
+        "savedWhen": "Gespeichert: {{when}}"
       },
       "connectorOffer": {
         "heading": "Dienst verbinden",
