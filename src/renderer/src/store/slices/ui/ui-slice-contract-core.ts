@@ -139,7 +139,6 @@ export type UiViewHistory =
   | 'skills'
   | 'artifacts'
   | 'mobile'
-  | 'shareRequest'
 
 export type UISliceCore = {
   sidebarOpen: boolean
@@ -180,9 +179,6 @@ export type UISliceCore = {
   previousViewBeforeSkills: Exclude<UiViewHistory, 'skills'>
   previousViewBeforeMobile: Exclude<UiViewHistory, 'mobile'>
   previousViewBeforeArtifacts: Exclude<UiViewHistory, 'artifacts'>
-  previousViewBeforeShareRequest: Exclude<UiViewHistory, 'shareRequest'>
-  /** The share request the shareRequest view shows; null when none is open. */
-  shareRequestId: string | null
   setActiveView: (view: UISliceCore['activeView']) => void
   taskPageData: TaskPageData
   taskResumeState: TaskResumeState | undefined
@@ -236,8 +232,6 @@ export type UISliceCore = {
   closeArtifactsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
-  openShareRequestPage: (shareId: string) => void
-  closeShareRequestPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISliceCore['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null

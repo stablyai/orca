@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from 'react'
-import { isSavedTopLevelView } from '../../../../shared/ui-chrome/top-level-view'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store/index'
 import {
@@ -191,8 +190,7 @@ export function usePersistedUIWriter(): void {
 
   // activeView uses a tiny profile preference rather than the multi-MB durable writer (#9002).
   useEffect(() => {
-    // An unsaved view keeps the last saved one, and never reaches a host.
-    if (!persistedUIReady || !isSavedTopLevelView(activeView)) {
+    if (!persistedUIReady) {
       return
     }
     void window.api.ui.set({ activeView })

@@ -190,7 +190,7 @@ export function MobileBotShareFlow(props: ShareFlowProps) {
     entry.kind === 'part' ? entry.title : shareListTitle(entry.list, t)
   if (page && ctx) {
     const backLabel =
-      nav.length > 1 ? pageTitle(nav.at(-2)!) : t('bots.share.shareBot', 'Share bot…')
+      nav.length > 1 ? pageTitle(nav.at(-2)!) : t('bots.share.shareBot', 'Send a copy…')
     return (
       <>
         <SheetHeader

@@ -9,6 +9,7 @@ import {
   TeamShareConnectorPeople,
   type TeamShareFoundByConnector
 } from './BotTeamShareConnectorPeople'
+import type { TeamShareConnectorAdds } from './share-staged-people'
 
 const { updateBot } = vi.hoisted(() => ({
   updateBot: vi.fn(async (): Promise<never> => {
@@ -68,6 +69,7 @@ const entry = {
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot>
 let found: TeamShareFoundByConnector
+const adds: TeamShareConnectorAdds = new Map()
 const report = (update: (all: TeamShareFoundByConnector) => TeamShareFoundByConnector): void => {
   found = update(found)
 }
@@ -77,7 +79,13 @@ function show(query: string): void {
     root.render(
       <ul>
         {/* oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a Slack row reads only these entry fields. */}
-        <TeamShareConnectorPeople bot={bot} entry={entry as never} query={query} report={report} />
+        <TeamShareConnectorPeople
+          bot={bot}
+          entry={entry as never}
+          query={query}
+          report={report}
+          adds={adds}
+        />
       </ul>
     )
   })
@@ -99,7 +107,7 @@ afterEach(() => {
 })
 
 describe('Slack people in the Share dialog', () => {
-  it('finds a typed @name, and a failed add says so with Try again', async () => {
+  it('finds a typed @name, and a failed Share says so with Try again', async () => {
     service = slackService('Everyone else in Acme can’t ask.')
     show('@dan')
     await act(async () => {
@@ -111,10 +119,13 @@ describe('Slack people in the Share dialog', () => {
       'slack:T1\nU1'
     ])
 
+    const member = answer?.status === 'ready' ? answer.member(answer.suggestions[0]!.key) : null
+    expect(member).toMatchObject({ id: 'U1', name: 'Dana' })
+    // Picking saves nothing; Share adds through the connector.
+    expect(updateBot).not.toHaveBeenCalled()
+    show('')
     await act(async () => {
-      if (answer?.status === 'ready') {
-        answer.pick(answer.suggestions[0]!.key)
-      }
+      await adds.get(entry.key)?.([member!])
       await vi.advanceTimersByTimeAsync(0)
     })
     expect(updateBot).toHaveBeenCalled()

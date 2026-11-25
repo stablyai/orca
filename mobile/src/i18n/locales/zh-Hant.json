@@ -5174,7 +5174,21 @@
       }
     },
     "share": {
-      "signInOtherSite": "電腦傳來的是其他網站的登入連結，因此沒有開啟。"
+      "signInOtherSite": "電腦傳來的是其他網站的登入連結，因此沒有開啟。",
+      "invite": {
+        "invitedYou": "{{owner}} 邀請了你",
+        "view": "查看邀請",
+        "sharedWithYou": "{{owner}} 與你分享了它",
+        "runsOn": "{{owner}} 的代理程式，在 {{owner}} 的電腦上執行。",
+        "chatFrom": "你可以在自己的 Orca 和手機上與它聊天。",
+        "ownChats": "你只能看到自己的聊天。",
+        "ownerSees": "{{owner}} 可以看到你與它的聊天。",
+        "actsAs": "它可以在 {{owner}} 的電腦上使用 {{owner}} 的帳號執行操作。",
+        "pauses": "{{owner}} 的電腦關機時它會暫停。",
+        "messagesWait": "訊息會等它恢復後再處理。",
+        "leave": "你可以隨時離開。",
+        "uses": "使用"
+      }
     },
     "settingsPage": {
       "off": "關閉",

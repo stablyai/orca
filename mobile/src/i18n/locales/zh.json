@@ -7754,7 +7754,7 @@
       "copyFailed": "无法复制链接",
       "previewChanged": "预览已更改。请先查看再发布",
       "movedHere": "此链接已在其他地方更新",
-      "shareBot": "分享 bot…",
+      "shareBot": "发送副本…",
       "countOf": "已选 {{picked}}/{{all}}",
       "removeSecret": "移除密钥后才能发布",
       "title": "分享 bot",
@@ -7874,6 +7874,20 @@
         "sharedBy": "由 {{who}} 分享",
         "viewOriginal": "查看原始版本",
         "originalGone": "已不可用"
+      },
+      "invite": {
+        "invitedYou": "{{owner}} 邀请了你",
+        "view": "查看邀请",
+        "sharedWithYou": "{{owner}} 与你共享了它",
+        "runsOn": "{{owner}} 的智能体，运行在 {{owner}} 的电脑上。",
+        "chatFrom": "你可以在自己的 Orca 和手机上与它聊天。",
+        "ownChats": "你只能看到自己的聊天。",
+        "ownerSees": "{{owner}} 可以看到你与它的聊天。",
+        "actsAs": "它可以在 {{owner}} 的电脑上使用 {{owner}} 的账号执行操作。",
+        "pauses": "{{owner}} 的电脑关机时它会暂停。",
+        "messagesWait": "消息会等它恢复后再处理。",
+        "leave": "你可以随时退出。",
+        "uses": "使用"
       }
     },
     "settingsView": {

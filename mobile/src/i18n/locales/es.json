@@ -5292,7 +5292,21 @@
       }
     },
     "share": {
-      "signInOtherSite": "El ordenador envió un enlace de inicio de sesión de otro sitio, así que no se abrió."
+      "signInOtherSite": "El ordenador envió un enlace de inicio de sesión de otro sitio, así que no se abrió.",
+      "invite": {
+        "invitedYou": "{{owner}} te invitó",
+        "view": "Ver invitación",
+        "sharedWithYou": "{{owner}} lo compartió contigo",
+        "runsOn": "Agente de {{owner}}. Se ejecuta en la computadora de {{owner}}.",
+        "chatFrom": "Chateas con él desde tu Orca y tu teléfono.",
+        "ownChats": "Solo ves tus propios chats.",
+        "ownerSees": "{{owner}} puede ver tus chats con él.",
+        "actsAs": "Puede actuar en la computadora de {{owner}}, con las cuentas de {{owner}}.",
+        "pauses": "Se pausa mientras la computadora de {{owner}} está apagada.",
+        "messagesWait": "Los mensajes esperan hasta que vuelva.",
+        "leave": "Puedes salir cuando quieras.",
+        "uses": "Usa"
+      }
     },
     "settingsPage": {
       "off": "Desactivado",

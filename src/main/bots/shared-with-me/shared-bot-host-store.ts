@@ -64,7 +64,6 @@ const SharedBotHostEntry = z.object({
   botId: Text,
   botName: Text,
   ownerName: Text,
-  avatarUrl: z.string().optional(),
   // The host's E2EE key held messages are sealed to; absent, nothing is held for it.
   hostKey: Text.optional(),
   // Ed25519: signs the relay auth and held messages. Curve25519: the host seals its offer to it.

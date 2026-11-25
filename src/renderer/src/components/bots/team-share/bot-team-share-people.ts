@@ -26,8 +26,6 @@ export type TeamSharePerson =
       kind: 'invite'
       key: string
       email: string
-      /** False while the invite email waits on its hourly limit. */
-      emailSent: boolean
     }
   | {
       kind: 'slack'
@@ -76,7 +74,7 @@ export function teamSharePersonName(person: TeamSharePerson): string {
   }
 }
 
-/** The bot's share list as rows, keyed by shareId: an account with its answer, Invited for an email. */
+/** The bot's share list as rows, keyed by shareId: an account with its answer, an invite for an email. */
 export function teamSharePeople(shares: readonly BotShare[] | undefined): TeamSharePerson[] {
   return (shares ?? []).map((share) =>
     share.kind === 'account'
@@ -93,12 +91,7 @@ export function teamSharePeople(shares: readonly BotShare[] | undefined): TeamSh
                 ? 'accepted'
                 : 'pending'
         }
-      : {
-          kind: 'invite',
-          key: share.shareId,
-          email: share.email,
-          emailSent: share.emailedAt !== undefined
-        }
+      : { kind: 'invite', key: share.shareId, email: share.email }
   )
 }
 

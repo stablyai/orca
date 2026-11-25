@@ -1,5 +1,5 @@
-// The Share dialog on the bot's own share list: adds, removes and re-sends through its host, which
-// emails each invite as its signed-in account (the owner row) and keeps whether the email went out.
+// The Share dialog on the bot's own share list: picks wait as chips until Share adds them through its
+// host, which emails each invite as its signed-in account (the owner row); removes and re-sends too.
 // Slack- and GitHub-only people come from, and are edited through, each connector's Who can ask.
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -20,6 +20,12 @@ import {
   type TeamShareFoundByConnector
 } from './BotTeamShareConnectorPeople'
 import { addBotTeamShare, removeBotTeamShare, resendBotTeamShare } from './bot-team-share-rpc'
+import {
+  shareStagedPeople,
+  type StagedPerson,
+  type TeamShareConnectorAdds
+} from './share-staged-people'
+import { useTeamShareClose } from './use-team-share-close'
 
 export function BotTeamShareDialogHost({
   bot,
@@ -31,6 +37,10 @@ export function BotTeamShareDialogHost({
   const t = useTranslate()
   const [query, setQuery] = useState('')
   const [found, setFound] = useState<TeamShareFoundByConnector>({})
+  const [staged, setStaged] = useState<StagedPerson[]>([])
+  const [adds] = useState<TeamShareConnectorAdds>(() => new Map())
+  // While Share saves, its confirmations sit on top; the dialog and its picks stay until it settles.
+  const [sharing, setSharing] = useState(false)
   const connectors = useTeamShareConnectors(bot)
   const account = useBotHostOrcaAccount(bot.hostId)
   const hostLabel = useBotHostLabel(bot.hostId)
@@ -51,8 +61,44 @@ export function BotTeamShareDialogHost({
   )
   const offered = invite === null ? null : [...invite, ...fromConnectors]
   // Nothing shows while a connector still searches and nobody is found yet, so No match never flashes.
+  const stagedPeople = staged.map((entry) => entry.suggestion)
+  const close = useTeamShareClose(stagedPeople, query, onClose, sharing)
+  const stagedKeys = new Set(staged.map((entry) => entry.suggestion.key))
+  const unpicked = offered?.filter((suggestion) => !stagedKeys.has(suggestion.key)) ?? null
   const suggestions: TeamShareSuggestion[] | null =
-    offered !== null && offered.length === 0 && stillSearching ? null : offered
+    unpicked !== null && unpicked.length === 0 && stillSearching ? null : unpicked
+  const stage = (suggestion: TeamShareSuggestion): void => {
+    setQuery('')
+    if (suggestion.kind === 'invite') {
+      setStaged((current) => [...current, { suggestion }])
+      return
+    }
+    for (const [key, search] of Object.entries(found)) {
+      const member = search.status === 'ready' ? search.member(suggestion.key) : undefined
+      if (member) {
+        setStaged((current) => [...current, { suggestion, connector: { key, member } }])
+        return
+      }
+    }
+  }
+  // Only those saved leave the field; a declined or failed one stays picked to try again.
+  const share = async (): Promise<void> => {
+    setSharing(true)
+    const saved = await shareStagedPeople(
+      staged,
+      (emails) =>
+        addBotTeamShare(bot, emails).then(
+          () => true,
+          (error: unknown) => {
+            failed(error)
+            return false
+          }
+        ),
+      adds
+    )
+    setStaged((current) => current.filter((entry) => !saved.has(entry.suggestion.key)))
+    setSharing(false)
+  }
   return (
     <BotTeamShareDialog
       bot={bot}
@@ -62,18 +108,16 @@ export function BotTeamShareDialogHost({
       query={query}
       onQueryChange={setQuery}
       suggestions={suggestions}
-      onAdd={(suggestion) => {
+      staged={stagedPeople}
+      onStage={stage}
+      onUnstage={(suggestion) =>
+        setStaged((current) => current.filter((entry) => entry.suggestion.key !== suggestion.key))
+      }
+      sharing={sharing}
+      onShare={() => void share()}
+      onCancelStaged={() => {
+        setStaged([])
         setQuery('')
-        if (suggestion.kind === 'invite') {
-          void addBotTeamShare(bot, suggestion.email).catch(failed)
-          return
-        }
-        // A Slack or GitHub person is confirmed and saved by their connector's Who can ask.
-        for (const search of searches) {
-          if (search.status === 'ready') {
-            search.pick(suggestion.key)
-          }
-        }
       }}
       onRemove={(person) => void removeBotTeamShare(bot, person.key).catch(failed)}
       onResend={(person) =>
@@ -86,7 +130,7 @@ export function BotTeamShareDialogHost({
           .catch(failed)
       }
       onShareAgain={(person) => void resendBotTeamShare(bot, person.key).catch(failed)}
-      onClose={onClose}
+      onClose={close}
     >
       {connectors.map((entry) => (
         <TeamShareConnectorPeople
@@ -95,6 +139,7 @@ export function BotTeamShareDialogHost({
           entry={entry}
           query={query}
           report={setFound}
+          adds={adds}
         />
       ))}
     </BotTeamShareDialog>

@@ -29615,7 +29615,7 @@
       "allHidden": "All bots are paused and hidden."
     },
     "share": {
-      "shareCopy": "Share a copy…",
+      "shareCopy": "Send a copy…",
       "none": "None",
       "noPurpose": "No purpose yet",
       "updatedAt": "Updated {{date}}",
@@ -29762,11 +29762,22 @@
       "sharedWith": "Shared with {{names}}",
       "ownersComputer": "{{name}}’s computer",
       "requestFailed": "Couldn’t answer the request. Try again.",
-      "requestLine": "{{owner}} shared {{agent}} with you",
       "accept": "Accept",
       "decline": "Decline",
-      "requestPageTitle": "{{owner}} shared {{agent}} with you",
-      "requestRunsOn": "Runs on {{owner}}’s computer"
+      "invite": {
+        "invitedYou": "{{owner}} invited you",
+        "view": "View invite",
+        "sharedWithYou": "{{owner}} shared it with you",
+        "runsOn": "{{owner}}’s agent. It runs on {{owner}}’s computer.",
+        "chatFrom": "You chat with it from your Orca and your phone.",
+        "ownChats": "You see only your own chats.",
+        "ownerSees": "{{owner}} can see your chats with it.",
+        "actsAs": "It can act on {{owner}}’s computer, with {{owner}}’s accounts.",
+        "pauses": "It pauses while {{owner}}’s computer is off.",
+        "messagesWait": "Messages wait until it’s back.",
+        "leave": "You can leave anytime.",
+        "uses": "Uses"
+      }
     },
     "apps": {
       "title": "Add to {{bot}}",
@@ -30677,7 +30688,6 @@
       }
     },
     "teamShare": {
-      "add": "Add",
       "addLabel": "Add people",
       "addPlaceholder": "Email, Slack @name or GitHub login",
       "done": "Done",
@@ -30687,7 +30697,6 @@
       "githubOnly": "GitHub only",
       "invite": "Invite {{email}}",
       "inviteActions": "Invite actions for {{name}}",
-      "invited": "Invited",
       "noMatch": "No match for {{query}}",
       "orcaAccount": "Orca account",
       "owner": "Owner",
@@ -30704,11 +30713,18 @@
       "title": "Share {{name}}",
       "warning": "Anyone you share with can do anything {{name}} can on {{host}}, including using your accounts, files and chats.",
       "you": "{{name}} (you)",
-      "hasAccess": "Has access",
-      "waitingToAccept": "Waiting to accept",
       "declined": "Declined",
       "personActions": "Actions for {{name}}",
-      "shareAgain": "Share again"
+      "shareAgain": "Share again",
+      "cancel": "Cancel",
+      "shareStaged": "Share",
+      "discardOne": "{{name}} won’t get access.",
+      "discardMany": "These people won’t get access.",
+      "discard": "Discard",
+      "keepEditing": "Keep editing",
+      "discardTitleOne": "Discard invite?",
+      "discardTitleMany": "Discard {{count}} invites?",
+      "invited": "Invited"
     }
   },
   "plugins": {

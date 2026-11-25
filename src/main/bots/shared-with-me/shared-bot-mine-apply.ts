@@ -33,13 +33,13 @@ export function sharedBotRequests(
 ): SharedBotRequestView[] {
   return [...(shares?.values() ?? [])]
     .filter((share) => !kept(store, share) && usableHere(store, share.shareId))
-    .map(({ shareId, botId, botName, ownerName, botPurpose, avatarUrl }) => ({
+    .map(({ shareId, botId, botName, ownerName, botPurpose, agentCard }) => ({
       shareId,
       botId,
       botName,
       ownerName,
       ...(botPurpose ? { botPurpose } : {}),
-      ...(avatarUrl ? { avatarUrl } : {})
+      ...(agentCard ? { agentCard } : {})
     }))
 }
 
@@ -61,14 +61,13 @@ export function applySharedBotMine(
   store.remove(new Set(gone.map((entry) => entry.shareId)))
   for (const share of shares.filter((candidate) => kept(store, candidate))) {
     const entry = store.get(share.shareId) ?? newSharedBotHostEntry(share)
-    const { hostKey: _hostKey, avatarUrl: _avatar, ...rest } = entry
+    const { hostKey: _hostKey, ...rest } = entry
     const offer = pinnedSharedBotOffer(entry, share)
     const hostKey = sharedBotHostKey({ offer, hostKey: share.hostKey })
     store.put({
       ...rest,
       botName: share.botName,
       ownerName: share.ownerName,
-      ...(share.avatarUrl ? { avatarUrl: share.avatarUrl } : {}),
       ...(hostKey ? { hostKey } : {}),
       ...(offer ? { offer } : {}),
       held: held.settle(entry.held, read)

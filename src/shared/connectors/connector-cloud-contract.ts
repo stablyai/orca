@@ -15,6 +15,7 @@ import {
 import { WebhookNotice, type ConnectorWebhookTrigger } from '../connector-webhook-contract'
 import { PrEvent } from '../connector-pr-event-contract'
 import { ConnectorAsker } from '../connector-asker-contract'
+import type { AgentCard } from '../bots/agent-card-contract'
 import type { ConnectorWorkLink } from '../connector-work-link-contract'
 import type { AutomationConnectorEventTrigger } from '../automation-event-triggers'
 import type { JournalConnectorReplyOutcome } from '../agent-session/journal/journal-connector-reply'
@@ -292,6 +293,8 @@ export type ConnectorBot = {
   sharedWith?: ConnectorBotShare[]
   /** What it is for, shown to the people it is shared with; absent when it says nothing. */
   botPurpose?: string
+  /** Its mascot and services, for the invite of someone it is shared with; absent when not shared. */
+  agentCard?: AgentCard
 }
 
 /** One event rule of a bot automation here; the cloud sends a match to this machine alone. */
