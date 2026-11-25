@@ -11,21 +11,33 @@ const TaskPage = lazy(() => import('../components/task-page/TaskPage'))
 export function TaskPageMount({ active }: { active: boolean }): React.JSX.Element | null {
   const t = useTranslate()
   const preload = useAppStore((s) => s.settings?.preloadTaskPage === true)
-  // Why: repo selection is seeded only at mount, so a repo-scoped open needs a fresh page.
-  const preselectedRepoId = useAppStore((s) => s.taskPageData.preselectedRepoId)
+  const repoId = useAppStore((s) => s.taskPageData.preselectedRepoId) ?? null
   const [warm, setWarm] = useState(false)
   const warmUp = useCallback(() => setWarm(true), [])
   usePreloadAfterInputQuiet(warmUp, preload)
+  // The kept page's remount key and the repo it was seeded with; null while nothing is kept.
+  const [kept, setKept] = useState<{ key: number; repoId: string | null } | null>(null)
+  const [wasActive, setWasActive] = useState(active)
+  if (active !== wasActive) {
+    setWasActive(active)
+    // Why: repo selection is seeded only at mount, so opening into or out of a repo-scoped view starts fresh, as it does unpreloaded.
+    if (active && kept && (repoId || kept.repoId)) {
+      setKept({ key: kept.key + 1, repoId })
+    }
+  }
 
-  if (!preload) {
-    return active ? <TaskPage /> : null
+  if (!preload || (!active && !warm)) {
+    if (kept) {
+      setKept(null)
+    }
+    return !preload && active ? <TaskPage /> : null
   }
   // An open before the scheduled warm-up still keeps the page once it is left.
-  if (active && !warm) {
+  if (!warm) {
     setWarm(true)
   }
-  if (!active && !warm) {
-    return null
+  if (!kept) {
+    setKept({ key: 0, repoId })
   }
   return (
     <Activity mode={active ? 'visible' : 'hidden'}>
@@ -40,7 +52,7 @@ export function TaskPageMount({ active }: { active: boolean }): React.JSX.Elemen
         )}
       >
         <Suspense fallback={null}>
-          <TaskPage key={preselectedRepoId ?? ''} />
+          <TaskPage key={kept?.key ?? 0} />
         </Suspense>
       </RecoverableRenderErrorBoundary>
     </Activity>

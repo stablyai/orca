@@ -25,6 +25,7 @@ import {
 } from './task-page-linear-cache-selectors'
 import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
 import { useTaskSearchDebouncedApply } from '../../use-task-search-debounced-apply'
+import { useTaskPageLinearIssuePagingReset } from './use-task-page-linear-issue-paging-reset'
 export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) {
   const {
     setTaskResumeState,
@@ -46,9 +47,6 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
       data: retainedLinearRows
     },
     linearIssueLimit,
-    setLinearIssueLimit,
-    setLinearIssuePage,
-    setLinearIssueLoadingTargetPage,
     setLinearIssuesHasMore,
     setLinearLoading,
     setLinearError,
@@ -65,8 +63,6 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     linearDisplayProperties,
     linearTeamPropertyTouched,
     linearRefreshNonce,
-    selectedLinearProject,
-    selectedLinearCustomView,
     lastLinearRequestRef,
     landingLinearRefreshKeysRef
   } = model
@@ -112,21 +108,7 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     taskResumeApplied,
     linearViewPersistReadyRef
   ])
-  useEffect(() => {
-    setLinearIssueLimit(LINEAR_ITEM_LIMIT)
-    setLinearIssuePage(0)
-    setLinearIssueLoadingTargetPage(null)
-  }, [
-    appliedLinearSearch,
-    linearMode,
-    selectedLinearCustomView?.id,
-    selectedLinearProject?.id,
-    selectedLinearWorkspaceId,
-    taskSource,
-    setLinearIssueLimit,
-    setLinearIssueLoadingTargetPage,
-    setLinearIssuePage
-  ])
+  useTaskPageLinearIssuePagingReset(model)
 
   useEffect(() => {
     if (!taskResumeApplied) {

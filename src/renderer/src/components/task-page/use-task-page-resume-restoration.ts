@@ -137,12 +137,21 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     }
     linearContextResumeAttemptedRef.current = true
     let cancelled = false
+    let settled = false
+    // Why: a preloaded Tasks page hidden mid-restore must retry when shown, not keep the abandoned attempt.
+    const cleanup = () => {
+      cancelled = true
+      if (!settled) {
+        linearContextResumeAttemptedRef.current = false
+      }
+    }
     if (context.kind === 'project') {
       void fetchLinearProject(context.id, context.workspaceId, {
         force: true,
         sourceContext: linearTaskSourceContext
       })
         .then((project) => {
+          settled = true
           if (cancelled) {
             return
           }
@@ -166,6 +175,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
           setLinearMode('projects')
         })
         .catch(() => {
+          settled = true
           if (!cancelled) {
             setSelectedLinearProject(null)
             setSelectedLinearProjectDetail(null)
@@ -181,9 +191,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
             })
           }
         })
-      return () => {
-        cancelled = true
-      }
+      return cleanup
     }
     if (context.kind === 'view' && context.model) {
       setLinearMode('views')
@@ -194,6 +202,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
         sourceContext: linearTaskSourceContext
       })
         .then((restoredView) => {
+          settled = true
           if (cancelled) {
             return
           }
@@ -214,6 +223,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
           setSelectedLinearCustomView(restoredView)
         })
         .catch(() => {
+          settled = true
           if (!cancelled) {
             setSelectedLinearCustomView(null)
             setLinearCustomViewsLoading(false)
@@ -228,9 +238,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
             })
           }
         })
-      return () => {
-        cancelled = true
-      }
+      return cleanup
     }
     return undefined
   }, [
