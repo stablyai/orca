@@ -4,6 +4,7 @@ import { automationEditPrecondition } from '../../../shared/automations/automati
 import { assertBotPlacesUnchanged } from '../../automations/bot-automation-place-refs'
 import { automationForClient, unchangedSinceForClient } from './google-rules-for-client'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the fields the save guard compares.
 const stored = {
   id: 'a1',
   rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
@@ -14,7 +15,6 @@ const stored = {
     { id: 'on-pr', source: 'github', event: 'pr_opened', in: [] },
     { id: 'on-mail', source: 'gmail', event: 'new_email', to: ['ops@example.com'] }
   ]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the fields the save guard compares.
 } as unknown as Automation
 
 /** A client that does not read Google rules, like the desktop renderer. */
