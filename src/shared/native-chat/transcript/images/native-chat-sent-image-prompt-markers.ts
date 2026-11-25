@@ -114,6 +114,23 @@ function replaceSentImagePromptMarkers(
   return out.join('\n')
 }
 
+const SPLIT_SENTINEL = '\u0000'
+
+/** Text cut at this send's `[Image #k]` markers: each marker becomes its image number, in place.
+ *  Markers in code and out-of-range numbers stay literal text; text with NUL bytes is not cut. */
+export function splitSentImagePromptMarkers(text: string, imageCount: number): (string | number)[] {
+  if (imageCount === 0 || text.includes(SPLIT_SENTINEL) || !IMAGE_PROMPT_MARKER.test(text)) {
+    return [text]
+  }
+  const marked = replaceSentImagePromptMarkers(text, (number, marker) =>
+    number >= 1 && number <= imageCount ? `${SPLIT_SENTINEL}${number}${SPLIT_SENTINEL}` : marker
+  )
+  return marked
+    .split(SPLIT_SENTINEL)
+    .map((part, index) => (index % 2 === 1 ? Number(part) : part))
+    .filter((part) => part !== '')
+}
+
 /** Restore sent markers as image chips; leave out-of-range numbers literal. */
 export function promptMarkersToImageReferences(text: string, imageIds: readonly string[]): string {
   return replaceSentImagePromptMarkers(text, (number, marker) => {
