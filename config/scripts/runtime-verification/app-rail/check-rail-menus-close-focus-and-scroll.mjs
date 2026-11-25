@@ -130,7 +130,7 @@ try {
       assert.equal(kept, 'INPUT[null]', `${item}: a click into a field keeps focus there`)
     }
 
-    // Only Workspaces, "…", Help and Settings on the rail, so "…" sits near the top of a 120px window.
+    // Only Workspaces, "…" and the account button on the rail, so "…" sits near the top of a 120px window.
     const fewPages = {
       showTasksButton: false,
       showAutomationsButton: false,

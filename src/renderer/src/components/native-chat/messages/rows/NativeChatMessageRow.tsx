@@ -21,6 +21,8 @@ import { NativeChatBotItemNoteRow } from '../../bot-items/NativeChatBotItemNoteR
 import { NativeChatAutomationRunRow } from '../../automation-run/NativeChatAutomationRunRow'
 import { mergedRunFailures } from '../../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
+import { NativeChatSubagentEndingRow } from '../../subagents/NativeChatSubagentEndingRow'
+import { isNativeChatSubagentEndingPresentation } from '../../subagents/native-chat-subagent-ending'
 import { NativeChatBotCreatedRow, NativeChatTookOverRow } from '../../NativeChatBotCreatedRow'
 import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
@@ -313,12 +315,17 @@ function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
   if (notice) {
     return (
       <div ref={rowRef}>
-        <NativeChatNoticeRow
-          block={notice}
-          messageId={message.id}
-          timestamp={message.timestamp}
-          agentName={agentName}
-        />
+        {/* A subagent's last word, shown in its sheet. */}
+        {isNativeChatSubagentEndingPresentation(notice.presentation) ? (
+          <NativeChatSubagentEndingRow block={notice} messageId={message.id} />
+        ) : (
+          <NativeChatNoticeRow
+            block={notice}
+            messageId={message.id}
+            timestamp={message.timestamp}
+            agentName={agentName}
+          />
+        )}
       </div>
     )
   }

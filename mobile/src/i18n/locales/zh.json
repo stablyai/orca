@@ -5714,6 +5714,12 @@
                 "message": "Claude 用量将在下次运行 Claude 时更新"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "运行 Codex 时更新",
+                "message": "Codex 用量将在下次运行 Codex 时更新"
+              }
+            },
             "1804cd8c3f": "正在刷新登录",
             "bf2e739f18": "登录不可用",
             "f8f0f9d8cc": "网络问题",

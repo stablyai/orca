@@ -17,7 +17,9 @@ import { homedir } from 'node:os'
 import { isAbsolute } from 'node:path'
 import { readAgentMcpServers } from './agent-configs/agent-mcp-config-read'
 import { MCP_CONFIG_AGENTS } from './agent-configs/agent-mcp-config-locations'
+import { relayProcessUrl } from '../bots/tool-relay/bot-tool-relay-grants'
 import { mcpServerForLaunch } from './mcp-host-list-launch'
+import { sharedMcpProcessServer } from './mcp-shared-process-servers'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { McpServersError } from './mcp-servers-error'
 
@@ -109,8 +111,21 @@ export async function mcpServerConnection(
   ) {
     return { on: false }
   }
+  const viaRelay = async (address: (origin: string) => string) => {
+    const { origin, token } = await (deps.relay ?? botToolRelay).grant(MCP_HOST_LIST_RELAY_OWNER, {
+      host: folder
+    })
+    return {
+      on: true as const,
+      url: address(origin),
+      headers: { authorization: `Bearer ${token}` }
+    }
+  }
   if (!('url' in server)) {
-    return { on: true, command: server.command, args: server.args, env: server.env ?? {} }
+    // A command Orca runs once for every agent is reached through the relay, as chats reach it.
+    return (await sharedMcpProcessServer(caller.id, folder))?.name === server.name
+      ? viaRelay((origin) => relayProcessUrl(origin, caller.id))
+      : { on: true, command: server.command, args: server.args, env: server.env ?? {} }
   }
   if (!server.credential) {
     // Header values live in the credential store; one still in the file was never moved, so it
@@ -119,12 +134,6 @@ export async function mcpServerConnection(
       ? { on: false }
       : { on: true, url: server.url, headers: {} }
   }
-  const { origin, token } = await (deps.relay ?? botToolRelay).grant(MCP_HOST_LIST_RELAY_OWNER, {
-    host: folder
-  })
-  return {
-    on: true,
-    url: relayToolUrl(origin, 'host', server.credential),
-    headers: { authorization: `Bearer ${token}` }
-  }
+  const { credential } = server
+  return viaRelay((origin) => relayToolUrl(origin, 'host', credential))
 }

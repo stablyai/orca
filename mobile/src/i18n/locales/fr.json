@@ -4528,6 +4528,12 @@
                 "message": "L'utilisation de Claude se met à jour la prochaine fois que Claude s'exécute."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Se met à jour quand Codex s'exécute",
+                "message": "L'utilisation de Codex se met à jour la prochaine fois que Codex s'exécute."
+              }
+            },
             "1804cd8c3f": "Actualisation de la connexion",
             "bf2e739f18": "Connexion indisponible",
             "f8f0f9d8cc": "Problème de réseau",

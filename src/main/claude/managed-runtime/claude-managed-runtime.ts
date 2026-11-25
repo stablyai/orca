@@ -40,18 +40,15 @@ export function claudeManagedPlatform(
   return platform === 'linux' ? `linux-${arch}${musl ? '-musl' : ''}` : null
 }
 
-const CLAUDE_UPDATE_CHANNELS = ['latest', 'stable'] as const
-type ClaudeUpdateChannel = (typeof CLAUDE_UPDATE_CHANNELS)[number]
-
 const channelSettingsSchema = z.object({
-  autoUpdatesChannel: z.enum(CLAUDE_UPDATE_CHANNELS).optional()
+  autoUpdatesChannel: z.enum(['latest', 'stable']).optional()
 })
 
 /** Claude's own `autoUpdatesChannel`; managed settings win over the user's, and Claude defaults to latest. */
 export async function claudeUpdateChannel(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
-): Promise<ClaudeUpdateChannel> {
+): Promise<'latest' | 'stable'> {
   const configDir = env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
   const managed =
     platform === 'darwin'
@@ -73,7 +70,7 @@ export async function claudeUpdateChannel(
 }
 
 export async function fetchClaudeChannelVersion(
-  channel: ClaudeUpdateChannel,
+  channel: 'latest' | 'stable',
   signal?: AbortSignal
 ): Promise<string> {
   const response = await getMainHttpClient().fetch(`${RELEASES}/${channel}`, { signal })

@@ -4,7 +4,7 @@
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-lifecycle/app-environment'
-import { readAgentMcpServers } from './agent-configs/agent-mcp-config-read'
+import { readAgentMcpServerNames, readAgentMcpServers } from './agent-configs/agent-mcp-config-read'
 import { mcpHostServerNameOfEntry } from './agent-files/mcp-agent-file-entry'
 import { MCP_CONFIG_AGENTS, type McpConfigAgent } from './agent-configs/agent-mcp-config-locations'
 
@@ -23,21 +23,26 @@ export async function agentOwnMcpServerNames(
   if (!configAgent) {
     return []
   }
-  // The agent loads Orca's own bridge entries too: one this Orca keeps for a server (Grok's,
-  // Cursor's and Droid's files) already serves it, so the session isn't given it a second time.
-  const servers = await readAgentMcpServers(
-    configAgent,
-    { homeDir: homedir(), env, platform: process.platform },
-    { projectPath: cwd, withOrcaOwned: true }
-  )
+  const context = { homeDir: homedir(), env, platform: process.platform }
+  const inFolder = ({ projectPath }: { projectPath?: string }): boolean =>
+    !projectPath || resolve(projectPath) === resolve(cwd)
+  // Every name the agent's files hold is taken, even one whose entry Orca can't read: Codex would
+  // merge a same-named server into it.
+  const [names, servers] = await Promise.all([
+    readAgentMcpServerNames(configAgent, context, { projectPath: cwd }),
+    // The agent loads Orca's own bridge entries too: one this Orca keeps for a server (Grok's,
+    // Cursor's and Droid's files) already serves it, so the session isn't given it a second time.
+    readAgentMcpServers(configAgent, context, { projectPath: cwd, withOrcaOwned: true })
+  ])
   const userDataPath = hasAppEnvironment() ? getAppEnvironment().getPath('userData') : null
-  return servers
-    .filter(({ source }) => !source.projectPath || resolve(source.projectPath) === resolve(cwd))
+  const bridged = servers
+    .filter(({ source }) => inFolder(source))
     .flatMap(({ configName, server }) => {
       const hostName =
         userDataPath && !('url' in server)
           ? mcpHostServerNameOfEntry(configName, server.env, userDataPath)
           : null
-      return hostName && hostName !== configName ? [configName, hostName] : [configName]
+      return hostName && hostName !== configName ? [hostName] : []
     })
+  return [...new Set([...names.filter(inFolder).map(({ name }) => name), ...bridged])]
 }

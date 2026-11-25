@@ -1,4 +1,5 @@
 import type { AppState } from '../../../types'
+import { orchestrationForStatusRows } from '@/runtime/agent-orchestration/remote-row-orchestration'
 import {
   parseAgentStatusPaneIdentity,
   resolveAgentStatusWorktreeId,
@@ -15,12 +16,8 @@ import {
   IDLE
 } from '../../../../../../shared/sidebar-list/sorting/smart-attention'
 import { classifyPaneKeyLiveness } from '../live-status/agent-status-capacity-eviction'
-import {
-  parsePaneKey,
-  makePaneKey,
-  parseLegacyNumericPaneKey
-} from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
+import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { legacyStatusTitleRowKey } from '@/components/sidebar/workspace-card/activity/legacy-status-title-row-key'
 import {
   FLAGS,
   emptySummary,
@@ -35,7 +32,18 @@ export function stageProjectionRows(
   state: AppState,
   topology: ProjectionTopology
 ) {
-  const { changedKeys, nextTabs, represented, now, nextFallback, ownerOf, sourceEntry } = topology
+  const {
+    changedKeys,
+    nextTabs,
+    represented,
+    now,
+    nextFallback,
+    nextFallbackTabs,
+    ownerOf,
+    sourceEntry
+  } = topology
+  // Remote hosts' contexts join by the same row identity the sidebar uses.
+  const contexts = orchestrationForStatusRows(state)
   const nextSuppressions = new Map<string, readonly string[]>(),
     suppressionDeltas = new Map<string, number>()
   const delta = (key: string, sign: number) =>
@@ -49,20 +57,15 @@ export function stageProjectionRows(
     const identity = parseAgentStatusPaneIdentity(key, represented.get(key))
     if (entry && identity) {
       keys.push(key)
-      const legacy = parseLegacyNumericPaneKey(key),
-        leaf = legacy
-          ? resolveRuntimePaneTitleLeafId(
-              state.terminalLayoutsByTabId[legacy.tabId],
-              legacy.numericPaneId
-            )
-          : null
-      if (leaf) {
-        keys.push(makePaneKey(legacy!.tabId, leaf))
-      }
-      const orchestration = mergeAgentStatusOrchestration(
-        entry,
-        state.runtimeAgentOrchestrationByPaneKey[key]
+      const titleRowKey = legacyStatusTitleRowKey(key, state.terminalLayoutsByTabId, (tabId) =>
+        Array.from(nextFallbackTabs.get(tabId) ?? data.fallbackByTab.get(tabId) ?? [], (rowKey) =>
+          nextFallback.has(rowKey) ? nextFallback.get(rowKey) : data.fallbackRows.get(rowKey)
+        )
       )
+      if (titleRowKey) {
+        keys.push(titleRowKey)
+      }
+      const orchestration = mergeAgentStatusOrchestration(entry, contexts[key])
       const parent = orchestration?.parentPaneKey
       const parsed = parent ? parsePaneKey(parent) : null
       const owner = resolveAgentStatusWorktreeId(entry, { get: ownerOf }, orchestration)
@@ -108,13 +111,7 @@ export function stageProjectionRows(
     const suppressed = (data.suppressed.get(key) ?? 0) + (suppressionDeltas.get(key) ?? 0) > 0
     const rows =
       entry && displayTab && worktreeId
-        ? buildExplicitWorktreeAgentRows(
-            entry,
-            displayTab,
-            now,
-            hasLivePty,
-            state.runtimeAgentOrchestrationByPaneKey
-          )
+        ? buildExplicitWorktreeAgentRows(entry, displayTab, now, hasLivePty, contexts)
         : fallback && worktreeId && !suppressed
           ? [fallback]
           : []
@@ -123,7 +120,7 @@ export function stageProjectionRows(
       ? resolveAgentStatusWorktreeId(
           entry,
           { get: ownerOf },
-          mergeAgentStatusOrchestration(entry, state.runtimeAgentOrchestrationByPaneKey[key])
+          mergeAgentStatusOrchestration(entry, contexts[key])
         )
       : undefined
     if (entry && summaryWorktreeId && identity) {
@@ -143,8 +140,7 @@ export function stageProjectionRows(
         const parent =
           entry.state === 'done'
             ? parseAgentStatusPaneIdentity(
-                mergeAgentStatusOrchestration(entry, state.runtimeAgentOrchestrationByPaneKey[key])
-                  ?.parentPaneKey
+                mergeAgentStatusOrchestration(entry, contexts[key])?.parentPaneKey
               )
             : null
         if (parent && ownerOf(parent.tabId) === summaryWorktreeId) {

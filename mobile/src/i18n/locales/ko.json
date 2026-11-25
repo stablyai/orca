@@ -4597,6 +4597,12 @@
                 "message": "Claude 사용량은 다음에 Claude를 실행할 때 업데이트됩니다."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Codex 실행 시 업데이트됨",
+                "message": "Codex 사용량은 다음에 Codex를 실행할 때 업데이트됩니다."
+              }
+            },
             "1804cd8c3f": "로그인 새로 고치는 중",
             "bf2e739f18": "로그인할 수 없음",
             "f8f0f9d8cc": "네트워크 문제",

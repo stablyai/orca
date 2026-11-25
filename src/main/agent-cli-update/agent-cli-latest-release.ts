@@ -115,25 +115,21 @@ async function refreshClaudeLatest(): Promise<string | null> {
   return CLAUDE_MANAGED_RUNTIME.pin()?.version ?? null
 }
 
-async function claudeChannelLatest(channel: 'stable'): Promise<string> {
-  const version = await fetchClaudeChannelVersion(
-    channel,
-    AbortSignal.timeout(RELEASE_LOOKUP_TIMEOUT_MS)
-  )
+async function claudeStableRelease(): Promise<string> {
+  const signal = AbortSignal.timeout(RELEASE_LOOKUP_TIMEOUT_MS)
+  const version = await fetchClaudeChannelVersion('stable', signal)
   if (!VERSION.test(version)) {
-    throw new Error(`Claude's ${channel} channel serves an unexpected version ${version}`)
+    throw new Error(`Claude's stable channel serves an unexpected version ${version}`)
   }
   return version
 }
 
 export async function latestAgentCliRelease(source: AgentCliReleaseSource): Promise<string | null> {
   switch (source.kind) {
-    case 'claude': {
-      const { channel } = source
-      return channel
-        ? lookUpVersion(`Claude ${channel}`, () => claudeChannelLatest(channel))
+    case 'claude':
+      return source.channel
+        ? lookUpVersion('Claude stable', claudeStableRelease)
         : refreshClaudeLatest()
-    }
     case 'npm':
       return lookUpVersion(`npm ${source.package}`, () => npmLatest(source.package))
     case 'github':

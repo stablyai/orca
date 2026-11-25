@@ -1,7 +1,6 @@
 // Finds and runs updates for the user's own agent CLIs on this host.
 
 import { homedir } from 'node:os'
-import { runProcess } from '@orca/process-host'
 import {
   isAgentCliUpdateAgent,
   LEGACY_AGENT_CLI_UPDATE_AGENTS,
@@ -21,16 +20,11 @@ import {
 } from './agent-cli-own-install'
 import { latestAgentCliRelease } from './agent-cli-latest-release'
 import { readModelsNeedingCliUpdate } from './agent-cli-model-requirements'
-import {
-  agentCliUpdateDefinition,
-  agentCliUpdatePlan,
-  type AgentCliUpdatePlan
-} from './agent-cli-update-agents'
+import { agentCliUpdateDefinition, type AgentCliUpdatePlan } from './agent-cli-update-agents'
 import { checkThroughGate, updateThroughGate } from './agent-cli-update-gate'
+import { runAgentCliUpdater, type UpdaterRun } from './agent-cli-updater-process'
 import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
 
-const UPDATE_TIMEOUT_MS = 10 * 60_000
-const UPDATE_OUTPUT_BYTES = 64 * 1024
 // An unread version (e.g. a slow first start) is asked again after this, not on every check.
 const UNREAD_RETRY_MS = 10 * 60_000
 // Each --version starts a full CLI runtime (often Node); a dozen at once spikes memory and CPU.
@@ -87,16 +81,16 @@ async function installedVersion(
   return version
 }
 
+function updatePlan(agent: AgentCliUpdateAgent, cli: OwnAgentCli, version: string) {
+  return agentCliUpdateDefinition(agent).plan(version, cli.realPath)
+}
+
 function planCommand(cli: OwnAgentCli, plan: AgentCliUpdatePlan): string {
   return plan.runnable ? [cli.command, ...plan.args].join(' ') : plan.command
 }
 
-function latestRelease(
-  agent: AgentCliUpdateAgent,
-  installed: string,
-  installPath: string
-): Promise<string | null> {
-  return latestAgentCliRelease(agentCliUpdateDefinition(agent).latest(installed, installPath))
+function latestRelease(agent: AgentCliUpdateAgent, installed: string, cli: OwnAgentCli) {
+  return latestAgentCliRelease(agentCliUpdateDefinition(agent).latest(installed, cli.realPath))
 }
 
 async function behindRelease(
@@ -106,7 +100,7 @@ async function behindRelease(
 ): Promise<{ version: string; latest: string } | null> {
   const version = await installedVersion(agent, cli, recheck)
   // Which release line is latest can depend on the installed major.
-  const latest = version ? await latestRelease(agent, version, cli.installPath) : null
+  const latest = version ? await latestRelease(agent, version, cli) : null
   return version && latest && compareAppVersions(version, latest) < 0 ? { version, latest } : null
 }
 
@@ -127,7 +121,7 @@ async function readAgentCliUpdate(
     return null
   }
   const { version, latest } = behind
-  const plan = agentCliUpdatePlan(agent, version, cli)
+  const plan = updatePlan(agent, cli, version)
   const models = await readModelsNeedingCliUpdate(agent, version, latest)
   return {
     agent,
@@ -213,25 +207,19 @@ async function updateAgentCli(
   }
   const version = await installedVersion(agent, cli)
   // An unread version compares equal to every gate, so the agent's own update still runs.
-  const plan = agentCliUpdatePlan(agent, version ?? '', cli)
+  const plan = updatePlan(agent, cli, version ?? '')
   if (!plan.runnable) {
     return { ok: false, output: `Run this to update:\n${plan.command}` }
   }
   const command = planCommand(cli, plan)
-  let result: Awaited<ReturnType<typeof runProcess>>
+  let result: UpdaterRun
   try {
-    result = await runProcess(
-      {
-        program: cli.program,
-        args: [...plan.args],
-        cwd: homedir(),
-        env: cli.env,
-        timeoutMs: UPDATE_TIMEOUT_MS,
-        maxOutputBytes: UPDATE_OUTPUT_BYTES,
-        terminationBarrier: true
-      },
-      'tail'
-    )
+    result = await runAgentCliUpdater({
+      program: cli.program,
+      args: plan.args,
+      cwd: homedir(),
+      env: cli.env
+    })
   } catch (error) {
     return { ok: false, output: error instanceof Error ? error.message : String(error), command }
   }
@@ -242,15 +230,17 @@ async function updateAgentCli(
   versions.delete(cli.program)
   versions.delete(updated.program)
   const after = await installedVersion(agent, updated)
-  const output = [result.stdout, result.stderr]
+  const output = [result.stdout, result.stderr, result.stoppedBecause ?? '']
     .map((text) => text.trim())
     .filter(Boolean)
     .join('\n')
-  const latest = after ? await latestRelease(agent, after, updated.installPath) : null
+  const latest = after ? await latestRelease(agent, after, updated) : null
   // The version decides when readable: a failed run that leaves the CLI at the latest release is done
   // (e.g. a wrapper around a desktop app's CLI), and a clean exit still behind it (e.g. Homebrew) is not.
   const current =
-    after && latest ? compareAppVersions(after, latest) >= 0 : result.code === 0 && !result.timedOut
+    after && latest
+      ? compareAppVersions(after, latest) >= 0
+      : result.code === 0 && result.stoppedBecause === null
   return current ? { ok: true } : { ok: false, output, command }
 }
 

@@ -150,7 +150,11 @@ export async function setMcpAgentFileAllowed(
  */
 export async function addMcpServer(
   given: BotToolServer,
-  { nameGiven, signal }: { nameGiven: boolean; signal?: AbortSignal },
+  {
+    nameGiven,
+    signal,
+    workspaces
+  }: { nameGiven: boolean; signal?: AbortSignal; workspaces?: McpServerWorkspaces },
   folder = mcpHostListFolder()
 ): Promise<McpServer> {
   const { server, signIn } = await classifyAddedBotTool(given, signal)
@@ -163,7 +167,7 @@ export async function addMcpServer(
         throw nameTaken(server.name)
       }
       const named = { ...server, name: freeBotToolName(server.name, taken) }
-      return [...entries, { server: named, extras: { id }, id }]
+      return [...entries, { server: named, extras: workspaces ? { id, workspaces } : { id }, id }]
     },
     { credentials: signIn }
   )

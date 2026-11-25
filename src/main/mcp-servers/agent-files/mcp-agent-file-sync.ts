@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 import { MCP_FILE_AGENTS, type McpFileAgent } from '../../../shared/mcp-servers/mcp-servers'
-import { prependOrcaCliDirToChildPath } from '../../cli/launchers/orca-cli-child-path'
+import { thisAppOrcaCliLauncher } from '../../cli/launchers/this-app-orca-cli-launcher'
 import {
   readAgentConfigText,
   writeAgentConfigIfUnchanged
@@ -242,18 +242,6 @@ async function publish(
   return await writeAgentConfigIfUnchanged(path, next, current)
 }
 
-/** This app's CLI by absolute path, as its own terminals get it. */
-function thisAppLauncher(userDataPath: string): string | null {
-  return prependOrcaCliDirToChildPath(
-    {},
-    {
-      isPackaged: getAppEnvironment().isPackaged(),
-      userDataPath,
-      resourcesPath: process.resourcesPath ?? null
-    }
-  )
-}
-
 /**
  * Syncs now and after every change to this host's list, one run at a time; a change during a run
  * runs it once more. Returns the stop.
@@ -262,7 +250,7 @@ export function startMcpAgentFileSync(): () => void {
   const folder = mcpHostListFolder()
   const userDataPath = getAppEnvironment().getPath('userData')
   // Once: this run of Orca's launcher doesn't move.
-  const launcher = thisAppLauncher(userDataPath)
+  const launcher = thisAppOrcaCliLauncher(userDataPath)
   const deps = (): McpAgentFileSyncDeps => ({
     folder,
     userDataPath,

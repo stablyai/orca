@@ -54,9 +54,13 @@ async function hostServersFor(
   // Read before the list: a write in between makes this launch look stale, never current.
   const epoch = botToolsEpoch(folder)
   try {
-    const { servers, digests } = await mcpServersWithDigestsForLaunch(agent, workspace, folder)
+    const { servers, sharedProcesses, digests } = await mcpServersWithDigestsForLaunch(
+      agent,
+      workspace,
+      folder
+    )
     return {
-      host: { folder, servers },
+      host: { folder, servers, sharedProcesses },
       launched: { folder, agent, workspace, digests, epoch }
     }
   } catch (error) {

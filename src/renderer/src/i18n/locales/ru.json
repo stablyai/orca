@@ -2103,7 +2103,8 @@
         "projectRemoved": "Проект удалён из Orca.",
         "folderWorkspaceRemoved": "Рабочее пространство папки удалено.",
         "chatStillStarting": "Чат ещё запускается. Повторите чуть позже.",
-        "chatOpenFailed": "Не удалось открыть чат.",
+        "chatOpenFailed": "Не удалось открыть чат",
+        "chatOpenDismiss": "Скрыть",
         "chatOpenRetry": "Повторить",
         "chatOpenShowDetails": "Показать подробности",
         "chatOpenHideDetails": "Скрыть подробности"
@@ -5204,6 +5205,12 @@
               "waiting": {
                 "label": "Обновится при запуске Claude",
                 "message": "Данные об использовании Claude обновятся при следующем запуске Claude."
+              }
+            },
+            "codex": {
+              "waiting": {
+                "label": "Обновится при запуске Codex",
+                "message": "Данные об использовании Codex обновятся при следующем запуске Codex."
               }
             },
             "justNow": "только что",
@@ -20011,7 +20018,8 @@
         "checking": "Проверяем готовность {{agent}} на этом сервере…",
         "cliInstall": "Установить",
         "cliRecheck": "Проверить снова",
-        "openAgentSettings": "Открыть настройки"
+        "openAgentSettings": "Открыть настройки",
+        "cliRecheckFailed": "Не удалось проверить установленных агентов на этом сервере. Повторите попытку."
       },
       "reasoning": "Рассуждения",
       "failureWords": {
@@ -20820,11 +20828,9 @@
         "started_other": "Запущено {{count}} дочернего агента",
         "ran_one": "Работал {{count}} дочерний агент",
         "ran_other": "Работало {{count}} дочернего агента",
-        "backToMain": "Назад к основному агенту",
         "mainAgent": "Основной агент",
-        "promptFromMain": "Запрос от основного агента",
-        "backTo": "Назад: {{value0}}",
         "path": "Путь дочернего агента",
+        "backTo": "Назад: {{value0}}",
         "stateHeading": {
           "completed": "Завершён",
           "working": "Работает",
@@ -20840,7 +20846,14 @@
         "started_few": "Запущено {{count}} дочерних агента",
         "started_many": "Запущено {{count}} дочерних агентов",
         "ran_few": "Работали {{count}} дочерних агента",
-        "ran_many": "Работали {{count}} дочерних агентов"
+        "ran_many": "Работали {{count}} дочерних агентов",
+        "prompt": "Промпт",
+        "result": "Результат",
+        "close": "Закрыть",
+        "needsYou": "Нужен ваш ответ",
+        "agentNeedsYou": "{{name}} ждёт вашего ответа",
+        "mainNeedsYou": "Основной агент ждёт вашего ответа",
+        "show": "Показать"
       },
       "rewind": {
         "unsupported": "В этом чате нельзя вернуться к предыдущему сообщению.",
@@ -21005,6 +21018,9 @@
         "failed": "Не удалось продолжить чат. Повторите попытку или отправьте сообщение.",
         "explanation": "При продолжении агент сначала проверит, завершился ли его последний шаг."
       },
+      "signIn": {
+        "title": "Войдите в {{agent}}, чтобы начать чат"
+      },
       "claudeSignIn": {
         "signingIn": "Вход…"
       },
@@ -21167,8 +21183,35 @@
         "modelApplyFailed": "Не удалось применить модель {{value}}.",
         "effortApplyFailed": "Не удалось применить глубину рассуждений {{value}}."
       },
+      "githubPeek": {
+        "updated": "обновлено: {{time}}",
+        "oneComment": "1 комментарий",
+        "comments": "Комментарии: {{count}}",
+        "unavailable": "Предпросмотр недоступен.",
+        "retry": "Повторить",
+        "retryKeyHint": "Предпросмотр недоступен. Нажмите {{key}}, чтобы повторить."
+      },
+      "webPeek": {
+        "unavailable": "Нет предпросмотра для этой страницы."
+      },
       "workers": {
         "stopUnconfirmed": "Orca не удалось подтвердить остановку исполнителя."
+      },
+      "connectorAsker": {
+        "anApp": "Приложение",
+        "directMessage": "Личные сообщения: {{source}}",
+        "earlierMessages": "Более ранних сообщений в обсуждении: {{count}}",
+        "earlierMessages_one": "{{count}} более раннее сообщение в обсуждении",
+        "earlierMessages_few": "{{count}} более ранних сообщения в обсуждении",
+        "earlierMessages_many": "{{count}} более ранних сообщений в обсуждении",
+        "earlierMessages_other": "{{count}} более ранних сообщения в обсуждении",
+        "groupMessage": "Групповые личные сообщения: {{source}}",
+        "label": "{{name}} · {{place}}",
+        "noAccess": "нет доступа",
+        "open": "Открыть в {{source}}",
+        "someone": "Кто-то",
+        "via": "{{name}} · через {{bot}}",
+        "you": "Вы"
       },
       "settings": "Настройки чата",
       "textAttachmentPreview": {
@@ -21267,6 +21310,20 @@
         "questionNotSentDetail": "Ваш вопрос остался в этом чате. Отправьте /btw снова, чтобы повторить попытку.",
         "questionUnconfirmed": "{{agent}} не удалось подтвердить, что побочный чат получил ваш вопрос",
         "questionUnconfirmedDetail": "Проверьте побочный чат, прежде чем спрашивать снова. Ваш вопрос остался в этом чате."
+      },
+      "urlRequest": {
+        "title": "Запрошен вход",
+        "open": "Открыть страницу входа",
+        "decline": "Отклонить",
+        "opened": "Страница входа открыта в браузере.",
+        "openAgain": "Открыть снова",
+        "finished": "Вход завершён",
+        "finishedWith": "Вход завершён · {{message}}"
+      },
+      "offerCard": {
+        "notNow": "Не сейчас",
+        "dismiss": "Скрыть",
+        "notSent": "Не удалось отправить. Повторите попытку."
       },
       "memoryUpdated": {
         "added": "Добавлено",
@@ -21391,6 +21448,44 @@
         "waiting": "Ожидание",
         "waitsFor": "Ожидает"
       },
+      "slackMirror": {
+        "ownDm": "Также публикуется в ваших личных сообщениях с {{bot}}",
+        "theirDm": "Также публикуется в личных сообщениях с {{bot}} (собеседник: {{name}})",
+        "someonesDm": "Также публикуется в личных сообщениях с {{bot}}",
+        "channel": "Также публикуется в обсуждении в {{channel}}",
+        "thread": "Также публикуется в обсуждении в Slack",
+        "offUnavailable": "Только в Orca · обсуждение недоступно",
+        "offNotInChannel": "Только в Orca · бота нет в канале",
+        "off": "Только в Orca",
+        "shortDm": "Личные сообщения Slack",
+        "shortChannel": "Обсуждение в {{channel}}",
+        "shortThread": "Обсуждение в Slack",
+        "headingDm": "Личные сообщения Slack",
+        "headingChannel": "Обсуждение в Slack, канал: {{channel}}",
+        "headingThread": "Обсуждение в Slack",
+        "detailUnavailable": "Это обсуждение в Slack удалено или его канал архивирован.",
+        "detailRemovedFrom": "{{bot}} больше не состоит в {{channel}}.",
+        "detailRemoved": "{{bot}} больше не состоит в канале.",
+        "detailFallback": "Публикуется от имени {{bot}} с указанием вашего имени. Обновите в Slack, чтобы публиковать под вашим именем.",
+        "detailOwnDm": "Ваши сообщения и ответы от {{bot}}. Эти личные сообщения видите только вы. Вызовы инструментов и исполнители остаются в Orca.",
+        "detailTheirDm": "Ваши сообщения и ответы от {{bot}}. Собеседник ({{name}}) видит их в своих личных сообщениях. Вызовы инструментов и исполнители остаются в Orca.",
+        "detailSomeonesDm": "Ваши сообщения и ответы от {{bot}}. Собеседник в этих личных сообщениях видит их. Вызовы инструментов и исполнители остаются в Orca.",
+        "detailThread": "Ваши сообщения и ответы от {{bot}}. Их видят все участники канала. Вызовы инструментов и исполнители остаются в Orca.",
+        "detailExternal": "Ваши сообщения и ответы от {{bot}}. Их видят все участники {{channel}}, в том числе люди вне вашего рабочего пространства. Вызовы инструментов и исполнители остаются в Orca.",
+        "detailChannel": "Ваши сообщения и ответы от {{bot}}. Их видят все участники {{channel}}. Вызовы инструментов и исполнители остаются в Orca.",
+        "posting": "Публикация в Slack…",
+        "failedFile": "Не опубликовано в Slack · файл слишком большой",
+        "failedEmpty": "Не опубликовано в Slack · нечего публиковать",
+        "failedTooLong": "Не опубликовано в Slack · сообщение слишком длинное",
+        "failed": "Не опубликовано в Slack",
+        "delete": "Удалить из Slack",
+        "postedFrom": "Опубликовано из Orca: {{place}}",
+        "retry": "Повторить",
+        "rewindStays": "Сообщения, уже отправленные в Slack, там останутся.",
+        "switch": "Публиковать этот чат в Slack",
+        "tooltipOff": "Ваши сообщения остаются только в Orca",
+        "tooltipOn": "Ваши сообщения и ответы от {{bot}} также публикуются в этом обсуждении в Slack"
+      },
       "typedBy": {
         "anotherComputer": "другой компьютер",
         "fromVia": "От {{name}} через {{computer}}",
@@ -21402,8 +21497,83 @@
         "running": "Выполняется",
         "failed": "Сбой"
       },
+      "signInNotice": {
+        "signedIn": "Вход выполнен. Отправьте снова.",
+        "notSent": "Не отправлено: вход в {{agent}} не выполнен.",
+        "notSignedIn": "Вход в {{agent}} не выполнен.",
+        "opensAntigravitySettings": "Открывает «Настройки → Учётные записи → Antigravity»",
+        "signIn": "Войти",
+        "signsInClaudeAccount": "Выполняет вход в эту учётную запись Claude",
+        "runsCommand": "Выполняет {{command}} в терминале",
+        "thenSlashCommand": "Войдите, затем введите {{slashCommand}}.",
+        "signsInAgy": "Выполняет вход в agy через Google в браузере"
+      },
+      "antigravityAuth": {
+        "chipLabel": "Способ входа в Antigravity: {{method}}. Изменить",
+        "chipTitle": "Способ входа в Antigravity: {{method}}",
+        "menuTitle": "Способ входа в Antigravity",
+        "detected": "Обнаружено",
+        "settings": "Настройки входа…",
+        "switched": "Теперь Antigravity использует способ входа: {{method}}.",
+        "switchFailed": "Orca не удалось изменить способ входа в Antigravity. Повторите попытку.",
+        "confirmTitle": "Сменить способ входа на «{{method}}»?",
+        "confirmBody": "Чаты Antigravity, запущенные на этом сервере, перезапустятся. Ответ в процессе остановится, но ваши беседы сохранятся.",
+        "cancel": "Отмена",
+        "confirm": "Сменить",
+        "otherWays": "Вместо этого можно войти с помощью API-ключа или gcloud.",
+        "moreOptions": "Другие варианты…",
+        "useApiKey": "Использовать ваш API-ключ Gemini",
+        "useGoogle": "Использовать ваш вход через Google",
+        "apiKeySaved": "Сохранён в Orca",
+        "googleFound": "Вы уже входили через Google на этом сервере",
+        "askApiKeyEnvironment": "Использовать вместо этого API-ключ Gemini из вашего окружения?",
+        "askApiKeySaved": "Использовать вместо этого API-ключ Gemini, сохранённый в Orca?",
+        "askGcloud": "Использовать вместо этого ваш вход через gcloud (проект {{project}})?",
+        "askGoogle": "Использовать вместо этого ваш вход через Google?",
+        "noSubscription": "У этой учётной записи Google нет подписки на Antigravity.",
+        "ineligible": "Эта учётная запись Google не может использовать Antigravity.",
+        "signedOut": "Вход в Antigravity не выполнен.",
+        "refused": "Google отклонил учётные данные этого чата.",
+        "usageLimit": "Для этого входа достигнут лимит использования.",
+        "signInGoogle": "Войти через Google",
+        "yourAgy": "Ваш agy",
+        "yourAgyVersion": "Ваш agy · v{{version}}",
+        "orcasAgy": "agy из Orca",
+        "orcasAgyVersion": "agy из Orca · v{{version}}",
+        "runsOn": "Запускается через: {{program}}",
+        "keepsOwnLogin": "Этот чат сохраняет собственный вход agy через Google. Новые чаты используют способ входа: {{method}}.",
+        "apiKeyEnvironment": "Из вашего окружения",
+        "foundGcloud": "Ваш вход через gcloud тоже подходит.",
+        "foundKey": "Ваш API-ключ Gemini тоже подходит.",
+        "foundKeyAndGcloud": "Ваш API-ключ Gemini и вход через gcloud тоже подходят.",
+        "gcloudProject": "Проект: {{project}}",
+        "otherWaysMenu": "Другие способы входа…",
+        "useGcloudLogin": "Использовать ваш вход через gcloud",
+        "otherWaysLabel": "Другие способы входа"
+      },
+      "pairedServerAsk": {
+        "always": "Всегда разрешать: {{server}}",
+        "deny": "Отклонить",
+        "once": "Разрешить один раз",
+        "thisServer": "этот сервер",
+        "title": "Запрос на отправку сообщения на этом компьютере: {{from}} → {{to}}",
+        "titlePills": "Запрос на отправку сообщения на этом компьютере: <from>{{from}}</from> → <to>{{to}}</to>"
+      },
+      "clientAsk": {
+        "declined": "Отклонено",
+        "notConnected": "Не был подключён",
+        "pairedComputer": "Сопряжённый компьютер",
+        "waitingForYou": "Ждёт вас",
+        "waitingOn": "Ожидание подтверждения: {{computer}}"
+      },
       "dock": {
         "label": "Поле сообщения и запросы"
+      },
+      "googleOffer": {
+        "useAccount": "Использовать {{email}} для Google.",
+        "reconnect": "Подключить {{email}} заново",
+        "use": "Использовать {{email}}",
+        "staysDefault": "По умолчанию остаётся {{email}}"
       },
       "workerDock": {
         "commandOutputPending": "Вывод команды пока недоступен.",
@@ -21474,6 +21644,17 @@
         "unreadDetail": "Исполнители появятся здесь после загрузки",
         "chipLabel": "{{label}}, последний: {{title}}"
       },
+      "webhookSetup": {
+        "heading": "Настройка вебхука",
+        "keyAndSecret": "Ключ и секрет подписи",
+        "copiedReceipt": "✓ URL скопирован",
+        "signingSecret": "Секрет подписи",
+        "addSecret": "Добавить…",
+        "noSecret": "Нет",
+        "sampleCall": "Пример вызова",
+        "sampleNote": "Выполняет настоящий запуск",
+        "send": "Отправить"
+      },
       "automationSaved": {
         "resultsInRuns": "результаты в каждом запуске",
         "paused": "приостановлена",
@@ -21493,6 +21674,22 @@
         "loadFailed": "Не удалось прочитать эту автоматизацию",
         "openFullPage": "Открыть страницу",
         "onAgent": "на {{name}}"
+      },
+      "connectorOffer": {
+        "heading": "Подключите сервис",
+        "connectService": "Подключить {{service}}",
+        "connected": "Подключено",
+        "connectedIn": "Подключено: {{places}}",
+        "pausedStatus": "Приостановлено",
+        "addOrg": "Добавить организацию",
+        "addWorkspace": "Добавить рабочее пространство",
+        "githubAsYou": "Он также может работать в GitHub от вашего имени через ваш вход в gh.",
+        "linearAsYou": "Он также может работать в Linear от вашего имени через ваш вход в Linear в Orca."
+      },
+      "toolAdded": {
+        "removed": "Удалено",
+        "remove": "Удалить",
+        "added": "Добавлено"
       },
       "usageLimitActions": {
         "handOff": "Передать агенту"
@@ -21522,8 +21719,10 @@
           "finish": "Завершить",
           "openAgain": "Открыть снова",
           "addressLabel": "Адрес страницы входа",
-          "unfinished": "Вход ещё не завершён. Завершите его на открывшейся странице, затем нажмите «Готово»."
+          "unfinished": "Вход ещё не завершён. Завершите его на открывшейся странице, затем нажмите «Готово».",
+          "pastePlaceholder": "http://localhost:…"
         },
+        "manage": "Управление серверами MCP",
         "title": "Серверы MCP",
         "close": "Закрыть",
         "loading": "Загрузка…",
@@ -22407,9 +22606,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Оставить открытым",
-        "bannerRunning": "Воркер оркестрации · Закроется через 2 минуты после завершения",
-        "bannerFinished": "Воркер оркестрации завершён · Закроется через {{countdown}}",
-        "bannerFinishedStatus": "Воркер оркестрации завершён · Скоро закроется",
+        "bannerRunning": "Закроется через {{minutes}} мин после завершения",
+        "bannerFinished": "Завершён · закроется через {{countdown}}",
+        "bannerFinishedStatus": "Воркер завершён · скоро закроется",
         "boundRunning": "Закроется вместе с: {{worker}}",
         "boundFinished": "{{worker}} завершён · Закроется через {{countdown}}",
         "boundFallbackName": "воркер"
@@ -25647,7 +25846,9 @@
       "untitled": "Новый чат",
       "loading": "Загрузка чатов…",
       "readFailed": "Не удалось прочитать чаты этого бота.",
-      "searchRetry": "Повторить попытку"
+      "searchRetry": "Повторить попытку",
+      "older": "Показать старые: {{count}}",
+      "hideOlder": "Скрыть старые"
     },
     "needs": {
       "chat": "Ваш чат с {{name}}",

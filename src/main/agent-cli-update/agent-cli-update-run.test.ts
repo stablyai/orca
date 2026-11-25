@@ -26,7 +26,7 @@ import { checkAgentCliUpdates, runAgentCliUpdate } from './agent-cli-update-serv
 
 const cliAt = (program: string) => ({
   program,
-  installPath: program,
+  realPath: program,
   env: {},
   command: 'claude',
   version: { prefixArgs: [], env: {} }
