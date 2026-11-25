@@ -97,6 +97,8 @@ export class SharedMcpProcesses {
     const { req, res, body, signal } = request
     // A deleted bot's token, or the relay closing, cuts its open calls and streams here too.
     const cut = (): void => void res.destroy()
+    // One revoked while the relay read its body never reaches the child.
+    signal?.throwIfAborted()
     signal?.addEventListener('abort', cut, { once: true })
     try {
       const parsed = body === undefined ? undefined : parseJson(body)
