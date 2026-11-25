@@ -38,6 +38,10 @@ export type BotWhoCanAskFound = {
   searchPlaceholder?: string
   /** What this search could not cover, shown in place of the generic incomplete line. */
   note?: string
+  /** Use this note when a visible result already explains the list's limitation. */
+  noteWithTag?: { tag: string; note: string | undefined }
+  /** The people list's original read time, when shown in the picker footer. */
+  snapshot?: string
   /** What an empty result says, when the search knows better than the service's `noMatch`. */
   empty?: { title: string; detail: string }
   /** Part of this search failed and can be asked again in place (BotWhoCanAskSession.retry). */

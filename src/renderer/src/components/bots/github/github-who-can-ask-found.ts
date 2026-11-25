@@ -11,8 +11,8 @@ import {
 } from '../../../../../shared/connector-bot-github-contract'
 import type { BotSlackResult } from '../../../../../shared/connector-bot-slack-contract'
 import { rankGitHubPeople } from '../../../../../shared/bots/github-people-rank'
-import type { GitHubPerson } from '../../../../../shared/bots/github-people-rank'
 import type { GitHubPeopleScope } from '../../../../../shared/bots/github-people-scope'
+import { supersededGitHubPeople } from './github-who-can-ask-identities'
 import type { BotWhoCanAskFound } from '../BotWhoCanAskList'
 
 /** People listed at once; typing narrows the rest. */
@@ -47,19 +47,6 @@ type Answer = {
 
 /** A reused list older than this is worth mentioning on every search. */
 export const STALE_LIST_MS = 60 * 60_000
-
-export function supersededGitHubPeople(
-  people: readonly GitHubPerson[],
-  live: ConnectorGitHubUsersResponse['members']
-): { id: string; name: string }[] {
-  const liveIds = new Map(live.map(({ id, name }) => [name.toLowerCase(), id]))
-  return people
-    .filter(({ login, id }) => {
-      const current = liveIds.get(login.toLowerCase())
-      return current !== undefined && current !== id
-    })
-    .map(({ id, login }) => ({ id, name: login }))
-}
 
 /** When a list was read: the time today, the date otherwise (date and time wouldn't fit one line). */
 function readTime(readAt: number, now: number): string {
@@ -228,45 +215,38 @@ export function gitHubWhoCanAskAnswer(
   const exactFailed =
     exact && !exact.ok ? t('bots.github.whoCanAsk.exactFailed', 'Username check failed.') : null
   const time = read ? readTime(read.readAt, now) : ''
-  const limits = [
-    // Whatever the list contributes to this answer (rows, a stranger's tag, an empty result, a
-    // limit) is dated by this first line, with or without a heading in view. "People list" names
-    // it whatever it was read from (repos, orgs or both), so org-only data is never a repo list.
-    // A host reads its list once per app run; restart advice joins it only when that matters (a
-    // list read for another scope or account, over an hour old, or no one in it matched).
-    read
-      ? read.reused &&
-        (historical ||
-          now - read.readAt > STALE_LIST_MS ||
-          (query.trim() !== '' && shown.length === 0))
-        ? remote
-          ? t(
-              'bots.github.whoCanAsk.readEarlierRemote',
-              'People list from {{time}}. Restart the bot’s Orca.',
-              {
-                time
-              }
-            )
-          : t(
-              'bots.github.whoCanAsk.readEarlier',
-              'People list from {{time}}. Restart Orca to refresh.',
-              {
-                time
-              }
-            )
-        : t('bots.github.whoCanAsk.listFrom', 'People list from {{time}}.', { time })
-      : null,
+  const shouldRefresh =
+    read?.reused &&
+    (historical || now - read.readAt > STALE_LIST_MS || (query.trim() !== '' && shown.length === 0))
+  const dated =
+    read &&
+    (shouldRefresh
+      ? remote
+        ? t(
+            'bots.github.whoCanAsk.readEarlierRemote',
+            'People list from {{time}}. Restart the bot’s Orca.',
+            { time }
+          )
+        : t(
+            'bots.github.whoCanAsk.readEarlier',
+            'People list from {{time}}. Restart Orca to refresh.',
+            { time }
+          )
+      : t('bots.github.whoCanAsk.listFrom', 'People list from {{time}}.', { time }))
+  const omitted =
     read?.omitted && !historical
       ? t('bots.github.whoCanAsk.omitted', 'Some connected sources were skipped.')
-      : null,
-    read && !historical ? cutLine(read.cut, t) : null,
+      : null
+  const cutNote = read && !historical ? cutLine(read.cut, t) : null
+  const unread =
     read && !read.complete && !historical
       ? t('bots.github.whoCanAsk.notRead', 'Some repos or members couldn’t be read.')
-      : null,
+      : null
+  const narrow =
     ranked.length > shown.length
       ? t('bots.github.whoCanAsk.keepTyping', 'Keep typing to narrow.')
-      : null,
-    exactFailed,
+      : null
+  const reader =
     searchedAs &&
     ownerLogin &&
     !(linkedLogins ?? [ownerLogin]).some(
@@ -276,12 +256,22 @@ export function gitHubWhoCanAskAnswer(
           login: searchedAs
         })
       : null
-  ]
-  // One sentence per line, so no line wraps at the popover's width.
-  const note =
-    roster.status === 'unreached' && exactFailed
+  // Org-only results keep the date in the footer so the body can show just one source note.
+  const orgOnly = place === 'orgs'
+  const refreshOrg =
+    orgOnly && shouldRefresh
+      ? remote
+        ? t('bots.github.whoCanAsk.refreshListRemote', 'Restart the bot’s Orca to refresh.')
+        : t('bots.github.whoCanAsk.refreshList', 'Restart Orca to refresh the people list.')
+      : null
+  const noteAfterTag = exactFailed ?? reader ?? refreshOrg ?? narrow ?? undefined
+  const note = orgOnly
+    ? (exactFailed ?? omitted ?? cutNote ?? unread ?? noteAfterTag)
+    : roster.status === 'unreached' && exactFailed
       ? t('bots.github.whoCanAsk.listAndUsernameFailed', 'People list and username check failed.')
-      : [rosterLine, exactOnly, ...limits].filter(Boolean).join('\n') || undefined
+      : [rosterLine, exactOnly, dated, omitted, cutNote, unread, narrow, exactFailed, reader]
+          .filter(Boolean)
+          .join('\n') || undefined
 
   const exactSearched = exact?.ok === true
   // An absence refers to the dated list in the note, never to the repos or orgs as they are now.
@@ -294,6 +284,10 @@ export function gitHubWhoCanAskAnswer(
             'Searched your people list and exact usernames.'
           )
         : t('bots.github.whoCanAsk.searchedList', 'Searched your people list.')
+  const orgEmpty =
+    omitted && exactSearched
+      ? t('bots.github.whoCanAsk.skippedSourcesExact', 'Partial list. Exact usernames checked.')
+      : (exactFailed ?? omitted ?? cutNote ?? unread ?? refreshOrg ?? searchedLine)
   // A roster still on its way: nothing definitive yet, whatever the exact lookup said.
   const empty =
     roster.status === 'loading'
@@ -318,7 +312,7 @@ export function gitHubWhoCanAskAnswer(
           }
         : {
             title: t('bots.github.whoCanAsk.noPerson', 'No one found for “{{query}}”', { query }),
-            detail: [searchedLine, note].filter(Boolean).join('\n')
+            detail: orgOnly ? (orgEmpty ?? '') : [searchedLine, note].filter(Boolean).join('\n')
           }
 
   return {
@@ -327,7 +321,7 @@ export function gitHubWhoCanAskAnswer(
       members,
       // The note says what was left out, so the picker's generic "not everyone" line stays away.
       complete: true,
-      // The note's first line dates the list; an absence refers to that list.
+      // An absence refers to the dated people list.
       labels: {
         scoped: historical
           ? t('bots.github.whoCanAsk.fromEarlierList', 'From an earlier people list')
@@ -339,6 +333,12 @@ export function gitHubWhoCanAskAnswer(
         outsideTag: t('bots.github.whoCanAsk.notInList', 'Not in your people list')
       },
       ...(note ? { note } : {}),
+      ...(orgOnly && (omitted || cutNote || unread)
+        ? { noteWithTag: { tag: uncheckedTag, note: noteAfterTag } }
+        : {}),
+      ...(orgOnly && (members.length > 0 || query.trim() !== '' || omitted || cutNote || unread)
+        ? { snapshot: t('bots.github.whoCanAsk.snapshotDate', 'List from {{time}}', { time }) }
+        : {}),
       empty,
       // A failed exact lookup or an unanswered list request can be asked again in place,
       // keeping the query, rows and picks.

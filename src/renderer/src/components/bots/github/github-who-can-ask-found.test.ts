@@ -77,11 +77,11 @@ describe('the GitHub picker’s reading of a search', () => {
       [none, 'benson']
     ] as const) {
       const shown = value(answer(orgsOnly, exact, query))
-      const words = [shown.note, shown.empty?.detail, shown.labels?.outsideTag]
+      const words = [shown.note, shown.empty?.detail, shown.labels?.outsideTag, shown.snapshot]
         .concat(shown.members.map((member) => member.tag))
         .join('\n')
       expect(words, query).not.toMatch(/repo/i)
-      expect(shown.note, query).toMatch(/^People list from /)
+      expect(shown.snapshot, query).toMatch(/^List from /)
     }
   })
 

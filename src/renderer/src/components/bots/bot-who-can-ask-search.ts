@@ -3,11 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   BotWhoCanAskFound,
-  BotWhoCanAskIdentityUpdate,
   BotWhoCanAskService,
   BotWhoCanAskSession
 } from './BotWhoCanAskList'
 import type { BotSlackResult } from '../../../../shared/connector-bot-slack-contract'
+
+import {
+  learnIdentities,
+  NO_IDENTITIES,
+  type Identities
+} from './github/github-who-can-ask-identities'
 
 const SEARCH_DEBOUNCE_MS = 250
 
@@ -21,30 +26,6 @@ function applySearchResult(previous: Search, result: BotSlackResult<BotWhoCanAsk
   return result.ok
     ? { status: 'ready', found: result.value, searchPlaceholder: result.value.searchPlaceholder }
     : { status: 'failed', error: result.error, searchPlaceholder: previous.searchPlaceholder }
-}
-
-/** What live lookups confirmed during this picker open: current names by id, and ids whose
- *  listed name was given to someone else. A later confirmation of an id clears its doubt. */
-export type Identities = {
-  names: Readonly<Record<string, string>>
-  superseded: ReadonlySet<string>
-}
-const NO_IDENTITIES: Identities = { names: {}, superseded: new Set() }
-
-function learnIdentities(known: Identities, confirmed: BotWhoCanAskIdentityUpdate): Identities {
-  const superseded = new Set(known.superseded)
-  for (const { id, name } of confirmed.superseded) {
-    const current = known.names[id]
-    if (!current || current.toLowerCase() === name.toLowerCase()) {
-      superseded.add(id)
-    }
-  }
-  const names = { ...known.names }
-  for (const { id, name } of confirmed.current) {
-    names[id] = name
-    superseded.delete(id)
-  }
-  return { names, superseded }
 }
 
 export function useMemberSearch(

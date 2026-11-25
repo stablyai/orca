@@ -188,8 +188,15 @@ export function BotWhoCanAskPicker({
   const scoped = grouped ? addable.filter((person) => person.group === 'scoped') : []
   const outside = grouped ? addable.filter((person) => person.group === 'outside') : []
   const unsorted = grouped ? addable.filter((person) => person.group === undefined) : addable
-  const note = search.status === 'ready' ? search.found.note : undefined
-  const labels = search.status === 'ready' ? search.found.labels : undefined
+  const answer = search.status === 'ready' ? search.found : undefined
+  const noteWithTag = answer?.noteWithTag
+  const note =
+    noteWithTag && addable.some((person) => person.tag === noteWithTag.tag)
+      ? noteWithTag.note
+      : answer?.note
+  const labels = answer?.labels
+  const snapshot = answer?.snapshot
+  const snapshotSuffix = snapshot ? ` · ${snapshot}` : ''
   const searching =
     search.status === 'loading' && search.announce
       ? t('bots.whoCanAsk.searching', 'Searching…')
@@ -374,6 +381,7 @@ export function BotWhoCanAskPicker({
             count: added.size,
             max: service.max
           })}
+          {snapshotSuffix}
         </p>
       ) : added.size + picks.length >= service.max - NEAR_CAP ? (
         // While picking, the footer counts the picks; the cap shows only once it is close.
@@ -400,9 +408,10 @@ export function BotWhoCanAskPicker({
       {picks.length > 0 ? (
         <div className="flex items-center justify-between gap-2 border-t border-border p-2 pl-3">
           <span className="text-xs text-muted-foreground">
-            {t('bots.whoCanAsk.selected', '{{count}} selected', {
-              count: picks.length
-            })}
+            {snapshot && checkingIdentities
+              ? picks.length
+              : t('bots.whoCanAsk.selected', '{{count}} selected', { count: picks.length })}
+            {snapshotSuffix}
           </span>
           <Button
             size="sm"

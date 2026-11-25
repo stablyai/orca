@@ -7,11 +7,9 @@ import {
 import type { BotSlackResult } from '../../../../../shared/connector-bot-slack-contract'
 import type { GitHubPeopleScope } from '../../../../../shared/bots/github-people-scope'
 import type { BotWhoCanAskIdentityUpdate, BotWhoCanAskSession } from '../BotWhoCanAskList'
-import {
-  gitHubWhoCanAskAnswer,
-  supersededGitHubPeople,
-  type GitHubRosterState
-} from './github-who-can-ask-found'
+import { gitHubWhoCanAskAnswer, type GitHubRosterState } from './github-who-can-ask-found'
+
+import { supersededGitHubPeople } from './github-who-can-ask-identities'
 
 /** How long one keystroke's answer waits for a roster still loading; it then goes out with what
  *  it has, and the session tells its listener when the roster lands. Logical only. */
