@@ -5,6 +5,7 @@ import { chatPaneKey } from './external-conversation-chat'
 import { ChatTurns } from './external-conversation-chat-turns'
 import type { EndedChatTurn } from './external-conversation-ended-turn'
 import type { ConversationEvent } from './external-conversation-events'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 const sessionId = 'chat-1'
 const paneKey = chatPaneKey(sessionId)
@@ -32,9 +33,17 @@ const told = (_chats: ChatTurns, show: (next: Row) => void) => {
 }
 
 // A linked chat whose turn began as `begin` says, its end now being read.
-function endedTurn(begin: (chats: ChatTurns, show: (next: Row) => void) => void = told) {
+function endedTurn(
+  begin: (
+    chats: ChatTurns,
+    show: (next: Row) => void,
+    hostRuns: (next: string) => void
+  ) => void = told
+) {
   const events: ConversationEvent[] = []
   let row: Row = { state: 'working', stateStartedAt: SENT }
+  // The message that opened the turn the host runs now.
+  let opener = 'send-a'
   const chats = new ChatTurns({
     setTimer: () => ({ cancel: () => {} }),
     now: () => ENDED,
@@ -51,7 +60,7 @@ function endedTurn(begin: (chats: ChatTurns, show: (next: Row) => void) => void 
     runningTurnReported: () => false,
     workLinks: async () => [],
     promptsAudience: () => true,
-    turnOpener: () => null,
+    turnOpener: () => ({ itemId: opener }) as unknown as AgentJournalRenderItem,
     keepAdoptedTurn: () => {},
     turnStartedAt: () => null
   })
@@ -60,7 +69,9 @@ function endedTurn(begin: (chats: ChatTurns, show: (next: Row) => void) => void 
     chats.observe(paneKey)
   }
   const starts = () => events.flatMap((event) => (event.kind === 'turn-started' ? [event.at] : []))
-  begin(chats, show)
+  begin(chats, show, (next) => {
+    opener = next
+  })
   chats.news({
     kind: 'turn-ended',
     sessionId,
@@ -69,7 +80,10 @@ function endedTurn(begin: (chats: ChatTurns, show: (next: Row) => void) => void 
     readTurn: () => new Promise<EndedChatTurn>(() => {}),
     at: ENDED
   })
-  return { chats, show, starts }
+  const hostRuns = (next: string) => {
+    opener = next
+  }
+  return { chats, show, starts, hostRuns }
 }
 
 describe('a chat turn’s status row after the turn ended', () => {
@@ -126,5 +140,18 @@ describe('a chat turn’s status row after the turn ended', () => {
       }) as unknown as AgentStatusIpcPayload
     expect(chats.dates.leadWorking(paneKey, row(HANDED_OVER))).toBe(false)
     expect(chats.dates.leadWorking(paneKey, row(ENDED - 500))).toBe(true)
+  })
+
+  it('tells the host’s next turn whose row was read before the last turn’s end', () => {
+    const { show, starts } = endedTurn((_chats, show, hostRuns) => {
+      told(_chats, show)
+      // The host ended the turn and began the next before its end was heard: the row reads working
+      // under the next turn's date, still taken for the open turn.
+      hostRuns('send-b')
+      show({ state: 'working', stateStartedAt: ENDED + 100 })
+    })
+    expect(starts()).toEqual([SENT])
+    show({ state: 'working', stateStartedAt: ENDED + 100 })
+    expect(starts()).toEqual([SENT, ENDED + 100])
   })
 })

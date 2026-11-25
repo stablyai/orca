@@ -173,7 +173,8 @@ export class ChatTurns {
         !this.deps.chatTurnWaiting(linked.link.sessionId))
     ) {
       if (open !== undefined) {
-        this.dates.showed(paneKey, lead.stateStartedAt)
+        const opener = this.deps.turnOpener(linked.link.sessionId)?.itemId ?? null
+        this.dates.showed(paneKey, lead.stateStartedAt, opener)
       }
       return
     }
@@ -182,7 +183,11 @@ export class ChatTurns {
       return
     }
     this.startedAt.set(paneKey, lead.stateStartedAt)
-    this.dates.started(paneKey, lead.stateStartedAt)
+    this.dates.started(
+      paneKey,
+      lead.stateStartedAt,
+      this.deps.turnOpener(linked.link.sessionId)?.itemId
+    )
     this.told.delete(paneKey)
     this.prompts.adopted.delete(paneKey)
     this.tell(paneKey, linked, lead.stateStartedAt)
@@ -329,12 +334,12 @@ export class ChatTurns {
   /** Signed out or another account: a turn end still being read reaches no one. */
   reset(): void {
     this.generation += 1
-    // Kept across a watch gap, so the next snapshot doesn't take an ended turn's row for a running one.
     this.dates.clear()
     this.clear()
   }
 
   /** A watch went; a turn end still being read reaches the next one. */
+  // Turn dates are kept, so the next watch's snapshot doesn't take an ended turn's row for a running one.
   clear(): void {
     this.startedAt.clear()
     this.told.clear()

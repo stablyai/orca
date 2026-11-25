@@ -11,16 +11,32 @@ const MAX_DATES = 16
 
 export class TurnDates {
   private readonly open = new Map<string, number[]>()
+  // The message that opened each open turn on its host, once seen: a re-date under another opener
+  // is the host's next turn, never this one's.
+  private readonly openers = new Map<string, string>()
   private readonly ended = new Map<string, ReadonlySet<number>>()
 
   /** A new turn begins on this date: the ended turn's dates no longer matter. */
-  started(paneKey: string, at: number): void {
+  started(paneKey: string, at: number, opener?: string | null): void {
     this.open.set(paneKey, [at])
     this.ended.delete(paneKey)
+    if (opener) {
+      this.openers.set(paneKey, opener)
+    } else {
+      this.openers.delete(paneKey)
+    }
   }
 
-  /** The open turn's row shows this date too (its start re-dated, or a turn adopted mid-run). */
-  showed(paneKey: string, at: number): void {
+  /** The open turn's row shows this date too (its start re-dated, or a turn adopted mid-run). With
+   *  `opener`, only while the host still runs the turn that message opened. */
+  showed(paneKey: string, at: number, opener?: string | null): void {
+    if (opener !== undefined) {
+      const known = this.openers.get(paneKey)
+      if (!opener || (known !== undefined && known !== opener)) {
+        return
+      }
+      this.openers.set(paneKey, opener)
+    }
     const dates = this.open.get(paneKey) ?? []
     if (!dates.includes(at)) {
       // The told start is kept; the oldest re-date after it goes first.
@@ -36,6 +52,7 @@ export class TurnDates {
   endedTurn(paneKey: string): void {
     const dates = this.open.get(paneKey)
     this.open.delete(paneKey)
+    this.openers.delete(paneKey)
     if (dates) {
       this.ended.set(paneKey, new Set(dates))
     } else {
@@ -55,11 +72,13 @@ export class TurnDates {
 
   forget(paneKey: string): void {
     this.open.delete(paneKey)
+    this.openers.delete(paneKey)
     this.ended.delete(paneKey)
   }
 
   clear(): void {
     this.open.clear()
+    this.openers.clear()
     this.ended.clear()
   }
 }
