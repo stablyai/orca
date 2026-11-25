@@ -8,7 +8,7 @@ const BotMemoryLineSchema = z.object({
   line: z.string(),
   after: z.string().nullable(),
   afterOccurrence: z.number().int().positive().optional(),
-  afterCopies: z.number().int().positive().optional()
+  followedBy: z.string().optional()
 })
 
 export const BotMemoryAuthorSchema = z.discriminatedUnion('kind', [

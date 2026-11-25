@@ -115,16 +115,22 @@ function redacted(
   by: BotMemoryAuthor,
   change: BotMemoryChange
 ): Pick<BotMemoryHistoryRow, 'by' | 'change' | 'undoable'> {
+  // `followedBy` only helps place a fact, so a secret-looking one is left out, not redacted.
+  const hinted = (entry: BotMemoryLine): BotMemoryLine => {
+    const { followedBy, ...rest } = entry
+    return followedBy === undefined || redactSecretLike(followedBy) !== followedBy ? rest : entry
+  }
+  const asked = { added: change.added.map(hinted), removed: change.removed.map(hinted) }
   const clean = (entry: BotMemoryLine): BotMemoryLine => ({
     ...entry,
     line: redactSecretLike(entry.line),
     after: entry.after === null ? null : redactSecretLike(entry.after)
   })
-  const kept = { added: change.added.map(clean), removed: change.removed.map(clean) }
+  const kept = { added: asked.added.map(clean), removed: asked.removed.map(clean) }
   return {
     by: by.kind === 'chat' && by.source ? { ...by, source: redactSecretLike(by.source) } : by,
     change: kept,
-    undoable: JSON.stringify(kept) === JSON.stringify(change)
+    undoable: JSON.stringify(kept) === JSON.stringify(asked)
   }
 }
 

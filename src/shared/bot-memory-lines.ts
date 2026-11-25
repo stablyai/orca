@@ -1,7 +1,12 @@
 // MEMORY.md as the owner sees it: one fact per list line, optionally dated, everything else kept byte for byte.
 // Orca, not the bot, writes where a fact came from after " · from: "; plain text, so any reader shows it.
 
-import { type BotMemoryAnchor, botMemoryPutBack, isBotMemoryAnchorLine } from './bot-memory-anchors'
+import {
+  type BotMemoryAnchor,
+  botMemoryPutBack,
+  isBotMemoryAnchorLine,
+  withBotMemoryFollowers
+} from './bot-memory-anchors'
 import { BOT_MEMORY_FENCE, botMemoryFenceOpeners } from './bot-memory-fences'
 
 /** Lines of MEMORY.md a session loads at start; the rest stays on disk for the bot to read. */
@@ -209,7 +214,8 @@ export function onlyBotMemoryFactsChanged(before: string, after: string): boolea
 export function botMemoryChange(before: string, after: string): BotMemoryChange {
   const only = (from: string, other: string): BotMemoryLine[] => {
     const keys = new Set(lineKeys(splitLines(other).lines))
-    const lines: BotMemoryLine[] = []
+    // Each line, and the index in `from` it came from.
+    const [lines, picked]: [BotMemoryLine[], number[]] = [[], []]
     const occurrences = new Map<string, number>()
     let previous: string | null = null
     let previousOccurrence = 0
@@ -219,6 +225,7 @@ export function botMemoryChange(before: string, after: string): BotMemoryChange 
     for (const [index, raw] of rows.entries()) {
       const key = rowKeys[index]
       if (key !== null && !keys.has(key)) {
+        picked.push(index)
         lines.push(
           previous === null
             ? { line: raw, after: null }
@@ -232,10 +239,8 @@ export function botMemoryChange(before: string, after: string): BotMemoryChange 
         occurrences.set(raw, previousOccurrence)
       }
     }
-    // With how many copies there were, so a put-back can tell whether any came or went since.
-    return lines.map((line) =>
-      line.after === null ? line : { ...line, afterCopies: occurrences.get(line.after) }
-    )
+    // A line `other` keeps too is one a put-back still finds.
+    return withBotMemoryFollowers(lines, picked, rows, (index) => keys.has(rowKeys[index]))
   }
   return { added: only(after, before), removed: only(before, after) }
 }

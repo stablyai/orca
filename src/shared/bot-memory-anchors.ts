@@ -4,10 +4,11 @@ import { botMemoryFenceOpeners, insertBotMemoryNonFenceLine } from './bot-memory
 /** The non-blank line a fact followed (null: the top of the file). */
 export type BotMemoryAnchor = {
   after: string | null
-  /** The anchor's 1-based occurrence among the lines a fact can follow, of `afterCopies` then.
-   *  Older history rows keep only its text. */
+  /** The anchor's 1-based occurrence among the lines a fact can follow. Older history rows keep
+   *  only its text. */
   afterOccurrence?: number
-  afterCopies?: number
+  /** The first line after the fact that stayed: what tells copies of its anchor apart. */
+  followedBy?: string
 }
 
 /** Whether a fact can come right after line `index`: no fence opener and no line inside a fence,
@@ -17,10 +18,37 @@ export function isBotMemoryAnchorLine(openers: readonly number[] | null, index: 
   return openers === null || openers[index + 1] === -1
 }
 
+/** `anchored`, the lines at `rows[picked[i]]`, each with the first non-blank line after it that
+ *  `stays` (followedBy), which tells the copies of its anchor apart when it goes back. */
+export function withBotMemoryFollowers<Line extends BotMemoryAnchor>(
+  anchored: readonly Line[],
+  picked: readonly number[],
+  rows: readonly string[],
+  stays: (index: number) => boolean
+): Line[] {
+  const followers = new Map<number, string>()
+  let next: string | null = null
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    if (next !== null) {
+      followers.set(index, next)
+    }
+    if (rows[index].trim() !== '' && stays(index)) {
+      next = rows[index]
+    }
+  }
+  return anchored.map((line, at) => {
+    const followedBy = followers.get(picked[at])
+    return line.after === null || followedBy === undefined ? line : { ...line, followedBy }
+  })
+}
+
 /**
- * Puts facts back into `lines`, in place and one by one: after the copy of the line a fact
- * followed (counted from the end once copies came or went); after the last copy for an older row
- * without an occurrence; at the end when no copy is left; above a fence that place is in.
+ * Puts facts back into `lines`, in place and one by one, after a copy of the line it followed:
+ * the one copy whose part of the file (up to the next copy) still has the line that followed the
+ * fact, whatever came or went above or below; when that can't tell (no such line, or it is in more
+ * than one copy's part or none), the copy at its occurrence, else the last copy, which is also
+ * where an older row without an occurrence goes. At the end when no copy is left; above a fence
+ * that place is in.
  */
 export function botMemoryPutBack(lines: string[]): (line: string, anchor: BotMemoryAnchor) => void {
   const found = botMemoryFenceOpeners(lines)
@@ -34,7 +62,27 @@ export function botMemoryPutBack(lines: string[]): (line: string, anchor: BotMem
     }
   }
   lines.forEach((_raw, index) => count(index))
-  const place = ({ after, afterOccurrence, afterCopies }: BotMemoryAnchor): number => {
+  const isCopy = (index: number, after: string): boolean =>
+    lines[index] === after && isBotMemoryAnchorLine(openers, index)
+  /** The copy whose part has `followedBy`, when exactly one does. */
+  const followed = (after: string, followedBy: string): number | null => {
+    let copy = -1
+    let found: number | null = null
+    for (let index = 0; index < lines.length; index += 1) {
+      // Checked first: a fact last in its part is followed by the next copy itself.
+      if (copy !== -1 && lines[index] === followedBy) {
+        if (found !== null && found !== copy) {
+          return null
+        }
+        found = copy
+      }
+      if (isCopy(index, after)) {
+        copy = index
+      }
+    }
+    return found
+  }
+  const place = ({ after, afterOccurrence, followedBy }: BotMemoryAnchor): number => {
     if (after === null) {
       return 0
     }
@@ -42,22 +90,20 @@ export function botMemoryPutBack(lines: string[]): (line: string, anchor: BotMem
     if (copies === 0) {
       return lines.findLastIndex((raw) => raw.trim() !== '') + 1
     }
-    // The same copy counted from both ends at once, so one near either end is found without
+    const known = copies > 1 && followedBy !== undefined ? followed(after, followedBy) : null
+    if (known !== null) {
+      return known + 1
+    }
+    // The occurrence counted from both ends at once, so a copy near either end is found without
     // reading the rest of the file.
-    // As many copies as then: the same one. Some came or went: the one as far from the end, which
-    // is where an older row goes too (the last copy), so it never lands worse than one would.
-    const then = afterCopies ?? copies
-    let fromEnd =
-      afterOccurrence === undefined ? 1 : Math.min(copies, Math.max(1, then - afterOccurrence + 1))
-    let fromStart = copies - fromEnd + 1
-    const copy = (index: number): boolean =>
-      lines[index] === after && isBotMemoryAnchorLine(openers, index)
+    let fromStart = Math.min(afterOccurrence ?? copies, copies)
+    let fromEnd = copies - fromStart + 1
     for (let step = 0; step < lines.length; step += 1) {
-      if (copy(step) && (fromStart -= 1) === 0) {
+      if (isCopy(step, after) && (fromStart -= 1) === 0) {
         return step + 1
       }
       const back = lines.length - 1 - step
-      if (copy(back) && (fromEnd -= 1) === 0) {
+      if (isCopy(back, after) && (fromEnd -= 1) === 0) {
         return back + 1
       }
     }
