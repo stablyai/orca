@@ -33,6 +33,8 @@ import type { QueuedMessagesPendingAction } from '@/components/native-chat/queue
 import { useNativeChatClippedLine } from '@/components/native-chat/queue/use-native-chat-clipped-line'
 import {
   QUEUED_ROW_REVEAL,
+  QUEUED_ROW_INSET_VAR,
+  QUEUED_ROW_TARGET,
   QueuedMessageRowTool,
   queuedRowToolsMask
 } from '@/components/native-chat/queue/NativeChatQueuedMessageRowTools'
@@ -272,7 +274,7 @@ export function NativeChatQueuedMessageCard({
         </div>
         {/* No gap: each glyph's own box spacing (an icon button's 5px, the image count's padding) sets
             the even rhythm the hover-revealed tools, which sit outside this flow, already have. */}
-        <div className="relative flex shrink-0 items-center">
+        <div className={cn('relative flex shrink-0 items-center', QUEUED_ROW_INSET_VAR)}>
           {toolCount > 0 ? (
             <div
               className={cn(
@@ -301,7 +303,14 @@ export function NativeChatQueuedMessageCard({
             </div>
           ) : null}
           {card.images ? (
-            <QueuedMessageImageCount images={card.images} className="h-6 rounded-md px-[5px]" />
+            <QueuedMessageImageCount
+              images={card.images}
+              // 1px less after the digit, whose own side bearing already widens the gap to the chevron.
+              className={cn(
+                'h-6 rounded-md pr-[calc(var(--queued-row-inset)-1px)] pl-(--queued-row-inset)',
+                QUEUED_ROW_TARGET
+              )}
+            />
           ) : null}
           {expanded || clipped ? (
             <QueuedMessageExpandToggle
@@ -319,6 +328,8 @@ export function NativeChatQueuedMessageCard({
                   type="button"
                   variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
                   size="xs"
+                  // Its glyphs start with their own blank edge, so the icon buttons' inset (not 6px) evens the gap before it.
+                  className={cn(QUEUED_ROW_TARGET, 'has-[>svg]:pl-(--queued-row-inset)')}
                   data-queued-message-send
                   onClick={onSteer}
                   disabled={steerHeld || busy}
@@ -383,16 +394,16 @@ function QueuedMessageExpandToggle({
           type="button"
           variant="ghost"
           size="icon-xs"
-          // The chevron's ink is narrower than the other icons': a narrower box keeps its gaps even.
-          className="w-5"
+          className={QUEUED_ROW_TARGET}
           aria-label={label}
           aria-expanded={expanded}
           aria-controls={controls}
           onClick={onToggle}
         >
+          {/* The row's narrowest glyph: at size-4 its full 24px box leaves the same gaps as its neighbors'. */}
           <ChevronDown
             className={cn(
-              'size-3.5 transition-transform motion-reduce:transition-none',
+              'size-4 transition-transform motion-reduce:transition-none',
               expanded && 'rotate-180'
             )}
           />

@@ -11,6 +11,7 @@ import type { NativeChatMessage } from '../../../../../shared/native-chat/native
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import { queuedMessageCardSendNow } from './NativeChatQueuedMessageCard'
 import { refocusAfterQueueAction } from './native-chat-queue-refocus'
+import { QUEUED_ROW_TARGET } from './NativeChatQueuedMessageRowTools'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 
 /** Other agents' waiting mail and what a person can do with it before the agent takes it. */
@@ -60,7 +61,8 @@ export function NativeChatWaitingAgentMailActions({
   const editLabel = t('components.native-chat.queuedMessages.editMessage', 'Edit message')
   const deleteLabel = t('components.native-chat.queuedMessages.delete', 'Delete')
   return (
-    // No gap, as on a queued card's tool row: the buttons' own padding spaces their glyphs evenly.
+    // No gap, as on a queued card's tool row: the buttons' own padding spaces their glyphs evenly, and
+    // each keeps the row's 24px target floor so flush neighbors stay full size at any text size.
     <span ref={ref} className="flex items-center">
       <Tooltip>
         <TooltipTrigger asChild>
@@ -68,6 +70,7 @@ export function NativeChatWaitingAgentMailActions({
             type="button"
             variant="ghost"
             size="xs"
+            className={QUEUED_ROW_TARGET}
             disabled={actions.steerHeld || busy}
             onClick={() => refocusAfter(actions.steer(queuedMessageId))}
           >
@@ -92,6 +95,7 @@ export function NativeChatWaitingAgentMailActions({
               type="button"
               variant="ghost"
               size="icon-xs"
+              className={QUEUED_ROW_TARGET}
               aria-label={editLabel}
               disabled={busy}
               onClick={() => void actions.edit(queuedMessageId)}
@@ -110,6 +114,7 @@ export function NativeChatWaitingAgentMailActions({
             type="button"
             variant="ghost"
             size="icon-xs"
+            className={QUEUED_ROW_TARGET}
             aria-label={deleteLabel}
             disabled={busy}
             onClick={() => refocusAfter(actions.remove(queuedMessageId))}
