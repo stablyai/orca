@@ -15,6 +15,11 @@ type UseSidebarResizeOptions<T extends HTMLElement> = {
   measureStartSize?: (container: T) => number
   /** Read at drag start from live layout, so the limit never trails the space actually free. */
   measureMaxSize?: (container: T) => number
+  /** Map pointer travel in local CSS pixels back to a saved width for non-linear layouts. */
+  measureWidthFromDelta?: (
+    container: T,
+    startWidth: number
+  ) => ((delta: number) => number) | undefined
   applyRenderedSize?: (container: T, size: number) => void
   /** Every drag's end, after the final size is applied and before `setWidth`: the size the drag
    *  ended at, or null when it ended where it started. `setWidth` alone skips a drag that ends at the
@@ -40,25 +45,6 @@ export function getRenderedSidebarWidthCssValue(
   return isOpen ? `${width + renderedExtraWidth}px` : '0px'
 }
 
-export function getNextSidebarResizeWidth({
-  clientX,
-  startX,
-  startWidth,
-  deltaSign,
-  minWidth,
-  maxWidth
-}: {
-  clientX: number
-  startX: number
-  startWidth: number
-  deltaSign: 1 | -1
-  minWidth: number
-  maxWidth: number
-}): number {
-  const delta = (clientX - startX) * deltaSign
-  return clampSidebarResizeWidth(startWidth + delta, minWidth, maxWidth)
-}
-
 export function useSidebarResize<T extends HTMLElement>({
   isOpen,
   width,
@@ -71,6 +57,7 @@ export function useSidebarResize<T extends HTMLElement>({
   axis = 'x',
   measureStartSize,
   measureMaxSize,
+  measureWidthFromDelta,
   applyRenderedSize,
   onResizeEnd
 }: UseSidebarResizeOptions<T>): UseSidebarResizeResult<T> {
@@ -78,6 +65,7 @@ export function useSidebarResize<T extends HTMLElement>({
   const isResizingRef = useRef(false)
   const startXRef = useRef(0)
   const dragZoomRef = useRef(1)
+  const widthFromDeltaRef = useRef<((delta: number) => number) | undefined>(undefined)
   const startWidthRef = useRef(width)
   const draftWidthRef = useRef(width)
   const measuredMaxWidthRef = useRef<number | null>(null)
@@ -158,14 +146,13 @@ export function useSidebarResize<T extends HTMLElement>({
         return
       }
 
-      const nextWidth = getNextSidebarResizeWidth({
-        clientX: (axis === 'y' ? event.clientY : event.clientX) / dragZoomRef.current,
-        startX: startXRef.current,
-        startWidth: startWidthRef.current,
-        deltaSign,
+      const position = (axis === 'y' ? event.clientY : event.clientX) / dragZoomRef.current
+      const delta = (position - startXRef.current) * deltaSign
+      const nextWidth = clampSidebarResizeWidth(
+        widthFromDeltaRef.current?.(delta) ?? startWidthRef.current + delta,
         minWidth,
-        maxWidth: measuredMaxWidthRef.current ?? maxWidth
-      })
+        measuredMaxWidthRef.current ?? maxWidth
+      )
       if (nextWidth === draftWidthRef.current) {
         return
       }
@@ -217,6 +204,9 @@ export function useSidebarResize<T extends HTMLElement>({
       event.preventDefault()
       const container = containerRef.current
       const startWidth = container && measureStartSize ? measureStartSize(container) : width
+      widthFromDeltaRef.current = container
+        ? measureWidthFromDelta?.(container, startWidth)
+        : undefined
       measuredMaxWidthRef.current = container && measureMaxSize ? measureMaxSize(container) : null
       const cursor = axis === 'y' ? 'row-resize' : 'col-resize'
       isResizingRef.current = true
@@ -241,7 +231,7 @@ export function useSidebarResize<T extends HTMLElement>({
         overlayRef.current = overlay
       }
     },
-    [axis, measureMaxSize, measureStartSize, onDraftWidthChange, width]
+    [axis, measureMaxSize, measureStartSize, measureWidthFromDelta, onDraftWidthChange, width]
   )
 
   return { containerRef, isResizing, onResizeStart }
