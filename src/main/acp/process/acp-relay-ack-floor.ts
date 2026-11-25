@@ -71,6 +71,8 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
   private readonly ended = new Map<string, Item>()
   /** The output names on every ack what a replay would split, so saved lines aren't shown twice. */
   readonly namesEveryAck = true
+  /** A reattach answers the open from kept lines, never waiting on the agent. */
+  readonly keepsHeldReplay = true
   /** Messages of agent-started turns the app ended: a late chunk of one is dropped, as live. */
   private endedByTurn = new Set<string>()
   private wakeAck: (() => void) | null = null

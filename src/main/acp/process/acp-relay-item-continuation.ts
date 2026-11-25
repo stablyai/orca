@@ -61,8 +61,21 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     children: new Set()
   }
 
+  /** An agent-started turn may run across the attach until it ends or a prompt is sent. */
+  private agentTurnOpen = true
+
+  mayResume(): boolean {
+    return this.agentTurnOpen
+  }
+
+  /** The agent's own turn ended: its messages resume no more. */
+  agentTurnEnded(): void {
+    this.agentTurnOpen = false
+  }
+
   /** Each attach's replay is read from its own first line. */
   reset(): void {
+    this.agentTurnOpen = true
     this.seen.clear()
     this.started.clear()
     this.cutKeys = null
