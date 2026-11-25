@@ -27,7 +27,8 @@ import {
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
-  getAccountsZcodePlanSearchEntries
+  getAccountsZcodePlanSearchEntries,
+  getAccountsCommandCodeSearchEntries
 } from './accounts-search'
 import { getRemoteAccountsPaneScope } from '../../provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
@@ -399,9 +400,8 @@ export function AccountsPane({
     readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
     ) : null,
-    !isRemoteAccountScope &&
-    (!searchQuery || /command ?code|account|usage|rate limit/i.test(searchQuery)) ? (
-      <CommandCodeAccountsSection key="command-code" />
+    matchesSettingsSearch(searchQuery, getAccountsCommandCodeSearchEntries()) ? (
+      <CommandCodeAccountsSection key={accountOwnerKey} host={usageCredentialHost} />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
       <ZcodePlanAccountsSection

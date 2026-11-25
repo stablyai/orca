@@ -1,77 +1,160 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../../store/index'
+import type { CommandCodeCredentialsStatus } from '../../../../../../shared/agent-accounts/usage-credentials/command-code-credentials'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import {
+  callCommandCodeCredentials,
+  UsageCredentialsHostOutdatedError
+} from '@/runtime/provider-accounts/usage/runtime-usage-credentials-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
-import type { CommandCodeCredentialsStatus } from '../../../../../../shared/agent-accounts/usage-credentials/command-code-credentials'
+import {
+  usageCredentialAccessAfterError,
+  usageCredentialAccessNotice,
+  type UsageCredentialAccess,
+  type UsageCredentialHost
+} from './usage-credential-host'
 
-type CredentialStatus = boolean | 'loading' | 'unavailable'
+type CredentialStatus = CommandCodeCredentialsStatus | null
 
-/** Kept out of the component: the React compiler cannot lower try/finally. */
-async function changeCommandCodeKey(
-  clear: boolean,
-  key: string
-): Promise<CommandCodeCredentialsStatus | null> {
-  try {
-    return clear
-      ? await window.api.commandCodeCredentials.clearApiKey()
-      : await window.api.commandCodeCredentials.saveApiKey(key)
-  } catch {
-    return null
-  }
-}
+const LOCAL_OWNER: RuntimeClientTarget = { kind: 'local' }
 
-/** Local-only: the key is saved on this device and never leaves main. Switching accounts means replacing the key. */
-export function CommandCodeAccountsSection(): React.JSX.Element {
+/** Remote hosts read and save the key on their own runtime; this device cannot see it. */
+function useCommandCodeCredentials(updatedAt: number | undefined, owner: RuntimeClientTarget) {
   const t = useTranslate()
-  const usage = useAppStore((s) => s.rateLimits.commandCode)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const [status, setStatus] = useState<CredentialStatus>(null)
+  const [access, setAccess] = useState<UsageCredentialAccess>(
+    owner.kind === 'local' ? 'ready' : 'checking'
+  )
   const [draft, setDraft] = useState('')
-  const [credentialStatus, setCredentialStatus] = useState<CredentialStatus>('loading')
   const [busy, setBusy] = useState(false)
-  const statusReadGeneration = useRef(0)
-  const configured = credentialStatus === true
+  const readGeneration = useRef(0)
+  const mutationPending = useRef(false)
+  const ownerEnvironmentId = owner.kind === 'environment' ? owner.environmentId : null
 
   useEffect(() => {
-    let active = true
-    const generation = statusReadGeneration.current
-    void window.api.commandCodeCredentials.getStatus().then(
-      (status: CommandCodeCredentialsStatus) => {
-        if (active && generation === statusReadGeneration.current) {
-          setCredentialStatus(status.apiKeyConfigured)
+    if (mutationPending.current) {
+      return
+    }
+    const request = ++readGeneration.current
+    const readTarget: RuntimeClientTarget = ownerEnvironmentId
+      ? { kind: 'environment', environmentId: ownerEnvironmentId }
+      : LOCAL_OWNER
+    void callCommandCodeCredentials(readTarget, 'getStatus').then(
+      (next) => {
+        if (request === readGeneration.current) {
+          setStatus(next)
+          setAccess('ready')
         }
       },
-      () => {
-        if (active && generation === statusReadGeneration.current) {
-          setCredentialStatus('unavailable')
+      (error: unknown) => {
+        if (request === readGeneration.current) {
+          setStatus(null)
+          setAccess(ownerEnvironmentId ? usageCredentialAccessAfterError(error) : 'ready')
         }
-        console.error('Failed to load Command Code credential status')
       }
     )
     return () => {
-      active = false
+      readGeneration.current += 1
     }
-  }, [])
+  }, [updatedAt, busy, ownerEnvironmentId])
 
-  const updateCredential = async (clear: boolean): Promise<void> => {
+  const runMutation = async (
+    action: 'saveApiKey' | 'clearApiKey',
+    value: string
+  ): Promise<CommandCodeCredentialsStatus | Error> => {
+    readGeneration.current += 1
+    mutationPending.current = true
     setBusy(true)
-    const status = await changeCommandCodeKey(clear, draft.trim())
+    const result = await callCommandCodeCredentials(owner, action, value).then(
+      (next): CommandCodeCredentialsStatus | Error =>
+        typeof next?.apiKeyConfigured === 'boolean'
+          ? next
+          : new Error('Command Code keys can only be changed in the desktop app on this host.'),
+      (error: unknown): Error => {
+        if (error instanceof UsageCredentialsHostOutdatedError) {
+          setAccess('outdated')
+        }
+        return error instanceof Error ? error : new Error(String(error))
+      }
+    )
+    mutationPending.current = false
     setBusy(false)
-    if (!status) {
-      toast.error(t('sessionHistory.settings.saveError', 'Could not save. Try again.'))
-      return
-    }
-    statusReadGeneration.current += 1
-    setCredentialStatus(status.apiKeyConfigured)
-    setDraft('')
+    return result
   }
 
+  const updateCredential = async (clear: boolean): Promise<void> => {
+    if (mutationPending.current) {
+      return
+    }
+    const result = await runMutation(clear ? 'clearApiKey' : 'saveApiKey', draft.trim())
+    if (result instanceof Error) {
+      const copy = mutationFailureCopy(clear, t)
+      toast.error(copy.title, { description: copy.description })
+      return
+    }
+    setStatus(result)
+    setDraft('')
+    recordFeatureInteraction('usage-tracking')
+  }
+
+  return { status, access, draft, setDraft, busy, updateCredential }
+}
+
+function formatCredits(balance: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(balance)
+}
+
+function mutationFailureCopy(clear: boolean, t: Translate): { title: string; description: string } {
+  return clear
+    ? {
+        title: t(
+          'auto.components.settings.AccountsPane.commandCode.clearFailed',
+          'Could not clear the Command Code key'
+        ),
+        description: t(
+          'auto.components.settings.AccountsPane.commandCode.clearFailedDescription',
+          'The saved key is unchanged. Try again.'
+        )
+      }
+    : {
+        title: t(
+          'auto.components.settings.AccountsPane.commandCode.saveFailed',
+          'Could not save the Command Code key'
+        ),
+        description: t(
+          'auto.components.settings.AccountsPane.commandCode.saveFailedDescription',
+          'Check the key and try again.'
+        )
+      }
+}
+
+/** Saves one Command Code key on the selected host; switching accounts means replacing that key. */
+export function CommandCodeAccountsSection({
+  host
+}: {
+  host: UsageCredentialHost
+}): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const storeUsage = useAppStore((s) => s.rateLimits.commandCode)
+  // This computer's usage poll cannot describe another host's key.
+  const usage = host.label === null ? storeUsage : null
+  const { status, access, draft, setDraft, busy, updateCredential } = useCommandCodeCredentials(
+    usage?.updatedAt,
+    host.owner
+  )
+  const configured = status?.apiKeyConfigured === true
   const monthlyPercent = usage?.monthly ? Math.round(usage.monthly.usedPercent) : null
   const balance = usage?.extraUsage?.unit === 'credits' ? usage.extraUsage.balance : null
+  const accessNotice = usageCredentialAccessNotice(host, access, t)
 
   return (
     <SettingsGroup
@@ -95,9 +178,9 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
             {t('auto.components.settings.AccountsPane.commandCode.apiKey.label', 'API key')}
           </Label>
           <Badge variant={configured ? 'secondary' : 'outline'}>
-            {credentialStatus === 'loading'
+            {access === 'checking'
               ? t('auto.components.settings.AccountsPane.commandCode.checking', 'Checking…')
-              : credentialStatus === 'unavailable'
+              : access === 'unreachable' || (access === 'ready' && status === null)
                 ? t(
                     'auto.components.settings.AccountsPane.commandCode.unavailable',
                     'Status unavailable'
@@ -107,12 +190,13 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
                   : t('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
           </Badge>
         </div>
+        {accessNotice && <p className="text-xs text-muted-foreground">{accessNotice}</p>}
         <div className="flex gap-2">
           <Input
             id="command-code-api-key"
             type="password"
             value={draft}
-            disabled={busy}
+            disabled={busy || access !== 'ready'}
             onChange={(event) => setDraft(event.target.value)}
             placeholder={t(
               'auto.components.settings.AccountsPane.commandCode.apiKey.placeholder',
@@ -123,7 +207,7 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
           />
           <Button
             size="xs"
-            disabled={busy || !draft.trim()}
+            disabled={busy || access !== 'ready' || !draft.trim()}
             onClick={() => void updateCredential(false)}
           >
             {configured
@@ -134,7 +218,7 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
             <Button
               variant="ghost"
               size="xs"
-              disabled={busy}
+              disabled={busy || access !== 'ready'}
               onClick={() => void updateCredential(true)}
             >
               {t('auto.components.settings.AccountsPane.b398b834c9', 'Clear')}
@@ -144,17 +228,6 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
       </SearchableSetting>
       {configured && usage && (
         <div className="space-y-1 py-3 text-sm text-muted-foreground">
-          {monthlyPercent !== null && (
-            <p>
-              {t(
-                'auto.components.settings.AccountsPane.commandCode.monthly',
-                'Monthly plan: {{percent}}% used',
-                {
-                  percent: monthlyPercent
-                }
-              )}
-            </p>
-          )}
           {usage.planType && (
             <p>
               {t('auto.components.settings.AccountsPane.commandCode.plan', 'Plan: {{plan}}', {
@@ -162,14 +235,21 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
               })}
             </p>
           )}
+          {monthlyPercent !== null && (
+            <p>
+              {t(
+                'auto.components.settings.AccountsPane.commandCode.monthly',
+                'Monthly plan: {{percent}}% used',
+                { percent: monthlyPercent }
+              )}
+            </p>
+          )}
           {balance !== null && (
             <p>
               {t(
                 'auto.components.settings.AccountsPane.commandCode.credits',
                 'Credits remaining: {{credits}}',
-                {
-                  credits: balance
-                }
+                { credits: formatCredits(balance, intlLocale) }
               )}
             </p>
           )}

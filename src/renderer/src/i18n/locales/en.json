@@ -9054,7 +9054,11 @@
             "unavailable": "Status unavailable",
             "monthly": "Monthly plan: {{percent}}% used",
             "credits": "Credits remaining: {{credits}}",
-            "plan": "Plan: {{plan}}"
+            "plan": "Plan: {{plan}}",
+            "clearFailed": "Could not clear the Command Code key",
+            "clearFailedDescription": "The saved key is unchanged. Try again.",
+            "saveFailed": "Could not save the Command Code key",
+            "saveFailedDescription": "Check the key and try again."
           }
         },
         "AdvancedPane": {
@@ -11120,7 +11124,17 @@
             "54c541fc6e": "Codex accounts",
             "4518496456": "Active Codex account",
             "be3a748ebb": "Claude accounts",
-            "9b6ce52c36": "MiniMax usage"
+            "9b6ce52c36": "MiniMax usage",
+            "commandCode": {
+              "title": "Command Code",
+              "description": "Save a Command Code API key to see plan usage and credits.",
+              "kw": {
+                "name": "command code",
+                "key": "api key",
+                "usage": "usage",
+                "credits": "credits"
+              }
+            }
           }
         },
         "advanced": {
@@ -11401,7 +11415,17 @@
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
             "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "ba1f9d39a6": "Antigravity usage",
+            "commandCode": {
+              "title": "Command Code usage",
+              "description": "Show Command Code plan usage and credits in the status bar.",
+              "kw": {
+                "name": "command code"
+              }
+            }
+          },
+          "statusBar": {
+            "commandCodeToggleDescription": "Show Command Code plan usage and credits for the active workspace."
           }
         },
         "auto": {

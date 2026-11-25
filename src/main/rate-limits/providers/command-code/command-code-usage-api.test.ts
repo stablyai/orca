@@ -49,4 +49,16 @@ describe('fetchCommandCodeRateLimits', () => {
     expect(result.monthly?.usedPercent).toBe(25)
     expect(result.extraUsage).toMatchObject({ balance: 2 })
   })
+
+  it('reports a rejected key when the subscriptions route returns 401, even if credits is 404', async () => {
+    routeBy((url) =>
+      url.endsWith(COMMAND_CODE_CREDITS_PATH)
+        ? new Response('{}', { status: 404 })
+        : new Response('{}', { status: 401 })
+    )
+    const result = await fetchCommandCodeRateLimits({ apiKey: KEY })
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
+    expect(result.error).toBe('Command Code rejected the saved API key')
+  })
 })

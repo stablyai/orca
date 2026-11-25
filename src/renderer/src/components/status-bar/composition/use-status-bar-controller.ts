@@ -168,7 +168,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   // OpenCode Go usage can use web credentials independently of CLI detection.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
-  // Opt-in item: shows only once a key is saved or a reading exists.
+  // Default-on, but hidden until a key is saved or a reading exists.
   const showCommandCode = visibleCommandCode !== null && statusBarItems.includes('command-code')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')

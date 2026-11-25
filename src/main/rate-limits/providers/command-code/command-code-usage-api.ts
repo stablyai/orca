@@ -85,10 +85,17 @@ export async function fetchCommandCodeRateLimits(input: {
     getJson(COMMAND_CODE_CREDITS_PATH, input.apiKey, input.signal),
     getJson(COMMAND_CODE_SUBSCRIPTIONS_PATH, input.apiKey, input.signal)
   ])
-  if (credits.kind === 'failed' && credits.failureKind === 'missing-credentials') {
+  // Either route rejecting the key settles it; a 404 on the other route does not hide that verdict.
+  const rejected = [credits, subscriptions].some(
+    (read) => read.kind === 'failed' && read.failureKind === 'missing-credentials'
+  )
+  if (rejected) {
     return failed('Command Code rejected the saved API key', 'missing-credentials')
   }
-  if (credits.kind === 'failed' && credits.failureKind === 'no-subscription') {
+  const entitlement = [credits, subscriptions].some(
+    (read) => read.kind === 'failed' && read.failureKind === 'no-subscription'
+  )
+  if (entitlement) {
     return failed('This Command Code plan does not include API usage access', 'no-subscription')
   }
   if (credits.kind === 'failed' && subscriptions.kind === 'failed') {

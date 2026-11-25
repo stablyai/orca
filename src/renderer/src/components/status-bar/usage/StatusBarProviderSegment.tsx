@@ -173,7 +173,7 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
     case 'muse':
       return 'S'
     case 'command-code':
-      return 'D'
+      return '>_'
     case 'codex':
       return 'X'
   }
