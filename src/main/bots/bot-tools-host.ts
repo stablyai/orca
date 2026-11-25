@@ -42,7 +42,7 @@ import { redactBotToolProblems } from './bot-tool-redaction'
 import { cliWithLaunchTools, withRelayProblems } from './bot-launch-tools'
 import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import type { BotAgent } from '../../shared/bot-types'
-import { readBotToolOAuth, withSavedBotToolHeaders } from './bot-tool-credentials'
+import { botToolOAuthReader, withSavedBotToolHeaders } from './bot-tool-credentials'
 
 export type BotToolsFolder = {
   /** The relay grant's owner: the bot, or the host list's reserved owner. */
@@ -221,10 +221,11 @@ export async function botToolProblems(
   const ownerStdioNames = cli.agent === 'codex' ? await codexStdioToolNames(cli) : []
   const taken = codexTakenToolProblems(scoped, ownerStdioNames)
   // A tool Orca signs in to has its state from Orca's own store; checking it would start it.
+  const readOAuth = botToolOAuthReader(cli.folder)
   const servers = scoped.filter(
     (server) =>
       !Object.hasOwn(taken, server.name) &&
-      !('url' in server && server.credential && readBotToolOAuth(cli.folder, server.credential))
+      !('url' in server && server.credential && readOAuth(server.credential))
   )
   // Another agent has no CLI check, so its rows show no problem, as a Claude or Codex row it confirmed.
   if (servers.length === 0 || !hasBotToolsCli(cli)) {

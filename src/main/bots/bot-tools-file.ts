@@ -128,7 +128,7 @@ function writeServers(
   }
   // Names are unique in a read file, so each entry finds its previous one without a search.
   const previousByName = new Map(snapshot.file.servers.map((entry) => [entry.name, entry]))
-  const readOAuth = lazyOAuthReader(folder)
+  const readOAuth = botToolOAuthReader(folder)
   const stored = entries.map(({ server, extras }): Record<string, unknown> => {
     const previous = previousByName.get(rename?.to === server.name ? rename.from : server.name)
     const unknown = botToolEntryExtras(extras ?? previous)
@@ -302,20 +302,14 @@ export async function writeBotToolServers(
   await changeBotToolServers(folder, () => [...servers])
 }
 
-/** Reads the credential store at most once, on the first sign-in asked for. */
-function lazyOAuthReader(folder: string): (id: string) => BotToolOAuthEntry | null {
-  let read: ((id: string) => BotToolOAuthEntry | null) | undefined
-  return (id) => (read ??= botToolOAuthReader(folder))(id)
-}
-
 /** `folder` is the bot's home, where a tool Orca signs in to has its sign-in. */
 export function botOwnTool(server: BotToolServer, folder: string): BotOwnTool {
-  return ownTool(server, lazyOAuthReader(folder))
+  return ownTool(server, botToolOAuthReader(folder))
 }
 
 /** `botOwnTool` for every server, from one read of the credential store. */
 export function botOwnTools(servers: readonly BotToolServer[], folder: string): BotOwnTool[] {
-  const readOAuth = lazyOAuthReader(folder)
+  const readOAuth = botToolOAuthReader(folder)
   return servers.map((server) => ownTool(server, readOAuth))
 }
 

@@ -1,12 +1,12 @@
-// Guards PR #<n>: listing a host's MCP servers or flipping one server's switch opens each saved
-// credential a fixed number of times, not once per credentialed server on the list.
+// Guards PR #<n>: listing or checking a host's MCP servers or a bot's tools, or flipping one server's
+// switch, opens each saved credential a fixed number of times, not once per credentialed server.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
 import { useBotToolCredentialsRoot } from '../bots/bot-tool-credentials'
-import { listBotTools } from '../bots/bot-tools-host'
+import { botToolProblems, listBotTools } from '../bots/bot-tools-host'
 import { writeBotToolServers } from '../bots/bot-tools-file'
 import { listMcpServers, setMcpServerAgentEnabled } from './mcp-host-list'
 
@@ -80,16 +80,24 @@ it('opens each credential four times per switch', async () => {
   expect(await opensFor(100, flip)).toBe(400)
 })
 
-// A bot with no agent CLI of its own, so nothing outside the test folders is read.
+// A bot with no agent CLI of its own, so nothing outside the test folders is read or started.
+const home = (folder: string) => ({
+  botId: 'bot-1',
+  folder,
+  signInFolder: folder,
+  otherBotFolders: [],
+  agent: 'opencode' as const
+})
+
 it("opens each credential twice per bot's tools list", async () => {
-  const list = (folder: string) =>
-    listBotTools({
-      botId: 'bot-1',
-      folder,
-      signInFolder: folder,
-      otherBotFolders: [],
-      agent: 'opencode'
-    })
+  const list = (folder: string) => listBotTools(home(folder))
   expect(await opensFor(10, list)).toBe(20)
   expect(await opensFor(100, list)).toBe(200)
+})
+
+// The file's read, and one read that tells each server with a credential whether Orca signs in to it.
+it('opens each credential twice per tools check', async () => {
+  const check = (folder: string) => botToolProblems(home(folder))
+  expect(await opensFor(10, check)).toBe(20)
+  expect(await opensFor(100, check)).toBe(200)
 })

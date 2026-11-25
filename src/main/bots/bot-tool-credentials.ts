@@ -177,10 +177,13 @@ export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry 
   return botToolOAuthReader(folder)(id)
 }
 
-/** `readBotToolOAuth` for many ids from one read of the store, which opens every entry. */
+/**
+ * `readBotToolOAuth` for many ids from one read of the store, which opens every entry; taken on the
+ * first id asked for, so a caller with none reads nothing.
+ */
 export function botToolOAuthReader(folder: string): (id: string) => BotToolOAuthEntry | null {
-  const sealed = readSealed(folder)
-  return (id) => oauthOf(entryOf(sealed, id))
+  let sealed: Stored | undefined
+  return (id) => oauthOf(entryOf((sealed ??= readSealed(folder)), id))
 }
 
 function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
