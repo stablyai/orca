@@ -3,12 +3,12 @@
 # This is a RATCHET: counts may only go DOWN.
 # Prune: node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs --prune
 1 src/main/acp/conversation-copy/acp-conversation-copies.ts
-3 src/main/acp/conversation-copy/acp-conversation-copy.ts
-5 src/main/acp/launch/acp-launch-command.ts
+1 src/main/acp/conversation-copy/acp-conversation-copy.ts
+3 src/main/acp/launch/acp-launch-command.ts
 2 src/main/acp/launch/acp-private-temp.ts
+1 src/main/acp/launch/acp-structured-launch-preparation.ts # moved from acp-structured-acquire.ts with the private-temp connect call
 1 src/main/acp/launch/acp-structured-launch-resolution.ts
 1 src/main/acp/process/acp-agent-connection.ts
-1 src/main/acp/session/acp-structured-acquire.ts
 1 src/main/acp/text-task/acp-text-task.ts
 1 src/main/agent-hooks/first-work/first-work-generation-target.ts
 1 src/main/agent-hooks/installation/bare-shell-plugin-agent-presence.ts
@@ -21,14 +21,13 @@
 1 src/main/agent-hooks/server/server-opencode-binder.ts
 1 src/main/agent-hooks/server/server-runtime-env.ts
 1 src/main/agent-hooks/server/server-status-hook-lifecycle.ts
-1 src/main/agent-hooks/server/server-status-retries.ts
 2 src/main/agent-hooks/wsl-relay/wsl-hook-relay-deps.ts
 3 src/main/agent-hooks/wsl-relay/wsl-hook-relay-launch.ts
 2 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
-12 src/main/agent-launch/trust/agent-trust-presets.ts
+10 src/main/agent-launch/trust/agent-trust-presets.ts
 2 src/main/agent-launch/trust/agent-workspace-trust-spawn.ts
 5 src/main/agent-launch/trust/agent-workspace-trust.ts
-3 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
+1 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
 12 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 3 src/main/ai-vault-search/session-search-child-service.ts
 4 src/main/ai-vault-search/session-search-enablement.ts
@@ -37,13 +36,12 @@
 3 src/main/ai-vault/discovery/ai-vault-scan-roots.ts
 1 src/main/ai-vault/discovery/session-scanner-agent-sources.ts
 3 src/main/ai-vault/discovery/session-scanner-roots.ts
-3 src/main/ai-vault/discovery/session-scanner-source-discovery.ts
+1 src/main/ai-vault/discovery/session-scanner-source-discovery.ts
 2 src/main/ai-vault/listing/cached-session-list.ts
 9 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
 1 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
 14 src/main/ai-vault/parse-cache/session-parse-cache-persistence.ts
 1 src/main/ai-vault/parse-cache/session-scanner-sidecar-enrichment.ts
-14 src/main/ai-vault/parsing/session-scanner-agent-parser.ts
 1 src/main/ai-vault/prompts/session-first-user-prompt-handler.ts
 5 src/main/ai-vault/scan-service/session-scanner-background.ts
 3 src/main/ai-vault/scan-service/session-scanner-service-entry-path.ts
@@ -51,60 +49,77 @@
 2 src/main/ai-vault/scanners/devin/session-scanner-devin-db.ts
 2 src/main/ai-vault/scanners/hermes/hermes-state-db-conversations.ts
 3 src/main/ai-vault/scanners/hermes/hermes-state-db-schema.ts
-2 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sources.ts
+1 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sources.ts
 15 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sqlite.ts
-5 src/main/ai-vault/scanners/hermes/session-scanner-hermes-worker.ts
 1 src/main/ai-vault/scanners/omp/omp-session-root.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
 15 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch.ts
 1 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process-entry.ts
-25 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
+5 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-wsl-client.ts
-3 src/main/ai-vault/scanners/opencode/session-scanner-opencode-sources.ts
 3 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture.ts
-1 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-discovery.ts
 2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list.ts
 1 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open.ts
 3 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite.ts
 1 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
 4 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
-1 src/main/ai-vault/scanners/zcode/session-scanner-zcode-sources.ts
-2 src/main/ai-vault/session-handoff-snapshot.ts
+1 src/main/ai-vault/session-handoff-snapshot.ts
 1 src/main/ai-vault/session-titles/session-title-resolver.ts
-1 src/main/ai-vault/transcripts/session-transcript-reader.ts
 4 src/main/amp/hook-service.ts
-1 src/main/antigravity/antigravity-acp-launch-spec.ts
 1 src/main/antigravity/antigravity-chat-sign-in.ts
-2 src/main/antigravity/antigravity-host-acp.ts
 8 src/main/antigravity/hook-service.ts
-4 src/main/antigravity/native-account-host.ts
-4 src/main/antigravity/native-account-launch.ts
-2 src/main/antigravity/native-account-store.ts
-6 src/main/antigravity/native-credential-backend.ts
-4 src/main/antigravity/native-file-credentials.ts
-13 src/main/antigravity/native-windows-credentials.ts
+1 src/main/antigravity/native-account-host.ts
+3 src/main/antigravity/native-account-launch.ts
+4 src/main/antigravity/native-credential-backend.ts
+1 src/main/antigravity/native-file-credentials.ts
+12 src/main/antigravity/native-windows-credentials.ts
 1 src/main/antigravity/native-wsl-credentials.ts
 6 src/main/artifacts/artifact-cloud-auth-context.ts
-10 src/main/artifacts/artifact-cloud-service.ts
-8 src/main/artifacts/artifact-create-intent-store.ts
-9 src/main/artifacts/artifact-publisher.ts
-12 src/main/artifacts/artifact-share-record-store.ts
+7 src/main/artifacts/artifact-cloud-service.ts
+2 src/main/artifacts/artifact-create-intent-store.ts # sign-out clear (bestEffortFsyncDirectorySync) plus writeArtifactFileWhileCurrent, whose only sync step is the fenced renameSync; was 8
+1 src/main/artifacts/artifact-guarded-secure-write.ts # per artifact write: writeSecureFileAsync keeps only its renameSync in the fence-check turn so a sign-out clear cannot land between; replaces sync reads, stage and fsync
+1 src/main/artifacts/artifact-publisher.ts
+8 src/main/artifacts/artifact-share-record-store.ts
+1 src/main/automations/bot-automation-service-wiring.ts
 1 src/main/automations/external-managers/external-manager-discovery.ts
 1 src/main/automations/external-managers/scoped-external-automations.ts
 1 src/main/automations/launch/automation-run-setup-skip.ts
 2 src/main/automations/runtime-automation-service.ts
+1 src/main/avatar-generation/avatar-generation-ipc.ts # per Generate click: the agent env prep commit-message generation shares; its sync read is a shell rc lookup for GROK_HOME only when it is unset
 5 src/main/backend/backend-entry.ts
 11 src/main/backend/core-runtime-activation.ts
 2 src/main/backend/core-runtime.ts
-4 src/main/bitbucket/client.ts
-5 src/main/bitbucket/credential-connection.ts
-7 src/main/bitbucket/credential-store.ts
-2 src/main/bitbucket/pull-request-creation.ts
-2 src/main/bitbucket/resolve-auth.ts
+1 src/main/bots/bot-access-request-watch.ts
+1 src/main/bots/bot-group-store-tables.ts # indexRemoteAsks at store open (one-shot startup); its SQL is in main-blocking-sqlite-baseline
+1 src/main/bots/bot-group-store.ts # createBotGroupTables at store open (one-shot startup); its SQL is in main-blocking-sqlite-baseline
+1 src/main/bots/bot-items-link-join.ts
+1 src/main/bots/bot-look-around-store.ts
+1 src/main/bots/bot-memory-history.ts
+1 src/main/bots/bot-package-apply.ts
+2 src/main/bots/bot-structured-session-wiring.ts
+14 src/main/bots/bot-tool-credentials.ts
+2 src/main/bots/bot-tool-details.ts
+3 src/main/bots/bot-tool-secret-scrub.ts
+2 src/main/bots/bot-tools-claude.ts
+20 src/main/bots/bot-tools-file.ts
+13 src/main/bots/bot-tools-host.ts
+4 src/main/bots/bot-tools-removal.ts
+5 src/main/bots/bot-tools-sign-in.ts
+2 src/main/bots/bot-work-runtime.ts
+1 src/main/bots/sharing/bot-share-client.ts
+1 src/main/bots/sharing/bot-share-picks-store.ts
+3 src/main/bots/sharing/bot-share-sources.ts
+5 src/main/bots/tool-oauth/bot-tool-credential-source.ts
+1 src/main/bots/tool-oauth/bot-tool-oauth-revoke.ts
+4 src/main/bots/tool-oauth/bot-tool-oauth-sign-in.ts
+12 src/main/bots/tool-oauth/bot-tool-oauth-tokens.ts
+6 src/main/bots/tool-oauth/bot-tool-owned-sign-in.ts
+3 src/main/bots/tool-oauth/bot-tool-sign-in-attempts.ts
+7 src/main/bots/tool-oauth/bot-tool-sign-in-flows.ts
+2 src/main/bots/tool-relay/bot-tool-relay.ts
 4 src/main/browser-passwords/browser-password-chromium-import.ts
 3 src/main/browser-passwords/browser-password-store.ts
 1 src/main/browser-passwords/browser-password-vault-file.ts
-1 src/main/browser/agent-browser/helper-process/agent-browser-binary.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-bridge-execution.ts
 1 src/main/browser/agent-browser/session-lifecycle/agent-browser-bridge-lifecycle.ts
 2 src/main/browser/agent-browser/session-lifecycle/agent-browser-session-reset.ts
@@ -117,11 +132,12 @@
 8 src/main/browser/cookies/chromium/import-cookies.ts
 5 src/main/browser/cookies/chromium/prepare-import.ts
 1 src/main/browser/cookies/chromium/scan-source-rows.ts
-7 src/main/browser/cookies/client-route/browser-client-route-cookie-import.ts
-3 src/main/browser/cookies/client-route/client-route-cookie-import-source-store.ts
+1 src/main/browser/cookies/client-route/browser-client-route-cookie-import.ts
 1 src/main/browser/cookies/imports/import-cookie-file.ts
 4 src/main/browser/cookies/imports/import-validated-cookies.ts
-2 src/main/browser/cookies/session-restore/browser-session-cookie-restore.ts
+3 src/main/browser/cookies/route-partition/browser-route-partition-cookie-import.ts # browser cookie source detection moved here from the import IPC and client-route import
+1 src/main/browser/cookies/route-partition/browser-ssh-route-cookie-import.ts # same source detection as the local import IPC
+1 src/main/browser/cookies/session-restore/browser-session-cookie-restore.ts
 1 src/main/browser/cookies/session-restore/browser-session-cookie-snapshot-file.ts
 5 src/main/browser/cookies/sources/browser-cookie-detection.ts
 4 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
@@ -146,11 +162,9 @@
 1 src/main/browser/guest-lifecycle/prompts/browser-system-dialogs.ts
 7 src/main/browser/identity/mode/browser-identity-mode-store.ts
 1 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
-1 src/main/browser/network/execution-routes/browser-network-execution-route-dispatch.ts
 1 src/main/browser/network/execution-routes/ssh-browser-network-execution-route.ts
-2 src/main/browser/network/execution-routes/wsl-browser-network-execution-route.ts
-2 src/main/browser/network/execution-routes/wsl-browser-network-relay-launch.ts
-2 src/main/browser/routing/local-host-partitions/local-ssh-browser-partitions.ts
+1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partition-bindings.ts # moved with the jar binding code from local-ssh-browser-partitions.ts
+1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partitions.ts
 1 src/main/browser/routing/local-host-partitions/wsl-host-browser-route-partition.ts
 4 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 5 src/main/browser/routing/partitions/browser-route-partition-pending-deletes.ts
@@ -194,7 +208,6 @@
 2 src/main/claude/agent-view/agent-view-plugin.ts
 1 src/main/claude/agent-view/agent-view-service.ts
 1 src/main/claude/child-process/claude-agent-sdk-process-spawn.ts
-1 src/main/claude/claude-cli-conversations.ts
 1 src/main/claude/claude-stream-json-connection.ts
 1 src/main/claude/configuration/claude-diff-panel-auto-open.ts
 13 src/main/claude/configuration/claude-folder-trust-file.ts
@@ -207,14 +220,13 @@
 3 src/main/claude/hooks/windows-hook-files.ts
 2 src/main/claude/structured/claude-structured-session-adapter.ts
 2 src/main/claude/structured/launch/claude-structured-child-env.ts
-1 src/main/claude/structured/launch/claude-structured-launch-home.ts
 1 src/main/claude/structured/launch/claude-structured-launch-resolution.ts
 1 src/main/claude/theme-sync/claude-code-theme-sync-schedule.ts
 10 src/main/claude/theme-sync/claude-code-theme-sync.ts
-2 src/main/claude/transcripts/claude-conversation-copy.ts
-4 src/main/claude/transcripts/claude-rewind-fork.ts
+1 src/main/claude/transcripts/claude-conversation-copy.ts
+2 src/main/claude/transcripts/claude-rewind-fork.ts
 2 src/main/claude/transcripts/claude-rewind-transcript.ts
-2 src/main/claude/transcripts/claude-transcript-catch-up.ts
+1 src/main/claude/transcripts/claude-transcript-catch-up.ts
 1 src/main/claude/transcripts/claude-transcript-recovery.ts
 12 src/main/cli/appimage/appimage-copy-pre-extraction.ts
 29 src/main/cli/appimage/appimage-extracted-root.ts
@@ -239,7 +251,7 @@
 1 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 4 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain.ts
 10 src/main/codex-accounts/login/codex-login-session.ts
-3 src/main/codex-accounts/managed-homes/codex-config-mirror.ts
+2 src/main/codex-accounts/managed-homes/codex-config-mirror.ts
 7 src/main/codex-accounts/managed-homes/codex-managed-home-lifecycle.ts
 4 src/main/codex-accounts/managed-homes/codex-managed-home-path.ts
 2 src/main/codex-accounts/managed-homes/guest-codex-account-homes.ts
@@ -249,7 +261,7 @@
 4 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 19 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-config-compatibility.ts
-3 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
+2 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
 11 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts # Codex launch prep from #43365 already merged; unblocks main, async follow-up owed
 9 src/main/codex-accounts/runtime-home/routing/runtime-home-service-launch.ts
 8 src/main/codex-accounts/runtime-home/routing/runtime-home-service-managed-home.ts
@@ -263,7 +275,8 @@
 1 src/main/codex-usage/store.ts
 1 src/main/codex/app-server/codex-app-server-connection.ts
 2 src/main/codex/app-server/codex-app-server-session.ts
-2 src/main/codex/codex-conversation-copy.ts
+1 src/main/codex/app-server/shared-servers/codex-shared-server-windows-job.ts # the windows-process-tree loader: one cached readFileSync per process (relay addon check)
+1 src/main/codex/codex-conversation-copy.ts
 2 src/main/codex/configuration/agent-state-file-reader.ts
 1 src/main/codex/configuration/codex-path-observation.ts
 22 src/main/codex/configuration/homes/codex-home-paths.ts
@@ -271,54 +284,56 @@
 3 src/main/codex/configuration/homes/codex-managed-home-rules.ts
 12 src/main/codex/configuration/homes/codex-pane-account-registry.ts
 3 src/main/codex/configuration/homes/codex-real-home-path.ts
-1 src/main/codex/configuration/homes/codex-runtime-home-launch-preparation.ts
+2 src/main/codex/configuration/homes/codex-runtime-home-launch-preparation.ts # +1: the deferred config mirror now runs here from data (it was a closure built in runtime-home-service-*); main runs it only when the trust worker did not
 1 src/main/codex/configuration/homes/codex-stale-pane-accounts.ts
 9 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/codex/configuration/settings/codex-config-mirror-merge.ts
-30 src/main/codex/configuration/settings/codex-config-mirror.ts
+3 src/main/codex/configuration/settings/codex-config-mirror-source.ts # moved from codex-config-mirror.ts with the system-config preparation helpers; no new calls
+27 src/main/codex/configuration/settings/codex-config-mirror.ts
 2 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/codex-config-runtime-owned-values.ts
 2 src/main/codex/configuration/settings/config-settings-baseline.ts
-1 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
-8 src/main/codex/configuration/settings/config-settings-promotion.ts
+2 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 resolveThroughLinkedAncestor: realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable, so a host ~/.codex linked into a WSL distro is never written (#45247)
+9 src/main/codex/configuration/settings/config-settings-promotion.ts # +1 resolvesIntoWslShare: realpath.native of a drive root only on Windows for a drive-letter target in a write-back or held-back pass (#45247)
 1 src/main/codex/configuration/settings/config-sync-stall.ts
-2 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
+1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
 3 src/main/codex/configuration/shared-server/codex-shared-server-pane.ts
 2 src/main/codex/configuration/shared-server/codex-shared-server-probe.ts
-6 src/main/codex/configuration/toml/config-toml-atomic-write.ts
+8 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction); +1 resolvesIntoWslShare only with refuseWslTarget (promotion write-back), realpath.native only for a Windows drive-letter target (#45247)
 4 src/main/codex/configuration/toml/config-toml-runtime-owned-sections.ts
 9 src/main/codex/history/backfill/codex-session-backfill-marker.ts
 6 src/main/codex/history/backfill/codex-session-backfill.ts
 3 src/main/codex/history/backfill/desktop-codex-session-migration.ts
-22 src/main/codex/history/bridges/codex-session-bridge.ts
-3 src/main/codex/history/cleanup/codex-host-rollout-homes.ts
+13 src/main/codex/history/bridges/codex-session-bridge.ts
+2 src/main/codex/history/cleanup/codex-host-rollout-homes.ts
 1 src/main/codex/history/index/codex-account-session-index-heal.ts
 1 src/main/codex/history/index/codex-session-index-heal-state.ts
 13 src/main/codex/history/index/codex-session-index-heal.ts
 3 src/main/codex/history/index/codex-state-db-backfill-recovery-process.ts
 5 src/main/codex/history/index/codex-state-db-backfill-recovery.ts
 5 src/main/codex/history/index/codex-state-db.ts
-2 src/main/codex/history/journal-views/codex-cli-conversations.ts
+1 src/main/codex/history/journal-views/codex-cli-conversations.ts
 3 src/main/codex/history/resume/codex-ai-vault-session-resume.ts
 2 src/main/codex/history/resume/codex-legacy-session-resume.ts
 6 src/main/codex/history/resume/codex-session-resume-home.ts
 4 src/main/codex/history/resume/codex-session-resume-launch-preparation.ts
 1 src/main/codex/history/resume/codex-session-resume-preparation.ts
-3 src/main/codex/history/resume/codex-thread-account-move.ts
 1 src/main/codex/history/rollouts/codex-session-file-listing.ts
 2 src/main/codex/history/rollouts/codex-session-link.ts
 2 src/main/codex/history/shared-store/wsl-codex-account-history.ts
 3 src/main/codex/hooks/definitions/codex-hook-definition.ts
-9 src/main/codex/hooks/installation/codex-hook-launch-preparation.ts
-14 src/main/codex/hooks/installation/codex-hook-local-install.ts
-21 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts
-13 src/main/codex/hooks/installation/codex-hook-service-implementation.ts
+9 src/main/codex/hooks/installation/codex-hook-launch-preparation.ts # unchanged from main: Off now routes its strip through the worker (strip runs on main only when the worker is down)
+2 src/main/codex/hooks/installation/codex-hook-local-install.ts # was 14 on main; the pass now runs on the trust worker, main keeps legacy cleanup and status
+8 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts
+6 src/main/codex/hooks/installation/codex-hook-managed-strip.ts # moved from codex-hook-local-maintenance (the managed-hook strip, shared by the trust worker and Off removal)
+5 src/main/codex/hooks/installation/codex-hook-pass-off-main.ts # moved from codex-hook-local-install/-maintenance (legacy cleanup and status); +1 names the worker-death recovery, whose main strip runs only when a fresh worker also fails
+12 src/main/codex/hooks/installation/codex-hook-service-implementation.ts
 9 src/main/codex/hooks/installation/codex-hook-wsl-runtime.ts
 1 src/main/codex/hooks/installation/codex-wsl-hook-install-plan.ts
 2 src/main/codex/hooks/installation/hook-service.ts
 4 src/main/codex/hooks/reconciliation/codex-account-home-hook.ts
-13 src/main/codex/hooks/reconciliation/codex-hook-legacy-cleanup.ts
+14 src/main/codex/hooks/reconciliation/codex-hook-legacy-cleanup.ts # legacy profile delete re-reads the file right before unlinking so a newer save is never deleted
 4 src/main/codex/hooks/reconciliation/codex-hook-reconcile.ts
 8 src/main/codex/hooks/reconciliation/codex-hook-status.ts
 12 src/main/codex/hooks/reconciliation/codex-real-home-hook-install.ts
@@ -340,37 +355,38 @@
 7 src/main/codex/trust/hooks/codex-hook-approval-first-write.ts
 14 src/main/codex/trust/hooks/codex-hook-hash-lookup.ts
 11 src/main/codex/trust/hooks/codex-hook-orca-approvals.ts
-1 src/main/codex/trust/hooks/codex-hook-system-trust.ts
 11 src/main/codex/trust/hooks/codex-hook-trust-cleanup.ts
 4 src/main/codex/trust/hooks/codex-hook-trust-derivation.ts
 6 src/main/codex/trust/hooks/codex-hook-trust-memo.ts
 1 src/main/codex/trust/hooks/codex-hook-trust-queue.ts
-7 src/main/codex/trust/hooks/codex-hook-user-mirroring.ts
 1 src/main/codex/trust/hooks/codex-user-hook-trust-moves.ts
 15 src/main/codex/trust/hooks/hook-trust-promotion.ts
 1 src/main/codex/trust/identity/codex-trust-identity.ts
 1 src/main/codex/trust/toml/config-toml-project-trust.ts
-30 src/main/codex/trust/toml/config-toml-trust.ts
+18 src/main/codex/trust/toml/config-toml-trust.ts
 6 src/main/command-code/hook-service.ts
+7 src/main/composio/composio-bot-tool.ts
+5 src/main/composio/composio-bots.ts
 1 src/main/computer/macos-native/macos-native-provider-paths.ts
 1 src/main/computer/macos-permissions/macos-computer-use-permission-status-gate.ts
 6 src/main/computer/macos-permissions/macos-computer-use-permission-status.ts
 5 src/main/computer/macos-permissions/macos-computer-use-permissions.ts
 7 src/main/computer/sidecar-transport/sidecar-client.ts
 2 src/main/connector-cloud/connector-cloud-install.ts
-5 src/main/connector-cloud/connector-token-mint.ts
-1 src/main/connector-cloud/connector-turn-events.ts
+1 src/main/connector-cloud/connector-cloud.ts
+3 src/main/connector-cloud/connector-host-install.ts
+7 src/main/connector-cloud/connector-token-mint.ts
+1 src/main/connector-cloud/connector-turn-outbox-file.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
 6 src/main/copilot/hook-service.ts
+6 src/main/core-desktop/desktop-core-composition.ts # moved unchanged from main-process-ready-runtime.ts (one-shot startup composition)
+1 src/main/core-desktop/desktop-core-shutdown.ts # moved unchanged from main-process-quit.ts (one-shot quit metadata clear)
+2 src/main/core-desktop/renderer-shutdown-checkpoint-service.ts # moved unchanged from ipc/renderer-shutdown-checkpoint.ts (unload staging drift report)
 4 src/main/crash-reporting/capture/appimage-crashpad-handler-exit.ts
 1 src/main/crash-reporting/capture/crashpad-capture.ts
 2 src/main/crash-reporting/process-exits/process-gone-diagnostics.ts
 1 src/main/crash-reporting/process-exits/process-gone-recorder.ts
 2 src/main/crash-reporting/reports/crash-feedback-diagnostic-bundle.ts
 1 src/main/crash-reporting/reports/crash-report-store.ts
-4 src/main/credentials/encrypted-api-key-file-store.ts
-7 src/main/credentials/integration-credential-file.ts
-1 src/main/credentials/integration-state-file-cache.ts
-2 src/main/credentials/integration-token-file-cache.ts
 1 src/main/cursor-accounts/status.ts
 6 src/main/cursor/hook-service.ts
 3 src/main/daemon/admission/automatic-work-run-marker-store.ts
@@ -418,7 +434,6 @@
 6 src/main/daemon/launch/daemon-spawner.ts
 8 src/main/daemon/launch/daemon-stale-kill.ts
 4 src/main/daemon/launch/local-terminal-daemon-stop.ts
-5 src/main/daemon/observability/daemon-adoption-telemetry-event.ts
 1 src/main/daemon/observability/daemon-file-log.ts
 2 src/main/daemon/permissions/daemon-tcc-attribution.ts
 11 src/main/daemon/process-scopes/daemon-cgroup-scope.ts
@@ -428,13 +443,13 @@
 3 src/main/daemon/providers/adapter/daemon-pty-daemon-recovery.ts
 1 src/main/daemon/providers/adapter/daemon-pty-runtime-state.ts
 1 src/main/daemon/providers/adapter/daemon-pty-session-control.ts
-6 src/main/daemon/providers/adapter/daemon-pty-session-spawn.ts
-18 src/main/daemon/providers/lifecycle/daemon-provider-init.ts
+5 src/main/daemon/providers/adapter/daemon-pty-session-spawn.ts
+17 src/main/daemon/providers/lifecycle/daemon-provider-init.ts
 7 src/main/daemon/providers/lifecycle/daemon-provider-restart.ts
 5 src/main/daemon/providers/lifecycle/daemon-provider-state.ts
 4 src/main/daemon/providers/lifecycle/daemon-severed-restart.ts
 1 src/main/daemon/providers/lifecycle/daemon-uninstall-shutdown.ts
-3 src/main/daemon/providers/routing/daemon-legacy-adapters.ts
+2 src/main/daemon/providers/routing/daemon-legacy-adapters.ts
 8 src/main/daemon/providers/routing/daemon-newer-protocol-hold.ts
 2 src/main/daemon/providers/routing/daemon-unlisted-session.ts
 1 src/main/daemon/providers/wsl/daemon-wsl-bridge-boot-identity.ts
@@ -449,6 +464,7 @@
 1 src/main/daemon/server/daemon-session-background-routing.ts
 1 src/main/daemon/server/daemon-terminal-admission.ts
 7 src/main/daemon/shell-readiness/shell-ready.ts
+2 src/main/daemon/terminal-host/foreground-agent-identity-check.ts # one-shot: both Windows helpers reach the addon file read once on first load (cached); the per-watch check then opens one process (microseconds)
 1 src/main/daemon/terminal-host/terminal-host-session-create.ts
 1 src/main/daemon/terminal-host/terminal-host-session-process.ts
 2 src/main/daemon/terminal-host/terminal-host-session-publish.ts
@@ -459,6 +475,7 @@
 1 src/main/daemon/transport/stream/daemon-stream-keep-tail-drop.ts
 6 src/main/devin/hook-service.ts
 2 src/main/diagnostics/main-thread-churn-probe.ts
+2 src/main/droid/droid-hook-config-files.ts # hooks.json, or legacy hooks/hooks.json while it is absent, is read on the same one-shot startup install, toggle, status and uninstall paths as settings.json
 6 src/main/droid/hook-service.ts
 11 src/main/dsh/hook-service.ts
 2 src/main/emulator/android/android-avd-boot.ts
@@ -488,10 +505,11 @@
 3 src/main/ephemeral-vm/workspace-suspend.ts
 8 src/main/external-editors/external-editor-launch.ts
 1 src/main/external-editors/remote-ssh-editor-launch.ts
-28 src/main/filesystem/atomic-file-publication.ts
+23 src/main/filesystem/atomic-file-publication.ts
 5 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
-2 src/main/filesystem/rolling-file-backup.ts
+7 src/main/filesystem/owner-only-durable-file-write.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
+4 src/main/filesystem/rolling-file-backup.ts # stageRollingFileBackup + commit (same sync copy and rename); the staged-copy rmSync moved into removeFileWithWindowsRetry so Windows AV locks are retried
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
 6 src/main/gemini/hook-service.ts
@@ -510,8 +528,7 @@
 2 src/main/git/command-runner/hosted-cli/glab-exec-file.ts
 4 src/main/git/command-runner/process-capture/command-exec-file.ts
 1 src/main/git/command-runner/process-capture/exec-file-capture-to-termination.ts
-3 src/main/git/command-runner/process-capture/exec-file-capture.ts
-1 src/main/git/command-runner/process-capture/worker-exec-file.ts
+2 src/main/git/command-runner/process-capture/exec-file-capture.ts
 1 src/main/git/command-runner/process-capture/wsl-process-group-termination.ts
 23 src/main/git/repositories/discovery/repo-detection.ts # main-checkout root lookup moved here from local-repo-registration.ts, which dropped to 1
 16 src/main/git/repositories/discovery/repo-git-marker-scan.ts
@@ -529,10 +546,15 @@
 1 src/main/github/repositories/github-enterprise-repository.ts
 1 src/main/github/repositories/github-repository-identity.ts
 5 src/main/github/repositories/github-ssh-host-alias-resolution.ts
+2 src/main/google/google-drive-read.ts
+1 src/main/google/google-pdf-text-client.ts
+1 src/main/google/google-pdf-text-worker-entry.ts
+2 src/main/google/google-setup-runs.ts
+2 src/main/google/google-trigger-runtime.ts
+1 src/main/google/google-trigger-state.ts
 1 src/main/grok-accounts/status.ts
 1 src/main/grok/grok-hook-backup-cleanup.ts
 1 src/main/grok/grok-text-task.ts
-1 src/main/grok/grok-transcript-import.ts
 17 src/main/grok/hook-service.ts
 1 src/main/hang-watchdog/hang-detection-marker.ts
 1 src/main/hang-watchdog/main-thread-hang-watchdog.ts
@@ -541,27 +563,25 @@
 4 src/main/hermes/hermes-acp-launch-spec.ts
 4 src/main/hermes/hermes-default-home.ts
 15 src/main/hermes/hermes-home-filesystem.ts
-3 src/main/hermes/hermes-transcript-import.ts
+2 src/main/hermes/hermes-transcript-import.ts
 27 src/main/hermes/hook-service.ts
 2 src/main/host/deferred-secret-protection-report.ts
 1 src/main/host/electron-speech-services.ts
 1 src/main/host/secret-protection-report.ts
-14 src/main/index.ts
+13 src/main/index.ts
 2 src/main/ipc/accounts/codex-accounts.ts
 1 src/main/ipc/accounts/codex-config-sync.ts
 1 src/main/ipc/accounts/cursor-accounts.ts
 1 src/main/ipc/accounts/grok-accounts.ts
-5 src/main/ipc/accounts/minimax-credentials.ts
 3 src/main/ipc/accounts/zcode-plan-credentials.ts
 1 src/main/ipc/ai-vault/ai-vault-search.ts
 1 src/main/ipc/ai-vault/ai-vault-subagent-list.ts
-6 src/main/ipc/app.ts
+4 src/main/ipc/app.ts
 1 src/main/ipc/automations.ts
-3 src/main/ipc/browser/browser-client-host-cookie-import-ipc.ts
 1 src/main/ipc/browser/browser-extensions.ts
 1 src/main/ipc/browser/browser-passwords-import-ipc.ts
 1 src/main/ipc/browser/browser-passwords-ipc.ts
-8 src/main/ipc/browser/browser-session-profile-ipc.ts
+5 src/main/ipc/browser/browser-session-profile-ipc.ts
 1 src/main/ipc/browser/browser.ts
 7 src/main/ipc/cli.ts
 1 src/main/ipc/command-path/command-path-directory-worker-client.ts
@@ -600,17 +620,8 @@
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
 1 src/main/ipc/filesystem/watchers/filesystem-watcher-wsl.ts
 1 src/main/ipc/filesystem/watchers/wsl-watcher-spawn.ts
-3 src/main/ipc/hooks/register-worktree-hook-check-handler.ts
 2 src/main/ipc/hooks/register-worktree-hook-file-handlers.ts
-3 src/main/ipc/jira/register-handlers.ts
-1 src/main/ipc/keyboard/macos-keyboard-layout-snapshot.ts
-1 src/main/ipc/linear/custom-view-handlers.ts
-7 src/main/ipc/linear/issue-handlers.ts
-2 src/main/ipc/linear/project-handlers.ts
-4 src/main/ipc/linear/register-handlers.ts
-4 src/main/ipc/linear/team-handlers.ts
-1 src/main/ipc/memory.ts
-1 src/main/ipc/native-chat.ts
+1 src/main/ipc/linear/register-handlers.ts
 7 src/main/ipc/notebook.ts
 1 src/main/ipc/notifications/notification-authorization-status.ts
 2 src/main/ipc/notifications/notifications.ts
@@ -621,7 +632,7 @@
 1 src/main/ipc/preflight/preflight-wsl-agent-detection.ts
 1 src/main/ipc/preflight/preflight-wsl-command.ts
 5 src/main/ipc/profiles/orca-profile-org-members-handlers.ts
-18 src/main/ipc/profiles/orca-profiles.ts
+12 src/main/ipc/profiles/orca-profiles.ts
 2 src/main/ipc/pty/delivery/producer-sync.ts
 2 src/main/ipc/pty/delivery/wire-session.ts
 8 src/main/ipc/pty/host-env/assembly.ts
@@ -637,15 +648,13 @@
 2 src/main/ipc/pty/ipc/spawn-env.ts
 1 src/main/ipc/pty/ipc/spawn-run.ts
 2 src/main/ipc/pty/provider/local-configure.ts
-3 src/main/ipc/pty/register-handlers.ts
+2 src/main/ipc/pty/register-handlers.ts
 1 src/main/ipc/pty/register-headless-runtime.ts
 1 src/main/ipc/pty/runtime/spawn-options.ts
-1 src/main/ipc/pty/runtime/spawn.ts
 1 src/main/ipc/pty/spawn/spawn-begin.ts
 1 src/main/ipc/pty/spawn/spawn-options-assembly.ts
-17 src/main/ipc/register-core-handlers/register-core-handlers.ts
+17 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
 1 src/main/ipc/register-core-handlers/runtime-host-handler-registration.ts
-2 src/main/ipc/renderer-shutdown-checkpoint.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
@@ -655,6 +664,7 @@
 2 src/main/ipc/repos/repo-creation-handlers.ts
 1 src/main/ipc/repos/repo-update-handler.ts
 2 src/main/ipc/runtime-environments/catalog/runtime-environment-preference.ts
+2 src/main/ipc/runtime-environments/connections/paired-desktop-account-declaration.ts
 1 src/main/ipc/runtime-environments/managed-orcad/managed-orcad-actions.ts
 1 src/main/ipc/runtime-environments/managed-orcad/orcad-runtime-lifecycle-handlers.ts
 1 src/main/ipc/runtime-environments/managed-orcad/runtime-environment-recipe-vm-wake.ts
@@ -663,18 +673,15 @@
 2 src/main/ipc/session.ts
 3 src/main/ipc/settings/settings.ts
 3 src/main/ipc/shell/shell.ts
-3 src/main/ipc/source-control/bitbucket.ts
 5 src/main/ipc/source-control/hosted-review.ts
-5 src/main/ipc/speech.ts
 3 src/main/ipc/ssh/plain-ssh-terminal-handlers.ts
 2 src/main/ipc/ssh/ssh-connection-handlers.ts
 2 src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
 2 src/main/ipc/ssh/ssh-target-crud-handlers.ts
-2 src/main/ipc/ssh/ssh.ts
+1 src/main/ipc/ssh/ssh.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-git-evidence.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-worktree-listing.ts
-1 src/main/ipc/workspace-space/workspace-space.ts
-3 src/main/ipc/worktrees.ts
+2 src/main/ipc/worktrees.ts
 3 src/main/ipc/worktrees/create/register-worktree-create-handlers.ts
 3 src/main/ipc/worktrees/floating-workspace-directory.ts
 1 src/main/ipc/worktrees/listing/detected-provider-listing.ts
@@ -688,8 +695,6 @@
 3 src/main/ipc/worktrees/removal/registered-worktree-roots-cache.ts
 1 src/main/ipc/worktrees/removal/remove-folder-workspace.ts
 1 src/main/ipc/worktrees/removal/remove-registered-local-worktree.ts
-2 src/main/ipc/worktrees/removal/remove-unregistered-worktree.ts
-1 src/main/ipc/worktrees/removal/worktree-removal-filesystem.ts
 1 src/main/ipc/worktrees/removal/worktree-removal-ownership.ts
 6 src/main/ipc/worktrees/worktree-remote.ts
 1 src/main/ipc/wsl/wsl-drive-project-handlers.ts
@@ -701,44 +706,30 @@
 1 src/main/ipc/wsl/wsl-move-release-here.ts
 2 src/main/ipc/wsl/wsl-move-undo-wiring.ts
 8 src/main/jcode/hook-service.ts
-8 src/main/jira/client.ts
-1 src/main/jira/jira-issue-comments.ts
-5 src/main/jira/jira-issue-create-metadata.ts
-3 src/main/jira/jira-issue-mutations.ts
-1 src/main/jira/jira-issue-read.ts
-1 src/main/jira/jira-issue-search.ts
-1 src/main/jira/jira-project-queries.ts
-2 src/main/jira/jira-transition-queries.ts
-8 src/main/jira/site-credential-store.ts
 1 src/main/jsonl-rpc/agent-connection.ts
 10 src/main/keybindings/keybinding-file.ts
 4 src/main/keybindings/keybinding-service.ts
 6 src/main/kimi/hook-service.ts
 8 src/main/kiro/hook-service.ts
 5 src/main/kiro/standalone-hooks.ts
-19 src/main/linear/accounts/linear-account-client.ts
+17 src/main/linear/accounts/linear-account-client.ts
 1 src/main/linear/accounts/linear-legacy-viewer-store.ts
-16 src/main/linear/accounts/linear-token-store.ts
-12 src/main/linear/accounts/linear-workspace-registry.ts
-4 src/main/linear/custom-views/linear-custom-view-queries.ts
-1 src/main/linear/issues/context/issue-context-children.ts
-2 src/main/linear/issues/context/issue-context-relations.ts
-9 src/main/linear/issues/context/issue-context-resolution.ts
-3 src/main/linear/issues/context/issue-context-sections.ts
-1 src/main/linear/issues/context/read-issue-context.ts
+1 src/main/linear/accounts/linear-login-store.ts
+10 src/main/linear/accounts/linear-token-store.ts
+10 src/main/linear/accounts/linear-workspace-registry.ts
+1 src/main/linear/custom-views/linear-custom-view-queries.ts
+1 src/main/linear/issues/context/issue-context-resolution.ts
 1 src/main/linear/issues/issue-relation-write.ts
-6 src/main/linear/issues/linear-issue-comments.ts
-4 src/main/linear/issues/linear-issue-listing.ts
-6 src/main/linear/issues/linear-issue-lookups.ts
-4 src/main/linear/issues/linear-issue-mutations.ts
+2 src/main/linear/issues/linear-issue-comments.ts
+1 src/main/linear/issues/linear-issue-listing.ts
+2 src/main/linear/issues/linear-issue-lookups.ts
+2 src/main/linear/issues/linear-issue-mutations.ts
 2 src/main/linear/issues/linear-issue-write-support.ts
-1 src/main/linear/issues/mcp-issue-list.ts
-2 src/main/linear/projects/linear-project-collection-read.ts
-1 src/main/linear/projects/linear-project-issue-queries.ts
-4 src/main/linear/projects/linear-project-queries.ts
+1 src/main/linear/projects/linear-project-collection-read.ts
+3 src/main/linear/projects/linear-project-queries.ts
 1 src/main/linear/projects/linear-project-team-queries.ts
-11 src/main/linear/teams/linear-team-queries.ts
-7 src/main/macos-permissions/macos-tcc-prompt-notice.ts
+5 src/main/linear/teams/linear-team-queries.ts
+6 src/main/macos-permissions/macos-tcc-prompt-notice.ts
 7 src/main/managed-data-accounts/credential-capture.ts
 1 src/main/managed-data-accounts/profile-removal.ts
 2 src/main/managed-data-accounts/service.ts
@@ -753,8 +744,8 @@
 6 src/main/managed-server/install/orcad-remote-deploy.ts
 4 src/main/managed-server/install/orcad-remote-install.ts
 1 src/main/managed-server/install/orcad-remote-rollback.ts
+1 src/main/managed-server/lifecycle/orcad-idle-restart-stop.ts # moved from orcad-managed-launch-session.ts with the idle-restart stop (withOrcadActivationLock), now shared with the WSL host relaunch
 4 src/main/managed-server/lifecycle/orcad-managed-auto-update.ts
-1 src/main/managed-server/lifecycle/orcad-managed-launch-session.ts
 1 src/main/managed-server/lifecycle/orcad-managed-runtime-context.ts
 1 src/main/managed-server/lifecycle/orcad-managed-stale-lock-reclaim.ts
 1 src/main/managed-server/lifecycle/orcad-managed-tunnel-transport.ts
@@ -767,13 +758,8 @@
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts
-3 src/main/memory/collector.ts
-1 src/main/memory/darwin-process-footprint.ts
 1 src/main/memory/hydrate-local-pty-registry.ts
 13 src/main/mimo/hook-service.ts
-1 src/main/minimax/minimax-api-key-store.ts
-4 src/main/minimax/minimax-cookie-store.ts
-13 src/main/minimax/minimax-credential-commands.ts
 1 src/main/muse-usage/muse-usage-provider.ts
 1 src/main/muse-usage/store.ts
 8 src/main/muse/hook-service.ts
@@ -784,44 +770,17 @@
 4 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
-12 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
-2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
-8 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
+6 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker; +1 creates the operation-window send indexes (IF NOT EXISTS, one-shot) on the journal SQL worker
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-40 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
-1 src/main/native-chat/agent-session-journal/database/journal-legacy-source-receipt.ts
-4 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
-2 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
-1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
-5 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
-2 src/main/native-chat/agent-session-journal/input-order/journal-input-conversion.ts
+1 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
+3 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
-10 src/main/native-chat/agent-session-journal/journal-domain-import-rows.ts
-1 src/main/native-chat/agent-session-journal/journal-domain-import-submissions.ts
-7 src/main/native-chat/agent-session-journal/journal-domain-import.ts
-1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
-1 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
-6 src/main/native-chat/agent-session-journal/journal-domain-queue-reads.ts
+2 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts # worker-only: the retired prune settles its pending entry on the journal SQL worker
 1 src/main/native-chat/agent-session-journal/journal-domain-schema.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-stop-notes.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-submission-consume.ts
 1 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
-11 src/main/native-chat/agent-session-journal/journal-sql-queue-read.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-queued-messages.ts
-2 src/main/native-chat/agent-session-journal/journal-sql-status-context.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-status-items.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-work-read.ts
-3 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
-2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-table.ts
-1 src/main/native-chat/agent-session-journal/queued-messages/journal-queue-import.ts
-1 src/main/native-chat/agent-session-journal/replay/journal-historical-inputs.ts
-13 src/main/native-chat/agent-session-journal/replay/journal-open.ts
 4 src/main/native-chat/agent-session-journal/replay/journal-read-row.ts
-2 src/main/native-chat/agent-session-journal/replay/journal-retained-inputs.ts
 3 src/main/native-chat/agent-session-journal/replay/journal-stored-cursor.ts
 3 src/main/native-chat/agent-session-journal/writing/command-receipt-table.ts
 1 src/main/native-chat/agent-session-journal/writing/command-receipt-transaction.ts
@@ -833,23 +792,18 @@
 2 src/main/native-chat/conversation-adoption/codex-adoption-preparation.ts
 1 src/main/native-chat/conversation-adoption/structured-agent-cli-conversations.ts
 3 src/main/native-chat/conversation-files/native-chat-media-path.ts
-3 src/main/native-chat/session-file-resolver.ts
-1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
+2 src/main/native-chat/session-file-resolver.ts
 1 src/main/native-chat/transcript-discovery/transcript-path-admission.ts
 3 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-dispatch.ts
 1 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/native-chat/transcript-filesystem/wsl-transcript-fs-access.ts
 2 src/main/native-chat/transcript-history/codex/codex-rollout-history-source.ts
 7 src/main/native-chat/transcript-history/hermes/transcript-hermes-sqlite.ts
-4 src/main/native-chat/transcript-history/opencode/transcript-opencode-database.ts
+3 src/main/native-chat/transcript-history/opencode/transcript-opencode-database.ts
 7 src/main/native-chat/transcript-history/opencode/transcript-opencode-sqlite-query.ts
-4 src/main/native-chat/transcript-history/opencode/transcript-opencode.ts
+2 src/main/native-chat/transcript-history/opencode/transcript-opencode.ts
 2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-fork-coverage.ts
 2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-sqlite.ts
-1 src/main/native-chat/transcript-read-cache.ts
-1 src/main/native-chat/transcript-reader.ts
-1 src/main/native-chat/transcript-tail-reader.ts
-3 src/main/native-chat/transcript-watch.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
 3 src/main/node-runtime/managed-runtime-installation.ts
 1 src/main/node-runtime/managed-runtime-release-install.ts
@@ -861,7 +815,6 @@
 2 src/main/omp/omp-transcript-import.ts
 1 src/main/opencode-usage/opencode-usage-provider.ts
 1 src/main/opencode-usage/store.ts
-1 src/main/opencode/accounts/opencode-go-api-key-store.ts
 1 src/main/opencode/acp/opencode-acp-connection.ts
 1 src/main/opencode/model-launch/opencode-launch-capabilities.ts
 1 src/main/opencode/model-launch/opencode-launch-model-context.ts
@@ -877,21 +830,26 @@
 1 src/main/opencode/text-tasks/opencode-text-task.ts
 1 src/main/opencode/text-tasks/wsl/opencode-wsl-text-task-entry.ts
 4 src/main/opencode/text-tasks/wsl/opencode-wsl-text-task.ts
-3 src/main/opencode/transcripts/opencode-transcript-import.ts
+2 src/main/opencode/transcripts/opencode-transcript-import.ts
 7 src/main/orca-profiles/catalog/other-profile-workspace-catalog.ts
 2 src/main/orca-profiles/catalog/profile-project-presence.ts
 11 src/main/orca-profiles/cloud-auth/profile-artifact-cloud-cleanup.ts
 1 src/main/orca-profiles/cloud-auth/profile-cloud-auth-status.ts
 3 src/main/orca-profiles/cloud-auth/profile-cloud-capability-refresh.ts
+3 src/main/orca-profiles/cloud-auth/profile-cloud-code-sign-in.ts
 11 src/main/orca-profiles/cloud-auth/profile-cloud-dev-service.ts
 19 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
 30 src/main/orca-profiles/cloud-auth/profile-cloud-service.ts
+1 src/main/orca-profiles/cloud-console/cloud-console-link.ts # click-time console link reads the profile index once
 5 src/main/orca-profiles/cloud-org/profile-cloud-org-members-service.ts
 2 src/main/orca-profiles/cloud-org/profile-cloud-org-selection.ts
-19 src/main/orca-profiles/cloud-session/profile-cloud-session-owner.ts
+9 src/main/orca-profiles/cloud-session/profile-cloud-session-commit.ts
+21 src/main/orca-profiles/cloud-session/profile-cloud-session-owner.ts
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-refresh.ts
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts
-20 src/main/orca-profiles/profile-index-store.ts
+8 src/main/orca-profiles/orca-account-service.ts # +1 openConsole: click-time console link reads the profile index once
+1 src/main/orca-profiles/profile-account-user-id.ts
+21 src/main/orca-profiles/profile-index-store.ts # writeRollingFileBackup replaces copyFileSync (main-sync-fs 12 -> 11)
 1 src/main/orca-profiles/profile-storage-paths.ts
 6 src/main/orca-profiles/project-transfer/profile-active-transfer.ts
 2 src/main/orca-profiles/project-transfer/profile-project-domain-move-intent.ts
@@ -903,7 +861,7 @@
 13 src/main/orca-profiles/project-transfer/profile-project-transfer.ts
 2 src/main/orca-profiles/storage/new-profile-state.ts
 3 src/main/orca-profiles/storage/profile-legacy-state-import.ts
-5 src/main/orcad/account-launch/orcad-account-services.ts
+4 src/main/orcad/account-launch/orcad-account-services.ts
 4 src/main/orcad/account-launch/orcad-codex-account-homes.ts
 4 src/main/orcad/account-launch/orcad-host-account-launch-env-store.ts
 2 src/main/orcad/account-launch/orcad-wsl-host-claude-profile-refresh.ts
@@ -911,13 +869,12 @@
 1 src/main/orcad/artifact-slots/orcad-artifact-identity.ts
 1 src/main/orcad/artifact-slots/orcad-artifact-materializer.ts
 3 src/main/orcad/artifact-slots/orcad-daemon-slot-pins.ts
-3 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
+2 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
 1 src/main/orcad/browser-providers/electron/electron-sidecar-profile.ts
-1 src/main/orcad/browser-providers/orcad-agent-browser-binary.ts
 3 src/main/orcad/browser-providers/orcad-browser-provider.ts
 1 src/main/orcad/browser-providers/orcad-browser-startup.ts
 1 src/main/orcad/browser-providers/orcad-sidecar-runtime-client.ts
-8 src/main/orcad/credentials/orcad-plaintext-credential-migration.ts
+7 src/main/orcad/credentials/orcad-plaintext-credential-migration.ts
 7 src/main/orcad/credentials/orcad-secret-key-record.ts
 10 src/main/orcad/credentials/orcad-secret-key-resolution.ts
 2 src/main/orcad/credentials/orcad-secret-store-startup.ts
@@ -941,10 +898,10 @@
 2 src/main/orcad/host-runtime/orcad-runtime-rpc.ts
 2 src/main/orcad/host-runtime/orcad-session-scanner-idle.ts
 1 src/main/orcad/host-runtime/orcad-session-search.ts
-2 src/main/orcad/host-runtime/orcad-speech-services.ts
+1 src/main/orcad/host-runtime/orcad-speech-services.ts
 2 src/main/orcad/host-runtime/orcad-wsl-host-login-environment.ts
 1 src/main/orcad/instance-lock/orcad-data-root-privacy.ts
-5 src/main/orcad/instance-lock/orcad-instance-lock-hold.ts
+6 src/main/orcad/instance-lock/orcad-instance-lock-hold.ts # journal legacy retirement: <=2 reads of the small (64 KiB-capped) profile lock file per attempt; attempts back off 1m->1h and stop once retired or refused
 14 src/main/orcad/instance-lock/orcad-instance-lock-reclaim.ts
 1 src/main/orcad/instance-lock/orcad-instance-lock-record.ts
 20 src/main/orcad/instance-lock/orcad-instance-lock.ts
@@ -961,6 +918,7 @@
 2 src/main/orcad/native-runtime/node-pty-precondition.ts
 3 src/main/orcad/native-runtime/orcad-native-preflight.ts
 9 src/main/orcad/native-runtime/orcad-runtime-native-preflight.ts
+1 src/main/orcad/orcad-connector.ts
 2 src/main/orcad/profile-state/orcad-host-identity-reset.ts
 3 src/main/orcad/profile-state/orcad-profile-state-startup.ts
 6 src/main/orcad/runtime-launch/orcad-bundled-runtime.ts
@@ -1073,11 +1031,12 @@
 2 src/main/plugins/storage/plugin-secrets-store.ts
 2 src/main/plugins/storage/plugin-storage-store.ts
 2 src/main/ports/darwin-process-metadata.ts
-7 src/main/ports/local-workspace-platform-port-scanner.ts
+1 src/main/ports/linux-socket-owners.ts # Linux socket listing runs in the port-scan worker; the only sync call is the worker client's one existsSync per lazy worker spawn
+8 src/main/ports/local-workspace-platform-port-scanner.ts # Linux socket listing runs in the port-scan worker; the only sync call is the worker client's one existsSync per lazy worker spawn
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
 3 src/main/preflight/agent-command-detection.ts
-3 src/main/preflight/agent-detection.ts # glab auth env = the same cached /proc/mounts read the exec helper does by default
+2 src/main/preflight/agent-detection.ts # glab auth env = the same cached /proc/mounts read the exec helper does by default
 1 src/main/preflight/installed-agent-detection.ts
 1 src/main/project-groups/nested-repo-discovery.ts
 2 src/main/provider-process/managed-provider-process.ts
@@ -1085,7 +1044,7 @@
 1 src/main/provider-process/provider-ownership-journal.ts
 1 src/main/provider-process/provider-process-spawn.ts
 1 src/main/provider-process/supervised-provider-child-location.ts
-4 src/main/providers/accounts/provider-account-services.ts
+2 src/main/providers/accounts/provider-account-services.ts
 1 src/main/providers/execution-host-provider-dispatch.ts
 2 src/main/providers/foreground/agent-process.ts
 1 src/main/providers/foreground/windows/process-rows.ts
@@ -1125,22 +1084,20 @@
 3 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 3 src/main/pty/shell-startup/zsh-wrapper-dir-ownership.ts
 2 src/main/qoder/workspace-trust.ts
+3 src/main/qwen-code/workspace-trust.ts # Qwen fresh-launch trust (#43989): sync read-modify-write like qoder/workspace-trust.ts so concurrent launches and the sync Qwen hook install cannot lose entries
 1 src/main/rate-limits/providers/antigravity/antigravity-usage-fetcher.ts
 1 src/main/rate-limits/providers/claude/claude-active-usage-fetch.ts
 5 src/main/rate-limits/providers/claude/claude-oauth-credentials.ts
-9 src/main/rate-limits/providers/codex/codex-fetcher.ts
+8 src/main/rate-limits/providers/codex/codex-fetcher.ts
 4 src/main/rate-limits/providers/codex/codex-rpc-rate-limit-probe.ts
 4 src/main/rate-limits/providers/cursor/cursor-auth.ts
 1 src/main/rate-limits/providers/cursor/cursor-fetcher.ts
-1 src/main/rate-limits/providers/gemini/gemini-oauth-sources.ts
-2 src/main/rate-limits/providers/gemini/gemini-usage-fetcher.ts
 1 src/main/rate-limits/providers/grok/grok-fetcher.ts
 1 src/main/rate-limits/providers/muse/muse-usage-fetcher.ts
 3 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
 1 src/main/rate-limits/providers/opencode-go/opencode-go-usage-source-selection.ts
 4 src/main/rate-limits/providers/zcode/zcode-usage-credentials.ts
 2 src/main/rate-limits/providers/zcode/zcode-usage-fetcher.ts
-2 src/main/rate-limits/service/rate-limit-service.ts
 1 src/main/rate-limits/service/service-fetch-targets.ts
 1 src/main/rate-limits/service/service-full-cycle-application.ts
 7 src/main/rate-limits/service/service-full-cycle-preparation.ts
@@ -1148,13 +1105,14 @@
 1 src/main/rate-limits/service/service-muse-usage-fetch.ts
 3 src/main/rate-limits/service/service-provider-cycles.ts
 1 src/main/rate-limits/service/service-state.ts
+2 src/main/remote-policies/release-asset-policy-live-update.ts
 4 src/main/ripgrep/bundled-ripgrep-path.ts
 1 src/main/ripgrep/bundled-ripgrep-spawn.ts
 1 src/main/ripgrep/bundled-ripgrep-text-search.ts
 1 src/main/runtime/agent-session/environment/structured-agent-account-home.ts
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
-6 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
+3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
 2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts
@@ -1162,13 +1120,11 @@
 1 src/main/runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery.ts
 1 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 4 src/main/runtime/agent-session/ownership/agent-session-process-identity-probe.ts
-3 src/main/runtime/agent-session/records/agent-session-record-rows.ts
 1 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts
 8 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
 2 src/main/runtime/agent-session/records/agent-session-store-transactions.ts
 1 src/main/runtime/agent-session/records/local-agent-session-record-store-startup-open.ts
 4 src/main/runtime/browser/commands/browser-profiles.ts
-1 src/main/runtime/client/runtime-client-state.ts
 1 src/main/runtime/client/settings/runtime-client-settings.ts
 3 src/main/runtime/construction/desktop-workspace-services.ts
 1 src/main/runtime/construction/runtime-identity-state.ts
@@ -1185,28 +1141,20 @@
 3 src/main/runtime/hosts/runtime-status.ts
 1 src/main/runtime/integrations/git/runtime-git-command-target.ts
 3 src/main/runtime/integrations/git/runtime-git-generation-commands.ts
-3 src/main/runtime/integrations/jira/runtime-jira-commands.ts
-8 src/main/runtime/integrations/linear/runtime-linear-browse-commands.ts
-6 src/main/runtime/integrations/linear/runtime-linear-connection-commands.ts
-5 src/main/runtime/integrations/linear/runtime-linear-context-commands.ts
-1 src/main/runtime/integrations/linear/runtime-linear-label-write-commands.ts
-5 src/main/runtime/integrations/linear/runtime-linear-project-write-commands.ts
-3 src/main/runtime/integrations/linear/runtime-linear-read-commands.ts
-1 src/main/runtime/integrations/linear/runtime-linear-state-commands.ts
-2 src/main/runtime/integrations/linear/runtime-linear-task-fields-commands.ts
-3 src/main/runtime/integrations/linear/runtime-linear-team-write-commands.ts
+1 src/main/runtime/integrations/linear/runtime-linear-connection-commands.ts
 2 src/main/runtime/mobile-cloud-relay/authentication/relay-auth-context.ts
 1 src/main/runtime/mobile-cloud-relay/desktop-relay-service.ts
 2 src/main/runtime/mobile-cloud-relay/pairing/relay-revoke-outbox.ts
 4 src/main/runtime/mobile-cloud-relay/region-selection/relay-region-preference.ts
-1 src/main/runtime/orca-runtime.ts
+4 src/main/runtime/orca-runtime-bots.ts
+2 src/main/runtime/orca-runtime.ts
 16 src/main/runtime/orchestration/db/attach-orchestration-db-methods.ts
 1 src/main/runtime/orchestration/db/database-file-permissions.ts
 2 src/main/runtime/orchestration/db/decision-gates/decision-gate-store.ts
 8 src/main/runtime/orchestration/db/dispatch-context/attempt-task-settlement.ts
 19 src/main/runtime/orchestration/db/dispatch-context/dispatch-completion.ts
 3 src/main/runtime/orchestration/db/dispatch-context/dispatch-context-store.ts
-2 src/main/runtime/orchestration/db/dispatch-context/task-dispatch-reconciliation.ts
+3 src/main/runtime/orchestration/db/dispatch-context/task-dispatch-reconciliation.ts # one Task unblock shared by a federated start and a local start seen only late, inside orchestration DB writes that were already synchronous
 10 src/main/runtime/orchestration/db/dispatch-context/worker-report-settlement.ts
 2 src/main/runtime/orchestration/db/lifecycle-transition.ts
 3 src/main/runtime/orchestration/db/lifecycle-write-transaction-runner.ts
@@ -1217,28 +1165,36 @@
 3 src/main/runtime/orchestration/db/messages/structured-mail-send-store.ts
 2 src/main/runtime/orchestration/db/mutation-receipts/mutation-receipt-capacity.ts
 2 src/main/runtime/orchestration/db/mutation-receipts/mutation-receipt-store.ts
-10 src/main/runtime/orchestration/db/orchestration-db.ts
+11 src/main/runtime/orchestration/db/orchestration-db.ts
 1 src/main/runtime/orchestration/db/remote-owned/remote-dispatch-records.ts
 6 src/main/runtime/orchestration/db/remote-owned/remote-owned-import.ts
 16 src/main/runtime/orchestration/db/remote-owned/remote-placements.ts
 10 src/main/runtime/orchestration/db/remote-owned/remote-run-links.ts
 4 src/main/runtime/orchestration/db/reset/orchestration-reset.ts
 3 src/main/runtime/orchestration/db/reset/removed-orchestration-work-read.ts
+1 src/main/runtime/orchestration/db/runs/retired-coordinator-runs.ts # one savepoint when a deleted chat or an ended coordinator terminal retires its Runs, around orchestration DB writes that were already synchronous
 1 src/main/runtime/orchestration/db/schema/migrate-v13-v30.ts
 1 src/main/runtime/orchestration/db/schema/migrate-v40.ts
 4 src/main/runtime/orchestration/db/schema/migrate.ts
 10 src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew.ts
 1 src/main/runtime/orchestration/db/schema/structured-worker-orca-session-backfill.ts
+1 src/main/runtime/orchestration/db/schema/worker-dock-schema.ts # one backfill transaction when the worker dock tables are first installed at database open; later dock facts are written by triggers inside lifecycle statements that were already synchronous
 9 src/main/runtime/orchestration/db/tasks/task-status-transition.ts
 2 src/main/runtime/orchestration/db/tasks/task-store.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-abandon.ts
-11 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-outcome.ts
+12 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-outcome.ts # the same ready transaction lifts the Task block of a start seen only late, inside orchestration DB writes that were already synchronous
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-settlement.ts
 4 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stage.ts
 6 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-start.ts
 22 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stop.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-terminal-recovery.ts
-2 src/main/runtime/orchestration/federation/peer-mail/peer-mail-relay.ts
+1 src/main/runtime/orchestration/dock/worker-dock-acknowledgment.ts # only on the user's Clear, Clear all or Show in dock again click; no passive caller
+1 src/main/runtime/orchestration/dock/worker-dock-provider-failures.ts # only when a provider subagent or command fails: one transaction per failure batch, so a failure stays until the user clears it; successful child events never reach the database
+3 src/main/runtime/orchestration/dock/worker-dock-read-snapshot.ts # one consistent read transaction (BEGIN, never IMMEDIATE) per dock read: the cold seed of a visible unknown source, subscribe, a lifecycle or visible activity change of this chat's own workers, or a roster window the user loads; unrelated wakes skip it by version and hidden chats never read
+1 src/main/runtime/orchestration/dock/worker-dock-read.ts # the dock reads described for worker-dock-read-snapshot.ts, through that one helper
+1 src/main/runtime/orchestration/federation/paired-server-asks/paired-server-ask-decisions.ts # one savepoint around orchestration DB writes that were already synchronous, so a card's answer and its decline or allowance commit together
+2 src/main/runtime/orchestration/federation/peer-mail/paired-server-changes.ts # moved unchanged out of peer-mail-relay.ts: closing a removed or re-paired server's Run links
+1 src/main/runtime/orchestration/federation/peer-mail/peer-questions-out.ts # one savepoint per asker told on an unpair, around orchestration DB writes that were already synchronous
 1 src/main/runtime/orchestration/federation/remote-owned/remote-owed-actions.ts
 1 src/main/runtime/orchestration/federation/remote-owned/remote-owned-calls.ts
 2 src/main/runtime/orchestration/federation/remote-owned/remote-owned-route.ts
@@ -1246,32 +1202,42 @@
 15 src/main/runtime/orchestration/legacy-remote-home/federated-worker-start-reconcile.ts
 1 src/main/runtime/orchestration/legacy-remote-home/legacy-remote-home-db-methods.ts
 5 src/main/runtime/orchestration/legacy-remote/federated-dispatch-observation-fence.ts
+1 src/main/runtime/orchestration/legacy-remote/federation-relay-enqueue.ts # its own transaction became savepoint-aware so a worker report and its record commit together; no new statements
 2 src/main/runtime/orchestration/legacy-remote/legacy-remote-db-methods.ts
 3 src/main/runtime/orchestration/legacy-remote/remote-dispatch-attachment-create.ts
+1 src/main/runtime/orchestration/mailbox/questions/question-reconcile.ts # one savepoint per agent-question notice, around orchestration DB writes that were already synchronous, so the notice and its record commit together
 2 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
-1 src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.ts
+1 src/main/runtime/orchestration/workers/turn-stops/worker-presence-report.ts # one savepoint per real worker presence change, around orchestration DB writes that were already synchronous, so the report and its record commit together
+1 src/main/runtime/orchestration/workers/turn-stops/worker-turn-stop-report.ts # one savepoint per real worker presence change, around orchestration DB writes that were already synchronous, so the report and its record commit together
 2 src/main/runtime/push/push-unregister-outbox.ts
 1 src/main/runtime/repositories/folder-workspace-deletion.ts
 3 src/main/runtime/repositories/runtime-nested-repo-import.ts
 1 src/main/runtime/repositories/runtime-project-host-setup-controller.ts
 2 src/main/runtime/repositories/runtime-repository-clone-controller.ts
-6 src/main/runtime/repositories/runtime-repository-hooks-commands.ts
+3 src/main/runtime/repositories/runtime-repository-hooks-commands.ts
 2 src/main/runtime/repositories/runtime-repository-issue-command.ts
 2 src/main/runtime/repositories/runtime-repository-registration-controller.ts
 1 src/main/runtime/repositories/runtime-repository-settings-controller.ts
 2 src/main/runtime/rpc/dispatcher.ts
 4 src/main/runtime/rpc/methods/accounts/antigravity-accounts.ts
-11 src/main/runtime/rpc/methods/accounts/usage-credentials.ts
+3 src/main/runtime/rpc/methods/accounts/usage-credentials.ts
+2 src/main/runtime/rpc/methods/bots-tools-owned-sign-in.ts
+11 src/main/runtime/rpc/methods/bots-tools.ts
+1 src/main/runtime/rpc/methods/bots.ts
 1 src/main/runtime/rpc/methods/browser/browser-identity-rpc.ts
 15 src/main/runtime/rpc/methods/computer/computer.ts
+1 src/main/runtime/rpc/methods/google-files.ts
 1 src/main/runtime/rpc/methods/host-management/environment-doctor.ts
 1 src/main/runtime/rpc/methods/host-management/host-capabilities.ts
 1 src/main/runtime/rpc/methods/host-management/managed-runtime-install.ts
 1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
-1 src/main/runtime/rpc/methods/native-chat/native-chat.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts
+1 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-outcome.ts # one savepoint per dropped question, around orchestration DB writes that were already synchronous, so the read and its take commit together
+2 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-sender-notice.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
 1 src/main/runtime/rpc/methods/orchestration/messaging/check-mail-reconciliation.ts
+1 src/main/runtime/rpc/methods/orchestration/messaging/peer-mail-reply.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
+1 src/main/runtime/rpc/methods/orchestration/messaging/reply-method.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
 1 src/main/runtime/rpc/methods/orchestration/runs/runs.ts
 1 src/main/runtime/rpc/methods/terminal/session-terminal-scrollback.ts
 1 src/main/runtime/rpc/methods/workspaces/worktree.ts
@@ -1292,7 +1258,7 @@
 1 src/main/runtime/session-tabs/chat/structured-session-create-support.ts
 1 src/main/runtime/sidebar-inputs/sidebar-inputs-feed-domains.ts
 1 src/main/runtime/speech/runtime-mobile-dictation-controller.ts
-6 src/main/runtime/speech/runtime-mobile-speech-catalog.ts
+2 src/main/runtime/speech/runtime-mobile-speech-catalog.ts
 1 src/main/runtime/terminal/launch/agent-launch-scope-runtime.ts
 1 src/main/runtime/terminal/launch/agent-teams-launch-plan.ts
 7 src/main/runtime/terminal/launch/claude-agent-teams-shim-env.ts
@@ -1309,7 +1275,6 @@
 1 src/main/runtime/workspaces/archive/runtime-workspace-archive.ts
 2 src/main/runtime/workspaces/catalog/repo-worktree-row-resolution.ts
 1 src/main/runtime/workspaces/catalog/resolved-worktree-scan-join.ts
-1 src/main/runtime/workspaces/catalog/runtime-worktree-filesystem.ts
 2 src/main/runtime/workspaces/catalog/scoped-worktree-row-resolution.ts
 2 src/main/runtime/workspaces/catalog/workspace-catalog.ts
 1 src/main/runtime/workspaces/catalog/workspace-repo-scan-refresh.ts
@@ -1321,13 +1286,10 @@
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
 2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
-1 src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.ts
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
-2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-removal.ts
-2 src/main/runtime/workspaces/removal/worktree-removal-agent-trust-cleanup.ts
-2 src/main/runtime/workspaces/workspace-removal-target.ts
+1 src/main/runtime/workspaces/workspace-removal-target.ts
 1 src/main/server/serve-pairing-readiness.ts
 2 src/main/skills/cloud/skill-cloud-auth.ts
 1 src/main/skills/cloud/skill-cloud-package-service.ts
@@ -1337,23 +1299,19 @@
 1 src/main/skills/filesystem/skill-wsl-install-filesystem.ts
 2 src/main/skills/providers/skill-provider-runtime-roots.ts
 1 src/main/skills/providers/skill-wsl-provider-detection.ts
-1 src/main/source-control/hosted-review-creation-provider.ts
-4 src/main/speech/cloud-transcription-target.ts
 1 src/main/speech/dictation-cleanup-service.ts
 2 src/main/speech/model-cache-path.ts
-7 src/main/speech/model-manager.ts
-6 src/main/speech/openai-api-key-store.ts
-1 src/main/speech/openai-api-key-verification.ts
-2 src/main/speech/openai-compatible-speech-provider-store.ts
+6 src/main/speech/model-manager.ts
 2 src/main/speech/speech-vad-model.ts
 4 src/main/speech/stt-gpu-failure-marker.ts
 2 src/main/speech/stt-service.ts
 2 src/main/speech/stt-session-prewarm.ts
-6 src/main/speech/stt-session-start.ts
+5 src/main/speech/stt-session-start.ts
 2 src/main/speech/stt-worker-paths.ts
 12 src/main/sqlite/row-cache/keyed-json-row-cache.ts
 1 src/main/sqlite/row-cache/legacy-json-source.ts
 8 src/main/sqlite/versioned-cache-database.ts
+1 src/main/ssh/application/ssh-application.ts # one-shot registerSshConnectionHandlers moved here from ipc/ssh/ssh.ts, whose row dropped 2 to 1
 1 src/main/ssh/authentication/ssh-agent-identity-filter.ts
 2 src/main/ssh/authentication/ssh-auth-resolution.ts
 1 src/main/ssh/authentication/ssh-identity-file-read.ts
@@ -1388,7 +1346,7 @@
 5 src/main/ssh/targets/ssh-target-route-resolution.ts
 1 src/main/startup/agent-accounts/codex-launch-preparation.ts
 1 src/main/startup/agent-accounts/codex-session-resume-launch.ts
-1 src/main/startup/agent-accounts/main-process-account-services.ts
+1 src/main/startup/cloud-startup/main-process-connector-startup.ts
 7 src/main/startup/configure-process.ts
 1 src/main/startup/diagnostics/event-loop-stall-probe.ts
 2 src/main/startup/diagnostics/startup-diagnostics.ts
@@ -1404,11 +1362,12 @@
 1 src/main/startup/main-process-preflight-failure.ts
 25 src/main/startup/main-process-preflight.ts
 15 src/main/startup/main-process-ready-foundation.ts
-7 src/main/startup/main-process-ready-runtime.ts
+3 src/main/startup/main-process-ready-runtime.ts
 4 src/main/startup/main-process-ready.ts
 1 src/main/startup/main-window/main-process-i18n-menu.ts
 15 src/main/startup/main-window/main-window-controller.ts
 4 src/main/startup/main-window/main-window-core-services.ts
+1 src/main/startup/native-setting-subscriptions.ts # HTTP/1 marker write moved here from main-process-ready-foundation.ts (settings change only)
 3 src/main/startup/network-compatibility/http1-compatibility-marker.ts
 9 src/main/startup/network-compatibility/http1-compatibility-profile-state.ts
 1 src/main/startup/plugin-startup/main-process-plugin-rpc.ts
@@ -1417,7 +1376,7 @@
 5 src/main/startup/profile-startup/profile-state-recovery-preflight.ts
 2 src/main/startup/profile-startup/single-instance-lock.ts
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
-2 src/main/startup/quit/main-process-quit.ts
+1 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
 4 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts
@@ -1471,16 +1430,19 @@
 1 src/main/warp-themes/auto-discovered-theme-files.ts
 6 src/main/warp-themes/discovery.ts
 1 src/main/warp-themes/index.ts
+2 src/main/webhooks/webhook-call-file.ts
+1 src/main/webhooks/webhook-call-runs.ts
+1 src/main/webhooks/webhook-host-ledger.ts
+2 src/main/webhooks/webhook-host-newer-agent-hooks.ts # the ledger's two secure writes, moved out of webhook-host-ledger.ts (its count dropped by 2)
 8 src/main/window/attach-main-window-services.ts
-1 src/main/window/clipboard/clipboard-ipc-handlers.ts
-2 src/main/window/createMainWindow.ts
+2 src/main/window/createMainWindow.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 3 src/main/window/desktop-integration/app-icon.ts
 1 src/main/window/desktop-integration/custom-app-icon.ts
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 1 src/main/windows/windows-administrator-restart.ts
 2 src/main/windows/windows-directory-acl.ts
-15 src/main/windows/windows-process-table.ts
-1 src/main/worker-thread-child-process/worker-thread-child-process.ts
+1 src/main/windows/windows-job-object.ts # the windows-process-tree loader: one cached readFileSync per process (relay addon check)
+12 src/main/windows/windows-process-table.ts # the windows-process-tree loader: one cached readFileSync per process (relay addon check)
 3 src/main/worker-threads/forked-child-entry-path.ts
 2 src/main/worker-threads/worker-send-ledger.ts
 2 src/main/workspace-hooks/hook-orca-cli-env.ts
@@ -1493,7 +1455,7 @@
 2 src/main/workspaces/catalog/repo-worktree-catalog-owner.ts
 5 src/main/workspaces/catalog/repo-worktrees.ts
 1 src/main/workspaces/cleanup/chat-history/deleted-workspace-chat-history.ts
-3 src/main/workspaces/cleanup/workspace-cleanup-removal-step.ts
+4 src/main/workspaces/cleanup/workspace-cleanup-removal-step.ts # folder workspace group (#44715): decideWorkspaceCleanups wraps the per-workspace decision; same orca.yaml read, now also for folder siblings in the re-check
 2 src/main/workspaces/cleanup/workspace-cleanup-runner.ts
 3 src/main/workspaces/creation/preparation/worktree-create-preparation-pool.ts
 2 src/main/workspaces/creation/preparation/worktree-create-preparation-stale-cleanup.ts
@@ -1502,13 +1464,9 @@
 1 src/main/workspaces/execution-host/local-project-runtime-resolution.ts
 4 src/main/workspaces/execution-host/project-runtime-git-router.ts
 2 src/main/workspaces/removal/folder-workspace-archive-hook.ts
-2 src/main/workspaces/removal/local-orphaned-worktree-cleanup.ts
-3 src/main/workspaces/removal/local-worktree-filesystem.ts
-1 src/main/workspaces/removal/local-worktree-removal-recovery.ts
 1 src/main/workspaces/removal/retirement/worktree-retirement-discovery.ts
-1 src/main/workspaces/removal/worktree-prunable-git-file.ts
 1 src/main/workspaces/removal/worktree-removal-process-cleanup.ts
-3 src/main/workspaces/space-analysis/workspace-space-analysis.ts
+1 src/main/workspaces/space-analysis/workspace-space-analysis.ts
 2 src/main/workspaces/space-analysis/workspace-space-repo-scan.ts
 2 src/main/workspaces/space-analysis/workspace-space-scan-worker-client.ts
 9 src/main/wsl/discovery/distro-catalog.ts
@@ -1539,11 +1497,10 @@
 1 src/main/wsl/filesystem/wsl-unc-delete.ts
 1 src/main/wsl/history/wsl-fish-history-cleanup.ts
 4 src/main/wsl/host-lifecycle/wsl-host-connector.ts
-1 src/main/wsl/host-lifecycle/wsl-host-gate-startup.ts
 6 src/main/wsl/host-lifecycle/wsl-host-kept-for-peers.ts
 2 src/main/wsl/host-lifecycle/wsl-host-removal.ts
 1 src/main/wsl/host-lifecycle/wsl-host-uninstall-server-stop.ts
-2 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
+1 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
 1 src/main/wsl/host-lifecycle/wsl-orphan-holder-release.ts
 1 src/main/wsl/orcad/wsl-orcad-active-probe.ts
 2 src/main/wsl/orcad/wsl-orcad-connection.ts
@@ -1553,9 +1510,8 @@
 5 src/main/wsl/orcad/wsl-orcad-instance-adoption.ts
 1 src/main/wsl/orcad/wsl-orcad-liveness-wiring.ts
 1 src/main/wsl/orcad/wsl-orcad-pairing-repair.ts
-6 src/main/zcode/hook-service.ts
-6 src/main/zcode/zcode-plan-api-key-store.ts
-10 src/main/zcode/zcode-plan-credential-commands.ts
+7 src/main/zcode/hook-service.ts # zcode-app-cli setting.json is read on the same one-shot startup, toggle and uninstall paths as config.json
+3 src/main/zcode/zcode-plan-credential-commands.ts
 3 src/main/zcode/zcode-v2-plan-credentials.ts
 13 src/shared/agent-hook-listener/claude-session-continuation.ts
 2 src/shared/agent-hook-listener/command-code-transcript.ts
@@ -1566,9 +1522,8 @@
 7 src/shared/agent-hook-listener/providers/codex/codex-events.ts
 1 src/shared/agent-hook-listener/providers/codex/codex-subagent-identity.ts
 1 src/shared/agent-hook-listener/providers/codex/codex-subagent-reviewer.ts
-3 src/shared/agent-hook-listener/providers/codex/codex-subagent-roster.ts
-4 src/shared/agent-hook-listener/providers/codex/codex-subagent-transcript.ts
-3 src/shared/agent-hook-listener/providers/codex/codex-transcript-poll.ts
+2 src/shared/agent-hook-listener/providers/codex/codex-subagent-roster.ts
+3 src/shared/agent-hook-listener/providers/codex/codex-subagent-transcript.ts
 1 src/shared/agent-hook-listener/providers/grok/grok-session-paths.ts
 1 src/shared/agent-hook-listener/providers/grok/grok-tool-fields.ts
 3 src/shared/agent-hook-listener/providers/jcode/jcode-session-files.ts
@@ -1616,10 +1571,11 @@
 5 src/shared/remote-runtime/serve-supervisor/serve-bundle-park.ts
 2 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
 1 src/shared/secure-storage/bounded-secure-json-file.ts
+1 src/shared/secure-storage/secure-file-async-write.ts # Windows only: the ACL addon creates restricted files synchronously, so the async writer falls back to writeSecureFile there
 19 src/shared/secure-storage/secure-file.ts
 6 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts
-2 src/shared/shell/command-resolution/cli-fs-reads.ts
-16 src/shared/shell/command-resolution/node-cli-command-resolution.ts
+3 src/shared/shell/command-resolution/cli-fs-reads.ts # sync runner for CLI lookups; isNativeExecutable moved here from node-cli-command-resolution (16 -> 13) so withCliRuntimeOnPath has an async form
+13 src/shared/shell/command-resolution/node-cli-command-resolution.ts
 1 src/shared/shell/command-resolution/nvm-version-directories.ts
 1 src/shared/shell/launch/startup-command-staging.ts

@@ -3,11 +3,7 @@ import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-comm
 import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import { filterUserWslDistros, parseWslDistros } from './wsl-distro-list-output'
 import { wslDistroListRetryDelayMs } from './wsl-distro-retry'
-import {
-  _resetWslAvailabilityCacheForTests,
-  _setWslAvailabilityCacheForTests,
-  dropStaleWslAvailabilityFailure
-} from './wsl-availability'
+import { dropStaleWslAvailabilityFailure } from './wsl-availability'
 import {
   WSL_PROBE_TIMEOUT_MS,
   runWslExe,
@@ -18,18 +14,15 @@ import {
   isWslListOutputLost,
   listedOrRegisteredWslDistros,
   readRegisteredWslDistrosLater,
-  resetWslListOutputLost,
   runningWhenListedNone
 } from './wsl-registered-distro-fallback'
 import {
-  _resetRunningWslDistroCacheForTests,
   resolveRunningWslDistros,
   type RunningWslDistroReadOptions
 } from './wsl-running-distro-cache'
-import { clearWslHomeCache, getCachedWslHome, rememberWslHome } from './wsl-home-cache'
+import { getCachedWslHome, rememberWslHome } from './wsl-home-cache'
 import { notifyWslDiscoveryChanged } from './wsl-discovery-change'
 import {
-  _setWslInstallationForTests,
   peekWslInstallation,
   peekWslInstallationAndRefreshIfDue,
   readWslInstallation
@@ -328,40 +321,4 @@ export async function listRunningWslHomeDirsAsync(): Promise<string[]> {
     (await listRunningWslDistrosAsync()).map((distro) => getWslHomeAsync(distro))
   )
   return homes.filter((home): home is string => Boolean(home))
-}
-
-// Retire pending probes with their cache so a reset cannot leak an old answer into the next test.
-function resetWslDistroListState(): void {
-  wslDistroCache = null
-  wslDistroListInFlight = null
-  wslDistroListRetryAfterMs = 0
-  wslDistroListEmptyStreak = 0
-  wslDistroProbeSequence = 0
-  wslDistroCacheSequence = 0
-  wslInstallationAbsent = false
-  resetWslListOutputLost()
-}
-
-export function _resetWslCachesForTests(): void {
-  clearWslHomeCache()
-  wslHomeProbeCache.clear()
-  resetWslDistroListState()
-  _resetRunningWslDistroCacheForTests()
-  _resetWslAvailabilityCacheForTests()
-}
-
-// Seeds expire like real cache entries; timer-advancing tests must mock process-host to prevent actual probes.
-export function _setWslCachesForTests(args: {
-  available?: boolean | null
-  distros?: string[] | null
-  availabilityRetryable?: boolean
-}): void {
-  _setWslAvailabilityCacheForTests(args.available, args.availabilityRetryable ?? false)
-  // Seed through normal caching so an empty list also arms backoff.
-  resetWslDistroListState()
-  if (args.distros) {
-    cacheWslDistroList(args.distros, ++wslDistroProbeSequence)
-  }
-  // A seeded catalog is an installed host. Don't let the service query consume a wsl.exe mock.
-  _setWslInstallationForTests('present')
 }

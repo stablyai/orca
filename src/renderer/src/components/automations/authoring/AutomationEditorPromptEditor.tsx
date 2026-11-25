@@ -138,7 +138,7 @@ export function AutomationEditorPromptEditor({
     <div
       data-slot={AUTOMATION_PROMPT_EDITOR_SLOT}
       className={cn(
-        'code-editor-colors relative min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-border/70 bg-editor-surface',
+        'code-editor-colors relative min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-border/70 bg-editor-surface @max-[35rem]:min-h-[max(12rem,40vh)]',
         'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50',
         // Tint Monaco’s placeholder token as ghost text rather than typed content.
         '[--vscode-editor-placeholder-foreground:color-mix(in_srgb,var(--muted-foreground)_50%,transparent)]'

@@ -10,10 +10,7 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import type {
-  WorkspaceLineage,
-  WorktreeLineage
-} from '../../../../../../shared/worktree/lineage-types'
+import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
@@ -90,8 +87,8 @@ export type VirtualizedWorktreeViewportProps = {
   defaultHostId: ExecutionHostId
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
-  workspaceLineageByChildKey: Record<string, WorkspaceLineage>
-  crossStoreChildrenByFolderId: ReadonlyMap<string, readonly Worktree[]>
+  /** selectSidebarChildrenByParentIdentity */
+  childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]>
   // Full canonical repo-id order; must include hidden repos or a reorder silently drops them.
   allRepoIds: string[]
   onReorderHostSections: (orderedHostIds: ExecutionHostId[]) => void

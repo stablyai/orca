@@ -1,8 +1,8 @@
 import { withFolderSetupSupportWarning } from './folder-setup-support-warning'
 import { withWorktreeSelectorRecovery } from './worktree-selector-recovery'
+import { cliCaller } from '../automations/automation-caller-chat'
 import type {
   RuntimeWorktreeListResult,
-  RuntimeWorktreePsResult,
   RuntimeWorktreeRecord,
   RuntimeWorktreeSetResult,
   RuntimeWorktreeCreateResult
@@ -11,7 +11,7 @@ import type { CommandHandler } from '../dispatch/dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { requestWorktreeRemoval } from './worktree-removal-request'
 import { removeIfFolderWorkspace, setIfFolderWorkspace } from './folder-workspace-mutations'
-import { formatWorktreeList, formatWorktreePs, formatWorktreeShow } from './workspace-format'
+import { formatWorktreeList, formatWorktreeShow } from './workspace-format'
 import { printResult } from '../output/command-result-output'
 import {
   annotateOmittedHostScope,
@@ -35,10 +35,10 @@ import { parseCliAgent, readCliAgentLaunch } from '../agents/agent-launch-reques
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
 import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
+import { runWorktreePs } from './worktree-ps'
 import { callNamingParentEnvironment } from './worktree-parent-environment'
-import { annotatePsRows, annotateShown } from './worktree-address-annotation'
+import { annotateShown } from './worktree-address-annotation'
 import { refuseCurrentForRemoval } from './worktree-removal-current-refusal'
-import { projectWorktreePsTerminalVerdict } from './worktree-ps-terminal-verdict'
 import {
   assertWorkspaceTargetFlagsCompatible,
   hasWorkspaceProjectTarget,
@@ -79,21 +79,7 @@ function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent
 }
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
-  'worktree ps': async ({ flags, client, json }) => {
-    const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreePsResult>>(
-      'worktree.ps',
-      {
-        limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-        ...(json && flags.has('agent-wait') ? { includeAgentWait: true } : {})
-      }
-    )
-    await annotateOmittedHostScope(result.result)
-    const annotate = await annotatePsRows(client, result.result.worktrees)
-    const worktrees = annotate(result.result.worktrees.map(projectWorktreePsTerminalVerdict))
-    printResult({ ...result, result: { ...result.result, worktrees } }, json, () =>
-      formatWorktreePs({ ...result.result, worktrees: annotate(result.result.worktrees) })
-    )
-  },
+  'worktree ps': runWorktreePs,
   'worktree list': async ({ flags, client, json }) => {
     const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreeListResult>>(
       'worktree.list',
@@ -199,6 +185,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         callerTerminalHandle,
         noParent
       })),
+      ...cliCaller(callerTerminalHandle, client.isRemote),
       // Always request CLI provenance, including hand-typed creates without a terminal handle.
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {}
     }

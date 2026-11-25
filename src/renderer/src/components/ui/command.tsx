@@ -15,12 +15,20 @@ import { useTranslate } from '@/i18n/use-translate'
 import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/text-input/ime/ime-text-field'
 import { DialogOverlay } from '@/components/ui/dialog'
+import {
+  COMMAND_ITEM_BASE_CLASS,
+  commandGroupVariants,
+  commandItemVariants,
+  commandSeparatorVariants
+} from './command-list-variants'
 
-const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded-md', {
+// Why outline-none: a list without a search field takes focus itself; its highlighted row shows focus.
+const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded-md outline-none', {
   variants: {
     surface: {
       default: 'bg-popover text-popover-foreground',
-      inline: 'bg-transparent text-foreground'
+      inline: 'bg-transparent text-foreground',
+      menu: 'rounded-none bg-transparent text-foreground'
     },
     density: {
       default: '',
@@ -146,44 +154,88 @@ const commandInputVariants = cva('flex items-center bg-muted/30 px-3 py-1', {
   variants: {
     variant: {
       default: 'border-b border-border',
-      framed: 'rounded-md border border-input'
+      framed: 'rounded-md border border-input',
+      menu: 'h-8 border-b border-black/7 bg-transparent px-2.5 py-0 dark:border-white/10'
     }
   },
   defaultVariants: { variant: 'default' }
 })
+
+function withoutTrailingEllipsis(value: string | undefined): string | undefined {
+  return value
+    ?.trim()
+    .replace(/(?:\.{3}|…)$/, '')
+    .trimEnd()
+}
 
 function CommandInput({
   className,
   variant,
   wrapperClassName,
   iconClassName,
+  leading,
   trailing,
+  truncatePlaceholder = false,
   ref,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input> &
   VariantProps<typeof commandInputVariants> & {
     wrapperClassName?: string
     iconClassName?: string
+    /** Rendered between the search icon and the field (e.g. a scope chip). */
+    leading?: React.ReactNode
     /** Rendered after the field, inside the input frame (e.g. a filter control). */
     trailing?: React.ReactNode
+    /** Ellipsize a controlled input's placeholder, including while focused. */
+    truncatePlaceholder?: boolean
   }) {
   const imeProps = useImeTextFieldProps<HTMLInputElement>(props)
+  const placeholderHint = truncatePlaceholder ? props.placeholder : props['aria-placeholder']
+  const repeatsName =
+    withoutTrailingEllipsis(placeholderHint) === withoutTrailingEllipsis(props['aria-label'])
+  const input = (
+    <CommandPrimitive.Input
+      ref={ref}
+      data-slot="command-input"
+      className={cn(
+        'flex h-10 w-full rounded-md bg-transparent py-3 text-sm text-ellipsis outline-none placeholder:text-muted-foreground placeholder:text-ellipsis disabled:cursor-not-allowed disabled:opacity-50',
+        variant === 'menu' && 'h-8 py-0 text-[13px]',
+        className
+      )}
+      {...props}
+      {...imeProps}
+      placeholder={truncatePlaceholder ? undefined : props.placeholder}
+      aria-placeholder={repeatsName ? undefined : placeholderHint}
+    />
+  )
   return (
     <div
       className={cn(commandInputVariants({ variant }), wrapperClassName)}
       data-cmdk-input-wrapper=""
     >
-      <SearchIcon className={cn('mr-2 h-4 w-4 shrink-0 opacity-50', iconClassName)} />
-      <CommandPrimitive.Input
-        ref={ref}
-        data-slot="command-input"
+      <SearchIcon
         className={cn(
-          'flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
-          className
+          'mr-2 h-4 w-4 shrink-0 opacity-50',
+          variant === 'menu' && 'hidden',
+          iconClassName
         )}
-        {...props}
-        {...imeProps}
       />
+      {leading}
+      {truncatePlaceholder ? (
+        <div className="relative flex min-w-0 flex-1">
+          {input}
+          {props.value === '' ? (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 flex items-center"
+            >
+              <span className="truncate text-sm text-muted-foreground">{props.placeholder}</span>
+            </span>
+          ) : null}
+        </div>
+      ) : (
+        input
+      )}
       {trailing}
     </div>
   )
@@ -259,37 +311,18 @@ function CommandEmpty({
 
 function CommandGroup({
   className,
+  variant,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Group>) {
+}: React.ComponentProps<typeof CommandPrimitive.Group> &
+  VariantProps<typeof commandGroupVariants>) {
   return (
     <CommandPrimitive.Group
       data-slot="command-group"
-      className={cn(
-        'overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground',
-        className
-      )}
+      className={cn(commandGroupVariants({ variant }), className)}
       {...props}
     />
   )
 }
-
-const COMMAND_ITEM_BASE_CLASS =
-  'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4'
-
-const commandItemVariants = cva('', {
-  variants: {
-    selection: { default: '', palette: 'jump-palette-item' },
-    density: { default: '', workspace: 'px-3 py-2 text-xs', flush: 'p-0' },
-    // Cmd+J's workspace row box: titles share one column across row kinds.
-    shape: {
-      default: '',
-      'palette-row':
-        'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-    },
-    emphasis: { default: '', pinned: 'bg-muted/35' }
-  },
-  defaultVariants: { selection: 'default' }
-})
 
 function CommandItem({
   className,
@@ -362,12 +395,14 @@ function CommandOption({
 
 function CommandSeparator({
   className,
+  variant,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Separator>) {
+}: React.ComponentProps<typeof CommandPrimitive.Separator> &
+  VariantProps<typeof commandSeparatorVariants>) {
   return (
     <CommandPrimitive.Separator
       data-slot="command-separator"
-      className={cn('-mx-1 h-px bg-border', className)}
+      className={cn(commandSeparatorVariants({ variant }), className)}
       {...props}
     />
   )

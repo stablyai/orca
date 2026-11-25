@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
+import { AGENT_ROW_TITLE_BESIDE_MODEL_CHIP } from '@/components/dashboard/rows/agent-row-title-floor'
 import {
   AgentStateDot,
   agentStateLabel,
@@ -13,23 +14,18 @@ import { cn } from '@/lib/class-names'
 import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { useClaudeAgentRowView } from '@/components/dashboard/rows/use-claude-agent-row-view'
 import './worktree-card-agent-summary'
-import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-status/presentation/agent-row-dot-state'
+import { agentRowDisplayDotState as getAgentDotState } from '../../../../../../shared/agent-row-dot-state'
 import { getAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { formatAgentToolPreview } from '@/lib/agent-status/presentation/agent-row-tool-preview'
-import { agentNoUpdateLabel } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { useAgentRowConversationNaming } from '@/components/dashboard/rows/use-agent-row-conversation-name'
 import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
 import { forkMarkedNameText } from '@/components/native-chat/fork/fork-marked-name-text'
 import { lastEnteredDoneAt } from '@/components/dashboard/rows/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
-import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
-import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
+import { translate } from '@/i18n/i18n'
+import { compactAgentStatusLine } from '../../../../../../shared/agent-status/presentation/agent-compact-status'
 import { getCompactAgentLineOrder } from './worktree-card-compact-agent-line-order'
-import {
-  programStatusAttentionLine,
-  type ProgramStatusPresentation
-} from '../../../../../../shared/program-status/presentation'
+import type { ProgramStatusPresentation } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
@@ -41,6 +37,30 @@ function getCompactAgentPrimary(
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
+/** What the agent itself reported, or null when it has said nothing yet. */
+export function getCompactAgentStatus(
+  agent: DashboardAgentRowData,
+  now: number,
+  lastAssistantMessageOverride?: string,
+  presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation,
+  t?: Translate
+): string | null {
+  const tr = t ?? translate
+  return compactAgentStatusLine({
+    entry: agent.entry,
+    state: agent.state,
+    presentation,
+    now,
+    labels: {
+      stopping: tr('components.native-chat.status.stopping', 'Stopping…'),
+      monitoring: agentStateLabel('monitoring', tr)
+    },
+    ...(lastAssistantMessageOverride !== undefined
+      ? { lastAssistantMessage: lastAssistantMessageOverride }
+      : {})
+  })
+}
+
 export function getCompactAgentSecondary(
   agent: DashboardAgentRowData,
   now: number,
@@ -48,37 +68,9 @@ export function getCompactAgentSecondary(
   presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation,
   t?: Translate
 ): string {
-  // Program-reported blocks need user attention before other row details.
-  if (presentation.attention) {
-    return programStatusAttentionLine(presentation.attention)
-  }
-  const verdictLine = agentVerdictStatusLine(agent.entry)
-  if (verdictLine) {
-    return verdictLine
-  }
-  // Silence proves only time without updates; do not infer what the pane is doing.
-  if (agent.state === 'unverifiable') {
-    return agentNoUpdateLabel(agent.entry, now)
-  }
-  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state, t)
-  if (stoppingLabel) {
-    return stoppingLabel
-  }
-  // Why: the lead turn is over in monitoring, so its last tool line is stale; name the state instead.
-  if (agent.state === 'working' && agent.entry.workingMode === 'monitoring') {
-    return agentStateLabel('monitoring')
-  }
-  const toolPreview = formatAgentToolPreview(agent.entry, agent.state)
-  if (toolPreview) {
-    return toolPreview
-  }
-  if (presentation.message) {
-    return presentation.message
-  }
-  const lastAssistantMessage =
-    lastAssistantMessageOverride ?? agent.entry.lastAssistantMessage?.trim()
-  if (lastAssistantMessage) {
-    return lastAssistantMessage
+  const status = getCompactAgentStatus(agent, now, lastAssistantMessageOverride, presentation, t)
+  if (status) {
+    return status
   }
   // Why: child rows without descriptions use their role as primary text; repeating its formatted label adds no information.
   if (agent.rowSource === 'subagent' && agent.entry.prompt?.trim() === agent.agentType.trim()) {
@@ -87,13 +79,19 @@ export function getCompactAgentSecondary(
   return formatAgentTypeLabel(agent.agentType)
 }
 
-function getCompactAgentTime(agent: DashboardAgentRowData, now: number): string | null {
+/** When the row's short age counts from: when it finished, else when it started. */
+export function getCompactAgentTimestamp(agent: DashboardAgentRowData): number | null {
   const doneAt = lastEnteredDoneAt(agent)
   if (doneAt !== null) {
-    return formatShortTimeAgo(doneAt, now)
+    return doneAt
   }
   const startedAt = agent.startedAt > 0 ? agent.startedAt : agent.entry.stateStartedAt
-  return startedAt > 0 ? formatShortTimeAgo(startedAt, now) : null
+  return startedAt > 0 ? startedAt : null
+}
+
+function getCompactAgentTime(agent: DashboardAgentRowData, now: number): string | null {
+  const at = getCompactAgentTimestamp(agent)
+  return at === null ? null : formatShortTimeAgo(at, now)
 }
 
 type CompactAgentRowProps = {
@@ -222,20 +220,51 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     highlighted && !isUnvisited && 'text-foreground'
   )
 
+  const modelChip =
+    showModel && model ? (
+      <span
+        className={cn(
+          'min-w-0 max-w-24 truncate font-mono text-3xs',
+          highlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
+        )}
+        title={model}
+      >
+        {model}
+      </span>
+    ) : null
+  const line = (
+    <span
+      className={cn('min-w-0 flex-1 truncate', modelChip && AGENT_ROW_TITLE_BESIDE_MODEL_CHIP)}
+      title={sendTargetDisabledReason ? undefined : rowTitle}
+    >
+      <span className={leadClassName}>{shownNode(leadingText)}</span>
+      {trailingText && (
+        <span className={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
+          {' '}
+          - {shownNode(trailingText)}
+        </span>
+      )}
+    </span>
+  )
+
   const rowBody = (
     <>
       {agent.childRow ? (
-        // Share chat-strip child content so both surfaces report the same state.
-        <AgentChildRowContent
-          row={agent.childRow}
-          now={now}
-          leadClassName={leadClassName}
-          trailClassName={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}
-          separator=" - "
-          dotTitle={sendTargetDisabledReason ? null : undefined}
-          tooltipSide="right"
-          lineTitle={!sendTargetDisabledReason}
-        />
+        <>
+          {/* Share chat-strip child content so both surfaces report the same state. */}
+          <AgentChildRowContent
+            row={agent.childRow}
+            now={now}
+            leadClassName={leadClassName}
+            trailClassName={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}
+            separator=" - "
+            dotTitle={sendTargetDisabledReason ? null : undefined}
+            tooltipSide="right"
+            lineTitle={!sendTargetDisabledReason}
+            lineClassName={modelChip ? AGENT_ROW_TITLE_BESIDE_MODEL_CHIP : undefined}
+          />
+          {modelChip}
+        </>
       ) : (
         <>
           {/* Show the actionable disabled reason over every hit area. */}
@@ -252,30 +281,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
               <AgentTypeIcon agentType={agent.agentType} size={13} />
             </span>
           )}
-          <span
-            className="min-w-0 flex-1 truncate"
-            title={sendTargetDisabledReason ? undefined : rowTitle}
-          >
-            <span className={leadClassName}>{shownNode(leadingText)}</span>
-            {trailingText && (
-              <span className={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
-                {' '}
-                - {shownNode(trailingText)}
-              </span>
-            )}
-          </span>
-        </>
-      )}
-      {showModel && model && (
-        <span
-          className={cn(
-            'min-w-0 max-w-24 truncate font-mono text-3xs',
-            highlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
+          {modelChip ? (
+            <span className="flex min-w-0 flex-1 items-center gap-1">
+              {line}
+              {modelChip}
+            </span>
+          ) : (
+            line
           )}
-          title={model}
-        >
-          {model}
-        </span>
+        </>
       )}
       {hasChildDisclosure && !childAgentsExpanded && (
         <span
@@ -322,6 +336,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
       onDragStart={(e) => e.stopPropagation()}
+      data-workspace-agent-row=""
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}

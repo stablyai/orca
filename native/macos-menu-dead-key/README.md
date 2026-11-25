@@ -19,12 +19,9 @@ clang -fobjc-arc -framework AppKit native/macos-menu-dead-key/probe-menu-dead-ke
 ORCA_BACKGROUND_LAUNCH=1 /tmp/orca-dead-key-probe
 ```
 
-The unguarded probe exits 42 with `characterAtIndex:` out of bounds. The regression
-test builds both Mac architectures and loads the guard into the native probe:
-
-```sh
-ORCA_BACKGROUND_LAUNCH=1 pnpm test config/scripts/desktop-distribution/macos/macos-menu-dead-key.test.mjs --maxWorkers=2
-```
+The unguarded probe exits 42 with `characterAtIndex:` out of bounds. The automated
+regression test that built both Mac architectures and loaded the guard into this probe
+was removed in the test-suite reduction; the probe above is the remaining manual check.
 
 On 2026-11-16, m4air (macOS 27.2, 26B123, arm64), accessed through `orca --environment
 m4air`, reproduced the report's `NSMenu performKeyEquivalent: + 80` exception

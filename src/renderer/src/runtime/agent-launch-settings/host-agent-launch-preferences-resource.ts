@@ -1,9 +1,9 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus
 } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { useAppStore } from '@/store/index'
 import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentsRetired,
@@ -42,14 +42,16 @@ const INHERITED: AgentLaunchPreferences = {
   agentPermissionDefault: 'own',
   agentPermissionOverrides: {}
 }
+/** True when the host has not stated its preferences (pending, timed out, failed, older server or stale owner). */
+export const isInheritedAgentLaunchPreferences = (preferences: AgentLaunchPreferences): boolean =>
+  preferences === INHERITED
 const FIRST_READ_DEADLINE_MS = 3_000
 const snapshotByEnvironment = new Map<string, Resource>()
 export const current = (entry: Resource): boolean =>
   snapshotByEnvironment.get(entry.owner.environmentId) === entry &&
   getRuntimeEnvironmentRevision(entry.owner.environmentId) === entry.owner.pairingRevision &&
-  (lastVerifiedRuntimeStatus(
-    useAppStore.getState().runtimeStatusByEnvironmentId.get(entry.owner.environmentId)
-  )?.runtimeId ?? entry.owner.runtimeId) === entry.owner.runtimeId
+  (lastVerifiedRuntimeStatus(readRuntimeStatuses().get(entry.owner.environmentId))?.runtimeId ??
+    entry.owner.runtimeId) === entry.owner.runtimeId
 const publish = (entry: Resource): void => entry.holders.forEach((listener) => listener())
 function stop(entry: Resource): void {
   entry.controller?.abort()
@@ -118,10 +120,6 @@ subscribeHostAgentLaunchSettings((owner) => {
   }
 })
 
-export function clearHostAgentMenuSettingsForTests(): void {
-  snapshotByEnvironment.forEach((_, id) => forget(id))
-}
-
 export function resource(owner: AgentLaunchSettingsOwner): Resource {
   const key = snapshotKey(owner.environmentId, owner.pairingRevision, owner.runtimeId)
   const previous = snapshotByEnvironment.get(owner.environmentId)
@@ -180,7 +178,7 @@ export function effectiveAgentLaunchPreferences(
   if (!owner) {
     return desktop
   }
-  const entry = useAppStore.getState().runtimeStatusByEnvironmentId.get(owner.environmentId)
+  const entry = readRuntimeStatuses().get(owner.environmentId)
   const status = lastVerifiedRuntimeStatus(entry)
   const currentOwner =
     !isRuntimeHostContactRevoked(entry) &&

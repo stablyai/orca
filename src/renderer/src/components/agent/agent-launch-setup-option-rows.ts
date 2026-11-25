@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
 import { withLaunchEffortDefault } from './agent-launch-setup-default-effort'
 import { translate } from '@/i18n/i18n'
+import { sayAgentSessionFailureTranslated } from '../native-chat/messages/notices/agent-session-failure-words-text'
 import type { Translate } from '@/i18n/use-translate'
 import type {
   SessionOptionDescriptor,
@@ -20,7 +21,8 @@ import type {
 import type {
   AgentPickerEntry,
   AgentPickerDraft,
-  AgentPickerModel
+  AgentPickerModel,
+  AgentPickerSurface
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { agentPickerPanelArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 
@@ -195,6 +197,7 @@ export function agentLaunchSetupCatalogState(
   entry: AgentPickerEntry,
   models: readonly { id: string; hidden?: true }[],
   currentModel: string | undefined,
+  surface: AgentPickerSurface,
   t: Translate = translate
 ) {
   const hasModels = models.some((model) => !model.hidden)
@@ -230,20 +233,26 @@ export function agentLaunchSetupCatalogState(
                   agent: entry.label
                 })
               : null
-  const catalogMessage = unsupported
-    ? t(
-        'agentPicker.catalogUnsupportedLaunch',
-        '{{agent}} models are unavailable on this host. Your current choices still apply.',
-        { agent: entry.label }
-      )
-    : (missing ??
-      (settled && !hasModels
-        ? t('agentPicker.catalogEmpty', '{{agent}} has no available models.', {
-            agent: entry.label
-          })
-        : null))
+  const commandRefused =
+    surface === 'chat' && entry.catalog.unavailable?.reason === 'agentCommandNotRunnable'
+  const catalogMessage = catalogPending
+    ? t('agentPicker.catalogLoading', 'Loading models…')
+    : commandRefused
+      ? sayAgentSessionFailureTranslated('agentCommandNotRunnable', { agent: entry.label })
+      : unsupported
+        ? t(
+            'agentPicker.catalogUnsupportedLaunch',
+            '{{agent}} models are unavailable on this host. Your current choices still apply.',
+            { agent: entry.label }
+          )
+        : (missing ??
+          (settled && !hasModels
+            ? t('agentPicker.catalogEmpty', '{{agent}} has no available models.', {
+                agent: entry.label
+              })
+            : null))
   // Retry reads the models again in place; an empty or unsupported answer would just repeat.
-  const catalogRetryable = missing !== null
+  const catalogRetryable = missing !== null && !commandRefused
   return { hasModels, catalogPending, catalogMessage, catalogRetryable }
 }
 

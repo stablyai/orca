@@ -46,7 +46,7 @@ export function nativeChatExplicitFileDestination(
     : 'editor'
 }
 
-export function createNativeChatExplicitFileOpener(
+function createNativeChatExplicitFileOpener(
   context: NativeChatFileLinkContext
 ): NativeChatFileOpener {
   return {

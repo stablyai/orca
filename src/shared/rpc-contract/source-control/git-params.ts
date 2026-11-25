@@ -107,6 +107,7 @@ export const GitHistory = WorktreeSelector.extend({
   limit: z.number().int().min(1).max(200).optional(),
   baseRef: z.string().nullable().optional(),
   branchOnly: z.boolean().optional(),
+  branchListOnly: z.boolean().optional(),
   refs: z
     .union([z.literal('head'), z.literal('all'), z.array(GitHistoryRefName).max(1000)])
     .optional(),
@@ -187,6 +188,7 @@ export const SourceControlAiSettings = CommitMessageAiSettings.omit({ customProm
 export const ResolvedSourceControlAiGenerationParams = z.object({
   agentId: z.string(),
   model: z.string(),
+  usesOrcaDefaultModel: z.boolean().optional(),
   thinkingLevel: z.string().optional(),
   customPrompt: z.string().optional(),
   commandInputTemplate: z.string().optional(),
@@ -255,6 +257,18 @@ export const GitForkSync = WorktreeSelector.extend({
     owner: z.string().trim().min(1),
     repo: z.string().trim().min(1)
   })
+})
+
+export const GitContinueRebase = WorktreeSelector.extend({
+  action: z.enum(['continue', 'inspect']).optional(),
+  // Continue refuses unless the rebase is still at the stop the user was shown.
+  expected: z
+    .object({
+      head: z.string().nullable(),
+      step: z.string().nullable(),
+      incarnation: z.string().nullable()
+    })
+    .optional()
 })
 
 export const GitRebaseFromBase = WorktreeSelector.extend({

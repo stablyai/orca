@@ -218,6 +218,9 @@ export type UISliceCore = {
   closeSpacePage: () => void
   openSkillsPage: () => void
   closeSkillsPage: () => void
+  /** The template Bot templates last showed; it reopens on it. Null shows the first. */
+  botTemplateSelected: string | null
+  selectBotTemplate: (templateId: string) => void
   pendingSkillShareId: string | null
   openSkillShare: (shareId: string) => void
   clearPendingSkillShare: () => void

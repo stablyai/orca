@@ -27,6 +27,7 @@ import {
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import { readAgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
+import { foldJournalTurnTextTails } from './journal-text-tail'
 import {
   hydrateJournalStoredItem,
   journalStoredItemRow,
@@ -171,6 +172,7 @@ export function writeJournalDomainCurrentItem(
     observeJournalDomainInputItem(db, target, item, input.inputObservation)
   }
   refreshJournalDomainAcceptedHandover(db, target, next.itemId)
+  foldJournalTurnTextTails(db, target, next, input.previous?.item)
   const oldReport =
     previousReport?.queue_failure_report_turn_item_id == null
       ? null

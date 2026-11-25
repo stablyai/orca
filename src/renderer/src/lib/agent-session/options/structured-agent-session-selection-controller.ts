@@ -78,7 +78,7 @@ export function structuredSessionSelectionController(
     ...createStructuredSessionSelectionController((picks) => {
       void controller
         .request((options) => {
-          const mutation = { type: 'apply-picks', agent, picks } as const
+          const mutation = { type: 'apply-picks', agent, picks, sessionId } as const
           return options.expectedEnvironmentPairingRevision === undefined
             ? enqueueSessionOptionSettingsWrite(target, mutation)
             : enqueueSessionOptionSettingsWrite(target, mutation, options)

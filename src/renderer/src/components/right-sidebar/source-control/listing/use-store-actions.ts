@@ -111,8 +111,10 @@ export function useSourceControlStoreActions() {
         ...args,
         ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
-    const openAllDiffs: AppState['openAllDiffs'] = (id, path, alternate, filter, entries) =>
-      useAppStore.getState().openAllDiffs(id, path, alternate, filter, entries, options)
+    const openAllDiffs: AppState['openAllDiffs'] = (id, path, alternate, filter, entries, extra) =>
+      useAppStore
+        .getState()
+        .openAllDiffs(id, path, alternate, filter, entries, { ...options, ...extra })
     const openBranchAllDiffs: AppState['openBranchAllDiffs'] = (id, path, compare, alternate) =>
       useAppStore.getState().openBranchAllDiffs(id, path, compare, alternate, options)
     const openConflictReview: AppState['openConflictReview'] = (id, path, entries, source) =>

@@ -7,6 +7,7 @@ import type {
   WorkspaceSpaceWorktreeMeasurement
 } from '../../../shared/workspace-disk-space/workspace-space-types'
 import { analyzeWorkspaceSpace } from '../../workspaces/space-analysis/workspace-space-analysis'
+import { retryHeavyWorkers } from '../../utility-worker-host/heavy-worker-spawn'
 import { WorkspaceSpaceScanCancelledError } from '../../workspaces/space-analysis/workspace-space-scan-control'
 import {
   persistWorkspaceSpaceAnalysisSnapshot,
@@ -30,6 +31,8 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
   ipcMain.removeHandler('workspaceSpace:getCachedAnalysis')
   ipcMain.handle('workspaceSpace:analyze', async (event): Promise<WorkspaceSpaceAnalyzeResult> => {
     if (!inFlightScan) {
+      // A scan is always a user's click, so it is also the retry after repeated worker crashes.
+      retryHeavyWorkers()
       const controller = new AbortController()
       const scanId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
       let latestProgress: WorkspaceSpaceScanProgress = {

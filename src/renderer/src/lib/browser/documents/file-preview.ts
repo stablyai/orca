@@ -18,6 +18,7 @@ import {
 } from '@/lib/browser/documents/workspace-file-browser-open-target'
 import { useAppStore } from '@/store/index'
 import { sideGroupPlacement } from './side-group-placement'
+import { sshHostWithoutServerMessage } from '../../../../../shared/project/host-setup/project-host-setup-target'
 import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import {
@@ -82,12 +83,17 @@ export function getWorkspaceFilePreviewPlan(
       reason: 'no-channel'
     }
   }
-  if (connectionId !== null) {
-    return webClientDocPreviewRefusal() ?? { status: 'doc-preview' }
-  }
   // Document preview needs no remote browser/screencast capability.
   if (runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)) {
     return webClientDocPreviewRefusal() ?? { status: 'doc-preview' }
+  }
+  if (connectionId !== null) {
+    // Only an SSH host's Orca server reads its files; a host without one has nothing to preview from.
+    return {
+      status: 'unsupported',
+      message: sshHostWithoutServerMessage(state.sshTargetLabels.get(connectionId) || connectionId),
+      reason: 'no-channel'
+    }
   }
   const availability = getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser']
   if (availability.state !== 'enabled') {

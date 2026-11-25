@@ -12,6 +12,8 @@ description: >-
 
 Use `ORCA linear` when Linear is the source of task context or ticket updates.
 
+`ORCA linear` acts as the Orca user, through their Linear account. A bot running in Orca uses it too, as its owner; it answers the issue that woke it with `ORCA bot reply` instead (`ORCA skills get orca-cli --reference bots`).
+
 `ORCA` is a placeholder for the executable you resolved in the stub; substitute it before running.
 
 `orca-linear` and `linear-tickets` are skill names, not CLI namespaces. Always run

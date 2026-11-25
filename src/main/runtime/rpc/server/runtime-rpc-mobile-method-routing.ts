@@ -1,10 +1,23 @@
 import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
 import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-methods'
+import { MOBILE_BOT_RPC_METHODS } from './runtime-rpc-mobile-bot-methods'
+import { DEFAULT_SCOPE_HOST_METHODS } from './runtime-rpc-mobile-tracker-methods'
 
-// Execution-host routes follow the configured target; paired-desktop routes stay with the relaying Mac. This table also defines mobile allowlisting.
-export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
+// Execution-host routes follow the configured target; paired-desktop routes stay with the relaying Mac;
+// default-scope-host routes follow the target, else the Mac's default host. This table also defines mobile allowlisting.
+export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop' | 'default-scope-host'
 
 export const EXECUTION_HOST_METHODS = [
+  // Signing in/out needs the same power as running commands on the host (workspace).
+  'orcaAccount.selectOrg',
+  'orcaAccount.signIn.cancel',
+  'orcaAccount.signIn.complete',
+  'orcaAccount.signIn.start',
+  'orcaAccount.signIn.wait',
+  'orcaAccount.signOut',
+  'orcaAccount.status',
+  'orcaAccount.subscribe',
+  'orcaAccount.unsubscribe',
   'ui.getJiraQuickFilters',
   'ui.setJiraQuickFilters',
   'ui.getJiraSavedFilters',
@@ -20,8 +33,14 @@ export const EXECUTION_HOST_METHODS = [
   'agentActivity.setRead',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
+  ...MOBILE_BOT_RPC_METHODS,
+  // A bot chat's Slack thread switch and its posts' Retry, Dismiss and Delete, on the bot's host.
+  'connector.slackMirror.set',
+  'connector.slackMirror.post',
+  'connector.slackMirror.status',
   // Transcripts live on the host that ran the agent, which is also where resume launches it.
   'aiVault.listSessions',
+  'aiVault.prepareSessionHandoffPrompt',
   'aiVault.prepareSessionResume',
   'aiVault.resolveSessionTitles',
   'aiVault.searchSessions',
@@ -34,6 +53,8 @@ export const EXECUTION_HOST_METHODS = [
   'automation.runNow',
   'automation.runs',
   'browser.back',
+  // Gated on browser.certificate-trust.v1; older hosts refuse it here, which the phone treats as unavailable.
+  'browser.certificate.proceed',
   'browser.dialogAccept',
   'browser.dialogDismiss',
   'browser.forward',
@@ -45,10 +66,16 @@ export const EXECUTION_HOST_METHODS = [
   'browser.mouseMove',
   'browser.mouseUp',
   'browser.mouseWheel',
+  // Answers a streamed page's permission, sign-in or open-app prompt on the host that asked; gated on browser.page-prompts.v1.
+  'browser.pagePromptAnswer',
+  // Read-only list so the phone can name a tab's profile and offer the host's profiles for a new tab.
+  'browser.profileList',
   'browser.reload',
   'browser.screencast',
   'browser.screencast.ack',
   'browser.screencast.unsubscribe',
+  // Gated on browser.mobile-stop.v1; older hosts refuse it here.
+  'browser.stop',
   'browser.tabCreate',
   'browser.viewport',
   // Pasted images must land on the host whose terminal reads the path.
@@ -77,15 +104,20 @@ export const EXECUTION_HOST_METHODS = [
   'files.stat',
   'files.statTerminalArtifact',
   'files.writeTerminalArtifact',
+  // A folder row's Delete removes the Orca workspace on its host, as desktop's Remove Workspace does.
+  'folderWorkspace.delete',
   'folderWorkspace.list',
   'git.abortMerge',
   'git.abortRebase',
+  // Read-only: the delete confirm names ignored files (.env) that removing the worktree would lose.
+  'git.atRiskLocalFiles',
   'git.branchCompare',
   'git.branchDiff',
   'git.bulkStage',
   'git.bulkUnstage',
   'git.cancelGenerateCommitMessage',
   'git.cancelGeneratePullRequestFields',
+  'git.checkIgnored',
   'git.checkout',
   'git.commit',
   'git.commitCompare',
@@ -164,6 +196,7 @@ export const EXECUTION_HOST_METHODS = [
   'host.wsl.listDistros',
   'preflight.check',
   'preflight.detectAgents',
+  'preflight.installedAgents',
   'preflight.detectRemoteAgents',
   'preflight.refreshAgents',
   'hostedReview.create',
@@ -179,6 +212,19 @@ export const EXECUTION_HOST_METHODS = [
   // Sender cards resolve on the host that owns the orchestration records.
   'orchestration.partyLocation',
   'orchestration.partyOpen',
+  // A coordinator chat's worker prompts wait on the host that runs its workers.
+  'orchestration.workerApprovalsSubscribe',
+  'orchestration.workerApprovalsUnsubscribe',
+  'orchestration.approvalAnswer',
+  // Read-only: the chat's worker strip. Stop and Clear stay on the desktop (the host refuses a phone).
+  'orchestration.workerDockRead',
+  'orchestration.workerDockSubscribe',
+  // Asks from agents on paired servers wait on this computer for its person, as on its phone. The phone
+  // reads and removes Always allow choices; adding one without a card stays on the desktop.
+  'pairedServerAsks.list',
+  'pairedServerAsks.decide',
+  'pairedServerAsks.allowances',
+  'pairedServerAsks.disallow',
   // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
   'orchestration.workerChatTouch',
@@ -212,6 +258,7 @@ export const EXECUTION_HOST_METHODS = [
   'session.tabs.closeLifecycle',
   'session.tabs.createTerminal',
   'session.tabs.list',
+  'session.tabs.terminalShellChoices',
   'session.tabs.listAll',
   'session.tabs.move',
   'session.tabs.subscribe',
@@ -245,6 +292,8 @@ export const EXECUTION_HOST_METHODS = [
   'worktree.activate',
   'worktree.create',
   'worktree.forceDeleteBranch',
+  // Read-only: the Bots section lists the workspaces a bot's workers made from its home.
+  'worktree.lineageList',
   'worktree.list',
   'worktree.listRetiredNames',
   'worktree.prefetchCreateBase',
@@ -260,5 +309,6 @@ export const EXECUTION_HOST_METHODS = [
 
 export const MOBILE_RPC_METHOD_ROUTES: ReadonlyMap<string, MobileRpcMethodRoute> = new Map([
   ...PAIRED_DESKTOP_METHODS.map((method) => [method, 'paired-desktop'] as const),
+  ...DEFAULT_SCOPE_HOST_METHODS.map((method) => [method, 'default-scope-host'] as const),
   ...EXECUTION_HOST_METHODS.map((method) => [method, 'execution-host'] as const)
 ])

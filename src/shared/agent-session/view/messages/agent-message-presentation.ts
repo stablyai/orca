@@ -70,6 +70,8 @@ export function agentMessageHeading(
 
 export function agentMessageSenderLabel(facts: {
   localChat: boolean
+  /** The bot whose home the sender's chat is in; it names every chat there. */
+  botName?: string | null
   customLabel?: string | null
   conversationName?: string | null
   snapshotName?: string | null
@@ -77,7 +79,7 @@ export function agentMessageSenderLabel(facts: {
   fallback: string
 }): string {
   return (
-    (facts.localChat && (facts.customLabel?.trim() || facts.conversationName)) ||
+    (facts.localChat && (facts.botName || facts.customLabel?.trim() || facts.conversationName)) ||
     facts.snapshotName ||
     facts.tabLabel?.trim() ||
     facts.fallback
@@ -124,4 +126,14 @@ export function agentMessageSenderView(
 
 export function agentMessageCanCopy(text: string): boolean {
   return text.length > 0
+}
+
+/** The id Steer and Delete act on while the host still holds this agent message as a queued card;
+ *  a handed-off one (its send recorded) is past them. */
+export function agentMessageWaitingQueuedId(
+  message: Pick<NativeChatMessage, 'queued' | 'queuedMessageId' | 'deliveryState'>
+): string | null {
+  return message.queued && message.deliveryState === undefined
+    ? (message.queuedMessageId ?? null)
+    : null
 }

@@ -6,7 +6,11 @@ import {
   type NativeChatEditFile,
   type NativeChatEditLine
 } from './native-chat-edit-model'
-import { editFilesFromPatchText, splitMoveMarker } from './native-chat-edit-patch-files'
+import {
+  editFilesFromPatchText,
+  nativeChatDiffChangedPaths,
+  splitMoveMarker
+} from './native-chat-edit-patch-files'
 import { editLinesFromUnifiedPatch, editLinesFromWholeFile } from './native-chat-unified-patch'
 import type { NativeChatEditPatch } from '../native-chat-types'
 
@@ -255,5 +259,10 @@ export function editFilesFromToolPair(pair: {
   if (!patchText) {
     return null
   }
-  return editFilesFromPatchText(patchText, text(input?.path) ?? text(input?.file_path))
+  return editFilesFromPatchText(
+    patchText,
+    text(input?.path) ?? text(input?.file_path),
+    false,
+    nativeChatDiffChangedPaths(input?.paths)
+  )
 }
