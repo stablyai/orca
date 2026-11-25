@@ -6,7 +6,10 @@ import {
   type Dispatch,
   type SetStateAction
 } from 'react'
-import type { useMobileNativeChatFileSearch } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-file-search'
+import {
+  normalizeFileSearchQuery,
+  type useMobileNativeChatFileSearch
+} from '../../session/native-chat/composer/attachments/use-mobile-native-chat-file-search'
 import {
   flattenDirectoryCache,
   getDirectoryCacheState,
@@ -24,11 +27,6 @@ type WorkspaceFileSearch = Pick<
 // Opened folders add at most this many matches the host's search did not return.
 const LISTED_MATCH_LIMIT = 32
 
-// As the search hook keys its answers.
-function normalizedSearch(text: string): string {
-  return text.trim().toLowerCase().slice(0, 256)
-}
-
 /** The explorer's visible rows, folded by open folders or the workspace search's results, and what a folder tap does. */
 export function useMobileFileExplorerRows({
   scope,
@@ -36,7 +34,8 @@ export function useMobileFileExplorerRows({
   expanded,
   setExpanded,
   loadDirectory,
-  search
+  search,
+  connected
 }: {
   scope: string
   directoryCache: DirectoryCache
@@ -44,6 +43,8 @@ export function useMobileFileExplorerRows({
   setExpanded: Dispatch<SetStateAction<Set<string>>>
   loadDirectory: (relativePath: string) => Promise<unknown>
   search: WorkspaceFileSearch
+  /** A search that failed while offline asks again once connected. */
+  connected: boolean
 }) {
   // Held with the scope it was typed in, so a new worktree starts unfiltered without an effect.
   const [scopedFilter, setScopedFilter] = useState({ scope, text: '' })
@@ -55,7 +56,7 @@ export function useMobileFileExplorerRows({
     if (filtering) {
       loadNativeChatFiles(filter)
     }
-  }, [filter, filtering, loadNativeChatFiles])
+  }, [connected, filter, filtering, loadNativeChatFiles])
   // The last answer stays up while the next query is out, so results don't blank on every keystroke.
   const [held, setHeld] = useState<{ scope: string; query: string; paths: string[] } | null>(null)
   if (
@@ -66,19 +67,18 @@ export function useMobileFileExplorerRows({
   ) {
     setHeld({ scope, query: nativeChatFilesQuery, paths: nativeChatFilePaths })
   }
-  const answer = held?.scope === scope ? held : null
-  const searchPending = filtering && answer?.query !== normalizedSearch(filter)
+  const typed = normalizeFileSearchQuery(filter)
+  // While the next answer is out, the last one stays only if the new text narrows it.
+  const answer = held?.scope === scope && filtering && typed.startsWith(held.query) ? held : null
+  const searchPending = filtering && answer?.query !== typed
   const searchPaths = useMemo(() => {
     if (!filtering) {
       return []
     }
     const found = answer?.paths ?? []
-    const seen = new Set(found)
     return [
       ...found,
-      ...listedPathMatches(directoryCache, filter, LISTED_MATCH_LIMIT).filter(
-        (path) => !seen.has(path)
-      )
+      ...listedPathMatches(directoryCache, filter, LISTED_MATCH_LIMIT, new Set(found))
     ]
   }, [answer, directoryCache, filter, filtering])
 

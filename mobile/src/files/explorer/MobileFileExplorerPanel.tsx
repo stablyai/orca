@@ -232,7 +232,8 @@ export function MobileFileExplorerPanel(props: {
   }, [connState, folderReads, folders, listingsKey, listingsVersion, queryClient, rootRead])
 
   const search = useMobileNativeChatFileSearch({
-    client,
+    // An older host's root read already holds its whole file list, which the listed matches search.
+    client: rootRead?.kind === 'legacy' ? null : client,
     worktreeId,
     limit: SEARCH_RESULT_LIMIT,
     maxAgeMs: SEARCH_MAX_AGE_MS
@@ -244,7 +245,8 @@ export function MobileFileExplorerPanel(props: {
       expanded,
       setExpanded,
       loadDirectory: refreshDirectory,
-      search
+      search,
+      connected: connState === 'connected'
     })
   const refreshing = useRefreshHint(searchPending)
   const decorate = useMobileFileExplorerDecorations({

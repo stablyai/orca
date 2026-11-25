@@ -31,6 +31,11 @@ type SearchAnswer = {
   client: RpcClient | null
   worktreeId: string | null
 }
+/** How a query is keyed: an answer's query is this form of what was typed. */
+export function normalizeFileSearchQuery(query: string): string {
+  return query.trim().toLowerCase().slice(0, 256)
+}
+
 const NO_ANSWER: SearchAnswer = { query: null, paths: [], client: null, worktreeId: null }
 
 /** The legacy inventory is the whole workspace, so its request carries no further parameters. */
@@ -96,7 +101,7 @@ export function useMobileNativeChatFileSearch(args: {
     (query: string) => {
       if (!client) {
         // Nothing to ask, so the query is answered with nothing rather than left waiting.
-        setNativeChatFilePaths([], query.trim().toLowerCase().slice(0, 256))
+        setNativeChatFilePaths([], normalizeFileSearchQuery(query))
         return
       }
       const generation = client.getGeneration?.() ?? 0
@@ -106,7 +111,7 @@ export function useMobileNativeChatFileSearch(args: {
         searchSupportedRef.current = null
         inventory.reset()
       }
-      const normalizedQuery = query.trim().toLowerCase().slice(0, 256)
+      const normalizedQuery = normalizeFileSearchQuery(query)
       const cachedEntry = queryCacheRef.current.get(normalizedQuery)
       const cached =
         cachedEntry && Date.now() - cachedEntry.at < maxAgeMs ? cachedEntry.paths : undefined
