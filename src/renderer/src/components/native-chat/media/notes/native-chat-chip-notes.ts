@@ -40,17 +40,28 @@ export function replaceNativeChatNotedImage(scopeKey: string, id: string): (() =
     : false
 }
 
-// Marked images reopened in a viewer, per chat. They stay in the draft, so a reload keeps them, but
-// the message box doesn't send them until the viewer swaps in the edited copy or closes.
-const editingImages = new Map<string, Set<string>>()
+// Marked images reopened in a viewer, per chat, with how many viewers have each open. They stay in
+// the draft, so a reload keeps them, but the message box doesn't send them until every viewer
+// editing them has swapped in its edited copy or closed.
+const editingImages = new Map<string, Map<string, number>>()
 
-/** Flags a reopened marked image as being edited; the returned function ends that. */
+/** Flags a reopened marked image as being edited; the returned function ends this viewer's edit. */
 export function markNativeChatNotedImageEditing(scopeKey: string, id: string): () => void {
-  const ids = editingImages.get(scopeKey) ?? new Set<string>()
-  ids.add(id)
+  const ids = editingImages.get(scopeKey) ?? new Map<string, number>()
+  ids.set(id, (ids.get(id) ?? 0) + 1)
   editingImages.set(scopeKey, ids)
+  let ended = false
   return () => {
-    ids.delete(id)
+    if (ended) {
+      return
+    }
+    ended = true
+    const left = (ids.get(id) ?? 1) - 1
+    if (left > 0) {
+      ids.set(id, left)
+    } else {
+      ids.delete(id)
+    }
     if (ids.size === 0 && editingImages.get(scopeKey) === ids) {
       editingImages.delete(scopeKey)
     }
@@ -61,8 +72,9 @@ export function markNativeChatNotedImageEditing(scopeKey: string, id: string): (
 export function nativeChatDraftHasEditingImage(scopeKey: string): boolean {
   const ids = editingImages.get(scopeKey)
   return (
-    Boolean(ids?.size) &&
-    readNativeChatComposerDraft(scopeKey).images.some(({ id }) => ids!.has(id))
+    ids !== undefined &&
+    ids.size > 0 &&
+    readNativeChatComposerDraft(scopeKey).images.some(({ id }) => ids.has(id))
   )
 }
 

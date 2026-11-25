@@ -121,8 +121,19 @@ export function clearNativeChatAttachmentNotesWhere(matches: (scopeKey: string) 
 
 /** Notes follow their draft when it moves to another scope (a launch draft becoming a session's).
  *  With `keepSource` they are copied: the source's go only when its draft is gone for good. */
-export function moveNativeChatAttachmentNotes(from: string, to: string, keepSource = false): void {
-  storage.update((entries) => moveNativeChatNotesEntries(entries, from, to, undefined, keepSource))
+export function moveNativeChatAttachmentNotes(
+  from: string,
+  to: string,
+  keepSource = false
+): boolean {
+  return storage.update((entries) =>
+    moveNativeChatNotesEntries(entries, from, to, undefined, keepSource)
+  )
+}
+
+/** Retries notes writes storage refused; true once storage holds them all. */
+export function saveNativeChatAttachmentNotes(): boolean {
+  return storage.save()
 }
 
 /** A command takes no notes and none of their images: the draft's marked images, with their notes,

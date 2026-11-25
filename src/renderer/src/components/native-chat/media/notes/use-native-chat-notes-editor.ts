@@ -231,13 +231,20 @@ export function useNativeChatNotesEditor(initial: {
     [notes, record]
   )
 
+  // Typing waits too: words typed after Send captured the note would be lost when it closes.
+  const typeDraftText = useCallback((text: string) => {
+    if (!lockedRef.current) {
+      setDraftText(text)
+    }
+  }, [])
+
   return useMemo(
     () => ({
       notes,
       pending,
       editing,
       draftText,
-      setDraftText,
+      setDraftText: typeDraftText,
       hasUnadded,
       confirm,
       setConfirm,
@@ -268,6 +275,7 @@ export function useNativeChatNotesEditor(initial: {
       past,
       locked,
       setLocked,
+      typeDraftText,
       redo,
       restore,
       place,

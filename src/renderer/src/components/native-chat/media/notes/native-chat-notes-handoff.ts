@@ -65,21 +65,52 @@ export function settleNativeChatNotesReplacement(
   return restore ?? undefined
 }
 
-/** Sends the message the notes went into, only if the chat's message box (found again from
- *  `opener`) is still the same one and still takes them as a message, as when Send was pressed. */
-export function submitNativeChatNotesIfAdmitted(
+/** What Send was pressed against: the chat (its root outlives a chip that the marked copy replaces),
+ *  the message box instance, and the draft as it was. */
+export type NativeChatNotesSendApproval = {
+  root: Element | null
+  composer: NativeChatNotesComposer
+  text: string
+  imageIds: readonly string[]
+}
+
+export function captureNativeChatNotesSend(
   opener: { readonly current: Element | null },
-  scopeKey: string,
-  ids: readonly string[]
-): void {
-  const now = nativeChatNotesComposer(opener.current)
-  if (
-    now?.scopeKey === scopeKey &&
-    now.handle.notesBlocked?.() === null &&
-    nativeChatNotesStillInDraft(scopeKey, ids)
-  ) {
-    now.handle.submit?.()
+  composer: NativeChatNotesComposer
+): NativeChatNotesSendApproval {
+  const draft = readNativeChatComposerDraft(composer.scopeKey)
+  return {
+    root: opener.current?.closest('[data-native-chat-root]') ?? null,
+    composer,
+    text: draft.text,
+    imageIds: draft.images.map(({ id }) => id)
   }
+}
+
+/** Sends the message the notes went into, only if it is still the one Send was pressed for: the same
+ *  message box instance, still taking notes as a message, with the draft changed only by these
+ *  marked images (and the chip they replace). Otherwise the images stay in the message box. */
+export function submitNativeChatNotesIfApproved(
+  approved: NativeChatNotesSendApproval,
+  ids: readonly string[],
+  replacedId: string | undefined
+): boolean {
+  const now = approved.root ? nativeChatNotesComposer(approved.root) : null
+  const { scopeKey } = approved.composer
+  const draft = readNativeChatComposerDraft(scopeKey)
+  const expected = new Set([...approved.imageIds.filter((id) => id !== replacedId), ...ids])
+  if (
+    now?.scopeKey !== scopeKey ||
+    now.handle !== approved.composer.handle ||
+    now.handle.notesBlocked?.() !== null ||
+    draft.text !== approved.text ||
+    draft.images.length !== expected.size ||
+    draft.images.some(({ id }) => !expected.has(id))
+  ) {
+    return false
+  }
+  now.handle.submit?.()
+  return true
 }
 
 /** A drawable frame of the media and its natural size. */

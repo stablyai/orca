@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { NativeChatMediaNote } from './native-chat-media-notes'
 import type { NativeChatNotesSource } from './native-chat-attachment-notes'
+import { nativeChatComposerDraftSaved } from '../../drafts/native-chat-composer-draft-saved'
 import {
   createNativeChatNotesStorage,
   moveNativeChatNotesEntries
@@ -14,7 +15,8 @@ import {
 const STORAGE_KEY = 'orca.nativeChat.heldNotes.v1'
 export const NATIVE_CHAT_HELD_NOTES_MAX = 60
 
-type HeldEntry = { scopeKey: string; notes: readonly NativeChatMediaNote[] }
+/** `hold`: which hold this is, so a viewer ends only the hold it opened, never a newer one. */
+type HeldEntry = { scopeKey: string; notes: readonly NativeChatMediaNote[]; hold?: string }
 
 const keyOf = (scopeKey: string, mediaKey: string): string => `${scopeKey}\0${mediaKey}`
 
@@ -55,8 +57,17 @@ function isHeldEntry(value: unknown): value is HeldEntry {
 }
 
 const storage = createNativeChatNotesStorage<HeldEntry>(STORAGE_KEY, (value) =>
-  isHeldEntry(value) ? { scopeKey: value.scopeKey, notes: value.notes } : null
+  isHeldEntry(value)
+    ? {
+        scopeKey: value.scopeKey,
+        notes: value.notes,
+        ...('hold' in value && typeof value.hold === 'string' ? { hold: value.hold } : {})
+      }
+    : null
 )
+
+let holdSequence = 0
+const nextHold = (): string => `hold-${Date.now().toString(36)}-${(holdSequence += 1)}`
 
 export function holdNativeChatNotes(
   scopeKey: string,
@@ -66,7 +77,7 @@ export function holdNativeChatNotes(
   return storage.update((held) => {
     const key = keyOf(scopeKey, mediaKey)
     held.delete(key)
-    held.set(key, { scopeKey, notes })
+    held.set(key, { scopeKey, notes, hold: nextHold() })
     while (held.size > NATIVE_CHAT_HELD_NOTES_MAX) {
       const oldest = held.keys().next().value
       if (oldest === undefined) {
@@ -87,9 +98,40 @@ export function readHeldNativeChatNotes(
   return storage.get(keyOf(scopeKey, mediaKey))?.notes ?? null
 }
 
-/** Ends the hold once its notes are handed to the message box or deliberately removed. */
-export function releaseHeldNativeChatNotes(scopeKey: string, mediaKey: string): void {
-  storage.update((held) => held.delete(keyOf(scopeKey, mediaKey)))
+/** The hold a viewer read back: it ends that one only, never a newer one held from another viewer. */
+export type NativeChatHeldNotesClaim = { scopeKey: string; mediaKey: string; hold: string }
+
+export function claimHeldNativeChatNotes(
+  scopeKey: string,
+  mediaKey: string
+): NativeChatHeldNotesClaim {
+  return { scopeKey, mediaKey, hold: storage.get(keyOf(scopeKey, mediaKey))?.hold ?? '' }
+}
+
+/** Ends the claimed hold, once its notes are deliberately removed, while it is still that hold. */
+export function releaseHeldNativeChatNotes(claim: NativeChatHeldNotesClaim): void {
+  storage.update((held) => {
+    const key = keyOf(claim.scopeKey, claim.mediaKey)
+    const entry = held.get(key)
+    return entry !== undefined && (entry.hold ?? '') === claim.hold && held.delete(key)
+  })
+}
+
+/** Ends the claimed hold once its notes were handed to the message box and the chat's draft holding
+ *  them is saved; a refused draft write keeps the hold, so a restart still finds the notes. */
+export function releaseHeldNativeChatNotesOnceSaved(
+  claim: NativeChatHeldNotesClaim
+): Promise<void> {
+  return nativeChatComposerDraftSaved(claim.scopeKey).then((saved) => {
+    if (saved) {
+      releaseHeldNativeChatNotes(claim)
+    }
+  })
+}
+
+/** Retries held-notes writes storage refused; true once storage holds them all. */
+export function saveNativeChatHeldNotes(): boolean {
+  return storage.save()
 }
 
 /** Drops held notes whose chat draft is deleted, such as a closed chat or a removed workspace. */
@@ -108,8 +150,8 @@ export function clearNativeChatHeldNotesWhere(matches: (scopeKey: string) => boo
 
 /** Held notes follow their chat's draft when it moves to another scope. Where that chat already
  *  holds notes for the same media, both sets stay: the moved notes go after its own, numbered on. */
-export function moveNativeChatHeldNotes(from: string, to: string, keepSource = false): void {
-  storage.update((held) =>
+export function moveNativeChatHeldNotes(from: string, to: string, keepSource = false): boolean {
+  return storage.update((held) =>
     moveNativeChatNotesEntries(
       held,
       from,
@@ -129,8 +171,10 @@ function combineHeldNotes(existing: HeldEntry, moved: HeldEntry): HeldEntry {
     return existing
   }
   const last = existing.notes.reduce((max, note) => Math.max(max, note.number), 0)
+  // A new hold: a viewer that read the destination's own notes must not end the merged set.
   return {
     ...existing,
+    hold: nextHold(),
     notes: [
       ...existing.notes,
       ...added.map((note, index) => ({ ...note, number: last + index + 1 }))

@@ -21,15 +21,19 @@ import {
   nativeChatNotesStillInDraft,
   NativeChatNotesSupersededError,
   settleNativeChatNotesReplacement,
-  submitNativeChatNotesIfAdmitted,
+  captureNativeChatNotesSend,
+  submitNativeChatNotesIfApproved,
   NativeChatNotesUnsavedError,
   type NativeChatNotesComposer
 } from './native-chat-notes-handoff'
 import {
   holdNativeChatNotes,
   nativeChatNotesMediaKey,
+  claimHeldNativeChatNotes,
   readHeldNativeChatNotes,
-  releaseHeldNativeChatNotes
+  releaseHeldNativeChatNotes,
+  releaseHeldNativeChatNotesOnceSaved,
+  type NativeChatHeldNotesClaim
 } from './native-chat-held-notes'
 
 type Editor = ReturnType<typeof useNativeChatNotesEditor>
@@ -83,7 +87,7 @@ export function useNativeChatNotesDelivery({
   const [composer, setComposer] = useState<NativeChatNotesComposer | null>(null)
   const restored = useRef(false)
   // The chat whose held notes this viewer brought back: they stay held until handed off or removed.
-  const heldIn = useRef<string | null>(null)
+  const heldIn = useRef<NativeChatHeldNotesClaim | null>(null)
   useLayoutEffect(() => {
     const found = nativeChatNotesComposer(opener.current)
     setComposer(found)
@@ -92,7 +96,7 @@ export function useNativeChatNotesDelivery({
       restored.current = true
       const held = readHeldNativeChatNotes(found.scopeKey, mediaKey)
       if (held?.length) {
-        heldIn.current = found.scopeKey
+        heldIn.current = claimHeldNativeChatNotes(found.scopeKey, mediaKey)
         editor.restore(held)
         onRestored()
       }
@@ -148,6 +152,8 @@ export function useNativeChatNotesDelivery({
         return false
       }
       busyRef.current = true
+      // Send goes to this message box with this draft, as they are now, or not at all.
+      const approved = send ? captureNativeChatNotesSend(opener, composer) : null
       setBusy(true)
       // The image is drawn from these notes: no change to them until it is handed off or fails.
       editor.setLocked(true)
@@ -165,12 +171,13 @@ export function useNativeChatNotesDelivery({
         const restore = settleNativeChatNotesReplacement(composer.scopeKey, ids, onAttached?.(ids))
         handed = true
         if (heldIn.current) {
-          releaseHeldNativeChatNotes(heldIn.current, mediaKey)
+          // The hold ends once the draft holding the marked image is saved, not before.
+          releaseHeldNativeChatNotesOnceSaved(heldIn.current)
           heldIn.current = null
         }
-        if (send) {
+        if (approved) {
           await afterComposerRender()
-          submitNativeChatNotesIfAdmitted(opener, composer.scopeKey, ids)
+          submitNativeChatNotesIfApproved(approved, ids, replacesAttachmentId)
           await afterComposerRender()
         }
         // Sent, the images have left the draft; when the box held the send back, say where they are.
@@ -223,6 +230,7 @@ export function useNativeChatNotesDelivery({
       offset,
       onAttached,
       opener,
+      replacesAttachmentId,
       showError,
       source,
       t,
@@ -265,7 +273,7 @@ export function useNativeChatNotesDelivery({
       }
     } else if (notes.length === 0 && heldIn.current) {
       // Every held note was removed: the hold ends with them.
-      releaseHeldNativeChatNotes(heldIn.current, mediaKey)
+      releaseHeldNativeChatNotes(heldIn.current)
       heldIn.current = null
     } else if (notes.length > 0 && loaded && !(await handOff(false))) {
       return

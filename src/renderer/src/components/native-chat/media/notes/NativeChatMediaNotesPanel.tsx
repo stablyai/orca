@@ -279,6 +279,8 @@ function NoteEditor({
         ref={ref}
         rows={2}
         value={editor.draftText}
+        // While Send makes the marked image from the notes, they can't change; the note says so.
+        readOnly={editor.locked}
         aria-label={heading}
         placeholder={t('components.native-chat.notes.placeholder', 'Add a note')}
         maxLength={NATIVE_CHAT_NOTE_TEXT_MAX}
@@ -311,7 +313,7 @@ function NoteEditor({
           type="button"
           variant="media-note"
           size="xs"
-          disabled={!canCommit}
+          disabled={!canCommit || editor.locked}
           onClick={() => editor.commit() && onClosed()}
         >
           {adding

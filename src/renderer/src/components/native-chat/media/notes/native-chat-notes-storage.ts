@@ -1,44 +1,115 @@
-// A small map kept in localStorage, which every window of this origin shares. Each write starts from
-// what storage holds now, so one window never drops notes another window saved or removed.
+// A small map kept in localStorage, which every window of this origin shares. Each entry is its own
+// item (`<storage key>:<entry key>`), and a write touches only the entries it changes, so two windows
+// changing different notes at the same moment never overwrite each other. For the same entry the
+// last write wins, except that a change storage refused here keeps winning in this window until it
+// lands (it is replayed over every read and retried on every write).
 
 export type NativeChatNotesStorage<T> = {
   get: (key: string) => T | undefined
-  /** In insertion order, oldest first. */
+  /** In the order entries were last written, oldest first. */
   keys: () => string[]
   /** Applies `change` on top of the stored map; `change` returns false when it changed nothing.
-   *  Resolves whether storage now holds the change (false: kept in this window only, for now). */
+   *  Returns whether storage now holds every change from this window (false: some are kept in this
+   *  window only, for now). */
   update: (change: (entries: Map<string, T>) => boolean) => boolean
+  /** Retries the changes storage refused; returns whether storage now holds them all. */
+  save: () => boolean
   subscribe: (listener: () => void) => () => void
   /** Test-only: forget the in-memory copy and read storage again. */
   resetForTests: () => void
+}
+
+type StoredEntry = { t: number; v: unknown }
+
+function isStoredEntry(value: unknown): value is StoredEntry {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    't' in value &&
+    typeof value.t === 'number' &&
+    'v' in value
+  )
 }
 
 export function createNativeChatNotesStorage<T>(
   storageKey: string,
   parse: (value: unknown) => T | null
 ): NativeChatNotesStorage<T> {
+  const prefix = `${storageKey}:`
+  const itemKey = (key: string): string => `${prefix}${encodeURIComponent(key)}`
   let entries = new Map<string, T>()
   let loaded = false
   let listening = false
-  // This window's changes storage refused, per key (undefined: removed). Every later read and write
-  // starts from storage and replays only these, so another window's saves and removals survive.
+  let rereadQueued = false
+  let clock = 0
+  // This window's changes storage refused, per key (undefined: removed). Every read replays them and
+  // every write retries them, so they are never lost to another window's write.
   const unsaved = new Map<string, T | undefined>()
   const listeners = new Set<() => void>()
 
-  const read = (): Map<string, T> => {
-    const next = new Map<string, T>()
+  // Later than every stamp this window gave, so a rewritten entry moves to the end.
+  const stamp = (): number => {
+    clock = Math.max(clock + 1, Date.now())
+    return clock
+  }
+  const write = (key: string, value: T | undefined): boolean => {
     try {
-      const parsed: unknown = JSON.parse(globalThis.localStorage?.getItem(storageKey) ?? '[]')
-      for (const entry of Array.isArray(parsed) ? parsed : []) {
-        if (Array.isArray(entry) && typeof entry[0] === 'string') {
-          const value = parse(entry[1])
-          if (value !== null) {
-            next.set(entry[0], value)
+      if (value === undefined) {
+        globalThis.localStorage?.removeItem(itemKey(key))
+      } else {
+        globalThis.localStorage?.setItem(itemKey(key), JSON.stringify({ t: stamp(), v: value }))
+      }
+      unsaved.delete(key)
+      return true
+    } catch {
+      unsaved.set(key, value)
+      return false
+    }
+  }
+  // Notes saved by an earlier version as one item move to an item each, then the old item goes.
+  const migrate = (storage: Storage): void => {
+    const legacy = storage.getItem(storageKey)
+    if (legacy === null) {
+      return
+    }
+    const parsed: unknown = JSON.parse(legacy)
+    let order = 0
+    for (const entry of Array.isArray(parsed) ? parsed : []) {
+      if (Array.isArray(entry) && typeof entry[0] === 'string') {
+        order += 1
+        if (storage.getItem(itemKey(entry[0])) === null) {
+          storage.setItem(itemKey(entry[0]), JSON.stringify({ t: order, v: entry[1] }))
+        }
+      }
+    }
+    storage.removeItem(storageKey)
+  }
+  const read = (): Map<string, T> => {
+    const found: { key: string; t: number; value: T }[] = []
+    const storage = globalThis.localStorage
+    try {
+      if (storage) {
+        migrate(storage)
+        for (let index = 0; index < storage.length; index += 1) {
+          const item = storage.key(index)
+          if (!item?.startsWith(prefix)) {
+            continue
+          }
+          const stored: unknown = JSON.parse(storage.getItem(item) ?? 'null')
+          const value = isStoredEntry(stored) ? parse(stored.v) : null
+          if (value !== null && isStoredEntry(stored)) {
+            found.push({ key: decodeURIComponent(item.slice(prefix.length)), t: stored.t, value })
+            clock = Math.max(clock, stored.t)
           }
         }
       }
     } catch {
       // Unreadable storage only costs notes from an earlier session or another window.
+    }
+    found.sort((a, b) => a.t - b.t || (a.key < b.key ? -1 : 1))
+    const next = new Map<string, T>()
+    for (const { key, value } of found) {
+      next.set(key, value)
     }
     for (const [key, value] of unsaved) {
       next.delete(key)
@@ -61,13 +132,28 @@ export function createNativeChatNotesStorage<T>(
     if (!listening && typeof globalThis.addEventListener === 'function') {
       listening = true
       globalThis.addEventListener('storage', (event: StorageEvent) => {
-        if (event.key === storageKey) {
-          entries = read()
-          notify()
+        if (event.key !== null && event.key !== storageKey && !event.key.startsWith(prefix)) {
+          return
+        }
+        // One write per entry arrives as one event each: read them all once.
+        if (!rereadQueued) {
+          rereadQueued = true
+          queueMicrotask(() => {
+            rereadQueued = false
+            entries = read()
+            notify()
+          })
         }
       })
     }
     return entries
+  }
+  const save = (): boolean => {
+    // Deleting the entry being visited is safe in a Map walk.
+    for (const [key, value] of unsaved) {
+      write(key, value)
+    }
+    return unsaved.size === 0
   }
 
   return {
@@ -81,21 +167,26 @@ export function createNativeChatNotesStorage<T>(
         return unsaved.size === 0
       }
       entries = base
-      try {
-        globalThis.localStorage?.setItem(storageKey, JSON.stringify([...base]))
-        unsaved.clear()
-      } catch {
-        // Quota or blocked storage: this window keeps the changed keys and replays them on later
-        // writes until one lands.
-        for (const key of new Set([...before.keys(), ...base.keys()])) {
-          if (before.get(key) !== base.get(key)) {
-            unsaved.set(key, base.get(key))
-          }
+      const changed = new Set<string>()
+      for (const key of new Set([...before.keys(), ...base.keys()])) {
+        if (before.get(key) !== base.get(key)) {
+          changed.add(key)
         }
+      }
+      // Earlier refused changes first, then this one's, in its order.
+      save()
+      for (const key of base.keys()) {
+        if (changed.delete(key)) {
+          write(key, base.get(key))
+        }
+      }
+      for (const key of changed) {
+        write(key, undefined)
       }
       notify()
       return unsaved.size === 0
     },
+    save,
     subscribe: (listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener)

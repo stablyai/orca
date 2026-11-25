@@ -25,6 +25,7 @@ import {
 } from './native-chat-pending-attachment-cache'
 import { nativeChatPendingAttachmentScope } from './native-chat-pending-attachment-scopes'
 import { useNativeChatComposerImageChips } from './use-native-chat-composer-image-chips'
+import { useNativeChatImageOnlyResolve } from './use-native-chat-image-only-resolve'
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   insertImageReferences,
@@ -278,10 +279,15 @@ export function useNativeChatComposerAttachments({
     [destinationScope, releasePreview, scopeEditor, serverOwnedPendingIds]
   )
 
+  const resolveImageOnly = useNativeChatImageOnlyResolve(
+    resolvePendingImageAttachment,
+    dropPendingImageAttachment,
+    mountedRef
+  )
   const pendingChips = useMemo(
     (): NativeChatPendingAttachmentChips => ({
       begin: beginPendingImageAttachment,
-      resolve: resolvePendingImageAttachment,
+      resolve: resolveImageOnly,
       drop: dropPendingImageAttachment,
       // Use the caret while mounted; persist into the scope draft through IME composition and unmounts.
       attachReferences: attachPendingReferences
@@ -290,7 +296,7 @@ export function useNativeChatComposerAttachments({
       attachPendingReferences,
       beginPendingImageAttachment,
       dropPendingImageAttachment,
-      resolvePendingImageAttachment
+      resolveImageOnly
     ]
   )
 

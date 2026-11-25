@@ -1,10 +1,15 @@
 // Persist whole memory records, journal unconfirmed changes on unload, and adopt other windows’ confirmed writes.
 
-import { releaseMovedNativeChatDraftSource } from './native-chat-moved-draft-release'
-import { basename } from '@/lib/path'
-import { isNativeChatKeptPastePath } from '../paste/native-chat-image-paste'
-import { isNativeChatPastedImagePath } from '../../../../../shared/native-chat/attachments/native-chat-image-label'
-import { isAgentSessionAttachmentStorePath } from '../../../../../shared/agent-session/agent-session-attachments'
+import {
+  isKeptLocalPaste,
+  savedForm,
+  unavailableNativeChatComposerDraftImage
+} from './native-chat-composer-draft-saved-form'
+import {
+  movedNativeChatDraftSourceRemoved,
+  movedNativeChatDraftSourceReused,
+  releaseMovedNativeChatDraftSource
+} from './native-chat-moved-draft-release'
 import {
   dirtyScopes,
   deferredRemovals,
@@ -18,7 +23,6 @@ import {
   refusedScopes,
   unconfirmed,
   reconcileRestoredImageChecks,
-  type DraftRecord,
   type UnconfirmedDraftChange
 } from './native-chat-composer-draft-memory'
 import type { AppendBeforeLoad, DraftAppend } from './native-chat-composer-draft-load'
@@ -29,7 +33,6 @@ import {
 import {
   nativeChatComposerDraftStorage,
   parseStoredNativeChatComposerDraft,
-  type NativeChatComposerDraftImage,
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 
@@ -46,8 +49,11 @@ let channel: BroadcastChannel | null = null
 function completeDeferredRemovals(destinationScope: string, savedAt: number): void {
   let released = false
   for (const [sourceScope, pending] of deferredRemovals) {
-    if (pending.destinationScope === destinationScope && savedAt >= pending.savedAt) {
+    if (
+      pending.destinationScope === destinationScope &&
+      savedAt >= pending.savedAt &&
       releaseMovedNativeChatDraftSource(sourceScope)
+    ) {
       released = true
     }
   }
@@ -56,36 +62,7 @@ function completeDeferredRemovals(destinationScope: string, savedAt: number): vo
   }
 }
 
-/** An image the draft names but can no longer send, so the user can attach it again. */
-export function unavailableNativeChatComposerDraftImage(
-  image: NativeChatComposerDraftImage
-): NativeChatComposerDraftImage {
-  return image.unavailableName === undefined
-    ? { id: image.id, path: '', unavailableName: basename(image.path) }
-    : image
-}
-
-/** A local paste in Orca's paste folder: it outlives the run, so a restore can show and send it. */
-export function isKeptLocalPaste(image: NativeChatComposerDraftImage): boolean {
-  return !image.connectionId && isNativeChatKeptPastePath(image.path)
-}
-
-/** Omit launch seeds; retain durable local/server pastes, reduce other pastes to unavailable names, and drop empty records. */
-function savedForm(record: DraftRecord): StoredNativeChatComposerDraft | null {
-  const { unsavedText, ...saved } = record
-  const images = saved.images.map((image) =>
-    isNativeChatPastedImagePath(image.path) &&
-    !isKeptLocalPaste(image) &&
-    !isAgentSessionAttachmentStorePath(image.path)
-      ? unavailableNativeChatComposerDraftImage(image)
-      : image
-  )
-  const text = saved.text === unsavedText ? '' : saved.text
-  if (text === '' && images.length === 0) {
-    return null
-  }
-  return { ...saved, text, images }
-}
+export { isKeptLocalPaste, unavailableNativeChatComposerDraftImage }
 
 function confirm(scopeKey: string, change: UnconfirmedDraftChange): void {
   if (unconfirmed.get(scopeKey) === change) {
@@ -96,6 +73,9 @@ function confirm(scopeKey: string, change: UnconfirmedDraftChange): void {
   }
   pruneNativeChatComposerDraftJournal(scopeKey, change.at)
   channel?.postMessage({ scopeKey })
+  if (change.draft === null) {
+    movedNativeChatDraftSourceRemoved(scopeKey)
+  }
   completeDeferredRemovals(scopeKey, change.at)
 }
 
@@ -144,6 +124,11 @@ function track(scopeKey: string, written: Promise<boolean>): void {
       scopeWrites.delete(scopeKey)
     }
   })
+}
+
+/** The writes issued for this scope that have not settled yet. */
+export function pendingNativeChatComposerDraftWrites(scopeKey: string): Promise<boolean>[] {
+  return [...(scopeWrites.get(scopeKey) ?? [])]
 }
 
 export function flushNativeChatComposerDrafts(): void {
@@ -234,7 +219,7 @@ export function persistNativeChatComposerDraft(
 ): void {
   installFlushOnHide()
   if (records.has(scopeKey)) {
-    deferredRemovals.delete(scopeKey)
+    movedNativeChatDraftSourceReused(scopeKey)
   }
   if (!load.hydrated && append && !load.editedBeforeLoad.has(scopeKey)) {
     appendBeforeLoad(scopeKey, append)

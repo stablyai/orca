@@ -7,7 +7,7 @@ import {
 import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
 import { deleteNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-removal'
 import { moveNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-move'
-import { deferredRemovals } from '../../drafts/native-chat-composer-draft-memory'
+import { keepsMovedNativeChatDraftNotes } from '../../drafts/native-chat-moved-draft-release'
 import { hydrateNativeChatComposerDrafts } from '../../drafts/native-chat-composer-draft-load'
 import {
   createMemoryNativeChatComposerDraftStorage,
@@ -24,6 +24,7 @@ import {
 import {
   holdNativeChatNotes,
   resetNativeChatHeldNotesForTests,
+  claimHeldNativeChatNotes,
   readHeldNativeChatNotes,
   releaseHeldNativeChatNotes
 } from './native-chat-held-notes'
@@ -44,6 +45,11 @@ vi.mock('./native-chat-media-notes-draw', () => ({
 
 const SCOPE = 'agent-session:notes'
 const ATTACHMENT_NOTES_KEY = 'orca.nativeChat.attachmentNotes.v1'
+// What another window sharing this storage writes for one entry.
+const itemOf = (scope: string, id: string): string =>
+  `${ATTACHMENT_NOTES_KEY}:${encodeURIComponent(`${scope}\u0000${id}`)}`
+const saveFromOtherWindow = (scope: string, id: string, value: NativeChatAttachmentNotes): void =>
+  localStorage.setItem(itemOf(scope, id), JSON.stringify({ t: Date.now() + 1000, v: value }))
 const note = (number: number, text = `Note ${number}`): NativeChatMediaNote => ({
   id: `n${number}`,
   number,
@@ -78,7 +84,7 @@ it('keeps held notes across a reload and drops them with their chat’s draft', 
   ])
   resetNativeChatHeldNotesForTests()
   expect(readHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toHaveLength(2)
-  releaseHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')
+  releaseHeldNativeChatNotes(claimHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png'))
   expect(readHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toBeNull()
   deleteNativeChatComposerDraft('agent-session:other')
   expect(readHeldNativeChatNotes('agent-session:other', '/tmp/dashboard.png')).toBeNull()
@@ -138,11 +144,7 @@ it('over the cap drops notes whose image left its draft, never notes on an image
 it('a write keeps notes another window saved meanwhile', () => {
   setNativeChatAttachmentNotes(SCOPE, 'img-1', record([note(1)]))
   // Another window sharing this storage saves notes of its own.
-  const stored: unknown[] = JSON.parse(localStorage.getItem(ATTACHMENT_NOTES_KEY) ?? '[]')
-  localStorage.setItem(
-    ATTACHMENT_NOTES_KEY,
-    JSON.stringify([...stored, ['agent-session:other\u0000img-9', record([note(1)])]])
-  )
+  saveFromOtherWindow('agent-session:other', 'img-9', record([note(1)]))
   setNativeChatAttachmentNotes(SCOPE, 'img-2', record([note(1)]))
   resetNativeChatAttachmentNotesForTests()
   expect(readNativeChatAttachmentNotes('agent-session:other', 'img-9')).not.toBeNull()
@@ -158,14 +160,8 @@ it('a write storage refused is retried without undoing what another window saved
   expect(setNativeChatAttachmentNotes(SCOPE, 'img-1', record([note(1)]))).toBe(false)
   setItem.mockRestore()
   // Meanwhile another window removes one entry and saves one of its own.
-  const stored: [string, unknown][] = JSON.parse(localStorage.getItem(ATTACHMENT_NOTES_KEY) ?? '[]')
-  localStorage.setItem(
-    ATTACHMENT_NOTES_KEY,
-    JSON.stringify([
-      ...stored.filter(([key]) => !key.endsWith('removed-elsewhere')),
-      ['agent-session:other\u0000img-9', record([note(1)])]
-    ])
-  )
+  localStorage.removeItem(itemOf(SCOPE, 'removed-elsewhere'))
+  saveFromOtherWindow('agent-session:other', 'img-9', record([note(1)]))
   expect(setNativeChatAttachmentNotes(SCOPE, 'img-2', record([note(1)]))).toBe(true)
   resetNativeChatAttachmentNotesForTests()
   expect(readNativeChatAttachmentNotes(SCOPE, 'img-1')).not.toBeNull()
@@ -186,8 +182,10 @@ it('notes on a draft’s images, and notes held for its chat, follow the draft t
   expect(imageIds()).toEqual(['img-3'])
   expect(readNativeChatAttachmentNotes(SCOPE, 'img-3')?.notes).toHaveLength(1)
   expect(readHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toHaveLength(2)
-  // The source keeps its copy exactly while its draft's removal waits for the destination's save.
-  expect(readNativeChatAttachmentNotes(launch, 'img-3') !== null).toBe(deferredRemovals.has(launch))
+  // The source keeps its copy exactly while its draft's removal is not yet confirmed.
+  expect(readNativeChatAttachmentNotes(launch, 'img-3') !== null).toBe(
+    keepsMovedNativeChatDraftNotes(launch)
+  )
 })
 
 it('a moved draft’s held notes join the notes its new chat already holds for the same media', () => {

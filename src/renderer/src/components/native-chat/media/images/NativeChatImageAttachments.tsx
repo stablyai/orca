@@ -4,6 +4,7 @@ import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { basename } from '../../../../lib/path'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
+import { nativeChatCapturedImageIndex } from './native-chat-captured-image'
 import { NativeChatMediaViewer } from '../notes/NativeChatMediaViewer'
 import { nativeChatSentNotesNumberMax } from '../notes/native-chat-media-notes'
 import {
@@ -309,6 +310,11 @@ export function NativeChatImageAttachments({
     }
   }, [])
   const images = blocks.filter((block) => block.type === 'image-ref')
+  // Annotate from the image set acts on the row's images as they are when it is pressed.
+  const latestImages = useRef(images)
+  useLayoutEffect(() => {
+    latestImages.current = images
+  })
   const group = useRef<HTMLDivElement>(null)
   const galleryMessageId = useContext(NativeChatGalleryMessageContext)
   // Only images a tile can show join, so a label chip never becomes a step.
@@ -327,7 +333,7 @@ export function NativeChatImageAttachments({
           blocks: shown.map(({ block }) => block),
           images: shown.map(({ image }) => image),
           annotate: (block) => {
-            const at = images.indexOf(block)
+            const at = nativeChatCapturedImageIndex(latestImages.current, block)
             if (!mounted.current || at === -1) {
               return false
             }
