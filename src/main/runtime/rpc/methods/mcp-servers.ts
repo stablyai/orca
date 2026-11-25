@@ -21,7 +21,10 @@ import {
   McpServersList
 } from '../../../../shared/rpc-contract/mcp-servers-params'
 import { botToolProblems } from '../../../bots/bot-tools-host'
-import { sharedBotToolHealthCheck } from '../../../bots/bot-tool-health-checks'
+import {
+  cancelBotToolHealthChecks,
+  sharedBotToolHealthCheck
+} from '../../../bots/bot-tool-health-checks'
 import { resolveBotToolInput } from '../../../bots/bot-tool-details'
 import {
   cancelBotToolSignInAttempt,
@@ -70,17 +73,6 @@ function signInOwner(context: RpcContext): string {
   return rpcCallerOperationKey(context.caller)
 }
 
-/** A finished sign-in changes the server's row for every client. */
-function noteSignedIn(
-  context: RpcContext,
-  view: BotToolSignInAttemptView
-): BotToolSignInAttemptView {
-  if (view.state === 'done') {
-    context.runtime.notifyMcpServersChanged()
-  }
-  return view
-}
-
 /** A method later hosts fill in; this one refuses it in words a client can tell apart. */
 async function notYet(method: string): Promise<never> {
   assertMcpServersFeatureEnabled()
@@ -126,7 +118,12 @@ export const MCP_SERVER_METHODS = [
     handler: (params, context) =>
       onHost(
         context,
-        async () => changed(await updateMcpServer(params.id, params.version, params.config)),
+        async () =>
+          changed(
+            await updateMcpServer(params.id, params.version, params.config, {
+              signal: context.signal
+            })
+          ),
         true
       )
   }),
@@ -179,6 +176,17 @@ export const MCP_SERVER_METHODS = [
       })
   }),
   defineMethod({
+    // The asking window let go: its check's CLI and servers close now, not at the check's timeout.
+    name: 'mcpServers.cancelProblems',
+    permission: 'workspace',
+    params: McpServersList,
+    handler: (_params, context) =>
+      onHost(context, async () => {
+        cancelBotToolHealthChecks(MCP_HOST_LIST_RELAY_OWNER)
+        return { cancelled: true }
+      })
+  }),
+  defineMethod({
     name: 'mcpServers.signIn.start',
     permission: 'workspace',
     params: McpServerSignInStart,
@@ -197,15 +205,12 @@ export const MCP_SERVER_METHODS = [
     permission: 'workspace',
     params: McpServerSignInWait,
     handler: (params, context) =>
-      onHost(context, async () =>
-        noteSignedIn(
-          context,
-          await waitBotToolSignInAttempt(
-            signInOwner(context),
-            params.flowId,
-            params.afterRevision,
-            context.signal
-          )
+      onHost(context, () =>
+        waitBotToolSignInAttempt(
+          signInOwner(context),
+          params.flowId,
+          params.afterRevision,
+          context.signal
         )
       )
   }),
@@ -216,10 +221,7 @@ export const MCP_SERVER_METHODS = [
     handler: (params, context) =>
       onHost(context, async () => {
         const owner = signInOwner(context)
-        return noteSignedIn(
-          context,
-          await inHostWords(() => finishBotToolSignInAttempt(owner, params.flowId, params.query))
-        )
+        return inHostWords(() => finishBotToolSignInAttempt(owner, params.flowId, params.query))
       })
   }),
   defineMethod({

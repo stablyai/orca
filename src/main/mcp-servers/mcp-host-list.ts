@@ -1,8 +1,8 @@
 // A host's own MCP server list: a bot-tools file in a folder of its own, so its saved headers,
 // sign-ins and relay addresses key by that folder exactly as a bot's do. Each server's id, agents,
 // workspaces and shared-process choice ride on the entry's extra keys, which bot tools keep as they are.
-import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
+import { join, resolve } from 'node:path'
 import { freeBotToolName, type BotToolInput, type BotToolServer } from '../../shared/bot-tools'
 import {
   ALL_MCP_SERVER_WORKSPACES,
@@ -11,8 +11,12 @@ import {
   type McpServer,
   type McpServerWorkspaces
 } from '../../shared/mcp-servers/mcp-servers'
-import { readBotToolDetails, resolveBotToolInput } from '../bots/bot-tool-details'
-import { withSavedBotToolHeaders } from '../bots/bot-tool-credentials'
+import { botToolDetailsOf, resolveBotToolInput } from '../bots/bot-tool-details'
+import {
+  botToolCredentialsFingerprint,
+  readBotToolOAuth,
+  withSavedBotToolHeaders
+} from '../bots/bot-tool-credentials'
 import {
   botOwnTool,
   botToolEntries,
@@ -20,10 +24,12 @@ import {
   readBotToolsSnapshot
 } from '../bots/bot-tools-file'
 import type { BotToolEntry } from '../bots/bot-tool-entry-extras'
-import { classifyAddedBotTool, ownedSignInKey } from '../bots/tool-oauth/bot-tool-owned-sign-in'
+import { classifyAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
+import { onBotToolSignInChanged } from '../bots/bot-tool-sign-in-changed'
 import type { BotToolOAuthKey } from '../bots/tool-oauth/bot-tool-oauth'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { McpServersError } from './mcp-servers-error'
+import { isMcpServersFeatureEnabled } from './mcp-servers-feature'
 
 /** `<userData>/mcp-servers`; the list is `.orca/bot-tools.json` inside, as in a bot's home. */
 export const mcpHostListFolder = (): string => join(getProfileUserDataPath(), 'mcp-servers')
@@ -117,6 +123,20 @@ async function entryById(folder: string, id: string): Promise<HostEntry> {
   return entry
 }
 
+/** The server as the write stored it: its credential id and sign-in are the file's, not the input's. */
+async function storedView(folder: string, id: string): Promise<McpServer> {
+  return viewOf(await entryById(folder, id), folder)
+}
+
+/** The server's own settings and saved values, never its switches. */
+function serverVersion(folder: string, server: BotToolServer): string {
+  const credential = 'url' in server ? server.credential : undefined
+  return createHash('sha256')
+    .update(JSON.stringify(server))
+    .update(botToolCredentialsFingerprint(folder, new Set(credential ? [credential] : [])))
+    .digest('hex')
+}
+
 export async function listMcpServers(folder = mcpHostListFolder()): Promise<McpServer[]> {
   return (await readHostEntries(folder)).entries.map((entry) => viewOf(entry, folder))
 }
@@ -131,7 +151,7 @@ export async function addMcpServer(
   folder = mcpHostListFolder()
 ): Promise<McpServer> {
   const { server, signIn } = await classifyAddedBotTool(given, signal)
-  let added: HostEntry | undefined
+  const id = randomUUID()
   await changeHostEntries(
     folder,
     (entries) => {
@@ -139,32 +159,38 @@ export async function addMcpServer(
       if (nameGiven && taken.has(server.name)) {
         throw nameTaken(server.name)
       }
-      const id = randomUUID()
-      added = {
-        server: { ...server, name: freeBotToolName(server.name, taken) },
-        extras: { id },
-        id
-      }
-      return [...entries, added]
+      const named = { ...server, name: freeBotToolName(server.name, taken) }
+      return [...entries, { server: named, extras: { id }, id }]
     },
     { credentials: signIn }
   )
-  if (!added) {
-    throw gone()
-  }
-  return viewOf(added, folder)
+  return storedView(folder, id)
 }
 
-/** The editor's save; `version` is the one `mcpServerDetails` gave, so an edit made since refuses. */
+/**
+ * The editor's save; `version` is the one `mcpServerDetails` gave, so an edit to this server since
+ * refuses. It covers only the server's own settings: a switch flipped meanwhile doesn't.
+ */
 export async function updateMcpServer(
   id: string,
   version: string,
   input: BotToolInput,
+  { signal }: { signal?: AbortSignal } = {},
   folder = mcpHostListFolder()
 ): Promise<McpServer> {
-  // The rename keeps a header server's credential id; the version check proves the name still holds.
-  const from = (await entryById(folder, id)).server.name
-  let updated: HostEntry | undefined
+  // Resolved against this read; the version check inside the write proves it still holds, so the
+  // rename (which keeps a header server's credential id) and any new sign-in fit the stored entry.
+  const before = await entryById(folder, id)
+  const resolved = resolveBotToolInput(input, withSavedBotToolHeaders(folder, before.server))
+  // A new address with no saved values is sorted as add sorts one: it may need Orca's sign-in.
+  const newAddress =
+    'url' in resolved &&
+    !resolved.credential &&
+    Object.keys(resolved.headers ?? {}).length === 0 &&
+    !('url' in before.server && before.server.url === resolved.url)
+  const { server, signIn } = newAddress
+    ? await classifyAddedBotTool(resolved, signal)
+    : { server: resolved, signIn: undefined }
   await changeHostEntries(
     folder,
     (entries) => {
@@ -172,20 +198,20 @@ export async function updateMcpServer(
       if (!previous) {
         throw gone()
       }
+      if (serverVersion(folder, previous.server) !== version) {
+        throw new McpServersError(
+          'mcp_server_stale',
+          'This server changed since the editor opened. Reopen it before saving.'
+        )
+      }
       if (entries.some((entry) => entry !== previous && entry.server.name === input.name)) {
         throw nameTaken(input.name)
       }
-      const server = resolveBotToolInput(input, withSavedBotToolHeaders(folder, previous.server))
-      const next: HostEntry = { ...previous, server }
-      updated = next
-      return entries.map((entry) => (entry === previous ? next : entry))
+      return entries.map((entry) => (entry === previous ? { ...previous, server } : entry))
     },
-    { expectedVersion: version, rename: { from, to: input.name } }
+    { rename: { from: before.server.name, to: input.name }, credentials: signIn }
   )
-  if (!updated) {
-    throw gone()
-  }
-  return viewOf(updated, folder)
+  return storedView(folder, id)
 }
 
 /** Removing a server Orca signs in to revokes that sign-in with it (bot-tools-file's write). */
@@ -204,20 +230,15 @@ async function changeMcpServerExtras(
   change: (entry: HostEntry) => Record<string, unknown>,
   folder: string
 ): Promise<McpServer> {
-  let changed: HostEntry | undefined
-  await changeHostEntries(folder, (entries) =>
-    entries.map((entry) => {
-      if (entry.id !== id) {
-        return entry
-      }
-      changed = { ...entry, extras: { ...change(entry), id } }
-      return changed
-    })
-  )
-  if (!changed) {
-    throw gone()
-  }
-  return viewOf(changed, folder)
+  await changeHostEntries(folder, (entries) => {
+    if (!entries.some((entry) => entry.id === id)) {
+      throw gone()
+    }
+    return entries.map((entry) =>
+      entry.id === id ? { ...entry, extras: { ...change(entry), id } } : entry
+    )
+  })
+  return storedView(folder, id)
 }
 
 export function setMcpServerAgentEnabled(
@@ -266,8 +287,8 @@ export function setMcpServerSharedProcess(
 
 /** The editor's view: saved values masked, with the version its save must send. */
 export async function mcpServerDetails(id: string, folder = mcpHostListFolder()) {
-  const details = await readBotToolDetails(folder, (await entryById(folder, id)).server.name)
-  return { id, ...details }
+  const { server } = await entryById(folder, id)
+  return { id, ...botToolDetailsOf(folder, server, serverVersion(folder, server)) }
 }
 
 /** The server's sign-in, when Orca signs in to it. */
@@ -275,7 +296,19 @@ export async function mcpServerSignInKey(
   id: string,
   folder = mcpHostListFolder()
 ): Promise<BotToolOAuthKey | null> {
-  return ownedSignInKey(folder, (await entryById(folder, id)).server.name)
+  const { server } = await entryById(folder, id)
+  return 'url' in server && server.credential && readBotToolOAuth(folder, server.credential)
+    ? { folder, credentialId: server.credential }
+    : null
+}
+
+/** Calls `changed` when a sign-in in the host's list changes what its row shows, while the switch is on. */
+export function onMcpHostListSignInChanged(changed: () => void): () => void {
+  return onBotToolSignInChanged((folder) => {
+    if (isMcpServersFeatureEnabled() && folder === resolve(mcpHostListFolder())) {
+      changed()
+    }
+  })
 }
 
 /** Each server's name to its id, for answers keyed by name (the bots' health checks). */

@@ -23,6 +23,7 @@ const tempDir = (prefix: string): string => {
   dirs.push(dir)
   return dir
 }
+const switchBefore = process.env.ORCA_MCP_SERVERS
 const stored = (folder: string) => JSON.parse(readFileSync(botToolsPath(folder), 'utf8'))
 
 beforeEach(() => {
@@ -37,7 +38,11 @@ beforeEach(() => {
 afterEach(() => {
   useBotToolCredentialsRoot(null)
   _resetSecretStoreForTests()
-  delete process.env.ORCA_MCP_SERVERS
+  if (switchBefore === undefined) {
+    delete process.env.ORCA_MCP_SERVERS
+  } else {
+    process.env.ORCA_MCP_SERVERS = switchBefore
+  }
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -57,12 +62,13 @@ describe("a host's MCP server list", () => {
       folder
     )
     await setMcpServerAgentEnabled(added.id, 'grok', false, folder)
+    const { version } = await mcpServerDetails(added.id, folder)
+    // A switch flipped while the editor is open doesn't make its save stale.
     const workspaces = { later: false, on: ['repo-1', 'folder:notes'], off: ['repo-2'] }
     await setMcpServerWorkspaces(added.id, workspaces, folder)
     // A bot-tools write that knows nothing of these keys keeps them.
     await changeBotToolServers(folder, (servers) => [...servers])
-    const { version } = await mcpServerDetails(added.id, folder)
-    await updateMcpServer(
+    const updated = await updateMcpServer(
       added.id,
       version,
       {
@@ -71,9 +77,12 @@ describe("a host's MCP server list", () => {
         transport: 'http',
         headers: [{ key: 'authorization', keep: true }]
       },
+      {},
       folder
     )
 
+    // The answer is the stored row: its headers went to the store, so the relay signs it in.
+    expect(updated.remote).toBe(false)
     expect(await listMcpServers(folder)).toEqual([
       expect.objectContaining({
         id: added.id,
@@ -116,6 +125,7 @@ describe("a host's MCP server list", () => {
 
 describe('the MCP servers switch', () => {
   it('advertises nothing and refuses every call while off', () => {
+    delete process.env.ORCA_MCP_SERVERS
     expect(darkSwitchRuntimeCapabilities()).not.toContain('mcp-servers.v1')
     expect(assertMcpServersFeatureEnabled).toThrow(
       expect.objectContaining({ code: 'mcp_servers_off' })

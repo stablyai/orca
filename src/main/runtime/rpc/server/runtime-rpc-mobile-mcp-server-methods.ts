@@ -3,6 +3,7 @@
 export const MOBILE_MCP_SERVER_RPC_METHODS = [
   'mcpServers.add',
   'mcpServers.agentFiles.allow',
+  'mcpServers.cancelProblems',
   'mcpServers.copy',
   'mcpServers.details',
   'mcpServers.discover',

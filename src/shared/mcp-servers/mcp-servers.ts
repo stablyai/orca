@@ -81,6 +81,8 @@ export type McpServerTypedFailureCode =
   /** No server with that id on this host. */
   | 'mcp_server_gone'
   | 'mcp_server_name_taken'
+  /** The server changed since the editor read it. */
+  | 'mcp_server_stale'
   /** A shared process is only for a server Orca starts with a command. */
   | 'mcp_server_not_command'
   /** Declared by the contract; a later host fills it in. */

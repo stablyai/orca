@@ -101,7 +101,7 @@
 2 src/main/bots/bot-tool-details.ts
 3 src/main/bots/bot-tool-secret-scrub.ts
 2 src/main/bots/bot-tools-claude.ts
-20 src/main/bots/bot-tools-file.ts
+21 src/main/bots/bot-tools-file.ts # +1 changeBotToolEntries: the same tools-file write changeBotToolServers now wraps, adding per-server extra keys
 13 src/main/bots/bot-tools-host.ts
 4 src/main/bots/bot-tools-removal.ts
 5 src/main/bots/bot-tools-sign-in.ts
@@ -756,6 +756,7 @@
 3 src/main/managed-server/lifecycle/orcad-runtime-maintenance.ts
 1 src/main/managed-server/lifecycle/orcad-runtime-status.ts
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
+6 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts
 1 src/main/memory/hydrate-local-pty-registry.ts
@@ -1230,6 +1231,7 @@
 1 src/main/runtime/rpc/methods/host-management/environment-doctor.ts
 1 src/main/runtime/rpc/methods/host-management/host-capabilities.ts
 1 src/main/runtime/rpc/methods/host-management/managed-runtime-install.ts
+3 src/main/runtime/rpc/methods/mcp-servers.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts
