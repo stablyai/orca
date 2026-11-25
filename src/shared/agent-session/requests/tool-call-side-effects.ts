@@ -211,7 +211,7 @@ function namesOption(word: string, options: readonly string[]): boolean {
 }
 
 /** `bash -lc '<command>'` as Codex wraps it: the inner command is what runs. */
-export function unwrapShell(command: string): string {
+function unwrapShell(command: string): string {
   const wrapped = /^(?:\S*\/)?(?:ba|z)?sh\s+-l?c\s+'((?:[^']|'\\'')*)'$/.exec(command.trim())
   return wrapped ? wrapped[1]!.replace(/'\\''/g, "'") : command.trim()
 }
