@@ -35,6 +35,7 @@ export async function prepareAutomationCodexLaunch(
   ) {
     throw unsupported
   }
+  let cwd: string | undefined
   if (automation.workspaceMode === 'existing') {
     const scope = parseWorkspaceKey(automation.workspaceId ?? '')
     const workspace = await runtime
@@ -54,6 +55,7 @@ export async function prepareAutomationCodexLaunch(
     ) {
       throw unsupported
     }
+    cwd = workspace.scope.path
   }
   signal.throwIfAborted()
   const settings = store.getSettings()
@@ -62,5 +64,5 @@ export async function prepareAutomationCodexLaunch(
       'Codex is disabled in Settings. Enable it before running this automation.'
     )
   }
-  return prepareCodexInstallation(settings, signal)
+  return prepareCodexInstallation(settings, signal, cwd)
 }

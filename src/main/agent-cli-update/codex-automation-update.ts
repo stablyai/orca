@@ -67,11 +67,15 @@ async function standaloneUpdateEnvironment(
   }
 }
 
-async function readVersion(cli: OwnAgentCli, signal: AbortSignal): Promise<string | null> {
+async function readVersion(
+  cli: OwnAgentCli,
+  signal: AbortSignal,
+  cwd = homedir()
+): Promise<string | null> {
   const { version } = await readAgentCliVersion(
     {
       program: cli.program,
-      cwd: homedir(),
+      cwd,
       env: cli.version.env,
       prefixArgs: cli.version.prefixArgs,
       operation: { signal },
@@ -82,19 +86,32 @@ async function readVersion(cli: OwnAgentCli, signal: AbortSignal): Promise<strin
   return version
 }
 
+async function findAutomationCodexCli(settings: AgentCliUpdateSettings, cwd?: string) {
+  const cli = await findOwnAgentCli('codex', settings, cwd)
+  const path = cli?.env.PATH ?? cli?.env.Path ?? process.env.PATH
+  // The future workspace can resolve a relative entry to a different executable.
+  if (cli && !cwd && path?.split(delimiter).some((entry) => !isAbsolute(entry))) {
+    throw new CodexAutomationUpdateError(
+      'Orca cannot verify Codex for a new workspace with a relative PATH entry.'
+    )
+  }
+  return cli
+}
+
 async function verifyOrUpdate(
   program: string,
   settings: AgentCliUpdateSettings,
-  signal: AbortSignal
+  signal: AbortSignal,
+  cwd?: string
 ): Promise<void> {
   signal.throwIfAborted()
-  const cli = await findOwnAgentCli('codex', settings)
+  const cli = await findAutomationCodexCli(settings, cwd)
   if (!cli || cli.program !== program) {
     throw new CodexAutomationUpdateError(
       'The selected Codex installation changed before the run could start.'
     )
   }
-  const installed = await readVersion(cli, signal)
+  const installed = await readVersion(cli, signal, cwd)
   const latest = installed ? await latestAgentCliRelease(codex.latest(installed)) : null
   signal.throwIfAborted()
   if (!installed || !latest) {
@@ -134,10 +151,10 @@ async function verifyOrUpdate(
         : `The Codex updater failed (exit code ${result.code}).`
     )
   }
-  const updated = await findOwnAgentCli('codex', settings)
+  const updated = await findAutomationCodexCli(settings, cwd)
   const after =
     updated?.program === program && (await standaloneUpdateEnvironment(updated))
-      ? await readVersion(updated, signal)
+      ? await readVersion(updated, signal, cwd)
       : null
   if (!after || compareAppVersions(after, latest) < 0) {
     throw new CodexAutomationUpdateError(
@@ -149,13 +166,14 @@ async function verifyOrUpdate(
 /** Calls share the stable launcher, which survives the standalone updater's symlink swap. */
 export async function prepareCodexInstallation(
   settings: AgentCliUpdateSettings,
-  signal: AbortSignal
+  signal: AbortSignal,
+  cwd?: string
 ): Promise<string> {
   signal.throwIfAborted()
   const deadline = AbortSignal.timeout(UPDATER_MAX_MS)
   const waitSignal = AbortSignal.any([signal, deadline])
   try {
-    const cli = await waitForPromiseWithSignal(findOwnAgentCli('codex', settings), waitSignal)
+    const cli = await waitForPromiseWithSignal(findAutomationCodexCli(settings, cwd), waitSignal)
     if (!cli) {
       throw new CodexAutomationUpdateError(
         'Orca could not identify a supported Codex installation for this run.'
@@ -175,7 +193,7 @@ export async function prepareCodexInstallation(
       const controller = new AbortController()
       const updateSignal = AbortSignal.any([controller.signal, deadline])
       const result = updateThroughGate('codex', () =>
-        verifyOrUpdate(cli.program, settings, updateSignal)
+        verifyOrUpdate(cli.program, settings, updateSignal, cwd)
       ).finally(() => pendingUpdates.delete(launcher))
       pending = { controller, signal: updateSignal, result, waiters: 0 }
       pendingUpdates.set(launcher, pending)

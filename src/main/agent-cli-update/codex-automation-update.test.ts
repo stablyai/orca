@@ -23,7 +23,7 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
-async function disposableCodex(version: string, update: string) {
+async function disposableCodex(version: string, update: string, pathPrefix = '') {
   const home = await mkdtemp(join(tmpdir(), 'orca-codex-update-'))
   directories.push(home)
   const bin = join(home, '.local', 'bin')
@@ -60,7 +60,7 @@ esac
   profileDirectory.mockReturnValue(join(home, 'orca-profile'))
   launchEnvironment.mockResolvedValue({
     HOME: home,
-    PATH: `${bin}:/usr/bin:/bin`
+    PATH: `${pathPrefix}${bin}:/usr/bin:/bin`
   })
   latestRelease.mockResolvedValue(currentVersion)
   return {
@@ -119,13 +119,46 @@ describe.skipIf(process.platform === 'win32')('preparing Codex for automation', 
   it('settles a cancelled waiter without cancelling the update for another run', async () => {
     const cli = await disposableCodex('0.168.0', swapRelease)
     const cancelled = new AbortController()
+    const remaining = new AbortController()
+    const checking = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<string>()
+    const joined = Promise.withResolvers<void>()
+    const any = AbortSignal.any.bind(AbortSignal)
+    let remainingWait: AbortSignal | undefined
+    vi.spyOn(AbortSignal, 'any').mockImplementation((signals) => {
+      const combined = any(signals)
+      if (signals[0] === remaining.signal) {
+        remainingWait = combined
+      } else if (remainingWait && signals[0] === remainingWait) {
+        joined.resolve()
+      }
+      return combined
+    })
+    latestRelease.mockImplementationOnce(() => {
+      checking.resolve()
+      return release.promise
+    })
     const failure = new Error('Run cancelled')
     const expired = prepareCodexInstallation(settings, cancelled.signal)
-    const active = prepareCodexInstallation(settings, new AbortController().signal)
-    cancelled.abort(failure)
-    await expect(expired).rejects.toBe(failure)
+    await checking.promise
+    const active = prepareCodexInstallation(settings, remaining.signal)
+    try {
+      await joined.promise
+      cancelled.abort(failure)
+      await expect(expired).rejects.toBe(failure)
+    } finally {
+      release.resolve('0.170.0')
+    }
     await expect(active).resolves.toBe(cli.program)
     expect(await cli.updates()).toBe('update\n')
+  })
+
+  it('refuses to update a new workspace launch with a workspace-relative PATH', async () => {
+    const cli = await disposableCodex('0.168.0', swapRelease, 'workspace-bin:')
+    await expect(prepareCodexInstallation(settings, new AbortController().signal)).rejects.toThrow(
+      'Orca cannot verify Codex for a new workspace with a relative PATH entry.'
+    )
+    expect(await cli.updates()).toBe('')
   })
 
   it('surfaces expiry while the latest release is still being read', async () => {
