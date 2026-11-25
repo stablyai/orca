@@ -59,7 +59,9 @@ export function AppRailMoreMenu({
   // A swap from "…" mounts More already open on its Customize checklist, on the row that was toggled.
   const reopenOn = useTakeChecklistCarry(checklist)
   const [underPointer] = useState(checklist.reopenedUnderPointer)
-  const [open, setOpen] = useState(reopenOn !== null)
+  const [opening, setOpening] = useState<'carry' | 'manual' | null>(
+    reopenOn === null ? null : 'carry'
+  )
   const [customizeOpen, setCustomizeOpen] = useState(false)
   const [focusRow, setFocusRow] = useState(reopenOn)
   // Why the checklist opens once its trigger attaches, not at mount: Radix closes a submenu from its mount effect's
@@ -95,7 +97,11 @@ export function AppRailMoreMenu({
   const customizeHeldInPlace = useMenuHeldInPlace(customizeOpen, customizeTriggerRef, customizeRows)
   const current = destinations.find((destination) => destination.current)?.label
   return (
-    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
+    <DropdownMenu
+      modal={false}
+      open={opening !== null}
+      onOpenChange={(open) => setOpening(open ? 'manual' : null)}
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -123,7 +129,7 @@ export function AppRailMoreMenu({
         side="right"
         align="start"
         sideOffset={8}
-        className="w-52"
+        className={opening === 'carry' ? 'w-52 data-[state=open]:animate-none' : 'w-52'}
         onCloseAutoFocus={(event) => {
           if (yieldCloseFocusRef.current) {
             yieldCloseFocusRef.current = false
@@ -160,6 +166,7 @@ export function AppRailMoreMenu({
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
             scrollable
+            className={focusRow === null ? undefined : 'data-[state=open]:animate-none'}
             {...customizeHeldInPlace}
             onPointerMove={() => {
               holdChecklistRef.current = false

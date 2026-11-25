@@ -463,10 +463,11 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
           async () => {
             const menu = await open(theme)
             const log = await keyboardAllRows(menu)
+            await paint(page)
+            assert.equal(await menu.getAttribute('data-state'), 'open', 'the checklist stays open')
             const rail = await railItems()
             if (label.startsWith('More')) {
               assert.ok(rail.includes('more'), `More stays on the rail: ${rail}`)
-              assert.ok(await menu.isVisible(), 'More > Customize is still open')
             }
             return `${log}; rail ${rail}`
           }

@@ -16,6 +16,9 @@ const argValue = (flag) => {
 }
 const out = path.resolve(argValue('--out') ?? '.cache/app-rail-checklist-swap')
 const only = argValue('--only')
+if (process.argv.includes('--only') && !['c1-01', 'c1-02', 'carry'].includes(only)) {
+  throw new Error('--only must be c1-01, c1-02, or carry')
+}
 const SOURCES = [
   'src/components/app-rail/AppRail.fixture.tsx',
   'src/components/app-rail/AppRail.tsx',
@@ -64,7 +67,23 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
           return
         }
         watch.frames += 1
-        if (!document.querySelector('[role=menuitemcheckbox]')) {
+        const visibleChecklist = Array.from(
+          document.querySelectorAll('[role=menuitemcheckbox]')
+        ).some((row) => {
+          if (!row.checkVisibility({ opacityProperty: true, visibilityProperty: true })) {
+            return false
+          }
+          const { top, right, bottom, left, width, height } = row.getBoundingClientRect()
+          return (
+            width > 0 &&
+            height > 0 &&
+            right > 0 &&
+            bottom > 0 &&
+            left < window.innerWidth &&
+            top < window.innerHeight
+          )
+        })
+        if (!visibleChecklist) {
           watch.withoutChecklist += 1
         }
         requestAnimationFrame(tick)
@@ -336,14 +355,51 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
         await paint(page)
       }
       const waitForClosedMore = async () => {
-        await page.locator('[data-app-rail-item="more"]').waitFor()
+        const trigger = page.locator('[data-app-rail-item="more"]')
+        await trigger.waitFor()
         await paint(page)
+        assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'More stays collapsed')
+        assert.equal(
+          await page.locator('[data-slot="dropdown-menu-content"][data-state="open"]').count(),
+          0
+        )
         assert.equal(
           await page.getByRole('menuitemcheckbox').count(),
           0,
           'the swapped menu stays closed'
         )
       }
+      async function holdNextWrite() {
+        await page.evaluate(() => {
+          const original = window.api.settings.set
+          window.__checklistWrites = 0
+          window.api.settings.set = (updates) => {
+            window.__checklistWrites += 1
+            return new Promise((resolve) => {
+              window.__landChecklistWrite = async () => resolve(await original(updates))
+            })
+          }
+        })
+      }
+      await flow(
+        'carry: a second toggle during the write does not displace the first carry',
+        async () => {
+          await setup()
+          await holdNextWrite()
+          await clickRowAlongPath('Automations')
+          await page.waitForFunction(() => typeof window.__landChecklistWrite === 'function')
+          await clickRowAlongPath('Artifacts')
+          assert.equal(await page.evaluate(() => window.__checklistWrites), 1)
+          await watchFrames()
+          await page.evaluate(() => window.__landChecklistWrite())
+          await expectChecklistAfterSwap('pending write', {
+            rail: FOLDED_AUTOMATIONS,
+            row: 'Automations',
+            checked: 'true',
+            surface: SUB
+          })
+        }
+      )
       await flow('carry: toggle in place, navigate to Artifacts, then resize', async () => {
         await setup(true)
         const rootMenu = page.locator('[data-slot="dropdown-menu-content"]')
@@ -396,13 +452,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
       })
       await flow('carry: dismiss while write is pending, then acknowledge', async () => {
         await setup()
-        await page.evaluate(() => {
-          const original = window.api.settings.set
-          window.api.settings.set = (updates) =>
-            new Promise((resolve) => {
-              window.__landChecklistWrite = async () => resolve(await original(updates))
-            })
-        })
+        await holdNextWrite()
         await pressSpaceOn('Automations')
         await page.waitForFunction(() => typeof window.__landChecklistWrite === 'function')
         await page.keyboard.press('Escape')

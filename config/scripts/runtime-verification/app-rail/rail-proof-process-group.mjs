@@ -47,7 +47,7 @@ function message(child, value) {
 }
 
 async function waitForEmptyGroup(group, exclude) {
-  const deadline = Date.now() + CLOSE_TIMEOUT
+  const deadline = performance.now() + CLOSE_TIMEOUT
   let members
   do {
     members = (await groupMembers(group)).filter((pid) => pid !== exclude)
@@ -55,7 +55,7 @@ async function waitForEmptyGroup(group, exclude) {
       break
     }
     await delay(100)
-  } while (Date.now() < deadline)
+  } while (performance.now() < deadline)
   return members
 }
 

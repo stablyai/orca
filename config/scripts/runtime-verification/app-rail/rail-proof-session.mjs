@@ -3,6 +3,7 @@
 // SACRIFICE=1, HANG=vite-close and PGREP exercise failure and cancellation before publishing proof.
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { once } from 'node:events'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -57,7 +58,11 @@ async function startChromium(profile) {
     { stdio: ['ignore', 'ignore', 'pipe'] }
   )
   let output = ''
+  let deadline
   const endpoint = await new Promise((resolve, reject) => {
+    deadline = setTimeout(() => {
+      reject(new Error(`Chromium at ${executable} did not report a DevTools endpoint: ${output}`))
+    }, 20_000)
     driver.on('error', reject)
     driver.once('exit', (code, signal) => {
       log(`driver browser pid ${driver.pid} exited code ${code}, signal ${signal ?? 'none'}`)
@@ -66,23 +71,27 @@ async function startChromium(profile) {
     driver.stderr.setEncoding('utf8').on('data', (chunk) => {
       output = (output + chunk).slice(-8000)
       const match = output.match(
-        /DevTools listening on (ws:\/\/127\.0\.0\.1:\d+\/devtools\/browser\/\S+)/
+        /DevTools listening on (ws:\/\/127\.0\.0\.1:\d+\/devtools\/browser\/\S+)\r?\n/
       )
       if (match) {
         resolve(match[1])
       }
     })
-  })
+  }).finally(() => clearTimeout(deadline))
   const browser = await chromium.connectOverCDP(endpoint)
   log(`driver browser pid ${driver.pid}, ${executable}, Chromium ${browser.version()}`)
   return browser
 }
 
 // A parent and a child, both ignoring SIGTERM, exercise escalation after the parent exits normally.
-function sacrificialProcesses() {
+async function sacrificialProcesses() {
   const child = "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"
-  const parent = `process.on('SIGTERM', () => {}); const child = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(child)}]); console.log('[rail-proof] sacrificial parent', process.pid, 'child', child.pid); setInterval(() => {}, 1000)`
-  spawn(process.execPath, ['-e', parent], { stdio: 'inherit' })
+  const parent = `process.on('SIGTERM', () => {}); const child = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(child)}]); console.log('[rail-proof] sacrificial parent', process.pid, 'child', child.pid); process.send('ready'); setInterval(() => {}, 1000)`
+  const processHandle = spawn(process.execPath, ['-e', parent], {
+    stdio: ['ignore', 'inherit', 'inherit', 'ipc']
+  })
+  await once(processHandle, 'message', { signal: AbortSignal.timeout(8_000) })
+  processHandle.disconnect()
 }
 
 export async function runRailProof(name, body) {
@@ -130,7 +139,7 @@ export async function runRailProof(name, body) {
     )
     log(`${name}: worker pid ${process.pid}, source root ${repoRoot}; ${identity.join('; ')}`)
     if (process.env.ORCA_RAIL_PROOF_SACRIFICE === '1') {
-      sacrificialProcesses()
+      await sacrificialProcesses()
     }
     if (signalName) {
       return

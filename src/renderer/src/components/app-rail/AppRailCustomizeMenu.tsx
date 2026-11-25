@@ -193,6 +193,7 @@ export function AppRailCustomizeMenu({
         side="right"
         align="start"
         sideOffset={8}
+        className={focusRow === null ? undefined : 'data-[state=open]:animate-none'}
         {...heldInPlace}
         onCloseAutoFocus={() => refocusTriggerIfFocusLost(triggerRef.current)}
       >

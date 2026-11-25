@@ -86,6 +86,7 @@ export function AppRail({
     more: boolean
   } | null>(null)
   const pendingChecklistWrite = useRef<typeof checklistCarry>(null)
+  const checklistWriteInFlight = useRef(false)
   const releaseChecklistCarry = useCallback(() => {
     pendingChecklistWrite.current = null
     setChecklistCarry(null)
@@ -248,6 +249,11 @@ export function AppRail({
     icon: destinationIcon(id, 14, undefined, 'size-3.5'),
     shown: shownDestinationSet.has(id),
     onToggle: (byPointer) => {
+      // Keep a second activation from replacing the row whose write is about to swap the menu.
+      if (checklistWriteInFlight.current) {
+        return
+      }
+      checklistWriteInFlight.current = true
       const shown = !shownDestinationSet.has(id)
       const nextShown = APP_RAIL_DESTINATION_IDS.filter((other) =>
         other === id ? shown : shownDestinationSet.has(other)
@@ -266,12 +272,16 @@ export function AppRail({
             setChecklistCarry(carry)
           }
         }
-      }).catch((error: unknown) => {
-        if (pendingChecklistWrite.current === carry) {
-          pendingChecklistWrite.current = null
-        }
-        console.error('Failed to update settings:', error)
       })
+        .catch((error: unknown) => {
+          if (pendingChecklistWrite.current === carry) {
+            pendingChecklistWrite.current = null
+          }
+          console.error('Failed to update settings:', error)
+        })
+        .finally(() => {
+          checklistWriteInFlight.current = false
+        })
     }
   }))
   // Only the swap this toggle causes: its write has landed, at the same size, and the slot took the other form.
