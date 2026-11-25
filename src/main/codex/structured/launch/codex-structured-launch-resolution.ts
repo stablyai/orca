@@ -1,5 +1,11 @@
-import { codexBotToolsThreadConfig, readCodexStdioToolNames } from '../../../bots/bot-tools-codex'
-import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import {
+  codexBotToolsThreadConfig,
+  readCodexInheritedToolNames,
+  readCodexStdioToolNames
+} from '../../../bots/bot-tools-codex'
+import { deliverHostMcpServers } from '../../../mcp-servers/session-host-mcp-delivery'
+import { agentOwnMcpServerNames } from '../../../mcp-servers/agent-own-mcp-server-names'
+import { withSessionMcpToolsEnv } from '../../../mcp-servers/session-mcp-tools'
 import { pathEnvRelativeTo } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
@@ -170,8 +176,17 @@ export function codexStructuredLaunchPart(
     const developerInstructions = await basis.instructions(
       linkedSkillsSection(linkedSkills.projects, [])
     )
-    const tools = await basis.toolServers()
     const codexHome = accountHome.path || environment?.CODEX_HOME || getSystemCodexHomePath()
+    // Codex merges a same-named server from Orca into one of its own, so that one runs alone.
+    const tools = await deliverHostMcpServers(
+      record.sessionId,
+      'Codex',
+      await basis.toolServers(),
+      async () => [
+        ...(await readCodexInheritedToolNames(codexHome)),
+        ...(await agentOwnMcpServerNames('codex', environment, launchDirectory))
+      ]
+    )
     const threadConfig = basis.readOnly
       ? codexReadOnlyThreadConfig(basis.readOnly)
       : tools.servers.length > 0
@@ -220,7 +235,7 @@ export function codexStructuredLaunchPart(
         ...(basis.readOnly && threadConfig ? { readOnly: basis.readOnly } : {})
       },
       env: withNativeChatVisualsEnv(
-        withBotLaunchToolsEnv(
+        withSessionMcpToolsEnv(
           { ...environment, ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {}) },
           tools
         ),

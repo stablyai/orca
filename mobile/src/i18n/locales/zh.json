@@ -1847,7 +1847,7 @@
       "pairingInvalid": "配对无效，请重新与桌面配对",
       "rePairDetail": "请重新与桌面配对",
       "reconnecting": "正在重新连接…",
-      "relayAccessExpired": "{{host}} 的 Relay 访问权限已过期",
+      "relayAccessRefused": "Relay 拒绝了对 {{host}} 的访问",
       "relayConnectFailed": "无法通过 Relay 连接",
       "relayUnreachable": "无法访问 Relay",
       "signInDetail": "请在桌面上登录 Orca 以重新连接",
@@ -7463,7 +7463,13 @@
         "context7": "代码库的最新文档和示例",
         "atlassian": "Jira 议题和 Confluence 页面",
         "notion": "搜索、阅读和编辑页面",
-        "stripe": "查询付款、客户和订阅"
+        "stripe": "查询付款、客户和订阅",
+        "clickup": "管理任务、列表和文档",
+        "airtable": "查询和编辑 Base、数据表和记录",
+        "todoist": "添加、整理和完成任务",
+        "zapier": "在你于 Zapier 中设置的应用里执行操作",
+        "granola": "搜索会议笔记和转录",
+        "intercom": "搜索对话、联系人和文章"
       },
       "webhooks": {
         "line": "来自任意工具或脚本的事件"

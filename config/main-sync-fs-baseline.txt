@@ -133,7 +133,6 @@
 5 src/main/codex/configuration/homes/codex-pane-account-registry.ts
 5 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
-1 src/main/codex/configuration/settings/config-settings-baseline.ts
 5 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable (per promotion pass with edits to write back or values held back), so a host ~/.codex linked into a WSL distro is detected before any write (#45247)
 2 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts

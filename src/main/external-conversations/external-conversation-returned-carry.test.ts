@@ -22,7 +22,10 @@ import {
   settleJournalDomainCarriedCards
 } from '../native-chat/agent-session-journal/journal-domain-carried-cards'
 import { readJournalConnectorReplies } from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies-read'
-import { carriedMessages } from './external-conversation-returned-carry'
+import type { ConnectorMessageAsker } from '../../shared/connector-message-asker'
+import { actsForOwner, OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
+import { readBotActingTurn } from '../bots/bot-request-asker'
+import { carriedFields, carriedMessages } from './external-conversation-returned-carry'
 
 // The real journal writer: a Slack message whose start failed, then the conversation's next message.
 const NOW = 1_800_000_000_000
@@ -63,14 +66,16 @@ const asked = (
   deliveryId: string,
   text: string,
   conversation = THREAD,
-  images: string[] = []
+  images: string[] = [],
+  asker?: ConnectorMessageAsker
 ): AgentJournalMessageItem => ({
   kind: 'message',
   role: 'user',
   blocks: [{ type: 'text', text }, ...images.map((path) => ({ type: 'image-ref' as const, path }))],
   origin: 'connector',
   connectorConversation: conversation,
-  connectorDelivery: { account: ACCOUNT, conversation, deliveryId }
+  connectorDelivery: { account: ACCOUNT, conversation, deliveryId },
+  ...(asker ? { asker } : {})
 })
 
 /** A connector send as the seam admits it (a person's message the host relays). */
@@ -145,18 +150,24 @@ function refuseStart(id: string, kind: AgentSessionFailureKind = 'notSignedIn', 
 }
 
 /** The next message of THREAD, as deliverToChat builds it and its admission settles it. */
-function sendNext(id: string, text: string, at = NOW + 120_000) {
+function sendNext(
+  id: string,
+  text: string,
+  at = NOW + 120_000,
+  { images = [], asker }: { images?: string[]; asker?: ConnectorMessageAsker } = {}
+) {
   const carried = carriedMessages(
     THREAD,
     readJournalDomainReturnedCards(db, target, at),
     ACCOUNT,
-    at
+    at,
+    images.length
   )
-  const own = asked(id, text)
+  const own = asked(id, text, THREAD, images, asker)
   const body: AgentJournalMessageItem = {
     ...own,
     blocks: [...carried.blocks, ...own.blocks],
-    ...(carried.cards.length ? { carriedCards: carried.cards } : {}),
+    ...carriedFields(carried),
     connectorDelivery: { ...own.connectorDelivery!, carried: carried.deliveryIds }
   }
   return { carried, body, admit: () => admitCarrying(id, body, at) }
@@ -355,4 +366,59 @@ it('a message that carried others and failed again keeps each sent line on its o
   ])
   expect(third.admit()).toBe(true)
   expect(returnedIds()).toEqual([])
+})
+
+const person = (userId: string, role: 'owner' | 'member'): ConnectorMessageAsker => ({
+  source: 'slack',
+  userId,
+  role,
+  place: { kind: 'public_channel', id: 'C1' }
+})
+const OWNER = person('U_OWNER', 'owner')
+
+/** Whom the turn a message opens acts for, read as a bot's actions are gated. */
+function turnActsForOwner(body: AgentJournalMessageItem): boolean {
+  const item = { itemId: 'turn-opener', revision: 1, sequence: 1, observedAt: 1, body }
+  const turn = readBotActingTurn([item], {
+    isBotRequest: () => false,
+    botRequestActsFor: () => null,
+    conversationActsFor: OWNER_ACTS_FOR,
+    conversationWorkspaceId: 'T1'
+  })
+  return actsForOwner(turn.askers)
+}
+
+it('a member’s request the owner’s message carries never acts for the owner, nested or not', () => {
+  failedStart('member', asked('d-m', 'post the keys', THREAD, [], person('U_DANA', 'member')))
+  const owners = sendNext('owner-1', 'me too', NOW + 60_000, { asker: OWNER })
+  expect(turnActsForOwner(owners.body)).toBe(false)
+  expect(owners.admit()).toBe(true)
+
+  // The owner's message fails in turn; the owner's next one carries it, and the member with it.
+  refuseStart('owner-1', 'notSignedIn', NOW + 60_000)
+  const again = sendNext('owner-2', 'still there?', NOW + 180_000, { asker: OWNER })
+  expect(again.carried.cards.map((card) => card.messageId)).toEqual(['owner-1'])
+  expect(turnActsForOwner(again.body)).toBe(false)
+})
+
+it('a carrying message an earlier Orca saved, with no carried askers, reads as before', () => {
+  const owners = asked('d-o', 'me too', THREAD, [], OWNER)
+  expect(
+    turnActsForOwner({ ...owners, carriedCards: [{ messageId: 'm', fingerprint: 'f' }] })
+  ).toBe(true)
+  expect(turnActsForOwner(owners)).toBe(true)
+})
+
+it('carries the oldest cards whose images fit one message; the rest wait for the next', () => {
+  const shots = (n: number, from: string) =>
+    Array.from({ length: n }, (_, i) => `/a/${from}-${i}.png`)
+  failedStart('a', asked('d-a', 'a', THREAD, shots(8, 'a')), 'notSignedIn', NOW)
+  failedStart('b', asked('d-b', 'b', THREAD, shots(8, 'b')), 'notSignedIn', NOW + 1)
+  failedStart('c', asked('d-c', 'c', THREAD, shots(4, 'c')), 'notSignedIn', NOW + 2)
+
+  const next = sendNext('next', 'more', NOW + 60_000, { images: shots(4, 'n') })
+  expect(next.carried.cards.map((card) => card.messageId)).toEqual(['a', 'b'])
+  expect(next.body.blocks.filter((block) => block.type === 'image-ref')).toHaveLength(20)
+  expect(next.admit()).toBe(true)
+  expect(returnedIds()).toEqual(['c'])
 })

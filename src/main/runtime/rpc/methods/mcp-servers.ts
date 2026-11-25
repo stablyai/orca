@@ -27,7 +27,6 @@ import {
   addMcpServer,
   readMcpHostList,
   setMcpAgentFileAllowed,
-  mcpHostListFolder,
   mcpServerDetails,
   mcpServerIdsByName,
   removeMcpServer,
@@ -38,8 +37,17 @@ import {
 } from '../../../mcp-servers/mcp-host-list'
 import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
+import { mcpHostListFolder } from '../../../mcp-servers/mcp-host-list-folder'
+import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
 import { defineMethod, type RpcContext } from '../core'
 import { botToolServerOf, toolsHomeFor } from './bots-tools'
+import {
+  agentMcpImportHost,
+  copyAgentMcpServer,
+  importAgentMcpServer,
+  listAgentMcpServers,
+  moveAgentMcpServer
+} from './mcp-servers-import'
 
 /** Runs `work` with the switch on; a change also tells every other client to re-read the list. */
 export async function onHost<T>(
@@ -68,7 +76,8 @@ export const MCP_SERVER_METHODS = [
     name: 'mcpServers.list',
     permission: 'workspace',
     params: McpServersList,
-    handler: (_params, context) => onHost(context, () => readMcpHostList())
+    handler: (_params, context) =>
+      onHost(context, async () => withMcpAgentProblems(await readMcpHostList()))
   }),
   defineMethod({
     name: 'mcpServers.add',
@@ -207,19 +216,24 @@ export const MCP_SERVER_METHODS = [
     name: 'mcpServers.discover',
     permission: 'workspace',
     params: McpServerDiscover,
-    handler: () => notYet('mcpServers.discover')
+    handler: (_params, context) =>
+      onHost(context, async () => ({
+        servers: await listAgentMcpServers(await agentMcpImportHost(context.runtime))
+      }))
   }),
   defineMethod({
     name: 'mcpServers.move',
     permission: 'workspace',
     params: McpServerImport,
-    handler: () => notYet('mcpServers.move')
+    handler: (params, context) =>
+      onHost(context, () => importAgentMcpServer(context, params.key, moveAgentMcpServer), true)
   }),
   defineMethod({
     name: 'mcpServers.copy',
     permission: 'workspace',
     params: McpServerImport,
-    handler: () => notYet('mcpServers.copy')
+    handler: (params, context) =>
+      onHost(context, () => importAgentMcpServer(context, params.key, copyAgentMcpServer), true)
   }),
   defineMethod({
     name: 'mcpServers.agentFiles.allow',

@@ -5,6 +5,7 @@
 // as that owner terminal.
 import {
   BOT_TOOLS_TOKEN_ENV,
+  MCP_TOKEN_ENV,
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV,
   ORCA_AGENT_SESSION_TOOL_TOKEN_ENV
 } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
@@ -37,6 +38,7 @@ export const INHERITED_ORCA_IDENTITY_ENV_KEYS = [
   'ORCA_PROJECT_GROUP_ID',
   'ORCA_WORKSPACE_ROOT',
   BOT_TOOLS_TOKEN_ENV,
+  MCP_TOKEN_ENV,
   ...REMOTE_RUNTIME_SELECTOR_ENV_KEYS,
   AGENT_TEAMS_TEAM_ID_ENV,
   'ORCA_AGENT_TEAMS_TOKEN',

@@ -250,7 +250,8 @@ import {
   BotToolSignInWait,
   BotToolTarget,
   BotToolUpdate,
-  BotToolsList
+  BotToolsList,
+  BotToolsSetHostMcpServers
 } from './bots-tools-params'
 import { BotWorkForget, BotWorkList } from './bots-work-params'
 import {
@@ -1392,6 +1393,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.tools.list': BotToolsList,
   'bots.tools.problems': BotToolProblems,
   'bots.tools.remove': BotToolTarget,
+  'bots.tools.setHostMcpServers': BotToolsSetHostMcpServers,
   'bots.tools.signIn.cancel': BotToolSignInFlow,
   'bots.tools.signIn.finish': BotToolSignInFinish,
   'bots.tools.signIn.start': BotToolSignInStart,

@@ -372,6 +372,13 @@
   },
   {
     "filePath": "src/shared/bots/bot-mcp-apps.ts",
+    "kind": "object-property:label",
+    "text": "Intercom region",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-mcp-apps.ts",
     "kind": "object-property:placeholder",
     "text": "gitlab.example.com",
     "dynamic": false,

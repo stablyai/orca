@@ -1,4 +1,5 @@
 import type { AgentBackgroundWait } from '../../agent-status/lifecycle/agent-background-wait'
+import type { FleetWorkerOutcome } from './orchestration-fleet-outcome-resolution'
 import type { FleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
 import { createFleetStatusIndex, statusForFleetWorker } from './orchestration-fleet-status-index'
 import {
@@ -33,7 +34,7 @@ export type FleetDurableWorker = {
   pendingInput?: boolean
   pendingApproval?: boolean
   terminationReason?: 'operator_close' | 'signaled' | 'exited' | 'unknown' | null
-  outcome?: 'in_progress' | 'succeeded' | 'failed' | 'outcome_unknown' | 'finished_unverified'
+  outcome?: FleetWorkerOutcome
   resource: {
     id: string
     ownerDispatchId: string
@@ -48,6 +49,11 @@ export type FleetDurableWorker = {
     /** A scheduled automatic release; the coordinator owes no release of its own. */
     autoReleaseAt?: string | null
     updatedAt: string
+  } | null
+  /** Its terminal went to this follow-up, with the shared row it last held when one names it. */
+  handedOn?: {
+    toDispatchId: string
+    resource: { id: string; ownerDispatchId: string; releaseState: string } | null
   } | null
 }
 
@@ -71,6 +77,8 @@ export type FleetLiveness =
         | 'peer_changed'
         /** The Dispatch settled with no worker row, so no process was ever supervised. */
         | 'unsupervised_settled'
+        /** Settled, and its terminal now runs a follow-up that has not released it. */
+        | 'handed_on'
       observedAt?: number
       /** What the host could not verify, when it said. */
       detail?: string
@@ -119,7 +127,7 @@ export type OrchestrationFleetWorker = {
      *  otherwise, and from older hosts. */
     backgroundWait?: AgentBackgroundWait
   }
-  outcome: 'in_progress' | 'succeeded' | 'failed' | 'outcome_unknown' | 'finished_unverified'
+  outcome: FleetWorkerOutcome
   liveness: FleetLiveness
   evidence: {
     durable: true

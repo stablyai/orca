@@ -1,6 +1,6 @@
 // Connector wake Worker: a stateless router in front of one ConnectorHost object per host.
 //   GET  /v1/connector/wake  desktop upgrade (wake token, checked here only)
-//   POST /__admin/wake       connector publisher (admin.ts)
+//   POST /__admin/wake       connector publisher (admin.ts); optional kind picks the frame
 //   GET  /__health/object    alerts deep probe (health.ts)
 import {
   CONNECTOR_WAKE_ADMIN_PATH,
@@ -8,7 +8,8 @@ import {
   CONNECTOR_WAKE_GAP_HEADER,
   CONNECTOR_WAKE_PATH,
   ConnectorWakeAdminRequestSchema,
-  type ConnectorWakeAdminResponse
+  type ConnectorWakeAdminResponse,
+  type ConnectorWakeKind
 } from '../../../packages/connector-contract/src/wake-messages'
 import { verifyAdminRequest } from './admin'
 import { ConnectorHost, HOST_ID_HEADER, PLACE_HEADER, type WakeResult } from './connector-host'
@@ -80,14 +81,14 @@ async function handleUpgrade(env: Env, request: Request): Promise<Response> {
   return host(env, verified.hostId).fetch(new Request(request.url, { method: 'GET', headers }))
 }
 
-async function wakeAll(env: Env, hosts: string[]): Promise<ConnectorWakeAdminResponse> {
+async function wakeAll(env: Env, hosts: string[], kind: ConnectorWakeKind | undefined): Promise<ConnectorWakeAdminResponse> {
   const counts: ConnectorWakeAdminResponse = { delivered: 0, noSocket: 0, error: 0 }
   const unique = [...new Set(hosts)]
   let next = 0
   const worker = async () => {
     while (next < unique.length) {
       const hostId = unique[next++]
-      const result: WakeResult = await host(env, hostId).wake().catch(() => 'error' as const)
+      const result: WakeResult = await host(env, hostId).wake(kind).catch(() => 'error' as const)
       if (result === 'delivered') { counts.delivered++ }
       else if (result === 'no_socket') { counts.noSocket++ }
       else { counts.error++ }
@@ -110,7 +111,7 @@ async function handleAdminWake(env: Env, request: Request): Promise<Response> {
     metric(env, 'admin', 1, '400', [], '', place)
     return reject(400)
   }
-  const counts = await wakeAll(env, body.data.hosts)
+  const counts = await wakeAll(env, body.data.hosts, body.data.kind)
   metric(env, 'admin', body.data.hosts.length, '200', [], '', place)
   if (counts.delivered) { metric(env, 'wake', counts.delivered, 'delivered', [], '', place) }
   if (counts.noSocket) { metric(env, 'wake', counts.noSocket, 'no_socket', [], '', place) }
