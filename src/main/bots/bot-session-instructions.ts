@@ -18,7 +18,6 @@ const READS_INSTRUCTIONS_EACH_START: ReadonlySet<string> = new Set([
   'aug',
   'goose',
   'kilo',
-  'gemini',
   'droid',
   'qwen-code',
   'cline',
