@@ -68,7 +68,13 @@ export const TEAMS_METHODS = [
               .filter((bot) => bot.teams === true)
               .map((bot) => ({ id: bot.id, name: bot.name }))
           : []
-      return { account: await getTeamsConnect().account(), bots }
+      return {
+        account: await getTeamsConnect().account(),
+        bots,
+        ...(caller.kind === 'bot'
+          ? { you: { name: caller.bot.name, on: caller.bot.teams === true } }
+          : {})
+      }
     }
   }),
   defineMethod({

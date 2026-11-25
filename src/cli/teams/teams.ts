@@ -30,15 +30,19 @@ export function formatTeamsAccount(account: TeamsAccountView): string[] {
   ]
 }
 
-function formatStatus({ account, bots }: TeamsStatusView): string {
+function formatStatus({ account, bots, you }: TeamsStatusView): string {
   if (!account) {
     return 'Microsoft Teams is not connected here. Connect it with `orca teams connect --tenant <id> --client <app id>`.'
   }
   return [
     ...formatTeamsAccount(account),
-    bots.length > 0
-      ? `Bots that may use it: ${bots.map((bot) => bot.name).join(', ')}`
-      : 'No bot may use it yet; `orca teams bot <bot> --on` turns it on for one.'
+    you
+      ? you.on
+        ? `Teams is on for ${you.name}.`
+        : `Teams is off for ${you.name}; your owner turns it on with \`orca teams bot "${you.name}" --on\`.`
+      : bots.length > 0
+        ? `Bots that may use it: ${bots.map((bot) => bot.name).join(', ')}`
+        : 'No bot may use it yet; `orca teams bot <bot> --on` turns it on for one.'
   ].join('\n')
 }
 

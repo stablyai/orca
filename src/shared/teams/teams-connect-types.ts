@@ -33,8 +33,10 @@ export type TeamsSignInStatus = {
 
 export type TeamsStatusView = {
   account: TeamsAccountView | null
-  /** The bots the owner turned Teams on for; empty for a bot asking. */
+  /** The bots the owner turned Teams on for; empty for a bot asking, which sees only `you`. */
   bots: { id: string; name: string }[]
+  /** For a bot asking: whether its owner turned Teams on for it. */
+  you?: { name: string; on: boolean }
 }
 
 export type TeamsPlaceView = { ref: string; label: string; kind: 'chat' | 'channel' | 'thread' }
