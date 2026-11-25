@@ -24793,7 +24793,21 @@
         "fromLinkMenu": "Bir bağlantıdan…"
       },
       "signInToPublish": "Yayımlamak için oturum aç",
-      "stopSharing": "Paylaşımı durdur"
+      "stopSharing": "Paylaşımı durdur",
+      "invite": {
+        "invitedYou": "{{owner}} sizi davet etti",
+        "view": "Daveti gör",
+        "sharedWithYou": "{{owner}} sizinle paylaştı",
+        "runsOn": "{{owner}} adlı kişinin ajanı. {{owner}} adlı kişinin bilgisayarında çalışır.",
+        "chatFrom": "Onunla Orca’nızdan ve telefonunuzdan sohbet edersiniz.",
+        "ownChats": "Yalnızca kendi sohbetlerinizi görürsünüz.",
+        "ownerSees": "{{owner}}, onunla yaptığınız sohbetleri görebilir.",
+        "actsAs": "{{owner}} adlı kişinin bilgisayarında, {{owner}} adlı kişinin hesaplarıyla işlem yapabilir.",
+        "pauses": "{{owner}} adlı kişinin bilgisayarı kapalıyken duraklar.",
+        "messagesWait": "Mesajlar o dönene kadar bekler.",
+        "leave": "İstediğiniz zaman ayrılabilirsiniz.",
+        "uses": "Kullanır"
+      }
     },
     "upNext": {
       "lookNow": "Şimdi göz at",

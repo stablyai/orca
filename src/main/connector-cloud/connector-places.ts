@@ -23,6 +23,8 @@ import {
   ConnectorBotShareSchema,
   type ConnectorBotShare
 } from '../../shared/connector-share-contract'
+import type { AgentCard } from '../../shared/bots/agent-card-contract'
+import { agentCardOf } from '../../shared/bots/shared-agent-card'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 
 const Place = z.tuple([z.enum(['bot', 'bot-chat']), z.string().min(1)])
@@ -78,6 +80,12 @@ function sharedWith(shares: readonly BotShare[] | undefined): { sharedWith?: Con
 
 function purposeField(botPurpose: string | undefined): { botPurpose?: string } {
   return botPurpose ? { botPurpose } : {}
+}
+
+// Only an agent the hello lists as shared: nobody else is shown it.
+function cardField(bot: Bot): { agentCard?: AgentCard } {
+  const agentCard = sharedWith(bot.shares).sharedWith ? agentCardOf(bot) : undefined
+  return agentCard ? { agentCard } : {}
 }
 
 /** A bot's GitHub people go on each installation, so a bot over its share drops installations from the end. */
@@ -214,7 +222,8 @@ export function connectorBots(
           : [])
       ]),
       ...sharedWith(bot.shares),
-      ...purposeField(purposeOf(bot.id))
+      ...purposeField(purposeOf(bot.id)),
+      ...cardField(bot)
     }))
     .map(withinBotBudget)
 }
