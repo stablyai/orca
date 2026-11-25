@@ -33,6 +33,11 @@ function controller(
   return {
     cards,
     queueCapable: true,
+    holds: () => false,
+    agentMail: [],
+    agentMailEditable: () => false,
+    mailLeads: false,
+    stopping: false,
     clearCapable: true,
     pause: null,
     resume: vi.fn(async () => true),
@@ -382,4 +387,38 @@ it('names a later send failure in a folded header when an unconfirmed card comes
   )
   fireEvent.click(screen.getByRole('button', { name: /^(Queued|[0-9]+ queued)/i }))
   expect(screen.getByRole('button', { name: /2 queued.*couldn't send/i })).toBeTruthy()
+})
+
+// The row's targets sit flush, so none may shrink under 24px: not the chevron, and not any of them at the
+// smallest text size, where the chat's spacing unit makes a size-6 button about 20.6px (CSS the test DOM does not run).
+it('keeps every control in a queued row a 24px target', () => {
+  vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(400)
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(100)
+  renderQueue(
+    controller(
+      [
+        card(1, {
+          hold: 'paused',
+          pausedReason: QUEUED_MESSAGE_PAUSED_SEND_FAILED,
+          images: [{ type: 'image-ref', path: '/tmp/mock.png', alt: 'Mock' }]
+        }),
+        card(2)
+      ],
+      { isWorking: true }
+    )
+  )
+  for (const row of screen.getAllByRole('listitem')) {
+    const targets = [
+      ...within(row).getAllByRole('button'),
+      ...within(row).queryAllByRole('img', { name: /image/i })
+    ]
+    expect(
+      targets.map((target) => target.getAttribute('aria-label') ?? target.textContent)
+    ).toEqual(expect.arrayContaining(['Show full message', 'Delete']))
+    for (const target of targets) {
+      expect(target.classList.contains('min-w-[24px]')).toBe(true)
+      expect(target.classList.contains('min-h-[24px]')).toBe(true)
+      expect([...target.classList].some((name) => /^w-\d/.test(name))).toBe(false)
+    }
+  }
 })

@@ -36,6 +36,7 @@ import {
 import { useTerminalTabActivity } from './use-terminal-tab-activity'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { useWorkerTabChrome } from '../use-worker-tab-chrome'
+import { useComposedRefs } from 'radix-ui/internal'
 
 import { useNativeChatNamingFailure } from '../session-actions/use-native-chat-naming-failure'
 import {
@@ -185,20 +186,19 @@ export default function SortableTab({
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
+  const iconOnly = slotProps['data-tab-density'] === 'icon'
   const worker = useWorkerTabChrome({
     worktreeId: tab.worktreeId,
     groupId,
     unifiedTabId,
     isEditing
   })
+  const tabRootRef = useComposedRefs(setNodeRef, worker.setTabRoot)
   const tabTitle = tab.customTitle ?? tab.title
   const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
   const tabRoot = (
     <div
-      ref={(node) => {
-        setNodeRef(node)
-        worker.setTabRoot(node)
-      }}
+      ref={tabRootRef}
       aria-description={worker.ariaDescription}
       data-testid="sortable-tab"
       data-tab-id={tab.id}
@@ -258,8 +258,9 @@ export default function SortableTab({
         isActive={isActive}
         progress={programProgress}
         identity={identityIcon}
+        compact={iconOnly && !isEditing}
       />
-      {isPinned && !isEditing && (
+      {isPinned && !isEditing && !iconOnly && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}
       {isEditing ? (
@@ -294,8 +295,9 @@ export default function SortableTab({
           {titleNode}
         </span>
       )}
-      {tab.color && !isEditing && (
+      {tab.color && !isEditing && !iconOnly && (
         <span
+          data-tab-color-dot=""
           className="mr-1.5 size-2 rounded-full shrink-0"
           style={{ backgroundColor: tab.color }}
         />

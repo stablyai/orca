@@ -113,6 +113,9 @@ export function applyRemoveWorktreeSuccessState(
       // Why: git status/compare caches stop refreshing once the worktree is deleted; remove them so no stale badges/diffs linger.
       gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
       gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),
+      gitRebaseIndexObservationByWorktree: omitByWorktree(
+        s.gitRebaseIndexObservationByWorktree ?? {}
+      ),
       gitBranchLineTotalByWorktree: omitByWorktree(s.gitBranchLineTotalByWorktree),
       gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
       gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),

@@ -9,6 +9,8 @@ import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-groups/t
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { displayedTabOrder } from '@/components/bots/bot-home-tab-order'
+import type { HomeBotLookup } from '@/components/tab-bar/model/pinned-home-tab'
 
 type TabNumberShortcutState = Pick<
   AppState,
@@ -28,6 +30,8 @@ type TabNumberShortcutState = Pick<
 export function resolveTabNumberShortcutTarget(
   state: TabNumberShortcutState,
   index: number,
+  /** Defaults to the bot catalog, as the tab bar reads it. */
+  homeBotFor?: HomeBotLookup,
   /** Cmd+1–9 counts only the tabs the strip shows. */
   foldedTabIds?: (worktreeId: string, groupId: string) => ReadonlySet<string>
 ): Tab | null {
@@ -51,7 +55,7 @@ export function resolveTabNumberShortcutTarget(
   )
   const tabById = new Map(groupTabs.map((tab) => [tab.id, tab]))
   // Match TabBar reconciliation: stored order is authoritative, but append mounted tabs missing during hydration/drag races.
-  const orderedIds = workerTabStripOrder(
+  const storedIds = workerTabStripOrder(
     dedupeTabOrder([
       ...group.tabOrder.filter((tabId) => tabById.has(tabId)),
       ...groupTabs.map((tab) => tab.id)
@@ -59,13 +63,15 @@ export function resolveTabNumberShortcutTarget(
     groupTabs,
     foldedTabIds ? selectWorkerTabPeekId(state, worktreeId, group.id) : undefined
   )
+  // The tab bar pins a bot's Home first wherever the stored order holds it; digits match what it shows.
+  const orderedIds = displayedTabOrder(storedIds, groupTabs, worktreeId, homeBotFor)
 
   return tabById.get(orderedIds[index] ?? '') ?? null
 }
 
 export function activateTabNumberShortcut(index: number): boolean {
   const store = useAppStore.getState()
-  const target = resolveTabNumberShortcutTarget(store, index, (worktreeId, groupId) =>
+  const target = resolveTabNumberShortcutTarget(store, index, undefined, (worktreeId, groupId) =>
     selectFoldedWorkerTabIds(store, worktreeId, groupId)
   )
   if (!target) {

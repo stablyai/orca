@@ -4,7 +4,6 @@ import type { ToolSnapshot } from './listener-event'
 import type { ExtractedPromptText } from './prompt-fields'
 import { extractClaudeToolFields } from './providers/claude/claude-tool-fields'
 import { extractCodexToolFields } from './providers/codex/codex-tool-fields'
-import { extractGeminiToolFields } from './providers/gemini/gemini-tool-fields'
 import { extractAntigravityToolFields } from './providers/antigravity/antigravity-tool-fields'
 import { extractAmpToolFields } from './providers/amp/amp-tool-fields'
 import { extractOpenCodeToolFields } from './providers/opencode-family/opencode-family-tool-fields'
@@ -47,8 +46,6 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
-    case 'gemini':
-      return eventName === 'BeforeAgent'
     case 'antigravity':
       return eventName === 'PreInvocation'
     case 'amp':
@@ -111,8 +108,6 @@ export function isTurnEndEvent(source: AgentHookSource, eventName: unknown): boo
     case 'droid':
     case 'devin':
       return eventName === 'Stop'
-    case 'gemini':
-      return eventName === 'AfterAgent'
     case 'amp':
       return eventName === 'agent.end'
     case 'command-code':
@@ -230,8 +225,6 @@ export function extractToolFields(
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)
-    case 'gemini':
-      return extractGeminiToolFields(eventName, hookPayload)
     case 'antigravity':
       return extractAntigravityToolFields(eventName, hookPayload)
     case 'amp':

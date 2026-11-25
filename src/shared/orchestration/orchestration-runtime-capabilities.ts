@@ -37,6 +37,9 @@ export const ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY =
 /** Paired windows and phones read a chat's worker approvals and answer them as the person. */
 export const ORCHESTRATION_PAIRED_WORKER_APPROVALS_RUNTIME_CAPABILITY =
   'orchestration.paired-worker-approvals.v1' as const
+/** A person on a paired window may Clear and Stop a chat's workers in its dock, as on this computer. */
+export const ORCHESTRATION_PAIRED_WORKER_DOCK_OWNER_RUNTIME_CAPABILITY =
+  'orchestration.paired-worker-dock-owner.v1' as const
 /** Sent by a paired window or phone, never by the orca CLI: its approvals are the person's. */
 export const ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY =
   'orchestration.person-approvals.v1' as const
@@ -84,6 +87,7 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY,
   ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY,
   ORCHESTRATION_PAIRED_WORKER_APPROVALS_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PAIRED_WORKER_DOCK_OWNER_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY,

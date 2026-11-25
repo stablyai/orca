@@ -25,6 +25,7 @@ import {
 } from '../../runtime/runtime-environment-subscriptions'
 import type { PreloadApi } from '../../api-types'
 import { managedOrcadApi } from './managed-orcad-api'
+import { runtimePortForwardsApi } from './runtime-port-forwards-api'
 import { getWslHostsApi } from '../wsl/wsl-hosts-api'
 
 export const runtimeEnvironmentsApi = {
@@ -150,5 +151,6 @@ export const runtimeEnvironmentsApi = {
   ): Promise<RuntimeEnvironmentSubscriptionHandle> =>
     subscribeRuntimeEnvironmentFromPreload(ipcRenderer, args, callbacks),
   managedOrcad: managedOrcadApi,
+  portForwards: runtimePortForwardsApi,
   wslHosts: getWslHostsApi()
 } satisfies PreloadApi['runtimeEnvironments']

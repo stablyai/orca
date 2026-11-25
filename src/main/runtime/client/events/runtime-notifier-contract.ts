@@ -63,6 +63,7 @@ export type RuntimeNotifier = {
   botsChanged?(scope: BotChangeScope): void
   orchestrationSessionWorkersChanged?(sessionId: string): void
   peerMailReturned?(): void
+  mcpServersChanged?(): void
   workspaceCleanupRunFinished?(run: WorkspaceCleanupRunFinishedEvent['run']): void
   activateWorktree(
     repoId: string,

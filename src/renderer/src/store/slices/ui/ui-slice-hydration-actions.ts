@@ -12,7 +12,7 @@ import {
   normalizeExecutionHostOrder,
   normalizeVisibleExecutionHostIds
 } from '../../../../../shared/execution-host/execution-host'
-import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import { hydrateFeatureInteractions } from './ui-slice-feature-interactions-hydration'
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { normalizeFeatureTipIds } from '../../../../../shared/feature-education/feature-tips'
 import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../../../shared/workspace-view/sleeping-workspace-visibility'
@@ -234,7 +234,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ...hydrateBrowserPaneLayout(ui),
           taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
           featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
-          featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),
+          ...hydrateFeatureInteractions(s.workspaceBoardUsedBeforeLaunch, ui),
           contextualToursSeenIds: normalizeContextualTourIds(ui.contextualToursSeenIds),
           contextualToursAutoEligible:
             typeof ui.contextualToursAutoEligible === 'boolean'

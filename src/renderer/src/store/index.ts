@@ -72,6 +72,7 @@ import {
   registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/browser/navigation/http-link-routing'
 import { registerAppHttpLinkStateAccessor } from '@/lib/browser/navigation/app-http-link-open'
+import { registerServerPortForwardStateAccessor } from '@/lib/workspace-ports/server-port-forward-support'
 import { installStoreListenerCensus } from './diagnostics/store-listener-census'
 import { installSettledSortEpoch } from './slices/ui/settled-sort-epoch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
@@ -197,6 +198,7 @@ registerHttpLinkGroupActionAvailability((request) =>
   canOfferHttpLinkGroupAction(useAppStore.getState(), request)
 )
 registerAppHttpLinkStateAccessor(() => useAppStore.getState())
+registerServerPortForwardStateAccessor(() => useAppStore.getState())
 attachEditorBufferIdentityEvents(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {

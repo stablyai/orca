@@ -29,6 +29,15 @@ export function normalizeBrowserDownloadFilename(
     : safeName
 }
 
+/** A name another machine sent for a file saved here: no folders, and not a hidden file. */
+export function normalizeIncomingDownloadFilename(
+  filename: string,
+  platform: NodeJS.Platform
+): string {
+  const visible = normalizeBrowserDownloadFilename(filename, platform).replace(/^[.\s]+/u, '')
+  return normalizeBrowserDownloadFilename(visible || 'download', platform)
+}
+
 export function buildBrowserDownloadCollisionCandidate(filename: string, suffix: number): string {
   if (suffix === 0) {
     return filename

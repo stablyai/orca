@@ -7,16 +7,9 @@ import {
   shouldShowSkillsButton
 } from '@/components/sidebar/chrome/SidebarNav'
 import { navigateFromRail } from './app-rail-navigation'
+import { APP_RAIL_DESTINATION_IDS, type AppRailDestinationId } from './app-rail-layout'
 
-/** Pages that live on the rail below Workspaces, in this order. With the rail on, their list rows are not rendered. */
-export const APP_RAIL_DESTINATION_IDS = [
-  'tasks',
-  'automations',
-  'artifacts',
-  'skills',
-  'mobile'
-] as const
-export type AppRailDestinationId = (typeof APP_RAIL_DESTINATION_IDS)[number]
+export { APP_RAIL_DESTINATION_IDS, type AppRailDestinationId } from './app-rail-layout'
 
 // The same visibility preferences the list rows read.
 const DESTINATION_VISIBLE: Record<

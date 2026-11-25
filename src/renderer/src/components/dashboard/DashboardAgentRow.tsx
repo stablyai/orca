@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { DashboardAgentRowMessage } from './rows/DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './rows/DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './rows/DashboardAgentRowToolStep'
+import { AGENT_ROW_TITLE_BESIDE_MODEL_CHIP } from './rows/agent-row-title-floor'
 import { programStatusAttentionLine } from '../../../../shared/program-status/presentation'
 import {
   agentRowToolInput,
@@ -253,6 +254,24 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
 
   const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts
 
+  // Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported.
+  const label = (
+    <span
+      className={cn(
+        'block min-w-0 flex-1 overflow-hidden text-[11px] leading-snug',
+        showModel && model && AGENT_ROW_TITLE_BESIDE_MODEL_CHIP,
+        'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
+        expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
+        isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground',
+        // Why: the selected-row fill washes out muted text — keep it readable.
+        highlighted && !isUnvisited && 'text-foreground/90'
+      )}
+      title={displayLabel}
+    >
+      {displayLabel}
+    </span>
+  )
+
   return (
     <WorkerAgentRowMenu
       worktreeId={agent.tab.worktreeId}
@@ -340,34 +359,19 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               <AgentTypeIcon agentType={agent.agentType} size={14} />
             </span>
           )}
-          {/* Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported. */}
-          <span
-            className={cn(
-              'block min-w-0 flex-1 overflow-hidden text-[11px] leading-snug',
-              'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
-              expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
-              isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground',
-              // Why: the selected-row fill washes out muted text — keep it readable.
-              highlighted && !isUnvisited && 'text-foreground/90'
-            )}
-            title={displayLabel}
-          >
-            {displayLabel}
-          </span>
-          {showModel && model && (
-            <span
-              className={cn(
-                'max-w-24',
-                // Why: only shrink when the in-flow Send button would otherwise overflow the row.
-                sendTargetStatus === 'eligible' || sendTargetStatus === 'sending'
-                  ? 'min-w-0'
-                  : 'shrink-0',
-                'truncate font-mono text-3xs text-muted-foreground/70'
-              )}
-              title={model}
-            >
-              {model}
+          {showModel && model ? (
+            // Why: title and chip split only what the fixed controls leave, so neither can push out the Send button.
+            <span className="flex min-w-0 flex-1 items-center gap-1.5">
+              {label}
+              <span
+                className="min-w-0 max-w-24 truncate font-mono text-3xs text-muted-foreground/70"
+                title={model}
+              >
+                {model}
+              </span>
             </span>
+          ) : (
+            label
           )}
           {/* Why: "+N" badge shows the hidden child count when collapsed; redundant once children are expanded below. */}
           {hasChildDisclosure && !childAgentsExpanded && (

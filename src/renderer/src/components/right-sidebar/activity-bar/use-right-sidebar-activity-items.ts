@@ -4,12 +4,16 @@ import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
-import { getPluginPanelActivityItems } from '../plugin-panels/plugin-panel-activity-items'
+import {
+  builtInTabNames,
+  getPluginPanelActivityItems,
+  withDistinctPluginPanelNames
+} from '../plugin-panels/plugin-panel-activity-items'
 import { getDefaultRightSidebarActivityItems } from './right-sidebar-default-activity-items'
 import {
   getPortsPanelOwnerKey,
   portsPanelHostForOwnerKey,
-  portsPanelReachesSshHost
+  portsPanelReachesRemoteHost
 } from '../ports/ports-panel-host'
 import {
   collectInstalledPluginTabKeys,
@@ -18,6 +22,8 @@ import {
   type PluginPanelsFetchStatus
 } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
+import { getActiveChecksStatus } from '../checks-panel/status/active-checks-status'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { ActivityBarItem } from './activity-bar-buttons'
@@ -83,10 +89,9 @@ export function useRightSidebarActivityItems({
   const connectorsNeedingOwner = needs.filter((need) => need.kind === 'connector').length
   const hasChatWorkers = useFocusedChatWorkers(rightSidebarOpen && !isBot).workers.length > 0
   // Why the owner: a managed server's workspace names its server, not an SSH connection.
-  const hasSshHost = useAppStore((s) =>
-    portsPanelReachesSshHost(
-      portsPanelHostForOwnerKey(getPortsPanelOwnerKey(s, activeWorktreeId)),
-      s.runtimeEnvironments
+  const hasRemoteHost = useAppStore((s) =>
+    portsPanelReachesRemoteHost(
+      portsPanelHostForOwnerKey(getPortsPanelOwnerKey(s, activeWorktreeId))
     )
   )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
@@ -102,55 +107,78 @@ export function useRightSidebarActivityItems({
     () => collectInstalledPluginTabKeys(installedPlugins),
     [installedPlugins]
   )
+  // Why here: the checks tab announces this status, so a plugin tab's name is judged against it.
+  const creatingWorktree = useAppStore(selectWorktreeCreationSurfaceShown)
+  const checksStatus = useAppStore((s) =>
+    s.rightSidebarOpen && !creatingWorktree ? getActiveChecksStatus(s) : null
+  )
 
   // A bot's page labels every tab (labeledTab): Home, Connectors, Chats, Files.
-  const activityItems = useMemo<ActivityBarItem[]>(
-    () => [
-      ...getDefaultRightSidebarActivityItems({
-        t,
-        explorerShortcut,
-        sourceControlShortcut,
-        checksShortcut,
-        portsShortcut,
-        isBot,
-        showsHomeTab,
-        needsYou,
-        connectorsNeedingOwner
-      }),
-      // Append plugin tabs to preserve built-in navigation positions.
-      ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors).map((item) => ({
-        ...item,
-        labeledTab: isBot
-      }))
-    ],
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-    [
-      checksShortcut,
+  const activityItems = useMemo<ActivityBarItem[]>(() => {
+    const builtInItems = getDefaultRightSidebarActivityItems({
+      t,
       explorerShortcut,
-      pluginPanelErrors,
-      visiblePluginPanels,
-      portsShortcut,
       sourceControlShortcut,
+      checksShortcut,
+      portsShortcut,
       isBot,
       showsHomeTab,
       needsYou,
-      connectorsNeedingOwner,
-      languageRevision,
-      t
+      connectorsNeedingOwner
+    })
+    return [
+      ...builtInItems,
+      // Append plugin tabs to preserve built-in navigation positions. Checked against every built-in
+      // label, not only the visible ones, so a plugin tab's name never depends on what is shown.
+      ...getPluginPanelActivityItems(
+        visiblePluginPanels,
+        pluginPanelErrors,
+        builtInTabNames(builtInItems, t)
+      ).map((item) => ({
+        ...item,
+        labeledTab: isBot
+      }))
     ]
-  )
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [
+    checksShortcut,
+    explorerShortcut,
+    pluginPanelErrors,
+    visiblePluginPanels,
+    portsShortcut,
+    sourceControlShortcut,
+    isBot,
+    showsHomeTab,
+    needsYou,
+    connectorsNeedingOwner,
+    languageRevision,
+    t
+  ])
 
+  // Why after visibility: only tabs on screen together need names a screen reader can tell apart.
   const visibleItems = useMemo(
     () =>
-      getVisibleRightSidebarActivityItems(activityItems, {
-        isFolder,
-        isFolderWorkspace,
-        hasSshHost,
-        isBot,
-        isGroupHome,
-        hasChatWorkers
-      }),
-    [activityItems, isFolder, isFolderWorkspace, hasSshHost, isBot, isGroupHome, hasChatWorkers]
+      withDistinctPluginPanelNames(
+        getVisibleRightSidebarActivityItems(activityItems, {
+          isFolder,
+          isFolderWorkspace,
+          hasRemoteHost,
+          isBot,
+          isGroupHome,
+          hasChatWorkers
+        }),
+        (item) => item.statusIndicator ?? (item.id === 'checks' ? checksStatus : null)
+      ),
+    [
+      activityItems,
+      isFolder,
+      isFolderWorkspace,
+      hasRemoteHost,
+      isBot,
+      isGroupHome,
+      hasChatWorkers,
+      checksStatus
+    ]
   )
 
   const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null

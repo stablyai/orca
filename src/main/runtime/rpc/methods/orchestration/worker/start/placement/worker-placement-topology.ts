@@ -24,6 +24,8 @@ export type WorkerEffect = {
   hookFound?: boolean
   startupPolicy?: string
   terminalId?: string
+  /** A structured worker's chat session, kept so a restart that cuts its start can close it. */
+  sessionId?: string
   surface?: 'visible' | 'background'
   warning?: string
 }
@@ -115,6 +117,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     role: 'agent',
     action: 'created',
     id: created.identity.handle,
+    sessionId: created.identity.sessionId,
     surface: 'background'
   })
   return created
