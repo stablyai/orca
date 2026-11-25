@@ -54,11 +54,12 @@ export class SessionMcpTools {
    * A bot's launch always gets its token, whichever agent runs it: its tools present it to the
    * relay, and the `orca` calls the session makes name the bot by it. Any other session gets the
    * host's token, which names no bot, and only when one of its servers goes through the relay. On
-   * a shared name the bot's own server wins over the host list's.
+   * a shared name the bot's own server wins over the host list's. A terminal's launch (`terminal`)
+   * always names the token by its variable and carries it in env: its argv lands in shell history.
    */
   static async for(
     relay: Pick<BotToolRelay, 'grant'>,
-    launch: { bot: SessionMcpBot; agent: string },
+    launch: { bot: SessionMcpBot; agent: string; terminal?: boolean },
     sources: { own?: readonly BotToolServer[]; host?: SessionHostMcpServers | undefined }
   ): Promise<SessionMcpTools> {
     const own = sources.own ?? []
@@ -88,7 +89,7 @@ export class SessionMcpTools {
     )
     const tokenName = launch.bot ? BOT_TOOLS_TOKEN_ENV : MCP_TOKEN_ENV
     // Claude and Pi expand `${VAR}` in a server's headers, so their config names only the variable.
-    const referencesEnv = ENV_REFERENCING_AGENTS.has(launch.agent)
+    const referencesEnv = launch.terminal === true || ENV_REFERENCING_AGENTS.has(launch.agent)
     // A bot's token also names it to the runtime; the host's only opens servers, so an agent whose
     // config carries it outright never gets it in env, where every command it runs would see it.
     const tokenEnv = launch.bot || referencesEnv ? { [tokenName]: token } : {}
@@ -109,7 +110,7 @@ export class SessionMcpTools {
         return process === undefined ? server : viaRelay(server, relayProcessUrl(origin, process))
       }
     // Codex saves its own env into shell snapshots on disk, so only the commands it runs get the token.
-    const commandsOnly = launch.agent === 'codex'
+    const commandsOnly = launch.agent === 'codex' && launch.terminal !== true
     return new SessionMcpTools(
       [...own.map(throughRelay('bot')), ...host.map(throughRelay('host'))],
       commandsOnly ? {} : tokenEnv,

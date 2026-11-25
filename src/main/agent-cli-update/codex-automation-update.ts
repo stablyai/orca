@@ -15,9 +15,8 @@ import {
 import { latestAgentCliRelease } from './agent-cli-latest-release'
 import { agentCliUpdateDefinition } from './agent-cli-update-agents'
 import { updateThroughGate } from './agent-cli-update-gate'
-import { runAgentCliUpdatePlan } from './agent-cli-update-service'
+import { runAgentCliUpdater, UPDATER_MAX_MS } from './agent-cli-updater-process'
 
-const DEADLINE_MS = 10 * 60_000
 const codex = agentCliUpdateDefinition('codex')
 const NETWORK_ENV =
   /^(?:https?_proxy|all_proxy|no_proxy|curl_ca_bundle|ssl_cert_file|ssl_cert_dir)$/i
@@ -114,9 +113,8 @@ async function verifyOrUpdate(
       'This Codex installation requires a manual update before the run can start.'
     )
   }
-  const result = await runAgentCliUpdatePlan(
-    { ...cli, program: cli.realPath, env },
-    plan,
+  const result = await runAgentCliUpdater(
+    { program: cli.realPath, args: plan.args, cwd: homedir(), env },
     signal
   ).catch(() => {
     throw new CodexAutomationUpdateError('Orca could not start the Codex updater.')
@@ -125,6 +123,9 @@ async function verifyOrUpdate(
   signal.throwIfAborted()
   if (result.timedOut) {
     throw new CodexAutomationUpdateError('The Codex update timed out.')
+  }
+  if (result.stoppedBecause) {
+    throw new CodexAutomationUpdateError(`Codex update stopped. ${result.stoppedBecause}`)
   }
   if (result.code !== 0) {
     throw new CodexAutomationUpdateError(
@@ -151,7 +152,7 @@ export async function prepareCodexInstallation(
   signal: AbortSignal
 ): Promise<string> {
   signal.throwIfAborted()
-  const deadline = AbortSignal.timeout(DEADLINE_MS)
+  const deadline = AbortSignal.timeout(UPDATER_MAX_MS)
   const waitSignal = AbortSignal.any([signal, deadline])
   try {
     const cli = await waitForPromiseWithSignal(findOwnAgentCli('codex', settings), waitSignal)

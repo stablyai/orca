@@ -10,10 +10,12 @@ import {
 } from '../../../../../shared/agent-launch/installation/agent-cli-update'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
+import { PrioritySemaphore } from '../../../../../shared/concurrency/priority-semaphore'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 
-// Above the host's ten-minute updater limit plus its waits before and after, so its answer always arrives.
+// Above the host's ten-minute updater limit plus its waits before and after; a later answer still settles the row.
 const RUN_TIMEOUT_MS = 12 * 60_000
 // Chat starts come in bursts; one ask per host in this window is enough.
 const CHECK_INTERVAL_MS = 10 * 60_000
@@ -24,6 +26,8 @@ const OPEN_CHECK_INTERVAL_MS = 10_000
 const CHECK_TIMEOUT_MS = 2 * 60_000
 
 export type AgentCliUpdateRun =
+  /** Waiting for one of the host's few update slots. */
+  | { phase: 'queued' }
   | { phase: 'running' }
   | {
       phase: 'failed'
@@ -53,6 +57,8 @@ const EMPTY_HOST: AgentCliUpdateHost = { updates: [], runs: {} }
 const LOCAL_TARGET = { kind: 'local' } as const
 const checks = new Map<string, Promise<void>>()
 const checkedAt = new Map<string, number>()
+// Each update installs a whole CLI (often through npm); dozens at once would swamp the host.
+const UPDATES_AT_ONCE = 3
 // Whether this window follows this computer's finished updates; paired hosts announce them as client events.
 let followsLocal = false
 // Hosts with a re-check already waiting on an answer in flight; more finished updates join it.
@@ -104,8 +110,40 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
       next.set(key, write(state.agentCliUpdates.get(key) ?? EMPTY_HOST))
       return { agentCliUpdates: next }
     })
+  const updateSlotsByHost = new Map<string, PrioritySemaphore>()
+  const updateSlots = (key: string): PrioritySemaphore => {
+    let slots = updateSlotsByHost.get(key)
+    if (!slots) {
+      slots = new PrioritySemaphore(UPDATES_AT_ONCE)
+      updateSlotsByHost.set(key, slots)
+    }
+    return slots
+  }
   const writeRun = (key: string, agent: AgentCliUpdateAgent, run: AgentCliUpdateRun) =>
     writeHost(key, (host) => ({ ...host, runs: { ...host.runs, [agent]: run } }))
+  /** Records a run's answer; returns the failed run it wrote, or null when the update landed. */
+  const settleRun = (
+    key: string,
+    agent: AgentCliUpdateAgent,
+    result: AgentCliUpdateRunResult
+  ): AgentCliUpdateRun | null => {
+    if (!result.ok) {
+      const failed: AgentCliUpdateRun = {
+        phase: 'failed',
+        output: result.output,
+        ...(result.command ? { command: result.command } : {}),
+        finishedAt: Date.now()
+      }
+      writeRun(key, agent, failed)
+      return failed
+    }
+    writeHost(key, (host) => {
+      const runs = { ...host.runs }
+      delete runs[agent]
+      return { updates: host.updates.filter((update) => update.agent !== agent), runs }
+    })
+    return null
+  }
   const hostAnswers = (target: RuntimeClientTarget): boolean =>
     target.kind === 'local' ||
     lastVerifiedRuntimeStatus(
@@ -212,36 +250,38 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
 
     runAgentCliUpdate: async (target, agent) => {
       const key = agentCliUpdateHostKey(target)
-      if (get().agentCliUpdates.get(key)?.runs[agent]?.phase === 'running') {
+      const phase = get().agentCliUpdates.get(key)?.runs[agent]?.phase
+      if (phase === 'running' || phase === 'queued') {
         return false
       }
+      writeRun(key, agent, { phase: 'queued' })
+      const release = await updateSlots(key).acquire(0)
       writeRun(key, agent, { phase: 'running' })
-      let result: AgentCliUpdateRunResult
-      try {
-        result = await callRuntimeRpc<AgentCliUpdateRunResult>(
-          target,
-          'agentCliUpdate.run',
-          { agent },
-          { timeoutMs: RUN_TIMEOUT_MS }
-        )
-      } catch (error) {
-        result = { ok: false, output: error instanceof Error ? error.message : String(error) }
+      const timedOut: AgentCliUpdateRunResult = {
+        ok: false,
+        output: `The update did not finish within ${RUN_TIMEOUT_MS / 60_000} minutes.`
       }
-      if (!result.ok) {
-        writeRun(key, agent, {
-          phase: 'failed',
-          output: result.output,
-          ...(result.command ? { command: result.command } : {}),
-          finishedAt: Date.now()
+      const call = callRuntimeRpc<AgentCliUpdateRunResult>(
+        target,
+        'agentCliUpdate.run',
+        { agent },
+        { timeoutMs: RUN_TIMEOUT_MS }
+      ).catch((error: unknown): AgentCliUpdateRunResult => ({
+        ok: false,
+        output: error instanceof Error ? error.message : String(error)
+      }))
+      // Local calls ignore timeoutMs, so an updater that never exits would leave the row running for good.
+      const result = await withTimeout(call, RUN_TIMEOUT_MS, timedOut).finally(release)
+      const settled = settleRun(key, agent, result)
+      if (result === timedOut && settled) {
+        // A late answer still decides the row, unless a newer run has replaced it.
+        void call.then((late) => {
+          if (get().agentCliUpdates.get(key)?.runs[agent] === settled) {
+            settleRun(key, agent, late)
+          }
         })
-        return false
       }
-      writeHost(key, (host) => {
-        const runs = { ...host.runs }
-        delete runs[agent]
-        return { updates: host.updates.filter((update) => update.agent !== agent), runs }
-      })
-      return true
+      return result.ok
     }
   }
 }

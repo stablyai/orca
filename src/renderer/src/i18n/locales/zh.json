@@ -28006,7 +28006,8 @@
       "readFailed": "无法读取此 bot 的聊天",
       "delete": "删除聊天",
       "open": "打开",
-      "actions": "聊天操作"
+      "actions": "聊天操作",
+      "hideOlder": "隐藏更早的"
     },
     "items": {
       "view": {

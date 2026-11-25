@@ -4,12 +4,12 @@ export type ClosingTerminalTab = { tabId: string; handles: Set<string> }
 
 export function createClosingTerminalTab(
   tab: Extract<MobileSessionTab, { type: 'terminal' }>,
-  currentTabs: readonly MobileSessionTab[]
+  handlesByTabId: ReadonlyMap<string, string>
 ): ClosingTerminalTab {
   const handles = new Set(tab.terminal === null ? [] : [tab.terminal])
-  const current = currentTabs.find((candidate) => candidate.id === tab.id)
-  if (current?.type === 'terminal' && current.terminal !== null) {
-    handles.add(current.terminal)
+  const currentHandle = handlesByTabId.get(tab.id)
+  if (currentHandle !== undefined) {
+    handles.add(currentHandle)
   }
   return { tabId: tab.id, handles }
 }

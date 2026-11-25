@@ -212,6 +212,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('../mcp/mcp-connect.js')).MCP_HANDLERS
   },
   {
+    name: 'mcp-exec',
+    keys: ['mcp exec'],
+    load: async () => (await import('../mcp/mcp-exec.js')).MCP_EXEC_HANDLERS
+  },
+  {
     name: 'agent-hooks',
     keys: ['agent hooks prepare-codex', 'agent hooks status', 'agent hooks off', 'agent hooks on'],
     load: async () => (await import('../agents/agent-hooks.js')).AGENT_HOOK_HANDLERS
