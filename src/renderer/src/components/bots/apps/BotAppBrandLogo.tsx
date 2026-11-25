@@ -19,6 +19,7 @@ import sentryLogo from '@/assets/connector-brands/sentry.svg'
 import slackLogo from '@/assets/connector-brands/slack.svg'
 import stripeLogo from '@/assets/connector-brands/stripe.svg'
 import supabaseLogo from '@/assets/connector-brands/supabase.svg'
+import tregLogo from '@/assets/connector-brands/treg.svg'
 import vercelLogo from '@/assets/connector-brands/vercel.svg'
 import { GitHubIcon } from '../../icons/GitHubIcon'
 import { GoogleIcon } from '../../icons/GoogleIcon'
@@ -58,6 +59,7 @@ const BRANDS: Readonly<Record<string, BotAppBrand>> = {
   atlassian: { logo: atlassianLogo },
   notion: { logo: notionLogo },
   stripe: { logo: stripeLogo },
+  treg: { logo: tregLogo, whiteMark: true },
   playwright: { logo: playwrightLogo }
 }
 
