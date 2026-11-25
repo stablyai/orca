@@ -25,8 +25,7 @@ import {
   commitBotToolOAuth,
   newBotToolCredentialId,
   botToolCredentialsFingerprint,
-  botToolOAuthReader,
-  readBotToolCredential,
+  botToolCredentialsReader,
   type BotToolCredential,
   type BotToolOAuthEntry
 } from './bot-tool-credentials'
@@ -128,7 +127,8 @@ function writeServers(
   }
   // Names are unique in a read file, so each entry finds its previous one without a search.
   const previousByName = new Map(snapshot.file.servers.map((entry) => [entry.name, entry]))
-  const readOAuth = botToolOAuthReader(folder)
+  // Nothing changes the store before this write's own changes below, so one read answers every row.
+  const saved = botToolCredentialsReader(folder)
   const stored = entries.map(({ server, extras }): Record<string, unknown> => {
     const previous = previousByName.get(rename?.to === server.name ? rename.from : server.name)
     const unknown = botToolEntryExtras(extras ?? previous)
@@ -136,7 +136,7 @@ function writeServers(
       return { ...unknown, ...server }
     }
     const { headers, credential, ...rest } = server
-    const signIn = credential ? readOAuth(credential) : null
+    const signIn = credential ? saved.oauth(credential) : null
     if (signIn && signIn.url !== server.url) {
       // A new address is another app to sign in to: the old sign-in goes, and a new one starts out.
       const id = newBotToolCredentialId()
@@ -158,8 +158,8 @@ function writeServers(
   const removed = new Set([...credentialsOf(snapshot.servers)].filter((id) => !kept.has(id)))
   const replaced = new Map(
     [...added.keys()].flatMap((id) => {
-      const saved = readBotToolCredential(folder, id)
-      return saved ? [[id, saved] as const] : []
+      const values = saved.credential(id)
+      return values ? [[id, values] as const] : []
     })
   )
   // The file still names the old values when its write fails: put them back, drop only new ids
@@ -304,12 +304,12 @@ export async function writeBotToolServers(
 
 /** `folder` is the bot's home, where a tool Orca signs in to has its sign-in. */
 export function botOwnTool(server: BotToolServer, folder: string): BotOwnTool {
-  return ownTool(server, botToolOAuthReader(folder))
+  return ownTool(server, botToolCredentialsReader(folder).oauth)
 }
 
 /** `botOwnTool` for every server, from one read of the credential store. */
 export function botOwnTools(servers: readonly BotToolServer[], folder: string): BotOwnTool[] {
-  const readOAuth = botToolOAuthReader(folder)
+  const readOAuth = botToolCredentialsReader(folder).oauth
   return servers.map((server) => ownTool(server, readOAuth))
 }
 

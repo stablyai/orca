@@ -161,7 +161,30 @@ export function botToolCredentialsTransaction<T>(folder: string, work: () => Pro
 
 /** One header or source credential, opened and checked against its folder and id; null for none or a sign-in. */
 export function readBotToolCredential(folder: string, id: string): BotToolCredential | null {
-  const entry = entryOf(readSealed(folder), id)
+  return botToolCredentialsReader(folder).credential(id)
+}
+
+/** The sign-in a credential id holds, or null when it holds none or something else. */
+export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry | null {
+  return botToolCredentialsReader(folder).oauth(id)
+}
+
+export type BotToolCredentialsReader = {
+  credential: (id: string) => BotToolCredential | null
+  oauth: (id: string) => BotToolOAuthEntry | null
+}
+
+/**
+ * `readBotToolCredential` and `readBotToolOAuth` for many ids from one read of the store, which opens
+ * every entry; taken on the first id asked for, so a caller with none reads nothing.
+ */
+export function botToolCredentialsReader(folder: string): BotToolCredentialsReader {
+  let sealed: Stored | undefined
+  const entry = (id: string) => entryOf((sealed ??= readSealed(folder)), id)
+  return { credential: (id) => credentialOf(entry(id)), oauth: (id) => oauthOf(entry(id)) }
+}
+
+function credentialOf(entry: Entry | null): BotToolCredential | null {
   if (!entry || entry.kind === 'oauth') {
     return null
   }
@@ -170,20 +193,6 @@ export function readBotToolCredential(folder: string, id: string): BotToolCreden
     ...(entry.kind === 'source' ? { source: entry.source } : {}),
     headers: { ...entry.headers }
   }
-}
-
-/** The sign-in a credential id holds, or null when it holds none or something else. */
-export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry | null {
-  return botToolOAuthReader(folder)(id)
-}
-
-/**
- * `readBotToolOAuth` for many ids from one read of the store, which opens every entry; taken on the
- * first id asked for, so a caller with none reads nothing.
- */
-export function botToolOAuthReader(folder: string): (id: string) => BotToolOAuthEntry | null {
-  let sealed: Stored | undefined
-  return (id) => oauthOf(entryOf((sealed ??= readSealed(folder)), id))
 }
 
 function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {

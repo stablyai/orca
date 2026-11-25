@@ -38,18 +38,18 @@ afterEach(() => {
   }
 })
 
+const withHeaders = (count: number, value: string) =>
+  Array.from({ length: count }, (_, i) => ({
+    name: `server-${i}`,
+    url: `https://mcp-${i}.example.com/mcp`,
+    transport: 'http' as const,
+    headers: { authorization: `${value}-${i}` }
+  }))
+
 /** A host list of `count` servers with saved header values, each one credential in the store. */
 async function credentialedList(count: number): Promise<string> {
   const folder = tempDir('mcp-host-perf-')
-  await writeBotToolServers(
-    folder,
-    Array.from({ length: count }, (_, i) => ({
-      name: `server-${i}`,
-      url: `https://mcp-${i}.example.com/mcp`,
-      transport: 'http' as const,
-      headers: { authorization: `secret-${i}` }
-    }))
-  )
+  await writeBotToolServers(folder, withHeaders(count, 'secret'))
   // The first list gives each server its id; what's counted is every list after it.
   await listMcpServers(folder)
   return folder
@@ -100,4 +100,12 @@ it('opens each credential twice per tools check', async () => {
   const check = (folder: string) => botToolProblems(home(folder))
   expect(await opensFor(10, check)).toBe(20)
   expect(await opensFor(100, check)).toBe(200)
+})
+
+// The file's read, one read for every old value kept for a rollback, and the store's own write.
+it('opens each credential a fixed number of times per write that replaces every saved value', async () => {
+  const replaceAll = (count: number) => (folder: string) =>
+    writeBotToolServers(folder, withHeaders(count, 'rotated'))
+  expect(await opensFor(10, replaceAll(10))).toBe(30)
+  expect(await opensFor(100, replaceAll(100))).toBe(300)
 })
