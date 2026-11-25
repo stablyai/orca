@@ -1,6 +1,8 @@
 import { claudeProfileHistoryDirs } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
+import { copilotEventsPath, copilotHomeDir } from '../copilot/copilot-session-paths'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import {
   resolveNativeChatTranscriptAgent,
@@ -154,6 +156,18 @@ async function resolveSessionFileById(
   const trimmedId = sessionId.trim()
   if (!trimmedId) {
     return null
+  }
+
+  if (transcriptAgent === 'copilot') {
+    const candidate = copilotEventsPath(join(copilotHomeDir(), 'session-state'), trimmedId)
+    if (!candidate) {
+      return null
+    }
+    try {
+      return (await stat(candidate)).isFile() ? candidate : null
+    } catch {
+      return null
+    }
   }
 
   // Explicit roots pin an account; fallback could silently read another account’s transcript.

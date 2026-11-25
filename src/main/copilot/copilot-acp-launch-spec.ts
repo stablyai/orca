@@ -3,6 +3,7 @@ import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { COPILOT_ACP_DIALECT } from '../acp/acp-dialects/copilot-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import { deliverCopilotInstructions } from '../acp/launch/acp-instructions'
+import { COPILOT_TRANSCRIPT_IMPORT } from './copilot-transcript-import'
 import { loadCopilotSkillRoots } from '../acp/launch/acp-skill-roots'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
@@ -51,7 +52,7 @@ export const COPILOT_LAUNCH_SPEC: AcpLaunchSpec = {
   instructions: deliverCopilotInstructions,
   compaction: true,
   compactionInstructions: true,
-  transcriptImport: null,
+  transcriptImport: COPILOT_TRANSCRIPT_IMPORT,
   sessionHistory: COPILOT_SESSION_HISTORY,
   // No session/delete: a naming task's session would land in the user's Copilot history.
   keepsEverySession: true
