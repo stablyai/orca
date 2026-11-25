@@ -17,7 +17,7 @@ import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
 import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
 import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
-import type { ConptyStartupEvents } from './conpty-startup-input-reader'
+import { runsOnWinpty, type ConptyStartupEvents } from './conpty-startup-input-reader'
 
 export type DaemonPtyPhysicalOwner = ReturnType<typeof createDaemonPtyPhysicalOwner>
 
@@ -135,6 +135,7 @@ export function createDaemonPtySubprocessHandle(args: {
   return {
     pid: proc.pid,
     processNameIsSpawnFile: ptyProcessNameIsSpawnFile(proc),
+    ...(runsOnWinpty(proc) ? { resizeRedrawsOwnScreen: true } : {}),
     // Only the login(1) wrapper hides the shell's exit status, and it forks the shell as its child.
     shellIsRootChild: !reportsChildExitStatus,
     ...(process.platform === 'win32'
@@ -165,6 +166,9 @@ export function createDaemonPtySubprocessHandle(args: {
     getForegroundProcess: foreground.getForegroundProcess,
     confirmForegroundProcess: foreground.confirmForegroundProcess,
     confirmShellForeground: foreground.confirmShellForeground,
+    // Windows proves the agent pid on a full read; POSIX reads carry it in their evidence instead.
+    foregroundAgent: () => (process.platform === 'win32' ? foreground.cachedAgent() : null),
+    pendingForegroundRefresh: foreground.pendingForegroundRefresh,
     write: (data) => {
       if (dead || ioFailed || masterRetired) {
         return

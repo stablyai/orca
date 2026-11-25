@@ -42,9 +42,8 @@ export function keybindingFileDiagnostic(
   params: Record<string, string> = {},
   reasonCode?: KeybindingReasonCode
 ): KeybindingFileDiagnostic {
-  const message = KEYBINDING_DIAGNOSTIC_COPY[code].replace(
-    /\{\{(\w+)\}\}/g,
-    (slot, name: string) => (Object.hasOwn(params, name) ? params[name] : slot)
+  const message = KEYBINDING_DIAGNOSTIC_COPY[code].replace(/\{\{(\w+)\}\}/g, (slot, name: string) =>
+    Object.hasOwn(params, name) ? params[name] : slot
   )
   return {
     ...base,

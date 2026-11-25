@@ -11,12 +11,16 @@ export function ProviderIdentityCard({
   p,
   accountLabel,
   footer,
+  usageSignInHint,
+  statusContent,
   usagePercentageDisplay,
   inMenu = false
 }: {
   p: ProviderRateLimits
   accountLabel?: string
+  statusContent?: React.ReactNode
   footer?: React.ReactNode
+  usageSignInHint?: string
   usagePercentageDisplay: UsagePercentageDisplay
   /** Inside a dropdown, the Used/Left toggle must be a menu item to stay keyboard reachable. */
   inMenu?: boolean
@@ -40,17 +44,21 @@ export function ProviderIdentityCard({
       <Card size="sm">
         <div className="space-y-3 px-2.5">
           <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0 truncate text-sm font-medium" title={accountLabel}>
+            {/* min-h-5: an unknown owner's empty name keeps the line, so the card doesn't move when it arrives. */}
+            <div className="min-h-5 min-w-0 truncate text-sm font-medium" title={accountLabel}>
               {accountLabel}
             </div>
-            <UsageDisplayToggle asMenuItem={inMenu} />
+            {usageSignInHint ? null : <UsageDisplayToggle asMenuItem={inMenu} />}
           </div>
-          <ProviderPanel
-            p={p}
-            embedded
-            showResetCredits={false}
-            usagePercentageDisplay={usagePercentageDisplay}
-          />
+          {statusContent ?? (
+            <ProviderPanel
+              p={p}
+              embedded
+              showResetCredits={false}
+              usageSignInHint={usageSignInHint}
+              usagePercentageDisplay={usagePercentageDisplay}
+            />
+          )}
           {footer}
         </div>
       </Card>

@@ -8,11 +8,13 @@ import type {
 import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { WORKER_AGENT_STARTING_STAGE } from '../../db/worker-dispatch/worker-awaiting-agent-stage'
 import {
   sessionCallerOf,
   type OrchestrationEntryCaller
 } from '../../addressing/orchestration-caller-identity'
-import { botWorkHostOf, prepareBotWorkerStart } from '../../../../bots/bot-work-runtime'
+import { botWorkHostOf } from '../../../../bots/bot-work-runtime'
+import { prepareBotWorkerStart } from '../../../../bots/bot-work-start'
 
 export type AgentCreationCard = AgentJournalAgentStartItem | AgentJournalAgentHandoffItem
 
@@ -134,5 +136,30 @@ function logStartCardFailure(error: unknown): void {
     console.warn('[orchestration] recording a started agent in its caller chat failed', error)
   } catch {
     // Display bookkeeping cannot change a successful launch.
+  }
+}
+
+/** An unknown outcome with an agent launched may yet be a running worker: a bot records it, with no
+ *  card. One that failed before any agent (a lost worktree reply) is no worker at all; one still
+ *  starting is recorded when its wait settles. A reused terminal is never a new worker. */
+export function recordWorkerStartOutcome(
+  record: (started: WorkerStarted) => void,
+  outcome: unknown,
+  started: Omit<WorkerStarted, 'ready' | 'workerAddress'> & {
+    workerAddress: string | undefined
+    reusedTerminal: boolean
+  }
+): void {
+  const state = outcome && typeof outcome === 'object' && 'state' in outcome ? outcome.state : null
+  const stage = outcome && typeof outcome === 'object' && 'stage' in outcome ? outcome.stage : null
+  const { reusedTerminal, workerAddress, ...card } = started
+  // A structured worker holding its brief for a still-starting agent is a worker already.
+  const holdsBrief = state === 'starting' && stage === WORKER_AGENT_STARTING_STAGE
+  if (
+    !reusedTerminal &&
+    workerAddress &&
+    (state === 'ready' || state === 'outcome_unknown' || holdsBrief)
+  ) {
+    record({ ...card, workerAddress, ready: state === 'ready' })
   }
 }

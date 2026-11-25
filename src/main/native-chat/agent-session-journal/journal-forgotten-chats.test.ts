@@ -122,7 +122,14 @@ it('deletes an idle chat with its tab, then every journal row in background page
         inTransaction(db, () => applyJournalSqlMaintenance(db, operation))
     },
     { database: async (operation) => readJournalSqlDatabase(db, operation) },
-    { ensure: async () => null },
+    {
+      ensure: async () => null,
+      compareLegacyChats: async () => {},
+      deferred: () => false,
+      resumed: () => false,
+      passCompleted: () => {},
+      deferPass: () => {}
+    },
     new JournalSqlActivity(),
     (error) => {
       throw error
@@ -147,6 +154,43 @@ it('deletes an idle chat with its tab, then every journal row in background page
   expect(count(db, "agent_session_tabs WHERE session_id='kept-chat'")).toBe(1)
   expect(count(db, "journal_items WHERE session_id='kept-chat'")).toBe(1)
   expect(count(db, "journal_chat_state WHERE session_id='kept-chat'")).toBe(1)
+})
+
+it('takes the revision a chat awaiting its older-Orca compare waited on, so no copy brings it back', () => {
+  const db = journal()
+  db.prepare(
+    `DELETE FROM agent_session_store_meta WHERE key='journal.legacy-revision:gone-chat'`
+  ).run()
+  db.prepare(
+    `INSERT INTO agent_session_store_meta VALUES('journal.legacy-compare:gone-chat','["legacy",4]')`
+  ).run()
+  expect(forget(db)).toBe(true)
+  expect(count(db, "agent_session_store_meta WHERE key LIKE 'journal.legacy-compare:%'")).toBe(0)
+  expect(
+    db
+      .prepare(
+        "SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-revision:gone-chat'"
+      )
+      .get()?.value
+  ).toBe('["legacy",4]')
+})
+
+it("drops a forgotten copy's mapping and failure, so none of its keys outlive it", () => {
+  const db = journal()
+  for (const [key, value] of [
+    ['journal.legacy-copy-source:gone-chat', 'original-chat'],
+    ['journal.legacy-failed:gone-chat', '{"revision":null,"error":"damaged"}'],
+    ['journal.legacy-pending-copy:original-chat', 'gone-chat']
+  ]) {
+    db.prepare('INSERT INTO agent_session_store_meta VALUES(?,?)').run(key, value)
+  }
+  expect(forget(db)).toBe(true)
+  expect(
+    count(
+      db,
+      "agent_session_store_meta WHERE key LIKE 'journal.legacy-copy-source:%' OR key LIKE 'journal.legacy-failed:%' OR key LIKE 'journal.legacy-pending-copy:%'"
+    )
+  ).toBe(0)
 })
 
 const refusals: {

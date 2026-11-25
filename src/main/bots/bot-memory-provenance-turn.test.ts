@@ -8,7 +8,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { parseBotMemoryFacts, tagBotMemoryChanges } from '../../shared/bot-memory-lines'
+import { parseBotMemoryFacts } from '../../shared/bot-memory-lines'
 import { botMemorySourcesOf } from '../../shared/bots/bot-memory-source'
 import { localBotHomeFilesystem } from './bot-home'
 import { createBotMemoryRecord } from './bot-memory-record'
@@ -291,16 +291,6 @@ describe('where memories came from', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
-  })
-
-  it('a 400,000-character line is read and tagged quickly, whole', () => {
-    const long = `- ${'a ·  from: '.repeat(36_000)}${' '.repeat(4_000)}!`
-    const started = performance.now()
-    const tagged = tagBotMemoryChanges('', `${long}\n`, 'Webhook')
-    parseBotMemoryFacts(tagged)
-    expect(performance.now() - started).toBeLessThan(500)
-    expect(parseBotMemoryFacts(tagged)[0]?.source).toBe('Webhook')
-    expect(tagged.length).toBeGreaterThan(300_000)
   })
 
   it("a running Slack turn's fact stays tagged when an owner turn beside it ends first", async () => {

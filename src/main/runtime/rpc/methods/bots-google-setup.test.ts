@@ -1,460 +1,420 @@
-import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { Bot } from '../../../../shared/bot-types'
-import { makeTestBot } from '../../../bots/bot.test-fixture'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GoogleSetupRuns } from '../../../google/google-setup-runs'
-import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../callers/rpc-caller-identity'
+import { googleSetupKeyBlocker } from '../../../../shared/google/google-setup-blocker'
+import {
+  googleSetupChoiceLocked,
+  googleSetupConnectOpen,
+  googleSetupShownStepStatus,
+  googleSetupStepCardView
+} from '../../../../shared/google/google-setup-card-view'
+import type { GoogleClientView } from '../../../../shared/google/google-client-config'
+import type { GoogleAccountView } from '../../../../shared/google/google-connect-types'
+import type { RpcContext } from '../core'
+import type { GoogleSetupRun } from '../../../../shared/google/google-setup-run'
+import type * as ChatCards from '../../../google/google-setup-chat-cards'
 
-const dir = mkdtempSync(join(tmpdir(), 'orca-google-setup-rpc-'))
-afterAll(() => rmSync(dir, { recursive: true, force: true }))
-const sent = vi.hoisted((): unknown[][] => [])
-const cards = vi.hoisted((): unknown[][] => [])
-vi.mock('../../../bots/bot-chat-status-line', () => ({
-  writeInChat: (sessionId: string | undefined, body: { googleSetup?: { card: string } }) =>
-    cards.push([sessionId, body.googleSetup?.card])
-}))
-const store = vi.hoisted((): { runs: GoogleSetupRuns | null } => ({ runs: null }))
-vi.mock('../../../bots/bot-session-tabs', () => ({
-  botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
-    sessionId === 'ivy-chat' ? bots.list()[0] : null
-}))
-vi.mock('../../../bots/tool-relay/bot-tool-relay', () => ({
-  botToolRelay: { botOf: (token: string) => (token === 'ivy-token' ? 'ivy' : null) }
-}))
-vi.mock('../../../bots/bot-chat-session', () => ({
-  runtimeBotChats: () => ({
-    sendToChat: async (...args: unknown[]) => {
-      sent.push(args)
-      return { sessionId: 'ivy-chat' }
-    }
-  })
-}))
-type FakeGoogle = {
-  client: { clientId: string; projectId?: string } | null
-  accounts: { email: string; status: string; connectedAt: number; services: unknown[] }[]
-  clientKey: 'works' | 'gone' | null
-  installed: boolean
-  turnRunning: boolean
+const state = vi.hoisted(
+  (): {
+    runs: GoogleSetupRuns | null
+    offers: number
+    lines: string[]
+    accounts: GoogleAccountView[]
+    cards: string[]
+    duringCheck: (() => void) | null
+  } => ({ runs: null, offers: 0, lines: [], accounts: [], cards: [], duringCheck: null })
+)
+const BOT = { id: 'bot-1', name: 'Ada', google: true, chatSessionId: 'chat-1' }
+const OLD_CLIENT: GoogleClientView = {
+  clientId: 'old',
+  projectId: 'home',
+  source: 'imported',
+  savedAt: 1
 }
-const google = vi.hoisted((): FakeGoogle => ({
-  client: null,
-  accounts: [],
-  clientKey: null,
-  installed: true,
-  turnRunning: false
+
+vi.mock('../../../google/google-setup-runs', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  googleSetupRuns: () => state.runs
 }))
 vi.mock('../../../google/google-connect', () => ({
-  getGoogleConnect: () =>
-    google.installed
-      ? {
-          client: () => google.client,
-          accounts: () => google.accounts,
-          checkAccounts: async () => google.accounts,
-          checkClient: async () => google.clientKey,
-          clientCheck: () => google.clientKey
-        }
-      : null
-}))
-const offers = vi.hoisted((): [string, { connectorOffer?: unknown }][] => [])
-vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => ({
-    captureAgentStartDestination: async (sessionId: string) => ({ sessionId }),
-    appendAgentStart: async (
-      destination: { sessionId: string },
-      entry: { body: { connectorOffer?: unknown } }
-    ) => {
-      offers.push([destination.sessionId, entry.body])
+  getGoogleConnect: () => ({
+    client: async () => OLD_CLIENT,
+    accounts: async () => state.accounts,
+    checkAccounts: async () => state.accounts,
+    checkClient: async () => null,
+    clientCheck: async () => {
+      state.duringCheck?.()
+      return null
     }
   })
 }))
-vi.mock('../../../bots/bot-automation-sessions', () => ({
-  botTurns: { running: () => google.turnRunning }
+vi.mock('../../../bots/bot-of-caller', () => ({
+  BOT_TOKEN_ENDED: 'ended',
+  botOfToken: (_runtime: unknown, token?: string) =>
+    token ? { kind: 'bot', bot: BOT } : { kind: 'owner' }
 }))
-vi.mock('../../../google/google-setup-runs', async (original) => ({
-  ...(await original<Record<string, unknown>>()),
-  googleSetupRuns: () => store.runs
+vi.mock('../../../google/google-card-reach', () => ({ noWindowAnswersGoogleCards: () => false }))
+vi.mock('../../../google/google-setup-chat-cards', async (importOriginal) => {
+  const real = await importOriginal<typeof ChatCards>()
+  return {
+    ...real,
+    // The cards a change calls for, without a chat to write them in.
+    writeGoogleSetupCards: (...[, prev, next]: Parameters<typeof real.writeGoogleSetupCards>) => {
+      const due = real.googleSetupCardsDue(prev, next)
+      state.cards.push(...due.map((ref) => ref.card))
+      return due
+    },
+    rewriteGoogleSetupWaitingCard: () => {}
+  }
+})
+vi.mock('../../../bots/bot-chat-session', () => ({
+  runtimeBotChats: () => ({
+    sendToChat: async (_botId: string, line: string) => {
+      state.lines.push(line)
+      return { sessionId: BOT.chatSessionId }
+    }
+  })
+}))
+vi.mock('./bots-connector-offer', () => ({
+  postConnectorOffer: async () => {
+    state.offers += 1
+  }
 }))
 
 const { GOOGLE_SETUP_METHODS } = await import('./bots-google-setup')
+const [read, write, , start] = GOOGLE_SETUP_METHODS
+if (
+  read.name !== 'bots.googleSetup.read' ||
+  write.name !== 'bots.googleSetup.write' ||
+  start.name !== 'bots.googleSetup.start'
+) {
+  throw new Error('bots.googleSetup.read, write or start moved')
+}
 
-const request = (method: string, params: unknown): RpcRequest => ({
-  id: 'req-1',
-  authToken: 'tok',
-  method,
-  params
-})
-
-let dispatcher: RpcDispatcher
-let bot: Bot
-let headless = false
-beforeEach(() => {
-  headless = false
-  offers.length = 0
-  google.client = null
-  google.accounts = []
-  google.clientKey = null
-  google.installed = true
-  google.turnRunning = false
-  sent.length = 0
-  cards.length = 0
-  store.runs = new GoogleSetupRuns(() => join(dir, `${Math.random()}.json`))
-  bot = makeTestBot({ id: 'ivy', name: 'Ivy', chatSessionId: 'ivy-chat' })
-  const runtime = {
-    getRuntimeId: () => 'test-runtime',
-    servesWithoutWindow: () => headless,
-    bots: { assertEnabled: () => {}, enabled: () => true, list: () => [bot] },
-    lookAround: { botOfLook: () => null, botOfTidyUp: () => null }
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the write handler reads only bots and lookAround here.
+const context = {
+  runtime: {
+    bots: { assertEnabled: () => {}, enabled: () => true, list: () => [BOT] },
+    lookAround: { botOfLook: () => null }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only runtime.bots, runtime.lookAround, servesWithoutWindow and the runtime id, which the stub provides.
-  const service = runtime as unknown as OrcaRuntimeService
-  dispatcher = new RpcDispatcher({ runtime: service, methods: GOOGLE_SETUP_METHODS })
+} as unknown as RpcContext
+
+let dir: string
+let runs: GoogleSetupRuns
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'orca-google-setup-start-'))
+  runs = new GoogleSetupRuns(() => join(dir, 'runs.json'))
+  state.runs = runs
+  state.offers = 0
+  state.lines = []
+  state.duringCheck = null
+  state.accounts = []
+  state.cards = []
 })
+afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-describe('bots.googleSetup', () => {
-  it('lets a bot move its own run from its chat', async () => {
-    const started = await dispatcher.dispatch(
-      request('bots.googleSetup.write', {
-        botToken: 'ivy-token',
-        callerSessionId: 'ivy-chat',
-        change: { action: 'start', mode: 'guide-here' }
-      })
-    )
-    expect(started).toMatchObject({
-      ok: true,
-      result: { run: { botId: 'ivy', mode: 'guide-here' } }
-    })
-    expect(
-      await dispatcher.dispatch(
-        request('bots.googleSetup.read', { botToken: 'ivy-token', callerSessionId: 'ivy-chat' })
-      )
-    ).toMatchObject({ ok: true, result: { run: { botId: 'ivy' } } })
+describe('bots.googleSetup.write start with an app already here', () => {
+  it('shows the Connect card without --new-app', async () => {
+    const result = await write.handler({ botToken: 't', change: { action: 'start' } }, context)
+    expect(result).toMatchObject({ routed: 'offer' })
+    expect(state.offers).toBe(1)
+    expect(runs.get(BOT.id)).toBeNull()
   })
 
-  it('records owner card answers and wakes the bot, without a bubble, once services are chosen', async () => {
-    await dispatcher.dispatch(
-      request('bots.googleSetup.write', {
-        botToken: 'ivy-token',
-        callerSessionId: 'ivy-chat',
-        change: { action: 'start' }
-      })
+  it('starts a new-app run with --new-app, and the old key is not its key', async () => {
+    const result = await write.handler(
+      { botToken: 't', change: { action: 'start', newApp: true } },
+      context
     )
-    await dispatcher.dispatch(
-      request('bots.googleSetup.answer', { botId: 'ivy', card: 'path', values: ['do-it-for-me'] }),
-      { caller: DESKTOP_RPC_CALLER, clientKind: 'runtime' }
-    )
-    // The path brings the services card; the bot waits for it rather than opening Google Cloud.
-    expect(cards).toEqual([
-      ['ivy-chat', 'path'],
-      ['ivy-chat', 'services']
-    ])
-    expect(sent).toEqual([])
-    const answered = await dispatcher.dispatch(
-      request('bots.googleSetup.answer', {
-        botId: 'ivy',
-        card: 'services',
-        values: ['gmail', 'calendar']
-      }),
-      { caller: DESKTOP_RPC_CALLER, clientKind: 'runtime' }
-    )
-    expect(answered).toMatchObject({
-      ok: true,
-      result: { run: { services: ['gmail', 'calendar'] } }
-    })
-    expect(sent).toEqual([
-      ['ivy', 'Card google-setup/services answered: gmail, calendar', 'card-answer']
-    ])
-  })
-
-  it('never takes a card answer, or a lock-lifting change, from a CLI', async () => {
-    await dispatcher.dispatch(
-      request('bots.googleSetup.write', {
-        botToken: 'ivy-token',
-        callerSessionId: 'ivy-chat',
-        change: { action: 'start', mode: 'guide-here' }
-      })
-    )
-    expect(
-      await dispatcher.dispatch(
-        request('bots.googleSetup.answer', { botId: 'ivy', card: 'step', values: ['take-over'] }),
-        { caller: LOCAL_CLI_RPC_CALLER }
-      )
-    ).toMatchObject({ ok: false, error: { message: expect.stringContaining('Only your owner') } })
-    // An agent that leaves its chat id off still counts as a bot.
-    expect(
-      await dispatcher.dispatch(
-        request('bots.googleSetup.write', {
-          botId: 'ivy',
-          change: { action: 'answer', card: 'path', values: ['do-it-for-me'] }
-        }),
-        { caller: LOCAL_CLI_RPC_CALLER }
-      )
-    ).toMatchObject({ ok: false, error: { message: expect.stringContaining('hand the clicking') } })
-    expect(sent).toEqual([])
-  })
-
-  it("starts a setup for the owner in the bot's chat, with its first card and no bubble", async () => {
-    const owner = { caller: DESKTOP_RPC_CALLER, clientKind: 'runtime' as const }
-    const started = await dispatcher.dispatch(
-      request('bots.googleSetup.start', { botId: 'ivy', from: 'settings' }),
-      owner
-    )
-    // The person clicks until the owner picks a path.
-    expect(started).toMatchObject({
-      ok: true,
-      result: { run: { state: 'running', mode: 'unchosen' } }
-    })
-    expect(sent).toEqual([['ivy', expect.stringContaining('from settings'), 'card-answer']])
-    expect(cards).toEqual([['ivy-chat', 'path']])
-    // Pressed again, it goes back to the same setup.
-    const again = await dispatcher.dispatch(
-      request('bots.googleSetup.start', { botId: 'ivy', from: 'add-connector' }),
-      owner
-    )
-    expect(again).toMatchObject({ ok: true, result: { run: { id: store.runs?.get('ivy')?.id } } })
-    expect(sent).toHaveLength(1)
-    expect(cards).toHaveLength(1)
-  })
-
-  it('never starts a setup for a CLI', async () => {
-    expect(
-      await dispatcher.dispatch(
-        request('bots.googleSetup.start', { botId: 'ivy', from: 'settings' }),
-        { caller: LOCAL_CLI_RPC_CALLER }
-      )
-    ).toMatchObject({ ok: false, error: { message: expect.stringContaining('Only your owner') } })
-    expect(store.runs?.get('ivy')).toBeNull()
-  })
-
-  it('writes the next card an answer calls for', async () => {
-    const owner = { caller: DESKTOP_RPC_CALLER, clientKind: 'runtime' as const }
-    await dispatcher.dispatch(
-      request('bots.googleSetup.start', { botId: 'ivy', from: 'settings' }),
-      owner
-    )
-    await dispatcher.dispatch(
-      request('bots.googleSetup.answer', { botId: 'ivy', card: 'path', values: ['guide-here'] }),
-      owner
-    )
-    expect(cards.map(([, card]) => card)).toEqual(['path', 'services'])
-  })
-
-  it('says the key is missing while client is open, and keeps client open until it arrives', async () => {
-    const bot = (change: Record<string, unknown>) =>
-      dispatcher.dispatch(
-        request('bots.googleSetup.write', {
-          botToken: 'ivy-token',
-          callerSessionId: 'ivy-chat',
-          change
-        })
-      )
-    const read = () =>
-      dispatcher.dispatch(
-        request('bots.googleSetup.read', { botToken: 'ivy-token', callerSessionId: 'ivy-chat' })
-      )
-    await bot({ action: 'start' })
-    store.runs?.apply('ivy', 'owner', { action: 'answer', card: 'path', values: ['do-it-for-me'] })
-    await bot({ action: 'set', projectId: 'example-project-123' })
-    expect(await read()).toMatchObject({ ok: true, result: { keyMissing: false } })
-    await bot({ action: 'step', step: 'client', status: 'active' })
-    // Still making the key: no owner buttons yet.
-    expect(await read()).toMatchObject({ ok: true, result: { keyMissing: true, blocker: null } })
-    expect(await bot({ action: 'step', step: 'client', status: 'done' })).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('Make a new key · Import a key file') }
-    })
-    // The refusal leaves the owner's card with the recovery the bot just named.
-    expect(await read()).toMatchObject({
-      ok: true,
-      result: {
-        keyMissing: true,
-        blocker: { kind: 'no-key', actions: [{ id: 'make-new-key' }, { id: 'import-key' }] }
-      }
-    })
-    // A key from another project isn't this setup's.
-    google.client = { clientId: 'x.apps.googleusercontent.com', projectId: 'old-project' }
-    expect(await bot({ action: 'step', step: 'client', status: 'done' })).toMatchObject({
-      ok: false
-    })
-    google.client = { clientId: 'x.apps.googleusercontent.com', projectId: 'example-project-123' }
-    expect(await read()).toMatchObject({ ok: true, result: { keyMissing: false } })
-    expect(await bot({ action: 'step', step: 'client', status: 'done' })).toMatchObject({
-      ok: true,
-      result: { run: { steps: { client: { status: 'done' } } } }
+    expect(state.offers).toBe(0)
+    const run = runs.get(BOT.id)
+    if (!run) {
+      throw new Error('no run')
+    }
+    expect(result).toMatchObject({ run: { id: run.id, state: 'running', newApp: true } })
+    expect(googleSetupKeyBlocker(run, { client: OLD_CLIENT, accounts: [] })).toMatchObject({
+      kind: 'no-key'
     })
   })
 
-  it('writes the sign-in card again at the bottom when done is refused for want of it, once', async () => {
-    const bot = (change: Record<string, unknown>) =>
-      dispatcher.dispatch(
-        request('bots.googleSetup.write', {
-          botToken: 'ivy-token',
-          callerSessionId: 'ivy-chat',
-          change
-        })
-      )
-    await bot({ action: 'start' })
-    store.runs?.apply('ivy', 'owner', { action: 'answer', card: 'path', values: ['do-it-for-me'] })
-    google.client = { clientId: 'x.apps.googleusercontent.com' }
-    store.runs?.apply('ivy', 'owner', {
+  it('keeps a running setup as is with --new-app, only marking it', async () => {
+    runs.apply(BOT.id, 'owner', { action: 'start' })
+    const answered = runs.apply(BOT.id, 'owner', {
       action: 'answer',
-      card: 'step',
-      values: ['done', 'client']
+      card: 'path',
+      values: ['do-it-for-me']
     })
-    cards.length = 0
-    expect(await bot({ action: 'done' })).toMatchObject({ ok: false })
-    expect(await bot({ action: 'done' })).toMatchObject({ ok: false })
-    expect(cards).toEqual([['ivy-chat', 'connect']])
-  })
-
-  it('writes one Make a new key card however often the bot asks to finish client without the key', async () => {
-    const bot = (change: Record<string, unknown>) =>
-      dispatcher.dispatch(
-        request('bots.googleSetup.write', {
-          botToken: 'ivy-token',
-          callerSessionId: 'ivy-chat',
-          change
-        })
-      )
-    await bot({ action: 'start' })
-    store.runs?.apply('ivy', 'owner', { action: 'answer', card: 'path', values: ['do-it-for-me'] })
-    await bot({ action: 'step', step: 'client', status: 'active' })
-    cards.length = 0
-    for (let ask = 0; ask < 3; ask++) {
-      expect(await bot({ action: 'step', step: 'client', status: 'done' })).toMatchObject({
-        ok: false
-      })
-    }
-    expect(cards).toEqual([['ivy-chat', 'progress']])
-  })
-
-  it("refuses the bot's done until every chosen service is ready, naming the owner's buttons", async () => {
-    const bot = (change: Record<string, unknown>) =>
-      dispatcher.dispatch(
-        request('bots.googleSetup.write', {
-          botToken: 'ivy-token',
-          callerSessionId: 'ivy-chat',
-          change
-        })
-      )
-    await bot({ action: 'start' })
-    store.runs?.apply('ivy', 'owner', { action: 'answer', card: 'path', values: ['do-it-for-me'] })
-    await bot({ action: 'set', account: 'you@gmail.com', kind: 'work', services: ['gmail'] })
-    for (const step of ['account', 'project', 'apis']) {
-      await bot({ action: 'step', step, status: 'done' })
-    }
-    await bot({ action: 'step', step: 'links', status: 'skipped' })
-    await bot({ action: 'step', step: 'publish', status: 'skipped' })
-    // Client as Orca finishes it when the key arrives; the key is gone again by the end.
-    for (const step of ['branding', 'client', 'connect']) {
-      store.runs?.apply('ivy', 'owner', { action: 'answer', card: 'step', values: ['done', step] })
-    }
-    // No key saved: the card offers a new key, and the bot hears the same words.
-    expect(await bot({ action: 'done' })).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('Make a new key · Import a key file') }
-    })
-    google.client = { clientId: 'x.apps.googleusercontent.com' }
-    const services = (state: string) => ['gmail', 'calendar'].map((service) => ({ service, state }))
-    google.accounts = [
-      {
-        email: 'you@gmail.com',
-        status: 'connected',
-        connectedAt: 5,
-        services: services('needs-permission')
-      }
-    ]
-    expect(await bot({ action: 'done' })).toMatchObject({
-      ok: false,
-      // Gmail is the only service chosen, so there's nothing to go on without.
-      error: { message: expect.stringContaining("Your owner's card shows: Allow Gmail.") }
-    })
-    expect(
-      await dispatcher.dispatch(
-        request('bots.googleSetup.read', { botToken: 'ivy-token', callerSessionId: 'ivy-chat' })
-      )
-    ).toMatchObject({ ok: true, result: { blocker: { kind: 'needs-permission' } } })
-    google.accounts = [
-      { email: 'you@gmail.com', status: 'connected', connectedAt: 5, services: services('ready') }
-    ]
-    // A key Google removed stops it; one Google couldn't be asked about doesn't.
-    google.clientKey = 'gone'
-    expect(await bot({ action: 'done' })).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('Make a new key · Start over') }
-    })
-    google.clientKey = null
-    expect(await bot({ action: 'done' })).toMatchObject({
-      ok: true,
-      result: { run: { state: 'done' }, blocker: null }
+    await write.handler({ botToken: 't', change: { action: 'start', newApp: true } }, context)
+    expect(runs.get(BOT.id)).toMatchObject({
+      id: answered.id,
+      mode: answered.mode,
+      answers: answered.answers,
+      startedAt: answered.startedAt,
+      newApp: true
     })
   })
 })
 
-describe("a bot's Google setup start when Google's app is already here", () => {
-  const signedIn = { email: 'owner@acme.dev', connectedAt: 1, services: [] }
-  const start = () =>
-    dispatcher.dispatch(
-      request('bots.googleSetup.write', {
-        botToken: 'ivy-token',
-        callerSessionId: 'ivy-chat',
-        change: { action: 'start' }
+describe('bots.googleSetup.start from Orca with newApp', () => {
+  it('starts a new-app run in the bot chat, and the old key is not its key', async () => {
+    const { run } = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
+    expect(run).toMatchObject({ state: 'running', mode: 'unchosen', newApp: true })
+    expect(googleSetupKeyBlocker(run, { client: OLD_CLIENT, accounts: [] })).toMatchObject({
+      kind: 'no-key'
+    })
+    expect(state.lines).toEqual([
+      'Setup of a new Google app started by your owner (from settings). Run `orca bot google-setup show` and carry on from there.'
+    ])
+  })
+
+  it('marks a running setup rather than restarting it', async () => {
+    runs.apply(BOT.id, 'owner', { action: 'start' })
+    const answered = runs.apply(BOT.id, 'owner', {
+      action: 'answer',
+      card: 'path',
+      values: ['do-it-for-me']
+    })
+    const { run } = await start.handler({ botId: BOT.id, from: 'chat', newApp: true }, context)
+    expect(run).toMatchObject({
+      id: answered.id,
+      mode: answered.mode,
+      answers: answered.answers,
+      newApp: true
+    })
+    expect(state.lines).toHaveLength(1)
+  })
+
+  it('starts over a running setup that imported the team file', async () => {
+    runs.apply(BOT.id, 'owner', { action: 'start' })
+    const imported = runs.apply(BOT.id, 'owner', {
+      action: 'answer',
+      card: 'path',
+      values: ['import']
+    })
+    const { run } = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
+    expect(run.id).not.toBe(imported.id)
+    expect(run).toMatchObject({ state: 'running', newApp: true, steps: {}, answers: {} })
+  })
+
+  it('returns to a running new-app setup without telling the bot again', async () => {
+    const first = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
+    const again = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
+    expect(again.run).toEqual(first.run)
+    expect(state.lines).toHaveLength(1)
+  })
+})
+
+describe('Stop setup', () => {
+  const waitingOnPublish = (): void => {
+    runs.apply(BOT.id, 'owner', { action: 'start' })
+    runs.apply(BOT.id, 'owner', { action: 'answer', card: 'path', values: ['guide-browser'] })
+    runs.apply(BOT.id, 'bot', { action: 'need-user', step: 'publish', note: 'Click Publish app.' })
+  }
+
+  it('lets the owner stop a run, which locks its step card', async () => {
+    waitingOnPublish()
+    await write.handler({ botId: BOT.id, change: { action: 'cancel' } }, context)
+    const run = runs.get(BOT.id)
+    if (!run) {
+      throw new Error('no run')
+    }
+    expect(run.state).toBe('cancelled')
+    expect(googleSetupStepCardView(run, 'publish', true)).toMatchObject({
+      acts: false,
+      ended: true
+    })
+    expect(googleSetupShownStepStatus(run, 'publish')).toBe('pending')
+    // Unanswered choice cards and the sign-in card take no clicks either.
+    expect(googleSetupChoiceLocked(run, false, false)).toBe(true)
+    expect(googleSetupConnectOpen(run)).toBe(false)
+    // A second Stop (a double click) is a no-op, not an error.
+    await write.handler({ botId: BOT.id, change: { action: 'cancel' } }, context)
+    expect(runs.get(BOT.id)).toEqual(run)
+    await expect(
+      write.handler(
+        { botToken: 't', change: { action: 'step', step: 'client', status: 'active' } },
+        context
+      )
+    ).rejects.toThrow('Your owner stopped this Google setup.')
+    await expect(
+      write.handler(
+        { botToken: 't', change: { action: 'step', step: 'client', status: 'done' } },
+        context
+      )
+    ).rejects.toThrow('Your owner stopped this Google setup.')
+  })
+
+  it('leaves a newer run alone when a late Stop names the one it replaced', async () => {
+    waitingOnPublish()
+    const shown = runs.get(BOT.id)?.id
+    await write.handler({ botId: BOT.id, change: { action: 'cancel', runId: shown } }, context)
+    const fresh = runs.apply(BOT.id, 'owner', { action: 'start' })
+    await write.handler({ botId: BOT.id, change: { action: 'cancel', runId: shown } }, context)
+    expect(runs.get(BOT.id)).toEqual(fresh)
+  })
+
+  it("refuses a bot's stop", async () => {
+    waitingOnPublish()
+    await expect(
+      write.handler({ botToken: 't', change: { action: 'cancel' } }, context)
+    ).rejects.toThrow('Only your owner can stop the setup.')
+    expect(runs.get(BOT.id)?.state).toBe('running')
+  })
+
+  it('drops an agent write when the owner stops and restarts the run during its checks', async () => {
+    waitingOnPublish()
+    runs.apply(BOT.id, 'bot', { action: 'step', step: 'client', status: 'active' })
+    state.duringCheck = () => {
+      state.duringCheck = null
+      runs.apply(BOT.id, 'owner', { action: 'cancel' })
+      runs.apply(BOT.id, 'owner', { action: 'start' })
+    }
+    const stopped = runs.get(BOT.id)?.id
+    await expect(
+      write.handler(
+        { botToken: 't', change: { action: 'step', step: 'client', status: 'done' } },
+        context
+      )
+    ).rejects.toThrow()
+    const fresh = runs.get(BOT.id)
+    expect(fresh?.id).not.toBe(stopped)
+    expect(fresh).toMatchObject({ state: 'running', steps: {} })
+    expect(fresh?.keyMissed).toBeUndefined()
+  })
+})
+
+describe('a step handed to the owner that they finished outside its card', () => {
+  const account = (state: 'ready' | 'api-disabled'): GoogleAccountView => ({
+    email: 'dana@acme.com',
+    status: 'connected',
+    connectedAt: 5,
+    services: [
+      { service: 'gmail', state: 'ready' },
+      { service: 'calendar', state }
+    ]
+  })
+  // A run saved by an earlier build: publish handed to the owner, who published in Google Cloud and
+  // signed in, so only that step's Done holds it.
+  const saveStuckRun = (
+    steps: GoogleSetupRun['steps'] = {},
+    fields: Partial<GoogleSetupRun> = {}
+  ) =>
+    writeFileSync(
+      join(dir, 'runs.json'),
+      JSON.stringify({
+        runs: {
+          [BOT.id]: {
+            id: 'run-1',
+            botId: BOT.id,
+            state: 'running',
+            mode: 'guide-browser',
+            steps: {
+              account: { status: 'done', by: 'user', at: 2 },
+              project: { status: 'done', by: 'user', at: 2 },
+              apis: { status: 'done', by: 'user', at: 2 },
+              branding: { status: 'done', by: 'user', at: 2 },
+              links: { status: 'done', by: 'user', at: 2 },
+              publish: { status: 'needs-user', at: 3, note: 'Press Publish app.' },
+              client: { status: 'done', by: 'user', at: 4 },
+              connect: { status: 'done', by: 'user', at: 5 },
+              ...steps
+            },
+            account: 'dana@acme.com',
+            services: ['gmail', 'calendar'],
+            answers: {},
+            startedAt: 1,
+            updatedAt: 5,
+            revision: 9,
+            ...fields
+          }
+        }
       })
     )
-  const offered = () => offers.map(([sessionId, body]) => [sessionId, body.connectorOffer])
 
-  it('shows the Connect card instead of the setup when an account is signed in and Google is off', async () => {
-    google.client = { clientId: 'c1' }
-    google.accounts = [{ ...signedIn, status: 'connected' }]
-    expect(await start()).toMatchObject({ ok: true, result: { routed: 'offer' } })
-    expect(offered()).toEqual([['ivy-chat', { botId: 'ivy', source: 'google' }]])
-    expect(store.runs?.get('ivy')).toBeNull()
+  it('finishes an old stuck run on the next read once every chosen service is ready', async () => {
+    saveStuckRun()
+    state.accounts = [account('ready')]
+    const result = await read.handler({ botId: BOT.id }, context)
+    expect(result.blocker).toBeNull()
+    expect(runs.get(BOT.id)).toMatchObject({
+      state: 'done',
+      steps: { publish: { status: 'done', note: expect.stringContaining('outside the card') } }
+    })
+    expect(runs.get(BOT.id)?.steps.publish?.by).toBeUndefined()
+    await read.handler({ botId: BOT.id }, context)
+    expect(state.cards).toEqual(['connected'])
   })
 
-  it('says Google is already on, with no card and no run, once it is on and signed in', async () => {
-    bot.google = true
-    google.client = { clientId: 'c1' }
-    google.accounts = [{ ...signedIn, status: 'connected' }]
-    expect(await start()).toMatchObject({ ok: true, result: { routed: 'on' } })
-    expect(offers).toEqual([])
-    expect(store.runs?.get('ivy')).toBeNull()
+  it('records the step but keeps running while another step is left', async () => {
+    saveStuckRun({ links: { status: 'active', at: 2 } }, { personStep: 'publish' })
+    state.accounts = [account('ready')]
+    await read.handler({ botId: BOT.id }, context)
+    const run = runs.get(BOT.id)
+    expect(run).toMatchObject({ state: 'running', steps: { publish: { status: 'done' } } })
+    expect(run?.personStep).toBeUndefined()
+    expect(state.cards).toEqual([])
   })
 
-  it.each([
-    ['nobody signed in', []],
-    ['only a sign-in Google ended', [{ ...signedIn, status: 'reconnect' }]]
-  ])('offers the card to a bot with Google on but %s', async (_case, accounts) => {
-    bot.google = true
-    google.client = { clientId: 'c1' }
-    google.accounts = accounts
-    expect(await start()).toMatchObject({ ok: true, result: { routed: 'offer' } })
-    expect(offered()).toEqual([['ivy-chat', { botId: 'ivy', source: 'google' }]])
+  it('counts a sign-in made outside the Connect card through this setup key', async () => {
+    saveStuckRun({ connect: undefined })
+    state.accounts = [{ ...account('ready'), app: { clientId: OLD_CLIENT.clientId } }]
+    await read.handler({ botId: BOT.id }, context)
+    expect(runs.get(BOT.id)).toMatchObject({
+      state: 'done',
+      steps: { connect: { status: 'done' } }
+    })
   })
 
-  it('starts the full setup when there is no Google app here', async () => {
-    expect(await start()).toMatchObject({ ok: true, result: { run: { botId: 'ivy' } } })
-    expect(offers).toEqual([])
+  it('ignores a sign-in through another app', async () => {
+    saveStuckRun({ connect: undefined })
+    state.accounts = [{ ...account('ready'), app: { clientId: 'other' } }]
+    await read.handler({ botId: BOT.id }, context)
+    expect(runs.get(BOT.id)).toMatchObject({
+      state: 'running',
+      steps: { publish: { status: 'needs-user' } }
+    })
+    expect(runs.get(BOT.id)?.steps.connect).toBeUndefined()
   })
 
-  it('resumes a running setup rather than routing it, so a retry after sign-in keeps its checks', async () => {
-    await start()
-    const running = store.runs?.get('ivy')
-    google.client = { clientId: 'c1' }
-    google.accounts = [{ ...signedIn, status: 'connected' }]
-    expect(await start()).toMatchObject({ ok: true, result: { run: { id: running?.id } } })
-    expect(offers).toEqual([])
+  it("takes the bot's done and a late Done card answer once Orca finished the run", async () => {
+    saveStuckRun()
+    state.accounts = [account('ready')]
+    await read.handler({ botId: BOT.id }, context)
+    const finished = runs.get(BOT.id)
+    const result = await write.handler({ botToken: 't', change: { action: 'done' } }, context)
+    expect(result).toMatchObject({ run: { state: 'done', revision: finished?.revision } })
+    expect(
+      runs.apply(BOT.id, 'owner', { action: 'answer', card: 'step', values: ['done', 'connect'] })
+    ).toEqual(finished)
+    expect(state.cards).toEqual(['connected'])
   })
 
-  it('on a server with no owner window, posts no card', async () => {
-    headless = true
-    google.client = { clientId: 'c1' }
-    google.accounts = [{ ...signedIn, status: 'connected' }]
-    expect(await start()).toMatchObject({ ok: true, result: { routed: 'server' } })
-    expect(offers).toEqual([])
+  it("lets the bot's done finish it", async () => {
+    saveStuckRun()
+    state.accounts = [account('ready')]
+    const result = await write.handler({ botToken: 't', change: { action: 'done' } }, context)
+    expect(result).toMatchObject({ run: { state: 'done' }, blocker: null })
+  })
+
+  it('keeps waiting on the owner while a chosen service is not ready', async () => {
+    saveStuckRun()
+    state.accounts = [account('api-disabled')]
+    await read.handler({ botId: BOT.id }, context)
+    await expect(
+      write.handler({ botToken: 't', change: { action: 'done' } }, context)
+    ).rejects.toThrow()
+    expect(runs.get(BOT.id)).toMatchObject({
+      state: 'running',
+      steps: { publish: { status: 'needs-user' } }
+    })
+  })
+
+  it('never lets the bot record it', () => {
+    saveStuckRun()
+    expect(() =>
+      runs.apply(BOT.id, 'bot', { action: 'finished-outside', steps: ['publish'] })
+    ).toThrow()
   })
 })

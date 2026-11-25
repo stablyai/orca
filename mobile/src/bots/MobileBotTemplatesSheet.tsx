@@ -1,29 +1,38 @@
-// The phone's bot templates, from New bot's "Start from a template": search, category pills, then the
+// The phone's bot templates, from New bot's "Use template": search, category pills, then the
 // desktop page's rows; a tap opens the template's detail, whose Use template… prefills New bot.
 import { useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
-import { Plus, Search } from 'lucide-react-native'
-import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
-import { TextField } from '../components/composer-input/TextField'
-import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { Keyboard, ScrollView, View } from 'react-native'
+import { Plus } from 'lucide-react-native'
+import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
+import { useBottomDrawerModalHostBackClaim } from '../components/bottom-drawer/bottom-drawer-modal-host-scope'
+import { MobileSearchField } from '../components/controls/MobileSearchField'
+import { MobileNoMatchState } from '../components/feedback/MobileStateView'
+import { LIST_ROW_PADDING, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { FilterChip } from '../components/nav-bar/FilterChip'
+import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { useBackClaim } from '../navigation/use-back-claim'
+import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { templateProposal, type BotProposal } from '../../../src/shared/bots/bot-proposal'
 import {
   BOT_TEMPLATE_CATEGORIES,
+  botTemplate,
   type BotTemplate,
   type BotTemplateCategory
 } from '../../../src/shared/bots/bot-templates'
+import { botTemplateGroups, botTemplateMatches } from '../../../src/shared/bots/bot-template-view'
 import {
-  botTemplateGroups,
-  botTemplateMatches,
-  freeBotName
-} from '../../../src/shared/bots/bot-template-view'
+  botTemplateBotName,
+  botTemplateText,
+  botTemplateWord
+} from '../../../src/shared/bots/bot-template-text'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { MobileBotTemplateDetail } from './MobileBotTemplateDetail'
 import { useBotTemplateCategoryLabel } from './mobile-bot-template-labels'
+
+const AVATAR_SIZE = 32
 
 export type BotTemplatePick = { proposal: BotProposal; origin: string } | { blank: true }
 
@@ -39,72 +48,94 @@ export function MobileBotTemplatesSheet(props: {
   const label = useBotTemplateCategoryLabel()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<BotTemplateCategory | null>(null)
-  const [detail, setDetail] = useState<BotTemplate | null>(null)
+  const pager = useOptionPager<string>()
+  const detail = botTemplate(pager.page ?? undefined)
+  // Back returns to the list: inside New bot's modal host Back reaches the host's claims, elsewhere BackHandler.
+  useBottomDrawerModalHostBackClaim(detail ? pager.close : null)
+  useBackClaim(
+    detail
+      ? () => {
+          pager.close()
+          return true
+        }
+      : null
+  )
   const groups = botTemplateGroups(
     (template) =>
       (category === null || template.category === category) &&
-      botTemplateMatches(template, query, label)
+      botTemplateMatches(template, query, label, (english) => botTemplateText(english, t))
   )
   const pick = (template: BotTemplate) => {
-    setDetail(null)
     props.onPick({
-      proposal: templateProposal(template, { name: freeBotName(template.name, props.botNames) }),
+      proposal: templateProposal(template, {
+        name: botTemplateBotName(template, props.botNames, t)
+      }),
       origin: t('bots.templates.originTemplateNamed', 'From the {{template}} template', {
-        template: template.name
+        template: botTemplateWord(template, 'name', t)
       })
     })
   }
   const pill = (value: BotTemplateCategory | null, text: string) => (
-    <Pressable
+    <FilterChip
       key={value ?? 'all'}
+      label={text}
+      active={category === value}
       onPress={() => setCategory(value)}
-      style={[styles.pill, category === value && styles.pillOn]}
-      accessibilityRole="button"
-      accessibilityState={{ selected: category === value }}
-    >
-      <Text style={[styles.pillText, category === value && styles.pillTextOn]}>{text}</Text>
-    </Pressable>
+    />
   )
 
-  return (
-    <>
-      <BottomDrawer
-        visible={props.visible && detail === null}
-        onClose={props.onClose}
-        contentScrollable
+  const main = (
+    <View style={styles.page}>
+      <SheetHeader title={t('bots.templates.title', 'Bot templates')} onClose={props.onClose} />
+      <MobileSearchField
+        value={query}
+        onChangeText={setQuery}
+        placeholder={t('bots.templates.search', 'Search templates')}
+      />
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        style={styles.pills}
+        contentContainerStyle={styles.pillRow}
       >
-        <Text style={styles.title}>{t('bots.templates.title', 'Bot templates')}</Text>
-        <TextField
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t('bots.templates.search', 'Search templates')}
-          accessibilityLabel={t('bots.templates.search', 'Search templates')}
-          leading={<Search size={16} color={colors.textMuted} />}
-          autoCorrect={false}
-        />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pills}>
-          {pill(null, t('bots.templates.allCategories', 'All'))}
-          {BOT_TEMPLATE_CATEGORIES.map((entry) => pill(entry, label(entry)))}
-        </ScrollView>
+        {pill(null, t('bots.templates.allCategories', 'All'))}
+        {BOT_TEMPLATE_CATEGORIES.map((entry) => pill(entry, label(entry)))}
+      </ScrollView>
+      <ScrollView
+        style={styles.page}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         {groups.length === 0 ? (
-          <Text style={styles.empty}>
-            {t('bots.templates.noMatch', 'No templates match “{{query}}”', { query: query.trim() })}
-          </Text>
+          <MobileNoMatchState
+            message={t('bots.templates.noMatch', 'No templates match “{{query}}”', {
+              query: query.trim()
+            })}
+            onClear={() => setQuery('')}
+          />
         ) : null}
         {groups.map((group, index) => (
           <View key={group.category}>
             <SectionHeader first={index === 0} title={label(group.category)} />
-            <ListGroup>
+            <ListGroup separatorInset={LIST_ROW_PADDING + AVATAR_SIZE + spacing.md}>
               {group.templates.map((template) => (
                 <ListRow
                   key={template.id}
                   leading={
-                    <MobileBotAvatar avatar={{ kind: 'mascot', id: template.mascot }} size={32} />
+                    <MobileBotAvatar
+                      avatar={{ kind: 'mascot', id: template.mascot }}
+                      size={AVATAR_SIZE}
+                    />
                   }
-                  title={template.name}
-                  subtitle={template.line}
+                  title={botTemplateWord(template, 'name', t)}
+                  subtitle={botTemplateWord(template, 'line', t)}
                   navigates
-                  onPress={() => setDetail(template)}
+                  onPress={() => {
+                    // The search field stays mounted under the page, so its keyboard would cover the detail.
+                    Keyboard.dismiss()
+                    pager.open(template.id)
+                  }}
                 />
               ))}
             </ListGroup>
@@ -118,38 +149,40 @@ export function MobileBotTemplatesSheet(props: {
             onPress={() => props.onPick({ blank: true })}
           />
         </ListGroup>
-      </BottomDrawer>
-      {detail ? (
-        <MobileBotTemplateDetail
-          template={detail}
-          visible={props.visible}
-          onClose={() => setDetail(null)}
-          onUse={() => pick(detail)}
-        />
-      ) : null}
-    </>
+      </ScrollView>
+    </View>
+  )
+
+  // A fixed height, as the sibling filterable sheets have, so filtering never resizes the sheet.
+  return (
+    <BottomDrawer
+      visible={props.visible}
+      onClose={props.onClose}
+      onAfterClose={pager.forget}
+      fillAvailable
+      contentScrollable={false}
+      dragContentToDismiss={false}
+    >
+      <OptionPager
+        pager={pager}
+        main={main}
+        page={
+          detail ? (
+            <MobileBotTemplateDetail
+              template={detail}
+              onBack={pager.close}
+              onUse={() => pick(detail)}
+            />
+          ) : null
+        }
+        fill
+      />
+    </BottomDrawer>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  pills: { flexGrow: 0, marginTop: spacing.sm },
-  pill: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    marginRight: spacing.xs
-  },
-  pillOn: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
-  pillText: { fontSize: 13, color: colors.textSecondary },
-  pillTextOn: { color: colors.bgBase },
-  empty: { fontSize: 13, color: colors.textMuted, padding: spacing.md, textAlign: 'center' }
+  page: { flex: 1 },
+  pills: { flexGrow: 0, marginTop: spacing.xs },
+  pillRow: { gap: spacing.sm }
 }))

@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import { folderWorkspaceKey } from '../../../src/shared/workspace/identity/workspace-scope'
-import { readHostMethodReply } from '../host-screen/sidebar-feed/host-sidebar-feed-operations'
+import {
+  readHostMethodReply,
+  type HostMethodReply
+} from '../host-screen/sidebar-feed/host-sidebar-feed-operations'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import { readBotAvatarUploads } from './bot-avatar-uploads'
 import { botActivityRead, type SheetActivity, type SheetBot } from './bot-sheet-operations'
 import { mobileBotAvatarSource, type MobileBotAvatarSource } from './host-bot-row-facts'
 import { startHostBotRefresh } from './host-bot-refresh'
@@ -23,6 +25,7 @@ export type RouteBot = {
   avatar: MobileBotAvatarSource
   activity: SheetActivity | null
   activityLoading?: boolean
+  /** Null while the last read landed; why it failed otherwise, empty when nothing said why. */
   activityError?: string | null
   /** The status the host list rolled up for this bot; null until the list has drawn it. */
   listStatus: BotRowStatus | null
@@ -37,6 +40,8 @@ export type RouteBot = {
   /** Counts the reads that may have moved its items (an items or workers notice, reconnect,
    *  foreground), so its item list and page re-read with these only, not with each pane's phase. */
   itemReads: number
+  /** The store key for the route's execution host (`hostBotsKey`). */
+  hostKey: string
 }
 
 /** The notices that can change what an item list or page shows: its items, and their linked workers. */
@@ -62,7 +67,6 @@ export function useRouteBot({
     entry?.bots.find(
       (candidate) => folderWorkspaceKey(candidate.folderWorkspaceId) === worktreeId
     ) ?? null
-  const [uploadUri, setUploadUri] = useState<string | undefined>(undefined)
   const scope = `${hostKey}\n${worktreeId}`
   const [activityScope, setActivityScope] = useState(scope)
   const [activity, setActivity] = useState<SheetActivity | null>(null)
@@ -71,7 +75,6 @@ export function useRouteBot({
   const [reads, setReads] = useState(0)
   const [itemReads, setItemReads] = useState(0)
   const previousScope = useRef(scope)
-  const avatarCache = useRef(new Map<string, string>())
   const readRef = useRef<() => void>(() => {})
   const ready = enabled && client !== null && connState === 'connected'
 
@@ -117,7 +120,7 @@ export function useRouteBot({
       try {
         const listed = await readHostBots(client, hostKey)
         if (listed.kind === 'unreadable' && current) {
-          setActivityError('Couldn’t load activity.')
+          setActivityError('')
         }
         if (listed.kind === 'no-capability') {
           // A host without bots for phones has nothing to refresh.
@@ -136,12 +139,13 @@ export function useRouteBot({
           return
         }
         routeBotId = found.id
-        const [uploads, activityReply] = await Promise.all([
-          readBotAvatarUploads(client, [found], avatarCache.current),
-          botActivityRead.request(client, { botId: found.id }).catch(() => null)
-        ])
-        const answer =
-          activityReply && readHostMethodReply(activityReply, botActivityRead.interpret)
+        const answer = await botActivityRead.request(client, { botId: found.id }).then(
+          (reply) => readHostMethodReply(reply, botActivityRead.interpret),
+          (error: unknown): HostMethodReply<never> => ({
+            kind: 'failed',
+            message: errorText(error)
+          })
+        )
         // A failed read keeps what the sheet shows rather than blanking it.
         if (current) {
           setReads((count) => count + 1)
@@ -149,16 +153,15 @@ export function useRouteBot({
             itemsDue = false
             setItemReads((count) => count + 1)
           }
-          setUploadUri(uploads.get(found.id))
-          if (answer?.kind === 'answered') {
+          if (answer.kind === 'answered') {
             setActivity(answer.value.activity)
           } else {
-            setActivityError('Couldn’t load activity.')
+            setActivityError(answer.kind === 'failed' ? (answer.message ?? '') : '')
           }
         }
-      } catch {
+      } catch (error) {
         if (current) {
-          setActivityError('Couldn’t load activity.')
+          setActivityError(errorText(error))
         }
       } finally {
         if (current) {
@@ -177,10 +180,11 @@ export function useRouteBot({
       appState: AppState,
       refresh: read,
       listed: () => listedBots,
-      // Until the first read finds the bot, every bot's change could be its.
+      // Until the first read finds the bot, every bot's change could be its. `access`: its waiting
+      // access requests re-read with each route read.
       interest: () => ({
         ...(routeBotId ? { botId: routeBotId } : {}),
-        kinds: [...BOT_VIEW_KINDS, 'items']
+        kinds: [...BOT_VIEW_KINDS, 'items', 'access']
       })
     })
     return () => {
@@ -198,7 +202,7 @@ export function useRouteBot({
   }
   return {
     bot,
-    avatar: mobileBotAvatarSource(bot, uploadUri),
+    avatar: mobileBotAvatarSource(bot),
     activity: activityScope === scope ? activity : null,
     activityLoading: activityScope === scope ? activityLoading : ready,
     activityError: activityScope === scope ? activityError : null,
@@ -207,6 +211,11 @@ export function useRouteBot({
     applyBot,
     refresh,
     reads,
-    itemReads
+    itemReads,
+    hostKey
   }
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : ''
 }

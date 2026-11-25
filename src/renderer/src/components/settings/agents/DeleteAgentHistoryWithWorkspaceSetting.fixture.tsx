@@ -36,3 +36,39 @@ export const confirm = defineFixture({
       ?.click()
   }
 })
+
+function mockCodexHistorySize(): void {
+  const call = window.api.runtime.call
+  Object.assign(window.api, {
+    runtime: {
+      ...window.api.runtime,
+      call: async ({ method }: { method: string }) =>
+        method === 'workspaceCleanup.codexHistoryDiskUsage'
+          ? {
+              id: 'fixture',
+              ok: true,
+              result: { bytes: 53_500_000_000, rollouts: 41_905, complete: true }
+            }
+          : call({ method })
+    }
+  })
+}
+
+export const withCodexHistorySize = defineFixture({
+  width: 640,
+  store: { settings },
+  setup: mockCodexHistorySize,
+  render: () => <Setting />
+})
+
+export const codexHistorySizeTooltip = defineFixture({
+  width: 640,
+  store: { settings },
+  setup: mockCodexHistorySize,
+  render: () => <Setting />,
+  // A Tab keydown first: tooltips open on keyboard focus, not on script focus alone.
+  interact: async (frame) => {
+    frame.ownerDocument.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    frame.querySelector<HTMLElement>('[data-slot="tooltip-trigger"]')?.focus()
+  }
+})

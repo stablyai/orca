@@ -4,8 +4,11 @@ import {
 } from '@/lib/window-activity/window-park-visibility'
 import { TERMINAL_WORKTREE_HOT_RETAIN_LIMIT } from '@/components/terminal-pane/parking/retention/terminal-hidden-view-parking'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { useAppStore } from '../../../store/index'
 import type { AppState } from '../../../store/types'
+import {
+  subscribeAppStoreWithStatuses,
+  type RuntimeStatuses
+} from '../../../store/slices/runtime-status/views/runtime-status-owner'
 import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import type {
   ActiveSessionTabsSubscription,
@@ -32,8 +35,12 @@ function streamIdentity(
 }
 
 /** The same identity use-web-session-tabs-sync.ts derives for the selected host. */
-function currentStreamIdentity(state: AppState, environmentId: string): string {
-  const status = state.runtimeStatusByEnvironmentId.get(environmentId)
+function currentStreamIdentity(
+  state: AppState,
+  statuses: RuntimeStatuses,
+  environmentId: string
+): string {
+  const status = statuses.get(environmentId)
   const environment = state.runtimeEnvironments.find(({ id }) => id === environmentId)
   return streamIdentity(
     status?.connectionGeneration ?? 0,
@@ -78,19 +85,21 @@ export function createWarmWorktreeSessionSubscriptions(
   })
 
   // Unselected hosts do not rerun selection effects; invalidate warm streams on re-pair/removal/restart or they retry dead identities.
-  const unsubscribeStore = useAppStore.subscribe((state, previous) => {
-    if (
-      state.runtimeEnvironments === previous.runtimeEnvironments &&
-      state.runtimeStatusByEnvironmentId === previous.runtimeStatusByEnvironmentId
-    ) {
-      return
-    }
-    for (const [key, entry] of entries) {
-      if (currentStreamIdentity(state, entry.environmentId) !== entry.identity) {
-        drop(key)
+  const unsubscribeStore = subscribeAppStoreWithStatuses(
+    (state, previous, statuses, previousStatuses) => {
+      if (
+        state.runtimeEnvironments === previous.runtimeEnvironments &&
+        statuses === previousStatuses
+      ) {
+        return
+      }
+      for (const [key, entry] of entries) {
+        if (currentStreamIdentity(state, statuses, entry.environmentId) !== entry.identity) {
+          drop(key)
+        }
       }
     }
-  })
+  )
 
   return {
     select: (args, runtimeId) => {

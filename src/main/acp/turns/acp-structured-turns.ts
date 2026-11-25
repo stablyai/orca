@@ -96,9 +96,10 @@ export class AcpStructuredTurns {
   interruptForPermissionTransition(): void {
     if (this.active) {
       this.cancelForSteer()
-    } else if (this.deps.lane.openTurnId !== null) {
+    } else if (this.deps.lane.openTurnId !== null && !this.deps.lane.agentTurn.endUnasked()) {
       this.deps.withdrawRequests()
       void this.deps.connection.cancel().catch(() => undefined)
+      this.deps.lane.agentTurn.end('cancelled')
     }
   }
 
@@ -146,6 +147,14 @@ export class AcpStructuredTurns {
       throw new Error(`${this.deps.agentName} is still working`)
     }
     const { lane } = this.deps
+    const agentTurn = lane.openTurnId
+    // A backed-up journal admits the agent turn's end later; adopt the command after it.
+    if (lane.agentTurn.end() && agentTurn !== null) {
+      await lane.whenTurnLeaves(agentTurn)
+      if (this.active || this.ended) {
+        throw new Error(`${this.deps.agentName} is still working`)
+      }
+    }
     const send: Send = {
       clientMessageId: command.clientMessageId,
       prompt: acpCompactPrompt(command.instructions, this.deps.compactCommand),
@@ -211,6 +220,7 @@ export class AcpStructuredTurns {
     // A new message is not covered by a Stop of the agent's own earlier turn.
     this.stopAt = null
     this.active = send
+    lane.agentTurn.end()
     const opened = lane.translator.openPrompt(send.clientMessageId, send.requestedAt)
     lane.apply(opened.events)
     this.run(send, opened.promptId)
@@ -231,9 +241,13 @@ export class AcpStructuredTurns {
         if (this.active !== send) {
           return
         }
-        lane.apply(lane.translator.promptResult(send.clientMessageId, result, this.deps.now()))
+        const cancelled = this.stopAt !== null || this.steerCancelled === send
+        const { clientMessageId } = send
+        lane.apply(
+          lane.translator.promptResult(clientMessageId, result, this.deps.now(), cancelled)
+        )
         this.accept(send.clientMessageId)
-        this.finish(send)
+        this.finishAndRetireIfLost(send, lane.translator.failures.takeSessionLoss())
       },
       (error: unknown) => {
         if (this.active !== send || error instanceof AcpConnectionClosedError) {
@@ -269,12 +283,15 @@ export class AcpStructuredTurns {
     } else {
       lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))
     }
-    const lost = lane.translator.sessionLost(error)
+    this.finishAndRetireIfLost(send, lane.translator.sessionLost(error) ? error : undefined)
+  }
+
+  private finishAndRetireIfLost(send: Send, sessionLoss: Error | undefined): void {
     // Held steers must not reach the dead session.
-    this.ended ||= lost
+    this.ended ||= sessionLoss !== undefined
     this.finish(send)
-    if (lost) {
-      this.deps.sessionLost(error)
+    if (sessionLoss) {
+      this.deps.sessionLost(sessionLoss)
     }
   }
 

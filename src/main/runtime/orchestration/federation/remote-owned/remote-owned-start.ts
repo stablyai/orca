@@ -1,7 +1,13 @@
+import { coordinatorKeepOpenByDefault } from '../../../rpc/methods/orchestration/worker/start/worker-keep-open-default'
+import { botOfSession } from '../../../../bots/bot-session-tabs'
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
-import { ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import {
+  ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY,
+  ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
+} from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { startsInChatLineage } from '../../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
 import { ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS } from '../../../../../shared/orchestration/orchestration-timing-budgets'
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
@@ -18,12 +24,20 @@ import {
   releaseRemotePlacement,
   reserveRemotePlacement
 } from '../../db/remote-owned/remote-placements'
-import { refuseTaskOfClosedPairing } from '../../db/remote-owned/remote-placement-hold'
+import {
+  markRemotePlacementNeverSent,
+  refuseTaskOfClosedPairing
+} from '../../db/remote-owned/remote-placement-hold'
 import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer } from './remote-owned-calls'
 import { resolveCrossMachineChildParent } from '../cross-machine-child-parent'
 import { remoteForwardKey } from './remote-forward-caller'
-import { errorData, inServerTerms, serverNeverAnswered } from './remote-owned-answers'
+import {
+  errorData,
+  failedBeforeSending,
+  inServerTerms,
+  serverNeverAnswered
+} from './remote-owned-answers'
 
 type StartParams = z.infer<typeof WorkerStartParams>
 type StartContext = Pick<
@@ -36,10 +50,18 @@ export async function serverOwnsPlacedWorkers(
   runtime: OrcaRuntimeService,
   server: OrchestrationWorkerServer
 ): Promise<boolean> {
+  return serverSupports(runtime, server, ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY)
+}
+
+async function serverSupports(
+  runtime: OrcaRuntimeService,
+  server: OrchestrationWorkerServer,
+  capability: string
+): Promise<boolean> {
   const decision = await getOrchestrationPeerCapabilityCache(runtime).resolve({
     peerFingerprint: server.peerFingerprint,
     expectedRuntimeEpoch: null,
-    capability: ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
+    capability,
     probe: async () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: status.get answers RuntimeStatus; the cache reads only its capabilities and runtime ID.
       (await runtime.callOrchestrationWorkerServer(
@@ -52,6 +74,37 @@ export async function serverOwnsPlacedWorkers(
       )) as RuntimeStatus
   })
   return decision.supported
+}
+
+/** The lineage a start carries to the server: only when its caller is in one and the server takes it.
+ *  An older server would ignore it and keep its own settings, as before. */
+export async function forwardedChatLineage(
+  runtime: OrcaRuntimeService,
+  db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
+  params: StartParams,
+  caller: StartContext['orchestrationCaller'],
+  server: OrchestrationWorkerServer
+): Promise<{ chatLineage?: true }> {
+  return startsInChatLineage(runtime, db, params, caller) &&
+    (await serverSupports(runtime, server, ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY))
+    ? { chatLineage: true }
+    : {}
+}
+
+/** The caller's options a server's start takes; this Orca's own fields, and a lineage claim the
+ *  caller made itself, stay here. */
+export function serverStartOptions(params: StartParams) {
+  const {
+    from: _from,
+    run: _run,
+    on: _on,
+    task: _task,
+    deps: _deps,
+    parent: _parent,
+    chatLineage: _chatLineage,
+    ...options
+  } = params
+  return options
 }
 
 /** One ID for the Task here and the start there, from the start's retry key, so a retry finds both. */
@@ -85,10 +138,8 @@ export async function startRemoteOwnedWorker(
       { effectsApplied: false }
     )
   }
-  const { coordinator, bindRun, taskDeps, existingTask, withRun } = await prepareWorkerStart(
-    params,
-    ctx
-  )
+  const { coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
+    await prepareWorkerStart(params, ctx)
   const db = runtime.getOrchestrationDb()
   const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
   // This caller's workspace is here, so a server's new-child nests under it across machines.
@@ -96,6 +147,7 @@ export async function startRemoteOwnedWorker(
     params.worktree === 'new-child'
       ? await resolveCrossMachineChildParent(runtime, params.from, ctx.orchestrationCaller)
       : undefined
+  const lineage = await forwardedChatLineage(runtime, db, params, ctx.orchestrationCaller, server)
   const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
@@ -106,7 +158,7 @@ export async function startRemoteOwnedWorker(
   const link = openRemoteRunLink(db, run.id, server, (handle, type) =>
     runtime.notifyMessageArrived(handle, type)
   )
-  const { task } = reserveRemotePlacement(db, {
+  const { task, nothingSent } = reserveRemotePlacement(db, {
     link,
     taskId,
     requestKey: forward.key,
@@ -125,15 +177,18 @@ export async function startRemoteOwnedWorker(
   })
   // Its queue has a reader from the start, so mail sent before the answer still comes home.
   runtime.ensureOrchestrationFederationRelay(run.id)
-  const {
-    from: _from,
-    run: _run,
-    on: _on,
-    task: _task,
-    deps: _deps,
-    parent: _parent,
-    ...options
-  } = params
+  const options = serverStartOptions(params)
+  // Read before the wait: the server cannot tell a bot's worker from a person's, and the
+  // coordinator's own Dispatch may settle while the server starts this one.
+  const keepOpenByDefault = coordinatorKeepOpenByDefault(
+    db,
+    params.worktree,
+    {
+      orcaSessionId: coordinator?.orcaSessionId ?? null,
+      creatorDispatchId: helperCreator?.id ?? null
+    },
+    (sessionId) => botOfSession(runtime.bots, sessionId) !== null
+  )
   const startCard = prepareWorkerStartCard(runtime, ctx.orchestrationCaller)
   let receipt: unknown
   try {
@@ -146,7 +201,8 @@ export async function startRemoteOwnedWorker(
           ? { task: task.id }
           : { spec: task.spec, ...(task.task_title ? { taskTitle: task.task_title } : {}) }),
         adoptTaskId: task.id,
-        ...(crossStoreParent ? { crossStoreParent } : {})
+        ...(crossStoreParent ? { crossStoreParent } : {}),
+        ...lineage
       },
       timeoutMs: budgets.attachDeadlineMs,
       requestId: forward.key,
@@ -158,7 +214,8 @@ export async function startRemoteOwnedWorker(
       taskId,
       error,
       key: forward.key,
-      createdByStart: !existingTask
+      createdByStart: !existingTask,
+      nothingSent
     })
     throw inServerTerms(error, { server: server.name, forward })
   }
@@ -188,8 +245,7 @@ export async function startRemoteOwnedWorker(
       dispatchId: started.data.dispatchId,
       taskId: task.id,
       workerAddress: `dispatch:${started.data.dispatchId}`,
-      task: task.spec,
-      agent
+      task: task.spec
     })
   }
   const answer = inServerTerms(receipt, { server: server.name, forward })
@@ -201,6 +257,7 @@ export async function startRemoteOwnedWorker(
           taskId,
           runId: run.id,
           runCreated: bindRun().created,
+          keepOpenByDefault,
           ...(started.data?.run ? { serverRunId: started.data.run.id } : {})
         }
       : answer
@@ -216,6 +273,7 @@ function settleUnansweredStart(
     key: string
     error: unknown
     createdByStart: boolean
+    nothingSent: boolean
   }
 ): void {
   const db = runtime.getOrchestrationDb()
@@ -235,5 +293,7 @@ function settleUnansweredStart(
   } else if (!outcomeUnknown) {
     // The server's ordinary start refused it, which a start that had launched answers with a receipt.
     releaseRemotePlacement(db, start.taskId, start.key, { createdByStart: start.createdByStart })
+  } else if (start.nothingSent && failedBeforeSending(start.error)) {
+    markRemotePlacementNeverSent(db, start.taskId, start.key)
   }
 }

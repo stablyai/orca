@@ -1,100 +1,102 @@
 // @vitest-environment happy-dom
-
-import '@testing-library/jest-dom/vitest'
-
+import { act } from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { botRowLineAge, BotRowLineView } from './BotRowActivityLine'
+import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
+import { i18n } from '@/i18n/i18n'
+import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
+import type { BotRowLine } from './bot-row-activity-line'
+import { BotHoverLatestLine, BotRowLineText } from './BotRowActivityLine'
 
-vi.mock('@/store', () => ({ useAppStore: () => null }))
-vi.mock('@/lib/bot-catalog', () => ({
-  useBotWaits: () => [],
-  useListedBotItemsNeedingOwner: () => null
-}))
+// React Compiler memoizes these components on their props, so a language switch must reach their
+// words through useTranslate() rather than module translate(); each case keeps one mount across it.
+// A sentinel catalog stands in for the real one, so only the switch is under test, not its copy.
 
-afterEach(cleanup)
-
-const NOW = 10 * 60 * 60_000
-const ACTIVITY = {
-  kind: 'activity',
-  place: null,
-  text: 'I posted the message to Bob',
-  at: NOW - 3 * 60 * 60_000
-} as const
-
-describe('BotRowLineView', () => {
-  it('ends with the fold toggle, not the time', () => {
-    render(
-      <BotRowLineView
-        line={ACTIVITY}
-        unread={false}
-        now={NOW}
-        trailing={<button type="button">fold</button>}
-      />
-    )
-    const text = screen.getByText('I posted the message to Bob')
-    const toggle = screen.getByRole('button', { name: 'fold' })
-    expect(text.parentElement?.lastElementChild).toBe(toggle)
-    expect(screen.queryByText('3h')).toBeNull()
-  })
-
-  it('keeps the fold toggle when there is nothing to say', () => {
-    render(
-      <BotRowLineView
-        line={null}
-        unread={false}
-        now={NOW}
-        trailing={<button type="button">fold</button>}
-      />
-    )
-    expect(screen.getByRole('button', { name: 'fold' })).toBeInTheDocument()
-  })
-
-  it('says what the bot is for when it has no activity', () => {
-    render(<BotRowLineView line={null} fallback="Runs the team's week" unread={false} now={NOW} />)
-    expect(screen.getByText("Runs the team's week")).toBeInTheDocument()
-  })
-
-  it('gives its purpose back to new activity', () => {
-    const { rerender } = render(
-      <BotRowLineView line={null} fallback="Runs the team's week" unread={false} now={NOW} />
-    )
-    expect(screen.getByText("Runs the team's week")).toBeInTheDocument()
-    rerender(
-      <BotRowLineView line={ACTIVITY} fallback="Runs the team's week" unread={false} now={NOW} />
-    )
-    expect(screen.getByText('I posted the message to Bob')).toBeInTheDocument()
-    expect(screen.queryByText("Runs the team's week")).toBeNull()
-  })
+beforeAll(() => {
+  i18n.addResourceBundle(
+    'zh',
+    'translation',
+    {
+      bots: {
+        panel: {
+          needYou_other: 'switched need {{count}}',
+          working_other: 'switched work {{count}}'
+        },
+        row: { replyingIn: 'switched reply {{place}}' }
+      }
+    },
+    false,
+    true
+  )
 })
 
-describe('botRowLineAge', () => {
-  it('ages activity only', () => {
-    expect(botRowLineAge(ACTIVITY, NOW)).toBe('3h')
-    expect(botRowLineAge({ ...ACTIVITY, at: null }, NOW)).toBeNull()
-    expect(botRowLineAge({ kind: 'paused' }, NOW)).toBeNull()
-    expect(botRowLineAge(null, NOW)).toBeNull()
-  })
+afterAll(() => {
+  i18n.removeResourceBundle('zh', 'translation')
+})
 
-  it('ends with the Up next count, then the fold toggle', () => {
-    render(
-      <BotRowLineView
-        line={ACTIVITY}
-        unread={false}
-        now={NOW}
-        trailing={
-          <>
-            <span>up next</span>
-            <button type="button">fold</button>
-          </>
-        }
-      />
-    )
-    const row = screen.getByText('I posted the message to Bob').parentElement!
-    expect([...row.children].map((child) => child.textContent)).toEqual([
-      'I posted the message to Bob',
-      'up next',
-      'fold'
-    ])
+afterEach(async () => {
+  cleanup()
+  await i18n.changeLanguage('en')
+  vi.unstubAllGlobals()
+})
+
+async function switchToZh(): Promise<void> {
+  await act(async () => {
+    await i18n.changeLanguage('zh')
   })
+}
+
+function renderInScope(node: React.ReactNode): void {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  render(<TranslationScopeProvider>{node}</TranslationScopeProvider>)
+}
+
+it.each<[string, BotRowLine, string, string]>([
+  ['needs you', { kind: 'needYouElsewhere', count: 2 }, '2 need you', 'switched need 2'],
+  ['working', { kind: 'workingElsewhere', count: 3 }, '3 working', 'switched work 3'],
+  [
+    'replying in a place',
+    { kind: 'replying', place: { label: '#general', source: 'slack' } },
+    'Replying in #general',
+    'switched reply #general'
+  ]
+])(
+  'the row line (%s) follows a language switch without remounting',
+  async (_, line, before, after) => {
+    renderInScope(
+      <p data-testid="line">
+        <BotRowLineText line={line} now={0} />
+      </p>
+    )
+    expect(screen.getByTestId('line').textContent).toBe(before)
+
+    await switchToZh()
+
+    expect(screen.getByTestId('line').textContent).toBe(after)
+  }
+)
+
+it('the hover card line follows a language switch without remounting', async () => {
+  renderInScope(<BotHoverLatestLine line={{ kind: 'needYouElsewhere', count: 2 }} now={0} />)
+  expect(screen.getByText('2 need you')).toBeTruthy()
+
+  await switchToZh()
+
+  expect(screen.getByText('switched need 2')).toBeTruthy()
+})
+
+it('the hover card age follows a language switch without remounting', async () => {
+  const now = 10 * 60_000
+  renderInScope(
+    <p data-testid="hover">
+      <BotHoverLatestLine
+        line={{ kind: 'activity', place: null, text: 'Shipped it', at: now - 5 * 60_000 }}
+        now={now}
+      />
+    </p>
+  )
+  expect(screen.getByTestId('hover').textContent).toBe('5 minutes ago · Shipped it')
+
+  await switchToZh()
+
+  expect(screen.getByTestId('hover').textContent).toBe('5分钟前 · Shipped it')
 })

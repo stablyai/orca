@@ -1,12 +1,8 @@
 import { forgetBotToolsEpoch } from '../../../bots/bot-tools-revision'
 import { join } from 'node:path'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import {
-  botToolsSupported,
-  type BotOwnTool,
-  type BotToolServer
-} from '../../../../shared/bot-tools'
-import type { Bot } from '../../../../shared/bot-types'
+import type { BotOwnTool, BotToolServer } from '../../../../shared/bot-tools'
+import type { Bot, BotAgent } from '../../../../shared/bot-types'
 import {
   BotToolAdd,
   BotToolUpdate,
@@ -19,6 +15,7 @@ import { botHomeFolder } from '../../../bots/bot-home'
 import { forgetBotToolCredentials } from '../../../bots/bot-tool-credentials'
 import { revokeBotToolSignIns } from '../../../bots/tool-oauth/bot-tool-oauth-revoke'
 import { botOwnTool, readBotToolServers } from '../../../bots/bot-tools-file'
+import { isMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
 import {
   addSortedBotTool,
   BOT_TOOL_SIGN_IN_NEEDS_UPDATE,
@@ -32,9 +29,11 @@ import { botToolRelay } from '../../../bots/tool-relay/bot-tool-relay'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import {
   botToolProblems,
+  hasBotToolsCli,
   listBotTools,
   updateBotTool,
-  type BotToolsCli
+  type BotToolsFolder,
+  type BotToolsHome
 } from '../../../bots/bot-tools-host'
 import { forgetBotTools, removeBotTool } from '../../../bots/bot-tools-removal'
 import {
@@ -60,11 +59,29 @@ import { refuseFromLook, targetBot } from './bots-tools-target'
 const botToolSignInFolder = (botId: string): string =>
   join(getProfileUserDataPath(), 'bot-tool-sign-in', botId)
 
-/** The agent CLI and account the bot's next turn runs on this host. */
-export async function botToolsCli(runtime: OrcaRuntimeService, bot: Bot): Promise<BotToolsCli> {
+/** The bot's tools on this host, with the agent CLI and account its next turn runs for Claude Code and Codex. */
+export async function botToolsHome(runtime: OrcaRuntimeService, bot: Bot): Promise<BotToolsHome> {
   const agent = bot.agent
-  if (!botToolsSupported(agent)) {
-    throw new InvalidArgumentError('Only Claude Code and Codex bots have tools in Orca yet.')
+  return toolsHomeFor(runtime, agent, {
+    botId: bot.id,
+    folder: botHomeFolder(bot),
+    signInFolder: botToolSignInFolder(bot.id),
+    hostMcpServers: bot.hostMcpServers === true,
+    otherBotFolders: runtime.bots
+      .list()
+      .filter((other) => other.id !== bot.id && other.agent === agent)
+      .map((other) => botHomeFolder(other))
+  })
+}
+
+/** A tools folder with the agent CLI and account a new chat runs for Claude Code and Codex. */
+export async function toolsHomeFor(
+  runtime: OrcaRuntimeService,
+  agent: BotAgent,
+  folder: BotToolsFolder
+): Promise<BotToolsHome> {
+  if (agent !== 'claude' && agent !== 'codex') {
+    return { ...folder, agent }
   }
   const release = new AbortController()
   try {
@@ -78,18 +95,12 @@ export async function botToolsCli(runtime: OrcaRuntimeService, bot: Bot): Promis
     // As a chat's launch pins it: only a non-default home; the CLI then reads the config dir its env names.
     const cliEnv = agent === 'claude' ? { ...env, ...claudeConfigDirEnvPatch(home, { env }) } : env
     return {
-      botId: bot.id,
+      ...folder,
       agent,
-      folder: botHomeFolder(bot),
-      signInFolder: botToolSignInFolder(bot.id),
       command,
       prefixArgs: [...prefixArgs],
       env: cliEnv,
-      accountHome: agent === 'claude' ? cliEnv.CLAUDE_CONFIG_DIR?.trim() || null : home,
-      otherBotFolders: runtime.bots
-        .list()
-        .filter((other) => other.id !== bot.id && other.agent === agent)
-        .map((other) => botHomeFolder(other))
+      accountHome: agent === 'claude' ? cliEnv.CLAUDE_CONFIG_DIR?.trim() || null : home
     }
   } finally {
     release.abort()
@@ -103,9 +114,6 @@ const scrubs = new WeakMap<OrcaRuntimeService, ClaudeMirrorScrubs>()
  * account its CLI runs on now, to the credential store; throws when that can't be done.
  */
 export async function scrubBotToolSecrets(runtime: OrcaRuntimeService, bot: Bot): Promise<void> {
-  if (!botToolsSupported(bot.agent)) {
-    return
-  }
   await readBotToolServers(botHomeFolder(bot))
   if (bot.agent !== 'claude' || !existsSync(botToolSignInFolder(bot.id))) {
     return
@@ -115,20 +123,21 @@ export async function scrubBotToolSecrets(runtime: OrcaRuntimeService, bot: Bot)
     state = new ClaudeMirrorScrubs()
     scrubs.set(runtime, state)
   }
-  await state.ensure(await botToolsCli(runtime, bot))
+  const home = await botToolsHome(runtime, bot)
+  if (hasBotToolsCli(home)) {
+    await state.ensure(home)
+  }
 }
 
 /** Signs a bot's tools out before the bot is deleted; a CLI that can't run doesn't stop the delete. */
 export async function forgetDeletedBotTools(runtime: OrcaRuntimeService, bot: Bot): Promise<void> {
   forgetBotToolSignIns(bot.id)
   forgetBotToolsEpoch(botHomeFolder(bot))
-  if (botToolsSupported(bot.agent)) {
-    await botToolsCli(runtime, bot)
-      .then(forgetBotTools)
-      .catch((error: unknown) =>
-        console.warn("[bots] signing out a deleted bot's tools failed:", error)
-      )
-  }
+  await botToolsHome(runtime, bot)
+    .then(forgetBotTools)
+    .catch((error: unknown) =>
+      console.warn("[bots] signing out a deleted bot's tools failed:", error)
+    )
   // Whether or not its CLI could run, the bot's token and saved values go with it.
   botToolRelay.revoke(bot.id)
   revokeBotToolSignIns(forgetBotToolCredentials(botHomeFolder(bot)))
@@ -147,9 +156,10 @@ export const BOT_TOOLS_METHODS = [
     params: BotToolsList,
     handler: async (params, context) => {
       const bot = targetBot(params, context)
-      return botToolsSupported(bot.agent)
-        ? await listBotTools(await botToolsCli(context.runtime, bot))
-        : { agent: bot.agent, unsupported: true as const }
+      const tools = await listBotTools(await botToolsHome(context.runtime, bot))
+      return isMcpServersFeatureEnabled()
+        ? { ...tools, hostMcpServers: bot.hostMcpServers === true }
+        : tools
     }
   }),
   defineMethod({
@@ -164,7 +174,7 @@ export const BOT_TOOLS_METHODS = [
         `${bot.agent}\0${remote ? 'remote' : 'all'}`,
         async (signal) => {
           await scrubBotToolSecrets(context.runtime, bot)
-          return botToolProblems(await botToolsCli(context.runtime, bot), { remote, signal })
+          return botToolProblems(await botToolsHome(context.runtime, bot), { remote, signal })
         }
       )
       return { problems }
@@ -190,7 +200,7 @@ export const BOT_TOOLS_METHODS = [
         'config' in params
           ? resolveBotToolInput(params.config)
           : botToolServerOf(params.source, params.name)
-      const cli = await botToolsCli(context.runtime, bot)
+      const cli = await botToolsHome(context.runtime, bot)
       const tool = await addSortedBotTool(cli, given, context.signal)
       // Added from the bot's chat: the chat shows it, with its sign-in and a way to remove it.
       const caller = context.pairedDeviceId === undefined ? params.callerSessionId : undefined
@@ -212,7 +222,7 @@ export const BOT_TOOLS_METHODS = [
     permission: 'workspace',
     params: BotToolsList,
     handler: async (params, context) => {
-      const cli = await botToolsCli(context.runtime, targetBot(params, context))
+      const cli = await botToolsHome(context.runtime, targetBot(params, context))
       return { folder: cli.folder, platform: process.platform, agent: cli.agent }
     }
   }),
@@ -222,7 +232,7 @@ export const BOT_TOOLS_METHODS = [
     params: BotToolTarget,
     handler: async (params, context) =>
       readBotToolDetails(
-        (await botToolsCli(context.runtime, targetBot(params, context))).folder,
+        (await botToolsHome(context.runtime, targetBot(params, context))).folder,
         params.name
       )
   }),
@@ -233,7 +243,7 @@ export const BOT_TOOLS_METHODS = [
     handler: async (params, context) => {
       refuseFromLook(params, context)
       const bot = targetBot(params, context)
-      const cli = await botToolsCli(context.runtime, bot)
+      const cli = await botToolsHome(context.runtime, bot)
       const server = await updateBotTool(cli, params.name, params.version, params.config)
       forgetBotToolSignIns(bot.id, params.name)
       return { tool: botOwnTool(server, cli.folder) }
@@ -246,7 +256,7 @@ export const BOT_TOOLS_METHODS = [
     handler: async (params, context) => {
       refuseFromLook(params, context)
       const bot = targetBot(params, context)
-      await removeBotTool(await botToolsCli(context.runtime, bot), params.name)
+      await removeBotTool(await botToolsHome(context.runtime, bot), params.name)
       forgetBotToolSignIns(bot.id, params.name)
       return { removed: params.name }
     }
@@ -261,7 +271,7 @@ export const BOT_TOOLS_METHODS = [
       const owned = await connectOwnedBotTool(botHomeFolder(bot), params.name, context)
       return (
         owned ??
-        (await connectBotTool(bot.id, params.name, () => botToolsCli(context.runtime, bot)))
+        (await connectBotTool(bot.id, params.name, () => botToolsHome(context.runtime, bot)))
       )
     }
   }),
@@ -276,7 +286,7 @@ export const BOT_TOOLS_METHODS = [
         throw new Error(BOT_TOOL_SIGN_IN_NEEDS_UPDATE)
       }
       await finishBotToolSignIn(
-        await botToolsCli(context.runtime, bot),
+        await botToolsHome(context.runtime, bot),
         params.name,
         params.address
       )

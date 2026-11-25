@@ -1,13 +1,8 @@
-import { z } from 'zod'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
-import type {
-  AcpCompactionReply,
-  AcpDialect,
-  AcpDialectNotification,
-  AcpRequestPresentation
-} from './acp-dialect'
+import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
+import type { AcpCompactionReply, AcpDialect, AcpRequestPresentation } from './acp-dialect'
 
 const TOOL_TITLE = /^([a-z][a-z0-9_]*)(?::\s+([\s\S]+)|$)/u
 const COMMAND_PREVIEW = /^\$ ([\s\S]+)$/u
@@ -76,28 +71,6 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
-// Reads only these fields, so the many tool updates of a turn are rejected at the literal.
-const replyTextSchema = z.object({
-  update: z.object({
-    sessionUpdate: z.literal('agent_message_chunk'),
-    content: z.object({ type: z.literal('text'), text: z.string() })
-  })
-})
-
-// A signed-out prompt replies with this sentence, then fails with a generic admitted_turn_failed.
-function notification(method: string, params: unknown): AcpDialectNotification | undefined {
-  const text =
-    method === 'session/update'
-      ? replyTextSchema.safeParse(params).data?.update.content.text
-      : undefined
-  return text && NO_PROVIDER.test(text)
-    ? {
-        disposition: 'map',
-        failure: { stopReason: 'error', notSignedIn: true, failureDetail: text.trim() }
-      }
-    : undefined
-}
-
 function compactionReply(text: string): AcpCompactionReply | undefined {
   const reply = text.trim()
   return COMPRESSION_SKIPPED.test(reply)
@@ -119,7 +92,9 @@ export const HERMES_ACP_DIALECT: AcpDialect = {
   normalizeToolUpdate,
   // Titles are `<tool>: <preview>`; the preview is the call's input, not its name.
   toolName: (update) => (update.title ? TOOL_TITLE.exec(update.title)?.[1] : undefined),
-  notification,
+  // A signed-out prompt replies with this sentence, then fails with a generic admitted_turn_failed.
+  notification: (method, params) =>
+    acpReplyNoticeFailure(method, params, NO_PROVIDER, { notSignedIn: true }),
   compactCommand: '/compress',
   // Orca's /compact runs /compress, and /reset would empty the session under the chat's transcript.
   withheldCommands: ['compress', 'reset'],

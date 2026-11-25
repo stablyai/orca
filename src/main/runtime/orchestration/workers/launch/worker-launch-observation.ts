@@ -23,6 +23,11 @@ export function workerLaunchAgent(value: unknown): string | null {
     : null
 }
 
+export function workerLaunchModel(value: unknown): string | null {
+  const parsed = launch.safeParse(value)
+  return parsed.success ? parsed.data.effective?.model || null : null
+}
+
 function startOptions(json: string): Record<string, unknown> {
   try {
     return object.parse(JSON.parse(json))

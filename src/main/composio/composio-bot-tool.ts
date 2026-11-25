@@ -7,7 +7,7 @@ import {
   composioUserOfBot
 } from '../../shared/composio/composio-apps'
 import { freeBotToolName, type BotToolServer } from '../../shared/bot-tools'
-import { addBotTool, inheritedTools, type BotToolsCli } from '../bots/bot-tools-host'
+import { addBotTool, inheritedTools, type BotToolsHome } from '../bots/bot-tools-host'
 import { changeBotToolServers, readBotToolServers } from '../bots/bot-tools-file'
 import {
   newBotToolCredentialId,
@@ -52,7 +52,7 @@ export async function ensureComposioTool({
   botId,
   call
 }: {
-  cli: BotToolsCli
+  cli: BotToolsHome
   botId: string
   call: <T>(work: (api: ComposioApi) => Promise<T>) => Promise<T>
 }): Promise<{ sessionId: string; changed: boolean }> {

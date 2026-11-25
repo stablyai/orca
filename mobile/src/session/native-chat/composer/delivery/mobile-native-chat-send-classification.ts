@@ -9,7 +9,7 @@ import {
   type NativeChatSendClassification
 } from '../../../../../../src/shared/native-chat/input/commands/native-chat-slash-commands'
 
-// Terminal mobile chat lacks desktop-owned command answers and reply rows.
+// Terminal mobile chat lacks desktop-owned composer answers.
 
 export function classifyMobileNativeChatSend(
   agent: string | null,

@@ -5,6 +5,7 @@ import { isBinaryBuffer } from '../file-preview/binary-buffer'
 import { isPathInsideOrEqual } from '../file-access/cross-platform-path'
 import { IMAGE_FILE_MIME_TYPES } from '../file-preview/image-mime-types'
 import { FONT_FILE_MIME_TYPES } from '../file-preview/font-file-extensions'
+import { MEDIA_FILE_MIME_TYPES } from '../file-preview/media-mime-types'
 import type { RuntimeFileReadChunkResult } from '../file-content/runtime-file-read'
 import {
   NodeFileReadTooLargeError,
@@ -28,12 +29,17 @@ export type DocPreviewFileAccessRequest = DocPreviewFileTarget & {
   maxBinaryBytes: number
 }
 
+export type DocPreviewFileChunkRequest = DocPreviewFileTarget & {
+  /** Only a reader that streams media by range asks for it; whole-file pagers keep the size caps. */
+  media?: boolean
+}
+
 /** One range of a preview file, with the opened file's version so a reader can refuse a rewrite mid-read. */
 export type DocPreviewFileChunk = RuntimeFileReadChunkResult & {
   size: number
   mtimeMs: number
   ctimeMs: number
-  /** Set for the image, font and PDF types a whole read serves as base64; text otherwise. */
+  /** Set for the image, font and PDF types a whole read serves as base64, and for audio/video a media reader asks for; text otherwise. */
   mimeType?: string
 }
 
@@ -156,16 +162,23 @@ export async function readAuthorizedDocPreviewFile(
   }
 }
 
-/** A range of a file too large for one reply, under the same authorization and size caps as a whole read. */
+/** A range of a file too large for one reply, under a whole read's authorization and size caps (media readers skip the caps). */
 export async function readAuthorizedDocPreviewFileChunk(
-  request: DocPreviewFileTarget,
+  request: DocPreviewFileChunkRequest,
   offset: number,
   length: number
 ): Promise<DocPreviewFileChunk> {
   const { handle, canonicalTarget, stats } = await openAuthorizedDocPreviewTarget(request)
   try {
-    const mimeType = docPreviewBinaryMimeType(canonicalTarget)
-    if (stats.size > (mimeType ? DOC_PREVIEW_MAX_BINARY_BYTES : DOC_PREVIEW_MAX_TEXT_BYTES)) {
+    // Why: media streams by range, so no size cap applies; whole reads and pagers still refuse it.
+    const mediaMimeType = request.media
+      ? MEDIA_FILE_MIME_TYPES[extname(canonicalTarget).toLowerCase()]
+      : undefined
+    const mimeType = mediaMimeType ?? docPreviewBinaryMimeType(canonicalTarget)
+    if (
+      !mediaMimeType &&
+      stats.size > (mimeType ? DOC_PREVIEW_MAX_BINARY_BYTES : DOC_PREVIEW_MAX_TEXT_BYTES)
+    ) {
       throw new Error('file_too_large')
     }
     const buffer = Buffer.alloc(Math.min(length, Math.max(0, stats.size - offset)))

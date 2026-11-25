@@ -1,7 +1,7 @@
 import type { LibprocProcessRow } from './libproc-addon'
 
 export const SIDL = 1
-const SSTOP = 4
+export const SSTOP = 4
 export const SZOMB = 5
 const P_CONTROLT = 0x2
 const P_PPWAIT = 0x10

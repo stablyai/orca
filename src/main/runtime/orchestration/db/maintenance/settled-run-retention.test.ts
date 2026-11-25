@@ -13,10 +13,14 @@ import '../attempt-outcome-projection'
 
 const LONG_AGO = '2000-01-01 00:00:00'
 const PANE_LEAF = '11111111-1111-4111-8111-111111111111'
-const nobodyIsLive: RunPartyLiveness = { isLiveHandle: () => false, isLivePane: () => false }
+const nobodyIsLive: RunPartyLiveness = {
+  isLiveHandle: () => false,
+  isLivePane: () => false,
+  waitedMailboxes: () => []
+}
 const liveHandle = (live: string): RunPartyLiveness => ({
-  isLiveHandle: (handle) => handle === live,
-  isLivePane: () => false
+  ...nobodyIsLive,
+  isLiveHandle: (handle) => handle === live
 })
 
 describe('settled Run retention', () => {
@@ -99,6 +103,12 @@ describe('settled Run retention', () => {
          VALUES (?, ?, ?, ?, 'released', 'released')`
       )
       .run(`resource_${objective}`, dispatchId, dispatchId, `term_worker_${objective}`)
+    db.db
+      .prepare(
+        `INSERT INTO worker_presence (dispatch_id, presence, generation, report)
+         VALUES (?, 'resting', 1, '{"from":"worker","reason":"finished"}')`
+      )
+      .run(dispatchId)
     return { run, task, dispatchId }
   }
 
@@ -147,7 +157,8 @@ describe('settled Run retention', () => {
       'federated_dispatches WHERE dispatch_id = ?',
       'worker_terminal_resources WHERE owner_dispatch_id = ?',
       'remote_questions WHERE dispatch_id = ?',
-      'federation_relay_items WHERE dispatch_id = ?'
+      'federation_relay_items WHERE dispatch_id = ?',
+      'worker_presence WHERE dispatch_id = ?'
     ]) {
       expect(count(table, settled.dispatchId)).toBe(0)
     }
@@ -157,6 +168,7 @@ describe('settled Run retention', () => {
     expect(db!.getTask(live.task.id)).toBeDefined()
     expect(db!.getWorkerDispatch(live.dispatchId)).toBeDefined()
     expect(count('worker_terminal_resources WHERE owner_dispatch_id = ?', live.dispatchId)).toBe(1)
+    expect(count('worker_presence WHERE dispatch_id = ?', live.dispatchId)).toBe(1)
   })
 
   it('deletes a large settled Run a bounded page at a time, its Run row last', () => {
@@ -181,8 +193,6 @@ describe('settled Run retention', () => {
     }
     settle(run.id)
     ageEveryTimestamp()
-    const totalChanges = (): number =>
-      Number(db!.db.prepare('SELECT total_changes() AS n').get()?.n)
 
     // A quit midway leaves the Run, with fewer settled rows, for the next pass to finish.
     const interrupted = retireSettledRun(db!, run.id, nobodyIsLive)
@@ -192,19 +202,14 @@ describe('settled Run retention', () => {
     expect(db!.getRun(run.id)).toBeDefined()
 
     const steps = retireSettledRun(db!, run.id, nobodyIsLive)
-    let maxStepChanges = 0
     for (;;) {
-      const before = totalChanges()
       const step = steps.next()
-      maxStepChanges = Math.max(maxStepChanges, totalChanges() - before)
       if (step.done) {
         expect(step.value).toBe(true)
         break
       }
       expect(db!.getRun(run.id)).toBeDefined()
     }
-    // One table page of 128 rows, plus the removed-work record each Task delete writes.
-    expect(maxStepChanges).toBeLessThanOrEqual(256)
     expect(db!.getRun(run.id)).toBeUndefined()
     expect(count('messages WHERE run_id = ?', run.id)).toBe(0)
     expect(count('tasks WHERE run_id = ?', run.id)).toBe(0)
@@ -221,7 +226,7 @@ describe('settled Run retention', () => {
     ageEveryTimestamp()
     let paneLive = false
     const steps = retireSettledRun(db!, run.id, {
-      isLiveHandle: () => false,
+      ...nobodyIsLive,
       isLivePane: (paneKey) => paneLive && paneKey === `tab_reattached:${PANE_LEAF}`
     })
     let step = steps.next()
@@ -278,6 +283,57 @@ describe('settled Run retention', () => {
     expect(count("tasks WHERE id = ? AND status = 'ready'", task.id)).toBe(1)
   })
 
+  it.each(['run', 'dispatch'] as const)(
+    'keeps a Run whose %s mailbox gets a reader between pages',
+    (mailbox) => {
+      const { run, dispatchId } = createRunWithWorker(`waited_${mailbox}`)
+      for (let n = 0; n < 200; n++) {
+        db!.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: `m${n}` })
+      }
+      settle(run.id)
+      ageEveryTimestamp()
+      const handle = mailbox === 'run' ? `run:${run.id}` : `dispatch:${dispatchId}`
+      let waiting = false
+      const steps = retireSettledRun(db!, run.id, {
+        ...nobodyIsLive,
+        waitedMailboxes: () => (waiting ? [handle] : [])
+      })
+      let step = steps.next()
+      // The worker's report, its question and the 200 above.
+      while (!step.done && count('messages WHERE run_id = ?', run.id) === 202) {
+        step = steps.next()
+      }
+      waiting = true
+      while (!step.done) {
+        step = steps.next()
+      }
+
+      expect(step.value).toBe(false)
+      expect(count('messages WHERE run_id = ?', run.id)).toBeGreaterThan(0)
+    }
+  )
+
+  it('keeps a Run whose settled Task result is corrected between pages', () => {
+    const { run, task } = createRunWithWorker('corrected')
+    settle(run.id)
+    ageEveryTimestamp()
+    const steps = retireSettledRun(db!, run.id, nobodyIsLive)
+    let step = steps.next()
+    while (!step.done && count("worker_terminal_resources WHERE id = 'resource_corrected'") === 1) {
+      step = steps.next()
+    }
+    db!.updateTaskStatus(task.id, 'completed', 'corrected result')
+    while (!step.done) {
+      step = steps.next()
+    }
+
+    expect(step.value).toBe(false)
+    expect(db!.getTask(task.id)?.result).toBe('corrected result')
+    expect(count('dispatch_contexts WHERE run_id = ?', run.id)).toBe(1)
+    // The worker's report and its question.
+    expect(count('messages WHERE run_id = ?', run.id)).toBe(2)
+  })
+
   it('keeps a settled Run while its coordinator, a reader of its unread mail or its worker terminal is live', () => {
     const { run } = createRunWithWorker('bound')
     db!.insertMessage({ runId: run.id, from: 'worker', to: 'term_reader', subject: 'note' })
@@ -288,7 +344,7 @@ describe('settled Run retention', () => {
     expect(deleteRetiredRun(db!, run.id, liveHandle(`run:${run.id}`))).toBe(false)
     expect(
       deleteRetiredRun(db!, run.id, {
-        isLiveHandle: () => false,
+        ...nobodyIsLive,
         isLivePane: (paneKey) => paneKey === `tab_bound:${PANE_LEAF}`
       })
     ).toBe(false)

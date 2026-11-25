@@ -119,7 +119,7 @@ export async function locateBotSessionLink(
             let workerDispatchId: string | undefined
             let sessionId = link.sessionId
             let itemId = target.sessionId === sessionId ? target.itemId : undefined
-            if (target.sessionId !== sessionId) {
+            if (target.sessionId && target.sessionId !== sessionId) {
               const workers = structuredSessionWorkers.interpret(
                 await structuredSessionWorkers.request(client, { session: sessionId }, options)
               )

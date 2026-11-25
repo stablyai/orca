@@ -10,6 +10,15 @@ export function capBotWorkspaceLines<T>(workspaces: readonly T[], open: T | unde
   )
 }
 
+/** A worker workspace's status as bot surfaces count it: it needs you only when one of its agents
+ *  asks (blocked or waiting), the evidence Needs you lists; a terminal title's guess is not an ask. */
+export function botWorkerWorkspaceStatus(
+  status: WorktreeStatus,
+  agentAsks: boolean
+): WorktreeStatus {
+  return status === 'permission' && !agentAsks ? 'active' : status
+}
+
 export type BotWorkspaceLiveCounts = { permission: number; working: number; failed: number }
 
 /** What a folded bot row shows: how many of its workspaces need you, are working, or failed. */

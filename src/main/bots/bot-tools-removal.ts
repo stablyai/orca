@@ -4,7 +4,12 @@ import { access, rm } from 'node:fs/promises'
 import type { BotToolServer } from '../../shared/bot-tools'
 import { claudeUnmirrorArgs } from './bot-tools-claude'
 import { changeBotToolServers, readBotToolServers } from './bot-tools-file'
-import { runBotToolsCli, type BotToolsCli } from './bot-tools-host'
+import {
+  hasBotToolsCli,
+  runBotToolsCli,
+  type BotToolsCli,
+  type BotToolsHome
+} from './bot-tools-host'
 
 /** Both CLIs keep one sign-in per account by name and URL, so another bot's same tool uses it too. */
 async function signInShared(cli: BotToolsCli, server: BotToolServer | undefined): Promise<boolean> {
@@ -19,11 +24,13 @@ async function signInShared(cli: BotToolsCli, server: BotToolServer | undefined)
   )
 }
 
-async function signOut(cli: BotToolsCli, name: string, server: BotToolServer | undefined) {
+async function signOut(home: BotToolsHome, name: string, server: BotToolServer | undefined) {
   // Relayed (saved values or Orca's own sign-in): the CLI never signed in; removal revokes Orca's.
-  if (server && 'url' in server && server.credential) {
+  // Another agent has no CLI Orca signed it in through.
+  if ((server && 'url' in server && server.credential) || !hasBotToolsCli(home)) {
     return
   }
+  const cli = home
   const keepSignIn = await signInShared(cli, server)
   if (cli.agent === 'claude') {
     if (
@@ -45,7 +52,7 @@ async function signOut(cli: BotToolsCli, name: string, server: BotToolServer | u
   }
 }
 
-export async function removeBotTool(cli: BotToolsCli, name: string): Promise<void> {
+export async function removeBotTool(cli: BotToolsHome, name: string): Promise<void> {
   const servers = await readBotToolServers(cli.folder)
   await signOut(
     cli,
@@ -58,7 +65,7 @@ export async function removeBotTool(cli: BotToolsCli, name: string): Promise<voi
 }
 
 /** A deleted bot's sign-ins and Claude sign-in folder; its tool file goes with its home folder. */
-export async function forgetBotTools(cli: BotToolsCli): Promise<void> {
+export async function forgetBotTools(cli: BotToolsHome): Promise<void> {
   for (const server of await readBotToolServers(cli.folder)) {
     await signOut(cli, server.name, server)
   }

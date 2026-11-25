@@ -11,21 +11,17 @@ function getLocalDownloadName(destinationPath: string, platform: NodeJS.Platform
 }
 
 /** Confirms a finished download by the name it was saved under, with a way to open it. */
-export function showDownloadedFileToast(destinationPath: string, isDirectory = false): void {
+export function showDownloadedFileToast(destinationPath: string): void {
   // POSIX allows backslashes in filenames; only Windows treats them as separators.
   const savedName = getLocalDownloadName(destinationPath, window.api.platform.get().platform)
   toast.success(
-    isDirectory
-      ? translate(
-          'auto.components.right.sidebar.FileExplorerRow.a4029c996b',
-          "Downloaded folder '{{value0}}'",
-          { value0: savedName }
-        )
-      : translate(
-          'auto.components.right.sidebar.FileExplorerRow.bce4d4e44f',
-          "Downloaded '{{value0}}'",
-          { value0: savedName }
-        ),
+    translate(
+      'auto.components.right.sidebar.FileExplorerRow.bce4d4e44f',
+      "Downloaded '{{value0}}'",
+      {
+        value0: savedName
+      }
+    ),
     {
       action: {
         label: translate('auto.components.right.sidebar.FileExplorerRow.1a3df04ae1', 'Open'),

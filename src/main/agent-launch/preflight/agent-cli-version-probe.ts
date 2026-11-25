@@ -7,6 +7,7 @@ import {
   parseCliVersion
 } from '../../../shared/app-lifecycle/identity/app-version'
 import { runProcess } from '@orca/process-host'
+import { agentCliMinimumVersion } from './agent-cli-minimum-version'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 
 function warnRefused(program: string, why: string, output = ''): void {
@@ -50,19 +51,6 @@ export async function checkAgentCliVersion(
 
 export function launchableRelease(check: AgentCliVersionCheck): boolean {
   return check.status === 'ready' || check.status === 'unknown'
-}
-
-/** Use the last floor at or below the release major, or the first floor for older majors. */
-export function agentCliMinimumVersion(
-  version: string,
-  minimumVersions: readonly string[]
-): string | null {
-  const major = (value: string): number => Number(value.split('.')[0])
-  return (
-    minimumVersions.findLast((minimum) => major(minimum) <= major(version)) ??
-    minimumVersions[0] ??
-    null
-  )
 }
 
 export async function readAgentCliVersion(

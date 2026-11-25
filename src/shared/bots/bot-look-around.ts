@@ -1,5 +1,6 @@
 // Look around: a bot reads what it can a few times a day and lists next steps under Up next.
 // The setting lives on the bot; absent means on with the defaults, so existing bots get it too.
+import type { BotFailure } from './bot-failure-copy'
 import * as z from 'zod'
 import { containsSecretLike } from '../crash-reporting/crash-report-redaction'
 import type { BotAgent } from '../bot-types'
@@ -136,10 +137,14 @@ export type UpNextState = {
   running: boolean
   /** The running look's session, whose steps clients can show; absent while no look runs. */
   runSessionId?: string
+  /** The last finished look's session, so clients can read whether its usage limit stopped it. */
+  lastSessionId?: string
   /** When the owner last saw Up next, 0 if never; suggestions made after it are new. */
   seenAt: number
   /** Why the last look failed; its older suggestions stay listed. */
   error?: string
+  /** `error` by code, for clients to translate; read with `readBotFailure`. */
+  failure?: BotFailure
 }
 
 /** The bot's Up next list and when it last looked; absent when Look around is off. */

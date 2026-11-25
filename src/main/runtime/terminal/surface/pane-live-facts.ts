@@ -22,17 +22,17 @@ export class PaneLiveFacts<T> {
     { fact: T; awaits?: AwaitedBind; binding?: string }
   >()
 
-  constructor(private readonly changed: () => void) {}
+  constructor(private readonly changed: (paneKey: string) => void) {}
 
   /** With `awaits`, the fact shows only once the pane binds that terminal. */
   set(paneKey: string, fact: T, awaits?: AwaitedBind): void {
     this.byPaneKey.set(paneKey, { fact, ...(awaits ? { awaits } : {}) })
-    this.changed()
+    this.changed(paneKey)
   }
 
   clear(paneKey: string): void {
     if (this.byPaneKey.delete(paneKey)) {
-      this.changed()
+      this.changed(paneKey)
     }
   }
 

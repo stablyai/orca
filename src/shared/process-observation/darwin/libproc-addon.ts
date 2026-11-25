@@ -52,7 +52,6 @@ export type LibprocAddon = {
 
 const requireFromHere = createRequire(__filename)
 let cachedAddon: LibprocAddon | null | undefined
-let addonOverride: LibprocAddon | null | undefined
 
 function hasAsyncPathReads(addon: LibprocAddon): boolean {
   return typeof addon.readProcessCwd === 'function' && typeof addon.readProcessPath === 'function'
@@ -70,9 +69,6 @@ function isLibprocAddon(native: unknown): native is LibprocAddon {
 /** The in-process reader, or null where ps/lsof must still run (non-macOS, an unpatched or unloadable node-pty).
  * Vitest keeps the subprocess path so ps fixtures stay authoritative. */
 export function loadLibprocAddon(): LibprocAddon | null {
-  if (addonOverride !== undefined) {
-    return addonOverride
-  }
   if (process.platform !== 'darwin' || process.env.VITEST === 'true') {
     return null
   }
@@ -102,10 +98,6 @@ export function loadLibprocAddon(): LibprocAddon | null {
     console.warn('[process-table] node-pty lacks the libproc reader; falling back to ps and lsof')
   }
   return cachedAddon
-}
-
-export function setLibprocAddonForTests(addon: LibprocAddon | null | undefined): void {
-  addonOverride = addon
 }
 
 // A lookup stuck on a dead mount pins its worker thread in the kernel; cap them so the rest of the libuv pool stays free.

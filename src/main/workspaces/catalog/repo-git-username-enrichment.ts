@@ -89,16 +89,3 @@ export function enrichRepoGitUsernames(
       }
     })
 }
-
-export async function flushRepoGitUsernameEnrichmentForTests(): Promise<void> {
-  // A queued rerun replaces enrichmentInFlight when the first pass settles.
-  while (enrichmentInFlight) {
-    await enrichmentInFlight
-  }
-}
-
-export function resetRepoGitUsernameEnrichmentForTests(): void {
-  attemptedLocations.clear()
-  enrichmentInFlight = null
-  rerunRequested = false
-}

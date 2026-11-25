@@ -40,10 +40,7 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
                 'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
                 'Resume in New Chat'
               )
-            : t(
-                'components.tab.bar.SortableTabContextMenu.switchToChatView',
-                'Continue in Chat UI'
-              )}
+            : t('components.tab.bar.SortableTabContextMenu.switchToChatView', 'Continue in chat')}
         </Item>
       ) : null}
       {onResumeInNewCli ? (
@@ -62,7 +59,7 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
                   )
                 : t(
                     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                    'Continue with Terminal Agent'
+                    'Continue in terminal'
                   )}
             </Item>
           </TooltipTrigger>

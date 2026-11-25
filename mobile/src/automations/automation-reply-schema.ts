@@ -102,6 +102,9 @@ export const runSchema = z.looseObject({
     .object({ stdout: z.string(), stderr: z.string(), command: z.string() })
     .nullable(),
   usage: z.object({ unavailableMessage: z.string().nullish() }).nullable(),
+  // Only their sources are read, so a malformed event still lists the run. Older hosts omit triggeredBy.
+  event: z.object({ source: z.string() }).nullish().catch(undefined),
+  triggeredBy: z.object({ source: z.string() }).nullish().catch(undefined),
   // Display-only, so a newer host kind shows by its id instead of costing the run.
   runContext: z.object({ hostId: z.string(), repoId: z.string(), path: z.string() }).nullish()
 })

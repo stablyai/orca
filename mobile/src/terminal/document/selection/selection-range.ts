@@ -4,11 +4,12 @@ import type { TerminalDocumentLine } from '../document-terminal-shape'
 import { isTerminalWordSeparator } from '../../../../../src/shared/terminal/input/terminal-word-separator'
 
 // Match xterm double-click: a space grows over spaces, anything else over non-separators.
-function joinsPressedWord(pressed: string, text: string) {
-  return pressed === ' ' ? text === ' ' : !isTerminalWordSeparator(text)
+// Unwritten cells always separate words in xterm, even when the setting leaves out space.
+function joinsPressedWord(pressed: string, text: string, separators: string, blank = false) {
+  return pressed === ' ' ? text === ' ' : !blank && !isTerminalWordSeparator(text, separators)
 }
 
-type SelectionUnit = { text: string; start: number; end: number }
+type SelectionUnit = { text: string; start: number; end: number; blank?: boolean }
 
 function selectionUnits(line: TerminalDocumentLine, cols: number): SelectionUnit[] | null {
   const cells: SelectionUnit[] = []
@@ -22,7 +23,8 @@ function selectionUnits(line: TerminalDocumentLine, cols: number): SelectionUnit
       col++
       continue
     }
-    cells.push({ text: cell.getChars() || ' ', start: col, end: col + width - 1 })
+    const chars = cell.getChars()
+    cells.push({ text: chars || ' ', start: col, end: col + width - 1, blank: !chars })
     col += width
   }
   if (typeof Intl.Segmenter !== 'function') {
@@ -36,12 +38,18 @@ function selectionUnits(line: TerminalDocumentLine, cols: number): SelectionUnit
     (part) => ({
       text: part.segment,
       start: columns[part.index].start,
-      end: columns[part.index + part.segment.length - 1].end
+      end: columns[part.index + part.segment.length - 1].end,
+      blank: columns[part.index].blank
     })
   )
 }
 
-function wordCellRange(line: TerminalDocumentLine | undefined, col: number, cols: number) {
+function wordCellRange(
+  line: TerminalDocumentLine | undefined,
+  col: number,
+  cols: number,
+  separators: string
+) {
   const units = line && selectionUnits(line, cols)
   const index = units?.findIndex((unit) => unit.start <= col && col <= unit.end) ?? -1
   if (!units || index < 0) {
@@ -50,10 +58,12 @@ function wordCellRange(line: TerminalDocumentLine | undefined, col: number, cols
   const pressed = units[index].text
   let start = index
   let end = index
-  while (start > 0 && joinsPressedWord(pressed, units[start - 1].text)) {
+  const joins = (unit: SelectionUnit) =>
+    joinsPressedWord(pressed, unit.text, separators, unit.blank)
+  while (start > 0 && joins(units[start - 1])) {
     start--
   }
-  while (end + 1 < units.length && joinsPressedWord(pressed, units[end + 1].text)) {
+  while (end + 1 < units.length && joins(units[end + 1])) {
     end++
   }
   return { start: units[start].start, end: units[end].end }
@@ -65,7 +75,13 @@ export type TerminalSelectionRange = {
 }
 
 export function seedWordSelection(scope: TerminalDocumentScope, col: number, absRow: number) {
-  const cells = wordCellRange(scope.term?.buffer.active.getLine(absRow), col, scope.term?.cols ?? 0)
+  const separators = scope.wordSeparator
+  const cells = wordCellRange(
+    scope.term?.buffer.active.getLine(absRow),
+    col,
+    scope.term?.cols ?? 0,
+    separators
+  )
   if (cells) {
     scope.sel = {
       anchor: { col: cells.start, row: absRow },
@@ -89,10 +105,10 @@ export function seedWordSelection(scope: TerminalDocumentScope, col: number, abs
   let s = col
   let e = col
   if (col >= 0 && col < line.length) {
-    while (s > 0 && joinsPressedWord(line[col], line[s - 1])) {
+    while (s > 0 && joinsPressedWord(line[col], line[s - 1], separators)) {
       s--
     }
-    while (e < line.length - 1 && joinsPressedWord(line[col], line[e + 1])) {
+    while (e < line.length - 1 && joinsPressedWord(line[col], line[e + 1], separators)) {
       e++
     }
   }

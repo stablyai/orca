@@ -18,7 +18,7 @@ export async function listTransitions(
   siteId?: string | null,
   strict = false
 ): Promise<JiraTransition[]> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   const entry = entries[0]
   if (!entry) {
@@ -48,7 +48,7 @@ export async function listTransitions(
     }))
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] listTransitions failed:', error)
@@ -66,7 +66,7 @@ export async function getProjectStatusOrder(
   siteId?: string | null
 ): Promise<JiraProjectStatusOrder> {
   // Omitted siteId can resolve to all-sites; board metadata needs one owning connection.
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   const entry = entries.length === 1 ? entries[0] : undefined
   if (!entry) {
     return { statusIdsByColumn: [] }
@@ -127,7 +127,7 @@ export async function getProjectStatusOrder(
     return { statusIdsByColumn, ...(boardColumns.length ? { columns: boardColumns } : {}) }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] getProjectStatusOrder failed:', error)

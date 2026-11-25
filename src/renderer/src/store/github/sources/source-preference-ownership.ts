@@ -278,10 +278,11 @@ export abstract class GitHubSourceOwnership {
           attempt.owner?.id === attempt.context))
     )
   }
-  sync(repos: readonly Repo[]) {
+  /** `visited`: the owners `repos` may retire; every owner unless a status write scoped it to its hosts. */
+  sync(repos: readonly Repo[], visited = this.owners) {
     const live = new Map(repos.map((repo) => [bindingKey(repo), repo]))
     const retired: CollectionOwner[] = []
-    for (const [key, owner] of this.owners) {
+    for (const [key, owner] of visited) {
       const next = live.get(key),
         write = this.writes.get(key)
       const ownedFlip =

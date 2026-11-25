@@ -41,11 +41,3 @@ export function cancelCommandCodeDoneSettle(paneKey: string): void {
     timerByPaneKey.delete(paneKey)
   }
 }
-
-export function _resetCommandCodeDoneSettlesForTest(): void {
-  for (const timer of timerByPaneKey.values()) {
-    clearTimeout(timer)
-  }
-  timerByPaneKey.clear()
-  executorByPaneKey.clear()
-}

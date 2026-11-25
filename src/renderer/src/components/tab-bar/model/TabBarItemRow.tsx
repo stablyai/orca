@@ -25,6 +25,12 @@ import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conve
 import { useAppStore } from '../../../store/index'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { useBotForWorkspace } from '../../bots/bot-workspace'
+import {
+  isBotHomeTab,
+  isBotSideChatTab,
+  isHostedBotChatTab
+} from '../../../../../shared/bots/bot-home-tab'
+import { useBotHomeRuleApplies } from '@/lib/bot-host-status'
 import { BotAvatar } from '../../bots/BotAvatar'
 import { BotGroupTabIcon, useBotGroupTabMembers } from '../../bots/BotGroupTabIcon'
 import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-label'
@@ -82,12 +88,26 @@ function TabBarItemRow({
   const chatNaming = useStructuredChatTabNaming(
     item.type === 'agent-session' ? item.data : undefined
   )
-  const conversationName = chatNaming.name
   const namingFailure = useStructuredChatTabNamingFailure(
     item.type === 'agent-session' ? item.data : undefined
   )
-  const bot = useBotForWorkspace(worktreeId)
-  const isBotChat = item.type === 'agent-session' && bot?.chatSessionId === item.data.entityId
+  const bot = useBotForWorkspace(
+    worktreeId,
+    item.type === 'agent-session' ? item.data.executionHostId : undefined
+  )
+  const isBotChat = item.type === 'agent-session' && isBotHomeTab(item.data, bot)
+  const homeRule = useBotHomeRuleApplies(bot)
+  // Why: Orca names a bot's main chat "Home" in its record; that name reads in the UI language.
+  const conversationName =
+    isBotChat && chatNaming.name === 'Home' ? t('bots.tabs.homeTitle', 'Home') : chatNaming.name
+  const ruledHome = useAppStore(
+    (state) =>
+      state.workspaceSessionReady &&
+      homeRule &&
+      item.type === 'agent-session' &&
+      isBotChat &&
+      isHostedBotChatTab(item.data, bot)
+  )
   const roomMembers = useBotGroupTabMembers(item.type === 'room' ? item.data.entityId : null)
   // A room is unread while one of its own members' replies is; a sibling thread's stays on that tab.
   const roomUnread = useAppStore(
@@ -194,6 +214,9 @@ function TabBarItemRow({
         namingFailure={item.data.customLabel ? null : namingFailure}
         fork={fork}
         closable={!isBotChat}
+        sizing={isBotChat ? 'content' : 'terminal'}
+        canPin={!(homeRule && isBotSideChatTab(item.data, bot))}
+        isBotHome={ruledHome}
         canContinueInTerminal={bot === null}
         identityIcon={
           bot ? <BotAvatar bot={bot} className="size-3 rounded-[3px] text-3xs" /> : undefined

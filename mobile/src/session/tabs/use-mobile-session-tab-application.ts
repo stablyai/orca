@@ -1,4 +1,8 @@
-import { keepsTerminalPaneVisible } from '../../terminal/session/pane-layout/mobile-terminal-pane-layout'
+import {
+  followTerminalRows,
+  keepsTerminalPaneVisible,
+  withReplacedTerminalHandles
+} from '../../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { orphanedMarkdownDraftTabs } from '../../files/session-documents/orphaned-markdown-draft-tabs'
 import {
   pendingSelectionHandle,
@@ -16,12 +20,13 @@ import {
   terminalRecordsEqual
 } from '../../terminal/session/inventory/mobile-terminal-records'
 import {
-  acceptSessionSnapshot,
   applyClosedTabTombstones,
-  confirmsMirroredTabSelection
+  confirmsMirroredTabSelection,
+  useSessionSnapshotGate
 } from './session-tab-snapshot-gate'
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { getActiveTabIdForHandle } from './terminal-tab-selection'
+import { rememberClosingTerminalHandles } from './closing-terminal-tab-handles'
 import { resolveActiveSessionTab } from './active-session-tab'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import { releaseTerminalCreateLock } from '../../terminal/session/creation/terminal-create-lock'
@@ -47,6 +52,8 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
+    closingTerminalTabsRef,
+    terminalRowHandlesRef,
     setTerminalsLoaded,
     setActiveHandle,
     setActiveSessionTabId,
@@ -65,9 +72,11 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     lastKnownTerminalCountRef,
     clientRef,
     creatingTerminalRef,
-    setCreating
+    setCreating,
+    setSplitTerminalHandles
   } = scope
   const draftOwnershipRef = useRef<DraftTabOwnership | null>(null)
+  const acceptSessionSnapshot = useSessionSnapshotGate()
   const applySessionTabs = useCallback(
     (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
       const diagnostics = terminalDiagnosticsRef.current
@@ -107,8 +116,6 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       if (
         result.tabs.length > 0 &&
         confirmsMirroredTabSelection(result.publicationEpoch) &&
-        result.publicationEpoch !== 'none' &&
-        result.publicationEpoch !== 'none:client-navigation' &&
         !result.clientHostedPagesUnreconciled &&
         !result.agentSessionsUnverifiable
       ) {
@@ -141,6 +148,12 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
       sessionTabsRef.current = nextTabs
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
+      const terminalRows = followTerminalRows(terminalRowHandlesRef.current, nextTabs)
+      terminalRowHandlesRef.current = terminalRows.handles
+      rememberClosingTerminalHandles(closingTerminalTabsRef.current, terminalRows.handles)
+      if (terminalRows.replaced.size > 0) {
+        setSplitTerminalHandles((pair) => withReplacedTerminalHandles(pair, terminalRows.replaced))
+      }
       // Avoid identical snapshot state updates that would tear down and replay subscriptions.
       setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
       const terminalTabs = getTerminalRecordsFromSessionTabs(nextTabs)
@@ -285,11 +298,9 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
       return outcome
     },
-    [hostId, worktreeId, subscribeToTerminal, unsubscribeTerminal]
+    [hostId, worktreeId, subscribeToTerminal, unsubscribeTerminal, setSplitTerminalHandles]
   )
-  return {
-    applySessionTabs
-  }
+  return { applySessionTabs }
 }
 
 export type MobileSessionTabApplicationModel = MobileSessionTerminalListModel &

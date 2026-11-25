@@ -13,14 +13,6 @@ export function setPlatform(userAgent: string): void {
   vi.stubGlobal('navigator', { userAgent })
 }
 
-export function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((res) => {
-    resolve = res
-  })
-  return { promise, resolve }
-}
-
 export async function flushAsyncWork(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }

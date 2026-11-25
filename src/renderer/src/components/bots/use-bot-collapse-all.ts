@@ -6,7 +6,7 @@ import {
 } from '@/store/slices/ui/collapsed-group-toggle'
 import { getLineageGroupKey } from '../../../../shared/sidebar-list/sections/group-keys'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { useBotSidebarChildren } from './bot-sidebar-child-presence'
+import { hasBotSidebarChildPresence, useBotSidebarChildren } from './bot-sidebar-child-presence'
 
 export type BotCollapseAll = {
   /** Every listed bot that can fold is folded, so the toggle unfolds them all. */
@@ -98,18 +98,25 @@ export function useBotCollapseAll(
   const toggle = useCallback(() => {
     const { collapsedGroups, setCollapsedGroups } = useAppStore.getState()
     const next = new Set(collapsedGroups)
+    // Offscreen bots might not have reported their children yet.
+    const toFold = allCollapsed
+      ? saved
+      : new Set([
+          ...withChildren,
+          ...botFoldKeys(
+            entries.filter((entry) => entry.kind === 'bot' && !hasBotSidebarChildPresence(entry.id))
+          )
+        ])
     if (allCollapsed) {
       for (const key of saved) {
         next.delete(key)
       }
     } else {
-      for (const key of withChildren) {
+      for (const key of toFold) {
         next.add(key)
       }
     }
-    setCollapsedGroups(
-      recordCollapsedGroupChanges(collapsedGroups, next, allCollapsed ? saved : withChildren)
-    )
-  }, [allCollapsed, saved, withChildren])
+    setCollapsedGroups(recordCollapsedGroupChanges(collapsedGroups, next, toFold))
+  }, [allCollapsed, entries, saved, withChildren])
   return state === NONE ? null : { allCollapsed, toggle }
 }

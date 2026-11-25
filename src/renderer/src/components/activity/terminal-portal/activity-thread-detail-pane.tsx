@@ -3,7 +3,8 @@ import { MessageSquareText, TerminalSquare } from 'lucide-react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { EventRepoBadge, ThreadAgentStateIndicator } from '../thread-list/activity-thread-controls'
+import { ProjectChip } from '@/components/repo/project-chip'
+import { ThreadAgentStateIndicator } from '../thread-list/activity-thread-controls'
 import type {
   ActivityTerminalPortalSlotId,
   AgentPaneThread
@@ -56,7 +57,7 @@ export function ActivityThreadDetailPane({
                 </h2>
               </div>
               <div className="mt-1 flex min-w-0 items-center gap-1.5 pl-11">
-                <EventRepoBadge repo={selectedThread.repo} />
+                {selectedThread.repo ? <ProjectChip repo={selectedThread.repo} /> : null}
                 <span className="truncate text-xs text-muted-foreground">
                   {selectedThread.worktree.displayName}
                 </span>

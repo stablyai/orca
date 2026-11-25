@@ -126,7 +126,7 @@ async function readListIssuesPageForState(
     state.canPage = false
     state.error = linearWorkspaceError(state.entry, error)
     if (isAuthError(error)) {
-      clearToken(state.entry.workspace.id)
+      await clearToken(state.entry.workspace.id)
       if (shouldThrowAuthError(workspaceId)) {
         throw new Error(LINEAR_AUTHENTICATION_ERROR)
       }
@@ -251,7 +251,7 @@ export async function listIssues(
       'Linear attribute filters require a concrete workspace; "all" workspaces is not supported.'
     )
   }
-  const entries = getClients(workspaceId, options?.signal)
+  const entries = await getClients(workspaceId, options?.signal)
   if (entries.length === 0) {
     return { items: [] }
   }

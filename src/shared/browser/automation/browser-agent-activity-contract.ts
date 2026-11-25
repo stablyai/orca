@@ -16,15 +16,18 @@ export type BrowserAgentActivityEvent = {
 }
 
 /** Where the agent is about to act, in the page's CSS px. */
-export type BrowserAgentCursorEvent = {
-  browserPageId: string
-  sequence: number
+export type BrowserAgentPointerPoint = {
   x: number
   y: number
   viewportWidth: number
   viewportHeight: number
   /** A press follows at this point. */
   press: boolean
+}
+
+export type BrowserAgentCursorEvent = BrowserAgentPointerPoint & {
+  browserPageId: string
+  sequence: number
   /** Main waits for `BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL` with this sequence before acting. */
   awaitsArrival: boolean
 }

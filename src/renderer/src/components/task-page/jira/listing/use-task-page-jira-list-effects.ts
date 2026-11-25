@@ -19,7 +19,7 @@ import { JIRA_ITEM_LIMIT } from '../../task-page-source-context'
 import { useTaskSearchDebouncedApply } from '../../use-task-search-debounced-apply'
 import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import { buildJiraPresetJql } from '../../../../../../shared/jira/jira-preset-jql'
+import { searchJiraPreset } from '../../../../../../shared/jira/jira-preset-jql'
 import { restrictJiraQueryToProject } from '../../../../../../shared/jira/jira-project-reference'
 export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffectsModel) {
   const {
@@ -150,14 +150,12 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
             favourite || exactSavedJql ? 'jql' : 'input'
           ).then((result) => ({ ...result, error: null }))
         : jiraProjectFilter
-          ? searchWithinLimit(
-              restrictJiraQueryToProject(
-                buildJiraPresetJql(activeJiraPreset, {
-                  statuses: selectedJiraStatuses,
-                  currentSprint: jiraCurrentSprint
-                }),
-                jiraProjectFilter
-              )
+          ? // Why: site authType is optional from older runtimes, so this path can't tell Server from
+            // Cloud and retries on any statusCategory rejection; harmless since Cloud never rejects it.
+            searchJiraPreset(
+              activeJiraPreset,
+              { statuses: selectedJiraStatuses, currentSprint: jiraCurrentSprint },
+              (jql) => searchWithinLimit(restrictJiraQueryToProject(jql, jiraProjectFilter))
             ).then((issues) => ({ issues, jqlRejection: null, error: null }))
           : listJiraIssues(activeJiraPreset, JIRA_ITEM_LIMIT, {
               sourceContext: jiraTaskSourceContext,

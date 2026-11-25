@@ -8,7 +8,6 @@ import { FeatureTipActions } from './FeatureTipActions'
 import {
   FEATURE_TIP_BUTTONS_ON_CARD_EDGE,
   FeatureTipDialogFrame,
-  FeatureTipEyebrow,
   FeatureTipSettingsLine
 } from './FeatureTipDialogFrame'
 
@@ -49,7 +48,6 @@ export function ChatUiHereTipDialog({
     >
       <DialogHeader className="text-left">
         <div>
-          <FeatureTipEyebrow label={t('featureTips.eyebrowNew', 'New')} />
           <DialogTitle size="display">
             {t('featureTips.chatUiHere.title', 'Chat UI is here')}
           </DialogTitle>

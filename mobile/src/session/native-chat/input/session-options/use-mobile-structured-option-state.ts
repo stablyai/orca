@@ -148,7 +148,8 @@ export function useMobileStructuredOptionState(args: {
               commands: support.result.conversationCommands ?? [],
               compactInstructions: support.result.compactInstructions === true,
               forkSupport: support.result.forkSupport,
-              contextUsage: support.result.contextUsage
+              contextUsage: support.result.contextUsage,
+              accountUsage: support.result.accountUsage === true
             },
             imageSupport: {
               sessionId: support.sessionId,

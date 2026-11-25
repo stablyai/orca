@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
@@ -68,6 +69,7 @@ function resolveDirectWorkItemLaunchHost(args: DirectLaunchHostArgs): KnownExecu
   // Use the creation repo’s host before workspace hydration, refined by its path/runtime (for example Windows-host WSL runs Linux).
   const fact = resolveRepoExecutionHostPlatform(
     args.latestStore,
+    readRuntimeStatuses(),
     args.repoHost,
     () => directLaunchProjectRuntime(args),
     args.worktreePath

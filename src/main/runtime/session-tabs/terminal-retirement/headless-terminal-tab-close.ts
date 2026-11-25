@@ -141,8 +141,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
           .map((tab) => tab.id)
       ])
     )
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
   }
 
   async moveMobileSessionTab(
@@ -219,7 +218,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       args = await this.nameMainPanes(worktreeId, hostTabId, args)
     }
     // Attached renderers own geometry; forward only explicitly renamed panes so stale resent maps cannot overwrite host names.
-    if (this.getAvailableAuthoritativeWindow()) {
+    if (this.hasAuthoritativeWindow()) {
       // Why: only panes the client says it renamed; a resent map may predate the host's names.
       const renamed = new Set(args.renamedLeafIds)
       if (args.titlesByLeafId && renamed.size > 0 && this.notifier?.setPaneTitle) {

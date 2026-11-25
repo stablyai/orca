@@ -25,12 +25,20 @@ import {
   type ClaudeUsageVerifiedSources
 } from './persisted-projection-validation'
 
+import {
+  createUsageScanCheckpointClock,
+  UsageScanReadBudget,
+  type UsageScanCheckpoint
+} from '../usage/source-input/usage-scan-pacing'
+
 const FILE_SCAN_BATCH_SIZE = 4
 
 type ClaudeUsageFilePlan = {
   previous: ClaudeUsagePersistedFile | undefined
   reusable: boolean
   resume: ClaudeUsageParseResumeState | null
+  /** Bytes a changed file's read covers: its unread suffix when resumed. */
+  readBytes: number
 }
 
 async function planClaudeUsageFile(
@@ -60,10 +68,12 @@ async function planClaudeUsageFile(
     !reusable && validProjection && fileInfo.size > previous.size && resumable.has(previous)
       ? previous.parseResumeState
       : null
+  const resumeState = resume && previous?.parseResumeState ? previous.parseResumeState : null
   return {
     previous,
     reusable,
-    resume: resume && previous?.parseResumeState ? previous.parseResumeState : null
+    resume: resumeState,
+    readBytes: reusable ? 0 : fileInfo.size - (resumeState?.parsedBytes ?? 0)
   }
 }
 
@@ -76,7 +86,8 @@ export async function scanClaudeUsageFiles(
   previousProcessedFiles: ClaudeUsagePersistedFile[] = [],
   onFilesScanned?: (count: number) => void,
   profileDirs?: string[],
-  verifiedSources?: ClaudeUsageVerifiedSources
+  verifiedSources?: ClaudeUsageVerifiedSources,
+  onCheckpoint?: UsageScanCheckpoint<ClaudeUsagePersistedFile>
 ): Promise<{
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
@@ -152,6 +163,8 @@ export async function scanClaudeUsageFiles(
     projections.set(path, projected)
   }
   const changed = files.filter((path) => !plans.get(path)?.reusable)
+  const readBudget = new UsageScanReadBudget()
+  const checkpointDue = createUsageScanCheckpointClock()
   for (let index = 0; index < changed.length; index += FILE_SCAN_BATCH_SIZE) {
     const batch = changed.slice(index, index + FILE_SCAN_BATCH_SIZE)
     const reads = await Promise.all(
@@ -161,6 +174,16 @@ export async function scanClaudeUsageFiles(
       await publishRead(path, reads[offset], plans.get(path)?.previous)
     }
     onFilesScanned?.(batch.length)
+    await readBudget.consume(
+      batch.reduce((sum, path) => sum + (plans.get(path)?.readBytes ?? 0), 0)
+    )
+    // A pending reclaim must finish first: a checkpoint would erase the lost owner that triggers it.
+    if (onCheckpoint && !lateOwnerLoss && checkpointDue()) {
+      // Unread files keep their previous record, so ownership matches a scan that stopped here.
+      await onCheckpoint(
+        files.flatMap((path) => projections.get(path) ?? plans.get(path)?.previous ?? [])
+      )
+    }
     if (index + batch.length < changed.length) {
       await yieldToEventLoop()
     }
@@ -175,6 +198,7 @@ export async function scanClaudeUsageFiles(
       }
       await publishRead(path, await readClaudeUsageScanFile(path), previous)
       onFilesScanned?.(1)
+      await readBudget.consume(previous.size)
     }
   }
   const processedFiles: ClaudeUsagePersistedFile[] = []

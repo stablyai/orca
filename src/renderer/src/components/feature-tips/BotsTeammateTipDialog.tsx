@@ -1,40 +1,99 @@
-import { useRef, type JSX } from 'react'
-import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
-import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react'
+import { BOT_MASCOT_URLS } from '@/components/bots/bot-mascots'
+import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import { BotsFleetStoryVisual } from './BotsFleetStoryVisual'
-import { fleetStoryFrame } from './bots-fleet-story-timeline'
-import { FeatureTipActions } from './FeatureTipActions'
-import {
-  FEATURE_TIP_BUTTONS_ON_CARD_EDGE,
-  FeatureTipDialogFrame,
-  FeatureTipEyebrow
-} from './FeatureTipDialogFrame'
-import { useBotsFleetStoryPlayback } from './use-bots-fleet-story-playback'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
+import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
+import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
+import { FeatureTipDialogFrame } from './FeatureTipDialogFrame'
+import { BotsTipGroupVisual } from './BotsTipGroupVisual'
+import { BotsTipItemsVisual } from './BotsTipItemsVisual'
+import { BotsTipMascots } from './BotsTipMascots'
+import { GroupPageCopy, ItemsPageCopy, TeammatePageCopy } from './BotsTipPageCopy'
+import { BotsTipPageNav } from './BotsTipPageNav'
+import { BotsTipSlackVisual } from './BotsTipSlackVisual'
+import { BOTS_TIP_PAGE_COUNT, mascotPawTapping } from './bots-tip-timeline'
+import { useBotsTipPlayback } from './use-bots-tip-playback'
+import './bots-tip.css'
 
 export function BotsTeammateTipDialog({
   open,
   tip,
   onOpenChange,
-  onPrimaryAction,
-  onSkip
+  onPrimaryAction
 }: {
   open: boolean
   tip: FeatureTip
+  /** Closing by ×, Esc or a click outside marks the tip seen. */
   onOpenChange: (open: boolean) => void
   onPrimaryAction: () => void
-  onSkip: () => void
 }): JSX.Element {
   const t = useTranslate()
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
-  const playback = useBotsFleetStoryPlayback(open)
-  // The steps light up in sync with the story on the right.
-  const beat = fleetStoryFrame(playback.t).beat
-  const steps = [
-    t('featureTips.botsTeammate.stepAsk', 'Message it from anywhere'),
-    t('featureTips.botsTeammate.stepFleet', 'It runs a fleet of agents'),
-    t('featureTips.botsTeammate.stepReview', 'You review the PR')
+  const playback = useBotsTipPlayback(open)
+  const { page, visit, pageStarts, pageTimes, reducedMotion } = playback
+  // Pages you pick are announced; the auto-advance stays quiet.
+  const [announced, setAnnounced] = useState('')
+  const startPage = playback.goTo
+  const goTo = useCallback(
+    (next: number): void => {
+      startPage(next)
+      const titles = [
+        t('featureTips.botsTeammate.title', 'Your AI teammate'),
+        t('featureTips.botsTeammate.itemsTitle', 'Its work, in one list'),
+        t('featureTips.botsTeammate.groupTitle', 'Bots work together')
+      ]
+      setAnnounced(
+        t('featureTips.botsTeammate.pageAnnounce', 'Page {{number}} of {{count}}: {{title}}', {
+          number: next + 1,
+          count: BOTS_TIP_PAGE_COUNT,
+          title: titles[next] ?? ''
+        })
+      )
+    },
+    [startPage, t]
+  )
+
+  // The incoming copy starts 4px low with no transition, then eases up into place.
+  const copyLayers = useRef<(HTMLDivElement | null)[]>([])
+  useLayoutEffect(() => {
+    const incoming = copyLayers.current[page]
+    if (!incoming || visit === 0) {
+      return
+    }
+    incoming.classList.add('bt-pre')
+    forceLayoutReflow(incoming)
+    incoming.classList.remove('bt-pre')
+  }, [page, visit])
+
+  // A page that starts again shows its first frame at once instead of animating back to it.
+  const snapping = !reducedMotion && playback.t === 0 ? page : null
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'ArrowRight' && page < BOTS_TIP_PAGE_COUNT - 1) {
+        goTo(page + 1)
+      } else if (event.key === 'ArrowLeft' && page > 0) {
+        goTo(page - 1)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, page, goTo])
+
+  const pages = [
+    <TeammatePageCopy key="teammate" active={page === 0} slotStart={pageStarts[0]!} />,
+    <ItemsPageCopy key="items" active={page === 1} />,
+    <GroupPageCopy key="group" active={page === 2} />
+  ]
+  const visuals = [
+    <BotsTipSlackVisual key="slack" t={pageTimes[0]!} />,
+    <BotsTipItemsVisual key="items" t={pageTimes[1]!} />,
+    <BotsTipGroupVisual key="group" t={pageTimes[2]!} />
   ]
 
   return (
@@ -46,64 +105,67 @@ export function BotsTeammateTipDialog({
         // Why: longer locales overflow the fixed frame; scrolling to the button would hide the title.
         primaryButtonRef.current?.focus({ preventScroll: true })
       }}
-      visual={<BotsFleetStoryVisual playback={playback} />}
-      copyClassName={FEATURE_TIP_BUTTONS_ON_CARD_EDGE}
-    >
-      <DialogHeader className="text-left">
-        <div>
-          <FeatureTipEyebrow label={t('featureTips.eyebrowNew', 'New')} />
-          <DialogTitle size="display">
-            {t('featureTips.botsTeammate.title', 'Meet your AI teammate')}
-          </DialogTitle>
-          <DialogDescription className="mt-3 max-w-2xl">
-            {t(
-              'featureTips.botsTeammate.description',
-              'Ask from anywhere. It runs a fleet of agents and remembers what it learns.'
-            )}
-          </DialogDescription>
-          <ol className="mt-5 flex flex-col gap-1">
-            {steps.map((step, index) => {
-              // Reduced motion and the finished frame light every step.
-              const lit = playback.finished || beat === index
-              const passed = !playback.finished && beat > index
-              return (
-                <li
-                  key={step}
-                  className={cn(
-                    'flex items-center gap-3 rounded-md px-2 py-1.5 text-sm transition-colors duration-300',
-                    lit ? 'text-foreground' : 'text-muted-foreground',
-                    beat === index && !playback.finished && 'bg-accent/60'
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'flex size-5 shrink-0 items-center justify-center rounded-full border text-2xs tabular-nums transition-colors duration-300',
-                      lit || passed
-                        ? 'border-foreground/40 text-foreground'
-                        : 'border-border text-muted-foreground'
-                    )}
-                  >
-                    {index + 1}
-                  </span>
-                  {step}
-                </li>
-              )
-            })}
-          </ol>
-        </div>
-      </DialogHeader>
-
-      <DialogFooter className="mt-8 flex motion-reduce:mt-6 sm:justify-stretch">
-        <FeatureTipActions
-          currentTip={tip}
-          primaryBusy={false}
-          onPrimaryAction={onPrimaryAction}
-          onSkip={onSkip}
-          fullWidth
-          primaryButtonRef={primaryButtonRef}
-          secondaryLabel={t('featureTips.botsTeammate.later', 'Maybe later')}
+      wide
+      scope="bots"
+      copyClassName="justify-center"
+      outside={
+        <BotsTipMascots
+          open={open}
+          reducedMotion={reducedMotion}
+          tapping={page === 0 && mascotPawTapping(pageTimes[0]!)}
         />
-      </DialogFooter>
+      }
+      visual={
+        // The story is drawn for the eye; the copy says it for screen readers.
+        <div className="bt-visual-stack" aria-hidden inert>
+          {visuals.map((visual, index) => (
+            <div
+              key={visual.key}
+              className={cn(
+                'bt-layer',
+                index === page && 'bt-cur',
+                index === snapping && 'bt-snap'
+              )}
+            >
+              {visual}
+            </div>
+          ))}
+        </div>
+      }
+    >
+      <div className="bt-eyebrow">
+        <span className="bt-new">{t('featureTips.eyebrowNew', 'New')}</span>
+        {t('featureTips.botsTeammate.product', 'Orca Bots')}
+      </div>
+      <div className="bt-copy-stack">
+        {pages.map((copy, index) => (
+          <div
+            key={copy.key}
+            ref={(node) => {
+              copyLayers.current[index] = node
+            }}
+            className={cn('bt-layer', index === page && 'bt-cur')}
+            aria-hidden={index !== page}
+          >
+            {copy}
+          </div>
+        ))}
+      </div>
+      <div className="mt-8 flex items-center gap-2">
+        <BotsTipPageNav page={page} progress={playback.progress} onPage={goTo} />
+        <span className="sr-only" aria-live="polite">
+          {announced}
+        </span>
+        <span className="flex-1" />
+        <Button ref={primaryButtonRef} onClick={onPrimaryAction}>
+          <span className="bt-faces" aria-hidden>
+            <img src={BOT_MASCOT_URLS.A1} alt="" />
+            <img src={BOT_MASCOT_URLS.E1} alt="" />
+            <img src={BOT_MASCOT_URLS.B1} alt="" />
+          </span>
+          {getLocalizedFeatureTipCopy(tip).ctaLabel}
+        </Button>
+      </div>
     </FeatureTipDialogFrame>
   )
 }

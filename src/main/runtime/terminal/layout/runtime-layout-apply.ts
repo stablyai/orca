@@ -24,6 +24,7 @@ export type WindowLayoutCommand =
         | { type: 'setGroupRatios' }
         | { type: 'closeTabs'; tabIds: [string] }
         | { browserTabId: string }
+        | { type: 'replaceTabContent' }
         | { type: 'moveTabToWorkspace' }
         | { type: 'renameEditorFiles' }
         | { type: 'setDefaultTabsApplied' | 'applyDefaultTabs' }

@@ -13,8 +13,9 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.TerminalWindowSection.c9e1fdf42f': { ja: 'カーソル' },
   'auto.components.onboarding.ThemeStep.ab2a583a97': { ja: 'カーソル' },
   // File-row "Duplicate" is the action, and it sits beside "Copy" (复制) in the same menu; keyed
-  // because the skills-dialog chip shares the English string but reads as a noun.
-  'auto.components.right.sidebar.FileExplorerRow.0fec99bfd7': { zh: '创建副本' },
+  // because the skills-dialog chip shares the English string but reads as a noun. The French
+  // noun "Doublon" has the same problem.
+  'auto.components.right.sidebar.FileExplorerRow.0fec99bfd7': { zh: '创建副本', fr: 'Dupliquer' },
   'menu.reportCrash': { ko: '크래시 신고...', zh: '报告崩溃...', ja: 'クラッシュを報告...' },
   'menu.showMobileButton': {
     ko: 'Orca 모바일 버튼 표시',
@@ -120,7 +121,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'オンボーディングチェックリスト、{{value0}}/{{value1}} 完了。セットアップガイドを表示。'
   },
   'auto.components.settings.ShortcutFilterRail.02dc7d4251': {
-    ko: '바로가기 검색',
+    ko: '단축키 검색',
     zh: '搜索快捷键',
     ja: 'ショートカットを検索'
   },
@@ -186,6 +187,18 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.automations.listGroups.active': { zh: '已启用' },
   'auto.components.automations.AutomationDetail.active': { zh: '已启用' },
   'auto.components.automations.ExternalAutomationManagers.b3feba84c7': { zh: '已启用' },
+  'bots.settingsPage.active': { zh: '已启用' },
+  'settings.bots.active': { zh: '已启用' },
+  'settings.bots.tools.sourcePlaceholder': { zh: 'https://… 或 npx …' },
+  // Bots: "Next" labels the next run time; "New" badges an unseen chat or a just-added install.
+  'bots.automations.next': { zh: '下次运行', ja: '次回', ko: '다음 실행' },
+  'bots.chats.newTag': { zh: '新' },
+  'bots.github.setup.new': { zh: '新增' },
+  // Bots: "Review" opens items, an access request, a finished setup or a tidy-up, not a code review (评审).
+  'bots.hover.review': { zh: '查看' },
+  'bots.accessRequest.review': { zh: '审核' },
+  'bots.github.pill.review': { zh: '查看' },
+  'settings.bots.tidyUp.review': { zh: '查看' },
   'auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b': {
     ko: 'Discord',
     zh: 'Discord',
@@ -202,7 +215,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: '待機中'
   },
   'auto.components.sidebar.SidebarWorkspaceFilterSection.ed1611b65b': {
-    ko: '슬립 중인 항목 숨기기',
+    ko: '절전 중인 항목 숨기기',
     zh: '隐藏休眠项',
     ja: 'スリープ中を非表示'
   },
@@ -382,7 +395,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'GitHub イシュー'
   },
   'auto.components.settings.CommitMessageAiPane.4f722a5f53': {
-    ko: '사용자 지정 명령을 선택하는 커밋 메시지, PR 및 브랜치 이름 레시피에서 사용됩니다. 사용',
+    ko: '사용자 지정 명령을 선택하는 커밋 메시지, PR 및 브랜치 이름 레시피에서 사용됩니다. 명령 입력을 인수로 넘기려면 명령에',
     zh: '由选择自定义命令的提交消息、拉取请求和分支名称配方使用。使用',
     ja: 'カスタムコマンドを選択するコミットメッセージ、PR、ブランチ名のレシピで使用されます。使用'
   },
@@ -528,7 +541,17 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.browser.search.sshWorkspaceRouting.ssh': { fr: 'ssh' },
   // Worktree badge: stand-alone 主要な leaves the adnominal な dangling — align with the Tooltip's プライマリ.
   'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ' },
-  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' }
+  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' },
+  // "Dismiss" on a bot's create offer is sent to the bot as the owner's reply, so it reads 忽略, not 关闭.
+  'components.native-chat.offerCard.dismiss': { zh: '忽略' },
+  // Bot statuses read as states (已完成), not the imperative button word 完成.
+  'bots.items.status.done': { zh: '已完成' },
+  'bots.webhooks.calls.completed': { zh: '已完成' },
+  'bots.googleSetup.progress.done': { zh: '已完成' },
+  'featureTips.botsTeammate.agentDone': { zh: '已完成' },
+  // Dismissing an Up next suggestion ignores it; the webhook's Checks are its signature checks.
+  'bots.upNext.dismiss': { zh: '忽略' },
+  'bots.webhooks.checksLabel': { zh: '验证' }
 }
 
 export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(BASE_LOCALE_KEY_OVERRIDES)

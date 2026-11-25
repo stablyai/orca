@@ -22,6 +22,7 @@ import { useBrowserIdentityMigrationNotice } from '../components/settings/browse
 import { useBrowserClientHostedDownloadNotices } from '../components/browser-pane/navigate/browser-client-hosted-download-notices'
 import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/provider-notices/codex-server-isolation/codex-terminal-server-isolation-notice'
 import { useClaudeThemeSyncOffer } from '../components/terminal-pane/provider-notices/claude-theme-sync/claude-theme-sync-offer'
+import { usePerfNotices } from '../components/perf-notices/use-perf-notices'
 import { useVisibleHostedReviewRefresh } from '../store/slices/hosted-review/refresh/use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './storage/use-profile-state-save-delay-notice'
 import { useBotHomeTabPlacement } from '../components/bots/bot-home-tab-placement'
@@ -59,4 +60,5 @@ export function useAppShellServices(): void {
   useBrowserClientHostedDownloadNotices()
   useCodexTerminalServerIsolationNotice()
   useClaudeThemeSyncOffer()
+  usePerfNotices()
 }

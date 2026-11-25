@@ -6,9 +6,17 @@ import {
   type ConnectorCloudFeature,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
+import {
+  CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE,
+  CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE,
+  CONNECTOR_REPLIES_PAUSED_FEATURE
+} from '../../shared/connector-cloud-features'
+import { CONNECTOR_LONG_ANSWER_BYTES } from '../../shared/connectors/connector-turn-activity-contract'
 import { SLACK_MIRROR_FEATURE } from '../../shared/connectors/connector-slack-mirror-contract'
 import type { ConversationEvent } from '../external-conversations/external-conversation-events'
-import { capUtf8, jsonBytes, unsupported } from './connector-snapshot'
+import { capAnswer, jsonBytes, unsupported } from './connector-snapshot'
+import { redactLocalPaths } from '../../shared/connectors/slack-local-paths'
+import { isSlackConversation } from './connector-slack-text'
 
 /** Within the per-event cap. */
 function promptEvent(event: Extract<ConnectorEvent, { kind: 'prompt' }>): ConnectorEvent {
@@ -27,6 +35,8 @@ export function toConnectorEvent(
     return null
   }
   const { paneKey } = event
+  const slack = isSlackConversation(conversation)
+  const shown = (text: string): string => (slack ? redactLocalPaths(text) : text)
   switch (event.kind) {
     case 'linked':
       return {
@@ -77,9 +87,10 @@ export function toConnectorEvent(
             stopReason: event.stopReason,
             ...(event.lastAssistantMessage
               ? {
-                  lastAssistantMessage: capUtf8(
-                    event.lastAssistantMessage,
-                    CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes
+                  // Kept whole to the long cap: what goes is cut to the cloud it goes to.
+                  lastAssistantMessage: capAnswer(
+                    shown(event.lastAssistantMessage),
+                    CONNECTOR_LONG_ANSWER_BYTES
                   )
                 }
               : {}),
@@ -90,11 +101,65 @@ export function toConnectorEvent(
             ...(event.mirror && cloudFeatures.has(SLACK_MIRROR_FEATURE) ? { mirror: true } : {}),
             // Any deployed cloud honours it, whatever its hello lists (design item 125 §3).
             ...(event.stateOnly ? { stateOnly: true } : {}),
+            // A cloud without the paused line would read it as nothing; only one that lists it.
+            ...(event.resumes && cloudFeatures.has(CONNECTOR_REPLIES_PAUSED_FEATURE)
+              ? { resumes: true }
+              : {}),
             ...(event.turnFor ? { turnFor: event.turnFor } : {})
           }
     case 'workers':
       return cloudFeatures.has('workers' satisfies ConnectorCloudFeature)
         ? { kind: 'workers', conversation, paneKey, running: event.running }
         : null
+    case 'activity':
+      return cloudFeatures.has(CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE)
+        ? {
+            kind: 'activity',
+            conversation,
+            paneKey,
+            turnId: event.turnId,
+            ...(event.text === undefined ? {} : { text: shown(event.text) }),
+            ...(event.steps?.length
+              ? { steps: event.steps.map((step) => ({ ...step, title: shown(step.title) })) }
+              : {})
+          }
+        : null
   }
+}
+
+/** An answer's words as this cloud takes them: within the older cap, said to be cut, for one that
+ *  doesn't list `answers.long`. */
+export function answerTextFor(text: string, cloudFeatures: ReadonlySet<string>): string {
+  return cloudFeatures.has(CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE)
+    ? text
+    : capAnswer(text, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
+}
+
+/**
+ * An event as this cloud takes its answer. Read as each batch goes, since an answer waits across
+ * hellos and the cloud it finally reaches may not be the one it was written for.
+ */
+export function answerFor(
+  event: ConnectorEvent,
+  cloudFeatures: ReadonlySet<string>
+): ConnectorEvent {
+  // One already within the cap goes as the same object: what binds to a sent event still finds it.
+  if (event.kind === 'turn-ended' && event.lastAssistantMessage !== undefined) {
+    // Again here: a turn end saved to disk before it was scrubbed is sent from there.
+    const said = isSlackConversation(event.conversation)
+      ? redactLocalPaths(event.lastAssistantMessage)
+      : event.lastAssistantMessage
+    const lastAssistantMessage = answerTextFor(said, cloudFeatures)
+    return lastAssistantMessage === event.lastAssistantMessage
+      ? event
+      : { ...event, lastAssistantMessage }
+  }
+  if (event.kind === 'reply' && event.prose !== undefined) {
+    const said = isSlackConversation(event.conversation)
+      ? redactLocalPaths(event.prose)
+      : event.prose
+    const prose = answerTextFor(said, cloudFeatures)
+    return prose === event.prose ? event : { ...event, prose }
+  }
+  return event
 }

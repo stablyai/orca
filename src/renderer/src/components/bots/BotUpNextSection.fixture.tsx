@@ -37,7 +37,14 @@ const UP_NEXT: BotUpNext = {
       'PR 39794 has conflicts and has not moved since last week.',
       'https://github.com/stablyai/orca/pull/39794'
     ),
-    suggestion('s3', 'Triage', 'Short.', 'https://linear.app/globex/issue/ENG-1')
+    suggestion('s3', 'Triage', 'Short.', 'https://linear.app/globex/issue/ENG-1'),
+    // No source: no logo, its title still on the others' edge.
+    suggestion(
+      's4',
+      'Renew the docs domain before it lapses',
+      'It expires Friday.',
+      'https://example.com/dns'
+    )
   ]
 }
 

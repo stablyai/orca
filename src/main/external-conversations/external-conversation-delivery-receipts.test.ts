@@ -92,6 +92,7 @@ describe('DeliveryReceipts ledger capacity', () => {
     for (let i = 0; i < CONNECTOR_PENDING_RECEIPT_LIMIT; i++) {
       void before.run(KEY, String(i), 'connector.send', ['hello'], never)
     }
+    db.beginMutationReceipt(ORDINARY)
     db.close()
 
     const reopened = new OrchestrationDb(path)
@@ -113,19 +114,10 @@ describe('DeliveryReceipts ledger capacity', () => {
     })
     expect(executed).toBe(1)
     expect(reopened.countPendingMutationReceipts(['connector:slack'])).toBe(0)
-    reopened.close()
-  })
-
-  it('leaves other callers’ pending receipts alone', async () => {
-    const { db } = fileDb()
-    db.beginMutationReceipt(ORDINARY)
-    await new DeliveryReceipts(() => db).run(KEY, 'd1', 'connector.send', ['hello'], async () => ({
-      outcome: 'accepted'
-    }))
-    expect(db.getMutationReceipt(ORDINARY.callerFingerprint, ORDINARY.requestId)?.state).toBe(
+    expect(reopened.getMutationReceipt(ORDINARY.callerFingerprint, ORDINARY.requestId)?.state).toBe(
       'pending'
     )
-    db.close()
+    reopened.close()
   })
 })
 
@@ -151,5 +143,25 @@ describe('DeliveryReceipts.recorded', () => {
     await expect(restarted.recorded(KEY, 'refused')).resolves.toBeNull()
     await expect(restarted.recorded(KEY, 'never-received')).resolves.toBeNull()
     reopened.close()
+  })
+})
+
+describe('DeliveryReceipts.heldByMute', () => {
+  it('replays only the same send the mute held, and refuses another payload under its id', async () => {
+    const { db } = fileDb()
+    const receipts = new DeliveryReceipts(() => db)
+    await receipts.run(KEY, 'held', 'connector.mute', ['mute'], async () => ({
+      outcome: 'accepted'
+    }))
+    await receipts.run(KEY, 'sent', 'connector.send', ['hi'], async () => ({ outcome: 'accepted' }))
+    await expect(receipts.heldByMute(KEY, 'held', ['mute'])).resolves.toEqual({
+      outcome: 'accepted'
+    })
+    await expect(receipts.heldByMute(KEY, 'held', ['hello'])).resolves.toEqual({
+      outcome: 'refused',
+      reason: 'delivery_id_reused'
+    })
+    expect(receipts.heldByMute(KEY, 'sent', ['hi'])).toBeNull()
+    db.close()
   })
 })

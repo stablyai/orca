@@ -41,6 +41,12 @@ export type NotificationSettings = {
   notifyHiddenWorkspaces: boolean
 }
 
+/** The switches a host applies to its own phone pushes; sounds and per-source mutes stay with each client. */
+export type HostNotificationSettings = Pick<
+  NotificationSettings,
+  'enabled' | 'agentTaskComplete' | 'agentNeedsInput' | 'terminalBell'
+>
+
 export function usesCustomNotificationSound(soundId: string | null | undefined): boolean {
   return !!soundId && soundId !== 'system' && soundId !== 'none'
 }
@@ -100,6 +106,8 @@ export type NotificationDispatchRequest = {
   agentToolName?: string
   agentToolInput?: string
   agentLastAssistantMessage?: string
+  /** The chat answers a Slack thread, so its reply is written in Slack's markup. */
+  agentRepliesInSlack?: true
   /** The verdict on the turn this notification reports, which picks its wording. */
   agentTurnOutcome?: AgentTurnOutcome
   /** Why a failed turn failed, typed: its body says so instead of the last message. */

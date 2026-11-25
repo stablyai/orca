@@ -18,7 +18,7 @@ import { BotAvatar } from '../BotAvatar'
 import { botShareErrorMessage } from './bot-share-error-copy'
 import { listBotShares } from './bot-share-rpc'
 import { BotShareFlow } from './BotShareFlow'
-import { botShareLinkOfShare, type BotShareStart } from './use-bot-share-link'
+import type { BotShareStart } from './use-bot-share-link'
 import { BotShareStopDialog } from './BotShareStopDialog'
 
 const DATE: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
@@ -171,8 +171,7 @@ export function BotSharedLinksList(): React.JSX.Element {
         <BotShareFlow
           bot={acting.bot}
           start={acting.start}
-          // The bot's own link is read with its version; an older extra link acts as itself.
-          link={acting.share.canonical ? undefined : botShareLinkOfShare(acting.share)}
+          shareId={acting.share.id}
           onChanged={load}
           onClose={() => setActing(null)}
         />

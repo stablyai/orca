@@ -24,6 +24,10 @@ export type ChatProgramObservation = AgentSessionChatProgram | 'unlearned'
 const chatProgramOffered = (program: ChatProgramObservation) =>
   program === 'available' || program === 'installable'
 
+/** An agent whose CLI isn't detected still counts as installed when its chat program is there. */
+export const chatProgramInstalled = (program: ChatProgramObservation): boolean =>
+  program === 'available'
+
 export function orderAgentLaunchPickerAgents(
   defaultAgent: TuiAgent | 'blank' | null | undefined,
   detected: readonly TuiAgent[],
@@ -45,12 +49,23 @@ export type ChatUnavailableReason =
   | 'not-on-host'
   | 'windows'
 
-export type NewTabAgentMenuRow = (
-  | { kind: 'chat'; agent: TuiAgent }
-  | { kind: 'chat-unavailable'; agent: TuiAgent; reason: ChatUnavailableReason }
-  | { kind: 'cli'; agent: TuiAgent; chat?: true }
-  | { kind: 'terminal'; agent: TuiAgent }
-) & { executionHostId?: ExecutionHostId }
+export type NewTabAgentMenuRow =
+  /** `setup`: the agent isn't installed there, so its chat opens with an offer to install it. */
+  (
+    | { kind: 'chat'; agent: TuiAgent; setup?: true }
+    | { kind: 'chat-unavailable'; agent: TuiAgent; reason: ChatUnavailableReason }
+    | { kind: 'cli'; agent: TuiAgent; chat?: true }
+    | { kind: 'terminal'; agent: TuiAgent }
+  ) & { executionHostId?: ExecutionHostId }
+
+export function agentMenuRowSupportsChat(row: NewTabAgentMenuRow): boolean {
+  return row.kind === 'chat' || (row.kind === 'cli' && row.chat === true)
+}
+
+/** Launches the agent as it is on the host now: not a chat that installs it first, not an unavailable one. */
+export function agentMenuRowReady(row: NewTabAgentMenuRow): boolean {
+  return row.kind === 'cli' || row.kind === 'terminal' || (row.kind === 'chat' && !row.setup)
+}
 
 export type NewTabAgentMenuSettings = NativeChatDefaultSettings &
   Partial<Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>>
@@ -127,11 +142,17 @@ export function buildNewTabAgentMenuRows(args: {
       ...chatAgents.filter((agent) => needsSetup(agent) && args.hostChatAnswer(agent) === 'yes')
     )
   }
+  const chats = orderAgentLaunchPickerAgents(defaultAgent, runnable).map((agent) => ({
+    kind: 'chat' as const,
+    agent,
+    ...(!args.detectedOnHost?.includes(agent) && !chatProgramInstalled(args.chatProgram(agent))
+      ? { setup: true as const }
+      : {})
+  }))
   return [
-    ...orderAgentLaunchPickerAgents(defaultAgent, runnable).map((agent) => ({
-      kind: 'chat' as const,
-      agent
-    })),
+    // Chats the host runs now lead the ones that install their agent first.
+    ...chats.filter(agentMenuRowReady),
+    ...chats.filter((row) => !agentMenuRowReady(row)),
     ...orderAgentLaunchPickerAgents(defaultAgent, [...unavailable.keys()]).map((agent) => ({
       kind: 'chat-unavailable' as const,
       agent,

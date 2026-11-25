@@ -42,6 +42,24 @@ export function readClaudeInit(message: Record<string, unknown>): ClaudeInitObse
     : null
 }
 
+/** Whether a frame naming another session refuses startup; foreign frames that do not are ignored.
+ *  `system/init` names the running session. Older CLIs (2.1.117) run a resume's SessionStart
+ *  hooks before switching from a boot id to the resumed session and stamp their frames with the
+ *  boot id, so on a resume those frames prove nothing either way; the first turn's init still
+ *  checks it. */
+export function claudeForeignFrameRefusesStartup(
+  message: Record<string, unknown>,
+  launch: { resumesTranscript: boolean }
+): boolean {
+  if (message.type === 'system' && message.subtype === 'init') {
+    return true
+  }
+  if (launch.resumesTranscript && message.hook_name === 'SessionStart:resume') {
+    return false
+  }
+  return readClaudeInit(message) !== null
+}
+
 /** Init and status frames describe the running mode; absent fields preserve the last report. */
 export function readClaudeReportedPermissionMode(
   message: Record<string, unknown>
@@ -80,6 +98,13 @@ export function observeClaudeReportedPermissionMode(
   }
   reports.reportedPermissionMode = mode
   return true
+}
+
+/** Initialize answers before Orca's first message can switch the mode; older CLIs omit it. */
+export function readClaudeOpenedPermissionMode(initialization: unknown): string | null {
+  return isRecord(initialization)
+    ? readClaudeFrameString(initialization, 'current_permission_mode')
+    : null
 }
 
 export function readClaudeModels(initialization: unknown): unknown[] {
@@ -156,6 +181,8 @@ export type ClaudeInitProof = {
   seen: () => ClaudeInitObservation | null
   /** Refusals after startup must end the published session. */
   onRefusal: ((error: Error) => void) | null
+  /** The first refusal recorded, or null. */
+  refusal: () => Error | null
 }
 
 export function createClaudeInitProof(): ClaudeInitProof {
@@ -167,6 +194,7 @@ export function createClaudeInitProof(): ClaudeInitProof {
   })
   void promise.catch(() => {})
   let outcome: { init: ClaudeInitObservation } | { error: Error } | null = null
+  let refused: Error | null = null
   const reject = (error: Error): void => {
     outcome ??= { error }
     rejectPromise(error)
@@ -183,6 +211,7 @@ export function createClaudeInitProof(): ClaudeInitProof {
         return
       }
       const error = new Error('claude provider session expected')
+      refused ??= error
       reject(error)
       proof.onRefusal?.(error)
     },
@@ -192,7 +221,8 @@ export function createClaudeInitProof(): ClaudeInitProof {
       }
       return outcome?.init ?? null
     },
-    onRefusal: null
+    onRefusal: null,
+    refusal: () => refused
   }
   return proof
 }

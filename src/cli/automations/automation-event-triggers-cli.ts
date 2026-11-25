@@ -20,6 +20,7 @@ import { callBots, findBot, type BotsListResult } from '../bots/bot'
 import { botEventSources, wontFireNote } from '../../shared/bot-event-sources'
 import type { AutomationListPayload } from './automation-format'
 import type { AutomationOnce } from '../../shared/automation-once'
+import { orcaCloudNeedsSignIn } from '../../shared/bots/host-orca-sign-in'
 
 type Flags = Map<string, string | boolean>
 
@@ -103,7 +104,7 @@ export async function withWontFire<Listed extends { result: AutomationListPayloa
   if (withRules.length === 0) {
     return listed
   }
-  const { bots, webhooks, connectorStatus } = await callBots<BotsListResult>(
+  const { bots, webhooks, connectorStatus, signInServer } = await callBots<BotsListResult>(
     client,
     'bots.list'
   ).then(
@@ -115,7 +116,15 @@ export async function withWontFire<Listed extends { result: AutomationListPayloa
     const bot = bots.find((entry) => entry.id === target?.botId)
     const note =
       bot &&
-      wontFireNote({ ...bot, webhooks, cloudSignedOut: connectorStatus === 'signed-out' }, on ?? [])
+      wontFireNote(
+        {
+          ...bot,
+          webhooks,
+          cloudSignedOut: orcaCloudNeedsSignIn(connectorStatus),
+          ...(signInServer !== undefined ? { signInServer } : {})
+        },
+        on ?? []
+      )
     return note ? [[id, note] as const] : []
   })
   return notes.length > 0

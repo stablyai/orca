@@ -55,16 +55,20 @@ const refresher = createHostOAuthRefresher<GoogleAccountRecord>({
         }
       : null,
   save: (_email, record, refreshed) =>
-    saveGoogleAccount({
-      ...record,
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      expiresAt: refreshed.expiresAt,
-      ...(refreshed.scope ? { grantedScopes: refreshed.scope.split(' ') } : {})
-    }),
+    saveGoogleAccount(
+      {
+        ...record,
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+        expiresAt: refreshed.expiresAt,
+        ...(refreshed.scope ? { grantedScopes: refreshed.scope.split(' ') } : {})
+      },
+      record.refreshToken ?? undefined
+    ),
   ended: (_email, record, error) =>
     saveGoogleAccount(
-      markGoogleAccountReconnect(record, GRANT_ENDED[error] ?? GRANT_ENDED.invalid_grant)
+      markGoogleAccountReconnect(record, GRANT_ENDED[error] ?? GRANT_ENDED.invalid_grant),
+      record.refreshToken ?? undefined
     )
 })
 
@@ -76,7 +80,7 @@ export async function refreshGoogleAccount(
 ): Promise<GoogleAccountRecord> {
   const key = email.toLowerCase()
   const outcome = await refresher.refresh(key, { now: deps.now, request: deps.http }, force)
-  const record = readGoogleAccount(key)
+  const record = await readGoogleAccount(key)
   if (!record) {
     throw new GoogleAccountUnavailableError(
       `${email} isn't connected on this computer. Connect it in Orca.`
@@ -98,7 +102,7 @@ export async function googleAccessToken(
   const record = await refreshGoogleAccount(email, deps)
   if (record.status !== 'connected' || !record.accessToken) {
     throw new GoogleAccountUnavailableError(
-      `${record.reason ?? 'Google access ended.'} Reconnect it in Orca.`
+      `${record.reason ?? 'Google access ended.'} Reconnect ${record.email} in Orca.`
     )
   }
   return record.accessToken

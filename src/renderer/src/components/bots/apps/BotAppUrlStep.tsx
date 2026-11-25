@@ -6,33 +6,32 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotOwnTool } from '../../../../../shared/bot-tools'
+import {
+  botMcpAppUrlPlace,
+  type BotMcpAppUrlVariable
+} from '../../../../../shared/bots/bot-mcp-apps'
 import { LoadedEditor } from '../AddBotToolDialog'
-import { BotToolFinishSignIn } from '../BotToolFinishSignIn'
 import {
   addBotTool,
   botToolErrorMessage,
-  useBotToolHostSignIn,
   connectBotTool,
-  openBotToolSignInPage,
-  readBotToolNames,
-  removeBotTool,
-  useBotToolSignIn
+  readBotOwnTools
 } from '../bot-tools-client'
-import { updateLine } from '../bot-tool-sign-in-action'
-import { openBotHostPageOrSay } from '@/lib/bot-host-page'
 import { BotAppLogo } from './BotAppRow'
-import {
-  BotAppBrowserWait,
-  BotAppOutcome,
-  BotAppStepHeader,
-  BotAppStepHeading
-} from './BotAppStepParts'
+import { BotAppOutcome, BotAppStepHeader, BotAppStepHeading } from './BotAppStepParts'
+import { BotAppUrlVariableForm } from './BotAppUrlVariableForm'
+import { ToolSignIn, ToolSignInFailed } from './BotAppToolSignIn'
 
 const FORM_BODY = 'px-6 pt-1 pb-6'
 
-type CustomPhase =
+export type CustomPhase =
   | { kind: 'edit' }
+  /** An app whose URL has a blank: its site or host, given before it is added. */
+  | { kind: 'variable'; app: BotMcpAppPreset; variable: BotMcpAppUrlVariable }
   | { kind: 'adding' }
+  /** Another site or host of the app is on the bot already; one tool per name. */
+  /** `place`: the site or host it is at, when the app's template makes its URL. */
+  | { kind: 'elsewhere'; app: string; place: string | null }
   /** owned: Orca signs in (pasted back only when its host runs it); else the tool's agent CLI does. */
   | {
       kind: 'signing'
@@ -45,30 +44,55 @@ type CustomPhase =
   | { kind: 'failed'; name: string; owned: boolean; error?: string }
   | { kind: 'done'; name: string }
 
+const webHref = (url: string): string => {
+  try {
+    return new URL(url).href
+  } catch {
+    return url
+  }
+}
+
 const urlLogo = (size: 'md' | 'lg') => (
   <BotAppLogo plain icon={<Link2 className={size === 'lg' ? 'size-5' : 'size-4'} />} size={size} />
 )
 
 /** An MCP app the catalog lists: added by its URL under its own name, no editor. */
-export type BotMcpAppPreset = { name: string; title: string; url: string; logo: React.ReactNode }
+export type BotMcpAppPreset = {
+  name: string
+  title: string
+  line: string
+  url: string
+  variable?: BotMcpAppUrlVariable
+  logo: React.ReactNode
+}
 
 /**
  * Add by URL: the bot's Tools editor, then the server's browser sign-in, waited for here. With a
- * preset (an MCP app from the catalog) the tool is added straight from its URL.
+ * preset (an MCP app from the catalog) the tool is added straight from its URL, once its site is
+ * given when its URL has a blank.
  */
 export function CustomAppStep({
   bot,
   preset,
   onBack,
-  onClose
+  onClose,
+  onManage
 }: {
   bot: Bot
   preset?: BotMcpAppPreset
   onBack: () => void
   onClose: () => void
+  /** The bot's apps, where one on the bot already is managed. */
+  onManage: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [phase, setPhase] = useState<CustomPhase>({ kind: preset ? 'adding' : 'edit' })
+  const [phase, setPhase] = useState<CustomPhase>(
+    preset?.variable
+      ? { kind: 'variable', app: preset, variable: preset.variable }
+      : { kind: preset ? 'adding' : 'edit' }
+  )
+  // The URL last added, which Try again adds again.
+  const addedUrl = useRef(preset?.url ?? '')
   const attempts = useRef(0)
   const { hostId, id: botId } = bot
   const signIn = useCallback(
@@ -96,9 +120,10 @@ export function CustomAppStep({
     [signIn]
   )
   const add = useCallback(
-    (app: BotMcpAppPreset) => {
+    (app: BotMcpAppPreset, url: string) => {
+      addedUrl.current = url
       setPhase({ kind: 'adding' })
-      void addBotTool({ hostId, id: botId }, app.url, app.name).then(added, (error: unknown) =>
+      void addBotTool({ hostId, id: botId }, url, app.name).then(added, (error: unknown) =>
         setPhase({ kind: 'failed', name: app.name, owned: true, error: botToolErrorMessage(error) })
       )
     },
@@ -107,20 +132,28 @@ export function CustomAppStep({
   // Once per step: the parent redraws with a fresh preset object.
   const addStarted = useRef(false)
   useEffect(() => {
-    if (!preset || addStarted.current) {
+    if (!preset || preset.variable || addStarted.current) {
       return
     }
     addStarted.current = true
-    add(preset)
+    add(preset, preset.url)
   }, [add, preset])
-  // Try again resumes where it failed, by whether the host has the tool: add it, or sign in to it.
+  // Try again resumes where it failed, by whether the host has the tool: add it, or sign in to it,
+  // unless the tool under that name is another site or host of the app (another window added it).
   const retry = (name: string, owned: boolean): void => {
-    void readBotToolNames(bot).then(
-      (names) => {
-        if (names.has(name)) {
+    void readBotOwnTools(bot).then(
+      (tools) => {
+        const saved = tools.find((tool) => tool.name === name)
+        if (saved && preset && webHref(saved.detail) !== webHref(addedUrl.current)) {
+          setPhase({
+            kind: 'elsewhere',
+            app: preset.title,
+            place: botMcpAppUrlPlace(preset, saved.detail)?.name ?? null
+          })
+        } else if (saved) {
           signIn(name, owned)
         } else if (preset) {
-          add(preset)
+          add(preset, addedUrl.current)
         } else {
           setPhase({ kind: 'edit' })
         }
@@ -140,6 +173,54 @@ export function CustomAppStep({
           title={t('bots.apps.mcp.adding', 'Adding {{app}}…', { app: preset?.title ?? '' })}
           line={null}
           actions={null}
+        />
+      </>
+    )
+  }
+  if (phase.kind === 'elsewhere') {
+    return (
+      <>
+        <BotAppStepHeader onClose={onClose} />
+        <BotAppOutcome
+          logo={appLogo}
+          badge="failed"
+          title={t('bots.apps.mcp.elsewhereTitle', '{{app}} is already on {{bot}}', {
+            app: phase.app,
+            bot: bot.name
+          })}
+          line={
+            phase.place
+              ? t(
+                  'bots.apps.mcp.elsewhereLine',
+                  'It’s added at {{place}}. Remove it in Manage to add another.',
+                  { place: phase.place }
+                )
+              : t('bots.apps.mcp.elsewhereOther', 'Remove it in Manage to add another.')
+          }
+          actions={
+            <>
+              <Button variant="ghost" size="sm" onClick={onClose}>
+                {t('bots.apps.close', 'Close')}
+              </Button>
+              <Button size="sm" onClick={onManage}>
+                {t('bots.connectors.manage', 'Manage')}
+              </Button>
+            </>
+          }
+        />
+      </>
+    )
+  }
+  if (phase.kind === 'variable') {
+    const { app, variable } = phase
+    return (
+      <>
+        <BotAppStepHeader onBack={onBack} onClose={onClose} />
+        <BotAppUrlVariableForm
+          className={FORM_BODY}
+          app={app}
+          variable={variable}
+          onAdd={(url) => add(app, url)}
         />
       </>
     )
@@ -211,175 +292,6 @@ export function CustomAppStep({
           <Button size="sm" onClick={onClose}>
             {t('bots.apps.done', 'Done')}
           </Button>
-        }
-      />
-    </>
-  )
-}
-
-/** A sign-in that didn't finish: why, as this window last heard it, with Try again or Remove. */
-function ToolSignInFailed({
-  bot,
-  phase,
-  logo,
-  app,
-  onRetry,
-  onError,
-  onClose
-}: {
-  bot: Bot
-  phase: Extract<CustomPhase, { kind: 'failed' }>
-  logo: React.ReactNode
-  app: string
-  onRetry: () => void
-  onError: (error: string) => void
-  onClose: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const signIn = useBotToolSignIn(bot, phase.name)
-  const failure = phase.owned ? signIn.failure : undefined
-  const unsupported = failure === 'unsupported'
-  const title = unsupported
-    ? t('bots.apps.unsupported', 'This app isn’t supported yet')
-    : failure === 'needs-update'
-      ? updateLine(t, signIn.hostName)
-      : failure === 'unavailable'
-        ? t('bots.apps.cantReach', 'Can’t reach {{app}}', { app })
-        : t('bots.apps.couldNotSignIn', 'Couldn’t sign in to {{app}}', { app })
-  const line =
-    failure === 'denied'
-      ? t('bots.apps.accessNotAllowed', 'Access wasn’t allowed.')
-      : failure === 'expired'
-        ? t('bots.apps.signInExpired', 'The sign-in expired.')
-        : unsupported || failure === 'unavailable' || failure === 'needs-update'
-          ? null
-          : (phase.error ??
-            t(
-              'bots.apps.custom.failedLine',
-              '{{app}} is on {{bot}} but not signed in. Try again, or remove it in Settings › Tools.',
-              { app, bot: bot.name }
-            ))
-  return (
-    <>
-      <BotAppStepHeader onClose={onClose} />
-      <BotAppOutcome
-        logo={logo}
-        badge="failed"
-        title={title}
-        line={line}
-        actions={
-          <>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              {t('bots.apps.close', 'Close')}
-            </Button>
-            {unsupported ? (
-              <Button
-                size="sm"
-                onClick={() =>
-                  void removeBotTool(bot, phase.name).then(onClose, (error: unknown) =>
-                    onError(botToolErrorMessage(error))
-                  )
-                }
-              >
-                {t('bots.toolApp.removeNamed', 'Remove {{app}}', { app })}
-              </Button>
-            ) : (
-              <Button size="sm" onClick={onRetry}>
-                {t('bots.composio.tryAgain', 'Try again')}
-              </Button>
-            )}
-          </>
-        }
-      />
-    </>
-  )
-}
-
-/** A tool's sign-in under way: Finish in your browser, or the address pasted from another computer. */
-function ToolSignIn({
-  bot,
-  phase,
-  logo,
-  title,
-  onPaste,
-  onOpenAgain,
-  onEnded,
-  onClose
-}: {
-  bot: Bot
-  phase: Extract<CustomPhase, { kind: 'signing' }>
-  logo: React.ReactNode
-  title: string
-  onPaste: (paste: boolean) => void
-  /** Orca's own sign-in: a fresh one, since its page can't be opened twice. */
-  onOpenAgain?: () => void
-  onEnded: (outcome: string | undefined) => void
-  onClose: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const { active, outcome } = useBotToolSignIn(bot, phase.name)
-  // A sign-in the bot's host runs for this device: its page is open here; its address comes back by paste.
-  const host = useBotToolHostSignIn(bot, phase.name)
-  const hosted = active ? host : null
-  // The watch ends with the host's last word on the sign-in.
-  React.useEffect(() => {
-    if (!active && outcome !== undefined) {
-      onEnded(outcome)
-    }
-  }, [active, outcome, onEnded])
-  if (phase.paste) {
-    return (
-      <>
-        <BotAppStepHeader
-          backLabel={t('bots.apps.back', 'Back')}
-          onBack={() => onPaste(false)}
-          onClose={onClose}
-        />
-        <div className={FORM_BODY}>
-          <BotAppStepHeading
-            logo={logo}
-            title={t('bots.apps.paste.title', 'Signing in on another computer?')}
-            line={t(
-              'bots.apps.paste.line',
-              'Sign in to {{app}} there, then copy the address of the page that didn’t load.',
-              { app: title }
-            )}
-          />
-          <BotToolFinishSignIn bot={bot} name={phase.name} />
-        </div>
-      </>
-    )
-  }
-  const hostedUrl = hosted?.paste ? hosted.url : null
-  return (
-    <>
-      <BotAppStepHeader onClose={onClose} />
-      <BotAppBrowserWait
-        logo={logo}
-        line={
-          hosted?.state === 'finishing'
-            ? t('bots.toolApp.finishing', 'Finishing sign-in…')
-            : t('bots.apps.signInAllow', 'Sign in to {{app}} and allow access.', {
-                app: title
-              })
-        }
-        onClose={onClose}
-        onOpenAgain={
-          hostedUrl
-            ? () => openBotToolSignInPage(hostedUrl)
-            : (onOpenAgain ??
-              (phase.url
-                ? () => openBotHostPageOrSay(bot.hostId, phase.url ?? '', { bot, local: 'system' })
-                : undefined))
-        }
-        footer={
-          hostedUrl ? (
-            <BotToolFinishSignIn bot={bot} name={phase.name} />
-          ) : phase.owned ? null : (
-            <Button variant="link" size="inlineText" onClick={() => onPaste(true)}>
-              {t('bots.apps.paste.title', 'Signing in on another computer?')}
-            </Button>
-          )
         }
       />
     </>

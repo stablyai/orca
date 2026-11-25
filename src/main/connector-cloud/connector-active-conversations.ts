@@ -44,9 +44,11 @@ export class ConnectorActiveConversations {
         this.turns.delete(event.paneKey)
         this.workers.delete(event.paneKey)
         break
-      // A link starts no work, and a prompt arrives inside a turn turn-started already counts.
+      // A link starts no work; a prompt and what a turn is doing arrive inside a turn turn-started
+      // already counts.
       case 'linked':
       case 'prompt':
+      case 'activity':
         break
     }
   }

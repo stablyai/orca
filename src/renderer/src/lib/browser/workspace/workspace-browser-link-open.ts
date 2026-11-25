@@ -1,3 +1,6 @@
+import { completePlacedBrowserLink } from './placed-browser-link-completion'
+import { clientCreateFailure } from './workspace-browser-tab-presentation'
+import { resolveNewBrowserTabProfile } from '@/store/slices/browser/profiles/browser-new-tab-profile'
 import { focusOpenedBrowserLink } from '../navigation/browser-link-focus'
 import { createBrowserLinkHostMatcher } from '../navigation/browser-link-owner'
 import { resolveBrowserLinkSession } from '../navigation/browser-link-session'
@@ -65,6 +68,43 @@ export function workspaceBrowserLinkDestination(
     profileHostId: sessionHostId,
     ...resolveBrowserLinkSession(state, request.workspaceId, sessionHostId),
     resource: { kind: 'website', url: request.url }
+  }
+}
+
+/** Create a client browser tab in the requested placement and complete source-aware link outcomes. */
+export async function createClientWorkspaceBrowserTab(
+  state: AppState,
+  request: OpenWorkspaceBrowserTabRequest,
+  hostId: ExecutionHostId,
+  presentation: { error: string; title: string },
+  // Desktop-rendered pages in runtime workspaces keep runtime ownership or palette/activation disowns their tabs.
+  ownerHostId: ExecutionHostId = hostId
+): Promise<string | null> {
+  if (request.linkContext && !request.placementWorkspaceId) {
+    const destination = workspaceBrowserLinkDestination(request, ownerHostId, null, hostId)
+    const outcome = await openClientWorkspaceBrowserLink(request, destination, presentation.title)
+    request.onLinkOutcome?.(outcome)
+    return outcome.status === 'opened' ? outcome.result.browserPageId : null
+  }
+  try {
+    const created = state.createBrowserTab(request.workspaceId, request.url, {
+      placementWorkspaceId: request.placementWorkspaceId,
+      activate: request.focusOnCreate !== false && request.linkContext?.canReveal?.() !== false,
+      browserRuntimeEnvironmentId: null,
+      focusAddressBar: false,
+      executionHostId: ownerHostId,
+      ...resolveNewBrowserTabProfile(state, request.workspaceId, hostId),
+      targetGroupId: request.targetGroupId,
+      ...(request.split ? { split: request.split } : {}),
+      ...(request.afterTabId ? { afterTabId: request.afterTabId } : {}),
+      title: presentation.title
+    })
+    if (created.activePageId) {
+      await completePlacedBrowserLink(request, created.activePageId, undefined, created.id)
+    }
+    return created.activePageId ?? null
+  } catch (error) {
+    throw clientCreateFailure(presentation.error, error)
   }
 }
 

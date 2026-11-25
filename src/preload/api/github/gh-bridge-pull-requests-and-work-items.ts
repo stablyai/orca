@@ -209,5 +209,6 @@ export const ghPullRequestsAndWorkItemsApi = {
     prNumber: number
     method?: 'merge' | 'squash' | 'rebase'
     prRepo?: GitHubOwnerRepo | null
+    expectedHeadSha?: string | null
   }): Promise<{ ok: true } | { ok: false; error: string }> => ipcRenderer.invoke('gh:mergePR', args)
 } satisfies Partial<PreloadApi['gh']>

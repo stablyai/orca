@@ -6,6 +6,11 @@ import {
   resolvePasteReadySignal
 } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
+import {
+  createSetupWaitGate,
+  SETUP_WAIT_GATE_MAX_MS,
+  type SetupWaitPhase
+} from '../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
@@ -121,6 +126,8 @@ export type StartupDraftReadinessOptions = {
   isShellInFront?: (ptyId: string) => Promise<boolean>
   /** Enter follows the paste, so the agent's submit signal is waited for instead of its draft one. */
   submit?: boolean
+  /** A wait-for-setup pane's Setup time does not count: the deadline restarts when Setup ends. */
+  afterSetup?: boolean
 }
 
 export function waitForWorktreeStartupDraft(
@@ -145,6 +152,7 @@ export function waitForWorktreeStartupDraft(
     let hardTimer: NodeJS.Timeout | null = null
     let deadlineCheckTimer: NodeJS.Timeout | null = null
     let unsubscribe: (() => void) | null = null
+    const setupGate = options.afterSetup ? createSetupWaitGate() : null
     // A check begun before a shell handoff cannot settle after it.
     let handoffs = 0
     let handoffCarry = ''
@@ -232,7 +240,15 @@ export function waitForWorktreeStartupDraft(
       if (settled) {
         return
       }
-      const data = isShellInFront ? sinceShellHandoff(chunk) : chunk
+      const gated = setupGate?.observe(chunk)
+      if (gated?.phase) {
+        restartForSetupPhase(gated.phase)
+        if (settled) {
+          return
+        }
+      }
+      const output = gated ? gated.output : chunk
+      const data = isShellInFront ? sinceShellHandoff(output) : output
       const result = scanner.observe(data)
       if (result.ready) {
         return onSignal()
@@ -271,7 +287,31 @@ export function waitForWorktreeStartupDraft(
         () => finish(null)
       )
     }
-    hardTimer = setTimeout(onDeadline, options.timeoutMs ?? resolveDraftPasteReadyTimeoutMs(agent))
+    const armDeadline = (
+      ms = options.timeoutMs ?? resolveDraftPasteReadyTimeoutMs(agent)
+    ): void => {
+      hardTimer = setTimeout(onDeadline, ms)
+    }
+    /** Output before Setup ended was the wrapper's, so its scan and timers start over. */
+    function restartForSetupPhase(phase: SetupWaitPhase): void {
+      if (phase === 'failed') {
+        return finish(null)
+      }
+      // A check begun on the wrapper's output cannot settle.
+      handoffs += 1
+      scanner = createDraftPasteReadyScanner(signal)
+      if (quietTimer) {
+        clearTimeout(quietTimer)
+        quietTimer = null
+      }
+      clearGrace()
+      if (hardTimer) {
+        clearTimeout(hardTimer)
+        hardTimer = null
+      }
+      armDeadline(phase === 'waiting' ? SETUP_WAIT_GATE_MAX_MS : undefined)
+    }
+    armDeadline()
     const replay = host.readRecentOutput(ptyId)
     if (replay) {
       observe(replay)

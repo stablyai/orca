@@ -26,10 +26,17 @@ import { useMobileRegisteredAgent } from '../agent-session/use-mobile-registered
 /** The fork a response offers: none, an empty held slot, drawn disabled, or pressable. */
 export type MobileNativeChatForkOffer = 'hidden' | 'reserved' | 'disabled' | 'available'
 
+/** What `/fork` did: opened a fork, waited on one already opening, or found no response to copy. */
+export type MobileNativeChatForkLatestOutcome = 'started' | 'pending' | 'working' | 'none'
+
 export type MobileNativeChatFork = {
   subscribe: (listener: () => void) => () => void
   offerFor: (message: NativeChatMessage) => MobileNativeChatForkOffer
   fork: (message: NativeChatMessage) => void
+  /** Whether `/fork` is Orca's here: the host and agent confirmed they can fork, as on desktop. */
+  commandOffered: () => boolean
+  /** `/fork`: copies through the newest response that offers a fork, as desktop's command does. */
+  forkLatest: () => MobileNativeChatForkLatestOutcome
 }
 
 /** Fixed by the row's own kind, never by support or turn state, so the meta row never shifts. */
@@ -150,16 +157,31 @@ export function useMobileNativeChatFork(input: {
     },
     [agent, createFork, offerFor, sessionId]
   )
+  const commandOffered = useCallback(
+    () => support.kind === 'known' && !!sessionId && isTuiAgent(agent ?? ''),
+    [agent, sessionId, support]
+  )
+  const forkLatest = useCallback((): MobileNativeChatForkLatestOutcome => {
+    if (inFlight.current) {
+      return 'pending'
+    }
+    const through = messages.findLast((message) => offerFor(message) === 'available')
+    if (!through) {
+      return agentWorking ? 'working' : 'none'
+    }
+    fork(through)
+    return 'started'
+  }, [agentWorking, fork, messages, offerFor])
   // One stable value: each button re-renders only when its own offer changes, not on every
   // streamed revision of the transcript.
-  const latest = useRef({ offerFor, fork })
+  const latest = useRef({ offerFor, fork, commandOffered, forkLatest })
   const listeners = useRef(new Set<() => void>())
   useLayoutEffect(() => {
-    latest.current = { offerFor, fork }
+    latest.current = { offerFor, fork, commandOffered, forkLatest }
     for (const listener of listeners.current) {
       listener()
     }
-  }, [offerFor, fork])
+  }, [offerFor, fork, commandOffered, forkLatest])
   return useMemo(
     () => ({
       subscribe: (listener) => {
@@ -167,7 +189,9 @@ export function useMobileNativeChatFork(input: {
         return () => listeners.current.delete(listener)
       },
       offerFor: (message) => latest.current.offerFor(message),
-      fork: (message) => latest.current.fork(message)
+      fork: (message) => latest.current.fork(message),
+      commandOffered: () => latest.current.commandOffered(),
+      forkLatest: () => latest.current.forkLatest()
     }),
     []
   )

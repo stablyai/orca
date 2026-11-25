@@ -32,7 +32,7 @@ import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace/creation/works
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
-import { getRepoSetupAgentStartupPolicy } from './workspace-setup/setup-policy-decisions'
+import { getRepoSetupAgentStartupPolicy } from '../../../../shared/workspace-setup/repo-hook-settings-defaults'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import type {
   SmartGitHubPrStartPointSelection,

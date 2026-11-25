@@ -10,10 +10,8 @@ import {
   announceWebPairingRefusedAtStartup,
   isWebPairingRefusedAtStartup
 } from './startup-web-pairing-refused'
-import {
-  collectTerminalProviderSnapshotPtyIds,
-  refreshTerminalProviderSnapshotCapabilities
-} from '../components/terminal/provider-snapshots/terminal-provider-snapshot-capability'
+import { refreshTerminalProviderSnapshotCapabilities } from '../components/terminal/provider-snapshots/terminal-provider-snapshot-capability'
+import { collectTerminalProviderSnapshotPtyIds } from '../components/terminal/provider-snapshots/terminal-provider-snapshot-pty-inventory'
 import { probeTerminalProviderGoneSessions } from '../components/terminal/provider-snapshots/terminal-provider-gone-sessions'
 
 type DegradedStartupRecoveryArgs = {

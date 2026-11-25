@@ -2,7 +2,7 @@ import { pbkdf2Sync } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
+import { unprotectWindowsDpapiCurrentUser } from '../../../windows-dpapi/current-user-unprotect'
 import { diag } from '../browser-cookie-import-diagnostics'
 import {
   CHROMIUM_BROWSERS,
@@ -150,30 +150,15 @@ export async function getWindowsEncryptionKey(
       return null
     }
 
-    // Send DPAPI data through stdin to keep it out of the PowerShell script.
-    const dpapiData = encryptedKey.subarray(dpapiPrefix.length).toString('base64')
-    const script = [
-      'try { Add-Type -AssemblyName System.Security.Cryptography.ProtectedData -ErrorAction Stop }',
-      'catch { try { Add-Type -AssemblyName System.Security -ErrorAction Stop } catch {} };',
-      '$in=[Convert]::FromBase64String([Console]::In.ReadLine());',
-      '$out=[System.Security.Cryptography.ProtectedData]::Unprotect($in,$null,',
-      '[System.Security.Cryptography.DataProtectionScope]::CurrentUser);',
-      '[Convert]::ToBase64String($out)'
-    ].join('')
-
-    // Hide the console and use the system PowerShell path; Electron’s PATH may differ.
-    const result = await runProcess({
-      program: windowsPowerShellPath(),
-      args: ['-NoProfile', '-NonInteractive', '-Command', script],
-      timeoutMs: 10_000,
-      input: dpapiData
-    })
-    if (result.code !== 0 || result.timedOut) {
+    const key = await unprotectWindowsDpapiCurrentUser(
+      encryptedKey.subarray(dpapiPrefix.length).toString('base64')
+    )
+    if (!key) {
       diag('  Windows DPAPI key extraction failed: PowerShell exited non-zero')
       return null
     }
 
-    return { key: Buffer.from(result.stdout.trim(), 'base64'), mode: 'aes-256-gcm' }
+    return { key, mode: 'aes-256-gcm' }
   } catch (err) {
     diag(`  Windows DPAPI key extraction failed: ${String(err)}`)
     return null

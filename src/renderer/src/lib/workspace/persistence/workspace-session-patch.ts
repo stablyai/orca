@@ -14,7 +14,10 @@ import {
   buildPersistedBrowserTabsByWorktree
 } from './workspace-session-browser-tabs'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
-import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
+import {
+  buildPersistedUnifiedTabSessionData,
+  type UnifiedTabSessionCache
+} from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
 
@@ -50,7 +53,8 @@ function buildPrunedTerminalScrollback(
 
 export function buildWorkspaceSessionPatch(
   fullSnapshot: WorkspaceSessionSnapshot,
-  changedFields: Iterable<SessionRelevantField>
+  changedFields: Iterable<SessionRelevantField>,
+  unifiedTabSessionCache?: UnifiedTabSessionCache
 ): WorkspaceSessionPatch {
   const snapshot = withoutStagedBrowserTabs(fullSnapshot)
   const changed = new Set(changedFields)
@@ -191,7 +195,7 @@ export function buildWorkspaceSessionPatch(
       'unifiedTabsByWorktree'
     ] as const)
   ) {
-    Object.assign(patch, buildPersistedUnifiedTabSessionData(snapshot))
+    Object.assign(patch, buildPersistedUnifiedTabSessionData(snapshot, unifiedTabSessionCache))
   }
   if (changed.has('lastVisitedAtByWorktreeId')) {
     patch.lastVisitedAtByWorktreeId = buildLastVisitedAtByWorktreeId(snapshot)

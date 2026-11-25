@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 
-// Windows/Linux replace native chrome with renderer controls.
-export function WindowControls(): React.JSX.Element {
+function MinimizeMaximizeButtons(): React.JSX.Element {
   const t = useTranslate()
   const [maximized, setMaximized] = useState(false)
   useEffect(() => {
@@ -20,7 +19,7 @@ export function WindowControls(): React.JSX.Element {
     }
   }, [])
   return (
-    <div className="window-controls">
+    <>
       <button
         className="window-controls-btn"
         aria-label={t('auto.App.bbb7f90669', 'Minimize')}
@@ -47,6 +46,16 @@ export function WindowControls(): React.JSX.Element {
           </svg>
         )}
       </button>
+    </>
+  )
+}
+
+// Windows/Linux replace native chrome with renderer controls.
+export function WindowControls({ closeOnly }: { closeOnly: boolean }): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="window-controls">
+      {!closeOnly && <MinimizeMaximizeButtons />}
       <button
         className="window-controls-btn window-controls-close"
         aria-label={t('auto.App.e960d18540', 'Close')}

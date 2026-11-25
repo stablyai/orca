@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { scrcpyVideoRegistry } from '../../emulator/scrcpy-video-registry'
 import { sendScrcpyTouch, type ScrcpyTouchPhase } from '../../emulator/android/scrcpy-control-input'
+import { sendScrcpyInOrder } from '../../emulator/android/scrcpy-input-queue'
 
 type ScrcpyTouchMessage = { deviceId: string; type: ScrcpyTouchPhase; x: number; y: number }
 
@@ -37,7 +38,8 @@ export function registerEmulatorScrcpyTouchHandler(): void {
     // so a pane that still streams has a live socket, and adb would add ~150 ms per event.
     const control = scrcpyVideoRegistry.control(touch.deviceId)
     if (control) {
-      sendScrcpyTouch(control, touch.type, touch.x, touch.y)
+      // A tap that moves focus must not overtake text still waiting for its paste.
+      void sendScrcpyInOrder(control, () => sendScrcpyTouch(control, touch.type, touch.x, touch.y))
     }
   })
 }

@@ -1,4 +1,4 @@
-// A chat's worker drawn by the Crew panel's status rules (bar an open ask, which is its coordinator's), for the tray, Activity and bot feed.
+// A chat's worker drawn by the Crew panel's status rules (an open ask is its coordinator's), for the tray, Activity and bot feed.
 import { translate } from '@/i18n/i18n'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { WorktreeStatus } from '../../../shared/worktree/row-display/worktree-status-rollup'
@@ -6,7 +6,7 @@ import {
   crewPartyStatus,
   crewStatusGroup,
   type CrewStatusGroup
-} from '@/components/orchestration-crew/CrewAgentIcons'
+} from '@/components/orchestration-crew/crew-party-status'
 import {
   sessionWorkerAgentState,
   sessionWorkerAsksCoordinator,
@@ -19,15 +19,18 @@ export type SessionWorkerLook = {
   group: CrewStatusGroup
   /** Resting on its coordinator's answer: an idle worker with a reason, never one needing you. */
   asksCoordinator: boolean
+  /** Its turn is over and it waits on background tasks it started. */
+  waitsOnBackground: boolean
 }
 
 export function sessionWorkerLook(
-  worker: Pick<OrchestrationSessionWorker, 'state' | 'activity' | 'pendingQuestion'>
+  worker: Pick<
+    OrchestrationSessionWorker,
+    'state' | 'activity' | 'pendingQuestion' | 'backgroundWait'
+  >
 ): SessionWorkerLook {
   const open = sessionWorkerIsRunning(worker)
   const status = crewPartyStatus({
-    // An open `ask` or gate waits on the chat that started the worker, not on you.
-    pendingQuestion: false,
     // What the host verdict knows that an agent state cannot: lost contact, or an exit before it reported.
     dot:
       worker.state === 'unverifiable'
@@ -41,7 +44,8 @@ export function sessionWorkerLook(
   return {
     status,
     group: crewStatusGroup(status),
-    asksCoordinator: sessionWorkerAsksCoordinator(worker)
+    asksCoordinator: sessionWorkerAsksCoordinator(worker),
+    waitsOnBackground: open && worker.backgroundWait !== undefined
   }
 }
 
@@ -51,6 +55,9 @@ export function sessionWorkerRestingLabel(look: SessionWorkerLook, coordinator: 
     return translate('bots.activity.askedCoordinator', 'Asked {{name}} a question', {
       name: coordinator
     })
+  }
+  if (look.waitsOnBackground && look.group === 'idle') {
+    return translate('bots.activity.waitsOnBackground', 'Waiting on its background task')
   }
   switch (look.group) {
     case 'needsYou':

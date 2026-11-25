@@ -110,3 +110,51 @@ export function capUtf8(text: string, maxBytes: number): string {
   }
   return bytes.subarray(0, end).toString('utf8')
 }
+
+export const ANSWER_CUT_NOTE = '_… cut short here. The full answer is in Orca._'
+
+// The longest fence a cut answer is given room to close; a longer opener is rare enough to share it.
+const CLOSING_FENCE_ROOM = '\n```'
+
+/** The fence that closes the code block the text ends inside, or '' when it ends outside one. A
+ *  block closes only on a fence of its own character, at least as long, with nothing after it. */
+function openFence(text: string): string {
+  let open: string | null = null
+  for (const line of text.split('\n')) {
+    const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
+    if (!fence) {
+      continue
+    }
+    const [, marks, rest] = fence
+    if (open === null) {
+      // Backticks after a backtick fence make the line inline code, which opens nothing.
+      open = marks![0] === '`' && rest!.includes('`') ? null : marks!
+    } else if (marks![0] === open[0] && marks!.length >= open.length && rest!.trim() === '') {
+      open = null
+    }
+  }
+  return open ?? ''
+}
+
+/**
+ * An answer within the cloud's byte limit that says so when it was cut: ended at a line break where
+ * one is near, an open code block closed, then the note. A reader otherwise takes the cut for the end.
+ */
+export function capAnswer(text: string, maxBytes: number): string {
+  if (Buffer.byteLength(text) <= maxBytes) {
+    return text
+  }
+  const tail = `\n\n${ANSWER_CUT_NOTE}`
+  const room = maxBytes - Buffer.byteLength(tail) - Buffer.byteLength(CLOSING_FENCE_ROOM)
+  const cut = capUtf8(text, room)
+  const lineEnd = cut.lastIndexOf('\n')
+  // A break in the last tenth loses little; any earlier, the words up to the limit are worth more.
+  let kept = (lineEnd > cut.length * 0.9 ? cut.slice(0, lineEnd) : cut).trimEnd()
+  let fence = openFence(kept)
+  // A fence longer than its room takes it from the words.
+  if (fence.length + 1 > CLOSING_FENCE_ROOM.length) {
+    kept = capUtf8(kept, room - (fence.length + 1 - CLOSING_FENCE_ROOM.length)).trimEnd()
+    fence = openFence(kept)
+  }
+  return `${kept}${fence ? `\n${fence}` : ''}${tail}`
+}

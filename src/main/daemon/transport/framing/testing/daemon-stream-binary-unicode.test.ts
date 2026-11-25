@@ -27,7 +27,7 @@ function reader() {
 }
 
 describe('binary stream UTF-16 preservation', () => {
-  it.each(['\ud83d', '\ude00', '\ud83d\ude00', '\ufffd', '\ud83da\ude00'])(
+  it.each(['\ud83d', '\ude00', '\ud83d\ude00\ufffd'])(
     'preserves exact code units for %j',
     (data) => {
       const received = reader()

@@ -23,6 +23,7 @@ import {
 import { findBotsRevealElement, wantedDepth } from './bots-sidebar-reveal-dom'
 import { startBotsRevealGlow, type BotsRevealGlow } from './bots-sidebar-reveal-glow'
 import type { BotsRevealContextValue, BotsRevealRequest } from './bots-sidebar-reveal-context'
+import { seekDistantBotSidebarRow } from './bot-sidebar-virtual-scroll'
 
 /** Long enough for a paired server's chat read; past it, the bot row stands as the reveal. */
 export const BOTS_REVEAL_MAX_WAIT_MS = 10_000
@@ -35,6 +36,7 @@ type LiveRequest = {
   /** "Reveal current" glows its row; an activation's reveal only scrolls to it. */
   glow: boolean
   settled: boolean
+  sought: boolean
   frames: number[]
   timers: number[]
 }
@@ -128,6 +130,9 @@ export function useBotsSidebarReveal(
         return
       }
       const { target } = entry.request
+      if (!entry.sought && !last) {
+        entry.sought = seekDistantBotSidebarRow(container, target)
+      }
       const wanted = wantedDepth(target)
       if (wanted > 1) {
         const deep = findBotsRevealElement(container, target, wanted)
@@ -240,6 +245,7 @@ export function useBotsSidebarReveal(
         glow: detail?.highlight !== false,
         // Nothing lists under a down host's row, and a bot-only target needs nothing below it.
         settled: wanted === 1,
+        sought: false,
         frames: [],
         timers: []
       }

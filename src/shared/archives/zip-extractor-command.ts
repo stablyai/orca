@@ -1,8 +1,8 @@
-import { join } from 'node:path'
+import { win32 } from 'node:path'
 
 export function getTarProgram(): string {
   return process.platform === 'win32'
-    ? join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
+    ? win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
     : 'tar'
 }
 

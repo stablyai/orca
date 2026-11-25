@@ -17,6 +17,7 @@ import {
   type UsageCacheSplitResult,
   type UsageSourceCacheRef
 } from '../usage/cache/usage-source-cache-file'
+import { reattributeUsageSourcesForWorktrees } from '../usage/worktree-attribution/usage-attribution-invalidation'
 
 const SOURCE_DOMAIN = 'claude-usage-sources-v1'
 
@@ -33,9 +34,6 @@ export async function readClaudeUsageSourceCache(
   ref: UsageSourceCacheRef
 ): Promise<ClaudeUsageLoadedSourceCache> {
   const cacheRef = { ...ref }
-  if (!cacheRef.reuse) {
-    return { sources: [] }
-  }
   try {
     const { parsed, verified } = await readClaudeUsageJson<{
       usageIntegrity?: string
@@ -46,30 +44,35 @@ export async function readClaudeUsageSourceCache(
     if (
       (parsed?.schemaVersion !== cacheRef.schemaVersion &&
         !(cacheRef.schemaVersion === 7 && parsed?.schemaVersion === 6)) ||
-      parsed.worktreeFingerprint !== cacheRef.worktreeFingerprint ||
       !Array.isArray(parsed.sources) ||
       (parsed.schemaVersion === 7 && !verified) ||
       (parsed.schemaVersion === 6 && verified)
     ) {
       return { sources: [] }
     }
+    const sameWorktrees = parsed.worktreeFingerprint === cacheRef.worktreeFingerprint
+    const sources = await reattributeUsageSourcesForWorktrees(
+      parsed.sources,
+      typeof parsed.worktreeFingerprint === 'string' ? parsed.worktreeFingerprint : null,
+      cacheRef.worktreeFingerprint,
+      // Claude attribution resolves transcript cwds through realpath.
+      { attributionResolvesCwd: true }
+    )
     if (verified) {
-      const normalized = normalizeClaudeUsageSourceFiles(
-        parsed.sources,
-        new WeakSet(parsed.sources)
-      )
+      const normalized = normalizeClaudeUsageSourceFiles(sources, new WeakSet(sources))
       return {
         sources: normalized.processedFiles,
         verifiedSources: new WeakSet(normalized.processedFiles),
         unchangedSourceCache:
+          sameWorktrees &&
           !normalized.invalidated &&
-          normalized.processedFiles.length === parsed.sources.length &&
-          normalized.processedFiles.every((file, index) => file === parsed.sources[index])
+          normalized.processedFiles.length === sources.length &&
+          normalized.processedFiles.every((file, index) => file === sources[index])
             ? { ref: cacheRef, sources: [...normalized.processedFiles] }
             : undefined
       }
     }
-    return { sources: parsed.sources }
+    return { sources }
   } catch {
     return { sources: [] }
   }
@@ -83,7 +86,6 @@ export async function persistClaudeUsageSourceCache(
   const unchanged = previous.unchangedSourceCache
   if (
     unchanged &&
-    ref.reuse &&
     ref.schemaVersion === 7 &&
     ref.path === unchanged.ref.path &&
     ref.schemaVersion === unchanged.ref.schemaVersion &&
@@ -140,8 +142,7 @@ export async function splitClaudeUsageCacheFile(
   const ref = {
     path: usageSourceCachePath(request.cacheFile),
     schemaVersion: state.schemaVersion,
-    worktreeFingerprint: state.worktreeFingerprint,
-    reuse: true
+    worktreeFingerprint: state.worktreeFingerprint
   }
   const existing = await readClaudeUsageSourceCache({ ...ref, schemaVersion: 7 })
   // A newer sidecar can survive a failed report migration; do not replace its warm generation.

@@ -109,6 +109,21 @@ export function dispatchTerminalNotification(
     agentSnapshotMatchesExplicitTitle(storedAgentStatus, explicitTitleAgentType)
       ? storedAgentStatus
       : undefined
+  // A launch restores the accepted turn; only later agent evidence can finish another one.
+  if (
+    event.source === 'agent-task-complete' &&
+    storedAgentStatus?.state === 'done' &&
+    storedAgentStatus.observation?.origin === 'launch' &&
+    agentSnapshotMatchesExplicitTitle(storedAgentStatus, explicitTitleAgentType) &&
+    (!eventAgentStatusSnapshot ||
+      eventAgentStatusSnapshot.stateStartedAt === storedAgentStatus.stateStartedAt)
+  ) {
+    recordAgentFinishDropped('resume-restatement', {
+      workspaceId: worktreeId,
+      paneKey: event.paneKey
+    })
+    return false
+  }
   if (
     event.source === 'agent-task-complete' &&
     event.agentCompletionSource !== 'process-exit' &&

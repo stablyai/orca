@@ -24,47 +24,49 @@ export const GOOGLE_READ_METHODS = [
     name: 'google.gmail.search',
     permission: 'workspace',
     params: GmailSearchParams,
-    handler: async (params, context) => searchGmail(googleApiForCaller(params, context), params)
+    handler: async (params, context) =>
+      searchGmail(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.gmail.read',
     permission: 'workspace',
     params: GmailReadParams,
-    handler: async (params, context) => readGmail(googleApiForCaller(params, context), params)
+    handler: async (params, context) =>
+      readGmail(await googleApiForCaller(params, context, [params.ref]), params)
   }),
   defineMethod({
     name: 'google.gmail.attachment',
     permission: 'workspace',
     params: GmailAttachmentParams,
     handler: async (params, context) =>
-      downloadGmailAttachment(googleApiForCaller(params, context), params.ref)
+      downloadGmailAttachment(await googleApiForCaller(params, context), params.ref)
   }),
   defineMethod({
     name: 'google.calendar.list',
     permission: 'workspace',
     params: CalendarListParams,
     handler: async (params, context) =>
-      listCalendarEvents(googleApiForCaller(params, context), { ...params, now: Date.now() })
+      listCalendarEvents(await googleApiForCaller(params, context), { ...params, now: Date.now() })
   }),
   defineMethod({
     name: 'google.calendar.calendars',
     permission: 'workspace',
     params: CalendarCalendarsParams,
     handler: async (params, context) =>
-      listCalendars(googleApiForCaller(params, context), Date.now())
+      listCalendars(await googleApiForCaller(params, context), Date.now())
   }),
   defineMethod({
     name: 'google.calendar.get',
     permission: 'workspace',
     params: CalendarGetParams,
     handler: async (params, context) =>
-      getCalendarEvent(googleApiForCaller(params, context), { ...params, now: Date.now() })
+      getCalendarEvent(await googleApiForCaller(params, context), { ...params, now: Date.now() })
   }),
   defineMethod({
     name: 'google.contacts.find',
     permission: 'workspace',
     params: ContactsFindParams,
     handler: async (params, context) =>
-      findContacts(googleApiForCaller(params, context), params.query)
+      findContacts(await googleApiForCaller(params, context), params.query)
   })
 ] as const

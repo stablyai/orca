@@ -57,7 +57,13 @@ export function BotGroupRow({
   }
   return (
     <BotSidebarRow
-      avatar={<BotGroupFaces faces={botGroupFaces(members, (bot) => bot.id)} className="size-7" />}
+      avatar={
+        <BotGroupFaces
+          faces={botGroupFaces(members, (bot) => bot.id)}
+          className="size-8"
+          slot={32}
+        />
+      }
       name={group.name}
       workspaceId={workspaceId}
       hostId={LOCAL_EXECUTION_HOST_ID}

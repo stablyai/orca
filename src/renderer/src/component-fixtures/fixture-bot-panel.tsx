@@ -2,7 +2,7 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { withBotConnectorRuntime } from '@/lib/bot-connector-host-calls.test-fixture'
 import { useState } from 'react'
-import { PanelRight } from 'lucide-react'
+import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import { useAppStore } from '@/store'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import type { AppState } from '@/store/types'
@@ -55,10 +55,12 @@ export function stubBotPanel(
   activity: BotActivity,
   bot: Bot = fixtureCos,
   chats: BotChatTreeChat[] = [],
-  /** The bot's items; omitted, the items read answers as the stub's fallback does. */
-  items?: BotItem[]
+  /** The bot's items; none by default. */
+  items: BotItem[] = []
 ): () => void {
   return () => {
+    // The page is reused across fixtures: each panel starts with its default folds.
+    window.localStorage.removeItem('orca.bots.panelFolds')
     stubBots([bot])
     // No connector is linked; their reads answer as an unlinked account's do.
     const unlinked = { state: async () => ({ ok: false, error: { code: 'not_linked' } }) }
@@ -72,7 +74,7 @@ export function stubBotPanel(
       call: async (request: Parameters<typeof fallback>[0]) =>
         request.method === 'bots.activity'
           ? { ok: true, result: { activity } }
-          : request.method === 'bots.items.owner.list' && items
+          : request.method === 'bots.items.owner.list'
             ? { ok: true, result: { items, counts: {}, seenEventId: 'e0' } }
             : request.method === 'bots.chatTree'
               ? { ok: true, result: { chats, workspaceChats: {} } }
@@ -222,7 +224,7 @@ export function BotPanelFrame(): React.JSX.Element {
           ))}
         </div>
         <span className="sidebar-toggle mr-1">
-          <PanelRight size={16} />
+          <SidebarToggleIcon side="right" size={16} />
         </span>
       </div>
       {tab === 'bot-chats' ? <BotChatsPanel /> : <BotActivityPanel />}

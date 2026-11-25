@@ -20,6 +20,7 @@ import {
   type ClaudeToolUse
 } from './claude-structured-item-translation'
 import { claudeEnvelopeStopHookFeedbackRow } from './claude-stop-hook-feedback'
+import { AGENT_SESSION_GOAL_CHECK_PRESENTATION } from '../../../../shared/agent-session/thread-goals/agent-session-goal-check-display'
 import {
   appendUnmodeledContent,
   type ClaudeProviderFrameFallback
@@ -154,7 +155,19 @@ export function journalClaudeMessage(
   }
   const stopHookFeedback = claudeEnvelopeStopHookFeedbackRow(envelope)
   if (stopHookFeedback) {
+    const goalCheck = ctx.threadGoal.recordGoalCheck(envelope)
     ctx.turn.ensureOpen(message, source, observedAt)
+    if (goalCheck?.reopened) {
+      const { identity: goalIdentity, body: goalBody } = goalCheck.reopened
+      ctx.sink.appendItem(goalIdentity, goalBody, {
+        ...stamp(goalIdentity, goalBody),
+        lifecycle: true
+      })
+    }
+    if (goalCheck) {
+      stopHookFeedback.presentation = AGENT_SESSION_GOAL_CHECK_PRESENTATION
+      stopHookFeedback.text = `Stop hook feedback: ${goalCheck.reason}`
+    }
     ctx.sink.appendItem(identity, stopHookFeedback, {
       ...stamp(identity, stopHookFeedback),
       lifecycle: true

@@ -216,7 +216,8 @@ export function descriptorRowElements(
       />
     ]
   }
-  const { currentValue } = descriptor.kind
+  // A provider fallback is what runs, so the saved model stays pickable.
+  const currentValue = descriptor.fallbackModel ?? descriptor.kind.currentValue
   const choices =
     descriptor.category === 'thought_level'
       ? orderEffortLevels(descriptor.kind.choices)
@@ -233,7 +234,12 @@ export function descriptorRowElements(
     />
   )
   // No search here, so search-only rows stay out; folded ones follow a More models toggle.
-  const listed = choices.filter((choice) => !choice.hidden || choice.value === currentValue)
+  const listed = choices.filter(
+    (choice) =>
+      !choice.hidden ||
+      choice.value === currentValue ||
+      choice.value === descriptor.kind.currentValue
+  )
   const more = moreChoices ? listed.filter((choice) => choice.legacy) : []
   return [
     ...listed.filter((choice) => !choice.legacy).map(choiceRow),
@@ -264,6 +270,7 @@ const styles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    maxWidth: '100%',
     height: 38,
     paddingHorizontal: 14,
     borderRadius: radii.pill,

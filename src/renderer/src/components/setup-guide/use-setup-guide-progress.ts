@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../shared/orca-profiles/orca-cloud-team-policy'
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
@@ -73,6 +75,7 @@ export function useSetupGuideProgress(
   const [computerUsePermissionStatusChecked, setComputerUsePermissionStatusChecked] =
     useState(false)
   const [computerUseUnavailable, setComputerUseUnavailable] = useState(false)
+  const computerUseBlocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.computerUse)
   const skillOptions = {
     enabled: shouldRefreshCoreState && activeSkillRuntime.enabled,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
@@ -83,7 +86,10 @@ export function useSetupGuideProgress(
   const { installed: detectedBrowserUseSkillInstalled, loading: detectedBrowserUseSkillLoading } =
     useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, skillOptions)
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
-    useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, skillOptions)
+    useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+      ...skillOptions,
+      enabled: skillOptions.enabled && !computerUseBlocked
+    })
   const {
     installed: detectedOrchestrationSkillInstalled,
     loading: detectedOrchestrationSkillLoading
@@ -195,8 +201,10 @@ export function useSetupGuideProgress(
     setComputerUseUnavailable(permissionState.unavailable)
   }, [])
 
+  const shouldReadComputerUsePermissions =
+    shouldRefreshCoreState && !computerUseBlocked && computerUseSkillInstalled
   useEffect(() => {
-    if (!shouldRefreshCoreState || !computerUseSkillInstalled) {
+    if (!shouldReadComputerUsePermissions) {
       // Unavailable steps must clear stale permission state before readiness is derived.
       setComputerUsePermissionStatusChecked(false)
       setComputerUsePermissionsReady(false)
@@ -224,7 +232,7 @@ export function useSetupGuideProgress(
       window.removeEventListener('focus', handleFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [computerUseSkillInstalled, readComputerUsePermissions, shouldRefreshCoreState])
+  }, [readComputerUsePermissions, shouldReadComputerUsePermissions])
 
   const taskSourceStatus = deriveIntegrationConnectionStatus({
     preflightStatus,
@@ -247,12 +255,6 @@ export function useSetupGuideProgress(
     setupScriptProbe,
     setupScriptProbeSignature
   )
-  const currentComputerUsePermissionStatusChecked =
-    shouldRefreshCoreState && computerUseSkillInstalled ? computerUsePermissionStatusChecked : false
-  const currentComputerUsePermissionsReady =
-    shouldRefreshCoreState && computerUseSkillInstalled ? computerUsePermissionsReady : false
-  const currentComputerUseUnavailable =
-    shouldRefreshCoreState && computerUseSkillInstalled ? computerUseUnavailable : false
   const ready = getSetupGuideProgressReady({
     refreshEnabled: shouldRefreshCoreState,
     settingsLoaded: settings !== null,
@@ -261,11 +263,12 @@ export function useSetupGuideProgress(
     linearStatusChecked: true,
     jiraStatusChecked: true,
     browserUseSkillDiscoveryLoading: detectedBrowserUseSkillLoading,
-    computerUseSkillDiscoveryLoading: computerUseSkillLoading,
+    computerUseSkillDiscoveryLoading: !computerUseBlocked && computerUseSkillLoading,
     orchestrationSkillDiscoveryLoading: detectedOrchestrationSkillLoading,
     setupScriptProbeReady: currentSetupScriptProbe.ready,
-    computerUseSkillInstalled,
-    computerUsePermissionStatusChecked: currentComputerUsePermissionStatusChecked
+    computerUseSkillInstalled: !computerUseBlocked && computerUseSkillInstalled,
+    computerUsePermissionStatusChecked:
+      shouldReadComputerUsePermissions && computerUsePermissionStatusChecked
   })
 
   const { rawProgress, preBrowserSetupComplete } = useMemo(
@@ -278,9 +281,11 @@ export function useSetupGuideProgress(
         browserUseSkillInstalled: shouldRefreshCoreState
           ? detectedBrowserUseSkillInstalled
           : browserUseSkillInstalled,
+        computerUseBlocked,
         computerUseSkillInstalled,
-        computerUsePermissionsReady: currentComputerUsePermissionsReady,
-        computerUseUnavailable: currentComputerUseUnavailable,
+        computerUsePermissionsReady:
+          shouldReadComputerUsePermissions && computerUsePermissionsReady,
+        computerUseUnavailable: shouldReadComputerUsePermissions && computerUseUnavailable,
         orchestrationSkillInstalled: shouldRefreshCoreState
           ? detectedOrchestrationSkillInstalled
           : orchestrationSkillInstalled,
@@ -292,9 +297,11 @@ export function useSetupGuideProgress(
       shouldRefreshCoreState,
       browserUseSkillInstalled,
       ready,
-      currentComputerUseUnavailable,
-      currentComputerUsePermissionsReady,
+      computerUseUnavailable,
+      computerUsePermissionsReady,
+      computerUseBlocked,
       computerUseSkillInstalled,
+      shouldReadComputerUsePermissions,
       detectedBrowserUseSkillInstalled,
       detectedOrchestrationSkillInstalled,
       featureInteractions,

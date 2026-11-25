@@ -14,6 +14,12 @@ import { itemsReader, itemsWriter } from './bots-items-caller'
 import { BOT_ITEMS_OWNER_METHODS } from './bots-items-owner-methods'
 import { BOT_ITEMS_WRITE_METHODS } from './bots-items-write-methods'
 import { pageSize, parseCursor, parseItemLink, resolveItem } from './bots-items-write-support'
+import {
+  botItemCountsForClient,
+  botItemEventsForClient,
+  botItemsForClient,
+  botItemStatusesForClient
+} from './bots-items-waiting-compat'
 
 const LIST = defineMethod({
   name: 'bots.items.list',
@@ -24,7 +30,7 @@ const LIST = defineMethod({
     runtime.bots.assertEnabled()
     const bot = itemsReader(params, context)
     const statuses: readonly BotItemStatus[] = params.statuses?.length
-      ? params.statuses
+      ? botItemStatusesForClient(params.statuses, context)
       : params.all
         ? BOT_ITEM_STATUSES
         : BOT_ITEM_OPEN_STATUSES
@@ -38,7 +44,7 @@ const LIST = defineMethod({
     const page = await runtime.botItems.store().list({
       botId: bot.id,
       statuses,
-      ...(chatId !== undefined ? { chatId } : {}),
+      ...(chatId !== undefined ? { chatIds: [chatId] } : {}),
       ...(link ? { link } : {}),
       limit: limit + 1,
       ...(cursor ? { cursor } : {})
@@ -49,8 +55,8 @@ const LIST = defineMethod({
     return {
       botId: bot.id,
       botName: bot.name,
-      items: await runtime.botItems.views(rows),
-      counts: page.counts,
+      items: botItemsForClient(await runtime.botItems.views(rows), context),
+      counts: botItemCountsForClient(page.counts, context),
       ...(more ? { nextCursor: `${last.lastActivityAt}:${last.number}` } : {})
     }
   }
@@ -71,12 +77,12 @@ const SHOW = defineMethod({
     }
     const limit = pageSize(params.limit, BOT_ITEM_LIMITS.eventsPage, BOT_ITEM_LIMITS.eventsPage)
     const events = await runtime.botItems.events(record.uid, after, limit + 1)
-    const [item] = await runtime.botItems.views([record])
+    const [item] = botItemsForClient(await runtime.botItems.views([record]), context)
     const page = events.slice(0, limit)
     const last = page.at(-1)
     return {
       item: item!,
-      events: page,
+      events: botItemEventsForClient(page, context),
       ...(events.length > limit && last ? { nextCursor: last.id } : {})
     }
   }

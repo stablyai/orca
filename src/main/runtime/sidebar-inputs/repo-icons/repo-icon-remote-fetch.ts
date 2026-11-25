@@ -1,4 +1,6 @@
 import { isKnownRasterImageMimeType } from '../../../../shared/file-preview/raster-image-preview-limits'
+import { getMainHttpClient } from '../../../network/http-client'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 
 export const REPO_ICON_FETCH_MAX_BYTES = 64 * 1024
 export const REPO_ICON_FETCH_MAX_REDIRECTS = 3
@@ -8,6 +10,12 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 
 export type RepoIconFetch = (url: string, init: RequestInit) => Promise<Response>
 export type FetchedRepoIcon = { mimeType: string; bytes: Uint8Array }
+
+/** This host's fetch for icons; the desktop net.fetch wrapper rejects manual redirects. */
+export const runtimeIconFetch: RepoIconFetch = (url, init) => {
+  const manualRedirectFetch = getRuntimeDesktopSurface().fetchRepoIcon
+  return manualRedirectFetch ? manualRedirectFetch(url, init) : getMainHttpClient().fetch(url, init)
+}
 
 function httpsUrl(raw: string, base?: URL): URL | null {
   try {

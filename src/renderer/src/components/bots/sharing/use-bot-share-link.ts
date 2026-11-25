@@ -1,12 +1,13 @@
 // The bot's one live link as the Share dialog reads it: from the caller, or read from Orca Cloud.
 import { useCallback, useEffect, useState } from 'react'
+import { translate } from '@/i18n/i18n'
 import {
   botShareStatusOf,
   type BotOwnedShare,
   type BotShareStatus
 } from '../../../../../shared/bots/bot-share-status'
 import { BOT_SHARE_ERRORS } from '../../../../../shared/bots/bot-share-errors'
-import { botShareErrorCode } from './bot-share-error-copy'
+import { botShareErrorCode, botShareErrorMessage } from './bot-share-error-copy'
 import { listBotShares } from './bot-share-rpc'
 
 export type BotShareLink = {
@@ -33,8 +34,7 @@ export function botShareLinkOf(status: BotShareStatus): BotShareLink | null {
     : null
 }
 
-/** A row of Settings › Shared links as the link it is. */
-export function botShareLinkOfShare(share: BotOwnedShare): BotShareLink {
+function botShareLinkOfShare(share: BotOwnedShare): BotShareLink {
   return {
     shareId: share.id,
     url: share.url,
@@ -47,28 +47,49 @@ export function botShareLinkOfShare(share: BotOwnedShare): BotShareLink {
 export type LinkRead =
   | { kind: 'loading' }
   | { kind: 'read'; link: BotShareLink | null }
-  | { kind: 'offline' }
+  | { kind: 'offline'; error: string | null }
   | { kind: 'signIn' }
 
 /** The bot's live link, read from Orca Cloud when the caller doesn't know it. */
 export function useBotShareLink(
   botId: string,
   known: BotShareLink | null | undefined,
-  skip: boolean
+  signedOut: boolean,
+  shareId?: string
 ): { read: LinkRead; setLink: (link: BotShareLink | null) => void; reread: () => void } {
   const [read, setRead] = useState<LinkRead>(
-    known === undefined ? { kind: 'loading' } : { kind: 'read', link: known }
+    signedOut || known === undefined ? { kind: 'loading' } : { kind: 'read', link: known }
   )
-  const [version, setVersion] = useState(known === undefined ? 1 : 0)
+  const [version, setVersion] = useState(signedOut || known === undefined ? 1 : 0)
+  const selectedShareId = shareId ?? known?.shareId
   useEffect(() => {
-    if (version === 0 || skip) {
+    if (version === 0 || signedOut) {
       return
     }
     let live = true
     setRead({ kind: 'loading' })
     listBotShares(botId).then(
-      (shares) =>
-        live && setRead({ kind: 'read', link: botShareLinkOf(botShareStatusOf(shares, botId)) }),
+      (shares) => {
+        if (!live) {
+          return
+        }
+        if (!selectedShareId) {
+          setRead({ kind: 'read', link: botShareLinkOf(botShareStatusOf(shares, botId)) })
+          return
+        }
+        const selected = shares.find((share) => share.id === selectedShareId)
+        setRead(
+          selected
+            ? { kind: 'read', link: botShareLinkOfShare(selected) }
+            : {
+                kind: 'offline',
+                error: translate(
+                  'bots.share.linkNoLongerAvailable',
+                  'This share link is no longer available.'
+                )
+              }
+        )
+      },
       (cause: unknown) => {
         if (!live) {
           return
@@ -77,17 +98,20 @@ export function useBotShareLink(
         setRead(
           code === BOT_SHARE_ERRORS.signIn || code === BOT_SHARE_ERRORS.reconnect
             ? { kind: 'signIn' }
-            : { kind: 'offline' }
+            : { kind: 'offline', error: code ? botShareErrorMessage(cause) : null }
         )
       }
     )
     return () => {
       live = false
     }
-  }, [botId, version, skip])
+  }, [botId, selectedShareId, version, signedOut])
   return {
-    read,
+    read: signedOut ? { kind: 'signIn' } : read,
     setLink: useCallback((link) => setRead({ kind: 'read', link }), []),
-    reread: useCallback(() => setVersion((current) => current + 1), [])
+    reread: useCallback(() => {
+      setRead({ kind: 'loading' })
+      setVersion((current) => current + 1)
+    }, [])
   }
 }

@@ -164,6 +164,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         ? {
             ...listing,
             models: structuredAgentSessionOptionModels(
+              params.agent,
               listing.models,
               own.options?.model,
               (row) => row

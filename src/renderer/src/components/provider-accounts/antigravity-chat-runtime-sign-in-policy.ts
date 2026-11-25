@@ -6,42 +6,21 @@ import {
 
 const SETTLED_OPERATION_PHASES = new Set(['succeeded', 'failed', 'cancelled'])
 
-/** Sign-in needs an installed server and no removal; updates keep the old copy usable, while unreported status defers to the host. */
-export function antigravityChatSignInBlocked(
-  install: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
-): boolean {
+type ActiveInstall = Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
+
+/** Sign-in runs agy, so it waits for agy to be installed and for any install or removal to end;
+ *  an unreadable status defers to the host. */
+export function antigravityChatSignInBlocked(install: ActiveInstall): boolean {
   const { snapshot } = install
   if (snapshot.kind !== 'known') {
     return snapshot.kind === 'unknown'
   }
   const { source, operation } = snapshot.state
-  return !source || (operation?.kind === 'remove' && !SETTLED_OPERATION_PHASES.has(operation.phase))
+  return !source || (operation !== null && !SETTLED_OPERATION_PHASES.has(operation.phase))
 }
 
-const CHANGING_PHASES = new Set(['downloading', 'extracting', 'verifying', 'removing'])
-
-/** Require an installed server outside install/removal; retain space while host status is unknown. */
-export function antigravityProviderSignInShown(
-  install: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
-): boolean {
-  const { snapshot } = install
-  if (snapshot.kind !== 'known') {
-    return true
-  }
-  const { source, operation } = snapshot.state
-  return source !== null && !(operation && CHANGING_PHASES.has(operation.phase))
-}
-
-/** Orca's own copy runs the chat, so Orca's sign-in applies; the host's agy keeps its own login. */
-export function antigravityOrcaRuntimeSignsIn(
-  install: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
-): boolean {
-  return (
-    install.snapshot.kind === 'known' &&
-    install.snapshot.state.source === 'managed' &&
-    antigravityProviderSignInShown(install)
-  )
-}
+export const isAntigravityGoogleMethod = (method: string | null | undefined): boolean =>
+  method === 'oauth-personal' || method === 'oauth-business'
 
 export type AntigravityChatSignInPrompt = 'signedOut' | 'signingIn' | 'failed'
 
@@ -49,12 +28,16 @@ export type AntigravityChatSignInPrompt = 'signedOut' | 'signingIn' | 'failed'
 export function antigravityChatSignInPrompt(
   view: AntigravityChatSignInView
 ): AntigravityChatSignInPrompt | null {
-  if (view.status !== 'known' || view.auth === 'signedIn') {
+  if (view.status !== 'known') {
     return null
   }
   const phase = view.flow?.phase
+  // A sign-in under way needs its code box whatever the host last saw.
   if (antigravityChatSignInRunning(view.flow)) {
     return 'signingIn'
+  }
+  if (view.auth === 'signedIn') {
+    return null
   }
   if (view.auth === 'unknown') {
     return null

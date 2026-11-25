@@ -1,5 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import {
+  isRemoteLoopbackHttpLink,
+  openOwnedSystemHttpLink,
   localhostLabelRouteForHttpLink,
   resolveLabeledLocalhostDisplayUrl,
   openLabeledLocalhostLink
@@ -14,9 +16,8 @@ import {
   canOpenLinkInSourceGroup
 } from '../../links/placement/link-open-intent'
 import type { LinkOpenIntent, LinkSourceState } from '../../links/placement/link-open-intent'
-import { translate } from '@/i18n/i18n'
+import { showBrowserOpenFailure } from '../workspace/workspace-browser-open-failure-toast'
 import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
-import { toast } from 'sonner'
 import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
 import { captureBrowserLinkReveal } from './browser-link-reveal'
 import type { BrowserLinkSelectionSubscriber } from './browser-link-reveal'
@@ -42,11 +43,11 @@ function settleHttpLinkBrowserOpen(
   if (onComplete) {
     void opening
       .then((pageId) => onComplete({ pageId: pageId ?? null, background }))
-      .catch(reportHttpLinkBrowserOpenFailure)
+      .catch(showBrowserOpenFailure)
       .finally(reveal.dispose)
     return
   }
-  void opening.catch(reportHttpLinkBrowserOpenFailure).finally(reveal.dispose)
+  void opening.catch(showBrowserOpenFailure).finally(reveal.dispose)
 }
 
 export type HttpLinkSourceOwner =
@@ -139,19 +140,20 @@ export function canHttpLinkOpenInSourceGroup(
   return state ? canOpenLinkInSourceGroup(state, workspaceId, sourceTabId) : false
 }
 
-function reportHttpLinkBrowserOpenFailure(error: unknown): void {
-  toast.error(
-    error instanceof Error
-      ? error.message
-      : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
-  )
+/** The one renderer route to the system browser for an address already resolved for it. */
+export async function openSystemHttpLink(url: string): Promise<void> {
+  await openSystemHttpLinkReportingOutcome(url)
 }
 
-async function openSystemHttpLink(url: string): Promise<void> {
+/** openSystemHttpLink for a caller that reports success: false when the launch failed, which it
+ *  has already reported. */
+export async function openSystemHttpLinkReportingOutcome(url: string): Promise<boolean> {
   try {
     await window.api.shell.openUrl(url)
+    return true
   } catch {
-    reportHttpLinkBrowserOpenFailure(null)
+    showBrowserOpenFailure(null)
+    return false
   }
 }
 
@@ -188,33 +190,34 @@ function executeHttpLink(
     forceInApp,
     sourceOwner
   } = opts
+  const placementWorkspaceId = opts.floatingWorkspace ? FLOATING_TERMINAL_WORKTREE_ID : undefined
   const worktreeId =
-    opts.floatingWorkspace && sourceOwner?.kind === 'local'
-      ? FLOATING_TERMINAL_WORKTREE_ID
-      : sourceWorktreeId
+    sourceOwner?.kind === 'local' ? (placementWorkspaceId ?? sourceWorktreeId) : sourceWorktreeId
   if (sourceOwner?.kind === 'unknown') {
     return 'none'
   }
   const state = storeAccessor?.()
   const sourceIsLocal = sourceOwner ? sourceOwner.kind === 'local' : !remoteRuntimeActive
   const openLinksInApp = state?.settings?.openLinksInApp === true
+  // A client fallback tab browses from this desktop, so it cannot reach the owner's loopback either.
+  const prefersOrca =
+    openLinksInApp ||
+    (!opts.allowClientBrowserFallback &&
+      isRemoteLoopbackHttpLink(url, sourceOwner, sourceWorktreeId))
   const modifier = resolveModifierRouting(
     Boolean(opts.modifierHeld),
-    openLinksInApp,
+    prefersOrca,
     state?.settings?.openLinksInAppModifierInverts === true
   )
   const wantsOrca =
     !forceSystemBrowser &&
     !modifier.wantsSystemBrowser &&
     Boolean(worktreeId) &&
-    (forceInApp || openLinksInApp || modifier.wantsOrca)
+    (forceInApp || prefersOrca || modifier.wantsOrca)
 
   if (wantsOrca && allowRemoteInApp && worktreeId && !sourceIsLocal) {
     if (workspaceHttpLinkBrowserOpener && state) {
-      const fields = prepareRemoteHttpLinkTab(
-        state,
-        opts.floatingWorkspace ? FLOATING_TERMINAL_WORKTREE_ID : worktreeId
-      )
+      const fields = prepareRemoteHttpLinkTab(state, placementWorkspaceId ?? worktreeId)
       const reveal = captureBrowserLinkReveal(
         () => storeAccessor?.() ?? state,
         storeSubscriber,
@@ -222,7 +225,7 @@ function executeHttpLink(
       )
       const opening = workspaceHttpLinkBrowserOpener({
         workspaceId: worktreeId,
-        ...(opts.floatingWorkspace ? { placementWorkspaceId: FLOATING_TERMINAL_WORKTREE_ID } : {}),
+        placementWorkspaceId,
         url,
         intent: { kind: 'url' },
         ...fields,
@@ -262,9 +265,7 @@ function executeHttpLink(
       if (workspaceHttpLinkBrowserOpener) {
         const opening = workspaceHttpLinkBrowserOpener({
           workspaceId: sourceWorktreeId ?? worktreeId,
-          ...(opts.floatingWorkspace
-            ? { placementWorkspaceId: FLOATING_TERMINAL_WORKTREE_ID }
-            : {}),
+          placementWorkspaceId,
           url: chosenUrl,
           intent: { kind: 'url' },
           linkContext: {
@@ -302,7 +303,7 @@ function executeHttpLink(
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    void openSystemHttpLink(url)
+    openOwnedSystemHttpLink(url, sourceOwner, sourceWorktreeId, openSystemHttpLink)
     return 'system-browser'
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {

@@ -8,13 +8,9 @@ import {
   invalidateConnectAttempt,
   isCurrentConnectAttempt
 } from './ssh-connect-attempt-registry'
-import {
-  connectionManager,
-  getCurrentMainWindow,
-  persistedStore,
-  portForwardManager
-} from './ssh-ipc-context'
+import { connectionManager, persistedStore, portForwardManager } from './ssh-ipc-context'
 import { broadcastSshTargetRemoved } from './ssh-renderer-broadcast'
+import { sshDesktopHost } from '../../ssh/application/ssh-desktop-host'
 import { clearHostSettingOverride } from '../../../shared/execution-host/host-setting-overrides'
 import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
@@ -50,16 +46,7 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
     store.removeTarget(targetId)
     // Target removal also retires its scoped browser cookie storage.
     try {
-      const [partitions, storage] = await Promise.all([
-        import('../../browser/routing/local-host-partitions/local-ssh-browser-partitions'),
-        import('../../browser/routing/partitions/browser-route-partition-storage-runtime')
-      ])
-      await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
-      await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
-      // A prepare can re-register during removal; sweep again after the release/clear race.
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
-      await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
+      await sshDesktopHost().clearTargetBrowserStorage(targetId)
     } catch (error) {
       console.warn(
         `[ssh] Failed to clear browser partitions for removed target ${targetId}: ${errorMessage(error)}`
@@ -68,7 +55,7 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
   })
   // Every removal (Settings, CLI, paired client, a recipe VM's cleanup) ends here: the window
   // drops the target's live state, and its rename must not outlive it.
-  broadcastSshTargetRemoved(getCurrentMainWindow, targetId)
+  broadcastSshTargetRemoved(targetId)
   dropRemovedSshTargetDisplayLabel(targetId)
 }
 

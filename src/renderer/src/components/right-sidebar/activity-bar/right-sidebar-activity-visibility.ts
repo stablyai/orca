@@ -3,8 +3,8 @@ import type { ActivityBarItem } from './activity-bar-buttons'
 type RightSidebarActivityVisibilityState = {
   isFolder: boolean
   isFolderWorkspace: boolean
-  /** The workspace runs on an SSH host, reached directly or through its managed server. */
-  hasSshHost: boolean
+  /** The workspace runs on an SSH host (directly or through its managed server) or a paired server. */
+  hasRemoteHost: boolean
   /** The workspace is a bot's home, whose page keeps only its own panels. */
   isBot: boolean
   /** The workspace is a bot group's home: members' workers attach to each bot's own home, so its folder panels are always empty. */
@@ -18,12 +18,16 @@ export function getVisibleRightSidebarActivityItems(
   {
     isFolder,
     isFolderWorkspace,
-    hasSshHost,
+    hasRemoteHost,
     isBot,
     isGroupHome = false,
     hasChatWorkers = false
   }: RightSidebarActivityVisibilityState
 ): ActivityBarItem[] {
+  if (isGroupHome) {
+    // A group's page keeps its Items; its folder panels are always empty.
+    return items.filter((item) => item.botOnly)
+  }
   if (isBot) {
     // A bot's own tabs lead; Files comes last.
     return [
@@ -40,6 +44,6 @@ export function getVisibleRightSidebarActivityItems(
             !isFolder ||
             (isFolderWorkspace && !isGroupHome && item.id === 'source-control')) &&
           (!item.folderOnly || (isFolderWorkspace && !isGroupHome)) &&
-          (!item.sshOnly || hasSshHost))
+          (!item.remoteHostOnly || hasRemoteHost))
   )
 }

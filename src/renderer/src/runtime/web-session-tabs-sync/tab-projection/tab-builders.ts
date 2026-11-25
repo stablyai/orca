@@ -46,6 +46,9 @@ export function buildBrowserUnifiedTab(
   groupId: string,
   environmentId: string
 ): Tab {
+  if (existingUnifiedTab && existingUnifiedTab.worktreeId !== tab.worktreeId) {
+    return { ...existingUnifiedTab, isPinned: hostTab.isPinned ?? existingUnifiedTab.isPinned }
+  }
   return {
     id: existingUnifiedTab?.id ?? hostTab.id,
     entityId: tab.id,

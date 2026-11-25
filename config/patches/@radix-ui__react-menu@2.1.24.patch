@@ -1,0 +1,190 @@
+diff --git a/dist/index.js b/dist/index.js
+index b3f6113cdcdb157f778848ad88bc816ac5bacbf1..e208eada130923cdc280cb860a899dc334857c63 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -114,25 +114,79 @@ var usePopperScope = (0, import_react_popper.createPopperScope)();
+ var useRovingFocusGroupScope = (0, import_react_roving_focus.createRovingFocusGroupScope)();
+ var [MenuProvider, useMenuContext] = createMenuContext(MENU_NAME);
+ var [MenuRootProvider, useMenuRootContext] = createMenuContext(MENU_NAME);
++// Orca patch: one document keydown listener serves every Menu root instead of one per root, so a key press
++// costs the same however many menus are mounted. Each root still reads the value its own listener would have held.
++var sharedKeyboardModality = { connectedRoots: 0, sequence: 0, lastKeyDown: 0, lastPointer: 0 };
++function handleSharedModalityPointer() {
++  sharedKeyboardModality.lastPointer = ++sharedKeyboardModality.sequence;
++}
++function handleSharedModalityKeyDown() {
++  sharedKeyboardModality.lastKeyDown = ++sharedKeyboardModality.sequence;
++  document.addEventListener("pointerdown", handleSharedModalityPointer, { capture: true, once: true });
++  document.addEventListener("pointermove", handleSharedModalityPointer, { capture: true, once: true });
++}
++function readRootKeyboardModality(root) {
++  // A root sees only events from while its effect is connected (pointer resets only once one of its keydowns armed
++  // them); the latest of those and its own last write wins.
++  if (!root.connected) {
++    return root.retained;
++  }
++  const { lastKeyDown, lastPointer } = sharedKeyboardModality;
++  let value = root.retained;
++  let at = root.retainedAt;
++  if (lastKeyDown > root.connectedAt) {
++    if (lastKeyDown > at) {
++      value = true;
++      at = lastKeyDown;
++    }
++    if (lastPointer > lastKeyDown && lastPointer > at) {
++      value = false;
++    }
++  }
++  return value;
++}
++function createRootKeyboardModality() {
++  return {
++    connected: false,
++    connectedAt: 0,
++    retained: false,
++    retainedAt: 0,
++    get current() {
++      return readRootKeyboardModality(this);
++    },
++    set current(value) {
++      this.retained = value;
++      this.retainedAt = ++sharedKeyboardModality.sequence;
++    }
++  };
++}
+ var Menu = /* @__PURE__ */ __name((props) => {
+   const { __scopeMenu, open = false, children, dir, onOpenChange, modal = true } = props;
+   const popperScope = usePopperScope(__scopeMenu);
+   const [content, setContent] = React.useState(null);
+-  const isUsingKeyboardRef = React.useRef(false);
++  const keyboardModalityRef = React.useRef(null);
++  if (keyboardModalityRef.current === null) {
++    keyboardModalityRef.current = createRootKeyboardModality();
++  }
++  const isUsingKeyboardRef = keyboardModalityRef.current;
+   const handleOpenChange = (0, import_react_use_callback_ref.useCallbackRef)(onOpenChange);
+   const direction = (0, import_react_direction.useDirection)(dir);
+   React.useEffect(() => {
+-    const handleKeyDown = /* @__PURE__ */ __name(() => {
+-      isUsingKeyboardRef.current = true;
+-      document.addEventListener("pointerdown", handlePointer, { capture: true, once: true });
+-      document.addEventListener("pointermove", handlePointer, { capture: true, once: true });
+-    }, "handleKeyDown");
+-    const handlePointer = /* @__PURE__ */ __name(() => isUsingKeyboardRef.current = false, "handlePointer");
+-    document.addEventListener("keydown", handleKeyDown, { capture: true });
++    const root = isUsingKeyboardRef;
++    root.connected = true;
++    root.connectedAt = sharedKeyboardModality.sequence;
++    root.retainedAt = root.connectedAt;
++    if (sharedKeyboardModality.connectedRoots++ === 0) {
++      document.addEventListener("keydown", handleSharedModalityKeyDown, { capture: true });
++    }
+     return () => {
+-      document.removeEventListener("keydown", handleKeyDown, { capture: true });
+-      document.removeEventListener("pointerdown", handlePointer, { capture: true });
+-      document.removeEventListener("pointermove", handlePointer, { capture: true });
++      root.retained = readRootKeyboardModality(root);
++      root.connected = false;
++      if (--sharedKeyboardModality.connectedRoots === 0) {
++        document.removeEventListener("keydown", handleSharedModalityKeyDown, { capture: true });
++        document.removeEventListener("pointerdown", handleSharedModalityPointer, { capture: true });
++        document.removeEventListener("pointermove", handleSharedModalityPointer, { capture: true });
++      }
+     };
+   }, []);
+   React.useEffect(() => {
+diff --git a/dist/index.mjs b/dist/index.mjs
+index cd4303a0124fd5593f3dbd392d1803e994ce2bfb..6eb2406ae4324ec1a84f1beefcdea0f8cd7cf463 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -48,25 +48,79 @@ var usePopperScope = createPopperScope();
+ var useRovingFocusGroupScope = createRovingFocusGroupScope();
+ var [MenuProvider, useMenuContext] = createMenuContext(MENU_NAME);
+ var [MenuRootProvider, useMenuRootContext] = createMenuContext(MENU_NAME);
++// Orca patch: one document keydown listener serves every Menu root instead of one per root, so a key press
++// costs the same however many menus are mounted. Each root still reads the value its own listener would have held.
++var sharedKeyboardModality = { connectedRoots: 0, sequence: 0, lastKeyDown: 0, lastPointer: 0 };
++function handleSharedModalityPointer() {
++  sharedKeyboardModality.lastPointer = ++sharedKeyboardModality.sequence;
++}
++function handleSharedModalityKeyDown() {
++  sharedKeyboardModality.lastKeyDown = ++sharedKeyboardModality.sequence;
++  document.addEventListener("pointerdown", handleSharedModalityPointer, { capture: true, once: true });
++  document.addEventListener("pointermove", handleSharedModalityPointer, { capture: true, once: true });
++}
++function readRootKeyboardModality(root) {
++  // A root sees only events from while its effect is connected (pointer resets only once one of its keydowns armed
++  // them); the latest of those and its own last write wins.
++  if (!root.connected) {
++    return root.retained;
++  }
++  const { lastKeyDown, lastPointer } = sharedKeyboardModality;
++  let value = root.retained;
++  let at = root.retainedAt;
++  if (lastKeyDown > root.connectedAt) {
++    if (lastKeyDown > at) {
++      value = true;
++      at = lastKeyDown;
++    }
++    if (lastPointer > lastKeyDown && lastPointer > at) {
++      value = false;
++    }
++  }
++  return value;
++}
++function createRootKeyboardModality() {
++  return {
++    connected: false,
++    connectedAt: 0,
++    retained: false,
++    retainedAt: 0,
++    get current() {
++      return readRootKeyboardModality(this);
++    },
++    set current(value) {
++      this.retained = value;
++      this.retainedAt = ++sharedKeyboardModality.sequence;
++    }
++  };
++}
+ var Menu = /* @__PURE__ */ __name((props) => {
+   const { __scopeMenu, open = false, children, dir, onOpenChange, modal = true } = props;
+   const popperScope = usePopperScope(__scopeMenu);
+   const [content, setContent] = React.useState(null);
+-  const isUsingKeyboardRef = React.useRef(false);
++  const keyboardModalityRef = React.useRef(null);
++  if (keyboardModalityRef.current === null) {
++    keyboardModalityRef.current = createRootKeyboardModality();
++  }
++  const isUsingKeyboardRef = keyboardModalityRef.current;
+   const handleOpenChange = useCallbackRef(onOpenChange);
+   const direction = useDirection(dir);
+   React.useEffect(() => {
+-    const handleKeyDown = /* @__PURE__ */ __name(() => {
+-      isUsingKeyboardRef.current = true;
+-      document.addEventListener("pointerdown", handlePointer, { capture: true, once: true });
+-      document.addEventListener("pointermove", handlePointer, { capture: true, once: true });
+-    }, "handleKeyDown");
+-    const handlePointer = /* @__PURE__ */ __name(() => isUsingKeyboardRef.current = false, "handlePointer");
+-    document.addEventListener("keydown", handleKeyDown, { capture: true });
++    const root = isUsingKeyboardRef;
++    root.connected = true;
++    root.connectedAt = sharedKeyboardModality.sequence;
++    root.retainedAt = root.connectedAt;
++    if (sharedKeyboardModality.connectedRoots++ === 0) {
++      document.addEventListener("keydown", handleSharedModalityKeyDown, { capture: true });
++    }
+     return () => {
+-      document.removeEventListener("keydown", handleKeyDown, { capture: true });
+-      document.removeEventListener("pointerdown", handlePointer, { capture: true });
+-      document.removeEventListener("pointermove", handlePointer, { capture: true });
++      root.retained = readRootKeyboardModality(root);
++      root.connected = false;
++      if (--sharedKeyboardModality.connectedRoots === 0) {
++        document.removeEventListener("keydown", handleSharedModalityKeyDown, { capture: true });
++        document.removeEventListener("pointerdown", handleSharedModalityPointer, { capture: true });
++        document.removeEventListener("pointermove", handleSharedModalityPointer, { capture: true });
++      }
+     };
+   }, []);
+   React.useEffect(() => {

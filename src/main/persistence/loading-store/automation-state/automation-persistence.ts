@@ -67,7 +67,6 @@ import {
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { WriteFlushBarrierOperations } from '../profile-writing/write-flush-barriers'
 import type { ProfilePreferences } from '../profile-preferences/profile-preferences'
-import { AutomationEnablementTransitions } from './automation-enablement-transitions'
 
 type AutomationPersistenceRuntime = Pick<
   StoreRuntimeState,
@@ -79,7 +78,6 @@ type AutomationPersistenceRuntime = Pick<
 >
 
 const automationPersistenceContext = Symbol('AutomationPersistence')
-const automationEnablement = Symbol('AutomationEnablement')
 type AutomationPersistenceContext = {
   runtime: AutomationPersistenceRuntime
   flushBarriers: WriteFlushBarrierOperations
@@ -91,7 +89,6 @@ type ArgsAfterOperations<F> = F extends (operations: never, ...rest: infer R) =>
 
 export class AutomationPersistence {
   readonly [automationPersistenceContext]: AutomationPersistenceContext
-  readonly [automationEnablement] = new AutomationEnablementTransitions()
 
   constructor(
     runtime: AutomationPersistenceRuntime,
@@ -178,23 +175,12 @@ export class AutomationPersistence {
     updates: AutomationUpdateInput,
     options?: AutomationUpdatePreconditions & { resolvedRepo?: Repo }
   ): Automation {
-    const stored = this[automationPersistenceContext].runtime.state.automations ?? []
-    return this[automationEnablement].track(stored, id, () =>
-      updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
-    )
+    return updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
   }
 
   /** `updateAutomation` for many rows with one list write and one flush. */
   updateAutomations(batch: readonly AutomationBatchUpdate[]): AutomationBatchUpdateResult[] {
-    const stored = this[automationPersistenceContext].runtime.state.automations ?? []
-    return this[automationEnablement].trackMany(stored, () =>
-      updateAutomationsOperation(getAutomationDefinitionOperations(this), batch)
-    )
-  }
-
-  /** Changes when an update pauses or re-enables the automation, never on run bookkeeping. */
-  automationEnablementRevision(id: string): number {
-    return this[automationEnablement].revision(id)
+    return updateAutomationsOperation(getAutomationDefinitionOperations(this), batch)
   }
 
   stampLegacyAutomationRunContext(automationId: string, runContext: WorkspaceRunContext): boolean {

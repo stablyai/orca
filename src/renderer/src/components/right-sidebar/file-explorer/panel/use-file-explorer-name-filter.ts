@@ -15,6 +15,7 @@ type UseFileExplorerNameFilterResult = {
   nameFilterCollapsedPaths: Set<string>
   setNameFilterCollapsedPaths: Dispatch<SetStateAction<Set<string>>>
   hasNameFilter: boolean
+  hasNameFilterQuery: boolean
   nameFilterFiles: RuntimeFileListState
   nameFilterSource: FileExplorerNameFilterProjectionSource | null
   handleClearNameFilter: () => void
@@ -83,6 +84,7 @@ export function useFileExplorerNameFilter({
     nameFilterCollapsedPaths,
     setNameFilterCollapsedPaths,
     hasNameFilter,
+    hasNameFilterQuery,
     nameFilterFiles,
     nameFilterSource,
     handleClearNameFilter

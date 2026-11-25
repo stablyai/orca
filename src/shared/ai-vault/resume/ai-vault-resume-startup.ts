@@ -32,6 +32,7 @@ import { assertOpenCodeCopyUsesLocalStore } from '../../agent-launch/startup/ope
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../agent-session/view/structured-agent-cli-conversation-adoption'
 import type { GlobalSettings } from '../../settings/global-settings-types'
 import { managedDataAccountResumeEnv } from '../../agent-launch/environment/managed-data-account-resume'
+import { buildAntigravityReferenceStartup } from './ai-vault-antigravity-reference-startup'
 
 export type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
@@ -103,7 +104,7 @@ function resumeCommandOverrides(
   }
 }
 
-/** A resume run on the host itself: no prebuilt remote command and no Antigravity reference. */
+/** A resume run on the host itself: no prebuilt remote command. */
 export function buildAiVaultLocalResumeStartup(
   args: AiVaultResumeStartupArgs & {
     agentArgs?: string
@@ -123,6 +124,19 @@ export function buildAiVaultLocalResumeStartup(
   })
   const cwd = embedCwd ? session.cwd : null
   const startupCwd = !embedCwd && session.cwd ? { cwd: session.cwd } : {}
+  if (isAntigravityReferenceSession(session)) {
+    const reference = buildAntigravityReferenceStartup({
+      session: { sessionId: session.sessionId, filePath: resumeFilePath },
+      cwd,
+      platform,
+      shell: liveShell,
+      commandOverride: args.commandOverride,
+      settings
+    })
+    if (reference) {
+      return { ...reference, ...startupCwd }
+    }
+  }
   if (localProviderSession && isResumableTuiAgent(session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: session.agent,

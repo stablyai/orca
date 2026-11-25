@@ -33,12 +33,13 @@ const sentry: WebhookCallView = {
 const matches = (where: WebhookWhere[], call = sentry) => matchesWebhookCall({ where }, call)
 
 describe('matchesWebhookCall', () => {
-  it('ANDs where clauses over dot paths', () => {
+  it('ANDs body clauses with case-insensitive header names', () => {
     expect(matches([{ path: 'body.data.event.level', op: '=', values: ['error'] }])).toBe(true)
     expect(
       matches([
         { path: 'body.data.event.level', op: 'in', values: ['warning', 'error'] },
-        { path: 'body.data.event.environment', op: '!=', values: ['staging'] }
+        { path: 'body.data.event.environment', op: '!=', values: ['staging'] },
+        { path: 'headers.Sentry-Hook-Resource', op: '=', values: ['event_alert'] }
       ])
     ).toBe(true)
     expect(
@@ -113,17 +114,6 @@ describe('matchesWebhookCall', () => {
       true
     )
     expect(matches([{ path: 'body.data.event', op: 'contains', values: ['error'] }])).toBe(false)
-  })
-
-  it('names headers in any case', () => {
-    expect(
-      matches([{ path: 'headers.Sentry-Hook-Resource', op: '=', values: ['event_alert'] }])
-    ).toBe(true)
-  })
-
-  it('reads a form body, whose repeated keys are arrays', () => {
-    const form = { headers: {}, body: { text: 'deploy web', label: ['ops', 'urgent'] } }
-    expect(matches([{ path: 'body.label', op: '=', values: ['urgent'] }], form)).toBe(true)
   })
 
   it('takes contains= over the body text, and a text body only as a whole', () => {

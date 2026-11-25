@@ -23,7 +23,8 @@ import { RELAYED_STREAM_CARRIERS } from './relayed-stream-carriers'
 import {
   declareRelayedPhoneCapabilities,
   rewriteRelayedPhoneRequest,
-  withRelayedLaunchChatDefault
+  withRelayedDesktopDefaults,
+  type RelayedDesktopDefaults
 } from './relayed-phone-frames'
 
 const RELAY_CONNECT_TIMEOUT_MS = PHONE_RELAY_CONNECT_BUDGET_MS
@@ -37,12 +38,10 @@ export class MobileDesktopRelay {
   private readonly stopRetirementWatch: () => void
 
   constructor(
-    private readonly options: {
+    private readonly options: RelayedDesktopDefaults & {
       hosts: MobileDesktopRelayHosts
       listPhones: () => DelegatedMobileDeviceSyncParams['phones']
       allocateStreamId: () => number
-      /** Whether this desktop's settings open `agent` as a chat. */
-      nativeChatDefault: (agent: string) => boolean
       prepareBrowserHost?: (host: MobileDesktopRelayHost) => Promise<string | null>
     }
   ) {
@@ -104,10 +103,11 @@ export class MobileDesktopRelay {
         if (!this.isCurrent(link)) {
           return
         }
-        const outgoing = withRelayedLaunchChatDefault(
+        const outgoing = withRelayedDesktopDefaults(
           rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
           request.method,
-          this.options.nativeChatDefault
+          environmentId,
+          this.options
         )
         try {
           if (request.method === 'status.get') {

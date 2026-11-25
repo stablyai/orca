@@ -77,10 +77,12 @@ function readNamingNote(value: unknown): AgentSessionConversationName | null {
   if (namingError === false) {
     return null
   }
+  const agent = 'agent' in value ? value.agent : undefined
   return {
     sessionId: value.sessionId,
     conversationName: name,
     ...(namingError ? { namingError } : {}),
+    ...(typeof agent === 'string' && agent && agent.length <= 64 ? { agent } : {}),
     // Provenance only from a frame that also says whether the chat is a fork.
     ...(forkedFrom !== undefined
       ? {
@@ -103,6 +105,7 @@ function sameNamingNote(
     a.namingError?.message === b.namingError?.message &&
     a.namingError?.failedAt === b.namingError?.failedAt &&
     a.conversationNameSource === b.conversationNameSource &&
+    a.agent === b.agent &&
     'forkedFrom' in a === 'forkedFrom' in b &&
     agentSessionForkNamingEqual(a.forkedFrom, b.forkedFrom)
   )
@@ -122,8 +125,15 @@ export function foldAgentSessionConversationNames(
       : []
   let next: Map<string, AgentSessionConversationName> | undefined
   for (const frame of [...sessions, ...notes]) {
-    const note = readNamingNote(frame)
-    if (!note || sameNamingNote((next ?? names).get(note.sessionId), note)) {
+    const read = readNamingNote(frame)
+    if (!read) {
+      continue
+    }
+    const previous = (next ?? names).get(read.sessionId)
+    // A chat's agent never changes; an older host's note just omits it.
+    const note =
+      read.agent === undefined && previous?.agent ? { ...read, agent: previous.agent } : read
+    if (sameNamingNote(previous, note)) {
       continue
     }
     next ??= new Map(names)

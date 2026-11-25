@@ -5,11 +5,18 @@ import type {
   AgentJournalThreadGoal
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import {
+  claudeMessageIdentity,
+  claudeRecord,
+  claudeText,
+  type ClaudeMessageEnvelope
+} from './claude-structured-item-translation'
+import { sliceAtCodeUnitLimit } from '../../../../shared/text/surrogate-safe-text-slice'
 import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 import type { ClaudeGoalBackgroundWork } from '../../background-tasks/claude-background-task-tracker'
 
 const GOAL_SET = 'Goal set: '
+const SETTLED_ROW_SUFFIX = ':goal'
 const GOAL_ACTIVE = /^Goal active: ([\s\S]+) \((?:not yet evaluated|\d+ turns?)\)$/u
 
 type GoalStatusBody = Extract<AgentJournalItemBody, { kind: 'status' }>
@@ -56,6 +63,16 @@ function goalRow(text: string, goal: AgentJournalThreadGoal | null): GoalStatusB
 }
 
 type GoalRowWrite = { identity: AgentJournalItemIdentity; body: GoalStatusBody }
+type GoalRowRef = { identity: AgentJournalItemIdentity; text: string }
+
+function settledRowIdentity(sessionId: string, uuid: string): AgentJournalItemIdentity {
+  return claudeMessageIdentity({ sessionId, uuid: `${uuid}${SETTLED_ROW_SUFFIX}` })
+}
+
+/** Orca's own completion row, which later reopens and completions revise in place. */
+function isSettledRow(row: GoalRowRef | null): row is GoalRowRef {
+  return row?.identity.provider === 'claude' && row.identity.uuid.endsWith(SETTLED_ROW_SUFFIX)
+}
 
 /** A settled goal's row; with `stopped`, the writer picks and `adopt` records its reading. */
 export type ClaudeGoalSettlement = {
@@ -65,13 +82,13 @@ export type ClaudeGoalSettlement = {
 }
 type SavedGoal = {
   goal: AgentJournalThreadGoal | null
-  row: { identity: AgentJournalItemIdentity; text: string } | null
+  row: GoalRowRef | null
 }
 
 export class ClaudeThreadGoal {
   /** Undefined defers hydration until the journal binds; null means no goal. */
   private known: AgentJournalThreadGoal | null | undefined
-  private row: { identity: AgentJournalItemIdentity; text: string } | null = null
+  private row: GoalRowRef | null = null
   private modelWorked = false
 
   constructor(private readonly journalGoal: () => SavedGoal | undefined) {}
@@ -116,6 +133,46 @@ export class ClaudeThreadGoal {
     this.row = next ? { identity, text } : null
     this.modelWorked = false
     return goalRow(text, next)
+  }
+
+  /** Match the goal's own Stop hook check; one after an inferred completion reopens the goal. */
+  recordGoalCheck(
+    envelope: ClaudeMessageEnvelope
+  ): { reason: string; reopened: GoalRowWrite | null } | null {
+    const goal = this.current
+    const text = claudeText(claudeRecord(envelope.content[0])?.text)
+    if (!goal || !text) {
+      return null
+    }
+    const shortened = sliceAtCodeUnitLimit(goal.objective, 500)
+    const labels = [goal.objective]
+    if (shortened.length < goal.objective.length) {
+      labels.push(`${shortened}… [+${goal.objective.length - shortened.length} chars]`)
+    }
+    const prefix = labels
+      .map((label) => `Stop hook feedback:\n[${label}]: `)
+      .find((value) => text.startsWith(value))
+    if (!prefix) {
+      return null
+    }
+    const reason = text.slice(prefix.length).trim()
+    if (/\n\[[^\n]+\]: /u.test(reason)) {
+      return null
+    }
+    if (goal.status !== 'complete') {
+      return { reason, reopened: null }
+    }
+    // Completion is only inferred; revise the completion row so restarts and older clients see the reopen.
+    const active: AgentJournalThreadGoal = { ...goal, status: 'active' }
+    const row = {
+      identity: isSettledRow(this.row)
+        ? this.row.identity
+        : settledRowIdentity(envelope.sessionId, envelope.uuid),
+      text: `Goal active: ${goal.objective}`
+    }
+    this.known = active
+    this.row = row
+    return { reason, reopened: { identity: row.identity, body: goalRow(row.text, active) } }
   }
 
   observe(message: Record<string, unknown>): void {
@@ -176,17 +233,19 @@ export class ClaudeThreadGoal {
       return { ran: activeRow }
     }
     const complete = reading('complete')
-    const completeRow =
-      sessionId && uuid
-        ? {
-            identity: { provider: 'claude' as const, sessionId, uuid: `${uuid}:goal` },
-            body: goalRow(`Goal complete: ${goal.objective}`, complete)
-          }
+    const completeIdentity = isSettledRow(this.row)
+      ? this.row.identity
+      : sessionId && uuid
+        ? settledRowIdentity(sessionId, uuid)
         : null
+    const completeText = `Goal complete: ${goal.objective}`
+    const completeRow = completeIdentity
+      ? { identity: completeIdentity, body: goalRow(completeText, complete) }
+      : null
     const adopt = (stopped: boolean) => {
       if (!stopped && this.known === active) {
         this.known = complete
-        this.row = null
+        this.row = completeIdentity ? { identity: completeIdentity, text: completeText } : null
       }
     }
     if (!end.stoppable) {

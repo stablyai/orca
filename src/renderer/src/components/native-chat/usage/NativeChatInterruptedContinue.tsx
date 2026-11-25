@@ -18,10 +18,8 @@ import {
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCardSubmission } from '../../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { latestNativeChatOrcaStopCut } from '../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import {
   latestNativeChatUsageLimitCut,
@@ -54,7 +52,7 @@ export function useNativeChatInterruptedContinuation(input: {
   agent: AgentType
   sessionId: string
   journalItems: readonly AgentJournalRenderItem[]
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+  submissions: readonly AgentJournalCardSubmission[]
   /** Also true while the host may take no turn: Continue starts one. */
   isWorking: boolean
   /** Stable; a Continue click is the user's newer action, so it clears the composer's error. */

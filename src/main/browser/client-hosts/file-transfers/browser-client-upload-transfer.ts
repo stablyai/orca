@@ -12,12 +12,41 @@ export const BROWSER_CLIENT_FILE_CHANNEL_READ_METHOD = 'browser.clientHost.fileC
 
 type FileChannelRequest = (method: string, params: unknown) => Promise<unknown>
 
+/** One chunk of a remote file, answered with a `BrowserClientFileChannelReadResult`. */
+export type BrowserClientUploadChunkReader = (
+  remotePath: string,
+  offset: number,
+  length: number
+) => Promise<unknown>
+
 export type BrowserClientRemoteUploadFile = { remotePath: string; contents: Buffer }
+
+/** A paired page's host reads its files through the file channel, under the page's authority. */
+export function fileChannelUploadChunkReader(
+  request: FileChannelRequest,
+  event: BrowserClientHostCommandEvent
+): BrowserClientUploadChunkReader {
+  const authority = {
+    fileChannelProtocolVersion: BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION,
+    authorityRuntimeId: event.authorityRuntimeId,
+    authorityEpoch: event.authorityEpoch,
+    browserHostClientId: event.browserHostClientId,
+    browserHostGeneration: event.browserHostGeneration,
+    browserPageId: event.browserPageId,
+    pageHostGeneration: event.pageHostGeneration
+  }
+  return (remotePath, offset, length) =>
+    request(BROWSER_CLIENT_FILE_CHANNEL_READ_METHOD, {
+      ...authority,
+      workspaceRelativePath: remotePath,
+      offset,
+      length
+    })
+}
 
 /** Resolve paths through the remote runtime; never read them on the desktop. */
 export async function fetchBrowserClientUploadFiles(options: {
-  request: FileChannelRequest
-  event: BrowserClientHostCommandEvent
+  readChunk: BrowserClientUploadChunkReader
   remotePaths: readonly string[]
 }): Promise<BrowserClientRemoteUploadFile[]> {
   if (options.remotePaths.length === 0) {
@@ -26,15 +55,6 @@ export async function fetchBrowserClientUploadFiles(options: {
   if (options.remotePaths.length > BROWSER_CLIENT_FILE_CHANNEL_MAX_FILES_PER_COMMAND) {
     throw new Error('browser_client_upload_file_count_exceeded')
   }
-  const authority = {
-    fileChannelProtocolVersion: BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION,
-    authorityRuntimeId: options.event.authorityRuntimeId,
-    authorityEpoch: options.event.authorityEpoch,
-    browserHostClientId: options.event.browserHostClientId,
-    browserHostGeneration: options.event.browserHostGeneration,
-    browserPageId: options.event.browserPageId,
-    pageHostGeneration: options.event.pageHostGeneration
-  }
   const files: BrowserClientRemoteUploadFile[] = []
   let transferredBytes = 0
   for (const remotePath of options.remotePaths) {
@@ -42,12 +62,7 @@ export async function fetchBrowserClientUploadFiles(options: {
     let offset = 0
     for (;;) {
       const parsed = BrowserClientFileChannelReadResult.safeParse(
-        await options.request(BROWSER_CLIENT_FILE_CHANNEL_READ_METHOD, {
-          ...authority,
-          workspaceRelativePath: remotePath,
-          offset,
-          length: BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES
-        })
+        await options.readChunk(remotePath, offset, BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES)
       )
       if (!parsed.success) {
         throw new Error('browser_client_upload_chunk_invalid')

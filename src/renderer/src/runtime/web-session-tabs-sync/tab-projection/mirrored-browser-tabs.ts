@@ -40,7 +40,12 @@ export function findBrowserWorkspaceForRemotePage(
     const pages = state.browserPagesByWorkspace[workspace.id] ?? []
     for (const page of pages) {
       const handle = state.remoteBrowserPageHandlesByPageId[page.id]
-      if (handle?.environmentId === environmentId && handle.remotePageId === remotePageId) {
+      // A relaunch restores streamed pages without a handle; their saved server page id still names this row.
+      const identity = handle ?? {
+        environmentId: page.browserRuntimeEnvironmentId,
+        remotePageId: page.remoteBrowserPageId
+      }
+      if (identity.environmentId === environmentId && identity.remotePageId === remotePageId) {
         return {
           workspace,
           page,
@@ -293,23 +298,20 @@ export function buildMirroredBrowserTabs(
       previousPage: existing?.page,
       preservesLoading,
       certificateFailure: tab.certificateFailure ?? null,
+      audible: tab.audible === true,
+      audioMuted: tab.audioMuted === true,
+      agentDriving: tab.agentDriving === true,
       remotePageId: tab.browserPageId,
       initializationPresentation: presentation,
       ...(tab.browserProfileId ? { browserProfileId: tab.browserProfileId } : {}),
       ...(tab.placement ? { placement: tab.placement } : {}),
-      unifiedTab:
-        existing?.unifiedTab && existing.unifiedTab.worktreeId !== snapshot.worktree
-          ? {
-              ...existing.unifiedTab,
-              isPinned: tab.isPinned ?? existing.unifiedTab.isPinned
-            }
-          : buildBrowserUnifiedTab(
-              workspace,
-              tab,
-              existing?.unifiedTab ?? null,
-              groupId,
-              environmentId
-            ),
+      unifiedTab: buildBrowserUnifiedTab(
+        workspace,
+        tab,
+        existing?.unifiedTab ?? null,
+        groupId,
+        environmentId
+      ),
       hostTabId: tab.id,
       ...(clientGroupId ? { clientGroupId } : {})
     }

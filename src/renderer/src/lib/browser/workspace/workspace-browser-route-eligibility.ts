@@ -11,6 +11,7 @@ import { resolveWorktreeOperationRoute } from '../../workspace/ownership/worktre
 import { getExecutionHostIdForWorktree } from '../../workspace/ownership/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from './ssh-workspace-browser-route-eligibility'
 import type { AppState } from '@/store/types'
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
 import type { HttpLinkSourceOwner } from '../navigation/http-link-routing'
 
 export function isExpectedRuntimeBrowserRoute(
@@ -26,8 +27,7 @@ export function isExpectedRuntimeBrowserRoute(
   }
   const expectedEnvironmentId = expectedRuntimeEnvironmentId.trim()
   const environmentId = route.runtimeEnvironmentId?.trim() || null
-  const capabilities =
-    state.runtimeStatusByEnvironmentId?.get(expectedEnvironmentId)?.status?.capabilities
+  const capabilities = readAppRuntimeStatuses().get(expectedEnvironmentId)?.status?.capabilities
   if (
     environmentId !== expectedEnvironmentId ||
     (!capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY) &&

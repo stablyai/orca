@@ -79,7 +79,7 @@ export async function getCustomView(
   return coalesce(
     key,
     async () => {
-      const entries = getClients(concreteWorkspaceId)
+      const entries = await getClients(concreteWorkspaceId)
       const entry = entries[0]
       if (!entry) {
         return null
@@ -95,7 +95,7 @@ export async function getCustomView(
         return mapped?.model === model ? mapped : null
       } catch (error) {
         if (isAuthError(error)) {
-          clearToken(entry.workspace.id)
+          await clearToken(entry.workspace.id)
         }
         throw error
       } finally {

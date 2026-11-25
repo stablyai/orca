@@ -281,7 +281,7 @@ export class StructuredAgentSessionJournalProjections {
       workRevision: authority.operationalRevision,
       stopRevision: authority.stopRevision,
       usageLimitCut: result.usageLimitCut,
-      state: withHostTurnEnd(result.state, turnEnd?.quietEnd),
+      state: withHostTurnEnd(result.state, turnEnd?.quietEnd, result.usageLimitCut !== null),
       ...result.indicators,
       authority,
       work: result.work
@@ -303,20 +303,21 @@ export class StructuredAgentSessionJournalProjections {
  *  are no news. */
 export type StructuredAgentSessionTurnEndPolicy = {
   botSession: boolean
-  quietEnd: (outcome: 'success' | 'failure') => boolean
+  quietEnd: (outcome: 'success' | 'failure', usageLimited?: boolean) => boolean
 }
 
 /** Whether its alert stays quiet: a turn that succeeded on a bot's quiet marker, or one that ended
  *  in a way its host keeps quiet (a look-around that already failed last time). */
 export function withHostTurnEnd(
   state: StructuredAgentSessionStatusState,
-  quietEnd?: (outcome: 'success' | 'failure') => boolean
+  quietEnd?: (outcome: 'success' | 'failure', usageLimited?: boolean) => boolean,
+  usageLimited = false
 ): StructuredAgentSessionStatusState {
   const outcome = state.summary.turnOutcome
   const request = state.latestRequest
   const quiet =
     outcome === 'failure'
-      ? quietEnd?.('failure') === true
+      ? quietEnd?.('failure', usageLimited) === true
       : request?.kind === 'turn' &&
         request.outcome === 'success' &&
         (state.quietAnswer === true || quietEnd?.('success') === true)

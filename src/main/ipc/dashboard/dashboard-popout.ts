@@ -1,5 +1,6 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
+import { createStoreNativeSettingsProjection } from '../../core-desktop/native-settings-projection'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
 import type { DashboardSnapshot } from '../../../shared/agent-status/presentation/dashboard-snapshot'
 import {
@@ -29,6 +30,7 @@ export function registerDashboardPopoutHandlers(
   store: Store,
   keybindings?: KeybindingService
 ): void {
+  const nativeSettings = createStoreNativeSettingsProjection(store)
   ipcMain.removeHandler('dashboardPopout:open')
   ipcMain.removeHandler('dashboard:publishSnapshot')
   ipcMain.removeHandler('dashboard:requestSnapshot')
@@ -55,7 +57,7 @@ export function registerDashboardPopoutHandlers(
     if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
-    createOrFocusDashboardPopout(store, {
+    createOrFocusDashboardPopout(nativeSettings, {
       getKeybindings: () => keybindings?.getOverrides()
     })
   })

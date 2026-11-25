@@ -5,13 +5,16 @@ import type {
   AutomationUpdateInput
 } from '../../../../../shared/automations/automation-definition'
 import { translate } from '@/i18n/i18n'
-import {
-  EVENT_ONLY_SCHEDULE,
-  hasAutomationSchedule
-} from '../../../../../shared/automation-event-triggers'
 import { listAutomationsForTarget } from '../hosts/automation-host-client'
-import { dispatchAutomationReread } from '../hosts/automation-row-action-dispatch'
-import { resolveAutomationCreateDestination } from './automation-create-destination'
+import {
+  dispatchAutomationReread,
+  type AutomationActionNotice
+} from '../hosts/automation-row-action-dispatch'
+import {
+  automationCreateHostFor,
+  automationCreateHostStableKey,
+  resolveAutomationCreateDestination
+} from './automation-create-destination'
 import { buildDraftSchedule } from './automation-draft-model'
 import {
   createAutomationOnDestination,
@@ -19,69 +22,61 @@ import {
 } from './automation-orca-save-operations'
 import { completeAutomationSave } from './automation-save-completion'
 import type { AutomationSaveContext } from './automation-save-context'
-import { botResultsPlace, withBotResultsPlace } from './automation-bot-results-to'
-import { botAutomationSetup, sameBotAgentSetup } from '../../../../../shared/bots/bot-agent-setup'
+import {
+  botSchedulePatch,
+  isSameBotTarget,
+  missingBotResultsPlace,
+  trimmedBotTarget
+} from '../../../../../shared/automations/bot-automation-target-edit'
+import { botAutomationSetup } from '../../../../../shared/bots/bot-agent-setup'
 import { isBotAgent } from '../../../../../shared/bot-types'
+import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
+import { automationHostRecoveryActions } from '../hosts/automation-host-status-descriptors'
 
 /** Why the target cannot be saved yet, or null when it can. */
 export function botTargetError(target: AutomationBotTarget): string | null {
-  const { resultsTo } = target
-  if (typeof resultsTo !== 'object') {
-    return null
-  }
-  if ('channel' in resultsTo) {
-    return resultsTo.channel.trim()
-      ? null
-      : translate('automations.botTarget.channelMissing', 'Enter the channel to send results to.')
-  }
-  // A key, a link or a saved ref; the host looks it up on save.
-  return resultsTo.linearIssue.trim()
-    ? null
-    : translate(
+  switch (missingBotResultsPlace(target)) {
+    case 'channel':
+      return translate(
+        'automations.botTarget.channelMissing',
+        'Enter the channel to send results to.'
+      )
+    case 'linear':
+      return translate(
         'automations.botTarget.linearIssueInvalid',
         'Enter the Linear issue to send results to, like ENG-123.'
       )
-}
-
-function resultsKey(target: AutomationBotTarget): string {
-  const { resultsTo } = target
-  if (typeof resultsTo !== 'object') {
-    return resultsTo
+    case null:
+      return null
   }
-  return 'channel' in resultsTo ? `channel:${resultsTo.channel}` : `linear:${resultsTo.linearIssue}`
 }
 
-/** Unchanged targets are left out of an edit. */
-export function isSameBotTarget(
-  left: AutomationBotTarget | undefined,
-  right: AutomationBotTarget
-): boolean {
-  return (
-    left !== undefined &&
-    left.botId === right.botId &&
-    left.runsIn === right.runsIn &&
-    left.chat?.sessionId === right.chat?.sessionId &&
-    resultsKey(left) === resultsKey(right) &&
-    Boolean(left.letBotReact) === Boolean(right.letBotReact) &&
-    sameBotAgentSetup(left.agentSetup, right.agentSetup)
-  )
-}
-
-/** The schedule fields an edit sends: none while unchanged, the never-reached one for "Only on events". */
-export function botSchedulePatch(
-  eventsOnly: boolean,
-  current: Automation | null,
-  schedule: { rrule: string; dtstart: number }
-): Partial<Pick<AutomationUpdateInput, 'rrule' | 'dtstart'>> {
-  const scheduled = current === null || hasAutomationSchedule(current)
-  if (eventsOnly) {
-    return scheduled ? { ...EVENT_ONLY_SCHEDULE } : {}
+/** Why the bot's host can't hold a new automation, with the repair that can help: an old server needs updating, not Retry. */
+export function botHostUnavailableNotice(
+  botHost: AutomationHostCatalogEntry | null
+): AutomationActionNotice {
+  const recovery = botHost ? automationHostRecoveryActions(botHost).authority : null
+  if (botHost && recovery === 'update-server') {
+    return {
+      message: translate(
+        'automations.botTarget.hostNeedsUpdate',
+        'Update the Orca server on {host} so its bots can have automations.'
+      ).replace('{host}', () => botHost.authorityLabel),
+      recovery,
+      severity: 'owner'
+    }
   }
-  // A picked schedule is new even when its rule matches the never-reached one.
-  return !scheduled || current?.rrule !== schedule.rrule ? schedule : {}
+  return {
+    message: translate(
+      'automations.botTarget.hostUnavailable',
+      "The bot's computer can't hold a new automation yet. Try again in a moment."
+    ),
+    recovery: recovery ?? 'retry',
+    severity: 'owner'
+  }
 }
 
-/** Saves an automation that runs as a bot; it lives on this computer, beside its bot. */
+/** Saves an automation that runs as a bot; it lives beside its bot, on the bot's host. */
 export async function saveBotAutomation(
   context: AutomationSaveContext,
   target: AutomationBotTarget,
@@ -89,13 +84,7 @@ export async function saveBotAutomation(
 ): Promise<void> {
   const { local, destination } = context
   const { draft, editingAutomationId, editingRowKey } = local
-  const bot: AutomationBotTarget =
-    typeof target.resultsTo === 'object'
-      ? {
-          ...target,
-          resultsTo: withBotResultsPlace(target.resultsTo, botResultsPlace(target.resultsTo).trim())
-        }
-      : target
+  const bot = trimmedBotTarget(target)
   const { timezone, rrule, missedRunGraceMinutes } = buildDraftSchedule(draft, time)
 
   if (editingAutomationId !== null) {
@@ -142,20 +131,16 @@ export async function saveBotAutomation(
     return
   }
 
-  const here = resolveAutomationCreateDestination(
-    destination.createDestination.control.entries.find(
-      (entry) => entry.owner?.authority.kind === 'desktop' && entry.owner.selector.kind === 'self'
-    )
+  // Like the CLI's --bot, the automation lives on the host that runs its bot.
+  const botHost = automationCreateHostFor(
+    destination.createDestination.control.entries,
+    automationCreateHostStableKey(draft.botHostId)
   )
+  const here = resolveAutomationCreateDestination(botHost)
   if (here.status !== 'ready') {
-    local.setEditorNotice({
-      message: translate(
-        'automations.botTarget.hostUnavailable',
-        "This computer can't hold a new automation yet. Try again in a moment."
-      ),
-      recovery: 'retry',
-      severity: 'owner'
-    })
+    // Recovery acts on the bot's host, not the Host picker the bot form hides.
+    local.setEditorNoticeHost(botHost)
+    local.setEditorNotice(botHostUnavailableNotice(botHost))
     return
   }
   const input: AutomationCreateInput = {
@@ -181,6 +166,7 @@ export async function saveBotAutomation(
   )
   if (!saved.ok) {
     local.setEditorNotice(saved.notice)
+    local.setEditorNoticeHost(botHost)
     return
   }
   await completeAutomationSave(context, saved.value, null, false)

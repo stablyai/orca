@@ -62,17 +62,17 @@ export function listAgentSessionConversations(
 /** Readable chats of exactly this workspace, and whether one this build cannot validate is also there. */
 export function listAgentSessionWorkspaceSessions(
   state: AgentSessionStoreState,
+  scoped: readonly AgentSessionConversationView[],
   location: AgentSessionExecutionLocation
 ): { sessionIds: string[]; hasUnreadable: boolean } {
-  const inWorkspace = (other: AgentSessionExecutionLocation) =>
-    agentSessionExecutionLocationsEqual(other, location)
+  const inWorkspace = scoped.filter((conversation) =>
+    agentSessionExecutionLocationsEqual(conversation.location, location)
+  )
   return {
-    sessionIds: [...state.records.values()]
-      .filter((record) => inWorkspace(record.location))
-      .map((record) => record.sessionId),
-    hasUnreadable: [...state.unreadableRecords.values()].some(
-      ({ conversation }) => !!conversation && inWorkspace(conversation.location)
-    )
+    sessionIds: inWorkspace.flatMap(({ sessionId }) =>
+      state.records.has(sessionId) ? [sessionId] : []
+    ),
+    hasUnreadable: inWorkspace.some(({ sessionId }) => !state.records.has(sessionId))
   }
 }
 

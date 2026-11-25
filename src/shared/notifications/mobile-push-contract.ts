@@ -17,13 +17,19 @@ export type MobilePushFilter = {
   onlyWhenDesktopAway?: boolean
   onlyWhenAgentNeedsInput?: boolean
   sound?: boolean
+  /** The phone app keeps its icon count current, so it can be sent one. */
+  badge?: boolean
 }
+
+export const MOBILE_PUSH_TOKEN_DIGEST_MAX_CHARS = 128
 
 /** Persisted on the paired DeviceEntry so a host restart can push without the phone re-registering. */
 export type MobilePushRegistration = {
   registrationId: string
   filter: MobilePushFilter
   expiresAt: number
+  /** Same phone token, same digest on every host, so a mirroring host can tell which phones the owning host pushes. */
+  tokenDigest?: string
 }
 
 export type MobilePushRegisterInput = {
@@ -56,7 +62,8 @@ function parseFilter(value: unknown): MobilePushFilter | null {
     (filter.onlyWhenDesktopAway !== undefined && typeof filter.onlyWhenDesktopAway !== 'boolean') ||
     (filter.onlyWhenAgentNeedsInput !== undefined &&
       typeof filter.onlyWhenAgentNeedsInput !== 'boolean') ||
-    (filter.sound !== undefined && typeof filter.sound !== 'boolean')
+    (filter.sound !== undefined && typeof filter.sound !== 'boolean') ||
+    (filter.badge !== undefined && typeof filter.badge !== 'boolean')
   ) {
     return null
   }
@@ -67,7 +74,8 @@ function parseFilter(value: unknown): MobilePushFilter | null {
     ...(typeof filter.onlyWhenAgentNeedsInput === 'boolean'
       ? { onlyWhenAgentNeedsInput: filter.onlyWhenAgentNeedsInput }
       : {}),
-    ...(typeof filter.sound === 'boolean' ? { sound: filter.sound } : {})
+    ...(typeof filter.sound === 'boolean' ? { sound: filter.sound } : {}),
+    ...(typeof filter.badge === 'boolean' ? { badge: filter.badge } : {})
   }
 }
 
@@ -90,10 +98,20 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
   return {
     registrationId: registration.registrationId,
     filter,
-    expiresAt: registration.expiresAt
+    expiresAt: registration.expiresAt,
+    ...(typeof registration.tokenDigest === 'string' &&
+    registration.tokenDigest.length > 0 &&
+    registration.tokenDigest.length <= MOBILE_PUSH_TOKEN_DIGEST_MAX_CHARS
+      ? { tokenDigest: registration.tokenDigest }
+      : {})
   }
 }
 
 export type MobilePushTestResult =
   | { accepted: true }
-  | { accepted: false; reason: 'not_registered' | 'unavailable' | 'rate_limited' | 'rejected' }
+  | {
+      accepted: false
+      reason: 'not_registered' | 'unavailable' | 'rate_limited' | 'rejected'
+      /** Push sign-in was refused because this host's clock is this far ahead (negative: behind). Older phones ignore it. */
+      clockSkewSeconds?: number
+    }

@@ -1,4 +1,5 @@
 import { spawnProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import type { ChildProcess } from 'node:child_process'
 import type { WindowsHostInteractiveLoginSpawn } from '../../providers/shell-launch/windows/windows-interactive-login-spawn'
 import { recordSelfInitiatedTreeKill } from '../../crash-reporting/process-exits/self-initiated-tree-kill-log'
@@ -24,7 +25,7 @@ export function terminateClaudeProcess(
       return
     }
     const taskkill = spawnProcess({
-      program: 'taskkill.exe',
+      program: windowsSystem32Binary('taskkill.exe'),
       args: ['/pid', String(windowsTerminationPid), '/t', '/f'],
       stdio: 'ignore'
     })

@@ -6,12 +6,10 @@ import {
   BotTidyUpUndo
 } from '../../../../shared/rpc-contract/bots-look-around-params'
 import { botHomeFolder } from '../../../bots/bot-home'
-import {
-  failedLooksInARow,
-  LOOK_FAILURES_TO_TURN_OFF
-} from '../../../bots/bot-look-around-failures'
 import { tidyUpState } from '../../../bots/bot-memory-tidy-up'
+import { tidyUpTurnedOff } from '../../../bots/bot-memory-tidy-up-failures'
 import { runtimeTidyUpRunner } from '../../../bots/bot-memory-tidy-up-runtime'
+import { botRunFailure } from '../../../bots/bot-run-failure-code'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 
 function botById(context: RpcContext, botId: string) {
@@ -30,18 +28,28 @@ export function botTidyUpView(context: RpcContext, botId: string): BotTidyUpView
   const state = tidyUpState(runtime.lookAround.get(bot.id))
   const lastRun = state.runs.at(-1)
   const rowId = state.last?.rowId
-  const undone =
-    rowId != null &&
-    runtime.bots.memory.history(bot.id).some((row) => row.by.kind === 'undo' && row.by.of === rowId)
+  // From what history holds in memory, never waiting on the disk: before the bot's history was read,
+  // say not undone, read it once, and have the view read again then.
+  let undone = false
+  if (rowId != null) {
+    const known = runtime.bots.memory.undoneKnown(bot.id, rowId)
+    if (known === undefined) {
+      runtime.bots.memory.whenUndoneKnown(bot.id, () =>
+        runtime.notifyBotsChanged({ botIds: [bot.id], kinds: ['lookAround'] })
+      )
+    }
+    undone = known === true
+  }
+  const error = lastRun?.endedAt !== undefined ? (lastRun.error ?? null) : null
+  const turnedOff = tidyUpTurnedOff(state, bot)
   return {
     setting,
     last: state.last ? { ...state.last, undone } : null,
     running: lastRun !== undefined && lastRun.endedAt === undefined,
-    turnedOff:
-      !setting.on && failedLooksInARow(state) >= LOOK_FAILURES_TO_TURN_OFF
-        ? (lastRun?.error ?? null)
-        : null,
-    error: lastRun?.endedAt !== undefined ? (lastRun.error ?? null) : null
+    turnedOff,
+    ...(turnedOff ? { turnedOffFailure: botRunFailure(turnedOff) } : {}),
+    error,
+    ...(error ? { failure: botRunFailure(error) } : {})
   }
 }
 

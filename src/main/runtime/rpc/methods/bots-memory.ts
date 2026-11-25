@@ -13,11 +13,35 @@ import {
   BotMemoryForget,
   BotMemoryUndo
 } from '../../../../shared/rpc-contract/bots-params'
-import type { BotMemoryHistoryView } from '../../../../shared/bots/bot-memory-history'
+import type {
+  BotMemoryHistoryRow,
+  BotMemoryHistoryView
+} from '../../../../shared/bots/bot-memory-history'
 import { botHomeFolder } from '../../../bots/bot-home'
 import { namedOrCallerBot } from './bots-caller-bot'
 import { readBotChats } from './bots-chats'
 import { defineMethod, InvalidArgumentError } from '../core'
+
+// Requests waiting on one history read share one view: a stalled disk holds no work per request.
+const historyViews = new WeakMap<
+  Promise<readonly BotMemoryHistoryRow[]>,
+  Promise<BotMemoryHistoryView[]>
+>()
+
+async function historyView(
+  runtime: Parameters<typeof readBotChats>[0],
+  bot: Parameters<typeof readBotChats>[1],
+  listed: Promise<readonly BotMemoryHistoryRow[]>
+): Promise<BotMemoryHistoryView[]> {
+  const rows = await listed
+  const titles = new Map(
+    (await readBotChats(runtime, bot, null, true)).map((chat) => [chat.id, chat.title])
+  )
+  return rows.map((row) => ({
+    ...row,
+    chat: 'sessionId' in row.by ? (titles.get(row.by.sessionId) ?? null) : null
+  }))
+}
 
 export const BOT_MEMORY_METHODS = [
   defineMethod({
@@ -76,14 +100,13 @@ export const BOT_MEMORY_METHODS = [
       const { runtime } = context
       runtime.bots.assertEnabled()
       const { bot } = namedOrCallerBot(params, context)
-      const titles = new Map(
-        (await readBotChats(runtime, bot, null, true)).map((chat) => [chat.id, chat.title])
-      )
-      const rows: BotMemoryHistoryView[] = runtime.bots.memory.history(bot.id).map((row) => ({
-        ...row,
-        chat: 'sessionId' in row.by ? (titles.get(row.by.sessionId) ?? null) : null
-      }))
-      return { rows }
+      const listed = runtime.bots.memory.history(bot.id)
+      let view = historyViews.get(listed)
+      if (!view) {
+        view = historyView(runtime, bot, listed)
+        historyViews.set(listed, view)
+      }
+      return { rows: await view }
     }
   }),
   defineMethod({

@@ -95,7 +95,7 @@ export async function listProjectsByExactName(
   return coalesce(
     key,
     async () => {
-      const entries = getClients(concreteWorkspaceId, signal)
+      const entries = await getClients(concreteWorkspaceId, signal)
       const entry = entries[0]
       if (!entry) {
         return []
@@ -134,7 +134,7 @@ export async function listProjectsByExactName(
         return matches
       } catch (error) {
         if (isAuthError(error)) {
-          clearToken(entry.workspace.id)
+          await clearToken(entry.workspace.id)
         }
         throw error
       } finally {
@@ -161,7 +161,7 @@ export async function getProject(
   return coalesce(
     key,
     async () => {
-      const entries = getClients(concreteWorkspaceId, signal)
+      const entries = await getClients(concreteWorkspaceId, signal)
       const entry = entries[0]
       if (!entry) {
         return null
@@ -178,7 +178,7 @@ export async function getProject(
           : null
       } catch (error) {
         if (isAuthError(error)) {
-          clearToken(entry.workspace.id)
+          await clearToken(entry.workspace.id)
         }
         throw error
       } finally {
@@ -194,7 +194,7 @@ export async function createProject(
   input: LinearProjectCreateInput,
   workspaceId?: string | null
 ): Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }> {
-  const entry = getClients(workspaceId)[0]
+  const entry = (await getClients(workspaceId))[0]
   if (!entry) {
     return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
@@ -213,7 +213,7 @@ export async function createProject(
     return { ok: true, project: mapProjectDetailForWorkspace(entry, project) }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.workspace.id)
+      await clearToken(entry.workspace.id)
       throw error
     }
     const message = error instanceof Error ? error.message : String(error)

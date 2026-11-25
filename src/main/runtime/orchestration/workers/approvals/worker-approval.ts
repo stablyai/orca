@@ -85,6 +85,7 @@ export function workerApprovalPayload(input: {
     worker: input.worker,
     summary: {
       title: item.displayName ? `Allow ${item.displayName}?` : item.title,
+      ...(item.toolName ? { tool: item.toolName } : {}),
       detail,
       reason: item.decisionReason ?? null
     },

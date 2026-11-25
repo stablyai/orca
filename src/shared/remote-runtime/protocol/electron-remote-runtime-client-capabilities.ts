@@ -9,12 +9,14 @@ import {
   STRUCTURED_CHAT_PROMPT_TELEMETRY_CLIENT_CAPABILITY
 } from '../../agent-session/requests/structured-chat-dispatch-telemetry'
 import { NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from './protocol-version'
+import { GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY } from '../../google/google-connect-types'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
   SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY
 } from './session-tabs-runtime-capabilities'
 import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from './worktree-runtime-capabilities'
+import { ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY } from '../../orchestration/orchestration-runtime-capabilities'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
@@ -44,5 +46,9 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   // Only the renderer shows Deleting for a `removing` row; CLI and mobile get those rows omitted.
   WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
   // The renderer shows a restored, unconfirmed agent row as identity only.
-  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY
+  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
+  // A person answers worker approvals in this window.
+  ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY,
+  // The renderer draws an agent's Google setup cards, Connect included.
+  GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY
 ] as const

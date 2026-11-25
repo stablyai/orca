@@ -81,8 +81,3 @@ export function recordHibernationBoundaryResolved(paneKey: string, now: number):
 export function getHibernationBoundaryResolvedAtByPaneKey(): Record<string, number> {
   return Object.fromEntries(boundaryResolvedAtByPaneKey)
 }
-
-export function resetHibernationPaneAgeForTests(): void {
-  ptyBindingByPaneKey.clear()
-  boundaryResolvedAtByPaneKey.clear()
-}

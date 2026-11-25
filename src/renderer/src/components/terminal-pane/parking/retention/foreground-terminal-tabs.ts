@@ -60,12 +60,6 @@ export function forgetForegroundTerminalTabs(tabIds: Iterable<string>): void {
   }
 }
 
-export function resetForegroundTerminalTabIdsForTests(): void {
-  explicitForegroundTerminalTabIds = new Set()
-  visibleTerminalTabClaimsByToken.clear()
-  foregroundTerminalTabLastSeenAtById.clear()
-}
-
 function refreshExitedForegroundTerminalTabLastSeen(
   previousForegroundTerminalTabIds: Set<string>,
   now: number

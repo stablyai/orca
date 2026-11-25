@@ -23,10 +23,11 @@ export async function availableParts(
   const shared = (path: string) => content.files.find((file) => file.path === path)?.text
   return {
     soulLines: textLineCount(shared('SOUL.md') ?? shareable.soul),
-    skills: shareable.skills.map(({ name, description, homePath }) => ({
+    skills: shareable.skills.map(({ name, description, homePath, optInFrom, optInKey }) => ({
       name,
       description: sharedDescription(shared(`skills/${name}/SKILL.md`)) ?? description,
-      homePath
+      homePath,
+      ...(optInFrom === undefined ? {} : { optInFrom, optInKey })
     })),
     schedules: shareable.schedules.map(({ automationId, name, rrule, timezone }) => ({
       automationId,

@@ -267,9 +267,3 @@ export function publishTerminalViewAttributes(
   }
   return true
 }
-
-export function _resetTerminalViewAttributesPublisherForTest(): void {
-  lastPublishedSnapshot = null
-  lastPublishedAttributes = null
-  publishedAttributesListeners.clear()
-}

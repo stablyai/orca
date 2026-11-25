@@ -124,12 +124,3 @@ export function clearSparseCheckoutStateCacheForRepo(repoPath: string): void {
 export function clearSparseCheckoutStateCache(): void {
   sparseCheckoutStateCache.clear()
 }
-
-export function __resetSparseCheckoutStateCacheForTests(): void {
-  sparseCheckoutStateCache.clear()
-  changeListener = undefined
-}
-
-export function __getSparseCheckoutStateCacheSizeForTests(): number {
-  return sparseCheckoutStateCache.size
-}

@@ -53,6 +53,7 @@ export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApp
     kind: 'approval',
     title: prompt.title ?? (planSubject ? 'Review proposed plan' : `Allow ${prompt.toolName}?`),
     ...(prompt.displayName ? { displayName: prompt.displayName } : {}),
+    ...(planSubject || !prompt.toolName ? {} : { toolName: prompt.toolName }),
     ...(prompt.description ? { description: prompt.description } : {}),
     ...(prompt.decisionReason ? { decisionReason: prompt.decisionReason } : {}),
     ...(prompt.blockedPath ? { blockedPath: prompt.blockedPath } : {}),
@@ -117,7 +118,9 @@ export function claudeQuestionItems(input: {
             ...(header ? { header } : {}),
             options: questionOptions(question, questionAddress),
             multiSelect: question.multiSelect === true,
-            freeTextQuestionId: questionAddress
+            freeTextQuestionId: questionAddress,
+            // Claude takes answers that leave a question out, as its own question card sends.
+            skippable: true
           }
         ]
       : []

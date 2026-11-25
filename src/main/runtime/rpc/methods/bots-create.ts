@@ -1,6 +1,5 @@
 // `bots.create`: the owner's New bot, in Orca (desktop or phone). A bot only proposes one
 // (`bots.createOffer`); creating from its card records the new bot against that card.
-import { assertBotAgentRunsOnThisHost } from '../../../bots/bot-agent-host-refusal'
 import { BotCreate } from '../../../../shared/rpc-contract/bots-params'
 import { botFirstKickoff } from '../../../../shared/bots/bot-import'
 import { botMadeForWorkspacesKickoff } from '../../../../shared/bots/bot-made-for-workspaces'
@@ -21,7 +20,6 @@ export const BOT_CREATE_METHOD = defineMethod({
   ) => {
     const { runtime } = context
     runtime.bots.assertEnabled()
-    assertBotAgentRunsOnThisHost(params.agent)
     // A bot proposes new bots (`bot create --offer`); only its owner creates one, in Orca.
     ownerOnly(
       context,

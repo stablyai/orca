@@ -201,8 +201,13 @@ export function useNativeChatComposerAttachments({
       references: { id: string; path: string }[],
       options?: NativeChatPendingAttachmentOptions,
       serverOwned = false
-    ) =>
-      settlePendingImageReferences(
+    ) => {
+      // Chips reserved for files staged on the remote target settle as server-owned too.
+      const owned = references.reduce(
+        (any, { id }) => serverOwnedPendingIds.delete(id) || any,
+        serverOwned
+      )
+      return settlePendingImageReferences(
         nativeChatPendingAttachmentScope(destinationScope(), references[0]?.id ?? ''),
         scopeEditor(),
         () =>
@@ -217,11 +222,12 @@ export function useNativeChatComposerAttachments({
                     attachResolvedPaths(
                       paths,
                       null,
-                      serverOwned ? { ...options, targetOwnerIsCurrent: () => true } : options
+                      owned ? { ...options, targetOwnerIsCurrent: () => true } : options
                     )
                 : undefined
           )
-      ),
+      )
+    },
     [
       attachResolvedPaths,
       attachmentScopeKey,
@@ -229,7 +235,8 @@ export function useNativeChatComposerAttachments({
       disabledRef,
       isComposing,
       mountedRef,
-      scopeEditor
+      scopeEditor,
+      serverOwnedPendingIds
     ]
   )
 

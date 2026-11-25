@@ -5,6 +5,8 @@ import type { WaitHostRead } from '../../../../src/shared/automations/automation
 export type MobileNativeChatBotIdentity = {
   /** The bot whose chat this is; absent where a row names a bot it doesn't own (a group chat). */
   botId?: string
+  /** The chat this identity is for; absent in a group chat. */
+  sessionId?: string
   showName?: boolean
   name: string
   avatar: MobileBotAvatarSource

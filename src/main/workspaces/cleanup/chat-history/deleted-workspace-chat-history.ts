@@ -27,6 +27,7 @@ import { isCodexRolloutStillIdleInGoneFolder } from './codex-rollout-last-cwd'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { deleteCodexRolloutsPermanently } from '../../../codex/history/cleanup/codex-rollout-permanent-delete'
 import { listHostCodexRolloutHomes } from '../../../codex/history/cleanup/codex-host-rollout-homes'
+import { createCodexRolloutHistoryReferencesClient } from '../../../codex/history/cleanup/codex-rollout-history-references-client'
 
 export type { ChatHistorySweepResult }
 
@@ -38,10 +39,14 @@ export type ChatHistorySweepDeps = {
   signal?: AbortSignal
   /** Sessions whose cwd is inside one of `scopePaths`, at most AI_VAULT_SCOPE_PATHS_MAX_COUNT of them. */
   listSessions: (scopePaths: string[], signal?: AbortSignal) => Promise<AiVaultSession[]>
-  /** `shouldDelete` runs right before each removal, after any earlier removal in the batch. */
+  /**
+   * `shouldDelete` runs right before each removal, after any earlier removal in the batch;
+   * `stillGone` is its cheap part (setting, rows, folder) for a last check nearest the unlink.
+   */
   deleteSessions: (
     targets: ChatHistoryTarget[],
-    shouldDelete: (target: ChatHistoryTarget) => Promise<boolean>
+    shouldDelete: (target: ChatHistoryTarget) => Promise<boolean>,
+    stillGone: () => Promise<boolean>
   ) => Promise<ChatHistorySweepResult>
   /** Orca's own chats on this host; absent sweeps none. */
   listNativeChats?: () => readonly AgentSessionRecord[]
@@ -123,7 +128,8 @@ export async function sweepDeletedWorkspaceChatHistory(
             target.agent === 'codex'
               ? isCodexRolloutStillIdleInGoneFolder
               : isChatStillIdleInGoneFolder
-          )(target.filePath, key, Date.now())) && (await stillGone())
+          )(target.filePath, key, Date.now())) && (await stillGone()),
+        stillGone
       )
   )
   const { listNativeChats, forgetNativeChats } = deps
@@ -150,6 +156,8 @@ export function deleteChatHistoryOfDeletedWorkspaces(
   store: RuntimeStore,
   signal: AbortSignal
 ): Promise<ChatHistorySweepResult> {
+  // One fork index for the whole sweep, in its own worker: each gone folder's batch reuses it.
+  const references = createCodexRolloutHistoryReferencesClient(signal)
   return sweepDeletedWorkspaceChatHistory({
     store,
     now: Date.now(),
@@ -162,7 +170,7 @@ export function deleteChatHistoryOfDeletedWorkspaces(
           { signal: scanSignal }
         )
       ).sessions,
-    deleteSessions: async (targets, shouldDelete) => {
+    deleteSessions: async (targets, shouldDelete, stillGone) => {
       const isCodex = (target: ChatHistoryTarget): boolean => target.agent === 'codex'
       const others = targets.filter((target) => !isCodex(target))
       const codex = targets.filter(isCodex)
@@ -172,8 +180,12 @@ export function deleteChatHistoryOfDeletedWorkspaces(
       // AI Vault lists one name per rollout and refuses Codex deletes: links would bring it back.
       const rollouts =
         codex.length > 0
-          ? await deleteCodexRolloutsPermanently(codex, shouldDelete, () =>
-              listHostCodexRolloutHomes(store.getSettings())
+          ? await deleteCodexRolloutsPermanently(
+              codex,
+              shouldDelete,
+              () => listHostCodexRolloutHomes(store.getSettings()),
+              references,
+              stillGone
             )
           : empty
       return {
@@ -185,5 +197,8 @@ export function deleteChatHistoryOfDeletedWorkspaces(
     listNativeChats: listHostNativeChats,
     forgetNativeChats: forgetHostNativeChats,
     isEnabled: () => store.getSettings().deleteChatHistoryWithWorkspace === true
+  }).finally(async () => {
+    await references.save()
+    await references.close()
   })
 }

@@ -2,9 +2,8 @@ import { useEffect, useLayoutEffect, useState } from 'react'
 import { useAppStore } from '../../store'
 import { useTranslate } from '@/i18n/use-translate'
 import { usageHostKey } from '../../store/slices/usage/usage-host'
-import { useRuntimeEnvironmentCapabilityAnswer } from '../../runtime/rpc/compatibility/use-runtime-environment-capability'
+import type { StatsHostUsageSupport } from '../../store/slices/process-stats/stats'
 import { subscribeRuntimeHostContactRegained } from '../../runtime/hosts/connections/runtime-host-contact-regained'
-import { USAGE_ANALYTICS_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type StatsHost = {
@@ -19,31 +18,39 @@ export function StatsHostScope({
   children
 }: {
   host: StatsHost
-  /** `usageUnsupported` is true only when the host answered that its Orca predates host-computed usage. */
-  children: (usageUnsupported: boolean, contactGeneration: number) => React.ReactNode
+  /** `view` changes with every new store view, so panes keyed on it read again. */
+  children: (usageSupport: StatsHostUsageSupport, view: number) => React.ReactNode
 }): React.JSX.Element | null {
   const key = usageHostKey(host.target)
-  const shownKey = useAppStore((state) => usageHostKey(state.statsHost))
+  const shown = useAppStore((state) => usageHostKey(state.statsHost) === key)
+  const usageSupport = useAppStore((state) => state.statsHostUsageSupport)
+  const view = useAppStore((state) => state.statsHostEpoch)
   const setStatsHost = useAppStore((state) => state.setStatsHost)
+  const renewStatsHostView = useAppStore((state) => state.renewStatsHostView)
   const environmentId = host.target.kind === 'environment' ? host.target.environmentId : null
-  const usageSupported = useRuntimeEnvironmentCapabilityAnswer(
-    environmentId,
-    USAGE_ANALYTICS_RUNTIME_CAPABILITY
-  )
-  // A remote host has no usage connection events; its reads start again when contact returns.
-  const [contactGeneration, setContactGeneration] = useState(0)
+  // Why: until this mount's view starts, panes would mount under the previous one and read early.
+  const [started, setStarted] = useState(false)
+  // A remote host has no usage connection events; a new view reads it again when contact returns.
   useEffect(
     () =>
       environmentId
-        ? subscribeRuntimeHostContactRegained(environmentId, () =>
-            setContactGeneration((generation) => generation + 1)
-          )
+        ? subscribeRuntimeHostContactRegained(environmentId, renewStatsHostView)
         : undefined,
-    [environmentId]
+    [environmentId, renewStatsHostView]
   )
-  // Layout effect: children's mount effects must already read this host. Same-host calls are no-ops.
-  useLayoutEffect(() => setStatsHost(host.target), [host.target, setStatsHost])
-  return shownKey === key ? <>{children(usageSupported === false, contactGeneration)}</> : null
+  // Layout effect: children's mount effects must already read this host. Showing the same remote
+  // host again starts a new view, since its version or reachability may have changed meanwhile.
+  useLayoutEffect(() => {
+    if (environmentId === null) {
+      setStatsHost({ kind: 'local' })
+    } else if (usageHostKey(useAppStore.getState().statsHost) === key) {
+      renewStatsHostView()
+    } else {
+      setStatsHost({ kind: 'environment', environmentId })
+    }
+    setStarted(true)
+  }, [environmentId, key, setStatsHost, renewStatsHostView])
+  return shown && started ? <>{children(usageSupport, view)}</> : null
 }
 
 export function StatsHostCaption({ name }: { name: string }): React.JSX.Element {

@@ -13,6 +13,7 @@ import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../../se
 import { readLegacyImportTranscript, TRANSCRIPT_DECODERS } from './journal-legacy-transcript-stream'
 import { readOpenCodeNativeChatTranscriptFull } from '../../transcript-history/opencode/transcript-opencode'
 import { prepareHermesImport } from './journal-hermes-import'
+import { prepareAntigravityImport } from './journal-antigravity-import'
 import { replacementItem, replacementItems } from './journal-replacement-items'
 import { mayBeClaudeConversationRecord } from '../../transcript-decoding/transcript-line-decoders-claude'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
@@ -95,6 +96,14 @@ export async function prepareLegacyTranscriptImport(input: {
   // OMP retained Pi's format, so its decoder also reads Pi sessions.
   if (input.agent === 'hermes') {
     return prepareHermesImport(input.sessionId, options, limits, MAX_LEGACY_IMPORT_RETAINED_BYTES)
+  }
+  if (input.agent === 'antigravity') {
+    return prepareAntigravityImport(
+      input.sessionId,
+      options,
+      limits,
+      MAX_LEGACY_IMPORT_RETAINED_BYTES
+    )
   }
   const transcriptAgent =
     input.agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(input.agent)

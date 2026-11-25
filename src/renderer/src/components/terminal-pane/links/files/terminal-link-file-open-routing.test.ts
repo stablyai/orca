@@ -37,6 +37,36 @@ vi.mock('@/lib/files/access/runtime-workspace-file-route', () => ({
 installTerminalLinkTestEnvironment(doubles)
 
 describe('handleOscLink', () => {
+  it('keeps the remote file owner when placing its document in floating', async () => {
+    setPlatform('Linux')
+    doubles.runtimeEnvironmentCallMock.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { size: 1, isDirectory: false, mtime: 1 },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    openDetectedFilePath('/srv/repo/report.md', 8, 2, {
+      worktreeId: 'wt-1',
+      worktreePath: '/srv/repo',
+      runtimeEnvironmentId: 'env-1',
+      floatingWorkspace: true
+    })
+    await flushDoubleRaf()
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/srv/repo/report.md',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: 'env-1'
+      }),
+      expect.objectContaining({
+        placementWorkspaceId: 'global-floating-terminal',
+        executionHostId: 'runtime:env-1',
+        suppressActiveRuntimeFallback: false
+      })
+    )
+    expect(doubles.statMock).not.toHaveBeenCalled()
+  })
+
   it('reports an unsupported floating directory instead of silently consuming the click', async () => {
     doubles.statMock.mockResolvedValueOnce({ isDirectory: true })
     const onOpenFailure = vi.fn()

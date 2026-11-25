@@ -212,6 +212,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   matchFolderWorkspaces: MatchFolderWorkspaces,
   /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
   crossStoreParent: CrossStoreParentRefSchema.optional(),
+  /** The cross-store parent is a bot's home, so cleanup on the child's host never groups it; older hosts strip it. */
+  crossStoreParentIsBotHome: z.literal(true).optional(),
   noParent: OptionalBoolean,
   /** With a parent change: apply it only while the current parent is this workspace key (`folder:<id>`,
    *  `worktree:<id>`); refuses with lineage_parent_changed otherwise, so a newer move stands. */

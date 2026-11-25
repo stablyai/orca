@@ -1,10 +1,13 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { NestedRepoTelemetryRuntimeKind } from '../../../../../../shared/telemetry/nested-repo-telemetry'
 import type { NestedRepoScanResult } from '../../../../../../shared/project/groups/project-group-types'
+import type { PausedLocalPathAdd } from '../dialog/add-repo-local-path-batch'
 import {
   defaultProjectGroupNameForPath,
   type AddRepoDialogStep
 } from '../dialog/add-repo-dialog-types'
+
+export type NestedProjectReporter = (added: PausedLocalPathAdd | null) => void
 
 export type ShowNestedRepoReviewArgs = {
   scan: NestedRepoScanResult
@@ -15,6 +18,8 @@ export type ShowNestedRepoReviewArgs = {
   inProgress: boolean
   scanId: string | null
   runtimeEnvironmentId?: string | null
+  /** Settles the add that opened this review with the project it added, or null. */
+  reportProject?: NestedProjectReporter
 }
 
 export function useAddRepoNestedReviewState({
@@ -44,6 +49,8 @@ export function useAddRepoNestedReviewState({
   setNestedScanInProgress: Dispatch<SetStateAction<boolean>>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
   showNestedRepoReview: (args: ShowNestedRepoReviewArgs) => void
+  /** Hands over the pending reporter once, so a later close cannot settle it with null. */
+  takeNestedProjectReporter: () => NestedProjectReporter | null
   setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
   handleStopNestedScan: () => void
   resetNestedRepoReviewState: () => void
@@ -62,6 +69,12 @@ export function useAddRepoNestedReviewState({
   const [nestedRuntimeEnvironmentId, setNestedRuntimeEnvironmentId] = useState<string | null>(null)
   const nestedScanIdRef = useRef<string | null>(null)
   const nestedScanRuntimeEnvironmentIdRef = useRef<string | null>(null)
+  const reportProjectRef = useRef<NestedProjectReporter | null>(null)
+  const takeNestedProjectReporter = useCallback((): NestedProjectReporter | null => {
+    const report = reportProjectRef.current
+    reportProjectRef.current = null
+    return report
+  }, [])
 
   const getNestedRepoRuntimeKind = useCallback(
     (connectionId: string | null): NestedRepoTelemetryRuntimeKind => {
@@ -86,6 +99,9 @@ export function useAddRepoNestedReviewState({
       setNestedScanInProgress(args.inProgress)
       setNestedImportScanId(args.scanId)
       setNestedRuntimeEnvironmentId(args.runtimeEnvironmentId ?? null)
+      if (args.reportProject) {
+        reportProjectRef.current = args.reportProject
+      }
       setStep('nested')
     },
     [setStep]
@@ -111,6 +127,7 @@ export function useAddRepoNestedReviewState({
   }, [cancelNestedRepoScan])
 
   const resetNestedRepoReviewState = useCallback((): void => {
+    takeNestedProjectReporter()?.(null)
     const activeNestedScanId = nestedScanIdRef.current
     if (activeNestedScanId) {
       void cancelNestedRepoScan(activeNestedScanId, {
@@ -127,7 +144,7 @@ export function useAddRepoNestedReviewState({
     setNestedImportScanId(null)
     setNestedRuntimeEnvironmentId(null)
     setActiveNestedScanId(null)
-  }, [cancelNestedRepoScan, setActiveNestedScanId])
+  }, [cancelNestedRepoScan, setActiveNestedScanId, takeNestedProjectReporter])
 
   return {
     nestedScan,
@@ -145,6 +162,7 @@ export function useAddRepoNestedReviewState({
     setNestedScanInProgress,
     getNestedRepoRuntimeKind,
     showNestedRepoReview,
+    takeNestedProjectReporter,
     setActiveNestedScanId,
     handleStopNestedScan,
     resetNestedRepoReviewState

@@ -114,3 +114,21 @@ export const history = defineFixture({
     row?.focus()
   }
 })
+
+const UNDASHED = {
+  disk: [
+    '# Memory',
+    '',
+    '2026-11-06 Releases go out on Tuesdays',
+    'Release notes never mention the build origin',
+    '- 2026-11-01 Times in Eastern',
+    ''
+  ].join('\n'),
+  refresh: async () => {}
+}
+
+/** Lines written without a dash are facts like any other. */
+export const undashed = defineFixture({
+  width: 640,
+  render: () => <BotMemoryPanel bot={{ hostId: 'local', id: 'release-manager' }} file={UNDASHED} />
+})

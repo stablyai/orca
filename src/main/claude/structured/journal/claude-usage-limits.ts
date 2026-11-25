@@ -1,6 +1,7 @@
 import {
   agentSessionFailureFact,
   providerDiagnostic,
+  type AgentSessionFailureFact,
   type ProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import {
@@ -12,8 +13,10 @@ import {
   type AgentSessionUsageLimit,
   type AgentSessionUsageLimitWindow
 } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentTurnFailure } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 import type { ClaudeOpenTurn } from '../turns/claude-open-turn'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import { claudeLimitLine } from './claude-limit-line'
 
 const CLAUDE_LIMIT_WINDOWS: Record<string, AgentSessionUsageLimitWindow> = {
   five_hour: 'session',
@@ -39,6 +42,27 @@ export function claudePooledUsageLimit(text: string, now: number): AgentSessionU
   const at = POOLED_RESET.exec(text)?.[1]
   const resetsAt = at ? usageLimitResetsAt(Date.parse(at), now) : undefined
   return resetsAt ? { resetsAt } : {}
+}
+
+/** A terminal Claude's StopFailure `rate_limit`: a usage limit when its message is the CLI's own
+ *  limit line, else a failed response. Other errors are not worded here. */
+export function claudeStopFailureFact(
+  failure: AgentTurnFailure | undefined,
+  now: number
+): AgentSessionFailureFact | null {
+  if (failure?.error !== 'rate_limit') {
+    return null
+  }
+  const text = failure.message ?? ''
+  const detail = providerDiagnostic(text, 'person')
+  const limit = claudePooledUsageLimit(text, now) ?? claudeLimitLine(text, now)
+  if (!limit) {
+    return agentSessionFailureFact('providerResponseFailed', { detail })
+  }
+  return agentSessionFailureFact('usageLimitReached', {
+    ...(limit.window || limit.resetsAt ? { usageLimit: limit } : {}),
+    detail
+  })
 }
 
 export type ClaudeUsageLimitRow = AgentSessionFailureRowWords & {
@@ -82,9 +106,10 @@ export class ClaudeUsageLimits {
     const typed = claudeText(message.api_error)
     const text = messageText(message)
     const pooled = claudePooledUsageLimit(text, this.now())
+    const line = message.error === 'rate_limit' && !typed ? claudeLimitLine(text, this.now()) : null
     // A login failure is an explicit cause, even though it carries no api_error.
     const cause =
-      typed === 'usage_limit_reached' || pooled
+      typed === 'usage_limit_reached' || pooled || line
         ? 'quota'
         : typed || message.error === 'authentication_failed'
           ? 'other'
@@ -97,7 +122,7 @@ export class ClaudeUsageLimits {
     const decision = !typed && root ? (turn?.usageLimitEvidence?.cause ?? cause) : cause
     const row =
       decision !== 'other' && refused
-        ? this.row(text, decision === 'quota', pooled ?? undefined)
+        ? this.row(text, decision === 'quota', pooled ?? undefined, line ?? undefined)
         : null
     if (root && turn?.isOpen && (cause !== 'untyped' || (refused && decision === 'untyped'))) {
       turn.usageLimitEvidence = { cause: row ? 'quota' : cause }
@@ -116,15 +141,18 @@ export class ClaudeUsageLimits {
     }
     const status = message.api_error_status
     const resultText = claudeText(message.result) ?? ''
-    const pooled =
-      failed && (status == null || status === 429)
-        ? claudePooledUsageLimit(resultText, this.now())
-        : null
+    const answered = failed && (status == null || status === 429)
+    const pooled = answered ? claudePooledUsageLimit(resultText, this.now()) : null
     if (pooled) {
       return this.row(resultText, true, pooled)
     }
+    // The CLI's limit line never outranks a cause the turn already typed, such as a login failure.
     if (evidence?.cause === 'other') {
       return null
+    }
+    const line = answered ? claudeLimitLine(resultText, this.now()) : null
+    if (line) {
+      return this.row(resultText, true, undefined, line)
     }
     const reason = claudeText(message.terminal_reason)
     const limited =
@@ -199,10 +227,13 @@ export class ClaudeUsageLimits {
   private row(
     providerText: string,
     typed = false,
-    named?: AgentSessionUsageLimit
+    named?: AgentSessionUsageLimit,
+    /** The CLI's limit line: a typed rejection's exact reset outranks its minute-rounded one. */
+    line?: AgentSessionUsageLimit
   ): ClaudeUsageLimitRow | null {
     // The pool's own earliest reset outranks an older rejection still cached for this account.
-    const limit = named?.resetsAt !== undefined ? named : (this.limit() ?? named ?? null)
+    const cached = named?.resetsAt !== undefined ? null : this.limit()
+    const limit = cached ? { ...line, ...cached } : (named ?? line ?? null)
     if (!limit && !typed) {
       return null
     }

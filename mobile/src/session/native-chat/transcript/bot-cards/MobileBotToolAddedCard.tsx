@@ -1,34 +1,32 @@
-// A tool this chat's bot gave itself: whether it is still there and signed in, and Remove. Signing in
-// stays on the computer, so a tool that needs it says so instead of offering a button.
+// A tool this chat's bot gave itself, as a status row: whether it is still there, its sign-in, and Remove.
+// Signing in opens the app's page in the phone's browser and finishes from the address it lands on, pasted here.
 import { useCallback, useEffect, useState } from 'react'
-import { Text } from 'react-native'
-import { Wrench } from 'lucide-react-native'
+import { Pressable, Text, View } from 'react-native'
+import { ExternalLink, Wrench } from 'lucide-react-native'
 import type { NativeChatBotCardValues } from '../../../../../../src/shared/native-chat/bot-cards/native-chat-bot-card-kind'
 import { botToolAddedCardView } from '../../../../../../src/shared/bots/bot-tool-added-card-view'
 import { botToolSubtitle, botToolTitle } from '../../../../../../src/shared/bots/bot-tool-labels'
-import type { Translate } from '../../../../i18n/mobile-i18n'
+import { botToolSignInFace } from '../../../../../../src/shared/bots/bot-tool-sign-in-face'
+import {
+  botToolsListRead,
+  botToolRemove,
+  type PhoneOwnTool
+} from '../../../../bots/tools/bot-tool-operations'
+import { botToolSignInActionLabel, botToolSignInLine } from '../../../../bots/tools/bot-tool-words'
+import { useBotToolPhoneSignIn } from '../../../../bots/tools/use-bot-tool-phone-sign-in'
+import { TextField } from '../../../../components/composer-input/TextField'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, typography } from '../../../../theme/mobile-theme'
+import { colors, feedback, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { mobileAutomationRowTime } from '../MobileAutomationRowFrame'
+import {
+  MobileNativeChatEventName,
+  MobileNativeChatEventRow
+} from '../messages/MobileNativeChatEventRow'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
 import { mobileBotToolAddedSay } from './mobile-bot-card-copy'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
-import { botToolRemove, botToolsListRead } from './mobile-bot-card-operations'
-import { MobileBotCardActions, MobileBotCardFrame, MobileBotCardMeta } from './MobileBotCardFrame'
-
-type OwnTool = { name: string; detail: string; remote: boolean; signIn?: { state: string } }
-
-/** A tool's sign-in on the phone: signed in, or a pointer to the computer. */
-export function mobileToolSignInLine(signIn: OwnTool['signIn'], t: Translate): string | null {
-  if (!signIn) {
-    return null
-  }
-  return signIn.state === 'signed-in'
-    ? t('chat.botCards.toolAdded.signedIn', 'Signed in')
-    : t('chat.botCards.toolAdded.signInOnComputer', 'Sign in on your computer')
-}
+import { MobileBotCardActions } from './MobileBotCardFrame'
 
 export function MobileBotToolAddedCard({
   added,
@@ -42,11 +40,13 @@ export function MobileBotToolAddedCard({
   const t = useMobileTranslation()
   const host = useMobileBotCardHost()
   const client = host?.client ?? null
+  const hostName = host?.hostLabel ?? ''
   const { botId, tool } = added
   // The tool as the host has it now: the card's copy is from when it was added. Null until read.
-  const [own, setOwn] = useState<readonly OwnTool[] | null>(null)
+  const [own, setOwn] = useState<readonly PhoneOwnTool[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [address, setAddress] = useState('')
   const read = useCallback(async () => {
     if (!client) {
       return
@@ -58,11 +58,35 @@ export function MobileBotToolAddedCard({
     void read().catch(() => {})
   }, [read])
   const live = own?.find((entry) => entry.name === tool.name)
+  const signIn = useBotToolPhoneSignIn({
+    client,
+    botId,
+    tool: live ?? tool,
+    hostName,
+    onSignedIn: () => {
+      setAddress('')
+      void read().catch(() => {})
+    }
+  })
+  const attempt = signIn.attempt
+  const face = live
+    ? botToolSignInFace(live, undefined, attempt !== null, signIn.failure, attempt?.finishing)
+    : null
+  const say = mobileBotToolAddedSay(t)
   const view = botToolAddedCardView(
     own === null ? null : live !== undefined,
-    mobileToolSignInLine(live?.signIn, t),
-    mobileBotToolAddedSay(t)
+    botToolSubtitle(live ?? tool),
+    botToolSignInLine(face, t, hostName),
+    say
   )
+  const title = botToolTitle(tool.name)
+  const action = botToolSignInActionLabel(face, t)
+  const pasted = address.trim()
+  const finish = () => {
+    if (pasted) {
+      signIn.finish(pasted)
+    }
+  }
   const remove = () => {
     if (!client) {
       return
@@ -80,43 +104,120 @@ export function MobileBotToolAddedCard({
       )
       .finally(() => setBusy(false))
   }
+  const shownError = error ?? signIn.error
+  const meta = scaledType(typography.metaSize, fontScale, 4)
   return (
-    <MobileBotCardFrame
-      avatar={<Wrench size={14} color={colors.textMuted} />}
-      heading={mobileBotToolAddedSay(t)('heading')}
-      trailing={
-        timestamp ? (
-          <Text style={[styles.time, scaledType(typography.metaSize, fontScale, 4)]}>
-            {mobileAutomationRowTime(timestamp)}
+    <View testID={`bot-tool-added-card:${tool.name}`}>
+      <MobileNativeChatEventRow
+        icon={<Wrench size={14} color={colors.textMuted} strokeWidth={2} />}
+        label={[`${view.lead} ${title}`, ...view.after].join(' · ')}
+        timestamp={timestamp}
+        fontScale={fontScale}
+        action={
+          view.present && !attempt ? (
+            <View style={styles.actions}>
+              {action ? (
+                <RowAction
+                  label={action}
+                  disabled={busy || signIn.starting}
+                  onPress={signIn.start}
+                  fontScale={fontScale}
+                />
+              ) : null}
+              <RowAction
+                label={say('remove')}
+                disabled={busy || signIn.starting}
+                onPress={remove}
+                fontScale={fontScale}
+              />
+            </View>
+          ) : null
+        }
+      >
+        {view.lead} <MobileNativeChatEventName>{title}</MobileNativeChatEventName>
+        {view.after.map((part) => ` · ${part}`).join('')}
+      </MobileNativeChatEventRow>
+      {view.present && attempt ? (
+        <View style={styles.paste}>
+          <Text style={[styles.hint, meta]}>
+            {t(
+              'bots.tools.signIn.pasteLanded',
+              'After you sign in, paste the address you landed on.'
+            )}
           </Text>
-        ) : null
-      }
-      title={botToolTitle(tool.name)}
-      meta={
-        <MobileBotCardMeta fontScale={fontScale}>
-          {[botToolSubtitle(live ?? tool), view.state].filter(Boolean).join(' · ')}
-        </MobileBotCardMeta>
-      }
-      fontScale={fontScale}
-      testID={`bot-tool-added-card:${tool.name}`}
-    >
-      {error ? (
-        <Text style={[styles.error, scaledType(typography.metaSize, fontScale)]}>{error}</Text>
-      ) : null}
-      {view.present ? (
-        <MobileBotCardActions>
-          <MobileNativeChatNoticePill
-            label={mobileBotToolAddedSay(t)('remove')}
-            disabled={busy}
-            onPress={remove}
+          <TextField
+            value={address}
+            onChangeText={setAddress}
+            monospace
+            placeholder={t('bots.tools.signIn.pastePlaceholder', 'Paste the address')}
+            accessibilityLabel={t('bots.tools.address', 'Address')}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            returnKeyType="done"
+            editable={!attempt.finishing}
+            onSubmitEditing={finish}
           />
-        </MobileBotCardActions>
+          <MobileBotCardActions>
+            <MobileNativeChatNoticePill
+              label={t('bots.tools.signIn.finish', 'Finish')}
+              primary
+              disabled={!pasted || attempt.finishing}
+              onPress={finish}
+            />
+            {attempt.url ? (
+              <MobileNativeChatNoticePill
+                label={t('bots.tools.signIn.openAgain', 'Open page again')}
+                Icon={ExternalLink}
+                onPress={signIn.openAgain}
+              />
+            ) : null}
+            <MobileNativeChatNoticePill
+              label={t('common.cancel', 'Cancel')}
+              style={styles.end}
+              onPress={signIn.cancel}
+            />
+          </MobileBotCardActions>
+        </View>
       ) : null}
-    </MobileBotCardFrame>
+      {shownError ? <Text style={[styles.error, styles.indent, meta]}>{shownError}</Text> : null}
+    </View>
+  )
+}
+
+/** A word button after the row's words, as the desktop row's sign-in and Remove. */
+function RowAction({
+  label,
+  disabled,
+  onPress,
+  fontScale
+}: {
+  label: string
+  disabled: boolean
+  onPress: () => void
+  fontScale: number
+}): React.JSX.Element {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => [disabled && styles.disabled, pressed && pressedStyle]}
+    >
+      <Text style={[styles.action, scaledType(typography.metaSize, fontScale, 4)]}>{label}</Text>
+    </Pressable>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  time: { color: colors.textMuted, marginLeft: 'auto' },
-  error: { color: colors.statusRed }
+  actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  action: { color: colors.textPrimary, fontWeight: '500' },
+  disabled: { opacity: feedback.disabledOpacity },
+  error: { color: colors.statusRed },
+  hint: { color: colors.textMuted },
+  // Under the row's words, past its 14pt mark and gap.
+  indent: { marginLeft: 20 },
+  paste: { gap: spacing.xs, marginLeft: 20, marginTop: spacing.xs },
+  end: { marginLeft: 'auto' }
 }))

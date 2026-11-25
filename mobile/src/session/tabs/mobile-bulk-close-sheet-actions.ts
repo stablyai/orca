@@ -1,3 +1,4 @@
+import { CopyX, X } from 'lucide-react-native'
 import type { MarkdownDocState } from '../../files/session-documents/session-document-state'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
@@ -54,6 +55,7 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
       {
         id: 'closeOtherTabs',
         label: translate('session.bulkCloseSheetActions.closeOtherTabs', 'Close Other Tabs'),
+        icon: CopyX,
         destructive: true,
         // Why: the confirm is its own native Modal; wait for this sheet to unmount (#10331).
         closeBeforePress: true,
@@ -76,7 +78,8 @@ export function createCloseWithBulkActions(
   return (target: MobileSessionTab | null, dismiss: () => void): ActionSheetAction[] => [
     {
       id: 'close',
-      label: translate('common.close', 'Close'),
+      label: translate('session.tabMenu.closeTab', 'Close Tab'),
+      icon: X,
       destructive: true,
       onPress: () => {
         dismiss()

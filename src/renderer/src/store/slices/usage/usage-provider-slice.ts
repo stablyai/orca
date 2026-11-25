@@ -24,16 +24,16 @@ export function createUsageProviderSlice<
 
     type Intent = 0 | 1 | 2
     type Operation = {
-      /** The Stats host view this operation serves; a host switch starts a new one. */
+      /** The Stats host view this operation serves; once it is no longer shown, the operation neither writes nor runs queued intents. */
       view: number
-      /** The view changed; this operation must neither write nor run queued intents. */
-      abandoned: boolean
       intent: Intent
       phase: 'reading' | 'refreshing' | 'projecting'
       disconnected: boolean
       readOnFailure: boolean
       promise: Promise<void>
     }
+    // A lost connection or a view no longer shown ends the operation at its next step.
+    const ended = (op: Operation): boolean => op.disconnected || op.view !== shownView()
     let operation: Operation | null = null
     let pending: Intent | null = null
     const queueIntent = (intent: Intent): void => {
@@ -44,13 +44,13 @@ export function createUsageProviderSlice<
       current: Operation,
       beforeRefresh: boolean
     ): Promise<T['snapshot']['scanState'] | undefined> => {
-      while (!current.disconnected) {
+      while (!ended(current)) {
         const { scope, range } = read()
         const snapshot = await api.getSnapshot(
           { scope, range, limit: 10 },
           current.intent === 0 ? 'recovery' : undefined
         )
-        if (current.disconnected) {
+        if (ended(current)) {
           return
         }
         if (scope !== read().scope || range !== read().range) {
@@ -83,7 +83,6 @@ export function createUsageProviderSlice<
         markLoading(view)
       }
       if (operation && operation.view !== view) {
-        operation.abandoned = true
         operation.disconnected = true
         operation = null
         pending = null
@@ -105,7 +104,6 @@ export function createUsageProviderSlice<
       }
       const current: Operation = {
         view,
-        abandoned: false,
         intent,
         phase: 'reading',
         disconnected: false,
@@ -132,7 +130,7 @@ export function createUsageProviderSlice<
       current.promise = Promise.resolve()
         .then(async () => {
           let next: Intent | null = intent
-          while (next !== null && !current.abandoned) {
+          while (next !== null && view === shownView()) {
             current.intent = next
             current.phase = 'reading'
             current.disconnected = false
@@ -140,7 +138,7 @@ export function createUsageProviderSlice<
             pending = null
             try {
               const state = await api.getScanState(next === 0 ? 'recovery' : undefined)
-              if (current.disconnected) {
+              if (ended(current)) {
                 throw new Error('Usage disconnected.')
               }
               if (state) {
@@ -152,19 +150,19 @@ export function createUsageProviderSlice<
                 })
                 if (state.enabled) {
                   const baseline = await project(api, current, next > 0)
-                  if (current.disconnected) {
+                  if (ended(current)) {
                     throw new Error('Usage disconnected.')
                   }
                   if (next > 0) {
                     current.phase = 'refreshing'
                     const olderFailure = read().failure
                     const refreshed = await api.refresh({ force: next === 2 })
-                    if (current.disconnected) {
+                    if (ended(current)) {
                       throw new Error('Usage disconnected.')
                     }
                     current.phase = 'projecting'
                     const completed = await project(api, current, false)
-                    if (current.disconnected) {
+                    if (ended(current)) {
                       throw new Error('Usage disconnected.')
                     }
                     if (
@@ -189,7 +187,7 @@ export function createUsageProviderSlice<
                 updateFailure(view, { read: false })
               }
             } catch (error) {
-              if (current.abandoned) {
+              if (view !== shownView()) {
                 break
               }
               updateFailure(view, { read: true, ...(next === 2 ? { refresh: true } : {}) })
@@ -201,7 +199,7 @@ export function createUsageProviderSlice<
               }
               console.error(`Failed to fetch ${config.name} usage:`, error)
             }
-            next = current.abandoned ? null : pending
+            next = view === shownView() ? pending : null
           }
           if (operation === current) {
             operation = null

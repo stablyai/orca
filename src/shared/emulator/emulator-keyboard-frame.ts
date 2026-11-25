@@ -11,12 +11,16 @@ type KeyUsage = {
 }
 
 type ServeSimKeyboardModifiers = {
+  alt?: boolean
+  meta?: boolean
   shift?: boolean
 }
 
 export const SERVE_SIM_KEYBOARD_MESSAGE_TAG = 0x06
 
 const SHIFT_USAGE = 225
+const ALT_USAGE = 226
+const META_USAGE = 227
 const ASCII_KEY_USAGES: Record<string, KeyUsage> = buildAsciiKeyUsages()
 
 const NAMED_KEY_USAGES: Record<string, number> = {
@@ -31,6 +35,49 @@ const NAMED_KEY_USAGES: Record<string, number> = {
   ArrowLeft: 80,
   ArrowDown: 81,
   ArrowUp: 82
+}
+
+// KeyboardEvent.code names a physical key; the guest's hardware layout decides its character.
+const PHYSICAL_KEY_USAGES: ReadonlyMap<string, number> = buildPhysicalKeyUsages()
+
+function buildPhysicalKeyUsages(): Map<string, number> {
+  const usages: Record<string, number> = {
+    ...NAMED_KEY_USAGES,
+    Enter: 40,
+    Tab: 43,
+    Space: 44,
+    Minus: 45,
+    Equal: 46,
+    BracketLeft: 47,
+    BracketRight: 48,
+    Backslash: 49,
+    Semicolon: 51,
+    Quote: 52,
+    Backquote: 53,
+    Comma: 54,
+    Period: 55,
+    Slash: 56,
+    NumpadDivide: 84,
+    NumpadMultiply: 85,
+    NumpadSubtract: 86,
+    NumpadAdd: 87,
+    NumpadEnter: 88,
+    Numpad0: 98,
+    NumpadDecimal: 99,
+    IntlBackslash: 100,
+    NumpadEqual: 103,
+    IntlRo: 135,
+    IntlYen: 137
+  }
+  for (let index = 0; index < 26; index += 1) {
+    usages[`Key${String.fromCharCode(65 + index)}`] = 4 + index
+  }
+  for (let digit = 1; digit <= 9; digit += 1) {
+    usages[`Digit${digit}`] = 29 + digit
+    usages[`Numpad${digit}`] = 88 + digit
+  }
+  usages.Digit0 = 39
+  return new Map(Object.entries(usages))
 }
 
 function buildAsciiKeyUsages(): Record<string, KeyUsage> {
@@ -84,10 +131,26 @@ function buildKeyUsageFrames(
   key: KeyUsage,
   modifiers: ServeSimKeyboardModifiers = {}
 ): ServeSimKeyboardFrame[] {
-  const frames = buildUsageFrames(key.usage)
-  return key.shift || modifiers.shift
-    ? [{ type: 'down', usage: SHIFT_USAGE }, ...frames, { type: 'up', usage: SHIFT_USAGE }]
-    : frames
+  let frames = buildUsageFrames(key.usage)
+  const held = [
+    modifiers.meta && META_USAGE,
+    modifiers.alt && ALT_USAGE,
+    (key.shift || modifiers.shift) && SHIFT_USAGE
+  ]
+  for (const usage of held) {
+    if (usage) {
+      frames = [{ type: 'down', usage }, ...frames, { type: 'up', usage }]
+    }
+  }
+  return frames
+}
+
+export function buildServeSimKeyboardFramesForCode(
+  code: string,
+  modifiers: ServeSimKeyboardModifiers = {}
+): ServeSimKeyboardFrame[] | null {
+  const usage = PHYSICAL_KEY_USAGES.get(code)
+  return usage === undefined ? null : buildKeyUsageFrames({ shift: false, usage }, modifiers)
 }
 
 export function buildServeSimKeyboardFramesForKey(
@@ -105,19 +168,31 @@ export function buildServeSimKeyboardFramesForKey(
     : buildKeyUsageFrames({ shift: false, usage: namedUsage }, modifiers)
 }
 
-export function buildServeSimKeyboardFramesForText(text: string): ServeSimKeyboardFrame[] | null {
-  const frames: ServeSimKeyboardFrame[] = []
-  for (const char of text) {
-    if (char === '\r') {
-      continue
-    }
-    const charFrames = buildServeSimKeyboardFramesForKey(char)
-    if (!charFrames) {
-      return null
-    }
-    frames.push(...charFrames)
+/**
+ * The HID usage of `code` when pressing it with `shift` types `key` on a US layout, else null. A
+ * device whose layout is US then types exactly what the host keyboard produced.
+ */
+export function usKeyboardUsageForKey(code: string, key: string, shift: boolean): number | null {
+  const usage = PHYSICAL_KEY_USAGES.get(code)
+  if (usage === undefined) {
+    return null
   }
-  return frames
+  const textKey = key === 'Enter' ? '\n' : key === 'Tab' ? '\t' : key
+  if (Object.hasOwn(ASCII_KEY_USAGES, textKey)) {
+    const us = ASCII_KEY_USAGES[textKey]
+    return us.usage === usage && us.shift === shift ? usage : null
+  }
+  return Object.hasOwn(NAMED_KEY_USAGES, key) && NAMED_KEY_USAGES[key] === usage ? usage : null
+}
+
+/** Whether every character has a US keyboard key, so typing it as key events loses nothing. */
+export function isUSKeyboardText(text: string): boolean {
+  for (const char of text) {
+    if (char !== '\r' && !Object.hasOwn(ASCII_KEY_USAGES, char)) {
+      return false
+    }
+  }
+  return true
 }
 
 export function encodeServeSimKeyboardFrame(key: ServeSimKeyboardFrame): Uint8Array<ArrayBuffer> {

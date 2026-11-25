@@ -120,11 +120,7 @@ export async function refreshGitHubChecksTab(
     }
     ctx.setChecksState((current) =>
       current.contextOwner === refreshContextOwner
-        ? updateGitHubChecksTabLocalChecks(
-            resetGitHubChecksTabForSource(current),
-            nextChecks,
-            observation.owner
-          )
+        ? updateGitHubChecksTabLocalChecks(resetGitHubChecksTabForSource(current), nextChecks)
         : current
     )
     ctx.onChecksUpdated(nextChecks)

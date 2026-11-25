@@ -1,6 +1,7 @@
 // A bot's tool credentials: each HTTP tool's real address with its saved headers, a source Orca fills
 // per call, or Orca's own sign-in to the app. Each entry is sealed whole on the host, bound to its bot
 // folder and id, so the bot's agent only ever gets Orca's relay address and its own token.
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import { createHash, randomBytes } from 'node:crypto'
 import { readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -105,7 +106,7 @@ function parseStored(folder: string, text: string | null): Stored {
     warnOnce(text, '[bot-tool-credentials] ignored credentials saved in the older layout')
     return {}
   }
-  throw new Error('The bot’s saved tool credentials are unreadable. Re-enter the tool’s values.')
+  throw new BotFailureError('toolCredentialsUnreadable')
 }
 
 const readSealed = (folder: string): Stored =>
@@ -194,8 +195,16 @@ function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
  * address and sign-in for an app Orca signs in to, so a refreshed token restarts no chat.
  */
 export function botToolCredentialsFingerprint(folder: string, ids: ReadonlySet<string>): string {
+  return JSON.stringify([...botToolCredentialFingerprints(folder, ids)])
+}
+
+/** `botToolCredentialsFingerprint`'s part for each credential, by id, from one read of the store. */
+export function botToolCredentialFingerprints(
+  folder: string,
+  ids: ReadonlySet<string>
+): Map<string, unknown> {
   const sealed = readSealed(folder)
-  return JSON.stringify(
+  return new Map(
     [...ids].sort().map((id) => {
       const slot = sealed[id]
       const entry = slot?.entry
@@ -213,7 +222,7 @@ export function botToolCredentialHeaderNames(folder: string, id: string): string
   return entry && entry.kind !== 'oauth' ? Object.keys(entry.headers) : []
 }
 
-const signInManaged = () => new Error('Orca signs in to this tool. Sign it in or out instead.')
+const signInManaged = () => new BotFailureError('toolSignInManaged')
 
 /**
  * Adds `added` and drops `removed`, inside the folder's transaction; answers the sign-ins it dropped,
@@ -257,7 +266,7 @@ export function changeBotToolCredentials(
     )
   }
   if (!publish(folder, text, current)) {
-    throw new Error('The bot’s tool credentials changed in another Orca. Try again.')
+    throw new BotFailureError('toolCredentialsRaced')
   }
   announceBotToolCredentialsEnded(folder, ended)
   return dropped
@@ -309,7 +318,7 @@ export function commitBotToolOAuth(
   if (current && (next === null || next.grant !== current.grant || next.url !== current.url)) {
     announceBotToolCredentialsEnded(folder, [id])
   }
-  announceIfShownChanged(current, next)
+  announceIfShownChanged(folder, current, next)
   return next === null ? null : { ...next, revision }
 }
 
@@ -332,7 +341,10 @@ export function forgetBotToolCredentials(folder: string): BotToolOAuthEntry[] {
   return entries
 }
 
-/** A stored tool with its saved values and the address they're bound to, to keep them on an edit. */
+/**
+ * A stored tool as an edit starts from: its saved values and the address they're bound to, and a
+ * credential id only for Orca's own sign-in, which the edit keeps.
+ */
 export function withSavedBotToolHeaders(folder: string, server: BotToolServer): BotToolServer {
   if (!('url' in server) || !server.credential) {
     return server
@@ -341,10 +353,11 @@ export function withSavedBotToolHeaders(folder: string, server: BotToolServer): 
     // Its tokens are Orca's own sign-in; a generic edit keeps the id and changes no values.
     return server
   }
-  const saved = readBotToolCredential(folder, server.credential)
+  const { credential, ...rest } = server
+  const saved = readBotToolCredential(folder, credential)
   if (saved?.source) {
     // Its headers come from a source Orca fills per call; a generic edit would drop them.
-    throw new Error('Orca manages this tool. Change it where you set it up.')
+    throw new BotFailureError('toolSourceManaged')
   }
-  return saved ? { ...server, url: saved.url, headers: saved.headers } : server
+  return saved ? { ...rest, url: saved.url, headers: saved.headers } : rest
 }

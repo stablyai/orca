@@ -1,7 +1,5 @@
 import { Buffer } from 'node:buffer'
-import type { WebContents } from 'electron'
 import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser/screencast/browser-screencast-protocol'
-import { sendDebuggerCommand } from './browser-screencast-debugger-command'
 import { enrichFrameMetadata, readFrameMetadata } from './browser-screencast-frame-metadata'
 import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
 import type {
@@ -24,35 +22,24 @@ export function browserScreencastDialogEvent(
   }
 }
 
-type BrowserScreencastMessageHandlerDeps = {
-  dbg: WebContents['debugger']
-  options: BrowserScreencastOptions
+type BrowserScreencastPageEventHandlerDeps = {
+  options: Pick<BrowserScreencastOptions, 'onEvent'>
   isClosed: () => boolean
   isStopping: () => boolean
-  queueFrame: (frame: PendingScreencastFrame) => void
-  ackScreencastFrame: (sessionId: number | undefined) => void
-  scheduleNavigationFrameCapture: (reason?: 'navigation' | 'viewport-recovery') => void
-  clearNavigationCaptureTimer: () => void
-  bumpSnapshotGeneration: () => void
-  /** True while guest frames must be dropped pending re-emulation. */
-  observeGuestViewSize: (metadata: BrowserScreencastFrameMetadata) => boolean
+  /** Every lane's: static pages may finish navigation without emitting a live frame. */
+  scheduleNavigationFrameCapture: () => void
   /** The page's dialog Orca still holds; a CDP close can be a second frame's turned-away one. */
   openDialog: () => BrowserJavaScriptDialogPrompt | null
 }
 
-export function createBrowserScreencastMessageHandler(
-  deps: BrowserScreencastMessageHandlerDeps
-): (event: unknown, method: string, params: unknown) => void {
-  const { dbg, options, isClosed, isStopping, queueFrame, ackScreencastFrame } = deps
-  const { scheduleNavigationFrameCapture, clearNavigationCaptureTimer, bumpSnapshotGeneration } =
-    deps
-  const { observeGuestViewSize, openDialog } = deps
+/** Page events on the stream's own CDP session; frames go to the lane that asked for them. */
+export function createBrowserScreencastPageEventHandler(
+  deps: BrowserScreencastPageEventHandlerDeps
+): (method: string, params: unknown) => void {
+  const { options, isClosed, isStopping, scheduleNavigationFrameCapture, openDialog } = deps
 
-  return (_event: unknown, method: string, params: unknown): void => {
-    if (isClosed()) {
-      return
-    }
-    if (isStopping() && method !== 'Page.screencastFrame') {
+  return (method: string, params: unknown): void => {
+    if (isClosed() || isStopping()) {
       return
     }
     // Openings come from Orca's dialog owner (see startBrowserScreencast), which knows the asking frame.
@@ -72,9 +59,33 @@ export function createBrowserScreencastMessageHandler(
     }
     if (method === 'Page.loadEventFired') {
       scheduleNavigationFrameCapture()
-      return
     }
-    if (method !== 'Page.screencastFrame') {
+  }
+}
+
+type BrowserScreencastFrameHandlerDeps = {
+  options: BrowserScreencastOptions
+  isClosed: () => boolean
+  isStopping: () => boolean
+  queueFrame: (frame: PendingScreencastFrame) => void
+  ackScreencastFrame: (sessionId: number | undefined) => void
+  scheduleNavigationFrameCapture: (reason?: 'navigation' | 'viewport-recovery') => void
+  clearNavigationCaptureTimer: () => void
+  bumpSnapshotGeneration: () => void
+  /** True while guest frames must be dropped pending re-emulation. */
+  observeGuestViewSize: (metadata: BrowserScreencastFrameMetadata) => boolean
+}
+
+export function createBrowserScreencastFrameHandler(
+  deps: BrowserScreencastFrameHandlerDeps
+): (params: unknown) => void {
+  const { options, isClosed, isStopping, queueFrame, ackScreencastFrame } = deps
+  const { scheduleNavigationFrameCapture, clearNavigationCaptureTimer, bumpSnapshotGeneration } =
+    deps
+  const { observeGuestViewSize } = deps
+
+  return (params: unknown): void => {
+    if (isClosed()) {
       return
     }
     const payload = params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
@@ -86,12 +97,8 @@ export function createBrowserScreencastMessageHandler(
     if (sessionId === null) {
       return
     }
-    if (!data) {
+    if (!data || isStopping()) {
       ackScreencastFrame(sessionId)
-      return
-    }
-    if (isStopping()) {
-      void sendDebuggerCommand(dbg, 'Page.screencastFrameAck', { sessionId }).catch(() => {})
       return
     }
 

@@ -10,6 +10,7 @@ import { memo, useCallback, useRef, useState } from 'react'
 import Svg, { Circle } from 'react-native-svg'
 import {
   contextUsageRingReadout,
+  formatContextTokenCount,
   keyContextUsageRows,
   type NativeChatContextUsageSummary
 } from '../../../../../../src/shared/native-chat/native-chat-context-usage-summary'
@@ -124,6 +125,9 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
     [layerRef, cardKeepsKeyboard]
   )
   const { filled, critical, used, window } = contextUsageRingReadout(usage)
+  const rows = keyContextUsageRows(usage.rows)
+  const counted = rows.filter(({ row }) => !row.deferred)
+  const deferred = rows.filter(({ row }) => row.deferred)
   const tint = critical ? colors.statusRed : colors.textMuted
   const label = t(
     'chat.contextUsage.label',
@@ -184,16 +188,18 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
         <View style={styles.track}>
           <View style={[styles.fill, critical && styles.fillCritical, { width: `${filled}%` }]} />
         </View>
-        {usage.rows.length > 0 ? (
-          <View style={styles.rows}>
-            {keyContextUsageRows(usage.rows).map(({ key, row }) => (
-              <View key={key} style={styles.row}>
-                <Text style={styles.rowName} numberOfLines={1}>
-                  {row.name}
-                </Text>
-                <Text style={styles.rowValue}>{row.percentage}%</Text>
-              </View>
-            ))}
+        {counted.length > 0 ? (
+          <View style={styles.rows}>{counted.map(renderContextUsageRow)}</View>
+        ) : null}
+        {deferred.length > 0 ? (
+          <View style={[styles.rows, styles.deferred]}>
+            <Text style={styles.note}>
+              {t(
+                'chat.contextUsage.deferredNote',
+                'Loaded on demand. Not counted in the used total.'
+              )}
+            </Text>
+            {deferred.map(renderContextUsageRow)}
           </View>
         ) : null}
         {usage.estimated ? (
@@ -205,6 +211,23 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
     </>
   )
 })
+
+/** Deferred rows sit outside the window, so they show tokens rather than a share of it. */
+function renderContextUsageRow({
+  key,
+  row
+}: ReturnType<typeof keyContextUsageRows>[number]): React.JSX.Element {
+  return (
+    <View key={key} style={styles.row}>
+      <Text style={styles.rowName} numberOfLines={1}>
+        {row.name}
+      </Text>
+      <Text style={styles.rowValue}>
+        {row.deferred ? formatContextTokenCount(row.tokens) : `${row.percentage}%`}
+      </Text>
+    </View>
+  )
+}
 
 const ringStyles = StyleSheet.create({
   ring: { transform: [{ rotate: '-90deg' }] }
@@ -244,6 +267,15 @@ const styles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.metaSize,
     fontVariant: ['tabular-nums']
+  },
+  deferred: {
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle
+  },
+  note: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize
   },
   estimated: {
     marginTop: spacing.md,

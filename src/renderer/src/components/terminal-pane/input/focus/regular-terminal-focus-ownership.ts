@@ -14,11 +14,48 @@ export function isXtermHelperTextarea(target: EventTarget | null): target is HTM
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
 }
 
+let regularTerminalInputFocused = false
+// Why: xterm regains DOM focus on window activation, so the attribute would turn the titlebar
+// no-drag under the activating click (Windows then selects text). Hold drag until page input.
+let awaitingInputAfterWindowBlur = false
+let windowActivationTracked = false
+
+function applyRegularTerminalInputFocusAttribute(): void {
+  document.documentElement.toggleAttribute(
+    REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE,
+    regularTerminalInputFocused && !awaitingInputAfterWindowBlur
+  )
+}
+
+export function trackWindowActivationForTerminalDragRegions(): void {
+  if (windowActivationTracked) {
+    return
+  }
+  windowActivationTracked = true
+  awaitingInputAfterWindowBlur = !document.hasFocus()
+  window.addEventListener('blur', () => {
+    awaitingInputAfterWindowBlur = true
+    applyRegularTerminalInputFocusAttribute()
+  })
+  // Presses on drag regions never reach the page, so only client-area input ends the hold.
+  const onPageInput = (): void => {
+    if (!awaitingInputAfterWindowBlur) {
+      return
+    }
+    awaitingInputAfterWindowBlur = false
+    applyRegularTerminalInputFocusAttribute()
+  }
+  window.addEventListener('pointerdown', onPageInput, true)
+  window.addEventListener('keydown', onPageInput, true)
+}
+
 export function setRegularTerminalInputFocusAttribute(focused: boolean): void {
   if (typeof document === 'undefined') {
     return
   }
-  document.documentElement.toggleAttribute(REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE, focused)
+  trackWindowActivationForTerminalDragRegions()
+  regularTerminalInputFocused = focused
+  applyRegularTerminalInputFocusAttribute()
 }
 
 // Why: returning from a browser guest gives the helper no text-field relatedTarget, yet macOS keeps

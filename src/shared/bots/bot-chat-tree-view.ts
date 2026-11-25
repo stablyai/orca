@@ -1,38 +1,17 @@
 // What a Chats tree shows of the host's read, the same on the desktop panel and the phone.
 import {
   CHAT_TREE_CAPS,
+  botOwnChatTree,
   chatIsGoing,
   type BotChatTreeChat,
   type BotChatTreeWorker
 } from './bot-chat-tree'
 import { CONNECTOR_SOURCE_NAMES } from '../connectors/external-conversation-link'
 import type { BotChatSearchResult } from './bot-chat-search'
+import { isBotGroupMemberSession } from './bot-group'
 
 /** A chat a search found; `matches` lists only the workers that hit when the chat itself didn't. */
 export type BotChatSearchHit = { chat: BotChatTreeChat; matches: ReadonlySet<string> | null }
-
-/** A search over the chats read here, for a host without `bots.chats.search`: a chat matches by its
- *  title or place; one matched only by workers lists just those. */
-export function searchBotChats(
-  chats: readonly BotChatTreeChat[],
-  query: string
-): BotChatSearchHit[] {
-  const needle = query.trim().toLocaleLowerCase()
-  if (!needle) {
-    return chats.map((chat) => ({ chat, matches: null }))
-  }
-  const hit = (text: string | undefined): boolean =>
-    Boolean(text?.toLocaleLowerCase().includes(needle))
-  return chats.flatMap((chat): BotChatSearchHit[] => {
-    if (hit(chat.title) || hit(chat.originLabel)) {
-      return [{ chat, matches: null }]
-    }
-    const workers = [...chat.running, ...chat.finished].filter(
-      (worker) => hit(worker.title) || hit(worker.branch)
-    )
-    return workers.length > 0 ? [{ chat, matches: new Set(workers.map((w) => w.key)) }] : []
-  })
-}
 
 /** How many of a chat's running and finished workers show; starts at the caps. */
 export type BotChatTreeShown = { running: number; finished: number }
@@ -132,12 +111,47 @@ export function botChatMoreMatchesNote(t: Translate, count: number): string {
   )
 }
 
-/** A host's search answer as rows: each chat, and the workers that hit when the chat itself didn't. */
-export function botChatSearchHits(result: BotChatSearchResult): BotChatSearchHit[] {
-  const byId = new Map(result.chats.map((chat) => [chat.chatId, chat]))
-  return result.matches.flatMap((match) => {
-    const chat = byId.get(match.chatId)
-    return chat ? [{ chat, matches: match.workerKeys ? new Set(match.workerKeys) : null }] : []
+/** A host's search answer as rows: each chat, and the workers that hit when the chat itself didn't.
+ *  Only the answer shows, shaped as the list is (`botOwnChatTree`): a group room session's matched
+ *  workers sit under Home Chat. With no Home in the answer, the list's `home` lends only its header. */
+export function botChatSearchHits(
+  result: BotChatSearchResult,
+  home: BotChatTreeChat | null = null
+): BotChatSearchHit[] {
+  const answerHome = result.chats.find((chat) => chat.origin === 'home' && !chat.closed)
+  const roomHit = result.matches.some((match) => isBotGroupMemberSession(match.chatId))
+  const header =
+    !answerHome && roomHit && home
+      ? { ...home, running: [], runningTotal: 0, finished: [], finishedTotal: 0, failedTotal: 0 }
+      : null
+  const own = botOwnChatTree({
+    chats: header ? [header, ...result.chats] : result.chats,
+    workspaceChats: {}
+  })
+  const homeId = answerHome?.chatId ?? header?.chatId ?? null
+  const byId = new Map(own.chats.map((chat) => [chat.chatId, chat]))
+  // Each listed chat once, in the answer's order; a room's worker hits join Home's.
+  const hits = new Map<string, ReadonlySet<string> | null>()
+  for (const match of result.matches) {
+    const room = homeId !== null && isBotGroupMemberSession(match.chatId)
+    if (room && !match.workerKeys) {
+      continue
+    }
+    const chatId = room ? homeId : match.chatId
+    const keys = match.workerKeys ? new Set(match.workerKeys) : null
+    const before = hits.get(chatId)
+    hits.set(
+      chatId,
+      before === undefined
+        ? keys
+        : before === null || keys === null
+          ? null
+          : new Set([...before, ...keys])
+    )
+  }
+  return [...hits].flatMap(([chatId, matches]) => {
+    const chat = byId.get(chatId)
+    return chat ? [{ chat, matches }] : []
   })
 }
 
@@ -212,8 +226,8 @@ export function chatsTabWorkers(
 
 /** Where a chat came from, for its line: the thread's place or automation's name, else the service. */
 export function botChatPlace(chat: BotChatTreeChat): string | null {
-  // A run is titled by its automation already.
-  if (chat.originLabel && chat.originLabel !== chat.title) {
+  // A run is titled by its automation already ("Upstream sync run 36").
+  if (chat.originLabel && !chat.title.startsWith(chat.originLabel)) {
     return chat.originLabel
   }
   return chat.origin === 'slack' || chat.origin === 'linear' || chat.origin === 'github'

@@ -151,6 +151,8 @@ export function updatePersistedUI(
           ? sanitizedUpdates.sidebarBotsHeight
           : operations.state.ui?.sidebarBotsHeight
       ) ?? undefined,
+    sidebarProjectsFirst:
+      (sanitizedUpdates.sidebarProjectsFirst ?? operations.state.ui?.sidebarProjectsFirst) === true,
     syncTaskStatusFromWorkspaceBoard:
       sanitizedUpdates.syncTaskStatusFromWorkspaceBoard !== undefined
         ? sanitizedUpdates.syncTaskStatusFromWorkspaceBoard === true

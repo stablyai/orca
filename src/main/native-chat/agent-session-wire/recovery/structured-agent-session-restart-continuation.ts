@@ -29,7 +29,7 @@ import {
   AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
 } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
-import { restartContinuationEnvelope } from './structured-agent-session-restart-continuation-envelope'
+import { continuationEnvelopeOf } from './structured-agent-session-restart-continuation-envelope'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import { liftStructuredQueueRestartHold } from '../delivery/structured-agent-session-queued-pause'
@@ -286,7 +286,7 @@ async function sendContinuation(
   if (fence === null) {
     return { done: { sessionId, outcome: 'refused', reason: 'agent_session_not_attached' } }
   }
-  const { envelope, body } = restartContinuationEnvelope(sessionId, fence, marker, continuationId)
+  const { envelope, body } = await continuationEnvelopeOf(sessionId, fence, marker, continuationId)
   const sent = await deps.send({ envelope, body }).catch((error: unknown) => {
     if (error instanceof AgentSessionPreDispatchError) {
       throw error

@@ -87,6 +87,12 @@ export const mobileApi = {
     return () => ipcRenderer.removeListener('mobile:relayStatusChanged', listener)
   },
 
+  onDevicesChanged: (callback: () => void): (() => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('mobile:devicesChanged', listener)
+    return () => ipcRenderer.removeListener('mobile:devicesChanged', listener)
+  },
+
   consumePendingUnpairedDeviceAuthFailure: (): Promise<boolean> =>
     ipcRenderer.invoke('mobile:consumePendingUnpairedDeviceAuthFailure'),
 

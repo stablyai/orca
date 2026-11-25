@@ -7,6 +7,8 @@ import type { Translate } from '@/i18n/use-translate'
 
 export function mcpSourceLabel(source: string, t: Translate): string {
   switch (source) {
+    case 'orca':
+      return 'Orca'
     case 'claudeai':
       return 'claude.ai'
     case 'project':
@@ -51,6 +53,8 @@ export function mcpServerStatusLine(server: AgentSessionMcpServer, t: Translate)
         : t('components.native-chat.mcp.status.failed', 'Failed')
     case 'disabled':
       return t('components.native-chat.mcp.status.disabled', 'Disabled')
+    case 'not-started':
+      return t('components.native-chat.mcp.status.notStarted', 'Not started')
   }
 }
 

@@ -5,6 +5,7 @@ import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
 import { InFlightPromiseDedupe } from '../../../../shared/concurrency/in-flight-promise-dedupe'
 import { iterateNulDelimitedFields } from '../../../../shared/git/commands/nul-delimited-fields'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 import { wslDistroForCommand } from '../../../../shared/file-access/wsl-paths'
 import {
   gitReadOptionsForWorktree,
@@ -185,16 +186,23 @@ function parseConfigList(
       : null
     origin = null
     const newline = field.indexOf('\n')
-    const key = newline === -1 ? field : field.slice(0, newline)
-    const value = newline === -1 ? 'true' : field.slice(newline + 1)
+    // Detach slices so cached config maps do not pin the full `git config --list -z` stdout.
+    const key = ownRetainedString(newline === -1 ? field : field.slice(0, newline))
+    const value = ownRetainedString(newline === -1 ? 'true' : field.slice(newline + 1))
     values.set(key, value)
-    if (originFile) {
-      inputFiles.add(originFile)
+    // Every field repeats its origin; copy each file path once.
+    if (originFile && !inputFiles.has(originFile)) {
+      inputFiles.add(ownRetainedString(originFile))
     }
     // Include targets may be empty or missing now and filled in later.
     if (key === 'include.path' || (key.startsWith('includeif.') && key.endsWith('.path'))) {
       inputFiles.add(
-        resolveConfigPath(value, originFile ? path.dirname(originFile) : locations.hostWorktreePath)
+        ownRetainedString(
+          resolveConfigPath(
+            value,
+            originFile ? path.dirname(originFile) : locations.hostWorktreePath
+          )
+        )
       )
     }
     // onbranch: conditions switch with the checked-out branch.

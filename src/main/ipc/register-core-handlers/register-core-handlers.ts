@@ -1,5 +1,4 @@
 import { app } from 'electron'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { registerAppHandlers } from '../app'
 import { registerWslMoveWiring } from '../wsl/wsl-move-driver-wiring'
 import { registerWslDriveProjectHandlers } from '../wsl/wsl-drive-project-handlers'
@@ -8,6 +7,7 @@ import { registerCliHandlers } from '../cli'
 import { registerOrcaUninstallHandlers } from '../orca-uninstall'
 import { registerPreflightHandlers } from '../preflight/preflight'
 import type { Store } from '../../persistence/loading-store/store'
+import { resolveDesktopAuthorizedPath } from '../filesystem/access/local-file-access-resolution'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { StatsCollector } from '../../stats/collector'
 import { registerFilesystemHandlers } from '../filesystem/filesystem'
@@ -41,6 +41,7 @@ import { registerTerminalPreviewHandlers } from '../terminal-views/terminal-prev
 import { registerDeveloperPermissionHandlers } from '../developer-permissions/developer-permissions'
 import { registerComputerUsePermissionHandlers } from '../computer-use-permissions'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
+import { registerBrowserServerDownloadCopyHandlers } from '../browser/browser-server-download-copy-ipc'
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
 import { registerSettingsHandlers } from '../settings/settings'
@@ -95,7 +96,10 @@ import {
 } from '../../ai-vault/runtime-hosts/runtime-session-scanner'
 import { callRuntimeSessionSearch } from '../../ai-vault/runtime-hosts/runtime-session-search-call'
 import { configureRuntimeAiVaultSessionDelete } from '../ai-vault/ai-vault-delete'
-import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
+import {
+  ensurePersistedStructuredAgentSessionHostUnlessRefused,
+  ensureStructuredAgentSessionHostUnlessRefused
+} from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugins/plugin-marketplaces'
@@ -129,16 +133,15 @@ export async function registerCoreHandlers(
   setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
   setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
   setAgentBrowserBridgeRef(runtime.getAgentBrowserBridge())
+  const { rendererCheckpoint } = lifecycleOptions
+  if (!rendererCheckpoint) {
+    throw new Error('Renderer shutdown checkpoint must be composed before core handlers')
+  }
   return (registration ??= (async () => {
     registerAppHandlers(store, {
-      quitResumeRecordsFor: (session) => runtime.quitResumeRecordsFor(session),
-      ...(ORCA_LAYOUT_OWNER_IS_MAIN
-        ? {
-            reconnectFactsFor: (session, partition) =>
-              runtime.shutdownReconnectFactsFor(session, partition)
-          }
-        : {}),
+      rendererCheckpoint,
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
+      onQuit: lifecycleOptions.onQuit,
       // Restart/profile switching closes this through will-quit; this callback covers relaunch exit.
       onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
     })
@@ -148,13 +151,15 @@ export async function registerCoreHandlers(
     registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
     registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
     registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
-    registerClaudeAccountHandlers(claudeAccounts)
+    registerClaudeAccountHandlers(claudeAccounts, (change, held) =>
+      runtime.moveRunningClaudePanes(change, held)
+    )
     registerOpenCodeGoCredentialsHandlers(rateLimits)
     registerMiniMaxCredentialsHandlers(rateLimits)
     registerZcodePlanCredentialsHandlers(rateLimits)
     registerGrokAccountHandlers()
     registerCursorAccountHandlers()
-    registerRateLimitHandlers(rateLimits, codexAccounts)
+    registerRateLimitHandlers(rateLimits, codexAccounts, () => store.getSettings())
     registerGitHubHandlers(store, stats, runtime)
     registerGitLabHandlers(store)
     registerHostedReviewHandlers(store, stats)
@@ -202,6 +207,7 @@ export async function registerCoreHandlers(
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch
     })
     registerBrowserHandlers(store)
+    registerBrowserServerDownloadCopyHandlers()
     registerShellHandlers(store)
     registerPetHandlers()
     registerSessionHandlers(store, runtime)
@@ -224,9 +230,9 @@ export async function registerCoreHandlers(
     registerWslDriveProjectHandlers(store, runtime)
     installProjectRuntimeGitRouter(store)
     registerEphemeralVmHandlers(store, pluginService)
-    // Session history and terminal resume are not chats; a refused host leaves nothing to check.
+    // Session history and terminal resume are not chats; skip booting an empty chat journal host.
     const ensureStructuredSessionOwnership = () =>
-      ensureStructuredAgentSessionHostUnlessRefused(() =>
+      ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
         runtime.ensureStructuredAgentSessionHost()
       )
     registerAiVaultSearchHandlers({
@@ -266,7 +272,7 @@ export async function registerCoreHandlers(
       deleteRuntimeAiVaultSession(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
     )
     registerNativeChatHandlers()
-    registerClipboardHandlers(store, {
+    registerClipboardHandlers((path) => resolveDesktopAuthorizedPath(path, store), {
       localChatAttachmentStore: async () => {
         await ensureStructuredAgentSessionHostUnlessRefused(() =>
           runtime.ensureStructuredAgentSessionHost()
@@ -274,7 +280,7 @@ export async function registerCoreHandlers(
         return getAgentSessionAttachmentStore()
       }
     })
-    registerUpdaterHandlers(store)
+    registerUpdaterHandlers()
     registerSpeechHandlers(store, commitMessageAgentEnv)
     void hostsReady.catch((error: unknown) =>
       console.warn('[startup] Host initialization failed:', error)

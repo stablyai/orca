@@ -25,7 +25,7 @@ export const BOT_LINEAR_METHODS = [
         const unlinked = await client.unlinkLinear(workspaceId)
         // The login came with the link; it goes with it.
         if (unlinked.ok) {
-          clearWorkspaceLogin(workspaceId)
+          await clearWorkspaceLogin(workspaceId)
         }
         return unlinked
       })

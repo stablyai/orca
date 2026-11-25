@@ -5,6 +5,11 @@ import { NewWorkspaceLoadingDrawer } from '../new-workspace/NewWorkspaceLoadingD
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBotLinkHostAnswers } from './use-bot-link-host-answers'
 import type { BotSessionLinkTarget } from './bot-link-target'
+import {
+  abortWhenNotPending,
+  botLinkPublishGeneration,
+  type PendingBotLink
+} from './pending-bot-link'
 import type { BotLinkComputerAnswer } from './bot-link-host-reads'
 import { readWhileBotLinkConnected } from './bot-link-connection-read'
 import { locateBotSessionLink } from './bot-session-link-locate'
@@ -23,11 +28,17 @@ import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session
 import { resolveBotLink } from '../../../src/shared/bots/bot-link-resolution'
 
 export function BotSessionLinkResolver({
+  link,
   target,
-  onDone
+  onDone,
+  onFallBack
 }: {
+  /** The pending entry this resolver serves; its work stops once that entry is no longer pending. */
+  link: PendingBotLink
   target: BotSessionLinkTarget
   onDone: () => void
+  /** A thread link (no session) that several or no computers answer goes on as the plain bot link. */
+  onFallBack: () => void
 }) {
   const { hosts, answers, computers, clientFor, failed } = useBotLinkHostAnswers()
   const openSession = useOpenMobileSession()
@@ -36,6 +47,7 @@ export function BotSessionLinkResolver({
   const activeAttempt = useRef<AbortController | null>(null)
   const readClients = useEffectEvent(clientFor)
   const done = useEffectEvent(onDone)
+  const fallBack = useEffectEvent(onFallBack)
   const open = useEffectEvent(openSession)
   const nameOf = useEffectEvent(
     (computer: BotLinkComputerAnswer) =>
@@ -53,38 +65,61 @@ export function BotSessionLinkResolver({
     let live = true
     const attempt = new AbortController()
     activeAttempt.current = attempt
+    const stopWatching = abortWhenNotPending(link, attempt)
     void (async () => {
       let openingOn: BotLinkComputerAnswer | undefined
+      let handedOff = false
       try {
+        if (attempt.signal.aborted) {
+          return
+        }
         if (failed) {
           unavailable(botLinkOpenFailureLine(t, t('bots.link.computer', 'your computer')))
           return
         }
         if (hosts.length === 0) {
+          // Pair stays valid after this link is cleared, until a newer link is published.
+          const generation = botLinkPublishGeneration()
           Alert.alert(
             t('bots.link.pairTitle', 'Pair a computer'),
-            t('bots.link.pairRequired', 'To open this link, pair this phone with a computer.'),
+            t(
+              'bots.link.pairRequired',
+              'To open this link, pair this phone with a computer, then open the link again.'
+            ),
             [
               { text: t('common.cancel', 'Cancel'), style: 'cancel' },
               {
                 text: t('bots.link.pairAction', 'Pair a computer'),
-                onPress: () => router.push('/pair')
+                onPress: () => {
+                  if (botLinkPublishGeneration() === generation) {
+                    router.push('/pair')
+                  }
+                }
               }
             ]
           )
           return
         }
-        const found = await locateBotSessionLink(
-          target,
-          [...computers.values()],
-          readClients,
-          attempt.signal
+        const asked = [...computers.values()].filter(
+          (computer) => !target.hostKey || computer.key === target.hostKey
         )
+        const found = await locateBotSessionLink(target, asked, readClients, attempt.signal)
         if (!live || attempt.signal.aborted) {
           return
         }
-        if (found.kind === 'home') {
-          const { home } = found
+        const thread = !target.sessionId
+        if (thread && !target.hostKey && (found.kind === 'missing' || found.kind === 'ambiguous')) {
+          handedOff = true
+          fallBack()
+          return
+        }
+        // A thread link lands on its bot's Home where that computer can't open the chat.
+        const home =
+          found.kind === 'home' ||
+          (thread && (found.kind === 'update-needed' || found.kind === 'failed'))
+            ? found.home
+            : undefined
+        if (home) {
           openingOn = home.computer
           if (!home.current()) {
             unavailable(
@@ -163,16 +198,14 @@ export function BotSessionLinkResolver({
             )
           }
         } else {
-          const unreadable = [...computers.values()].find(
-            (computer) => computer.answer.kind === 'unreadable'
-          )
+          const unreadable = asked.find((computer) => computer.answer.kind === 'unreadable')
           if (unreadable) {
             unavailable(botLinkOpenFailureLine(t, nameOf(unreadable)))
             return
           }
           const unresolved = resolveBotLink(
             target.botId,
-            [...computers.values()].map((computer) => ({
+            asked.map((computer) => ({
               hostId: computer.key,
               answer:
                 readClients(computer.pairedHostId)?.getState() !== 'connected'
@@ -218,16 +251,17 @@ export function BotSessionLinkResolver({
           )
         }
       } finally {
-        if (live && !attempt.signal.aborted) {
+        if (live && !attempt.signal.aborted && !handedOff) {
           done()
         }
       }
     })()
     return () => {
       live = false
+      stopWatching()
       attempt.abort()
     }
-  }, [answers, computers, failed, hosts, router, t, target])
+  }, [answers, computers, failed, hosts, link, router, t, target])
   return (
     <NewWorkspaceLoadingDrawer
       visible

@@ -16,6 +16,7 @@ import {
   claudeDispatchContentKey,
   claudeDispatchContentRejection,
   claudeDispatchInvokesSlashCommand,
+  claudeDispatchRenamesSession,
   claudeDispatchMessageContent,
   claudeDispatchRejection
 } from './claude-structured-dispatch-content'
@@ -152,10 +153,11 @@ export async function dispatchClaudeTurn(
           agentJournalSubmissionKey(input.clientMessageId)
         )
       : randomUUID())
+  const renamesSession = claudeDispatchRenamesSession(content)
   const arm = () => {
     session.historyCatchUp?.abort()
     ++session.dispatchSequence
-    return waitForReplay(
+    const replay = waitForReplay(
       session,
       acceptsResult,
       sentUuid,
@@ -163,6 +165,10 @@ export async function dispatchClaudeTurn(
       input.clientMessageId ?? null,
       input.requestedAt ?? null
     )
+    if (renamesSession) {
+      replay.waiter.renamesSession = true
+    }
+    return replay
   }
   const message: Record<string, unknown> = {
     type: 'user',

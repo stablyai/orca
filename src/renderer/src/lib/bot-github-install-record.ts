@@ -2,7 +2,10 @@
 // what the owner had before going to GitHub's page. The dialog and the pill both render from it, so
 // minimizing closes the dialog for real; a wait still pending survives a restart.
 import { useSyncExternalStore } from 'react'
-import type { ConnectorGitHubInstallation } from '../../../shared/connector-bot-github-contract'
+import {
+  type ConnectorGitHubInstallation,
+  GITHUB_LOGIN_PATTERN
+} from '../../../shared/connector-bot-github-contract'
 import type { BotRef } from './bot-hosts'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
@@ -18,7 +21,7 @@ import {
   subscribeBotGitHub
 } from './bot-github-state'
 import type { HttpLinkDestination } from './browser/navigation/http-link-routing'
-import { cancelConnectorConnect } from './connector-connect-state'
+import { cancelConnectorConnect, startConnectorConnect } from './connector-connect-state'
 
 export type GitHubInstallRecord = {
   bot: BotRef
@@ -166,6 +169,49 @@ export function openGitHubInstall(bot: BotRef & { name: string; github: unknown 
     before: null,
     inSystemBrowser: false,
     waiting: false
+  })
+}
+
+/** Links another GitHub login, or reads again what one reaches (Refresh): the setup's own sign-in,
+ *  with GitHub's account picker. One already on GitHub ends on Done, since the login's installations
+ *  just join its rows. */
+export function addGitHubAccount(bot: BotRef & { name: string; github: unknown }): void {
+  signInToGitHub(bot, {})
+}
+
+/** More GitHub access for a bot already on GitHub (Add org): the same sign-in, then GitHub's install
+ *  page only if the login picked can't reach `workspace`, or none is named. `onOlderHost`: the host
+ *  can't, so the setup closes for the install page alone. */
+export function addGitHubAccess(
+  bot: BotRef & { name: string; github: unknown },
+  workspace: string | undefined,
+  onOlderHost: () => void
+): void {
+  signInToGitHub(bot, {
+    addAccess: workspace && GITHUB_LOGIN_PATTERN.test(workspace) ? { workspace } : {},
+    onOlderHost: () => {
+      closeGitHubInstall()
+      onOlderHost()
+    }
+  })
+}
+
+function signInToGitHub(
+  bot: BotRef & { name: string; github: unknown },
+  options: Pick<Parameters<typeof startConnectorConnect>[2] & object, 'addAccess' | 'onOlderHost'>
+): void {
+  openGitHubInstall(bot)
+  update({ turnedOn: bot.github !== null })
+  void startConnectorConnect(bot.hostId, 'github', {
+    ...options,
+    switchAccount: true,
+    bot,
+    owner: gitHubSetupOwner(bot),
+    onOpened: (destination) => {
+      if (destination === 'orca-browser') {
+        minimizeGitHubInstall()
+      }
+    }
   })
 }
 

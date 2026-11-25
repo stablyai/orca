@@ -196,7 +196,8 @@ export class RuntimeProjectGroupController {
     if (pathRefusal) {
       throw new FolderWorkspaceCreateRefusedError(pathRefusal)
     }
-    const workspace = await createFolderWorkspaceWithPluginHooks(input, (request) =>
+    const { terminalImageViewerSupported: _viewer, ...createInput } = input
+    const workspace = await createFolderWorkspaceWithPluginHooks(createInput, (request) =>
       createFolder({
         ...request,
         creatorProvenance: request.creatorProvenance ?? { kind: 'host' }

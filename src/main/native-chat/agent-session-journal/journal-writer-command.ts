@@ -78,6 +78,8 @@ export type JournalWriterCommand = {
   facts?: JournalWriterHostFacts
   /** The host's clock at admission, so host-staged receipts agree with the row's time. */
   savedAt?: number
+  /** Scheduling only: the chat has a send in flight, so this write goes ahead of bulk work. */
+  urgent?: true
 }
 
 export type JournalWriterInputOperation =
@@ -102,7 +104,7 @@ export type JournalWriterInputOperation =
         messageId: string
         body: AgentJournalMessageItem
         requireAttachments?: true
-        holdReason?: QueuedMessageHoldReason
+        holdReason?: string
         options?: AgentSessionExecutionOptions
         deliveryMode?: 'queue' | 'steer'
         unattended?: boolean

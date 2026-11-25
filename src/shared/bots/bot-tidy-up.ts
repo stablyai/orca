@@ -67,7 +67,9 @@ export const BotTidyUpSummarySchema = z.object({
   /** Old lines moved to the archive. */
   moved: z.number(),
   /** Repeats merged into one line. */
-  merged: z.number()
+  merged: z.number(),
+  /** Why each op a tidy-up on operations asked for was skipped; absent on other tidy-ups. */
+  skipped: z.array(z.string()).optional()
 })
 
 export type BotTidyUpSummary = z.infer<typeof BotTidyUpSummarySchema>
@@ -90,8 +92,12 @@ export const BotTidyUpViewSchema = z.object({
   running: z.boolean(),
   /** Why it turned itself off, when it did after failing too often; null otherwise. */
   turnedOff: z.string().nullable(),
+  /** `turnedOff` by code; read with `readBotFailure`. */
+  turnedOffFailure: z.unknown().optional(),
   /** The last run's failure, when it failed. */
-  error: z.string().nullable()
+  error: z.string().nullable(),
+  /** `error` by code, for clients to translate; read with `readBotFailure`. */
+  failure: z.unknown().optional()
 })
 
 export type BotTidyUpView = z.infer<typeof BotTidyUpViewSchema>

@@ -14,6 +14,8 @@ export async function restoreOrcadTerminalAuthority(
   readiness.open('orchestration')
   // Terminal inventory stays on the critical path: no latch, every client needs it at connect.
   await timed('reconcile-terminals', () => runtime.reconcileLegacyWorkerTerminals())
+  // Off the critical path: it waits for chat continuations and reports what they left.
+  void runtime.reportWorkerStopsAcrossRestartOnce()
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     await placeUnshownLiveTerminalsBestEffort(runtime)
   }

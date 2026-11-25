@@ -36,8 +36,3 @@ export function onTabPaneTreeRedraw(listener: (tabId: string) => void): () => vo
   redrawListeners.add(listener)
   return () => redrawListeners.delete(listener)
 }
-
-export function _resetLayoutOwnerPaneTreeHoldsForTests(): void {
-  heldTabs.clear()
-  redrawListeners.clear()
-}

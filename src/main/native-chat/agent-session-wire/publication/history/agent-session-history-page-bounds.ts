@@ -107,6 +107,8 @@ export type HistoryReader = {
   form: (item: AgentJournalRenderItem) => HistoryItemForm
   wireForm?: 'client' | 'bounded'
   budgetBytes: number
+  /** Aborts when nobody will read the page; a read still waiting for a reader is withdrawn. */
+  signal?: AbortSignal
   /** Forward reads project touched identities; cold reads include retained sources before bounds. */
   snapshot?: (
     journal: AgentSessionJournal,

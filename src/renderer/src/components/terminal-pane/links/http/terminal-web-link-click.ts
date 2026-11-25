@@ -30,7 +30,7 @@ type TerminalWebLinkClickDeps = Pick<
   sourceOwner?: HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
   linkActionContext?: TerminalLinkActionContext | null
-  actionDestinations?: TerminalHttpLinkActionDestinations
+  getActionDestinations?: (url: string) => TerminalHttpLinkActionDestinations
 }
 
 /** Apply desktop gesture policy before routing a detected web link with its activation context. */
@@ -56,14 +56,17 @@ export function handleTerminalWebLinkClick(
           : { kind: 'local' }),
       requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
       linkActionContext: deps.linkActionContext,
-      actionDestinations: deps.actionDestinations
+      actionDestinations: deps.getActionDestinations?.(completeUrl)
     })
     // Use logical hit testing because WebLinksAddon knows only a physical row of wrapped URLs.
     if (handled || !isTerminalLinkFloatingActivation(event)) {
       event.preventDefault()
     }
   } else {
-    handled = handleOscLink(url, event, deps)
+    handled = handleOscLink(url, event, {
+      ...deps,
+      actionDestinations: deps.getActionDestinations?.(url)
+    })
   }
 
   if (handled) {
