@@ -24,6 +24,7 @@ export function publishProjectionTopology(
     }
   }
   data.inputs = state
+  data.remoteRows = topology.remoteRows
   represented.commitInto(data.represented)
   for (const [id, tab] of nextTabs) {
     if (tab) {

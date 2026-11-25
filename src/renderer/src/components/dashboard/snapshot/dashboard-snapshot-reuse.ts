@@ -65,6 +65,7 @@ export function dashboardSnapshotReuseInputs(state: DashboardSnapshotInput): unk
     state.unifiedTabsByWorktree,
     state.migrationUnsupportedByPtyId,
     state.runtimeAgentOrchestrationByPaneKey,
+    state.remoteAgentOrchestrationByHost,
     state.terminalLayoutsByTabId,
     state.ptyIdsByTabId,
     state.runtimePaneTitlesByTabId,
