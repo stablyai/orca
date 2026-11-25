@@ -3,6 +3,7 @@
 import type { Bot } from '../../../shared/bot-types'
 import { botRosterFields, type BotRosterEntry } from '../../../shared/bot-roster'
 import type { BotShareScopedMethod } from '../../../shared/bots/bot-share-rpc-methods'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RpcContext } from '../../runtime/rpc/core'
 import { botShareListedBots } from './bot-share-access'
 import { botShareChatFilter, botShareScopeOf, botShareSessionFilter } from './bot-share-chats'
@@ -16,6 +17,8 @@ export type BotShareScopedView = EveryScopedMethod<{
   'bots.chats.own': { botIds: [string]; owns: (chatId: string) => boolean }
   /** By session id; one per stream, as it keeps the answers it has given. */
   'agentSession.subscribeStatus': (sessionId: string) => boolean
+  /** The protocol and capabilities a teammate's Orca checks; nothing of the owner's computer. */
+  'status.get': (status: RuntimeStatus) => RuntimeStatus
 }>
 
 /** The teammate's view, or null for any other caller (who sees the handler's full answer). */
@@ -36,6 +39,24 @@ export function botShareScopedView(
         specialty: null
       })),
     'bots.chats.own': { botIds: [scope.botId], owns: botShareChatFilter(runtime, scope) },
-    'agentSession.subscribeStatus': botShareSessionFilter(runtime, scope)
+    'agentSession.subscribeStatus': botShareSessionFilter(runtime, scope),
+    'status.get': botShareStatus
+  }
+}
+
+function botShareStatus(status: RuntimeStatus): RuntimeStatus {
+  return {
+    runtimeId: status.runtimeId,
+    rendererGraphEpoch: status.rendererGraphEpoch,
+    graphStatus: status.graphStatus,
+    authoritativeWindowId: null,
+    liveTabCount: 0,
+    liveLeafCount: 0,
+    runtimeProtocolVersion: status.runtimeProtocolVersion,
+    minCompatibleRuntimeClientVersion: status.minCompatibleRuntimeClientVersion,
+    capabilities: status.capabilities,
+    appVersion: status.appVersion,
+    protocolVersion: status.protocolVersion,
+    minCompatibleMobileVersion: status.minCompatibleMobileVersion
   }
 }

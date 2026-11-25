@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { structuredAgentSessionHolderId } from '../../../../../../shared/agent-session/view/structured-agent-session-holder'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { sharedBotHostFor } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 export function useStructuredAgentSessionHold(args: {
   sessionId: string
@@ -20,7 +21,8 @@ export function useStructuredAgentSessionHold(args: {
     targetRef.current = target
   }, [target])
   useEffect(() => {
-    if (!enabled) {
+    // A host new enough to take shares ignores holds, and its share doesn't take them.
+    if (!enabled || sharedBotHostFor(targetRef.current)) {
       return
     }
     const runtimeTarget = targetRef.current

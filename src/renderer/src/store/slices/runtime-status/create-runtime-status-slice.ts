@@ -77,8 +77,9 @@ export const createRuntimeStatusSlice: (
     set((s) => {
       const keep = new Set(environments.map((environment) => environment.id))
       const removedStatusIds = new Set<string>()
-      for (const id of s.runtimeStatusByEnvironmentId.keys()) {
-        if (!keep.has(id)) {
+      for (const [id, entry] of s.runtimeStatusByEnvironmentId) {
+        // A shared host's status follows its share, not this catalog.
+        if (!keep.has(id) && !entry.snapshot?.sharedHost) {
           removedStatusIds.add(id)
           runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(id)
         }

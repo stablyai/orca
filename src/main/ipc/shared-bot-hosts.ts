@@ -7,7 +7,10 @@ import { NODE_RELAY_CLIENT_PLATFORM } from '../../shared/remote-runtime/relay/cl
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import { SharedBotHosts } from '../bots/shared-with-me/shared-bot-hosts'
 import { sharedBotsCloud } from '../bots/shared-with-me/shared-bots-cloud'
-import { routeSharedHostsThrough } from './runtime-environments/requests/runtime-environment-shared-hosts'
+import {
+  routeSharedHostsThrough,
+  sharedHostsChanged
+} from './runtime-environments/requests/runtime-environment-shared-hosts'
 import { SharedBotHomes, type SharedBotHomeDeps } from '../bots/shared-with-me/shared-bot-home'
 
 const SendAgainArgs = z.object({
@@ -30,6 +33,7 @@ export function registerSharedBotHostsHandlers(args: {
     },
     account: () => args.cloud()?.signedInAccount() ?? null,
     publish: (state: SharedBotHostsState) => {
+      sharedHostsChanged()
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.webContents.isDestroyed()) {
           window.webContents.send('sharedBotHosts:changed', state)

@@ -23,6 +23,7 @@ import { defineMethod } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
 import { BOT_METHODS } from '../methods/bots'
+import { STATUS_METHODS } from '../methods/host-management/status'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../methods/structured-sessions/subscriptions/structured-agent-session-status-stream'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
@@ -174,7 +175,8 @@ beforeEach(() => {
         handler: ran
       }),
       ...BOT_METHODS.filter((method) => method.name === 'bots.roster'),
-      ...STRUCTURED_AGENT_SESSION_STATUS_METHODS
+      ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
+      ...STATUS_METHODS
     ]
   })
 })
@@ -311,6 +313,33 @@ describe('the share guard', () => {
         }
       ]
     })
+  })
+
+  it('answers a teammate’s status with its protocol and capabilities, nothing of this computer', async () => {
+    const response = await call('status.get', undefined)
+    const status = response.ok ? (response.result as Record<string, unknown>) : null
+    expect(status).toMatchObject({
+      runtimeId: runtime.getRuntimeId(),
+      capabilities: runtime.getStatus().capabilities,
+      authoritativeWindowId: null,
+      liveTabCount: 0,
+      liveLeafCount: 0
+    })
+    const shared = new Set([
+      'runtimeId',
+      'rendererGraphEpoch',
+      'graphStatus',
+      'authoritativeWindowId',
+      'liveTabCount',
+      'liveLeafCount',
+      'runtimeProtocolVersion',
+      'minCompatibleRuntimeClientVersion',
+      'capabilities',
+      'appVersion',
+      'protocolVersion',
+      'minCompatibleMobileVersion'
+    ])
+    expect(Object.keys(status ?? {}).filter((key) => !shared.has(key))).toEqual([])
   })
 
   it('lists only methods this host serves', () => {

@@ -5,7 +5,7 @@ import type {
 } from '../../../../../shared/bots/shared-bot-hosts'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { subscribeRuntimeRpc } from '../../rpc/subscriptions/runtime-rpc-subscribe'
-import { ensureRuntimeEnvironmentCompatible } from '../../rpc/compatibility/runtime-compatibility-probe'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../rpc/testing/runtime-compatibility-test-fixture'
 import {
   installSharedBotHostCatalog,
   readSharedBotHosts,
@@ -56,13 +56,16 @@ afterEach(() => {
 
 // Its calls and streams go through runtimeEnvironments; main routes them (runtime-environment-shared-hosts.test.ts).
 describe('a shared agent’s host in the window', () => {
-  it('probes no status: the host answers none to a share', async () => {
-    await expect(ensureRuntimeEnvironmentCompatible(HOST.environmentId)).resolves.toBeNull()
-    expect(environmentCall).not.toHaveBeenCalled()
-  })
-
   it('sends calls and streams through runtimeEnvironments, with no channel of its own', async () => {
-    environmentCall.mockResolvedValue({ id: 'x', ok: true, result: {}, _meta: { runtimeId: 'r' } })
+    environmentCall.mockImplementation(
+      async (request: { method: string }) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(request) ?? {
+          id: 'x',
+          ok: true,
+          result: {},
+          _meta: { runtimeId: 'r' }
+        }
+    )
     await callRuntimeRpc(target, 'bots.list', {})
     await subscribeRuntimeRpc(
       target,

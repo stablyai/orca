@@ -34,7 +34,8 @@ export const BOT_SHARE_SCOPED_METHODS = [
   'bots.list',
   'bots.roster',
   'bots.chats.own',
-  'agentSession.subscribeStatus'
+  'agentSession.subscribeStatus',
+  'status.get'
 ] as const
 export type BotShareScopedMethod = (typeof BOT_SHARE_SCOPED_METHODS)[number]
 const SELF: BotShareMethodAccess = { kind: 'self' }

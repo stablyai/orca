@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { DocumentDeliveryEndpoint } from '../../../../shared/backend/document-delivery-endpoint'
+import type { SharedBotHostView } from '../../../../shared/bots/shared-bot-hosts'
 
 type Handler = (event: unknown, args: unknown) => Promise<RuntimeRpcResponse<unknown>>
 const ipc = vi.hoisted(() => ({ handlers: new Map<string, Handler>() }))
@@ -17,7 +18,11 @@ vi.mock('../../../../shared/remote-runtime/host-store/runtime-environment-store'
   resolveEnvironment: registry.resolve
 }))
 
-import { routeSharedHostsThrough } from './runtime-environment-shared-hosts'
+import {
+  routeSharedHostsThrough,
+  sharedHostsChanged,
+  sharedHostStatusSnapshots
+} from './runtime-environment-shared-hosts'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { registerRuntimeEnvironmentPassiveHandlers } from '../connectivity/runtime-environment-connectivity-handlers'
 import { subscribeRuntimeEnvironmentForDocument } from '../subscriptions/runtime-environment-document-subscription'
@@ -32,8 +37,21 @@ const answer = (method: string): RuntimeRpcResponse<unknown> => ({
   _meta: { runtimeId: SHARED }
 })
 const stop = vi.fn()
+const view: SharedBotHostView = {
+  environmentId: SHARED,
+  shareId: 'share-1',
+  botId: 'bot-1',
+  botName: 'Helper',
+  ownerName: 'Owner',
+  homeWorkspaceId: null,
+  link: 'live',
+  holds: true,
+  held: []
+}
+let views: SharedBotHostView[] = []
 const hosts = {
   ready: vi.fn(async () => {}),
+  views: () => views,
   reaches: (environmentId: string) => environmentId === SHARED,
   call: vi.fn(async (_environmentId: string, method: string) => answer(method)),
   subscribe: vi.fn(
@@ -52,6 +70,10 @@ const hosts = {
 function windowCall(selector: string, method: string): Promise<RuntimeRpcResponse<unknown>> {
   const handler = ipc.handlers.get('runtimeEnvironments:call')!
   return handler({}, { selector, method, params: {} })
+}
+
+function windowGetStatus(selector: string): Promise<RuntimeRpcResponse<unknown>> {
+  return ipc.handlers.get('runtimeEnvironments:getStatus')!({}, { selector })
 }
 
 function windowDocument() {
@@ -86,6 +108,7 @@ beforeEach(() => {
   hosts.call.mockClear()
   hosts.subscribe.mockClear()
   stop.mockClear()
+  views = [{ ...view }]
   subscriptions.clear()
   routeSharedHostsThrough(hosts)
   registerRuntimeEnvironmentPassiveHandlers(() => '/nowhere')
@@ -112,10 +135,6 @@ describe('a shared agent’s host, reached through runtimeEnvironments', () => {
         error: { code: 'method_not_found' }
       })
     }
-    // Nor a status probe: the host answers none to a share.
-    expect(await callRuntimeEnvironment('/nowhere', SHARED, 'status.get', undefined)).toMatchObject(
-      { ok: false, error: { code: 'method_not_found' } }
-    )
     const { document, send } = windowDocument()
     await windowSubscribe(document, SHARED, 'bots.items.subscribe')
     expect(send).toHaveBeenCalledWith(
@@ -161,6 +180,54 @@ describe('a shared agent’s host, reached through runtimeEnvironments', () => {
       'runtimeEnvironments:subscriptionEvent',
       expect.objectContaining({ response: answer('bots.chats') })
     )
+  })
+})
+
+describe('a shared agent’s host status, as a paired server’s', () => {
+  it('answers getStatus and lists a verified, ready snapshot the window keeps', async () => {
+    expect(await windowGetStatus(SHARED)).toEqual(answer('status.get'))
+    // The window's capability reads ask status.get as a call; the same owner answers it.
+    expect(await windowCall(SHARED, 'status.get')).toEqual(answer('status.get'))
+    expect(sharedHostStatusSnapshots()).toEqual([
+      expect.objectContaining({
+        environmentId: SHARED,
+        sharedHost: true,
+        transport: 'ready',
+        verification: 'verified',
+        status: { method: 'status.get' }
+      })
+    ])
+    expect(registry.resolve).not.toHaveBeenCalled()
+  })
+
+  it('stays ready on its last answer while its owner is away and messages are held', async () => {
+    await windowGetStatus(SHARED)
+    hosts.call.mockResolvedValueOnce({
+      id: 'status.get',
+      ok: false,
+      error: { code: 'offline', message: '' }
+    })
+    views = [{ ...view, link: 'offline' }]
+    sharedHostsChanged()
+    expect(await windowGetStatus(SHARED)).toEqual(answer('status.get'))
+    expect(sharedHostStatusSnapshots()[0]).toMatchObject({
+      transport: 'ready',
+      verification: 'verified'
+    })
+  })
+
+  it('reads disconnected with no held messages, and retires when the share goes', async () => {
+    views = [{ ...view, link: 'offline', holds: false }]
+    hosts.call.mockResolvedValueOnce({
+      id: 'status.get',
+      ok: false,
+      error: { code: 'offline', message: '' }
+    })
+    expect(await windowGetStatus(SHARED)).toMatchObject({ ok: false })
+    expect(sharedHostStatusSnapshots()[0]).toMatchObject({ transport: 'disconnected' })
+    views = []
+    sharedHostsChanged()
+    expect(sharedHostStatusSnapshots()).toEqual([])
   })
 })
 

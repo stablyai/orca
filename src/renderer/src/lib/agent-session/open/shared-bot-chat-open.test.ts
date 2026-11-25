@@ -19,6 +19,7 @@ import { openBotHome, openBotHomeTab, startBotSession } from '../../bot-catalog'
 import { installSharedBotNewChatSwap } from '@/runtime/hosts/shared-bot-hosts/shared-bot-new-chat-swap'
 import { buildWorkspaceSessionPayload } from '../../workspace/persistence/workspace-session'
 import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 
 const SHARED: SharedBotHostView = {
   environmentId: 'shared-env',
@@ -109,13 +110,14 @@ const environmentCall = async (request: {
   method: string
   params: { newChatId?: string }
 }) =>
-  BOT_SHARE_RPC_METHODS.has(request.method)
+  createCompatibleRuntimeStatusResponseIfNeeded(request) ??
+  (BOT_SHARE_RPC_METHODS.has(request.method)
     ? call({ environmentId: request.selector, method: request.method, params: request.params })
     : {
         id: request.method,
         ok: false,
         error: { code: 'method_not_found', message: request.method }
-      }
+      })
 
 beforeEach(async () => {
   call.mockClear()

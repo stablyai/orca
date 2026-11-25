@@ -1,4 +1,7 @@
-import { sharedHostRoute } from '../requests/runtime-environment-shared-hosts'
+import {
+  sharedHostRoute,
+  sharedHostStatusSnapshots
+} from '../requests/runtime-environment-shared-hosts'
 import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
@@ -63,9 +66,10 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   ipcMain.handle('runtimeEnvironments:desktopCreatedChatIds', () =>
     desktopChatCreationHistory(getUserDataPath()).sessionIds()
   )
-  ipcMain.handle('runtimeEnvironments:getStatusSnapshots', () =>
-    getRuntimeEnvironmentStatusSnapshots()
-  )
+  ipcMain.handle('runtimeEnvironments:getStatusSnapshots', () => [
+    ...getRuntimeEnvironmentStatusSnapshots(),
+    ...sharedHostStatusSnapshots()
+  ])
   ipcMain.handle('runtimeEnvironments:list', async () => {
     const environments = (await listEnvironments(getUserDataPath())).filter(
       (environment) => !isGatedOffWslHost(environment)
@@ -124,6 +128,10 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       _event,
       args: { selector: string; timeoutMs?: number }
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
+      const sharedHost = await sharedHostRoute(args.selector)
+      if (sharedHost) {
+        return sharedHost.status({ timeoutMs: args.timeoutMs, reconnect: true })
+      }
       const environment = await resolveEnvironment(getUserDataPath(), args.selector)
       assertWslHostReachable(environment)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
@@ -153,6 +161,11 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
       _event,
       args: { selector: string; timeoutMs?: number; observeOnly?: true; force?: true }
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
+      const sharedHost = await sharedHostRoute(args.selector)
+      if (sharedHost) {
+        const { timeoutMs, observeOnly, force } = args
+        return sharedHost.status({ timeoutMs, observeOnly, force })
+      }
       const environment = await resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)

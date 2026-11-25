@@ -23,6 +23,8 @@ export type RuntimeHostStatusSnapshot = {
   transport: 'unknown' | 'connecting' | 'ready' | 'disconnected'
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   retired?: true
+  /** A host shared with this account, reached over its share: it is in no paired-server catalog. */
+  sharedHost?: true
 }
 
 /** Share projected status and its snapshot evidence; optional fields let structural copies silently miss new semantics. */

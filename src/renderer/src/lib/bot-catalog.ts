@@ -319,7 +319,9 @@ export function openBotHome(bot: Bot): boolean {
   const opened = activateAndRevealFolderWorkspace(bot.folderWorkspaceId, {
     executionHostId: botHomeHostId(bot),
     // Bots are not rows of the workspace list, so there is nothing there to reveal.
-    revealInSidebar: false
+    revealInSidebar: false,
+    // A shared agent's home here holds only the teammate's chat tabs, never a terminal in its folder.
+    ...(sharedBotHostOf(bot.hostId) ? { providesInitialSurface: true } : {})
   })
   return opened !== false
 }
