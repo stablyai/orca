@@ -314,7 +314,10 @@ export function AiVaultSessionVirtualList({
       >
         {(loading && sessionsCount === 0) ||
         (scopePending && filteredSessionsCount === 0 && !noAgentsSelected) ? (
-          <SessionLoadingState showLabel={!scanProgressShown} />
+          <SessionLoadingState
+            showLabel={!scanProgressShown}
+            searching={searchHits !== undefined}
+          />
         ) : null}
 
         {!loading && sessionsCount === 0 && !error ? (

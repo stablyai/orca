@@ -2,9 +2,12 @@ import { ArchiveRestore, LoaderCircle } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function SessionLoadingState({
-  showLabel = true
+  showLabel = true,
+  searching = false
 }: {
   showLabel?: boolean
+  /** A search waits on its own query; History only waits for a list, which may not need a scan. */
+  searching?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -13,10 +16,15 @@ export function SessionLoadingState({
         <div className="mb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
           <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
           <span>
-            {t(
-              'auto.components.right.sidebar.AiVaultPanelControls.scanningSessions',
-              'Scanning sessions'
-            )}
+            {searching
+              ? t(
+                  'auto.components.right.sidebar.AiVaultPanelControls.scanningSessions',
+                  'Scanning sessions'
+                )
+              : t(
+                  'auto.components.right.sidebar.AiVaultScanProgressStrip.loadingSessions',
+                  'Loading sessions…'
+                )}
           </span>
         </div>
       ) : null}
