@@ -4944,8 +4944,6 @@
             "remaining": "残り"
           },
           "UsagePercentageDisplayChangeNotice": {
-            "title": "使用状況に、使用済みの割合を表示するようになりました",
-            "body": "残量表示にしたい場合は、[設定] で変更できます。",
             "dismiss": "閉じる",
             "openSettings": "設定を開く",
             "gotIt": "了解"
@@ -5427,7 +5425,6 @@
           "h9i0j1k2l3": " • {{value0}}",
           "i0j1k2l3m4": "Grok 使用状況を更新",
           "d4f5a6b7c8": "更新",
-          "e5a6b7c8d9": "使用済み週次クレジット",
           "f6b7c8d9e0": "請求期間のリセット",
           "a7b8c9d0e1": "Grok アカウント設定"
         },

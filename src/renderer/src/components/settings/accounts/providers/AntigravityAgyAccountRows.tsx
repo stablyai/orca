@@ -6,6 +6,9 @@ import type { AntigravityAccountState } from '../../../../../../shared/agent-acc
 import type { ProviderRateLimits } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { formatTimeAgo } from '../../../status-bar/usage/provider-usage-panel'
+import { useUsagePercentageDisplay } from '../../../status-bar/usage/use-usage-percentage-display'
+import { formatUsagePercentageLabel } from '../../../status-bar/usage/usage-percentage-label'
+import type { UsagePercentageDisplay } from '../../../../../../shared/agent-usage/display/usage-percentage-display'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
@@ -14,10 +17,16 @@ import type { AntigravityChatSignInControls } from '../../../provider-accounts/u
 
 export type AntigravityAccountAction = 'List' | 'AddCurrent' | 'Select' | 'Remove' | 'Usage'
 
-export function formatUsageReading(usage: ProviderRateLimits, t: Translate = translate): string {
+export function formatUsageReading(
+  usage: ProviderRateLimits,
+  display: UsagePercentageDisplay,
+  t: Translate = translate
+): string {
   return t('accounts.antigravity.usageReading', 'Session: {{session}} · Weekly: {{weekly}}', {
-    session: usage.session ? `${Math.round(usage.session.usedPercent)}%` : '—',
-    weekly: usage.weekly ? `${Math.round(usage.weekly.usedPercent)}%` : '—'
+    session: usage.session
+      ? formatUsagePercentageLabel(usage.session.usedPercent, display, t)
+      : '—',
+    weekly: usage.weekly ? formatUsagePercentageLabel(usage.weekly.usedPercent, display, t) : '—'
   })
 }
 
@@ -42,6 +51,7 @@ export function AntigravityAgyAccountRows({
   signIn?: AntigravityChatSignInControls
 }): React.JSX.Element {
   const t = useTranslate()
+  const display = useUsagePercentageDisplay()
   const signingIn = signIn?.ownFlow === true
   const signInAlert = signIn?.alert ? <ActionError message={signIn.alert} /> : null
   const changed = Boolean(
@@ -67,7 +77,7 @@ export function AntigravityAgyAccountRows({
             aria-label={
               reading && !reading.error
                 ? t('accounts.antigravity.usageWithReading', 'Refresh usage ({{reading}})', {
-                    reading: formatUsageReading(reading, t)
+                    reading: formatUsageReading(reading, display, t)
                   })
                 : t('accounts.antigravity.usage', 'Refresh usage')
             }
@@ -76,7 +86,7 @@ export function AntigravityAgyAccountRows({
           >
             <RefreshCw />
             {reading && !reading.error
-              ? formatUsageReading(reading, t)
+              ? formatUsageReading(reading, display, t)
               : t('accounts.antigravity.usage', 'Refresh usage')}
           </Button>
         </TooltipTrigger>
@@ -201,7 +211,7 @@ export function AntigravityAgyAccountRows({
                 time: formatTimeAgo(account.usage.updatedAt, t)
               })
             : t('accounts.antigravity.lastReading', '{{reading}} · Read {{time}}', {
-                reading: formatUsageReading(account.usage, t),
+                reading: formatUsageReading(account.usage, display, t),
                 time: formatTimeAgo(account.usage.updatedAt, t)
               })
           : t('accounts.antigravity.noReading', 'Usage unknown: not read yet')

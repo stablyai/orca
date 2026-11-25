@@ -5,6 +5,8 @@ import type {
   ProviderRateLimits,
   RateLimitWindow
 } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { useUsagePercentageDisplay } from '../../../status-bar/usage/use-usage-percentage-display'
+import { formatUsagePercentageLabel } from '../../../status-bar/usage/usage-percentage-label'
 import { Badge } from '../../../ui/badge'
 
 export type ZcodeUsageWindowKind = 'session' | 'weekly' | 'monthly'
@@ -55,11 +57,14 @@ export function ZcodeUsageWindowView({
   now: number
 }): React.JSX.Element {
   const t = useTranslate()
+  const display = useUsagePercentageDisplay()
   const resetLabel = formatWindowReset(row.window, now)
   return (
     <div className="flex items-center gap-2 text-xs">
       <Badge variant="secondary">
-        <span className="tabular-nums">{Math.round(row.window.usedPercent)}%</span>
+        <span className="tabular-nums">
+          {formatUsagePercentageLabel(row.window.usedPercent, display, t)}
+        </span>
       </Badge>
       <span className="text-muted-foreground">
         {windowLabel(row.kind, t)}

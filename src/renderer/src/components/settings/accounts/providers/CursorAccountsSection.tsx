@@ -6,6 +6,8 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
+import { useUsagePercentageDisplay } from '../../../status-bar/usage/use-usage-percentage-display'
+import { formatUsagePercentageLabel } from '../../../status-bar/usage/usage-percentage-label'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import type { CursorAccountStatus } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -44,6 +46,7 @@ function credentialSourceLabel(
 
 export function CursorAccountsSection(): React.JSX.Element {
   const t = useTranslate()
+  const display = useUsagePercentageDisplay()
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const cursorUsage = useAppStore((s) => s.rateLimits.cursor)
   const [status, setStatus] = useState<CursorAccountStatus | null>(null)
@@ -223,7 +226,9 @@ export function CursorAccountsSection(): React.JSX.Element {
               {pools.map((pool) => (
                 <div key={pool.name} className="flex items-center gap-2 text-xs">
                   <Badge variant="secondary">
-                    <span className="tabular-nums">{Math.round(pool.usedPercent)}%</span>
+                    <span className="tabular-nums">
+                      {formatUsagePercentageLabel(pool.usedPercent, display, t)}
+                    </span>
                   </Badge>
                   <span className="text-muted-foreground">{pool.name}</span>
                 </div>
@@ -231,7 +236,9 @@ export function CursorAccountsSection(): React.JSX.Element {
               {monthly ? (
                 <div className="flex items-center gap-2 text-xs">
                   <Badge variant="secondary">
-                    <span className="tabular-nums">{Math.round(monthly.usedPercent)}%</span>
+                    <span className="tabular-nums">
+                      {formatUsagePercentageLabel(monthly.usedPercent, display, t)}
+                    </span>
                   </Badge>
                   <span className="text-muted-foreground">
                     {t('auto.components.settings.CursorAccountsSection.planTotal', 'Plan')}

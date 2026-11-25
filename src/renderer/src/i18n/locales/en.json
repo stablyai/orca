@@ -6263,11 +6263,11 @@
             "bare": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
-            "title": "Usage now shows % used",
-            "body": "Prefer remaining? Change it in Settings.",
             "dismiss": "Dismiss",
             "openSettings": "Open Settings",
-            "gotIt": "Got it"
+            "gotIt": "Got it",
+            "titleRemaining": "Usage now shows % left",
+            "bodyRemaining": "Prefer % used? Change it in Settings."
           },
           "UsageRosterPanel": {
             "wslUsageNotShown": "WSL usage isn't shown yet",
@@ -6763,9 +6763,9 @@
           "h9i0j1k2l3": " • {{value0}}",
           "i0j1k2l3m4": "Refresh Grok usage",
           "d4f5a6b7c8": "Refresh",
-          "e5a6b7c8d9": "Weekly credits used",
           "f6b7c8d9e0": "Billing period reset",
-          "a7b8c9d0e1": "Grok account settings"
+          "a7b8c9d0e1": "Grok account settings",
+          "weeklyCredits": "Weekly credits"
         },
         "MuseUsagePane": {
           "title": "Muse Usage Tracking",

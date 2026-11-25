@@ -4854,8 +4854,6 @@
             "compactBody": "Une mesure principale par fournisseur. Choisissez <detailed>Détaillé</detailed> dans le menu Utilisation pour afficher plus de limites."
           },
           "UsagePercentageDisplayChangeNotice": {
-            "title": "L'utilisation affiche désormais le pourcentage consommé",
-            "body": "Vous préférez le restant ? Changez ce choix dans les paramètres.",
             "dismiss": "Ignorer",
             "openSettings": "Ouvrir les paramètres",
             "gotIt": "Compris"
@@ -5378,7 +5376,6 @@
           "h9i0j1k2l3": " • {{value0}}",
           "i0j1k2l3m4": "Actualiser l'utilisation Grok",
           "d4f5a6b7c8": "Actualiser",
-          "e5a6b7c8d9": "Crédits hebdomadaires utilisés",
           "f6b7c8d9e0": "Réinitialisation de la période de facturation",
           "a7b8c9d0e1": "Paramètres du compte Grok"
         },

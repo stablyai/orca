@@ -5147,8 +5147,6 @@
             "remaining": "남음"
           },
           "UsagePercentageDisplayChangeNotice": {
-            "title": "사용량이 이제 사용된 %로 표시됩니다",
-            "body": "남은 양 표시를 원하시나요? 설정에서 변경할 수 있습니다.",
             "dismiss": "닫기",
             "openSettings": "설정 열기",
             "gotIt": "확인"
@@ -5653,7 +5651,6 @@
           "h9i0j1k2l3": " • {{value0}}",
           "i0j1k2l3m4": "Grok 사용량 새로 고침",
           "d4f5a6b7c8": "새로 고침",
-          "e5a6b7c8d9": "사용한 주간 크레딧",
           "f6b7c8d9e0": "결제 기간 재설정",
           "a7b8c9d0e1": "Grok 계정 설정"
         },

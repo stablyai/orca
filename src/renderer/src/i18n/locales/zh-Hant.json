@@ -5008,8 +5008,6 @@
             "bare": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
-            "title": "用量現在顯示已用百分比",
-            "body": "更喜歡剩餘額度？請在設定中變更。",
             "dismiss": "關閉",
             "openSettings": "開啟設定",
             "gotIt": "知道了"
@@ -5486,7 +5484,6 @@
           "h9i0j1k2l3": " • {{value0}}",
           "i0j1k2l3m4": "重新整理 Grok 用量",
           "d4f5a6b7c8": "重新整理",
-          "e5a6b7c8d9": "已用每週額度",
           "f6b7c8d9e0": "計費週期重設",
           "a7b8c9d0e1": "Grok 帳戶設定"
         },

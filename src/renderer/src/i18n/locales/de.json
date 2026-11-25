@@ -5096,8 +5096,6 @@
             "bare": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
-            "title": "Nutzung zeigt jetzt den Verbrauch in %",
-            "body": "Lieber den verbleibenden Anteil anzeigen? In den Einstellungen ändern.",
             "dismiss": "Ausblenden",
             "openSettings": "Einstellungen öffnen",
             "gotIt": "Verstanden"
@@ -5596,7 +5594,6 @@
           "h9i0j1k2l3": " • {{value0}}",
           "i0j1k2l3m4": "Grok-Nutzungsdaten aktualisieren",
           "d4f5a6b7c8": "Aktualisieren",
-          "e5a6b7c8d9": "Wöchentlich verbrauchte Credits",
           "f6b7c8d9e0": "Zurücksetzung des Abrechnungszeitraums",
           "a7b8c9d0e1": "Grok-Kontoeinstellungen"
         },

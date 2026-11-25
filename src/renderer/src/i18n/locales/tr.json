@@ -6112,8 +6112,6 @@
             "bare": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
-            "title": "Kullanım artık % kullanıldı olarak gösteriliyor",
-            "body": "Kalanı mı tercih edersiniz? Ayarlar bölümünde değiştirin.",
             "dismiss": "Kapat",
             "openSettings": "Ayarları Aç",
             "gotIt": "Anladım"
@@ -6612,7 +6610,6 @@
           "h9i0j1k2l3": " • {{value0}}",
           "i0j1k2l3m4": "Grok kullanımını yenile",
           "d4f5a6b7c8": "Yenile",
-          "e5a6b7c8d9": "Kullanılan haftalık kredi",
           "f6b7c8d9e0": "Fatura dönemi sıfırlanması",
           "a7b8c9d0e1": "Grok hesap ayarları"
         },

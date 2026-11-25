@@ -6,9 +6,12 @@ import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { StatCard } from './StatCard'
 import { formatUpdatedAt } from './usage-formatters'
+import { useUsagePercentageDisplay } from '../status-bar/usage/use-usage-percentage-display'
+import { formatUsagePercentageLabel } from '../status-bar/usage/usage-percentage-label'
 
 export function GrokUsagePane(): React.JSX.Element {
   const t = useTranslate()
+  const display = useUsagePercentageDisplay()
   const intlLocale = useIntlLocale()
   const grok = useAppStore((s) => s.rateLimits.grok)
   const grokAuthConfigured = useAppStore((s) => s.rateLimits.grokAuthConfigured)
@@ -66,10 +69,8 @@ export function GrokUsagePane(): React.JSX.Element {
     )
   }
 
-  const weeklyPercent =
-    grok?.weekly && typeof grok.weekly.usedPercent === 'number'
-      ? Math.round(grok.weekly.usedPercent)
-      : null
+  const weeklyUsedPercent =
+    grok?.weekly && typeof grok.weekly.usedPercent === 'number' ? grok.weekly.usedPercent : null
   const isFetching = isRefreshing || grok?.status === 'fetching'
 
   return (
@@ -116,8 +117,12 @@ export function GrokUsagePane(): React.JSX.Element {
 
       <div className="grid gap-3 md:grid-cols-2">
         <StatCard
-          label={t('auto.components.stats.GrokUsagePane.e5a6b7c8d9', 'Weekly credits used')}
-          value={weeklyPercent !== null ? `${weeklyPercent}%` : '—'}
+          label={t('auto.components.stats.GrokUsagePane.weeklyCredits', 'Weekly credits')}
+          value={
+            weeklyUsedPercent !== null
+              ? formatUsagePercentageLabel(weeklyUsedPercent, display, t)
+              : '—'
+          }
           icon={<Sparkles className="size-4" />}
         />
         <StatCard

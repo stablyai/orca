@@ -5368,8 +5368,6 @@
             "remaining": "剩余"
           },
           "UsagePercentageDisplayChangeNotice": {
-            "title": "用量现在显示已用百分比",
-            "body": "更喜欢剩余额度？请在设置中更改",
             "dismiss": "关闭",
             "openSettings": "打开设置",
             "gotIt": "知道了"
@@ -5851,7 +5849,6 @@
           "h9i0j1k2l3": " • {{value0}}",
           "i0j1k2l3m4": "刷新 Grok 使用量",
           "d4f5a6b7c8": "刷新",
-          "e5a6b7c8d9": "已用每周额度",
           "f6b7c8d9e0": "计费周期重置",
           "a7b8c9d0e1": "Grok 账户设置"
         },

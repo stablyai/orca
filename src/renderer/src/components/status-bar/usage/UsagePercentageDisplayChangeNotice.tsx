@@ -38,12 +38,12 @@ export function useUsagePercentageDisplayChangeNotice(
     eligible,
     dismiss,
     title: t(
-      'auto.components.status.bar.UsagePercentageDisplayChangeNotice.title',
-      'Usage now shows % used'
+      'auto.components.status.bar.UsagePercentageDisplayChangeNotice.titleRemaining',
+      'Usage now shows % left'
     ),
     description: t(
-      'auto.components.status.bar.UsagePercentageDisplayChangeNotice.body',
-      'Prefer remaining? Change it in Settings.'
+      'auto.components.status.bar.UsagePercentageDisplayChangeNotice.bodyRemaining',
+      'Prefer % used? Change it in Settings.'
     ),
     action: {
       label: t(

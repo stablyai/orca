@@ -4524,8 +4524,6 @@
             "remaining": "Restante"
           },
           "UsagePercentageDisplayChangeNotice": {
-            "title": "El uso ahora muestra el porcentaje utilizado",
-            "body": "¿Prefieres ver el uso restante? Cámbialo en Configuración.",
             "dismiss": "Dismiss",
             "openSettings": "Open Settings",
             "gotIt": "Got it"
@@ -5053,7 +5051,6 @@
           "h9i0j1k2l3": " • {{value0}}",
           "i0j1k2l3m4": "Actualizar uso de Grok",
           "d4f5a6b7c8": "Actualizar",
-          "e5a6b7c8d9": "Créditos semanales usados",
           "f6b7c8d9e0": "Restablecimiento del periodo de facturación",
           "a7b8c9d0e1": "Configuración de la cuenta de Grok"
         },

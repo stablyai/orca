@@ -3972,8 +3972,6 @@
             "bare": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
-            "title": "O uso agora mostra % usado",
-            "body": "Prefere ver o restante? Altere isso em Configurações.",
             "dismiss": "Descartar",
             "openSettings": "Abrir Configurações",
             "gotIt": "Entendi"
@@ -16387,7 +16385,6 @@
           "h9i0j1k2l3": " • {{value0}}",
           "i0j1k2l3m4": "Atualizar uso do Grok",
           "d4f5a6b7c8": "Atualizar",
-          "e5a6b7c8d9": "Créditos semanais usados",
           "f6b7c8d9e0": "Reinício do período de faturamento",
           "a7b8c9d0e1": "Configurações da conta do Grok"
         },

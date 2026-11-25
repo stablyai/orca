@@ -4,6 +4,8 @@ import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
+import { useUsagePercentageDisplay } from '../../../status-bar/usage/use-usage-percentage-display'
+import { formatUsagePercentageLabel } from '../../../status-bar/usage/usage-percentage-label'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import type { GrokAccountStatus } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -15,6 +17,7 @@ const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
 
 export function GrokAccountsSection(): React.JSX.Element {
   const t = useTranslate()
+  const display = useUsagePercentageDisplay()
   const refreshGrokRateLimits = useAppStore((s) => s.refreshGrokRateLimits)
   const grokUsage = useAppStore((s) => s.rateLimits.grok)
   const [status, setStatus] = useState<GrokAccountStatus | null>(null)
@@ -178,7 +181,7 @@ export function GrokAccountsSection(): React.JSX.Element {
           >
             <div className="flex items-center gap-2 text-xs">
               <Badge variant="secondary" className="tabular-nums">
-                {Math.round(usageWindow.usedPercent)}%
+                {formatUsagePercentageLabel(usageWindow.usedPercent, display, t)}
               </Badge>
               {usageWindow.resetDescription ? (
                 <span className="text-muted-foreground">
