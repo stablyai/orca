@@ -77,12 +77,11 @@ export function botNewChatAgents(
   return enabled.length > 0 ? enabled : [botAgentOnHost(bot.agent, model)]
 }
 
-/** What a bot's home offers to start from its + menu. A shared agent's chats run on its owner's
- *  computer, so it offers the agents its owner's menu does (`ownerAgents`, its own alone until that
- *  answers); its Home Chat is its owner's, and a terminal or browser would open on this computer in
- *  an empty folder, so neither is offered. */
+/** What a bot's home offers to start from its + menu, beside New Home Chat (every person's own). A
+ *  shared agent's chats run on its owner's computer, so it offers the agents its owner's menu does
+ *  (`ownerAgents`, its own alone until that answers); a terminal or browser would open on this
+ *  computer in an empty folder, so neither is offered. */
 export type BotHomeOffers = {
-  homeChat: boolean
   agents: BotNewChatAgent[]
   workspaceTabs: boolean
 }
@@ -93,11 +92,10 @@ export function botHomeOffers(
   shared: { ownerAgents: readonly BotNewChatAgent[] | null } | null
 ): BotHomeOffers {
   if (!shared) {
-    return { homeChat: true, agents: botNewChatAgents(bot, model), workspaceTabs: true }
+    return { agents: botNewChatAgents(bot, model), workspaceTabs: true }
   }
   const owner = ownAgentFirst(bot.agent, shared.ownerAgents ?? [])
   return {
-    homeChat: false,
     agents: owner.length > 0 ? owner : [{ agent: bot.agent }],
     workspaceTabs: false
   }

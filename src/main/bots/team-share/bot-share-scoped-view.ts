@@ -51,7 +51,6 @@ export function botShareScopedView(
       home: { accountId: scope.accountId }
     },
     'bots.agentChoices': ({ newChatAgents }) => ({ newChatAgents }),
-    'bots.agentChoices': ({ newChatAgents }) => ({ newChatAgents }),
     'agentSession.subscribeStatus': botShareSessionFilter(runtime, scope),
     'status.get': botShareStatus
   }
