@@ -259,6 +259,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
               : undefined
           }
           workRun={workRun}
+          disclosureId={slot.disclosureId}
         />
       )}
       {newRowsMarker?.place === 'above-turn-bar' ? marker : null}

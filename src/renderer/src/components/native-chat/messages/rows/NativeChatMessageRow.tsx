@@ -99,6 +99,8 @@ export type MessageRowProps = {
   fork?: NativeChatForkRowAction
   /** All messages in this work run, message first; preserve row identity when a message becomes a run. */
   workRun?: readonly NativeChatMessage[]
+  /** Keeps a run's disclosures under its earlier head's id once older rows joined it. */
+  disclosureId?: string
 }
 
 function rowHasContent(content: ReturnType<typeof deriveNativeChatRowContent>): boolean {

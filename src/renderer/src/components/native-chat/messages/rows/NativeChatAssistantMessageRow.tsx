@@ -177,7 +177,7 @@ function toolRunProps(
     expandSignal: props.expandSignal,
     activeTurnIsWorking: props.activeTurnIsWorking,
     trailing: props.trailingRun,
-    disclosureId: props.message.id,
+    disclosureId: props.disclosureId ?? props.message.id,
     asides: run?.asides,
     runtimeContext: props.runtimeContext
   }

@@ -222,6 +222,8 @@ export function NativeChatMessageList({
     turnDiffs,
     openedPullRequests: openedPullRequests.byTurn,
     expandedTurnKeys: expandedTurnIds,
+    setExpandedTurnKeys: setExpandedTurnIds,
+    loadingOlder: loadingEarlier,
     isWorking: working,
     lifecycleWorking,
     subagentHeads: scope.heads,

@@ -103,6 +103,8 @@ export type NativeChatMessageSlot = {
   estimatedHeight: number
   /** Members of an unbroken work run, with message as its head. */
   workRun?: readonly NativeChatMessage[]
+  /** The id this run's disclosures are kept under, when older rows moved its head earlier. */
+  disclosureId?: string
   /** Consecutive quiet item notes drawn close together, with message as the first. */
   itemNotes?: readonly NativeChatMessage[]
   /** Opens on an activity row right below the slot before's: drawn 4 px below it, not a row gap below. */
