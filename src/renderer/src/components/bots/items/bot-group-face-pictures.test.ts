@@ -14,7 +14,7 @@ import {
 } from '@/lib/bot-host-listing'
 
 type Read = { botId: string; settle: (png: string | null | Error) => void }
-const avatars = vi.hoisted(() => ({ reads: [] as Read[] }))
+const avatars = vi.hoisted((): { reads: Read[] } => ({ reads: [] }))
 
 // Each avatar read waits until the test answers it, so reads from before and after a come-back can be
 // answered in any order.
