@@ -191,7 +191,9 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
     kind: z.literal('turn-started'),
     at: EpochMsSchema,
     // The delivery the turn answers, when exactly one started it; an older machine leaves it out.
-    deliveryId: OpaqueIdSchema.optional()
+    deliveryId: OpaqueIdSchema.optional(),
+    // Present only on the first turn after this chat changes agents.
+    switchedAgent: z.string().trim().min(1).max(64).regex(/^[^\r\n]+$/).optional().catch(undefined)
   }),
   z.object({
     ...PaneEvent,
