@@ -1,5 +1,5 @@
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
-import type { BotLaunchTools } from '../../../bots/bot-launch-tools'
+import type { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
@@ -69,7 +69,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveSessionInstructions?: (
     record: AgentSessionRecord,
     launchDirectory: string,
-    linkedSkills: string | null
+    linkedSkills: string | null,
+    eachStart: boolean
   ) => Promise<string | null>
   /** See `StructuredAgentLaunchSources.readOnlySession`. */
   readOnlySession?: (sessionId: string) => ReadOnlySessionMode | null
@@ -79,7 +80,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveSessionToolServers?: (
     record: AgentSessionRecord,
     launchDirectory: string
-  ) => Promise<BotLaunchTools>
+  ) => Promise<SessionMcpTools>
   /** See `StructuredAgentLaunchSources.resolveLinkedSkills`. */
   resolveSessionLinkedSkills?: (record: AgentSessionRecord) => Promise<LinkedSkills>
   /** The chat's bot folder brought up to date, as a launch would load it, with no launch

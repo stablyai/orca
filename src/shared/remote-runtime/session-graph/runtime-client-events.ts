@@ -79,6 +79,8 @@ export type RuntimeClientEvent =
   | { type: 'orchestrationSessionWorkersChanged'; sessionId: string }
   /** A paired computer handed back replies to this host's agents' asks; their cards re-read. Old clients drop it. */
   | { type: 'peerMailReturned' }
+  /** This host's MCP server list changed; clients showing it re-read. Old clients drop it. */
+  | { type: 'mcpServersChanged' }
   // Old clients drop the unknown type; the report RPC has the same run.
   | WorkspaceCleanupRunFinishedEvent
   | {

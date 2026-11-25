@@ -38,7 +38,6 @@ export function NativeChatNoticeAuthRecovery({
     <NativeChatAntigravityAuthRecovery
       agentName={agentName}
       failureKind={failure?.kind}
-      account={failure?.account}
       problem={
         failure !== undefined ||
         (look.kind === 'line' && (look.tone === 'error' || look.tone === 'warning'))
@@ -54,13 +53,11 @@ export function NativeChatNoticeAuthRecovery({
 export function NativeChatAntigravityAuthRecovery({
   agentName,
   failureKind,
-  account,
   text,
   problem
 }: {
   agentName: string | undefined
   failureKind: string | undefined
-  account: string | undefined
   /** Everything the row shows or keeps behind Details, where a 401/403 usually is. */
   text: string
   /** The row reports a failure or warning; plain status lines never offer a switch. */
@@ -71,8 +68,12 @@ export function NativeChatAntigravityAuthRecovery({
   if (!problem || !auth?.detection || agentSessionSetupFor(agentName)?.agent !== 'antigravity') {
     return null
   }
-  const reason = antigravityAuthFailureReason({ failureKind, account, text })
+  const reason = antigravityAuthFailureReason({ failureKind, text })
   if (!reason || antigravityAuthFailureOutlived(reason, text, auth.detection.method)) {
+    return null
+  }
+  // A chat with history on agy's own login stays there, so switching method can't fix it.
+  if (auth.ownLogin) {
     return null
   }
   const [option] = antigravityChatAuthAlternatives(auth.detection)

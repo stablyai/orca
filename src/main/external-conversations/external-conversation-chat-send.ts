@@ -11,6 +11,7 @@ import { refusalOf } from './external-conversation-chain'
 import { storedConnectorAsker } from '../../shared/connector-message-asker'
 import { rejectedSendRefusal } from './external-conversation-failure'
 import {
+  carriedFields,
   NOTHING_CARRIED,
   readCarriedMessages,
   type CarriedMessages
@@ -55,7 +56,12 @@ export async function deliverToChat(
     for (let attempt = 1; ; attempt += 1) {
       const carried =
         link.bot && attempt <= CARRY_READS
-          ? await readCarriedMessages(chat, link, delivery.reply?.account)
+          ? await readCarriedMessages(
+              chat,
+              link,
+              delivery.reply?.account,
+              delivery.images?.length ?? 0
+            )
           : NOTHING_CARRIED
       const outcome = await sendConnectorTurn(chat, link, delivery, carried, admit)
       if (
@@ -140,7 +146,7 @@ function sendConnectorTurn(
           ...carried.askers.map((each) => ({ asker: each })),
           ...(delivery.later ?? [])
         ]),
-        ...(carried.cards.length > 0 ? { carriedCards: carried.cards } : {}),
+        ...carriedFields(carried),
         // Its reply outbox rows commit with this admission (design item 125).
         ...(delivery.reply && delivery.deliveryId
           ? {

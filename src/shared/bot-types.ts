@@ -12,6 +12,12 @@ import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bots/bot-avatar-color'
 import { BotStoredOutfitSchema } from './bots/bot-avatar-outfit'
+import {
+  BOT_AGENT_SUCCESSORS,
+  BOT_RETIRED_AGENTS,
+  isBotRetiredAgent,
+  migrateRetiredBotAgent
+} from './bots/bot-retired-agents'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
 export const BOT_HELD_BACK_AGENTS = [] as const
@@ -35,13 +41,17 @@ export const BOT_AGENTS = [
   'goose',
   'kilo',
   'mimo-code',
-  'gemini',
   'droid',
   'qwen-code',
   'cline',
   'devin',
   'codebuddy'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
+
+/** A bot agent as old records and peers name it: a retired agent reads as its successor. */
+export const BotAgentReadSchema = z
+  .enum([...BOT_AGENTS, ...BOT_RETIRED_AGENTS])
+  .transform((agent): BotAgent => (isBotRetiredAgent(agent) ? BOT_AGENT_SUCCESSORS[agent] : agent))
 
 /** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
 const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
@@ -208,6 +218,9 @@ export const BotSchema = z.object({
   /** The accounts it may use while `google` is on; absent is every account, now and later. A malformed
    *  list reads as none, never as every account. */
   googleAccounts: z.array(z.string().min(1).max(320)).max(100).optional().catch([]),
+  /** Its sessions also take the host's MCP server list (and so its sign-ins); absent is off. Only
+   *  bots.tools.setHostMcpServers sets it, never the bot itself. Older hosts drop it. */
+  hostMcpServers: z.boolean().optional().catch(undefined),
   /** Projects (repo ids) whose skills the bot loads when a chat starts; absent is none. */
   skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
   /** Its place in the sidebar's Bots list, set by a drag; a bot without one follows the placed bots. */
@@ -390,7 +403,7 @@ export function normalizePersistedBots(value: unknown): Bot[] {
   const bots: Bot[] = []
   const seen = new Set<string>()
   for (const candidate of value) {
-    const parsed = BotSchema.safeParse(candidate)
+    const parsed = BotSchema.safeParse(migrateRetiredBotAgent(candidate))
     if (parsed.success && !seen.has(parsed.data.id)) {
       seen.add(parsed.data.id)
       bots.push(withSlackMembersTagged(parsed.data))
