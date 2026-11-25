@@ -86,15 +86,20 @@ function readLogTail() {
 /** Returns the running fixture server, starting a detached one if needed. */
 export async function ensureFixtureServer({ onStart } = {}) {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS
-  const codeStamp = fixtureServerCodeStamp()
   let child
   let waited = false
   while (Date.now() < deadline) {
+    // Why per poll: fixture scripts can change while a server starts.
+    const codeStamp = fixtureServerCodeStamp()
     const state = readServerState()
     const health = await readServerHealth(state, Math.max(1, deadline - Date.now()))
     const identified = health && health.pid === state.pid
     if (identified && health.codeStamp === codeStamp) {
       return { url: state.url, started: waited }
+    }
+    // Our child is up with an older stamp, or a client stopped it (exit 0) to replace it.
+    if (child && ((identified && health.pid === child.pid) || child.exitCode === 0)) {
+      child = undefined
     }
     if (child && (child.exitCode !== null || child.signalCode !== null)) {
       throw new Error(`Fixture server exited during startup:\n${readLogTail()}`)
