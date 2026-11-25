@@ -24,7 +24,7 @@ import {
   changeBotToolCredentials,
   commitBotToolOAuth,
   newBotToolCredentialId,
-  botToolCredentialsFingerprint,
+  botToolCredentialFingerprints,
   botToolCredentialsReader,
   type BotToolCredential,
   type BotToolOAuthEntry
@@ -46,6 +46,8 @@ export type BotToolsSnapshot = {
   file: z.infer<typeof BotToolsFile>
   servers: BotToolServer[]
   version: string
+  /** Each credential the servers name, by id, as `version` counts it (`botToolCredentialFingerprints`). */
+  credentials: ReadonlyMap<string, unknown>
 }
 
 async function readRawSnapshot(folder: string): Promise<BotToolsSnapshot> {
@@ -77,6 +79,7 @@ async function readRawSnapshot(folder: string): Promise<BotToolsSnapshot> {
     throw new Error('The bot tools file is invalid. Repair it before editing tools.')
   }
   const servers = parsed.data.servers.map((server) => BotToolServerSchema.parse(server))
+  const credentials = botToolCredentialFingerprints(folder, credentialsOf(servers))
   return {
     text,
     file: parsed.data,
@@ -84,8 +87,9 @@ async function readRawSnapshot(folder: string): Promise<BotToolsSnapshot> {
     // A header-only edit keeps the file and its credential id, so the saved values count too.
     version: createHash('sha256')
       .update(text ?? '')
-      .update(botToolCredentialsFingerprint(folder, credentialsOf(servers)))
-      .digest('hex')
+      .update(JSON.stringify([...credentials]))
+      .digest('hex'),
+    credentials
   }
 }
 
