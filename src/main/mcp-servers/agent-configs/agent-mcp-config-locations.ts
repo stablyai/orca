@@ -188,10 +188,11 @@ export function agentMcpServerBlocks(
       if (location.scope === 'project') {
         return [user]
       }
-      const projects = Object.keys(record(parsed.projects) ?? {})
+      const projects = record(parsed.projects) ?? {}
+      const blocks = Object.keys(projects)
         .filter((projectPath) => !skipProject(projectPath))
         .map((projectPath) => {
-          const project = record(record(parsed.projects)?.[projectPath])
+          const project = record(projects[projectPath])
           return {
             path: ['projects', projectPath, 'mcpServers'],
             dialect: 'mcp-json' as const,
@@ -199,7 +200,7 @@ export function agentMcpServerBlocks(
             disabledNames: nameSet(project?.disabledMcpServers)
           }
         })
-      return [user, ...projects]
+      return [user, ...blocks]
     }
     case 'codex':
       return [{ path: ['mcp_servers'], dialect: 'codex-toml' }]

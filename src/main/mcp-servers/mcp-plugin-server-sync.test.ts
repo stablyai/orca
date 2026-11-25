@@ -46,7 +46,9 @@ it('keeps the user’s switches across plugin updates, writes nothing unchanged,
     folder
   )
 
-  expect(await syncPluginMcpServers(only(fromPlugin(['-y', 'acme@1'])), {}, folder)).toBe(true)
+  expect((await syncPluginMcpServers(only(fromPlugin(['-y', 'acme@1'])), {}, folder)).wrote).toBe(
+    true
+  )
   const added = (await listMcpServers(folder)).find((server) => server.plugin)
   expect(added).toMatchObject({
     name: 'acme-2',
@@ -60,11 +62,15 @@ it('keeps the user’s switches across plugin updates, writes nothing unchanged,
 
   const text = readFileSync(botToolsPath(folder), 'utf8')
   const epoch = botToolsEpoch(folder)
-  expect(await syncPluginMcpServers(only(fromPlugin(['-y', 'acme@1'])), {}, folder)).toBe(false)
+  expect((await syncPluginMcpServers(only(fromPlugin(['-y', 'acme@1'])), {}, folder)).wrote).toBe(
+    false
+  )
   expect(readFileSync(botToolsPath(folder), 'utf8')).toBe(text)
   expect(botToolsEpoch(folder)).toBe(epoch)
 
-  expect(await syncPluginMcpServers(only(fromPlugin(['-y', 'acme@2'])), {}, folder)).toBe(true)
+  expect((await syncPluginMcpServers(only(fromPlugin(['-y', 'acme@2'])), {}, folder)).wrote).toBe(
+    true
+  )
   expect((await listMcpServers(folder)).find((server) => server.id === id)).toMatchObject({
     name: 'acme-2',
     detail: 'npx -y acme@2',
@@ -82,8 +88,9 @@ it('keeps the user’s switches across plugin updates, writes nothing unchanged,
 
   // An update waiting for review holds the entry as approved; losing the plugin removes it.
   expect(
-    await syncPluginMcpServers({ declared: [], held: new Set(['acme.toolkit']) }, {}, folder)
+    (await syncPluginMcpServers({ declared: [], held: new Set(['acme.toolkit']) }, {}, folder))
+      .wrote
   ).toBe(false)
-  expect(await syncPluginMcpServers(only(), {}, folder)).toBe(true)
+  expect((await syncPluginMcpServers(only(), {}, folder)).wrote).toBe(true)
   expect(await listMcpServers(folder)).toEqual([yours])
 })
