@@ -129,6 +129,9 @@ describe('agent MCP config discovery and move', () => {
       )
     profile('same', '')
     profile('edited', ', "headers": { "Authorization": "Bearer mine" }')
+    // Orca never launches Gemini CLI with its list, so Gemini keeps its copy.
+    const gemini = `{ "mcpServers": { "github": { "httpUrl": "${GITHUB}" } } }`
+    write('.gemini/settings.json', gemini)
     const host: AgentMcpImportHost = {
       context: context(),
       userDataPath: join(home, 'orca-data'),
@@ -137,14 +140,16 @@ describe('agent MCP config discovery and move', () => {
           '/work/orca': { key: 'repo-1', name: 'orca' },
           '/work/docs': { key: 'repo-2', name: 'docs' }
         })[path] ?? null,
-      isOrcaProject: (path) => path.startsWith('/orca-data/')
+      isOrcaProject: (path) => path.startsWith('/orca-data/'),
+      listReaches: async () => (agent) => agent !== 'gemini'
     }
     const rows = await listAgentMcpServers(host)
     const row = (name: string) => rows.find((found) => found.name === name)!
     expect([row('db').projectNames, row('db').movable]).toEqual([['docs'], true])
     expect([row('lost').projectNames, row('lost').movable]).toEqual([['elsewhere'], false])
     expect(row('github')).toMatchObject({
-      agents: ['claude', 'codex'],
+      agents: ['claude', 'codex', 'gemini'],
+      removesFrom: ['claude', 'codex'],
       projectNames: [],
       movable: true
     })
@@ -186,6 +191,7 @@ describe('agent MCP config discovery and move', () => {
       `# keep me\nmodel = "o3"\n\n# about linear\n[mcp_servers.linear]\nurl = "https://mcp.linear.app/mcp"\n`
     )
     expect(read('.codex/config.toml.bak')).toBe(CODEX_TOML)
+    expect(read('.gemini/settings.json')).toBe(gemini)
     expect(read('orca-data/claude-profiles/same/home/.claude.json')).not.toContain('github')
     expect(read('orca-data/claude-profiles/edited/home/.claude.json')).toContain('github')
   })

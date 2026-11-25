@@ -147,6 +147,11 @@ export async function readMcpHostList(
   }
 }
 
+/** Which agents' own MCP file the user let Orca keep its servers in, without reading the servers. */
+export async function readMcpAgentFiles(folder = mcpHostListFolder()): Promise<McpAgentFiles> {
+  return agentFilesOf((await readBotToolsSnapshot(folder)).file)
+}
+
 /** The user's consent, or its withdrawal, for Orca to keep its servers in `agent`'s own MCP file. */
 export async function setMcpAgentFileAllowed(
   agent: McpFileAgent,

@@ -1,7 +1,8 @@
 // mcpServers.discover/move/copy: the "In your agents" servers on this host, and bringing one into
 // the host list. Only reached through mcpServers.*, which refuses while the switch is off.
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
-import type { McpServer } from '../../../../shared/mcp-servers/mcp-servers'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { MCP_FILE_AGENTS, type McpServer } from '../../../../shared/mcp-servers/mcp-servers'
 import {
   isRepoOnCatalogHost,
   parseExecutionHostId
@@ -14,11 +15,15 @@ import {
   moveAgentMcpServer,
   workspaceForPathIn,
   type AddImportedMcpServer,
-  type AgentMcpImportHost
+  type AgentMcpImportHost,
+  type AgentMcpReach
 } from '../../../mcp-servers/agent-configs/agent-mcp-import'
 import { AgentMcpConfigEditError } from '../../../mcp-servers/agent-configs/agent-mcp-config-removal'
+import { hasMcpAgentProblem } from '../../../mcp-servers/mcp-agent-problems'
+import { terminalMcpAdapterFor } from '../../../mcp-servers/terminal/terminal-mcp-adapters'
 import {
   addMcpServer,
+  readMcpAgentFiles,
   removeMcpServer,
   setMcpServerAgentEnabled,
   setMcpServerWorkspaces
@@ -32,23 +37,43 @@ export { copyAgentMcpServer, listAgentMcpServers, moveAgentMcpServer }
 const isLocal = (executionHostId: string | null | undefined): boolean =>
   executionHostId == null || parseExecutionHostId(executionHostId)?.kind === 'local'
 
+/**
+ * Which agents' new sessions on this host get its list: Grok, Cursor and Droid once the user let
+ * Orca into their own file, the others when their terminal takes the servers and no launch learned
+ * otherwise. Orca launches no other agent (Gemini CLI) with the list.
+ */
+async function hostListReaches(): Promise<AgentMcpReach> {
+  const agentFiles = await readMcpAgentFiles()
+  return (agent) => {
+    const fileAgent = MCP_FILE_AGENTS.find((candidate) => candidate === agent)
+    if (fileAgent) {
+      return agentFiles[fileAgent]
+    }
+    return isTuiAgent(agent) && terminalMcpAdapterFor(agent) !== null && !hasMcpAgentProblem(agent)
+  }
+}
+
 /** This host's repos, their worktrees and folder workspaces: what a Claude project path maps to. */
 export function agentMcpImportHost(runtime: OrcaRuntimeService): AgentMcpImportHost {
-  return localAgentMcpImportHost(getAppEnvironment().getPath('userData'), async () => {
-    const store = runtime.requireStore()
-    const repos = store.getRepos().filter(isRepoOnCatalogHost)
-    const local = new Set(repos.map((repo) => repo.id))
-    const { worktrees } = await runtime.listManagedWorktrees(undefined, Number.MAX_SAFE_INTEGER)
-    return workspaceForPathIn({
-      repos,
-      worktrees: worktrees.filter(
-        (worktree) => local.has(worktree.repoId) && isLocal(worktree.hostId)
-      ),
-      folderWorkspaces: (store.getFolderWorkspaces?.() ?? []).filter(
-        (folder) => !folder.connectionId && isLocal(folder.executionHostId)
-      )
-    })
-  })
+  return localAgentMcpImportHost(
+    getAppEnvironment().getPath('userData'),
+    async () => {
+      const store = runtime.requireStore()
+      const repos = store.getRepos().filter(isRepoOnCatalogHost)
+      const local = new Set(repos.map((repo) => repo.id))
+      const { worktrees } = await runtime.listManagedWorktrees(undefined, Number.MAX_SAFE_INTEGER)
+      return workspaceForPathIn({
+        repos,
+        worktrees: worktrees.filter(
+          (worktree) => local.has(worktree.repoId) && isLocal(worktree.hostId)
+        ),
+        folderWorkspaces: (store.getFolderWorkspaces?.() ?? []).filter(
+          (folder) => !folder.connectionId && isLocal(folder.executionHostId)
+        )
+      })
+    },
+    hostListReaches
+  )
 }
 
 function editFailure(error: AgentMcpConfigEditError): string {

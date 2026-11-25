@@ -1,6 +1,7 @@
 // "In your agents": list the servers agents keep in their own configs, and Move or Copy one into
 // Orca's host list. Move adds first, then takes the entries out of the agents' files, so a failed
-// removal never loses the server.
+// removal never loses the server. It takes them only from agents whose sessions get Orca's list on
+// this host: any other agent would lose a working server, so it keeps its copy.
 import { homedir } from 'node:os'
 import { basename } from 'node:path'
 import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
@@ -64,17 +65,23 @@ export type AgentMcpImportHost = {
   workspaceFor: () => Promise<WorkspaceForPath>
   /** Claude projects Orca made itself (bots' sign-in folders), never the user's. */
   isOrcaProject: (projectPath: string) => boolean
+  /** Whether each agent's new sessions on this host get Orca's list, so Move may take its copy. */
+  listReaches: () => Promise<AgentMcpReach>
 }
+
+export type AgentMcpReach = (agent: string) => boolean
 
 export function localAgentMcpImportHost(
   userDataPath: string,
-  workspaceFor: () => Promise<WorkspaceForPath>
+  workspaceFor: () => Promise<WorkspaceForPath>,
+  listReaches: AgentMcpImportHost['listReaches']
 ): AgentMcpImportHost {
   return {
     context: { homeDir: homedir(), env: process.env, platform: process.platform },
     userDataPath,
     workspaceFor,
-    isOrcaProject: isOrcaDataProject
+    isOrcaProject: isOrcaDataProject,
+    listReaches
   }
 }
 
@@ -87,6 +94,8 @@ function isOrcaDataProject(projectPath: string): boolean {
 
 type ImportRow = {
   found: DiscoveredAgentMcpServer
+  /** The copies Move takes out: those of agents Orca's list reaches. */
+  removing: AgentMcpConfigSource[]
   row: AgentMcpServerRow
   scope: ImportedMcpServerScope
 }
@@ -105,12 +114,18 @@ function limitedTo(found: DiscoveredAgentMcpServer): string[] | null {
 
 type MappedPath = { path: string; workspace: ReturnType<WorkspaceForPath> }
 
-function importRow(found: DiscoveredAgentMcpServer, mapped: MappedPath[] | null): ImportRow {
+function importRow(
+  found: DiscoveredAgentMcpServer,
+  mapped: MappedPath[] | null,
+  listReaches: AgentMcpReach
+): ImportRow {
   const paths = mapped ?? []
   const keys = [...new Set(paths.flatMap(({ workspace }) => (workspace ? [workspace.key] : [])))]
   const agents = [...new Set(found.sources.map((source) => source.agent))]
+  const removing = found.sources.filter((source) => listReaches(source.agent))
   return {
     found,
+    removing,
     scope: {
       workspaces: mapped ? { later: false, on: keys, off: [] } : null,
       agentsOff: agents.filter((agent) =>
@@ -123,6 +138,7 @@ function importRow(found: DiscoveredAgentMcpServer, mapped: MappedPath[] | null)
       detail: botToolDetail(found.server),
       transport: 'url' in found.server ? 'http' : 'command',
       agents,
+      removesFrom: [...new Set(removing.map((source) => source.agent))],
       files: [...new Set(found.sources.map((source) => source.path))],
       projectNames: [
         ...new Set(paths.map(({ path, workspace }) => workspace?.name ?? basename(path)))
@@ -140,10 +156,12 @@ async function importRows(
 ): Promise<ImportRow[]> {
   const limits = found.map(limitedTo)
   const workspaceFor = limits.some((paths) => paths !== null) ? await host.workspaceFor() : null
+  const reaches = await host.listReaches()
   return found.map((server, index) =>
     importRow(
       server,
-      limits[index]?.map((path) => ({ path, workspace: workspaceFor?.(path) ?? null })) ?? null
+      limits[index]?.map((path) => ({ path, workspace: workspaceFor?.(path) ?? null })) ?? null,
+      reaches
     )
   )
 }
@@ -202,7 +220,8 @@ async function claudeProfileCopies(
 
 /**
  * Move to Orca: adds it (limited to the workspaces a project-scoped copy was for), then removes it
- * from every agent file listed and from Orca's Claude account profiles, keeping a backup of each.
+ * from the files of the agents Orca's list reaches and from Orca's Claude account profiles, keeping
+ * a backup of each. With no such agent it is a Copy.
  */
 export async function moveAgentMcpServer<T>(
   host: AgentMcpImportHost,
@@ -210,14 +229,14 @@ export async function moveAgentMcpServer<T>(
   add: AddImportedMcpServer<T>
 ): Promise<T> {
   return oneImportAtATime(async () => {
-    const { found, scope } = await movableRow(host, key)
+    const { found, removing, scope } = await movableRow(host, key)
     const added = await add(found.server, scope)
     const configName = found.sources[0]!.keyPath.at(-1)!
     const mergeKey = agentMcpServerMergeKey(configName, found.server)
-    await removeAgentMcpServerEntries(found.sources, mergeKey)
+    await removeAgentMcpServerEntries(removing, mergeKey)
     try {
       // A profile entry the user changed in that account is theirs to keep.
-      await removeAgentMcpServerEntries(await claudeProfileCopies(host, found.sources), mergeKey, {
+      await removeAgentMcpServerEntries(await claudeProfileCopies(host, removing), mergeKey, {
         differing: 'skip'
       })
     } catch (error) {
