@@ -81,6 +81,40 @@ async function applyBuildMode(
   }
 }
 
+/** Picks run without waiting on each other; each writes after the one before it, so the last
+ *  pick is the mode Claude ends in, and a pick a newer one already replaced writes nothing. */
+function applyInOrder(
+  session: ClaudeSession,
+  mode: PermissionMode,
+  timeoutMs: number | undefined
+): Promise<void> {
+  const turn = (session.keptModeTurn ?? 0) + 1
+  session.keptModeTurn = turn
+  const run = (session.keptModeWrites ?? Promise.resolve())
+    .catch(() => {})
+    .then(() =>
+      session.keptModeTurn === turn ? applyBuildMode(session, mode, timeoutMs) : undefined
+    )
+  session.keptModeWrites = run
+  return run
+}
+
+/** Full access picked in Plan wasn't asked of Claude (asking leaves Plan), so leaving Plan asks it
+ *  first; otherwise an Ask launch's first init reads as a refusal and the ladder never tries it. */
+export async function askKeptBypassLeavingPlan(
+  session: ClaudeSession,
+  timeoutMs: number | undefined
+): Promise<void> {
+  if (
+    keptClaudeAgentRelay(session.connection) &&
+    session.launchIntent?.permissionMode === 'bypassPermissions' &&
+    session.bypassAccepted !== true &&
+    session.bypassDisabled !== true
+  ) {
+    await askKeptBypass(session, timeoutMs).catch(() => {})
+  }
+}
+
 /** At reattach the agent runs what it had when the last app let go, which a pick made since may
  *  have changed. Like the open app, the chat's mode and choices go with its next message: by then
  *  the replay has shown whether the agent is in Plan. The launch-seeded choices are forgotten, so
@@ -105,7 +139,7 @@ export async function applyKeptClaudeModeOwed(
   const owed = session.keptModeOwed
   session.keptModeOwed = undefined
   if (isBuildMode(owed) && !claudeInPlan(session) && session.savedPlan !== true) {
-    await applyBuildMode(session, owed, timeoutMs)
+    await applyInOrder(session, owed, timeoutMs)
   }
 }
 
@@ -135,6 +169,6 @@ export function applyLive(
     if (mode === 'own' || bypassRefused(session, mode)) {
       return
     }
-    await applyBuildMode(session, claudePermissionModeFor(mode), timeoutMs())
+    await applyInOrder(session, claudePermissionModeFor(mode), timeoutMs())
   }
 }

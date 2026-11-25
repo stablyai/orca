@@ -26,7 +26,10 @@ import {
 } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { claudeTakesFlagSettings, setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import { applyKeptClaudeModeOwed } from '../../relay/claude-kept-permission'
+import {
+  applyKeptClaudeModeOwed,
+  askKeptBypassLeavingPlan
+} from '../../relay/claude-kept-permission'
 import {
   isAbortSignalReason,
   throwIfSignalAborted,
@@ -96,6 +99,9 @@ export async function applyClaudeMessageOptions(
     } else {
       await waitForClaudeStartupSettings(session, signal)
       const leavingPlan = claudeInPlan(session)
+      if (leavingPlan) {
+        await waitForPromiseWithSignal(askKeptBypassLeavingPlan(session, timeoutMs), signal)
+      }
       const refused = claudeBypassRefused(session)
       // A refused Full access chat already running its fallback needs no write.
       const mode =
