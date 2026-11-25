@@ -221,7 +221,7 @@ export function createClaudeJournalTranslator(
     } else if (event.type === 'message') {
       backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
       messageContext.usageLimits.observe(event.message, turn.command?.rejections)
-      const kind = claudeProviderFrameKind(event.message)
+      messageContext.assistantFailures.authRetry(event.message, turn.command ? null : turn.id)
       if (
         !journalClaudeMessage(
           messageContext,
@@ -233,7 +233,7 @@ export function createClaudeJournalTranslator(
         )
       ) {
         providerFallback.append(
-          kind,
+          claudeProviderFrameKind(event.message),
           event.message,
           undefined,
           undefined,
