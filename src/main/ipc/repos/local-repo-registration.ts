@@ -1,20 +1,19 @@
-import { randomUUID } from 'node:crypto'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
+import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
+import { getRepoName } from '../../git/repositories/repository-name'
 import {
-  inspectGitRepoForRegistrationAsync,
-  getGitRepoRootAsync,
-  getRepoName
-} from '../../git/repo'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { findProjectAtSameRealPath } from '../../project-realpath-identity'
-import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
-import { describeWslUncAccessDenied } from '../../wsl/wsl-unc-access-denied'
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
+import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
+import { matchLinkedWorktreeMainCheckout } from '../../workspaces/catalog/linked-worktree-main-checkout'
+import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
+import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
+import { createLocalProjectRecord } from '../../workspaces/catalog/local-project-record'
 
 export async function addLocalRepoFromPath(
   store: Store,
@@ -64,30 +63,15 @@ export async function addLocalRepoFromPath(
     return { repo: existingAtRealPath, alreadyExisted: true }
   }
 
-  // Linked worktrees report their own toplevel; resolve the main checkout to avoid duplicate host setups.
-  let mainRepoKey: string | null = null
-  if (repoKind === 'git') {
-    const mainRepoRoot = gitInfo?.mainRepoPath
-      ? await getGitRepoRootAsync(gitInfo.mainRepoPath)
-      : null
-    if (mainRepoRoot) {
-      mainRepoKey = normalizeRuntimePathForComparison(mainRepoRoot)
-      // Only Git checkouts share project identity with their worktrees; folder records do not deduplicate them.
-      const trackedMainRepo = store
-        .getRepos()
-        .find(
-          (repo) =>
-            !repo.connectionId &&
-            !isFolderRepo(repo) &&
-            normalizeRuntimePathForComparison(repo.path) === mainRepoKey
-        )
-      if (trackedMainRepo) {
-        return { repo: trackedMainRepo, alreadyExisted: true }
-      }
-    }
+  const isMainCheckout = matchLinkedWorktreeMainCheckout(gitInfo)
+  const trackedMainRepo = store
+    .getRepos()
+    .find((repo) => !repo.connectionId && isMainCheckout(repo))
+  if (trackedMainRepo) {
+    return { repo: trackedMainRepo, alreadyExisted: true }
   }
 
-  const detected = await detectRepoIconAndUpstream({
+  const detected = await detectRepoLocalMetadata({
     repoPath: resolvedPath,
     kind: repoKind,
     executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -98,31 +82,17 @@ export async function addLocalRepoFromPath(
       return false
     }
     const repoPathKey = normalizeRuntimePathForComparison(repo.path)
-    return (
-      repoPathKey === pathKey ||
-      repoPathKey === resolvedPathKey ||
-      (mainRepoKey !== null && !isFolderRepo(repo) && repoPathKey === mainRepoKey)
-    )
+    return repoPathKey === pathKey || repoPathKey === resolvedPathKey || isMainCheckout(repo)
   })
   if (raceWinner) {
     return { repo: raceWinner, alreadyExisted: true }
   }
-  const repo: Repo = {
-    id: randomUUID(),
+  const repo = createLocalProjectRecord({
     path: resolvedPath,
     displayName: displayName?.trim() || getRepoName(resolvedPath),
-    badgeColor: DEFAULT_REPO_BADGE_COLOR,
-    ...detected,
-    addedAt: Date.now(),
     kind: repoKind,
-    ...(repoKind === 'git'
-      ? {
-          externalWorktreeVisibilityLegacy: false,
-          // Explicit imports are ready host setups; legacy-repo is reserved for migrated records.
-          projectHostSetupMethod: 'imported-existing-folder' as const
-        }
-      : {})
-  }
+    detected
+  })
 
   store.addRepo(repo)
   await prepareLocalWorktreeRootForRepo(store, repo)

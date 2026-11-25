@@ -1,21 +1,29 @@
+import { paneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
 import {
-  agentProviderSessionsEqual,
   isResumableTuiAgent,
   normalizeAgentProviderSession,
-  type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
-import type { AgentProcessVerdict } from '../../../../shared/agent-process-presence'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentProcessVerdict } from '../../../../shared/agent-status/process/agent-process-presence'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { isWorkspaceSleepRecord } from '../../../../shared/workspace/lifecycle/workspace-sleep'
+import { launchStatement, type PtyLaunchFacts } from '../launch/launch-evidence'
+import { agentPaneSleepStatus } from '../../../../shared/agent-status/lifecycle/agent-pane-sleep-status'
+import { agentVerdictFields } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 
 /** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
 export type WorktreeSleepResumeCapture = Map<
   string,
-  { retiredPaneKeys: string[]; records: SleepingAgentSessionRecord[] }
+  {
+    retiredPaneKeys: string[]
+    records: SleepingAgentSessionRecord[]
+    /** Main can't tell this PTY's launch, so a record keeps an earlier capture's same-session note. */
+    launchUnknown?: boolean
+  }
 >
 
 /** Captures before a host-driven sleep stops its PTYs and persists for the ones proven stopped. */
@@ -32,13 +40,16 @@ export type WorktreeSleepResumeRecorder = {
 export async function captureWorktreeSleepResumeRecords(args: {
   worktreeId: string
   paneKeysByPtyId: ReadonlyMap<string, Iterable<string>>
-  /** The agent each PTY was launched as, with its recipe; resume must reuse a custom binary/args. */
-  launchByPtyId: ReadonlyMap<
-    string,
-    { agent: string | null; config: SleepingAgentLaunchConfig | null }
-  >
+  /** Each PTY's launch facts; only a launch main still holds supplies its recipe. */
+  launchByPtyId: ReadonlyMap<string, PtyLaunchFacts | undefined>
   /** Read after each presence probe, so a conversation started during it is the one captured. */
-  readRows: () => readonly AgentStatusIpcPayload[]
+  readRowsForPane: (paneKey: string) => readonly AgentStatusIpcPayload[]
+  readSavedRecord?: (paneKey: string) => Promise<SleepingAgentSessionRecord | undefined>
+  /** `savedRecord` null: read and absent. */
+  readIdentity?: (
+    paneKey: string,
+    savedRecord?: SleepingAgentSessionRecord | null
+  ) => ReturnType<typeof paneAgentIdentity>
   checkAgentPresence:
     | ((paneKey: string, exitedSince?: number) => Promise<AgentProcessVerdict | null>)
     | null
@@ -53,23 +64,43 @@ export async function captureWorktreeSleepResumeRecords(args: {
     const records: SleepingAgentSessionRecord[] = []
     const retiredPaneKeys: string[] = []
     const launch = args.launchByPtyId.get(ptyId)
+    let launchUnknown = false
     for (const { paneKey, tabId } of panes) {
-      // Why: the one holder rule — an agent the hook store proved exited left a plain shell.
-      if ((await args.checkAgentPresence?.(paneKey, 0).catch(() => null)) === 'exited') {
+      const savedBeforeProbe = await args.readSavedRecord?.(paneKey)
+      const presence = await args
+        .checkAgentPresence?.(paneKey, savedBeforeProbe?.updatedAt ?? 0)
+        .catch(() => null)
+      const savedRecord = await args.readSavedRecord?.(paneKey)
+      const identity = args.readIdentity
+        ? args.readIdentity(paneKey, savedRecord ?? (args.readSavedRecord ? null : undefined))
+        : paneAgentIdentity({
+            paneKey,
+            row: args.readRowsForPane(paneKey).find((candidate) => candidate.paneKey === paneKey),
+            savedRecord,
+            worktreeId: args.worktreeId,
+            ended: presence === 'exited'
+          })
+      if (
+        identity?.ended ||
+        identity?.executionHost === 'shared' ||
+        (presence === 'exited' && !identity?.status.paneSleep)
+      ) {
         retiredPaneKeys.push(paneKey)
         continue
       }
-      const row = args.readRows().find((candidate) => candidate.paneKey === paneKey)
+      const row = identity?.status
       const agent = row?.agentType
       const providerSession = normalizeAgentProviderSession(row?.providerSession)
       if (!row) {
         continue
       }
       if (!isResumableTuiAgent(agent) || !providerSession) {
-        // Why: the hook store names another agent here now, so an older capture no longer applies.
         retiredPaneKeys.push(paneKey)
         continue
       }
+      const statement = launchStatement(launch, agent)
+      launchUnknown ||= statement === undefined
+      const launchConfig = statement ?? undefined
       records.push({
         paneKey,
         tabId,
@@ -79,18 +110,40 @@ export async function captureWorktreeSleepResumeRecords(args: {
         prompt: row.prompt,
         // Why done: a pane-owned capture whose `--resume` waits for the tab open (#11598).
         state: 'done',
+        ...agentVerdictFields(agentPaneSleepStatus(row, args.capturedAt)),
         capturedAt: args.capturedAt,
         updatedAt: row.receivedAt,
         origin: 'worktree-sleep',
         restoreOnTabOpenOnly: true,
         // Why: the SSH host boundary keeps the id off another machine; a WSL relay tag is local transport.
         connectionId: isLocalHookConnectionId(row.connectionId) ? null : row.connectionId,
-        ...(launch?.config && launch.agent === agent ? { launchConfig: launch.config } : {})
+        ...(launchConfig ? { launchConfig } : {})
       })
     }
-    capture.set(ptyId, { retiredPaneKeys, records })
+    capture.set(ptyId, {
+      retiredPaneKeys,
+      records,
+      ...(launchUnknown ? { launchUnknown } : {})
+    })
   }
   return capture
+}
+
+/** Whether the record's pane still exists, bound to the stopped terminal or to none. */
+function paneStillHeldBy(
+  session: WorkspaceSessionState,
+  record: SleepingAgentSessionRecord,
+  ptyId: string
+): boolean {
+  const tabId = record.tabId ?? parsePaneKey(record.paneKey)?.tabId
+  const row = tabId && session.tabsByWorktree?.[record.worktreeId]?.find((tab) => tab.id === tabId)
+  if (!row) {
+    return false
+  }
+  const layout = session.terminalLayoutsByTabId?.[row.id]
+  const leafId = parsePaneKey(record.paneKey)?.leafId
+  const bound = layout ? (leafId ? layout.ptyIdsByLeafId?.[leafId] : undefined) : row.ptyId
+  return !bound || bound === ptyId
 }
 
 /** The session with the stopped panes' records replaced, or null when nothing changes. */
@@ -111,9 +164,14 @@ export function applyWorktreeSleepResumeRecords(
       }
     }
     for (const record of entry?.records ?? []) {
+      // A tab close or another terminal took the pane while the stop ran: its saved state is theirs.
+      if (!paneStillHeldBy(session, record, ptyId)) {
+        continue
+      }
+      // Only a terminal main can't tell about keeps an earlier capture's recipe for the same session.
       const previous = next[record.paneKey]
-      // Reattach can lose launch recipes; retain an earlier capture's config for the same session.
       const keptLaunchConfig =
+        entry?.launchUnknown &&
         !record.launchConfig &&
         previous?.launchConfig &&
         previous.agent === record.agent &&

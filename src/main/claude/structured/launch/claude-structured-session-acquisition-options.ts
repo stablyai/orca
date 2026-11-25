@@ -31,9 +31,6 @@ export function claudeStructuredSessionPublicationOptions(input: {
   return {
     fastMode: input.fastMode,
     fastModePerSessionOptIn: input.fastModePerSessionOptIn,
-    ...(input.fastModeFacts.state ? { fastModeState: input.fastModeFacts.state } : {}),
-    ...(input.fastModeFacts.disabledReason
-      ? { fastModeDisabledReason: input.fastModeFacts.disabledReason }
-      : {})
+    ...(input.fastModeFacts.state ? { fastModeState: input.fastModeFacts.state } : {})
   }
 }

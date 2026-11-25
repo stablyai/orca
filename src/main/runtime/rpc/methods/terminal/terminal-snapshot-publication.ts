@@ -2,12 +2,12 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   MOBILE_SNAPSHOT_BYTE_BUDGET,
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
-} from '../../../scrollback-limits'
-import { terminalStreamByteLengthExceeds } from '../../terminal-stream-byte-length'
+} from '../../../terminal/output/mobile-scrollback-limits'
+import { terminalStreamByteLengthExceeds } from '../../terminal/terminal-stream-byte-length'
 import {
   iterateTerminalStreamTextPayloads,
   requestedSnapshotScrollbackCandidates

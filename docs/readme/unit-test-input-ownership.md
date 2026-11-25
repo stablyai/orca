@@ -2,7 +2,7 @@
 
 Unit selection remains advisory. Every PR still executes the full unit inventory.
 
-`config/scripts/ci-unit-input-ownership.json` records reviewed indirect repository inputs. A record covers the entire local source closure reachable from its `file`, including type imports. It does not remove ordinary import edges. Other callers of an indirect reader retain their own conservative fallback.
+`config/scripts/ci/unit-selection/dependency-graph/ci-unit-input-ownership.json` records reviewed indirect repository inputs. A record covers the entire local source closure reachable from its `file`, including type imports. It does not remove ordinary import edges. Other callers of an indirect reader retain their own conservative fallback.
 
 - `inputs`: exact repository paths or directory prefixes ending in `/`. Directory ownership includes new files. Unknown, deleted, renamed and global inputs still select the full suite.
 - `emptyEnv`: optional external input overrides that must be absent or empty for the declaration to apply.

@@ -22,6 +22,12 @@ import {
   PLUGIN_EVENT_SUBSCRIPTION_LIMIT,
   pluginEventContributionSchema
 } from './plugin-event-contribution'
+import { PLUGIN_HOOK_LIMIT, pluginHookContributionSchema } from './plugin-hook-contribution'
+import {
+  PLUGIN_FONT_LIMIT,
+  PLUGIN_FONTS_SINCE,
+  pluginFontContributionSchema
+} from './plugin-font-contribution'
 import type { PluginExecutionProfile } from './plugin-execution-profile'
 import {
   PLUGIN_CUSTOM_EDITOR_LIMIT,
@@ -34,10 +40,16 @@ import {
 import { PLUGIN_PANEL_LIMIT, pluginPanelContributionSchema } from './plugin-panel-contribution'
 import {
   pluginFieldDoc,
+  PLUGIN_HOOKS_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_PANEL_BRIDGE_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
+import {
+  PLUGIN_STATUS_BAR_ITEM_LIMIT,
+  PLUGIN_STATUS_BAR_SINCE,
+  pluginStatusBarItemContributionSchema
+} from './plugin-status-bar-item-contribution'
 import {
   PLUGIN_SETTING_LIMIT,
   pluginSettingContributionSchema
@@ -48,38 +60,39 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'panels',
   'commands',
   'events',
+  'hooks',
   'languagePacks',
   'keybindings',
   'vmRecipes',
   'themes',
   'terminalThemes',
   'iconThemes',
+  'fonts',
   'syntaxes',
   'customEditors',
   'newFiles',
-  'settings'
+  'settings',
+  'statusBarItems'
 ] as const
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
 
 /** `contributes` keys held for planned points, so each can ship later as an additive minor
  *  instead of a new manifest format. Each must stay empty until its format is defined.
- *  `skills`, `mcpServers` and `hooks` keep the meaning agent-plugin formats such as Claude Code's
- *  give them; `agents` is left unclaimed because those formats use it for subagent files. */
+ *  `skills` and `mcpServers` keep the meaning agent-plugin formats such as Claude Code's give them;
+ *  `agents` is left unclaimed because those formats use it for subagent files. */
 export const PLUGIN_RESERVED_CONTRIBUTION_POINTS = {
   agentHarnesses: 'coding-agent harness definitions',
   skills: 'agent skills',
   mcpServers: 'MCP server definitions',
-  hooks: 'agent hooks',
   taskSources: 'task sources',
   connections: 'account connections',
-  statusBarItems: 'status bar items',
   sidebarCards: 'sidebar cards'
 } as const
 
 export type PluginReservedContributionPoint = keyof typeof PLUGIN_RESERVED_CONTRIBUTION_POINTS
 
-/** The intended shape of each reserved point, in the order the references list them. */
+/** The intended shape of each reserved point. */
 export const PLUGIN_PLANNED_CONTRIBUTION_POINTS: Readonly<
   Record<PluginReservedContributionPoint, string>
 > = {
@@ -89,13 +102,9 @@ export const PLUGIN_PLANNED_CONTRIBUTION_POINTS: Readonly<
     'Account providers with a host-run sign-in, so a plugin never handles credentials itself.',
   agentHarnesses:
     'New coding-agent harnesses described as data: how to launch them and read their status.',
-  statusBarItems:
-    'Declarative status bar widgets (label, icon, tooltip) whose values a worker updates.',
   sidebarCards: 'Declarative left-sidebar cards with fixed layouts whose values a worker updates.',
   mcpServers: 'MCP server definitions that Orca offers to the agents it launches.',
-  skills: 'Agent skills shipped as files that Orca installs for the agents it launches.',
-  hooks:
-    'Agent lifecycle hooks, such as before and after a tool call, for the agents Orca launches.'
+  skills: 'Agent skills shipped as files that Orca installs for the agents it launches.'
 }
 
 function reservedList(purpose: string) {
@@ -148,6 +157,12 @@ export const pluginContributesFields = {
     'Events delivered to the plugin worker.',
     V1
   ),
+  hooks: contributionList(
+    pluginHookContributionSchema,
+    PLUGIN_HOOK_LIMIT,
+    'Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one.',
+    PLUGIN_HOOKS_SINCE
+  ),
   languagePacks: contributionList(
     pluginLanguagePackContributionSchema,
     PLUGIN_LANGUAGE_PACK_LIMIT,
@@ -184,6 +199,12 @@ export const pluginContributesFields = {
     'File icon themes.',
     NEXT
   ),
+  fonts: contributionList(
+    pluginFontContributionSchema,
+    PLUGIN_FONT_LIMIT,
+    'Font families for the terminal, editor and interface font pickers.',
+    PLUGIN_FONTS_SINCE
+  ),
   syntaxes: contributionList(
     pluginSyntaxContributionSchema,
     PLUGIN_SYNTAX_LIMIT,
@@ -207,6 +228,12 @@ export const pluginContributesFields = {
     PLUGIN_SETTING_LIMIT,
     'Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`).',
     PLUGIN_PANEL_BRIDGE_SINCE
+  ),
+  statusBarItems: contributionList(
+    pluginStatusBarItemContributionSchema,
+    PLUGIN_STATUS_BAR_ITEM_LIMIT,
+    'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled.',
+    PLUGIN_STATUS_BAR_SINCE
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
 
@@ -214,10 +241,8 @@ export const pluginReservedContributesFields = {
   agentHarnesses: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.agentHarnesses),
   skills: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.skills),
   mcpServers: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.mcpServers),
-  hooks: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.hooks),
   taskSources: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.taskSources),
   connections: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.connections),
-  statusBarItems: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.statusBarItems),
   sidebarCards: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.sidebarCards)
 } satisfies Record<PluginReservedContributionPoint, z.ZodType>
 
@@ -240,17 +265,23 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   commands: { execution: 'declarative', catalogType: 'instructions', bindsContent: false },
   // Why no catalog type: events need a worker, which `main` already declares.
   events: { execution: 'trusted-worker', catalogType: null, bindsContent: false },
+  // Why trusted-worker: a hook changes or refuses what Orca does, which only full access may.
+  hooks: { execution: 'trusted-worker', catalogType: null, bindsContent: false },
   languagePacks: { execution: 'data', catalogType: 'interface-language', bindsContent: false },
   keybindings: { execution: 'declarative', catalogType: 'instructions', bindsContent: true },
   vmRecipes: { execution: 'declarative', catalogType: 'instructions', bindsContent: true },
   themes: { execution: 'data', catalogType: 'app-theme', bindsContent: false },
   terminalThemes: { execution: 'data', catalogType: 'terminal-theme', bindsContent: false },
   iconThemes: { execution: 'data', catalogType: 'icon-theme', bindsContent: false },
+  // Why no catalog type: older catalogs would drop a release naming one, and a font is inert data.
+  fonts: { execution: 'data', catalogType: null, bindsContent: false },
   syntaxes: { execution: 'data', catalogType: 'syntax', bindsContent: false },
   customEditors: { execution: 'sandboxed-ui', catalogType: 'editor', bindsContent: false },
   // Why data and no catalog type: a template is inert text that seeds a file the user asked for;
   // whatever opens that file (a syntax, an editor) carries its own type.
   newFiles: { execution: 'data', catalogType: null, bindsContent: false },
   // Why sandboxed-ui: only code reads a setting, and panels are the least code there is.
-  settings: { execution: 'sandboxed-ui', catalogType: null, bindsContent: false }
+  settings: { execution: 'sandboxed-ui', catalogType: null, bindsContent: false },
+  // Why declarative: a static item only names its own command; updating it needs a worker.
+  statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false }
 }

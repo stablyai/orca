@@ -1,9 +1,17 @@
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/paired-e2ee-compressed-frame'
+import {
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY
+} from '../../../shared/browser/runtime/browser-runtime-capabilities'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
+import { RUNTIME_COMMIT_MESSAGE_HOST_KEY_PREFIX } from '../../../shared/source-control/ai/generation/commit-message-host-key'
+import {
+  pickCommitMessageGenerationSettings,
+  type CommitMessageGenerationSettings
+} from '../../../shared/source-control/ai/generation/commit-message-generation-settings'
 import {
   readTerminalStreamFrameId,
   writeTerminalStreamFrameId
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 const STRIPPED_ENVELOPE_FIELDS = new Set(['deviceToken', 'executionHost'])
 
@@ -53,7 +61,7 @@ export function declareRelayedPhoneCapabilities(frame: string): string {
 
 const LAUNCH_METHODS_READING_CHAT_DEFAULT = new Set(['agent.launch', 'agent.launchReplay'])
 
-// The relaying desktop owns the user chat default; older servers strip this additive field.
+// The phone's own Chat or CLI pick wins, then the relaying desktop's default; older servers strip this additive field.
 export function withRelayedLaunchChatDefault(
   frame: string,
   method: string,
@@ -67,29 +75,131 @@ export function withRelayedLaunchChatDefault(
     return frame
   }
   const agent = typeof parsed.params.agent === 'string' ? parsed.params.agent : ''
+  const picked = parsed.params.nativeChatDefault
   return JSON.stringify({
     ...parsed,
-    params: { ...parsed.params, nativeChatDefault: nativeChatDefaultFor(agent) }
+    params: {
+      ...parsed.params,
+      nativeChatDefault: typeof picked === 'boolean' ? picked : nativeChatDefaultFor(agent)
+    }
   })
+}
+
+const GENERATION_METHODS_READING_AI_SETTINGS = new Set([
+  'git.generateCommitMessage',
+  'git.generatePullRequestFields'
+])
+
+// Desktop's own Source Control sends its settings to a server, so the phone through it gets the same agent.
+// Model discovery is left alone: the phone uses it for chats, which launch with the server's commands.
+export function withRelayedSourceControlAiSettings(
+  frame: string,
+  method: string,
+  environmentId: string,
+  desktopSettings: () => CommitMessageGenerationSettings
+): string {
+  if (!GENERATION_METHODS_READING_AI_SETTINGS.has(method)) {
+    return frame
+  }
+  const parsed: unknown = JSON.parse(frame)
+  if (!isRecord(parsed) || !isRecord(parsed.params)) {
+    return frame
+  }
+  const stamped = {
+    ...pickCommitMessageGenerationSettings(desktopSettings()),
+    // The key desktop's own call uses, so the model picked for this server is the one used.
+    commitMessageDiscoveryHostKey: `${RUNTIME_COMMIT_MESSAGE_HOST_KEY_PREFIX}${environmentId}`
+  }
+  // Fields the phone sent itself win.
+  return JSON.stringify({ ...parsed, params: { ...stamped, ...parsed.params } })
+}
+
+export type RelayedDesktopDefaults = {
+  /** Whether this desktop's settings open `agent` as a chat. */
+  nativeChatDefault: (agent: string) => boolean
+  /** This desktop's Source Control AI settings, which its own calls to a server send. */
+  sourceControlAiSettings: () => CommitMessageGenerationSettings
+}
+
+/** Stamp the desktop's own defaults on a relayed frame, as its own calls to that server carry them. */
+export function withRelayedDesktopDefaults(
+  frame: string,
+  method: string,
+  environmentId: string,
+  desktop: RelayedDesktopDefaults
+): string {
+  return withRelayedSourceControlAiSettings(
+    withRelayedLaunchChatDefault(frame, method, desktop.nativeChatDefault),
+    method,
+    environmentId,
+    desktop.sourceControlAiSettings
+  )
 }
 
 /** Renumber host stream ids: each host starts at 1, but the phone routes all binary frames on one socket. */
 export class RelayedPhoneReplies {
   // Relay-owned requests have no phone awaiting their replies.
-  private readonly openRequests = new Map<string, { hostStreamIds: number[]; swallow: boolean }>()
+  private readonly openRequests = new Map<
+    string,
+    {
+      hostStreamIds: number[]
+      swallow: boolean
+      browserScreencast?: () => boolean
+      settle?: (reply: unknown) => void
+      cancel?: () => void
+    }
+  >()
   private readonly desktopStreamIds = new Map<number, number>()
 
   constructor(private readonly allocateStreamId: () => number) {}
 
-  noteForwarded(requestId: string, options: { swallowReplies?: boolean } = {}): void {
+  noteForwarded(
+    requestId: string,
+    options: { swallowReplies?: boolean; browserScreencast?: () => boolean } = {}
+  ): void {
     this.openRequests.set(requestId, {
       hostStreamIds: [],
-      swallow: options.swallowReplies === true
+      swallow: options.swallowReplies === true,
+      browserScreencast: options.browserScreencast
+    })
+  }
+
+  request(id: string, send: () => boolean, timeoutMs: number): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.openRequests.delete(id)
+        reject(new Error('Timed out confirming the executing Orca server.'))
+      }, timeoutMs)
+      this.openRequests.set(id, {
+        hostStreamIds: [],
+        swallow: true,
+        settle: (reply) => {
+          clearTimeout(timer)
+          resolve(reply)
+        },
+        cancel: () => {
+          clearTimeout(timer)
+          reject(new Error('The executing Orca server connection changed.'))
+        }
+      })
+      try {
+        if (!send()) {
+          this.openRequests.get(id)?.cancel?.()
+          this.openRequests.delete(id)
+        }
+      } catch (error) {
+        clearTimeout(timer)
+        this.openRequests.delete(id)
+        reject(error)
+      }
     })
   }
 
   takeOpenRequestIds(): string[] {
     const ids = [...this.openRequests].filter(([, open]) => !open.swallow).map(([id]) => id)
+    for (const open of this.openRequests.values()) {
+      open.cancel?.()
+    }
     this.openRequests.clear()
     this.desktopStreamIds.clear()
     return ids
@@ -107,11 +217,22 @@ export class RelayedPhoneReplies {
       return plaintext
     }
     const open = this.openRequests.get(parsed.id)
+    open?.settle?.(parsed)
     const result = parsed.result
-    let renumbered = false
+    let rewritten = false
+    if (
+      open?.browserScreencast?.() &&
+      parsed.ok === true &&
+      isRecord(result) &&
+      Array.isArray(result.capabilities) &&
+      !result.capabilities.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
+    ) {
+      result.capabilities = [...result.capabilities, BROWSER_SCREENCAST_RUNTIME_CAPABILITY]
+      rewritten = true
+    }
     if (open && isRecord(result) && typeof result.streamId === 'number') {
       result.streamId = this.desktopStreamId(result.streamId, open.hostStreamIds)
-      renumbered = true
+      rewritten = true
     }
     // Unsubscribe sends no end; cap retained streams until link closure.
     if (open && (parsed.streaming !== true || (isRecord(result) && result.type === 'end'))) {
@@ -120,7 +241,7 @@ export class RelayedPhoneReplies {
     if (open?.swallow) {
       return null
     }
-    return renumbered ? JSON.stringify(parsed) : plaintext
+    return rewritten ? JSON.stringify(parsed) : plaintext
   }
 
   /** Drop terminal frames for streams never announced to the phone. */

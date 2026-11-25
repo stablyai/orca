@@ -1,16 +1,20 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Repo } from '../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { RepoHostTarget } from '../../../shared/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
-import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
-import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility-sources'
-import type { GhAccountBinding } from '../../../shared/github/account-binding'
-import { invalidateGhAccountTokenCache } from '../../github/gh-account-token'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import {
+  type ExecutionHostId,
+  getRepoExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
+
+import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/worktree/visibility/external-worktree-visibility'
+import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
+import { normalizeRepoWorkspaceCleanupPolicy } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
+import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility/visibility-sources'
+import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
+import { invalidateGhAccountTokenCache } from '../../github/accounts/gh-account-token'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import { findExtraFolderWorkspaceIds } from '../../folder-workspace-meta-presence'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
 
 export type RepoUpdateMutationOperations = {
   state: Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'>
@@ -94,30 +98,36 @@ export class RepoUpdatePersistenceOperations {
         | 'upstream'
         | 'gitRemoteIdentity'
         | 'hookSettings'
+        | 'editorFormatter'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
         | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
+        | 'dictationTerms'
         | 'issueSourcePreference'
         | 'defaultJiraProject'
         | 'forkSyncMode'
+        | 'agentWorkspaceTrust'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
-        | 'projectGroupOrder'
         | 'projectHostSetupMethod'
       >
     > & {
+      projectGroupOrder?: number | null
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
+      workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+      hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
+      browserProfileId?: string | null
     }
   ): Repo | null {
     const repo = findRepoRowForHostScopedWrite(
@@ -166,7 +176,10 @@ export class RepoUpdatePersistenceOperations {
         sanitizedUpdates.projectGroupId = null
       }
     }
-    if (
+    if (sanitizedUpdates.projectGroupOrder === null) {
+      delete repo.projectGroupOrder
+      delete sanitizedUpdates.projectGroupOrder
+    } else if (
       'projectGroupOrder' in sanitizedUpdates &&
       (typeof sanitizedUpdates.projectGroupOrder !== 'number' ||
         !Number.isFinite(sanitizedUpdates.projectGroupOrder))
@@ -185,6 +198,10 @@ export class RepoUpdatePersistenceOperations {
     ) {
       delete repo.issueSourcePreference
       delete sanitizedUpdates.issueSourcePreference
+    }
+    if ('browserProfileId' in sanitizedUpdates && sanitizedUpdates.browserProfileId == null) {
+      delete repo.browserProfileId
+      delete sanitizedUpdates.browserProfileId
     }
     if ('ghAccount' in sanitizedUpdates && sanitizedUpdates.ghAccount == null) {
       delete repo.ghAccount
@@ -226,6 +243,13 @@ export class RepoUpdatePersistenceOperations {
       delete sanitizedUpdates.externalWorktreeDiscoverySuppressedAt
     }
     if (
+      'hiddenAt' in sanitizedUpdates &&
+      (sanitizedUpdates.hiddenAt === undefined || sanitizedUpdates.hiddenAt === null)
+    ) {
+      delete repo.hiddenAt
+      delete sanitizedUpdates.hiddenAt
+    }
+    if (
       'sourceControlAi' in sanitizedUpdates &&
       (sanitizedUpdates.sourceControlAi === undefined || sanitizedUpdates.sourceControlAi === null)
     ) {
@@ -239,6 +263,23 @@ export class RepoUpdatePersistenceOperations {
         delete sanitizedUpdates.sourceControlAi
       } else {
         sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
+      }
+    }
+    if (
+      'workspaceCleanupPolicy' in sanitizedUpdates &&
+      (sanitizedUpdates.workspaceCleanupPolicy === undefined ||
+        sanitizedUpdates.workspaceCleanupPolicy === null)
+    ) {
+      delete repo.workspaceCleanupPolicy
+      delete sanitizedUpdates.workspaceCleanupPolicy
+    } else if ('workspaceCleanupPolicy' in sanitizedUpdates) {
+      const workspaceCleanupPolicy = normalizeRepoWorkspaceCleanupPolicy(
+        sanitizedUpdates.workspaceCleanupPolicy
+      )
+      if (workspaceCleanupPolicy === undefined) {
+        delete sanitizedUpdates.workspaceCleanupPolicy
+      } else {
+        sanitizedUpdates.workspaceCleanupPolicy = workspaceCleanupPolicy
       }
     }
     if ('ghAccount' in updates) {

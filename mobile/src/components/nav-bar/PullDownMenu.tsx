@@ -5,19 +5,21 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
-  useWindowDimensions
+  useWindowDimensions,
+  type HostInstance
 } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import type { ActionSheetAction } from '../ActionSheetModal'
+import type { ActionSheetAction } from '../sheets/ActionSheetModal'
 
 const MENU_WIDTH = 252
 const ANCHOR_GAP = 6
@@ -32,7 +34,7 @@ type Anchor = { top: number; right: number } | { bottom: number; right: number }
 type PullDownMenuProps = {
   visible: boolean
   /** The button the menu drops from. */
-  anchorRef: RefObject<View | null>
+  anchorRef: RefObject<HostInstance | null>
   /** Groups are separated by a thicker divider, like an iOS menu's sections. */
   groups: readonly (readonly ActionSheetAction[])[]
   onClose: () => void
@@ -153,6 +155,10 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
           style={[
             styles.menu,
             anchor,
+            // Long menus scroll instead of running off a short (landscape) screen.
+            {
+              maxHeight: window.height - ('top' in anchor ? anchor.top : anchor.bottom) - EDGE_INSET
+            },
             {
               opacity: appear.interpolate({
                 inputRange: [0, 1],
@@ -173,44 +179,61 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
           ]}
           accessibilityRole="menu"
         >
-          {shown.map((group, groupIndex) => (
-            <View key={groupIndex} style={groupIndex > 0 && styles.groupGap}>
-              {group.map((action, index) => {
-                const Icon = action.icon
-                const tint = action.destructive ? colors.statusRed : colors.textPrimary
-                return (
-                  <Pressable
-                    key={action.id ?? action.label}
-                    style={({ pressed }) => [
-                      styles.item,
-                      index > 0 && styles.itemDivider,
-                      pressed && styles.itemPressed,
-                      action.disabled && styles.itemDisabled
-                    ]}
-                    disabled={action.disabled || action.loading}
-                    onPress={() => press(action)}
-                    accessibilityRole="menuitem"
-                    accessibilityLabel={action.label}
-                    accessibilityHint={action.hint}
-                    accessibilityState={
-                      action.checked === undefined ? undefined : { checked: action.checked }
-                    }
-                  >
-                    <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
-                      {action.label}
-                    </Text>
-                    {action.checked ? (
-                      <Check size={17} color={tint} strokeWidth={2.2} />
-                    ) : action.renderIcon ? (
-                      action.renderIcon()
-                    ) : (
-                      Icon && <Icon size={17} color={tint} strokeWidth={2} />
-                    )}
-                  </Pressable>
-                )
-              })}
-            </View>
-          ))}
+          <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+            {shown.map((group, groupIndex) => (
+              <View key={groupIndex} style={groupIndex > 0 && styles.groupGap}>
+                {group.map((action, index) => {
+                  const Icon = action.icon
+                  const tint = action.destructive ? colors.statusRed : colors.textPrimary
+                  return (
+                    <Pressable
+                      key={action.id ?? action.label}
+                      style={({ pressed }) => [
+                        styles.item,
+                        index > 0 && styles.itemDivider,
+                        pressed && styles.itemPressed,
+                        action.disabled && styles.itemDisabled
+                      ]}
+                      disabled={action.disabled || action.loading}
+                      onPress={() => press(action)}
+                      accessibilityRole="menuitem"
+                      accessibilityLabel={
+                        action.status ? `${action.label}, ${action.status}` : action.label
+                      }
+                      accessibilityHint={action.hint}
+                      accessibilityState={
+                        action.checked === undefined ? undefined : { checked: action.checked }
+                      }
+                    >
+                      <View style={styles.labelBlock}>
+                        <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
+                          {action.label}
+                        </Text>
+                        {/* No tooltips on a phone: a disabled item says why, a destructive one what it replaces. */}
+                        {(action.disabled || action.destructive) && action.hint ? (
+                          <Text style={styles.hint} numberOfLines={2}>
+                            {action.hint}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {action.status ? (
+                        <Text style={styles.status} numberOfLines={1}>
+                          {action.status}
+                        </Text>
+                      ) : null}
+                      {action.checked ? (
+                        <Check size={17} color={tint} strokeWidth={2.2} />
+                      ) : action.renderIcon ? (
+                        action.renderIcon()
+                      ) : (
+                        Icon && <Icon size={17} color={tint} strokeWidth={2} />
+                      )}
+                    </Pressable>
+                  )
+                })}
+              </View>
+            ))}
+          </ScrollView>
         </Animated.View>
       ) : null}
     </Modal>
@@ -254,8 +277,23 @@ const styles = themedStyleSheet(() => ({
   itemDisabled: {
     opacity: 0.4
   },
+  labelBlock: {
+    flexShrink: 1,
+    gap: 2
+  },
   label: {
     flexShrink: 1,
     fontSize: 15.5
+  },
+  hint: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  status: {
+    marginLeft: 'auto',
+    flexShrink: 0,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontVariant: ['tabular-nums']
   }
 }))

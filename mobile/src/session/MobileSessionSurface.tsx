@@ -1,5 +1,5 @@
-import { useContext, useMemo } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { useCallback, useContext, useMemo } from 'react'
+import { Text, View } from 'react-native'
 import { styles } from './mobile-session-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -7,18 +7,15 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSheets } from './MobileSessionSheets'
-import { MobileWorkerAutoCloseStrip } from './MobileWorkerAutoCloseStrip'
-import { DetailCardLayer } from '../components/detail-card-host'
-import { AnchoredDetailCard } from '../components/AnchoredDetailCard'
-import { StatusDot } from '../components/StatusDot'
+import { MobileWorkerAutoCloseStrip } from './tabs/MobileWorkerAutoCloseStrip'
+import { BotChatOpenContext, BotItemOpenContext, BotPanelOpenContext } from '../bots/bot-item-open'
+import { openBotChatTab } from './bot-chat-tab-open'
+import { AnchoredDetailCardLayer } from '../components/detail-cards/AnchoredDetailCard'
+import { StatusDot } from '../components/feedback/StatusDot'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-import { WorkspaceServerContext } from '../transport/use-workspace-client'
-import { useSessionTitleCard } from './use-session-title-card'
-import { useDetailCardScope } from '../components/use-detail-card-scope'
-import { useNow } from '../hooks/use-now'
-import { getMobileTerminalTabHostAgentIdentity } from './mobile-terminal-tab-agent'
-import { mobileSessionTabCardContent } from './mobile-session-tab-card-content'
-import { MobileSessionTabCardFooter } from './MobileSessionTabCardFooter'
+import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
+import { useSessionTitleCard } from './tabs/use-session-title-card'
+import { useDetailCardScope } from '../components/detail-cards/use-detail-card-scope'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
@@ -32,10 +29,13 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   const besideTabs = (layout.isLandscapePhone || sideRail) && hasTabs
   const titleVisible =
     !sideRail || !hasTabs || controller.showConnectionRetry || controller.connectionEscalated
+  // The compact Duo header removes the opener, so its card must yield with it.
   const obscured = Boolean(
+    !titleVisible ||
     controller.showHeaderMoreActions ||
     controller.showCreateTabDrawer ||
     controller.showTerminalLayout ||
+    controller.textSizeSheet != null ||
     (controller.showQuickCommands && controller.quickCommandsSupported === true) ||
     controller.pendingDiffNotesDelivery != null ||
     controller.actionTarget != null ||
@@ -52,38 +52,46 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     controller.showDictationSetup ||
     controller.deleteKeyTarget != null
   )
-  const details = useSessionTitleCard(besideTabs, obscured, controller.visibleTabs, titleVisible)
-  const missingSource = details.missingTab || details.missingTitle
-  const tab = useMemo(
+  const details = useSessionTitleCard(besideTabs, obscured)
+  const { itemsOnPhone, openBotPanel, openNativeSession, worktreeId, sessionTabs } = controller
+  const { switchSessionTab, activeSessionTabId, routeBot } = controller
+  const homeChatId = routeBot?.bot.chatSessionId
+  const openItem = useMemo(
+    () => (itemsOnPhone ? (itemUid: string) => openBotPanel({ item: itemUid }) : null),
+    [itemsOnPhone, openBotPanel]
+  )
+  const routeBotId = routeBot?.bot.id
+  // Keyed on the ids, so an Activity read that changes none doesn't redraw every card using the opener.
+  const automationIds = (routeBot?.activity?.automations ?? [])
+    .map((row) => row.automation.id)
+    .join('\n')
+  const panelOpener = useMemo(
     () =>
-      details.tabId
-        ? controller.visibleTabs.find((candidate) => candidate.id === details.tabId)
-        : undefined,
-    [controller.visibleTabs, details.tabId]
+      itemsOnPhone && routeBotId
+        ? {
+            botId: routeBotId,
+            open: openBotPanel,
+            automationIds: new Set(automationIds.split('\n'))
+          }
+        : null,
+    [itemsOnPhone, routeBotId, openBotPanel, automationIds]
   )
-  const hostAgentIdentity = useMemo(
-    () => (tab ? getMobileTerminalTabHostAgentIdentity(tab, controller.terminals) : undefined),
-    [tab, controller.terminals]
+  const openChat = useCallback(
+    (chat: { chatId: string; home?: true }) =>
+      openBotChatTab(
+        { chatId: chat.chatId, home: chat.home === true },
+        {
+          homeChatId,
+          sessionTabs,
+          activeSessionTabId,
+          switchSessionTab,
+          openNativeSession,
+          worktreeId
+        }
+      ),
+    [homeChatId, sessionTabs, activeSessionTabId, switchSessionTab, openNativeSession, worktreeId]
   )
-  const now = useNow(60_000, details.active && tab != null)
-  const tabContent = useMemo(
-    () => (tab ? mobileSessionTabCardContent(tab, hostAgentIdentity, now) : null),
-    [tab, hostAgentIdentity, now, t]
-  )
-  const footer = useMemo(
-    () => (tabContent ? <MobileSessionTabCardFooter content={tabContent} /> : null),
-    [tabContent]
-  )
-  const contentRow = useMemo(
-    () => <MobileSessionContentRow controller={controller} />,
-    [controller]
-  )
-  useDetailCardScope({
-    ...details,
-    openerRef: details.scopeOpenerRef,
-    active: details.active && !missingSource,
-    obscured: obscured || missingSource
-  })
+  useDetailCardScope({ ...details, obscured })
   // Only a proven local record belongs to this route's desktop or server.
   const hostName =
     controller.worktreeHostId === 'local' ? (server ? server.name : controller.hostName) : null
@@ -92,47 +100,30 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
       <View style={styles.kavInner}>
         <MobileSessionHeader controller={controller} details={details} />
         <MobileWorkerAutoCloseStrip controller={controller} />
-        {contentRow}
+        {/* A chat's item chips open the item's page in the bot panel. */}
+        <BotItemOpenContext.Provider value={openItem}>
+          <BotChatOpenContext.Provider value={openChat}>
+            <BotPanelOpenContext.Provider value={panelOpener}>
+              <MobileSessionContentRow controller={controller} />
+            </BotPanelOpenContext.Provider>
+          </BotChatOpenContext.Provider>
+        </BotItemOpenContext.Provider>
       </View>
-      <DetailCardLayer>
-        <View
-          ref={details.layerRef}
-          collapsable={false}
-          pointerEvents="box-none"
-          onLayout={details.onLayout}
-          style={detailLayer}
-        >
-          {details.visual ? (
-            <AnchoredDetailCard
-              {...details.visual}
-              bounds={details.bounds}
-              contentRef={details.contentRef}
-              boundaryRefs={details.boundaryRefs}
-              active={details.active && !missingSource}
-              obscured={obscured || missingSource}
-              onSettled={details.onSettled}
-              title={
-                tabContent?.title ??
-                (controller.worktreeName || t('session.header.terminalTitle', 'Terminal'))
-              }
-              detail={tabContent ? tabContent.detail : controller.worktreePath}
-              footer={
-                tabContent ? (
-                  footer
-                ) : hostName ? (
-                  <>
-                    <StatusDot state={controller.connState} />
-                    <Text style={styles.sessionMetaText}>{hostName}</Text>
-                  </>
-                ) : null
-              }
-            />
-          ) : null}
-        </View>
-      </DetailCardLayer>
+      <AnchoredDetailCardLayer
+        card={details}
+        obscured={obscured}
+        title={controller.worktreeName || t('session.header.terminalTitle', 'Terminal')}
+        detail={controller.worktreePath}
+        footer={
+          hostName ? (
+            <>
+              <StatusDot state={controller.connState} />
+              <Text style={styles.sessionMetaText}>{hostName}</Text>
+            </>
+          ) : null
+        }
+      />
       <MobileSessionSheets controller={controller} />
     </View>
   )
 }
-
-const detailLayer = { ...StyleSheet.absoluteFillObject, zIndex: 1000 }

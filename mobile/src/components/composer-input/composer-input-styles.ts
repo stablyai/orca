@@ -1,4 +1,3 @@
-import { StyleSheet } from 'react-native'
 import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
@@ -6,6 +5,9 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 export const COMPOSER_CONTROL_SIZE = 38
 /** Grows a round control to a 44 pt touch box without crossing the action row's 8 pt gap. */
 export const COMPOSER_CONTROL_HIT_SLOP = (44 - COMPOSER_CONTROL_SIZE) / 2
+/** A round control in a one-line box: one 20pt text line plus its 4pt insets. */
+export const COMPOSER_COMPACT_CONTROL_SIZE = 28
+export const COMPOSER_COMPACT_CONTROL_HIT_SLOP = (44 - COMPOSER_COMPACT_CONTROL_SIZE) / 2
 // Every input uses the composer's size, which also keeps the page above iOS's 16px focus-zoom floor.
 export const COMPOSER_TEXT_SIZE = 16
 export const COMPOSER_LINE_HEIGHT = 22
@@ -35,22 +37,35 @@ const labelControl = {
   minHeight: COMPOSER_CONTROL_SIZE
 } as const
 
-const surface = () =>
-  ({
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.composerBorder,
-    backgroundColor: colors.composerSurface
-  }) as const
+// A field with no controls of its own is told apart by its edge alone, so it draws inputBorder (3:1).
+const edge = (borderColor: string) =>
+  ({ borderWidth: 1, borderColor, backgroundColor: colors.composerSurface }) as const
 
-// The chat composer's look, shared by every text input so they cannot drift apart.
+// The box owns the focus ring, so the browser's own ring on the text inside is dropped.
+const noOwnRing = { outlineWidth: 0 } as const
+
+// The chat composer's look, shared by every text input so they cannot drift apart; plain fields add the edge.
 export const composerInputStyles = themedStyleSheet(() => ({
   box: {
-    ...surface(),
+    ...edge(colors.composerBorder),
     padding: spacing.md,
     borderRadius: radii.floating
   },
   formBox: {
+    borderColor: colors.inputBorder,
     borderRadius: radii.surface
+  },
+  // The edge thickens to a 2pt accent ring, drawn as an outline so nothing moves.
+  focused: {
+    borderColor: colors.accentBlue,
+    outlineColor: colors.accentBlue,
+    outlineStyle: 'solid',
+    outlineWidth: 1
+  },
+  fieldInput: {
+    ...edge(colors.inputBorder),
+    borderRadius: radii.control,
+    color: colors.textPrimary
   },
   inlineBox: {
     flexDirection: 'row',
@@ -69,15 +84,8 @@ export const composerInputStyles = themedStyleSheet(() => ({
     marginTop: 0
   },
   formText: {
+    ...noOwnRing,
     minHeight: FORM_MESSAGE_MIN_HEIGHT
-  },
-  // Only bars floating over content cast a shadow; an inline box would shade its own thread.
-  docked: {
-    shadowColor: '#000',
-    shadowOpacity: 0.45,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8
   },
   messageText: {
     width: '100%',
@@ -110,6 +118,10 @@ export const composerInputStyles = themedStyleSheet(() => ({
     ...roundControl,
     backgroundColor: colors.surfaceBright
   },
+  compactSendButton: {
+    width: COMPOSER_COMPACT_CONTROL_SIZE,
+    height: COMPOSER_COMPACT_CONTROL_SIZE
+  },
   sendButtonDisabled: {
     backgroundColor: colors.composerControl
   },
@@ -128,7 +140,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     opacity: feedback.pressedOpacity
   },
   field: {
-    ...surface(),
+    ...edge(colors.inputBorder),
     minHeight: FIELD_MIN_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
@@ -137,6 +149,9 @@ export const composerInputStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md
   },
   fieldText: {
+    ...noOwnRing,
+    // On web an unpositioned input paints under TextField's absolute focus backdrop.
+    position: 'relative',
     flex: 1,
     minWidth: 0,
     alignSelf: 'stretch',
@@ -147,11 +162,20 @@ export const composerInputStyles = themedStyleSheet(() => ({
     includeFontPadding: false,
     textAlignVertical: 'center'
   },
+  labelledText: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    paddingVertical: spacing.xs
+  },
+  fieldLabel: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   mono: {
     fontFamily: typography.monoFamily
-  },
-  hiddenText: {
-    color: 'transparent'
   },
   disabled: {
     opacity: feedback.disabledOpacity

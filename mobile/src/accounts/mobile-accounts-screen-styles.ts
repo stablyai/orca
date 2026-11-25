@@ -15,15 +15,6 @@ export const styles = themedStyleSheet(() => ({
   group: {
     backgroundColor: colors.bgPanel
   },
-  usageRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.xs
-  },
-  errorText: {
-    fontSize: typography.metaSize,
-    color: colors.statusRed
-  },
   footerHint: {
     flexDirection: 'row',
     alignItems: 'flex-start',

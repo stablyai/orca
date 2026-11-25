@@ -5,7 +5,7 @@ import {
   type WorkerTerminalArchiveRow,
   type WorkerTerminalArchiveStatus,
   type WorkerTerminalRetainedReason
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 
@@ -28,7 +28,7 @@ export function storeWorkerTerminalArchive(
     .run(params.dispatchId, params.resourceId, params.kind, params.content)
 }
 
-/** Stop closes the terminal; keep its output so a later release has an archive to settle with. */
+/** Stop closes the terminal; record where its output lives so a later release has a reference to settle with. */
 export function storeWorkerTerminalArchiveBeforeStop(
   this: OrchestrationDb,
   params: {
@@ -37,7 +37,7 @@ export function storeWorkerTerminalArchiveBeforeStop(
     kind: WorkerTerminalArchiveKind
     content: string
     archiveSource: 'transcript' | 'terminal'
-    archiveStatus: Extract<WorkerTerminalArchiveStatus, 'captured' | 'empty'>
+    archiveStatus: WorkerTerminalArchiveStatus
   }
 ): void {
   this.db.exec('BEGIN IMMEDIATE')
@@ -68,7 +68,7 @@ export function commitWorkerTerminalArchiveForRelease(
     kind?: WorkerTerminalArchiveKind
     content?: string
     archiveSource: 'transcript' | 'terminal'
-    archiveStatus: Extract<WorkerTerminalArchiveStatus, 'captured' | 'empty'>
+    archiveStatus: WorkerTerminalArchiveStatus
   }
 ): WorkerTerminalResourceRow {
   this.db.exec('BEGIN IMMEDIATE')
@@ -128,9 +128,18 @@ export function getWorkerTerminalArchive(
     .get(dispatchId) as WorkerTerminalArchiveRow | undefined
 }
 
+/** Existence only; rows written before references can still hold a saved copy until it is removed. */
+export function hasWorkerTerminalArchive(this: OrchestrationDb, dispatchId: string): boolean {
+  return Boolean(
+    this.db.prepare('SELECT 1 FROM worker_terminal_archives WHERE dispatch_id = ?').get(dispatchId)
+  )
+}
+
+/** `owner`, when given, fences the write to that dispatch's custody: a transferred row is left alone. */
 export function settleWorkerTerminalRelease(
   this: OrchestrationDb,
-  resourceId: string
+  resourceId: string,
+  owner?: string
 ): WorkerTerminalResourceRow {
   this.db
     .prepare(
@@ -138,43 +147,48 @@ export function settleWorkerTerminalRelease(
        SET release_state = 'released', ownership_state = 'released',
            release_completed_at = datetime('now'), release_error = NULL,
            updated_at = datetime('now')
-       WHERE id = ? AND release_state IN ('requested', 'releasing', 'unknown')`
+       WHERE id = ? AND release_state IN ('requested', 'releasing', 'unknown')
+         AND (? IS NULL OR owner_dispatch_id = ?)`
     )
-    .run(resourceId)
+    .run(resourceId, owner ?? null, owner ?? null)
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
 export function markWorkerTerminalReleaseUnknown(
   this: OrchestrationDb,
   resourceId: string,
-  reason: string
+  reason: string,
+  owner?: string
 ): WorkerTerminalResourceRow {
   this.db
     .prepare(
       `UPDATE worker_terminal_resources
        SET release_state = 'unknown', release_error = ?, updated_at = datetime('now')
-       WHERE id = ? AND release_state IN ('requested', 'releasing')`
+       WHERE id = ? AND release_state IN ('requested', 'releasing')
+         AND (? IS NULL OR owner_dispatch_id = ?)`
     )
-    .run(reason, resourceId)
+    .run(reason, resourceId, owner ?? null, owner ?? null)
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
 export function revertWorkerTerminalReleaseToRetained(
   this: OrchestrationDb,
   resourceId: string,
-  reason: WorkerTerminalRetainedReason
+  reason: WorkerTerminalRetainedReason,
+  owner?: string
 ): WorkerTerminalResourceRow {
   this.db
     .prepare(
       `UPDATE worker_terminal_resources
        SET release_state = 'retained', retained_reason = ?, updated_at = datetime('now')
-       WHERE id = ? AND release_state IN ('requested', 'releasing')`
+       WHERE id = ? AND release_state IN ('requested', 'releasing')
+         AND (? IS NULL OR owner_dispatch_id = ?)`
     )
-    .run(reason, resourceId)
+    .run(reason, resourceId, owner ?? null, owner ?? null)
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
-/** Caller owns the transaction; retain must preserve committed release state and its output archive. */
+/** Caller owns the transaction; retain must preserve committed release state and its output reference. */
 export function retainTerminalResourceInTransaction(
   database: OrchestrationDb,
   resourceId: string,
@@ -191,7 +205,7 @@ export function retainTerminalResourceInTransaction(
     )
     .run(reason, resourceId)
   if (changes > 0) {
-    // A stopped worker's terminal is closed; the archive taken before stop is its only output.
+    // A stopped worker's terminal is closed; the reference taken before stop is its only pointer to output.
     const dropped = database.db
       .prepare(
         `DELETE FROM worker_terminal_archives WHERE dispatch_id = ? AND NOT EXISTS (
@@ -284,6 +298,7 @@ export type WorkerTerminalArchiveMethods = {
   storeWorkerTerminalArchiveBeforeStop: typeof storeWorkerTerminalArchiveBeforeStop
   commitWorkerTerminalArchiveForRelease: typeof commitWorkerTerminalArchiveForRelease
   getWorkerTerminalArchive: typeof getWorkerTerminalArchive
+  hasWorkerTerminalArchive: typeof hasWorkerTerminalArchive
   settleWorkerTerminalRelease: typeof settleWorkerTerminalRelease
   markWorkerTerminalReleaseUnknown: typeof markWorkerTerminalReleaseUnknown
   revertWorkerTerminalReleaseToRetained: typeof revertWorkerTerminalReleaseToRetained
@@ -297,6 +312,7 @@ export function attachWorkerTerminalArchive(ctor: { prototype: object }): void {
     storeWorkerTerminalArchiveBeforeStop,
     commitWorkerTerminalArchiveForRelease,
     getWorkerTerminalArchive,
+    hasWorkerTerminalArchive,
     settleWorkerTerminalRelease,
     markWorkerTerminalReleaseUnknown,
     revertWorkerTerminalReleaseToRetained,

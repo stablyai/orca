@@ -95,12 +95,9 @@ and filesystem metadata, so they are not the total footprint. The cold seed cost
 one timing sample on a busy machine does not establish a speed guarantee. Deleting the seed
 left the other import directory readable. No existing worktrees were cleaned up.
 
-Tests cover concurrent publication, lock heartbeats and eviction, independent branch stand-ins,
-corrupt seeds, fallback, the opt-out, and preserved read-only files. Run them with:
-
-```sh
-ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/cross-version-wire/release-source-cache.unit.test.ts tests/e2e/cross-version-wire/release-source-retention.unit.test.ts tests/e2e/cross-version-wire/release-checkout.unit.test.ts tests/e2e/cross-version-wire/release-checkout-tree.unit.test.ts tests/e2e/cross-version-wire/release-missing-packages.unit.test.ts config/scripts/space-sharing-copy.test.ts
-```
+The focused unit tests for concurrent publication, lock heartbeats and eviction, independent
+branch stand-ins, corrupt seeds, fallback, the opt-out, and preserved read-only files were
+removed in the test-suite reduction; no automated coverage of this cache remains.
 
 ## P3 remains an experiment
 

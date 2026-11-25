@@ -2,23 +2,25 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useAppStore } from '@/store'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { revealDashboardAgent } from './reveal-dashboard-agent'
-import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
-import { isXtermHelperTextarea } from '../terminal-pane/regular-terminal-focus-ownership'
-import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
+import { revealDashboardAgent } from './navigation/reveal-dashboard-agent'
+import { AgentKanbanBoard } from './board/AgentKanbanBoard'
+import { isXtermHelperTextarea } from '../terminal-pane/input/focus/regular-terminal-focus-ownership'
+import type { DashboardRevealAgentArgs as AgentRevealArgs } from '../../../../shared/agent-status/presentation/dashboard-snapshot'
 import {
   isWorkspaceBoardKeepOpenTarget,
   useWorkspaceKanbanOutsideDismiss
-} from '../sidebar/use-workspace-kanban-outside-dismiss'
+} from '../sidebar/workspace-board/surface/use-workspace-kanban-outside-dismiss'
 import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
-} from '../sidebar/workspace-chrome-metrics'
-import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
-import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
-import { useAgentDashboardTelemetry } from '../dashboard-popout/use-agent-dashboard-telemetry'
-import { translate } from '@/i18n/i18n'
-import { trackSidebarLiveWidth } from '@/components/sidebar/sidebar-live-width'
+} from '../../app-shell/chrome/workspace-chrome-metrics'
+import { AgentDashboardSettingsMenu } from './settings/AgentDashboardSettingsMenu'
+import { useLiveDashboardSnapshot } from './snapshot/useLiveDashboardSnapshot'
+import { useAgentDashboardTelemetry } from './board/use-agent-dashboard-telemetry'
+import { useTranslate } from '@/i18n/use-translate'
+import { trackSidebarLiveWidth } from '@/components/sidebar/chrome/sidebar-live-width'
+import { resolveSidebarDrawerLeftEdge } from '@/components/sidebar/chrome/sidebar-drawer-left-edge'
+import { selectAppRailWidth, selectWorkspaceListOpen } from '@/components/app-rail/app-rail-layout'
 
 // Nested interactive overlays own Escape before the companion sheet; exclude the sheet’s own role=dialog marker.
 const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
@@ -94,9 +96,10 @@ export function AgentDashboardDrawer({
   leftSidebarStyle,
   statusBarVisible
 }: AgentDashboardDrawerProps): React.JSX.Element {
+  const t = useTranslate()
   const open = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const sidebarOpen = useAppStore(selectWorkspaceListOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const [menuOpen, setMenuOpen] = useState(false)
   const boardRef = useRef<HTMLDivElement | null>(null)
@@ -137,11 +140,9 @@ export function AgentDashboardDrawer({
     close()
   }, [close])
   // Store-driven closes bypass close(); clear menu state for sidebar collapse and workspace-board exclusivity too.
-  useEffect(() => {
-    if (!open) {
-      setMenuOpen(false)
-    }
-  }, [open])
+  if (!open && menuOpen) {
+    setMenuOpen(false)
+  }
   const handleSheetOpenChange = useCallback(
     (nextOpen: boolean) => {
       // Radix can request coordinate-free dismissal; allow only the drawer’s guarded Escape/outside/close paths.
@@ -181,10 +182,12 @@ export function AgentDashboardDrawer({
     return () => document.removeEventListener('keydown', handleKeyDown, true)
   }, [close, open])
 
-  const drawerLeft = sidebarOpen ? sidebarWidth : 0
-  const drawerLeftCss = sidebarOpen
-    ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
-    : '0px'
+  const railWidth = useAppStore(selectAppRailWidth)
+  const { left: drawerLeft, leftCss: drawerLeftCss } = resolveSidebarDrawerLeftEdge({
+    sidebarOpen,
+    sidebarWidth,
+    railWidth
+  })
   // Reserve the same status-row space as App so the portal cannot cover its controls.
   const drawerBottom = `${statusBarVisible ? STATUS_BAR_RESERVE_HEIGHT : 0}px`
 
@@ -245,7 +248,7 @@ export function AgentDashboardDrawer({
         onPointerDownOutside={guardSidebarInteraction}
         onInteractOutside={guardSidebarInteraction}
       >
-        <SheetTitle className="sr-only">{translate('dashboardPopout.title', 'Agents')}</SheetTitle>
+        <SheetTitle className="sr-only">{t('dashboardPopout.title', 'Agents')}</SheetTitle>
         {/* Closed SheetContent unmounts the live snapshot body, avoiding closed-path derivation. */}
         <div ref={boardRef} className="flex min-h-0 flex-1 flex-col">
           <AgentDashboardDrawerBody

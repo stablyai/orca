@@ -1,19 +1,22 @@
 import type { TaskPageRuntimeHostsModel } from './use-task-page-runtime-hosts'
 import { useCallback, useMemo } from 'react'
-import { getJiraAccountLabel } from '@/lib/jira-account-label'
-import type { Repo } from '../../../../shared/repo-types'
+import { useAppStore } from '@/store/index'
+import { getJiraAccountLabel } from '@/lib/work-items/jira/jira-account-label'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
+import { getTaskSourceHostAvailabilityForHost } from './task-page-source-context'
+import type { TaskSourceHostAvailability } from './source-selection/task-source-context-summary'
+import { getRepoBackedProviderAvailability } from '@/components/task-page/source-selection/task-source-provider-availability'
 import {
-  getTaskPageRepoSourceContext,
-  getTaskSourceHostAvailabilityForHost
-} from './task-page-source-context'
-import type { TaskSourceHostAvailability } from '../task-source-context-summary'
-import { getRepoBackedProviderAvailability } from '@/components/task-source-provider-availability'
-import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
+  getSettingsFocusedExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import { isRuntimeHostKnownUnreachable } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   type TaskSourceContext,
   normalizeTaskSourceContext,
   getTaskSourceCacheScope
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import { useTaskPageSourceSummary } from './use-task-page-source-summary'
 export type TaskPageSourceAvailabilityPreludeModel = ReturnType<
   typeof useTaskPageSourceAvailabilityPrelude
@@ -34,7 +37,8 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     taskSource,
     runtimePreflightStatusByHostId,
     taskSourceRepoContexts,
-    hostRegistryById
+    hostRegistryById,
+    runtimeStatusByEnvironmentId
   } = model
   const getTaskPickerRepoHostLabel = useCallback(
     (repo: Repo): string | null => {
@@ -74,6 +78,38 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     taskSource,
     taskSourceRepoContexts
   ])
+  // Lists skip these hosts instead of waiting out their connect bound; the key re-runs them when one returns.
+  const unreachableTaskSourceHostIds = useMemo(
+    () =>
+      new Set(
+        taskSourceRepoContexts.flatMap((context) => {
+          const host = parseExecutionHostId(context.hostId)
+          return host?.kind === 'runtime' &&
+            isRuntimeHostKnownUnreachable(
+              runtimeStatusByEnvironmentId.get(host.environmentId)?.snapshot
+            )
+            ? [context.hostId]
+            : []
+        })
+      ),
+    [runtimeStatusByEnvironmentId, taskSourceRepoContexts]
+  )
+  const unreachableTaskSourceHostKey = [...unreachableTaskSourceHostIds].sort().join('|')
+  // The request a skipped host would have made was the dial that notices it came back; one status check stands in.
+  // `force` for a user's Refresh or Retry, which must not wait out a failed host's backoff.
+  const recheckUnreachableTaskSourceHosts = useCallback(
+    (options?: { force?: true }) => {
+      for (const hostId of unreachableTaskSourceHostIds) {
+        const host = parseExecutionHostId(hostId)
+        if (host?.kind === 'runtime') {
+          void useAppStore
+            .getState()
+            .refreshRuntimeEnvironmentStatus(host.environmentId, undefined, options)
+        }
+      }
+    },
+    [unreachableTaskSourceHostIds]
+  )
   const accountBackedTaskSourceHostId = useMemo(
     () => getSettingsFocusedExecutionHostId(settings),
     [settings]
@@ -142,25 +178,19 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     const availability = getTaskSourceHostAvailabilityForHost(host, accountBackedTaskSourceHostId)
     return availability ? [availability] : []
   }, [accountBackedTaskSourceHostId, hostRegistryById, taskSource])
-  const nextModel = model as typeof model & {
-    getTaskPickerRepoHostLabel: typeof getTaskPickerRepoHostLabel
-    taskSourceHostAvailability: typeof taskSourceHostAvailability
-    accountBackedTaskSourceHostId: typeof accountBackedTaskSourceHostId
-    fallbackTaskSourceProjectId: typeof fallbackTaskSourceProjectId
-    linearTaskSourceContext: typeof linearTaskSourceContext
-    jiraTaskSourceContext: typeof jiraTaskSourceContext
-    jiraTaskSourceScopeKey: typeof jiraTaskSourceScopeKey
-    accountBackedTaskSourceHostAvailability: typeof accountBackedTaskSourceHostAvailability
-  }
-  nextModel.getTaskPickerRepoHostLabel = getTaskPickerRepoHostLabel
-  nextModel.taskSourceHostAvailability = taskSourceHostAvailability
-  nextModel.accountBackedTaskSourceHostId = accountBackedTaskSourceHostId
-  nextModel.fallbackTaskSourceProjectId = fallbackTaskSourceProjectId
-  nextModel.linearTaskSourceContext = linearTaskSourceContext
-  nextModel.jiraTaskSourceContext = jiraTaskSourceContext
-  nextModel.jiraTaskSourceScopeKey = jiraTaskSourceScopeKey
-  nextModel.accountBackedTaskSourceHostAvailability = accountBackedTaskSourceHostAvailability
-  return nextModel
+  return Object.assign(model, {
+    getTaskPickerRepoHostLabel,
+    taskSourceHostAvailability,
+    unreachableTaskSourceHostIds,
+    unreachableTaskSourceHostKey,
+    recheckUnreachableTaskSourceHosts,
+    accountBackedTaskSourceHostId,
+    fallbackTaskSourceProjectId,
+    linearTaskSourceContext,
+    jiraTaskSourceContext,
+    jiraTaskSourceScopeKey,
+    accountBackedTaskSourceHostAvailability
+  })
 }
 export function useTaskPageSourceAvailability(model: TaskPageRuntimeHostsModel) {
   const preludeModel = useTaskPageSourceAvailabilityPrelude(model)

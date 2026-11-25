@@ -1,17 +1,28 @@
 import type { WebContents } from 'electron'
-import { onWatcherChildCapacityAvailable } from '../watcher-process/parcel-watcher-child-registry'
-import type { LocalWatcherCapacityRetry } from './filesystem-watcher-lifecycle-state'
-import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
+import { onWatcherChildCapacityAvailable } from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
+
+import {
+  type LocalWatcherCapacityRetry,
+  watcherLifecycleState
+} from './filesystem-watcher-lifecycle-state'
 import {
   clearLocalCapacityRetry,
   registerWatcherSenderCleanup
 } from './filesystem-watcher-listener-lifecycle'
-import { isWatcherRemovalInProgressError } from '../../watcher-removal-gate'
-import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
+import { isWatcherRemovalInProgressError } from '../../../workspaces/removal/watcher-removal-gate'
+import type { FsChangedPayload } from '../../../../shared/file-watch/filesystem-change-event'
+import { CRASH_FUSE_COOLDOWN_INITIAL_MS } from '../watcher-process/supervision/parcel-watcher-crash-fuse'
 
 export type SubscribeLocalWatcher = (worktreePath: string, sender: WebContents) => Promise<void>
 /** Calls `retry` when installing may succeed again; returns a cancel. */
 export type WaitForLocalWatcherRetry = (retry: () => Promise<void>) => () => void
+
+// Why the base cooldown: the fuse settles lazily on the next subscribe, so an escalated fuse costs one failed attempt per interval.
+export const waitForWatcherCrashFuseCooldown: WaitForLocalWatcherRetry = (retry) => {
+  const timer = setTimeout(() => void retry(), CRASH_FUSE_COOLDOWN_INITIAL_MS)
+  timer.unref?.()
+  return () => clearTimeout(timer)
+}
 
 export function scheduleLocalCapacityRetry(
   rootKey: string,

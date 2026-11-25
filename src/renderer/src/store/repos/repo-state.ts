@@ -1,13 +1,19 @@
-import type { WslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
-import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
-import type { GhAccountBinding } from '../../../../shared/github/account-binding'
-import type { SshRepoReadoption } from '../../../../shared/ssh-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type {
+  FolderWorkspaceCreateInput,
+  FolderWorkspaceCreateResult
+} from '../../../../shared/folder-workspaces/folder-workspace-create'
+import type { WslHostWindowsDriveRefusal } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
+import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
+import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
+import type { SshRepoReadoption } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type {
   NestedRepoScanResult,
   ProjectGroup,
+  ProjectGroupUpdate,
+  ProjectGroupMutation,
   ProjectGroupImportResult
-} from '../../../../shared/project-group-types'
+} from '../../../../shared/project/groups/project-group-types'
 import type {
   Project,
   ProjectHostSetup,
@@ -21,17 +27,25 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
-} from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../../shared/repo-host-identity'
+} from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../../shared/repository/repo-host-identity'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
-} from '../../../../shared/folder-workspace-path-status'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+} from '../../../../shared/folder-workspaces/folder-workspace-path-status'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import type { ConfirmedUnsavedDiscards } from '../slices/worktrees/teardown/removed-workspace-unsaved-files'
+import type { HostCatalogIdentity } from '../host-catalog/host-catalog-fence'
 
+export type FolderWorkspaceDeleteOptions = {
+  executionHostId?: ExecutionHostId
+  /** Retry after the Archive script failed, removing the folder anyway. */
+  allowFailedArchiveHook?: boolean
+  /** The host call that removes the workspace, when its owner (a bot) must remove it; defaults to folder delete. */
+  remove?: () => Promise<boolean>
+}
 export const ERROR_TOAST_DURATION = 60_000
 
 export type RepoUpdate = Partial<
@@ -42,27 +56,33 @@ export type RepoUpdate = Partial<
     | 'repoIcon'
     | 'upstream'
     | 'hookSettings'
+    | 'editorFormatter'
     | 'worktreeBaseRef'
     | 'worktreeBasePath'
     | 'kind'
     | 'symlinkPaths'
+    | 'dictationTerms'
     | 'issueSourcePreference'
     | 'defaultJiraProject'
     | 'forkSyncMode'
+    | 'agentWorkspaceTrust'
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'externalWorktreeInboxBaselinePaths'
     | 'importedExternalWorktreePaths'
     | 'customWorktreeVisibilitySources'
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
-    | 'projectGroupOrder'
   >
 > & {
+  projectGroupOrder?: number | null
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
   agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+  hiddenAt?: Repo['hiddenAt'] | null
   ghAccount?: GhAccountBinding | null
+  workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
+  browserProfileId?: string | null
 }
 
 export type ProjectUpdate = ProjectUpdateArgs['updates']
@@ -149,7 +169,6 @@ export type DeleteProjectGroupWithContainedProjectsResult =
 export type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId: string | null }
 
 export type AddRepoPathOptions = {
-  onResolvedSelectedPath?: (path: string) => void
   runtimeEnvironmentId?: string | null
   /** Overrides the host's basename naming for the new project. */
   displayName?: string
@@ -170,9 +189,12 @@ export type RepoSlice = {
   projectHostSetups: readonly ProjectHostSetup[]
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
+  folderWorkspaceCatalogByHost: Partial<Record<ExecutionHostId, HostCatalogIdentity>>
   /** Local projects a WSL host now owns: never in `repos`/`folderWorkspaces`, read-only, chats only. */
   wslMovedProjects: readonly WslMovedProject[]
   fetchWslMovedProjects: () => Promise<void>
+  /** Startup only: a stopped WSL host's saved project list, before its live catalog is asked for. */
+  seedReposFromHostCatalogSnapshots: () => Promise<void>
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   /** Host-resolved floating workspace directory; null until the host has answered. */
   floatingWorkspacePath: string | null
@@ -228,19 +250,9 @@ export type RepoSlice = {
   /** `hostId` is the host of the project that seeds the group. */
   createProjectGroup: (name: string, hostId: ExecutionHostId) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
-    args: {
-      projectGroupId: string
-      name?: string
-      folderPath?: string | null
-      connectionId?: string | null
-      linkedTask?: FolderWorkspace['linkedTask']
-      linkedItems?: FolderWorkspace['linkedItems']
-      linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
-      createdWithAgent?: FolderWorkspace['createdWithAgent']
-      pendingFirstAgentMessageRename?: boolean
-    },
-    options: FolderWorkspacePathStatusRouteOptions
-  ) => Promise<FolderWorkspace | null>
+    args: FolderWorkspaceCreateInput,
+    options: FolderWorkspacePathStatusRouteOptions & { signal?: AbortSignal }
+  ) => Promise<FolderWorkspaceCreateResult | null>
   getFolderWorkspacePathStatusCacheKey: (
     request: FolderWorkspacePathStatusRequest,
     options: FolderWorkspacePathStatusRouteOptions
@@ -260,13 +272,16 @@ export type RepoSlice = {
   ) => Promise<boolean>
   deleteFolderWorkspace: (
     folderWorkspaceId: string,
-    options?: { executionHostId?: ExecutionHostId }
+    options?: FolderWorkspaceDeleteOptions
   ) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the group's own host owns the call.
   updateProjectGroup: (
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>,
+    updates: ProjectGroupUpdate,
     options?: { hostId?: ExecutionHostId }
+  ) => Promise<boolean>
+  updateProjectGroups: (
+    mutations: readonly (ProjectGroupMutation & { hostId?: ExecutionHostId })[]
   ) => Promise<boolean>
   deleteProjectGroup: (groupId: string, options?: { hostId?: ExecutionHostId }) => Promise<boolean>
   deleteProjectGroupWithContainedProjects: (
@@ -300,7 +315,7 @@ export type RepoSlice = {
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the focused host is assumed.
   updateRepo: (
     projectId: string,
-    updates: RepoUpdate | ((repo: Repo) => RepoUpdate),
+    updates: RepoUpdate,
     options?: { hostId?: ExecutionHostId }
   ) => Promise<boolean>
   setActiveRepo: (projectId: string | null) => void

@@ -33,7 +33,9 @@ export const WORKER_METHODS = {
   invokeCommand: 'command.invoke',
   deliverEvent: 'event.deliver',
   /** A panel's `plugin.request`, answered by the handler from `orca.panels.handle`. */
-  panelRequest: 'panel.request'
+  panelRequest: 'panel.request',
+  /** One hook, answered with a decision (plugin-worker-hooks.ts). */
+  runHook: 'hook.run'
 } as const
 
 export const pluginWorkerInitSchema = z.object({
@@ -42,7 +44,9 @@ export const pluginWorkerInitSchema = z.object({
   pluginRoot: z.string().min(1),
   mainEntry: z.string().min(1),
   /** Worker-side early refusals only; host rechecks every call regardless of declared grants. */
-  grantedCapabilities: z.array(z.enum(PLUGIN_CAPABILITY_KINDS))
+  grantedCapabilities: z.array(z.enum(PLUGIN_CAPABILITY_KINDS)),
+  /** A development plugin: `host.has` also answers for proposed methods. */
+  allowProposed: z.boolean().optional()
 })
 
 export const pluginWorkerInvokeParamsSchema = z.object({
@@ -96,5 +100,9 @@ export const PLUGIN_WORKER_READY_TIMEOUT_MS = 10_000
 export const PLUGIN_WORKER_INVOKE_TIMEOUT_MS = 30_000
 /** Dispose idle workers and refork on their next trigger. */
 export const PLUGIN_WORKER_IDLE_REAP_MS = 5 * 60_000
+/** How often the main process sweeps for idle workers. */
+export const PLUGIN_WORKER_REAP_INTERVAL_MS = 60_000
 /** Default cap on concurrently-active workers; excess activations queue. */
 export const PLUGIN_WORKER_MAX_ACTIVE_DEFAULT = 5
+/** Soft cap on always-running hook workers, which hold no slot of the cap above. */
+export const PLUGIN_WORKER_MAX_KEEP_WARM_DEFAULT = 16

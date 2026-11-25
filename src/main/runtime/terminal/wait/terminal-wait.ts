@@ -1,25 +1,26 @@
 import type {
   RuntimeTerminalWait as RuntimeTerminalWaitResult,
   RuntimeTerminalWaitCondition
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitExitError,
   buildPtyTerminalWaitResult,
   getPtyTerminalState
-} from '../../terminal-wait-results'
+} from './terminal-wait-results'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import { showsScreenProbeBanner } from '../../agent-state-rules/agent-state-text-anchors'
-import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
-import { evaluateTuiIdle, type TuiIdleVerdict } from '../../tui-idle-evidence'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
+import { settlesForMidTurnInput } from './terminal-delivery-refusal'
 import {
   outputClockOf,
   ptyTuiIdleEvidence,
   type TuiIdleEvidenceSource
-} from '../../tui-idle-evidence-source'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { TerminalWaiter } from '../../runtime-terminal-contracts'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+} from './tui-idle-evidence-source'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { TerminalWaiter } from './terminal-waiter'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { RuntimeTerminalIdlePolls } from './terminal-idle-polls'
 import type { RuntimeTerminalWaiterRegistry } from './terminal-waiter-registry'
 
@@ -61,8 +62,19 @@ export class RuntimeTerminalWait {
   ) {}
 
   /** Why one helper: the immediate check and the poll must rank the same terminal the same way. */
-  private evaluate(pty: RuntimePtyWorktreeRecord, waitText: string): TuiIdleVerdict {
-    return evaluateTuiIdle(ptyTuiIdleEvidence(this.deps, pty, () => waitText))
+  private evaluate(
+    pty: RuntimePtyWorktreeRecord,
+    waitText: string,
+    acceptsMidTurnInput: boolean | undefined
+  ): { verdict: TuiIdleVerdict; ready: boolean } {
+    const evidence = ptyTuiIdleEvidence(this.deps, pty, () => waitText)
+    const verdict = evaluateTuiIdle(evidence)
+    return {
+      verdict,
+      ready:
+        verdict.kind === 'ready-strong' ||
+        (!!acceptsMidTurnInput && settlesForMidTurnInput(verdict, pty.ptyId, this.deps))
+    }
   }
 
   async wait(
@@ -73,6 +85,10 @@ export class RuntimeTerminalWait {
       signal?: AbortSignal
       /** Main-internal, never on the wire: see `TerminalWaiter.launchReadiness`. */
       launchReadiness?: boolean
+      /** Main-internal, never on the wire: see `TerminalWaiter.acceptsMidTurnInput`. */
+      acceptsMidTurnInput?: boolean
+      /** Main-internal, never on the wire: see `TerminalWaiter.outlivesRenderer`. */
+      outlivesRenderer?: true
     }
   ): Promise<RuntimeTerminalWaitResult> {
     const condition = options?.condition ?? 'exit'
@@ -85,11 +101,13 @@ export class RuntimeTerminalWait {
     }
     const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
     // Only strong verdicts settle synchronously; weak evidence needs the poll's rendered-screen check.
-    const verdict = condition === 'tui-idle' ? this.evaluate(pty, waitText) : null
+    const ranked =
+      condition === 'tui-idle' ? this.evaluate(pty, waitText, options?.acceptsMidTurnInput) : null
+    const verdict = ranked?.verdict ?? null
     if (verdict?.kind === 'blocked') {
       return buildPtyTerminalWaitBlockedResult(handle, condition, pty, verdict.reason)
     }
-    if (verdict?.kind === 'ready-strong') {
+    if (ranked?.ready) {
       return buildPtyTerminalWaitResult(handle, condition, pty)
     }
     return await new Promise<RuntimeTerminalWaitResult>((resolve, reject) => {
@@ -109,7 +127,9 @@ export class RuntimeTerminalWait {
         timeout: null,
         cancelIdlePoll: null,
         abortCleanup: null,
-        ...(options?.launchReadiness ? { launchReadiness: true } : {})
+        ...(options?.launchReadiness ? { launchReadiness: true } : {}),
+        ...(options?.acceptsMidTurnInput ? { acceptsMidTurnInput: true } : {}),
+        ...(options?.outlivesRenderer ? { outlivesRenderer: true } : {})
       }
       if (!this.waiters.bindAbort(waiter, options?.signal)) {
         reject(new Error('request_aborted'))

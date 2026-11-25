@@ -1,19 +1,21 @@
-import type { UiLanguageDetection } from '../../shared/ui-locale'
-import type { WindowMaterial } from '../../shared/window-material'
-import type { AppIdentity } from '../../shared/app-identity'
-import type { E2EConfig } from '../../shared/e2e-config'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { UiLanguageDetection } from '../../shared/i18n/ui-locale'
+import type { WindowMaterial } from '../../shared/app-lifecycle/windows/window-material'
+import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
+import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
+import type { E2EConfig } from '../../shared/app-lifecycle/launch/e2e-config'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type {
   WriteTerminalRenderDesyncEvidenceArgs,
   WriteTerminalRenderDesyncEvidenceResult
-} from '../../shared/terminal-render-desync-evidence'
-import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
-import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
-import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapshot'
-import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
+} from '../../shared/terminal/diagnostics/terminal-render-desync-evidence'
+import type { MacCapturedDigitRowChord } from '../../shared/keybindings/macos-symbolic-hotkeys'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
+import type { PersistedUIState } from '../../shared/orca-profiles/persisted-ui-state-types'
+import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import type { KeyboardLayoutSnapshot } from '../../shared/keybindings/keyboard-layout-snapshot'
+import type { KeyboardLayoutChangeEvent } from '../../shared/keybindings/keyboard-layout-events'
+import type { DesktopRelayWrite } from '../../shared/workspace-session/desktop-relay-write'
 
 export type AppApi = {
   getSystemLanguageDetection?: (
@@ -24,6 +26,8 @@ export type AppApi = {
   getIdentity: () => Promise<AppIdentity>
   /** Local Windows desktop elevation; null when unavailable. Does not describe remote hosts. */
   getWindowsAdministratorStatus: () => Promise<boolean | null>
+  /** Local Mac only; optional for older clients. */
+  getMacosUpgradeSupport?: (minimumMacosVersion: string) => Promise<MacosUpgradeSupport>
   /** Restarts the installed Windows desktop with administrator approval and replaces its local terminal host. */
   restartAsAdministrator: () => Promise<void>
   /** Append filenames to this base: Vite /@fs in dev, file:// resources when packaged. */
@@ -34,11 +38,15 @@ export type AppApi = {
   relaunch: () => Promise<void>
   /** Uses normal quit handling so daemon terminals survive for reattachment. */
   restart: () => Promise<void>
+  /** Ordinary user quit, like the app menu Quit; close guards may cancel it. */
+  quit: () => Promise<void>
   /** Main classifies teardown before Electron emits process-gone events. */
   reload: () => Promise<void>
   stageBeforeUnloadSync: (args: {
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
     ui: Partial<PersistedUIState>
+    /** Relay ids that left `sessions`, applied by main to the keys the window owns. */
+    desktopRelays?: DesktopRelayWrite['hosts']
   }) => void
   /** Waits for durable persistence; rejection lets reload/restart abort without losing state. */
   awaitBeforeUnloadCheckpoint: () => Promise<void>
@@ -51,7 +59,9 @@ export type AppApi = {
   /** Whether this machine's runtime holds a structured chat, saved or live. */
   holdsStructuredAgentSessions: () => Promise<boolean>
   onStructuredAgentSessionsHeldChanged: (callback: (held: boolean) => void) => () => void
-  recoverLegacyWorkerTerminalsForRendererStartup: () => Promise<void>
+  recoverLegacyWorkerTerminalsForRendererStartup: (options?: {
+    afterReconnect?: boolean
+  }) => Promise<void>
   /** Enabled only by ORCA_STARTUP_DIAGNOSTICS. */
   startupDiagnostic: (event: string, details?: Record<string, unknown>) => Promise<void>
   /** macOS input mode or non-IME layout ID; null off macOS or if the defaults read fails. */
@@ -62,8 +72,6 @@ export type AppApi = {
   getKeyboardLayoutSnapshot: () => Promise<KeyboardLayoutSnapshot | null>
   /** Subscribes to active macOS input-source changes. No-op in the browser fallback. */
   onKeyboardLayoutChanged: (callback: (event: KeyboardLayoutChangeEvent) => void) => () => void
-  /** No-op on Windows/Linux. */
-  setUnreadDockBadgeCount: (count: number) => Promise<void>
   getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest) => Promise<string>
   /** App-owned directory for auto-created Floating Workspace notes. */
   getFloatingMarkdownDirectory: () => Promise<string>

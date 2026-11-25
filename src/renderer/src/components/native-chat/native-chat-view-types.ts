@@ -1,8 +1,8 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatSession } from '../../../../shared/native-chat/native-chat-types'
-import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
+import type { NativeChatContextMenuActions } from './pane/actions/use-native-chat-context-menu'
 
 export type NativeChatBridgeViewProps = {
   mode?: 'bridge'
@@ -19,7 +19,8 @@ export type NativeChatBridgeViewProps = {
   /** Whether this pane owns the tab's launch draft; false for split siblings. */
   ownsTabWideLaunchDraft: boolean
   onSwitchToTerminal?: () => void
-  readTerminalScreen?: () => string | null
+  /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
+  readTerminalDraft?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 
@@ -48,7 +49,8 @@ export type NativeChatResolvedViewProps = {
   terminalTabId: string
   ownsTabWideLaunchDraft: boolean
   onSwitchToTerminal?: () => void
-  readTerminalScreen?: () => string | null
+  /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
+  readTerminalDraft?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 

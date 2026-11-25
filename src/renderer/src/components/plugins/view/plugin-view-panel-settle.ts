@@ -3,8 +3,8 @@ import {
   pluginPanelDrawStatus,
   subscribePluginPanelDraw,
   type PluginPanelDrawStatus
-} from '../../right-sidebar/plugin-panel-draw-status'
-import type { PluginPanelActDriver } from '../../right-sidebar/plugin-panel-act-driver'
+} from '../../right-sidebar/plugin-panels/health/plugin-panel-draw-status'
+import type { PluginPanelActDriver } from '../../right-sidebar/plugin-panels/health/plugin-panel-act-driver'
 
 // Why a fallback: a hidden window may not tick animation frames, and a capture must not hang.
 const FRAME_FALLBACK_MS = 100

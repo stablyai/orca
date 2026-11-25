@@ -3,7 +3,7 @@ import {
   TERMINAL_COLOR_KEYS,
   hasUsableTerminalThemeColors,
   normalizeTerminalColorOverrides
-} from '../../terminal-custom-themes'
+} from '../../terminal-themes/terminal-custom-themes'
 import {
   pickKnownArtifactKeys,
   pluginContentIdSchema,

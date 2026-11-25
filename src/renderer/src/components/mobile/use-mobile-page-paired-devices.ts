@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { useMobilePairingDevicePolling } from '../settings/mobile-pairing-device-polling'
-import type { PairedDevice, StepIndex } from './MobileHero'
+import { useMobilePairingDevicePolling } from './pairing/mobile-pairing-device-polling'
+import type { PairedMobileDevice } from './paired-mobile-devices'
+import type { StepIndex } from './MobileHero'
 import {
   shouldShowPairedAfterDeviceRefresh,
   type MobilePageStage as FlowStage
@@ -21,7 +22,7 @@ export function useMobilePagePairedDevices({
   stepIdx: StepIndex
   setStepIdx: Dispatch<SetStateAction<StepIndex>>
 }): {
-  devices: readonly PairedDevice[]
+  devices: readonly PairedMobileDevice[]
   stage: FlowStage | null
   revokingDeviceIds: readonly string[]
   enterFlow: () => void
@@ -74,28 +75,29 @@ export function useMobilePagePairedDevices({
       opts: {
         force?: boolean
       } = {}
-    ): Promise<readonly PairedDevice[]> => {
+    ): Promise<readonly PairedMobileDevice[]> => {
       try {
-        const nextDevices = await refreshDevices(opts)
-        if (mountedRef.current) {
-          if (
-            shouldShowPairedAfterDeviceRefresh({
-              stage: stageRef.current,
-              deviceCountAtPairStart: deviceCountAtPairStartRef.current,
-              nextDeviceCount: nextDevices.length
-            })
-          ) {
-            showPairedDevices(nextDevices.length)
-          }
-        }
-        return nextDevices
+        return await refreshDevices(opts)
       } catch (err) {
         console.error('mobile.listDevices failed', err)
         return []
       }
     },
-    [mountedRef, refreshDevices, showPairedDevices]
+    [refreshDevices]
   )
+
+  // Any cache update (poll or main's devices-changed push) can complete a pairing started on this page.
+  useEffect(() => {
+    if (
+      shouldShowPairedAfterDeviceRefresh({
+        stage: stageRef.current,
+        deviceCountAtPairStart: deviceCountAtPairStartRef.current,
+        nextDeviceCount: devices.length
+      })
+    ) {
+      showPairedDevices(devices.length)
+    }
+  }, [devices.length, showPairedDevices])
 
   useEffect(() => {
     let cancelled = false
@@ -130,7 +132,7 @@ export function useMobilePagePairedDevices({
           throw new Error('mobile.revokeDevice returned revoked=false')
         }
         // Once revoked, reload failure must still report success; remove from last-known devices rather than treating failed loading as an empty list.
-        let remaining: readonly PairedDevice[]
+        let remaining: readonly PairedMobileDevice[]
         try {
           remaining = await refreshDevices({ force: true })
         } catch (err) {

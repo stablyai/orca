@@ -1,7 +1,5 @@
-import {
-  recordHiddenRendererPtyDataDrop,
-  shouldDropHiddenRendererPtyData
-} from './pty-hidden-delivery-gate'
+import { shouldDropHiddenRendererPtyData } from './pty-hidden-delivery-gate'
+import { advanceEscapeBoundary } from './pty-escape-boundary'
 import type { PendingPtyData } from './pty-pending-data-drain-contract'
 import { activeRendererPtys } from './visibility-state'
 import {
@@ -10,9 +8,10 @@ import {
   PTY_BATCH_FLUSH_MAX_WRITES,
   PTY_DISPATCHER_READY_WATCHDOG_MS
 } from './constants'
-import { getDroppedMode2031RendererData, getDroppedSynchronizedOutputRendererData } from './pending'
-import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal-synchronized-output-scan'
+import { makeDroppedOutputPayload } from './pending'
+import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import { makePtyDataPayload, sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
+import { dropHiddenPendingPtyData } from './hidden-transition'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
 import type { PtyIpcSession } from '../session'
 
@@ -104,11 +103,14 @@ export function flushPendingData(session: PtyIpcSession): void {
       }
       const { id, pending } = selection
       // The model already owns hidden bytes; discard delivery and restore from its snapshot on reveal.
-      if (shouldDropHiddenRendererPtyData(id, settings)) {
+      if (
+        shouldDropHiddenRendererPtyData(id, settings) &&
+        !(pending.droppedOutput === true && pending.data)
+      ) {
         session.pendingData.remove(selection)
         session.pendingOverflowMarkedPtys.delete(id)
         session.updateProducerFlowControl(id)
-        const drop = recordHiddenRendererPtyDataDrop(id, pending.data.length)
+        const drop = dropHiddenPendingPtyData(session, id, pending)
         warnIfDroppingHiddenBytesForVisiblePty(session, id, pending.data.length)
         if (drop.shouldEmitRestoreMarker) {
           sendModelRestoreNeededMarker(
@@ -129,17 +131,7 @@ export function flushPendingData(session: PtyIpcSession): void {
         session.pendingData.remove(selection)
         session.updateProducerFlowControl(id)
         // A pending-cap gap requires snapshot repaint; only salvaged query bytes remain in data.
-        if (
-          !sendPtyDataToRenderer(session, id, {
-            id,
-            // Release DEC 2026 before salvaged partial mode-2031 CSI so a later ESC cannot abort it.
-            data:
-              pending.data +
-              getDroppedSynchronizedOutputRendererData(pending) +
-              getDroppedMode2031RendererData(pending),
-            droppedOutput: true
-          })
-        ) {
+        if (!sendPtyDataToRenderer(session, id, makeDroppedOutputPayload(id, pending))) {
           sendFailed = true
           break
         }
@@ -162,6 +154,13 @@ export function flushPendingData(session: PtyIpcSession): void {
         if (pending.containsBackgroundOutput === true) {
           nextPending.containsBackgroundOutput = true
         }
+        const remainderEscapeBoundary = advanceEscapeBoundary(
+          pending.startEscapeBoundary === undefined ? '' : pending.startEscapeBoundary,
+          chunk
+        )
+        if (remainderEscapeBoundary !== '') {
+          nextPending.startEscapeBoundary = remainderEscapeBoundary
+        }
         session.pendingData.replaceWithRemainder(selection, nextPending)
       } else {
         session.pendingData.remove(selection)
@@ -178,7 +177,7 @@ export function flushPendingData(session: PtyIpcSession): void {
           pending.containsBackgroundOutput,
           pending.rawLength,
           pending.transformed,
-          pending.gapEscapeState
+          pending.startEscapeBoundary
         )
       )
       if (!sent) {

@@ -1,20 +1,24 @@
 import { createDaemonPtyPhysicalOwner } from './daemon-pty-physical-owner'
 import type { DisposableNativePty } from './native-pty-spawn'
 import type * as pty from 'node-pty'
-import type { RecognizedAgentProcess } from '../../../shared/agent-process-recognition'
-import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo'
-import { signalPosixPtyForegroundGroup } from '../../pty/posix-pty-foreground-group'
-import { readPtsName } from '../../pty/node-pty-pts-name'
+import type { RecognizedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
+import { readPtySlavePath } from '../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo'
+import { signalPosixPtyForegroundGroup } from '../../pty/process-retirement/posix-pty-foreground-group'
+import {
+  observePtyForeground,
+  readPtyForegroundGroup,
+  ptyForegroundGroupReader
+} from '../../pty/process-retirement/pty-master-foreground-observation'
+import { readPtsName } from '../../pty/process-retirement/node-pty-pts-name'
 import { terminatePtyJob } from '../../windows/windows-pty-job'
-import { isValidPtySize } from '../daemon-pty-size'
-import type { SubprocessHandle } from '../session-subprocess-handle'
+import { isValidPtySize } from '../protocol/daemon-pty-size'
+import type { SubprocessHandle } from '../sessions/session-subprocess-handle'
 import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
 import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
 import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
-import type { ConptyStartupEvents } from './conpty-startup-input-reader'
+import { runsOnWinpty, type ConptyStartupEvents } from './conpty-startup-input-reader'
 
-export { createDaemonPtyPhysicalOwner } from './daemon-pty-physical-owner'
 export type DaemonPtyPhysicalOwner = ReturnType<typeof createDaemonPtyPhysicalOwner>
 
 // Normal exit also retires the master first; let the exit report win before calling input closed.
@@ -127,27 +131,44 @@ export function createDaemonPtySubprocessHandle(args: {
   const exitSubscription = physical.onExit(acceptExit)
 
   const slavePath = readPtySlavePath(proc)
+  const readForegroundGroup = ptyForegroundGroupReader(proc)
   return {
     pid: proc.pid,
     processNameIsSpawnFile: ptyProcessNameIsSpawnFile(proc),
+    ...(runsOnWinpty(proc) ? { resizeRedrawsOwnScreen: true } : {}),
     // Only the login(1) wrapper hides the shell's exit status, and it forks the shell as its child.
     shellIsRootChild: !reportsChildExitStatus,
     ...(process.platform === 'win32'
       ? {
-          inspectChildProcesses: (fresh?: boolean, ignoreDetached?: boolean) =>
-            inspectSpawnFileWindowsChildProcesses(proc, shellPath, fresh, ignoreDetached)
+          inspectChildProcesses: (
+            fresh?: boolean,
+            ignoreDetached?: boolean,
+            jobMembershipOnly?: boolean
+          ) =>
+            inspectSpawnFileWindowsChildProcesses(
+              proc,
+              shellPath,
+              fresh,
+              ignoreDetached,
+              jobMembershipOnly
+            )
         }
       : {}),
     shellPath: args.shellPath,
     shellCwd: args.spawnCwd,
     shellPathEnv: args.env.PATH,
     ...(slavePath ? { slavePath } : {}),
+    ...(readForegroundGroup ? { readForegroundGroup } : {}),
     ...(args.startupCommandDeliveredInShellArgs
       ? { startupCommandDeliveredInShellArgs: true }
       : {}),
+    observeForeground: () => observePtyForeground(proc, () => !dead && !ioFailed && !masterRetired),
     getForegroundProcess: foreground.getForegroundProcess,
     confirmForegroundProcess: foreground.confirmForegroundProcess,
     confirmShellForeground: foreground.confirmShellForeground,
+    // Windows proves the agent pid on a full read; POSIX reads carry it in their evidence instead.
+    foregroundAgent: () => (process.platform === 'win32' ? foreground.cachedAgent() : null),
+    pendingForegroundRefresh: foreground.pendingForegroundRefresh,
     write: (data) => {
       if (dead || ioFailed || masterRetired) {
         return
@@ -226,6 +247,7 @@ export function createDaemonPtySubprocessHandle(args: {
       // SIGWINCH belongs to the tty foreground group; destructive signals keep the root-pid target.
       if (sig === 'SIGWINCH') {
         void signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), sig, signalRootPid, {
+          readForegroundGroup: () => readPtyForegroundGroup(proc),
           ownsRoot: () => !physical.hasExited()
         })
         return

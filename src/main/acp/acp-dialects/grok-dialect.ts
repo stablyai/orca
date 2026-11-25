@@ -1,11 +1,13 @@
 import { z } from 'zod'
-import { acpNotificationEnvelopeSchema } from '../acp-context-usage'
+import { acpNotificationEnvelopeSchema } from '../protocol/acp-session-events'
 import type { AcpDialect, AcpDialectNotification, AcpHookBlock } from './acp-dialect'
+import type { AvailableCommand } from '../generated/acp-protocol.generated'
 import { grokRequest, grokSettleRequest } from './grok-requests'
 import { grokBackgroundTaskNotification, grokToolBackgroundTasks } from './grok-background-tasks'
 import { grokModelEfforts } from './grok-model-catalog'
 import { grokSubagentNotification, grokToolSubagents } from './grok-subagents'
 import { grokSubagentStop } from './grok-subagent-stop'
+import { grokThreadGoalReport } from './grok-goal-updates'
 import { grokBackgroundTaskStop } from './grok-background-task-stop'
 
 const tokenCount = z.number().int().nonnegative()
@@ -37,6 +39,8 @@ const hookDeniedSchema = z.looseObject({
   cancellationContext: z.looseObject({ reason: z.string().optional() }).nullish()
 })
 const promptErrorDataSchema = z.looseObject({ message: z.string() })
+// Grok's code for an HTTP 429; /compact keeps it when it wraps the error.
+const RATE_LIMITED_ERROR_CODE = -32003
 const FAILED_STOP_REASONS = ['error', 'rate_limit']
 const SESSION_NOTIFICATIONS = ['x.ai/session_notification', 'x.ai/session/update']
 
@@ -137,8 +141,15 @@ function notification(
     const detail = parsed.success
       ? failureDetail(parsed.data.stopReason, parsed.data.agentResult)
       : undefined
-    return parsed.success && detail
-      ? { disposition: 'map', turn: parsed.data.promptId, failureDetail: detail }
+    return parsed.success && FAILED_STOP_REASONS.includes(parsed.data.stopReason)
+      ? {
+          disposition: 'map',
+          turn: parsed.data.promptId,
+          failure: {
+            stopReason: parsed.data.stopReason,
+            ...(detail ? { failureDetail: detail } : {})
+          }
+        }
       : { disposition: 'ignore' }
   }
   if (canonical === 'x.ai/queue/changed') {
@@ -161,6 +172,14 @@ function notification(
       disposition: 'map',
       ...(envelope._meta?.isReplay === true ? { replay: true } : {}),
       subagents: [subagent]
+    }
+  }
+  const threadGoal = grokThreadGoalReport(envelope.update)
+  if (threadGoal) {
+    return {
+      disposition: 'map',
+      ...(envelope._meta?.isReplay === true ? { replay: true } : {}),
+      threadGoal
     }
   }
   const meta = turnMetaSchema.safeParse(envelope._meta)
@@ -206,6 +225,25 @@ function notification(
   }
 }
 
+const initializeCommandsSchema = z.looseObject({
+  _meta: z.looseObject({
+    grokShell: z.literal(true),
+    availableCommands: z.array(z.looseObject({ name: z.string() }))
+  })
+})
+// Initialize lists only built-ins; a skill or workflow that takes a session-gated built-in's name carries these.
+const OTHER_ORIGIN_META = ['path', 'scope', 'workflowSource']
+
+function grokBuiltinCommands(initialized: unknown): (command: AvailableCommand) => boolean {
+  const parsed = initializeCommandsSchema.safeParse(initialized)
+  if (!parsed.success) {
+    return () => false
+  }
+  const names = new Set(parsed.data._meta.availableCommands.map((command) => command.name))
+  return (command) =>
+    names.has(command.name) && !OTHER_ORIGIN_META.some((key) => command._meta?.[key] !== undefined)
+}
+
 export const GROK_ACP_DIALECT: AcpDialect = {
   subagentStop: grokSubagentStop,
   backgroundTaskStop: grokBackgroundTaskStop,
@@ -215,6 +253,7 @@ export const GROK_ACP_DIALECT: AcpDialect = {
     return parsed.success ? parsed.data['x.ai/tool'].name : undefined
   },
   request: grokRequest,
+  elicitationComplete: (method) => method.replace(/^_/, '') === 'x.ai/mcp/elicit_complete',
   settleRequest: grokSettleRequest,
   toolBackgroundTasks: grokToolBackgroundTasks,
   toolSubagents: grokToolSubagents,
@@ -226,7 +265,10 @@ export const GROK_ACP_DIALECT: AcpDialect = {
       : undefined,
   contextWindow,
   modelEfforts: grokModelEfforts,
+  builtinCommands: grokBuiltinCommands,
   hookBlock,
   promptErrorDetail: (error) => promptErrorDataSchema.safeParse(error.data).data?.message,
+  promptFailure: (error) =>
+    error.code === RATE_LIMITED_ERROR_CODE ? { stopReason: 'rate_limit' } : undefined,
   failedTurnText: () => 'Grok ended this turn with an error.'
 }

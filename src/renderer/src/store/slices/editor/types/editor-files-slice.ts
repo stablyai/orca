@@ -1,18 +1,19 @@
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import type { CheckRunDetailsTabPatch } from '@/components/editor/check-run-details-tab'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import type { CheckRunDetailsTabPatch } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type {
   CombinedDiffAlternate,
   ConflictReviewEntry,
   ConflictReviewState,
   OpenCheckRunDetailsState
-} from '../../../../../../shared/editor-tab-view-types'
+} from '../../../../../../shared/editor/views/editor-tab-view-types'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
   GitCommitCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { WorkspaceVisibleTabType } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   BranchCompareLike,
   ClosedEditorTabSnapshot,
@@ -27,6 +28,8 @@ import type {
   EditorBufferKeptRecords
 } from '../buffers/editor-buffer-kept'
 import type { EditorBufferDetachments, EditorBufferViewIndex } from '../buffers/editor-buffer-views'
+import type { StrandedEditorDrafts } from '@/lib/workspace/persistence/stranded-editor-drafts'
+import type { PersistedOpenFile } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import type { EditorOpenLinkIntent, EditorOpenResult } from './editor-open-link-intent'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from './open-file-path-rekey'
 import type {
@@ -35,6 +38,8 @@ import type {
 } from './restored-editor-owner'
 
 export type OpenFileOptions = {
+  placementWorkspaceId?: string
+  executionHostId?: ExecutionHostId
   preview?: boolean
   targetGroupId?: string
   recordReplacedPreview?: boolean
@@ -65,6 +70,10 @@ export type EditorFilesSlice = {
   releaseKeptEditorBuffers: (notice: number) => void
   /** A write landed `content` for kept records of `viewIds`: drop one it saved, else move its baseline. */
   settleKeptEditorBuffers: (viewIds: readonly string[], content: string, signature: string) => void
+  /** Unsaved drafts of workspaces gone at startup; kept until a live untitled tab holds them. */
+  strandedEditorDrafts: StrandedEditorDrafts
+  /** Forget stranded drafts whose text a recovered tab now holds. */
+  settleRecoveredStrandedEditorDrafts: (recovered: ReadonlySet<PersistedOpenFile>) => void
   /** Bumped when runtime revisions change, so the record middleware re-resolves identities. */
   editorBufferIdentityRevision: number
   /** Re-resolves every view's file identity after a change the store can't see (revisions). */
@@ -120,7 +129,12 @@ export type EditorFilesSlice = {
       | 'externalSshTargetId'
     > &
       Partial<Pick<OpenFile, 'terminalArtifactGrantId' | 'readOnly' | 'operationProvenance'>>,
-    options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
+    options?: {
+      anchor?: string | null
+      targetGroupId?: string
+      sourceFileId?: string
+      placementWorkspaceId?: string
+    }
   ) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
   pinFile: (fileId: string, tabId?: string) => void
@@ -130,7 +144,11 @@ export type EditorFilesSlice = {
    */
   closeFile: (
     fileId: string,
-    opts?: { captureRecentlyClosed?: boolean; keepEditorBuffer?: EditorBufferKeepRequest }
+    opts?: {
+      captureRecentlyClosed?: boolean
+      keepEditorBuffer?: EditorBufferKeepRequest
+      placementWorkspaceId?: string
+    }
   ) => void
   closeAllFiles: () => void
   /** Most recently closed editor tabs per worktree (for Cmd/Ctrl+Shift+T). */
@@ -185,7 +203,13 @@ export type EditorFilesSlice = {
     worktreePath: string,
     alternate?: CombinedDiffAlternate,
     areaFilter?: string,
-    entriesSnapshot?: GitStatusEntry[]
+    entriesSnapshot?: GitStatusEntry[],
+    options?: EditorOpenTargetOptions & {
+      /** Only uncommitted changes, in their own tab ("Uncommitted Changes"). */
+      uncommittedOnly?: boolean
+      /** Uncommitted + branch; falls back to uncommittedOnly when branch compare is not ready. */
+      wholeScope?: boolean
+    }
   ) => void
   openConflictFile: (
     worktreeId: string,
@@ -205,7 +229,8 @@ export type EditorFilesSlice = {
     worktreeId: string,
     worktreePath: string,
     entries: ConflictReviewEntry[],
-    source: ConflictReviewState['source']
+    source: ConflictReviewState['source'],
+    options?: EditorOpenTargetOptions
   ) => void
   openCheckRunDetails: (
     worktreeId: string,
@@ -224,7 +249,8 @@ export type EditorFilesSlice = {
     worktreeId: string,
     worktreePath: string,
     compare: GitBranchCompareSummary,
-    alternate?: CombinedDiffAlternate
+    alternate?: CombinedDiffAlternate,
+    options?: EditorOpenTargetOptions
   ) => void
   openCommitAllDiffs: (
     worktreeId: string,
@@ -232,6 +258,7 @@ export type EditorFilesSlice = {
     compare: GitCommitCompareSummary,
     entries: GitBranchChangeEntry[],
     subject?: string,
-    message?: string
+    message?: string,
+    options?: EditorOpenTargetOptions
   ) => void
 }

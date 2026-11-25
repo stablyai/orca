@@ -1,37 +1,41 @@
-import type { AgentSessionDeathEvidence } from '../../agent-session-death-evidence'
-import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
-import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
-import { isAgentSessionConversationName } from '../agent-session-conversation-name'
+import { isOptionalUsageLimitContinueCancel } from './stopping/agent-session-usage-limit-continue'
+import type { AgentSessionDeathEvidence } from './leases/agent-session-death-evidence'
+import { isAgentSessionRewindRecord } from './rewind/agent-session-rewind'
+import type { AgentSessionRewindRecord } from './rewind/agent-session-rewind'
+import { isAgentSessionLaunchArgs } from './records/agent-session-launch-args'
+import { isAgentSessionConversationName } from '../conversation-naming/agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
   isPersistedAgentSessionRuntimeKind,
   type PersistedAgentSessionObservationLease,
   type PersistedAgentSessionObservationRecord,
   type PersistedAgentSessionRecord
-} from './agent-session-legacy-handoff-lease'
+} from './leases/agent-session-legacy-handoff-lease'
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
-import type { AgentSessionLastTurn } from '../../agent-session-last-turn'
-import type { ExecutionHostId } from '../../execution-host'
-import {
-  isAgentSessionConversationCommandRecord,
-  type AgentSessionConversationCommandRecord
-} from '../agent-session-conversation-command'
+import type { AgentSessionLastTurn } from './records/agent-session-last-turn'
+import type { AgentSessionForkedFrom } from './records/agent-session-forked-from'
+export type { AgentSessionForkedFrom }
+import type { ExecutionHostId } from '../../execution-host/execution-host'
+import { isAgentSessionConversationCommandRecord } from '../conversation-context/agent-session-conversation-command'
+import type { AgentSessionConversationCommandRecord } from '../conversation-context/agent-session-conversation-command'
 import {
   decodePersistedAgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
-} from './agent-session-provider-handle'
+} from './provider-handles/agent-session-provider-handle'
 import {
   isAgentSessionProviderContextBoundary,
   type AgentSessionProviderContextBoundary
-} from '../agent-session-provider-context'
-import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
-import { isNonNegativeSafeInteger } from '../../ssh-retained-payload-limits'
+} from '../conversation-context/agent-session-provider-context'
+import { isStructuredAgentId } from './provider-handles/agent-session-provider-handle-encoding'
+import { isNonNegativeSafeInteger } from '../../remote-runtime/ssh/ssh-retained-payload-limits'
 import {
   isAgentSessionAccountHome,
+  isOptionalAgentSessionLaunchedAccount,
   MAX_PATH_LENGTH,
-  type AgentSessionAccountHome
-} from './agent-session-account-home'
+  type AgentSessionAccountHome,
+  type AgentSessionLaunchedAccount
+} from './accounts/agent-session-account-home'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
@@ -110,6 +114,8 @@ export type AgentSessionRecord = {
   providerHandleChain: AgentSessionProviderHandleLink[]
   providerContextBoundary?: AgentSessionProviderContextBoundary
   accountHome: AgentSessionAccountHome
+  /** Where the latest proven runtime actually launched; absent before any or from older hosts. */
+  launchedAccount?: AgentSessionLaunchedAccount
   /** Optional host-written construction observation; checked independently of record readability. */
   acquiredAccount?: unknown
   /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
@@ -118,6 +124,10 @@ export type AgentSessionRecord = {
   options?: Record<string, string>
   /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
   permissionMode?: string
+  usageLimitContinueCancel?: { turnItemId: string; resetsAt: number }
+  /** The newest async question row the person skipped; it and every earlier question stop
+   *  waiting on them, on every device. A malformed one is dropped on read. */
+  asyncQuestionsSkippedThrough?: string
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The conversation's one name: Orca's automatic name or the user's rename. Session History,
@@ -132,6 +142,10 @@ export type AgentSessionRecord = {
   /** Latest turn edge for lists that must not open conversation history. */
   lastTurn?: AgentSessionLastTurn
   launchArgs?: AgentSessionLaunchArgs
+  /** The chat this one was forked from; the marker after its inherited history derives from it. */
+  forkedFrom?: AgentSessionForkedFrom
+  /** Key of the host-owned instructions this provider context was confirmed to hold; absent: unknown. */
+  instructionsKey?: string
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -144,13 +158,11 @@ const MAX_LAUNCH_ENV_ENTRIES = 256
 const MAX_LAUNCH_ENV_VALUE_LENGTH = 65_536
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
 
-function isBoundedString(value: unknown, max: number): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= max
-}
+const isBoundedString = (value: unknown, max: number): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= max
 
-export function isAgentSessionId(value: unknown): value is string {
-  return typeof value === 'string' && SESSION_ID_PATTERN.test(value)
-}
+export const isAgentSessionId = (value: unknown): value is string =>
+  typeof value === 'string' && SESSION_ID_PATTERN.test(value)
 
 /** NUL cannot occur in a host id, distro name, or workspace id, so no component can forge a join. */
 
@@ -260,10 +272,8 @@ function isStoredRecordObject(value: unknown): value is Record<string, unknown> 
 function isPersistedAgentSessionObservationLease(
   lease: unknown
 ): lease is PersistedAgentSessionObservationLease {
-  if (!isStoredRecordObject(lease)) {
-    return false
-  }
   return (
+    isStoredRecordObject(lease) &&
     isAgentSessionId(lease.sessionId) &&
     isPersistedAgentSessionRuntimeKind(lease.runtimeKind) &&
     typeof lease.runtimeFence === 'number' &&
@@ -303,11 +313,13 @@ export function isPersistedAgentSessionObservationRecord(
       isAgentSessionExecutionLocation(record.location) &&
       isStructuredAgentId(record.provider) &&
       isAgentSessionAccountHome(record.accountHome) &&
+      isOptionalAgentSessionLaunchedAccount(record.launchedAccount) &&
       (record.launchDirectory === undefined ||
         isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
       (record.options === undefined || isAgentSessionOptions(record.options)) &&
       (record.permissionMode === undefined ||
         isBoundedString(record.permissionMode, MAX_ID_LENGTH)) &&
+      isOptionalUsageLimitContinueCancel(record.usageLimitContinueCancel) &&
       (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
       (record.providerContextBoundary === undefined ||
         isAgentSessionProviderContextBoundary(record.providerContextBoundary)) &&

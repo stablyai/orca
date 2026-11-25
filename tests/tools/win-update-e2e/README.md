@@ -11,24 +11,19 @@ the update — and whether any console/terminal window flashes.
 > the shared modules in this directory (app driver, daemon discovery, PowerShell
 > runner, platform guard, table renderer).
 
-It is the Phase 0 "proof harness" deliverable from
-[`docs/windows-terminal-update-survival-plan.md`](../../docs/windows-terminal-update-survival-plan.md).
-It exists specifically because the July 2026 attempt shipped four broken RCs
-without ever installing the packaged artifact (see
-[`docs/windows-terminal-update-survival-postmortem.md`](../../docs/windows-terminal-update-survival-postmortem.md),
-"Why verification missed every one of these"). Its design refuses to repeat
-those verification failures:
+Source checks alone cannot establish what an installed Windows update does to
+live terminals. This harness checks the packaged artifacts with independent
+instruments:
 
 - **Window visibility is measured by window enumeration + owner/canary
-  attribution — never by conhost command-line heuristics.** The post-mortem
-  proved conhost flags invert with parent console state and `MainWindowHandle`
-  is `0` for Windows-Terminal-hosted consoles. See `window-enum.ps1`.
+  attribution — never by conhost command-line heuristics.** See the native
+  enumeration in `window-enum.ps1`.
 - **Interactivity is proven by execution, not by result-shape.** Typed commands
   write sentinel **files**; the harness checks the files. A command that "runs
   and returns correct output" but flashes a window is still caught, because the
   window watch runs independently.
 - **The daemon is identified by command-line marker, never by exe name.** With
-  `ELECTRON_RUN_AS_NODE` the daemon image is `Orca.exe`; a relocated Phase 1
+  `ELECTRON_RUN_AS_NODE` the daemon image is `Orca.exe`; a relocated
   host may be a differently-named copied binary. See `daemon-processes.mjs`.
 - **Each run uses an isolated userData dir** so its daemon's socket/token path
   is unique and never collides with the many other daemons a dev box or CI
@@ -58,15 +53,16 @@ Or directly: `node tests/tools/win-update-e2e/run.mjs --from ... --to ... --expe
 
 ### Profiles
 
-- **`cold-restore`** — **today's** behavior and the baseline that must keep
-  passing against current `main`. The installer's path sweep kills the in-dir
-  daemon, so: old daemon PID is **dead**, a **fresh** daemon exists, scrollback
-  is cold-restored (best-effort), a new terminal is interactive, and **zero**
-  unexpected console/terminal windows appear.
-- **`survival`** — the Phase 1 target. Daemon PID **unchanged** across the
-  update, marker process **still alive**, the pre-update session still
-  interactive (typed input echoes, Ctrl+C interrupts), and **zero** unexpected
-  windows.
+- **`cold-restore`** — the installer's path sweep kills the in-dir daemon, so:
+  old daemon PID is **dead**, a **fresh** daemon exists, a new terminal is
+  interactive, and **zero** unexpected console/terminal windows appear.
+- **`survival`** — daemon PID **unchanged** across the update, marker process
+  **still alive**, the pre-update session still interactive (typed input
+  echoes, Ctrl+C interrupts), and **zero** unexpected windows.
+
+Pick the profile that matches the base/update pair under test. The
+[branch-build workflow](../../../.github/workflows/win-update-survival-e2e.yml)
+defaults to `survival`.
 
 ## Safety
 
@@ -210,12 +206,9 @@ powershell -File tests/tools/win-update-e2e/window-enum.ps1
 
 ## Known limitations
 
-- **Scrollback fidelity is best-effort.** A production build renders the
-  terminal with WebGL, so xterm text is not reliably in the DOM and the e2e
-  `SerializeAddon` is not exposed. When text cannot be read the check reports
-  `INFO` (unknown), never a false `FAIL`.
-- **Daemon file log** does not exist yet in packaged builds (the fork's stdio is
-  suppressed). The "daemon log free of ERROR lines" assertion is `INFO` until
-  Phase 0 daemon logging lands, then it reads `<userData>/logs/daemon.log`.
+- The daemon-log assertion is informational when `<userData>/logs/daemon.log`
+  is absent. When present, it fails on `uncaught-exception-fatal` records,
+  `client-hello-rejected` records with reason `invalid-token`, and non-JSON
+  lines containing `FATAL`. Suppressed exceptions are only counted.
 - The harness assumes the packaged main honors `ORCA_E2E_USER_DATA_DIR` to
   relocate userData; verify this against a real packaged build.

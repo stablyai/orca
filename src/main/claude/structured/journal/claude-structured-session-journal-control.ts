@@ -1,15 +1,17 @@
 import {
   bindClaudeContextUsageCapture,
   type ClaudeContextUsageCaptureOptions
-} from '../../claude-context-usage'
+} from '../../context-usage/claude-context-usage'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
-import type { ClaudeJournalTranslator } from '../../claude-journal-translator-contract'
+import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { ClaudeInitProof } from '../claude-structured-init-proof'
+import type { ClaudeInitProof } from '../startup/claude-structured-init-proof'
+import { claimClaudeFullAccessRefusalNotice } from '../permissions/claude-full-access-refusal-notice'
+import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeSession,
@@ -20,13 +22,17 @@ export function createClaudeSessionJournalTranslator(
   sink: StructuredAgentSessionEventSink | undefined,
   fallbackIdPrefix: string,
   failure: Parameters<typeof createClaudeJournalFailureHandler>[0],
-  currentSession: () => ClaudeSession | null
+  currentSession: () => ClaudeSession | null,
+  acceptStartupFailure: (message: Record<string, unknown>) => boolean
 ): ClaudeJournalTranslator | null {
   const { attempt } = failure
+  attempt.delivery.onFailure = createClaudeJournalFailureHandler(failure)
+  attempt.delivery.bind(sink)
   return sink
     ? createClaudeJournalTranslator({
         sink,
-        account: () => attempt.account,
+        delivery: attempt.delivery,
+        account: () => attempt.launch?.account,
         model: () => {
           const session = currentSession()
           return (
@@ -41,7 +47,14 @@ export function createClaudeSessionJournalTranslator(
           currentSession()?.backgroundTasks.goalBackgroundWork ?? 'unverifiable',
         onBackgroundTaskJournalFailure: createClaudeJournalFailureHandler(failure),
         bindPromptItemId: (itemId, promptKey) =>
-          attempt.prompts.bindJournalItemId(itemId, promptKey)
+          attempt.prompts.bindJournalItemId(itemId, promptKey),
+        acceptStartupFailure,
+        fullAccessRefusalNotice: () => {
+          const session = currentSession()
+          return session ? claimClaudeFullAccessRefusalNotice(session) : null
+        },
+        steerAwaitingEcho: () =>
+          currentSession()?.dispatchWaiters.some((waiter) => waiter.steers) ?? false
       })
     : null
 }
@@ -81,13 +94,30 @@ function retryOwedWritesOnDrain(
 export function bindClaudeJournalReadingControl(
   sink: StructuredAgentSessionEventSink | undefined,
   connection: Pick<ClaudeStreamJsonConnection, 'pauseReading' | 'resumeReading'>,
-  translator: ClaudeJournalTranslator | null
+  translator: ClaudeJournalTranslator | null,
+  delivery?: ClaudeJournalBoundDelivery
 ): (() => void) | undefined {
   if (!connection.pauseReading || !connection.resumeReading) {
     return undefined
   }
   let sinkPaused = false
-  return sink?.bindReadingControl?.({
+  let journalPaused = false
+  const resume = () => {
+    if (!sinkPaused && !journalPaused) {
+      connection.resumeReading?.()
+    }
+  }
+  const unbindDelivery = delivery?.bindReadingControl({
+    pauseReading: () => {
+      journalPaused = true
+      connection.pauseReading?.()
+    },
+    resumeReading: () => {
+      journalPaused = false
+      resume()
+    }
+  })
+  const unbindSink = sink?.bindReadingControl?.({
     pauseReading: () => {
       sinkPaused = true
       connection.pauseReading?.()
@@ -96,20 +126,25 @@ export function bindClaudeJournalReadingControl(
       sinkPaused = false
       const retried = retryOwedWritesOnDrain(translator)
       if (!sinkPaused && (retried.accepted || retried.reason !== 'backpressure')) {
-        connection.resumeReading?.()
+        resume()
       }
     }
   })
+  return () => {
+    unbindDelivery?.()
+    unbindSink?.()
+  }
 }
 
 export function bindClaudeConnectionJournalControls(
   sink: StructuredAgentSessionEventSink | undefined,
   connection: ClaudeStreamJsonConnection,
   translator: ClaudeJournalTranslator | null,
-  capture: ClaudeContextUsageCaptureOptions
+  capture: ClaudeContextUsageCaptureOptions,
+  delivery?: ClaudeJournalBoundDelivery
 ): (() => void) | undefined {
   const unbinds = [
-    bindClaudeJournalReadingControl(sink, connection, translator),
+    bindClaudeJournalReadingControl(sink, connection, translator, delivery),
     bindClaudeContextUsageCapture(connection, translator, capture)
   ].filter((unbind): unbind is () => void => unbind !== undefined)
   return unbinds.length === 0

@@ -1,41 +1,23 @@
-import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
-import type { AgentType } from '../../agent-status-types'
+import { agentSessionInteractionCommand } from '../options/permissions/agent-session-interaction-mode'
+import { withoutClaudeVendor } from '../options/model-catalog/model-id-label'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../native-chat/input/native-chat-session-options'
+import type { SlashCommandSuggestion } from '../../native-chat/input/commands/native-chat-slash-commands'
 import {
-  sessionSlashCommandSuggestions,
-  type SlashCommandSuggestion
-} from '../../native-chat/input/native-chat-slash-commands'
-import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
+  CONVERSATION_COMMANDS,
+  STRUCTURED_AGENT_SESSION_SLASH_COMMANDS
+} from './structured-agent-session-slash-menu'
+import type { AgentSessionConversationCommand } from '../conversation-context/agent-session-conversation-command'
+import type { AgentSessionThreadGoalChange } from '../thread-goals/agent-session-thread-goal-wire'
 import type { AgentSessionSlashCommand } from '../agent-session-wire'
 import {
   structuredComposerFailure,
   type StructuredComposerFailureCode,
   type StructuredComposerFailureParams
-} from '../../structured-agent-session-composer-failure'
-
-const MODEL_COMMAND: SlashCommandSuggestion = {
-  name: 'model',
-  description: 'Choose the model'
-}
-
-const EFFORT_COMMAND: SlashCommandSuggestion = {
-  name: 'effort',
-  description: 'Choose reasoning effort'
-}
-
-const CONVERSATION_COMMANDS: readonly SlashCommandSuggestion[] = [
-  { name: 'clear', description: 'Clear conversation context' },
-  { name: 'compact', description: 'Compact conversation context' }
-]
-
-/** Session options remain available on hosts predating conversation commands. */
-export const STRUCTURED_AGENT_SESSION_SLASH_COMMANDS: readonly SlashCommandSuggestion[] = [
-  MODEL_COMMAND,
-  EFFORT_COMMAND
-]
+} from '../failures/structured-agent-session-composer-failure'
 
 export type StructuredAgentSessionComposerOptions = {
   agent?: AgentType
@@ -45,11 +27,17 @@ export type StructuredAgentSessionComposerOptions = {
   /** What the running session reported for its `/` menu; undefined until read or on an older host. */
   sessionCommands?: readonly AgentSessionSlashCommand[]
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  /** Text after `/compact` reaches the agent; without this it is refused, never dropped. */
+  compactInstructions?: boolean
   runConversationCommand?: (
-    command: AgentSessionConversationCommand
+    command: AgentSessionConversationCommand,
+    instructions?: string,
+    onSent?: () => void
   ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
   /** Without host goal support, /goal remains agent-handled text. */
-  setThreadGoalObjective?: (objective: string) => Promise<boolean>
+  changeThreadGoal?: (change: AgentSessionThreadGoalChange) => Promise<boolean>
+  /** Without it, /mcp remains agent-handled text. */
+  openMcpPanel?: () => void
 }
 
 /** Visible condition holding a refusal: agent/prompt/background work, an in-flight send or a Retry card. */
@@ -71,49 +59,23 @@ export type StructuredAgentSessionCommandOutcome = {
   refusedWhile?: StructuredAgentSessionCommandRefusalCause
 }
 
-function commandParts(text: string): { name: string; argument: string } | null {
+function commandParts(text: string, agent?: AgentType) {
   if (!text.startsWith('/')) {
     return null
   }
-  const match = /^\/([^\s]+)(?:\s+(.*))?$/.exec(text.trimEnd())
-  return match ? { name: match[1]!.toLowerCase(), argument: match[2]?.trim() ?? '' } : null
-}
-
-/** Fallback menu combines host-owned and agent text-driven commands when no catalog is reported. */
-export function structuredSlashCommands(
-  commands: readonly AgentSessionConversationCommand[] = [],
-  agent?: AgentType | null
-): readonly SlashCommandSuggestion[] {
-  const hostOwned = [
-    ...STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
-    ...CONVERSATION_COMMANDS.filter((entry) =>
-      commands.includes(entry.name as AgentSessionConversationCommand)
-    )
-  ]
-  // No reported catalog must not hide agent-handled commands such as Codex /goal.
-  return [
-    ...hostOwned,
-    ...getTextDrivenNativeChatCommands(agent).filter(
-      (entry) => !hostOwned.some((offered) => offered.name === entry.name)
-    )
-  ]
-}
-
-/** Host commands remain first; reported catalogs add other names. */
-export function structuredSessionSlashCommands(
-  agent: AgentType,
-  conversationCommands: readonly AgentSessionConversationCommand[] | undefined,
-  reported: readonly AgentSessionSlashCommand[] | undefined
-): readonly SlashCommandSuggestion[] {
-  const hostOwned = structuredSlashCommands(conversationCommands, agent)
-  if (reported === undefined) {
-    return hostOwned
+  const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text.trimEnd())
+  if (!match) {
+    return null
   }
-  const offered = new Set(hostOwned.map(({ name }) => name))
-  return [
-    ...hostOwned,
-    ...sessionSlashCommandSuggestions(agent, reported).filter(({ name }) => !offered.has(name))
-  ]
+  const typed = match[1]!.toLowerCase()
+  // Codex's /new starts a new chat, which its app-server would read as prose; `$` skills never share the name.
+  const name = agent === 'codex' && typed === 'new' ? 'clear' : typed
+  const argument = match[2]?.trim() ?? ''
+  // Other commands take one line; a longer message that starts with their name is for the agent.
+  return /[\n\r\u2028\u2029]/.test(argument) &&
+    !CONVERSATION_COMMANDS.some((entry) => entry.name === name)
+    ? null
+    : { name, typed, argument }
 }
 
 function structuredRecognizedCommands(): readonly SlashCommandSuggestion[] {
@@ -125,41 +87,49 @@ function structuredRecognizedCommands(): readonly SlashCommandSuggestion[] {
  *  would be silently dropped, whereas a pass-through command is a real send. */
 export function isStructuredAgentSessionComposerCommand(
   text: string,
-  _agent: AgentType = 'codex',
-  _reported?: readonly AgentSessionSlashCommand[]
+  agent: AgentType | undefined,
+  snapshot: readonly SessionOptionDescriptor[]
 ): boolean {
-  const command = commandParts(text)
+  const command = commandParts(text, agent)
   return Boolean(
-    command && structuredRecognizedCommands().some((entry) => entry.name === command.name)
+    (command && structuredRecognizedCommands().some((entry) => entry.name === command.name)) ||
+    (agentSessionInteractionCommand(agent ?? '', text) !== null &&
+      snapshot.some((entry) => entry.id === 'interactionMode'))
   )
 }
 
-/** Host actions send no message; /goal is an action only on hosts that set goals. */
-export function isStructuredAgentSessionHostCommand(text: string, hostSetsGoals: boolean): boolean {
+/** Host actions send no message; /goal and /mcp are actions only where the host offers them. */
+export function isStructuredAgentSessionHostCommand(
+  text: string,
+  hostSetsGoals: boolean,
+  agent: AgentType | undefined,
+  snapshot: readonly SessionOptionDescriptor[],
+  opensMcpPanel = false
+): boolean {
   return (
-    isStructuredAgentSessionComposerCommand(text) ||
-    (hostSetsGoals && isStructuredAgentSessionGoalCommand(text))
+    isStructuredAgentSessionComposerCommand(text, agent, snapshot) ||
+    (hostSetsGoals && isStructuredAgentSessionGoalCommand(text)) ||
+    (opensMcpPanel && commandParts(text)?.name === 'mcp')
   )
 }
 
 export function prepareStructuredAgentSessionComposerCommand(
-  _agent: AgentType,
+  agent: AgentType,
   _reported?: readonly AgentSessionSlashCommand[]
 ): (text: string) => boolean {
   const names = new Set(structuredRecognizedCommands().map((entry) => entry.name))
   return (text) => {
-    const command = commandParts(text)
+    const command = commandParts(text, agent)
     return command !== null && names.has(command.name)
   }
 }
 
-/** `/clear` or `/compact` alone: a conversation command with nothing after it. */
+/** `/clear`, `/compact` or `/new` alone: a conversation command with nothing after it, for any agent. */
 export function isLoneStructuredAgentSessionConversationCommand(text: string): boolean {
   const command = commandParts(text.trim())
-  return Boolean(
-    command &&
-    command.argument === '' &&
-    CONVERSATION_COMMANDS.some((entry) => entry.name === command.name)
+  return (
+    command?.argument === '' &&
+    (command.name === 'new' || CONVERSATION_COMMANDS.some((entry) => entry.name === command.name))
   )
 }
 
@@ -168,26 +138,34 @@ export function isStructuredAgentSessionGoalCommand(text: string): boolean {
   return commandParts(text)?.name === 'goal'
 }
 
-/** `/clear`, `/compact` and `/goal …` change the conversation; option and picker commands do not. */
-export function structuredAgentSessionCommandChangesConversation(text: string): boolean {
-  const command = commandParts(text)
-  return (
-    command?.name === 'clear' ||
-    command?.name === 'compact' ||
-    (command?.name === 'goal' && command.argument !== '')
-  )
+const GOAL_CONTROLS: ReadonlyMap<string, AgentSessionThreadGoalChange> = new Map([
+  ['pause', { kind: 'status', status: 'paused' }],
+  ['resume', { kind: 'status', status: 'active' }],
+  ['clear', { kind: 'clear' }]
+])
+
+/** `/goal pause|resume|clear` controls the current goal; any other text is a new objective. */
+export function structuredAgentSessionGoalChange(argument: string): AgentSessionThreadGoalChange {
+  return GOAL_CONTROLS.get(argument.toLowerCase()) ?? { kind: 'set', objective: argument }
+}
+
+/** `/clear`, `/compact` and goal changes that start work change the conversation; pausing or clearing a goal does not. */
+export function structuredAgentSessionCommandChangesConversation(
+  text: string,
+  agent: AgentType | undefined
+): boolean {
+  const command = commandParts(text, agent)
+  if (command?.name === 'goal') {
+    const change = command.argument ? structuredAgentSessionGoalChange(command.argument) : null
+    return change?.kind === 'set' || (change?.kind === 'status' && change.status === 'active')
+  }
+  return command?.name === 'clear' || command?.name === 'compact'
 }
 
 /** `/goal` with nothing after it: an entrance to goal mode, not an objective. */
 export function isBareStructuredAgentSessionGoalCommand(text: string): boolean {
   const command = commandParts(text)
   return command?.name === 'goal' && command.argument === ''
-}
-
-/** Goal mode strips an optional /goal prefix instead of treating it as objective text. */
-export function structuredAgentSessionGoalObjective(text: string): string {
-  const command = commandParts(text)
-  return command?.name === 'goal' ? command.argument : text.trim()
 }
 
 function unavailable(name: string): StructuredAgentSessionCommandOutcome {
@@ -200,10 +178,24 @@ function unavailable(name: string): StructuredAgentSessionCommandOutcome {
 
 export async function dispatchStructuredAgentSessionComposerCommand(
   text: string,
-  controller: StructuredAgentSessionComposerOptions
+  controller: StructuredAgentSessionComposerOptions,
+  /** A conversation command left for the host, so the composer can release its draft. */
+  onSent?: () => void
 ): Promise<StructuredAgentSessionCommandOutcome> {
-  const command = commandParts(text)
-  if (command?.name === 'goal' && controller.setThreadGoalObjective) {
+  const interaction = agentSessionInteractionCommand(controller.agent ?? '', text)
+  if (interaction !== null && controller.snapshot.some((entry) => entry.id === 'interactionMode')) {
+    return {
+      handled: true,
+      accepted: await controller.setOption('interactionMode', interaction),
+      error: null
+    }
+  }
+  const command = commandParts(text, controller.agent)
+  if (command?.name === 'mcp' && controller.openMcpPanel) {
+    controller.openMcpPanel()
+    return { handled: true, accepted: true, error: null }
+  }
+  if (command?.name === 'goal' && controller.changeThreadGoal) {
     if (!command.argument) {
       return {
         handled: true,
@@ -214,22 +206,24 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     // A refusal reaches the user through the session's own error surface.
     return {
       handled: true,
-      accepted: await controller.setThreadGoalObjective(command.argument),
+      accepted: await controller.changeThreadGoal(
+        structuredAgentSessionGoalChange(command.argument)
+      ),
       error: null
     }
   }
   if (
     !command ||
-    !isStructuredAgentSessionComposerCommand(text, controller.agent, controller.sessionCommands)
+    !isStructuredAgentSessionComposerCommand(text, controller.agent, controller.snapshot)
   ) {
     return { handled: false, accepted: false, error: null }
   }
   if (command.name === 'clear' || command.name === 'compact') {
-    if (command.argument) {
+    if (command.argument && !(command.name === 'compact' && controller.compactInstructions)) {
       return {
         handled: true,
         accepted: false,
-        ...structuredComposerFailure('commandTakesNoArguments', { name: command.name })
+        ...structuredComposerFailure('commandTakesNoArguments', { name: command.typed })
       }
     }
     if (
@@ -239,10 +233,15 @@ export async function dispatchStructuredAgentSessionComposerCommand(
       return {
         handled: true,
         accepted: false,
-        ...structuredComposerFailure('commandUnsupportedByHost', { name: command.name })
+        ...structuredComposerFailure('commandUnsupportedByHost', { name: command.typed })
       }
     }
-    return { handled: true, ...(await controller.runConversationCommand(command.name)) }
+    return {
+      handled: true,
+      ...(await (command.argument
+        ? controller.runConversationCommand(command.name, command.argument, onSent)
+        : controller.runConversationCommand(command.name, undefined, onSent)))
+    }
   }
   if (command.name !== 'model' && command.name !== 'effort') {
     return unavailable(command.name)
@@ -261,11 +260,14 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     }
   }
   const normalized = command.argument.toLowerCase()
+  // Claude rows read `Opus 5.5`; still accept the official `Claude Opus 5.5`.
+  const unvendored = controller.agent === 'claude' ? withoutClaudeVendor(normalized) : normalized
   const choice =
     descriptor?.kind.type === 'select'
       ? descriptor.kind.choices.find(
           (entry) =>
-            entry.value.toLowerCase() === normalized || entry.label.toLowerCase() === normalized
+            entry.value.toLowerCase() === normalized ||
+            [normalized, unvendored].includes(entry.label.toLowerCase())
         )
       : undefined
   const value = choice?.value ?? command.argument

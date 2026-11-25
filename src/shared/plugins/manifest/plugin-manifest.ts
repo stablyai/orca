@@ -21,6 +21,10 @@ import {
   validatePluginManifestV2Rules
 } from './plugin-manifest-v2-rules'
 import { upgradePluginManifestV1Names } from './plugin-manifest-v1-names'
+import {
+  pluginPanelIconEngineFloorError,
+  withDrawablePluginPanelIcons
+} from './plugin-panel-icon-fallback'
 import { formatPluginSchemaIssues } from './plugin-schema-issues'
 import { pluginApiMajorSchema } from '../workers/plugin-host-api-major'
 import {
@@ -128,7 +132,7 @@ const pluginManifestFields = {
     .optional()
     .meta(
       pluginPathFieldDoc(
-        `Node entry run in an out-of-process plugin worker: a \`.js\`/\`.mjs\` module, or a \`.ts\`/\`.mts\` module that Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`). Requires the \`trusted-worker\` execution profile, and is required by it, by \`contributes.events\` and by any command without an \`action\`.`,
+        `Node entry run in an out-of-process plugin worker: a \`.js\`/\`.mjs\` module, or a \`.ts\`/\`.mts\` module that Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`). Requires the \`trusted-worker\` execution profile, and is required by it, by \`contributes.events\`, by \`contributes.hooks\` and by any command without an \`action\`.`,
         V1,
         ['dist/main.mjs']
       )
@@ -167,7 +171,7 @@ export const pluginManifestV2Object = z
       .meta(pluginFieldDoc('Manifest format. Use 2 for new plugins.', NEXT)),
     execution: pluginExecutionProfileSchema.meta(
       pluginFieldDoc(
-        'Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main` and events). Contributions beyond it fail validation.',
+        'Most authority the plugin needs, least first: `data` (themes, syntaxes, translations), `declarative` (commands, shortcuts, recipes), `sandboxed-ui` (panels), `trusted-worker` (`main`, events and hooks). Contributions beyond it fail validation.',
         NEXT,
         ['data']
       )
@@ -257,13 +261,16 @@ export function qualifiedPluginKey(manifest: { publisher: string; id: string }):
 }
 
 export type PluginManifestParseResult =
-  | { ok: true; manifest: PluginManifest }
-  | { ok: false; error: string }
+  /** `warnings`: advice that did not stop the load, such as a panel icon shown as `puzzle`. */
+  { ok: true; manifest: PluginManifest; warnings?: string[] } | { ok: false; error: string }
 
 function parseWith(schema: typeof pluginManifestSchema, raw: unknown): PluginManifestParseResult {
-  const parsed = schema.safeParse(raw)
+  const drawable = withDrawablePluginPanelIcons(raw)
+  const parsed = schema.safeParse(drawable.raw)
   if (parsed.success) {
-    return { ok: true, manifest: parsed.data }
+    // Why unique: panels sharing a title and an icon problem would repeat the same line.
+    const warnings = [...new Set(drawable.warnings)]
+    return { ok: true, manifest: parsed.data, ...(warnings.length > 0 ? { warnings } : {}) }
   }
   return { ok: false, error: formatPluginSchemaIssues(parsed.error.issues, raw) }
 }
@@ -271,14 +278,19 @@ function parseWith(schema: typeof pluginManifestSchema, raw: unknown): PluginMan
 /** Strict authoring check (`validate:plugin`, catalog CI, dev folders). */
 export function parsePluginManifest(raw: unknown): PluginManifestParseResult {
   const parsed = parseWith(pluginManifestSchema, raw)
+  if (!parsed.ok) {
+    return parsed
+  }
   // Why only here: hosts strip these characters so installed plugins keep loading.
-  const unsafe = parsed.ok ? unsafePluginDisplayTextPaths(raw) : []
-  return unsafe.length > 0
-    ? {
-        ok: false,
-        error: unsafe.map((path) => `${path}: ${UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE}`).join('; ')
-      }
-    : parsed
+  const unsafe = unsafePluginDisplayTextPaths(raw)
+  if (unsafe.length > 0) {
+    return {
+      ok: false,
+      error: unsafe.map((path) => `${path}: ${UNSAFE_PLUGIN_DISPLAY_TEXT_MESSAGE}`).join('; ')
+    }
+  }
+  const iconFloor = pluginPanelIconEngineFloorError(raw)
+  return iconFloor ? { ok: false, error: iconFloor } : parsed
 }
 
 /** Runtime read for install, discovery and update. Callers must still check engines.orca

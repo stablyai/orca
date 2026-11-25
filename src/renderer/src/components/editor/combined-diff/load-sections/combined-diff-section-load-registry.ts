@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import {
   createCombinedDiffLoadScheduler,
   type CombinedDiffLoadScheduler

@@ -4,7 +4,9 @@ import {
   mergeContextualTourSeenIds
 } from './ui-slice-hydration-values'
 import { getContextualTourProgressionForFeatureInteraction } from './ui-slice-contextual-tour-progression'
-import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
+import { getContextualTourStepIndex } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
+import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import { getFeatureTipSeenId } from '../../../../../shared/feature-education/feature-tips'
 
 export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
@@ -17,9 +19,11 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
         const current = new Set(s.featureTipsSeenIds)
         let changed = false
         for (const id of ids) {
-          if (!current.has(id)) {
-            current.add(id)
-            changed = true
+          for (const seenId of [id, getFeatureTipSeenId(id, s.settings?.telemetry)]) {
+            if (!current.has(seenId)) {
+              current.add(seenId)
+              changed = true
+            }
           }
         }
         if (!changed) {
@@ -32,6 +36,7 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
     chatUiLaunchTipVariant: null,
     setChatUiLaunchTipVariant: (variant) => set({ chatUiLaunchTipVariant: variant }),
     featureInteractions: {},
+    workspaceBoardUsedBeforeLaunch: null,
     recordFeatureInteraction: (id) => {
       let tourProgression: ReturnType<typeof getContextualTourProgressionForFeatureInteraction> =
         null
@@ -72,6 +77,18 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
           return {
             featureInteractions: next,
             sidebarOpen: true,
+            activeContextualTourStepIndex: getContextualTourStepIndex(
+              'workspace-agent-sessions',
+              'agent-sessions-parallel'
+            )
+          }
+        }
+        if (tourProgression === 'reveal-sidebar') {
+          return { featureInteractions: next, sidebarOpen: true }
+        }
+        if (tourProgression === 'advance-to-next-step') {
+          return {
+            featureInteractions: next,
             activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
           }
         }

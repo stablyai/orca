@@ -1,5 +1,8 @@
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
-import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../../shared/terminal-exit-cause'
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import {
+  HOST_LOST_EXIT_CAUSE,
+  UNVERIFIED_PROCESS_EXIT_CODE
+} from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
@@ -39,7 +42,9 @@ function releaseAbsentPaneProcess(
     owner.incarnationId ?? null
   )
   runtime?.onPtyExit(owner.ptyId, UNVERIFIED_PROCESS_EXIT_CODE, owner.incarnationId, {
-    hostExitConfirmed: true
+    hostExitConfirmed: true,
+    cause: HOST_LOST_EXIT_CAUSE,
+    paneRespawning: true
   })
   settleStop?.(true)
   clearProviderPtyState(owner.ptyId)

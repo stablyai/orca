@@ -15,19 +15,17 @@ import {
   buildPluginPanelShellHtml,
   type PluginFrameSurface
 } from '../../../shared/plugins/frames/plugin-panel-shell'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import type { PluginHostCaller } from '../plugin-service-host-call'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
+import type { PluginHostCaller } from '../runtime/plugin-service-host-call'
 import { getPluginHostMethodSpec } from '../../../shared/plugins/workers/plugin-host-api'
-import type { PluginContentVerifier } from '../plugin-content-integrity'
-import {
-  PLUGIN_PANEL_ENTRY_MAX_BYTES,
-  readContainedPluginArtifactText
-} from '../plugin-artifact-validation'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import { PLUGIN_PANEL_ENTRY_MAX_BYTES } from '../../../shared/plugins/frames/plugin-frame-entry-limits'
+import { readContainedPluginArtifactText } from '../artifacts/plugin-contained-artifact'
 import {
   PluginPanelSessions,
   type PluginPanelSessionBinding,
   type ResolvedPluginPanelSession
-} from './plugin-panel-sessions'
+} from './panel-lifetime/plugin-panel-sessions'
 import type { PluginPanelCaller } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 
 type PluginPanelControllerOptions = {
@@ -268,11 +266,10 @@ export class PluginPanelController {
       return null
     }
     const declarative = contribution.ui === 'components'
-    // Why no entry text: a declarative entry is a module the desktop guest imports; browser
-    // clients get an empty shell and show that the panel needs the desktop app.
-    const html = withShell
-      ? await this.readShell(plugin, declarative ? null : contribution.entry, surface)
-      : ''
+    // Why no entry text: a declarative entry is a module the desktop guest imports, and an
+    // isolated-only editor never runs in the srcdoc fallback; both show they need the desktop app.
+    const shellEntry = declarative || contribution.frame === 'isolated' ? null : contribution.entry
+    const html = withShell ? await this.readShell(plugin, shellEntry, surface) : ''
     if (html === null) {
       return null
     }
@@ -329,7 +326,7 @@ function findFrameContribution(
   plugin: ValidDiscoveredPlugin,
   surface: PluginPanelSessionBinding['surface'],
   id: string
-): { entry: string; ui?: string } | null {
+): { entry: string; ui?: string; frame?: string } | null {
   const list =
     surface === 'panel'
       ? plugin.manifest.contributes.panels

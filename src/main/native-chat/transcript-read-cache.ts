@@ -1,15 +1,18 @@
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
-import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
-import type { AgentType } from '../../shared/agent-status-types'
-import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-history/opencode/transcript-opencode'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
+import {
+  InFlightPromiseDedupe,
+  stableInFlightKey
+} from '../../shared/concurrency/in-flight-promise-dedupe'
 import { resolveSessionFilePath } from './session-file-resolver'
 import { readNativeChatTranscript, type ReadTranscriptResult } from './transcript-reader'
-import { wslGatedStat } from './wsl-transcript-fs-access'
+import { wslGatedStat } from './transcript-filesystem/wsl-transcript-fs-access'
 import {
   isWslTranscriptFsRefusalMessage,
   WslTranscriptFsError,
   wslTranscriptFsRefusal
-} from './wsl-transcript-fs-error'
+} from './transcript-filesystem/wsl-transcript-fs-error'
 
 // Share one unwindowed parse per resolved path across desktop and paired clients.
 // Session IDs can resolve to different worktree files; connection keys would duplicate memory.
@@ -144,8 +147,4 @@ export function clearNativeChatTranscriptCache(): void {
   cacheEpoch += 1
   inFlightReads.clear()
   cache.clear()
-}
-
-export function setNativeChatTranscriptCacheMaxBytesForTests(bytes?: number): void {
-  maxCacheBytes = bytes ?? MAX_CACHE_BYTES
 }

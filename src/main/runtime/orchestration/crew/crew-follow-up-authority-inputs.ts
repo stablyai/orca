@@ -1,8 +1,8 @@
 import { z } from 'zod'
-import type { OrchestrationDb } from '../db'
+import type { OrchestrationDb } from '../db/orchestration-db'
 import type { DispatchCreator } from '../db/dispatch-depth'
 import { createDispatchCreatorEvaluation } from '../db/dispatch-creator-evaluation'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
   REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL,

@@ -6,12 +6,12 @@ import type {
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
-import { readAgentJournalTurn } from '../lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../lifecycle/records/agent-session-turn-record'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 import type { StructuredAgentSessionLatestRequest } from '../requests/structured-agent-session-latest-request'
 import type { AgentSessionStatusSummary } from '../agent-session-wire'
-import type { AgentMainAgentStatus } from '../../main-agent-status'
-import type { AgentStatusState } from '../../agent-status-types'
+import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
+import type { AgentStatusState } from '../../agent-status/contracts/agent-status-types'
 import { isUnansweredStructuredAgentSessionDispatch } from '../requests/structured-agent-session-unanswered-dispatch'
 
 /** Undefined when the journal records no edge that dates `status`; readers keep their own rule. */

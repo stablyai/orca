@@ -1,47 +1,62 @@
 import React, { useState, useCallback } from 'react'
-import { cn } from '@/lib/utils'
-import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
-import { useClaudeAgentRowView } from './use-claude-agent-row-view'
+import { cn } from '@/lib/class-names'
+import {
+  opensClaudeParentConversation,
+  viewClaudeAgentFromRow
+} from '@/lib/agent-session/navigation/claude-agent-row-view'
+import { useClaudeAgentRowView } from './rows/use-claude-agent-row-view'
 import {
   AgentStateDot,
   agentStateLabel,
   agentStateProgressLabel,
   type AgentDotState
-} from '@/components/AgentStateDot'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
+} from '@/components/agent/status/AgentStateDot'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
-import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
-import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
+import { DashboardAgentRowMessage } from './rows/DashboardAgentRowMessage'
+import { DashboardAgentRowTrailingControls } from './rows/DashboardAgentRowTrailingControls'
+import { DashboardAgentRowToolStep } from './rows/DashboardAgentRowToolStep'
+import { AGENT_ROW_TITLE_BESIDE_MODEL_CHIP } from './rows/agent-row-title-floor'
 import { programStatusAttentionLine } from '../../../../shared/program-status/presentation'
-import { agentRowToolInput, showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import {
+  agentRowToolInput,
+  showsAgentToolPreview
+} from '../../../../shared/agent-status/presentation/agent-row-tool-preview'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
-import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
-import { agentNoUpdateLabel, formatCompactDuration } from '../../../../shared/agent-row-decay-state'
-import { agentRowDisplayDotState, agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
+import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
+import {
+  agentNoUpdateLabel,
+  formatCompactDuration
+} from '../../../../shared/agent-status/presentation/agent-row-decay-state'
+import {
+  agentRowDisplayDotState,
+  agentRowDotState as asDotState
+} from '../../../../shared/agent-row-dot-state'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
-} from '../../../../shared/agent-main-agent-verdict'
-import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
-import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
-import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
-import { useAgentRowConversationName } from './use-agent-row-conversation-name'
-import { lastEnteredDoneAt } from './agent-finished-timestamp'
+} from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { agentToolDisplayName } from '../../../../shared/agent-status/presentation/agent-tool-preview'
+import { agentVerdictStatusLine } from '../../../../shared/agent-status/presentation/agent-verdict-status-line'
+import type { DashboardAgentRow as DashboardAgentRowData } from './rows/dashboard-agent-row'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
+import { useAgentRowConversationName } from './rows/use-agent-row-conversation-name'
+import { lastEnteredDoneAt } from './rows/agent-finished-timestamp'
 import {
   agentChildRowMessageLine,
   agentChildRowNoUpdateLabel
-} from '@/components/agent-child-row-text'
+} from '@/components/agent/status/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
-function formatTimeAgo(ts: number, now: number): string {
+function formatTimeAgo(ts: number, now: number, t: Translate = translate): string {
   const delta = now - ts
   if (delta < 60_000) {
-    return translate('auto.components.dashboard.DashboardAgentRow.justNow', 'just now')
+    return t('auto.components.dashboard.DashboardAgentRow.justNow', 'just now')
   }
-  return translate('auto.components.dashboard.DashboardAgentRow.timeAgo', '{{duration}} ago', {
+  return t('auto.components.dashboard.DashboardAgentRow.timeAgo', '{{duration}} ago', {
     duration: formatCompactDuration(delta)
   })
 }
@@ -116,6 +131,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   sendTargetDisabledReason,
   onSendTargetClick
 }: Props) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
@@ -170,17 +186,17 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
   // Show tool details only for working/approval waits; ended or monitoring turns have stale last-tool metadata.
-  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
+  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state, t)
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring && stoppingLabel === null
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
-  const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
+  const toolName = showsTool ? agentToolDisplayName(agent.entry.toolName) : ''
   // Why the fallback: a hook-owned row without a tool line still shows what the program says it does.
   const toolInput = showsTool
     ? agentRowToolInput(agent.entry, agent.state) || presentation.message || ''
     : ''
   // Why: a child row's message line is the model's, so a child that ended without an outcome says so.
   const lastAssistantMessage = agent.childRow
-    ? agentChildRowMessageLine(agent.childRow)
+    ? agentChildRowMessageLine(agent.childRow, t)
     : (agent.entry.lastAssistantMessage?.trim() ?? '')
   const isInterrupted = agentVerdictDisplayMark(agent.entry) === 'interrupted'
   const lineage = agent.lineage
@@ -189,7 +205,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const participatesInLineage = isLineageChild || lineageChildCount > 0
   const identityTitle =
     lineageChildCount > 0
-      ? translate(
+      ? t(
           'auto.components.dashboard.DashboardAgentRow.dispatchedAgents',
           '{{agentType}} - dispatched {{count}} agents',
           {
@@ -201,34 +217,56 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Surface failed main-agent outcomes even while subagents continue running.
   const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
-  const dotTooltipLabel = agentStateProgressLabel(
+  const dotStatusLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,
     stateDotTooltipLabel(agent, dotState, now)
   )
+  const dotTooltipLabel =
+    isUnvisited && dotState === 'done'
+      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: dotStatusLabel })
+      : dotStatusLabel
   // Unverifiable rows expose elapsed silence in their timestamp slot; do not hide their only content in a tooltip.
   const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
 
-  const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now) : null
-  const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
+  const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now, t) : null
+  const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now, t) : null
   const relativeTimestamp = noUpdateLabel ?? doneTimeAgo ?? startedTimeAgo
   const tsParts: string[] = noUpdateLabel ? [noUpdateLabel] : []
   if (startedTimeAgo !== null) {
     tsParts.push(
-      translate('auto.components.dashboard.DashboardAgentRow.startedAgo', 'started {{time}}', {
+      t('auto.components.dashboard.DashboardAgentRow.startedAgo', 'started {{time}}', {
         time: startedTimeAgo
       })
     )
   }
   if (doneTimeAgo !== null) {
     tsParts.push(
-      translate('auto.components.dashboard.DashboardAgentRow.doneAgo', 'done {{time}}', {
+      t('auto.components.dashboard.DashboardAgentRow.doneAgo', 'done {{time}}', {
         time: doneTimeAgo
       })
     )
   }
 
   const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts
+
+  // Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported.
+  const label = (
+    <span
+      className={cn(
+        'block min-w-0 flex-1 overflow-hidden text-[11px] leading-snug',
+        showModel && model && AGENT_ROW_TITLE_BESIDE_MODEL_CHIP,
+        'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
+        expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
+        isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground',
+        // Why: the selected-row fill washes out muted text — keep it readable.
+        highlighted && !isUnvisited && 'text-foreground/90'
+      )}
+      title={displayLabel}
+    >
+      {displayLabel}
+    </span>
+  )
 
   return (
     // Why: no role="button" — nested interactive children (buttons, tooltip triggers) would violate ARIA nesting rules.
@@ -246,15 +284,13 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
+      data-workspace-agent-row=""
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}
       aria-description={
         opensClaudeParentConversation(agent)
-          ? translate(
-              'auto.lib.claudeAgentRowView.openParentConversation',
-              'Open parent conversation'
-            )
+          ? t('auto.lib.claudeAgentRowView.openParentConversation', 'Open parent conversation')
           : undefined
       }
       data-agent-send-target={sendTargetStatus}
@@ -302,6 +338,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
                 size={stateDotSize}
                 title={null}
                 progress={presentation.progress}
+                unread={isUnvisited}
               />
             </span>
           </TooltipTrigger>
@@ -315,34 +352,19 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             <AgentTypeIcon agentType={agent.agentType} size={14} />
           </span>
         )}
-        {/* Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported. */}
-        <span
-          className={cn(
-            'block min-w-0 flex-1 overflow-hidden text-[11px] leading-snug',
-            'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
-            expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
-            isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground',
-            // Why: the selected-row fill washes out muted text — keep it readable.
-            highlighted && !isUnvisited && 'text-foreground/90'
-          )}
-          title={displayLabel}
-        >
-          {displayLabel}
-        </span>
-        {showModel && model && (
-          <span
-            className={cn(
-              'max-w-24',
-              // Why: only shrink when the in-flow Send button would otherwise overflow the row.
-              sendTargetStatus === 'eligible' || sendTargetStatus === 'sending'
-                ? 'min-w-0'
-                : 'shrink-0',
-              'truncate font-mono text-3xs text-muted-foreground/70'
-            )}
-            title={model}
-          >
-            {model}
+        {showModel && model ? (
+          // Why: title and chip split only what the fixed controls leave, so neither can push out the Send button.
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+            {label}
+            <span
+              className="min-w-0 max-w-24 truncate font-mono text-3xs text-muted-foreground/70"
+              title={model}
+            >
+              {model}
+            </span>
           </span>
+        ) : (
+          label
         )}
         {/* Why: "+N" badge shows the hidden child count when collapsed; redundant once children are expanded below. */}
         {hasChildDisclosure && !childAgentsExpanded && (

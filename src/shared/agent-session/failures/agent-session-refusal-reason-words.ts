@@ -1,7 +1,10 @@
 // Require wording and next steps for every new refusal reason at compile time.
 
 import type { AgentSessionFailureKind } from './agent-session-failure'
-import type { AgentSessionRefusalReason } from './agent-session-refusal-details'
+import type {
+  AgentSessionConversationOwner,
+  AgentSessionRefusalReason
+} from './agent-session-refusal-details'
 import type { AgentSessionWriteNoticeSentence } from './agent-session-write-notice-copy'
 import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
 import type { AgentSessionWriteKind, AgentSessionWriteRefusal } from './agent-session-write-failure'
@@ -104,6 +107,7 @@ const REASON_WORDS = {
     goalsUnsupported: causeWords('goalsUnsupported', 'hostFinding'),
     providerRejected: causeWords('agentRefused', 'retry'),
     providerStartFailed: { fact: 'providerStartFailed', action: 'retry' },
+    savedConversationMissing: { fact: 'savedConversationMissing', action: 'goElsewhere' },
     notSignedIn: { fact: 'notSignedIn', action: 'actFirst' },
     cliMissing: { fact: 'cliMissing', action: 'actFirst' },
     historyTooLarge: { fact: 'historyTooLarge', action: 'goElsewhere' },
@@ -117,6 +121,8 @@ const REASON_WORDS = {
     agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
     runtimeNotInstalled: { fact: 'runtimeNotInstalled', action: 'actFirst' },
     fullAccessAsRoot: { fact: 'fullAccessAsRoot', action: 'actFirst' },
+    botToolsNeedStatusHooks: { fact: 'botToolsNeedStatusHooks', action: 'actFirst' },
+    botToolsGatewayOutdated: { fact: 'botToolsGatewayOutdated', action: 'actFirst' },
     launchPreparationFailed: { fact: 'launchPreparationFailed', action: 'retry' },
     conversationOpenInTerminal: { fact: 'conversationOpenInTerminal', action: 'actFirst' },
     conversationOpenElsewhere: { fact: 'conversationOpenElsewhere', action: 'actFirst' },
@@ -149,7 +155,9 @@ const REASON_WORDS = {
   },
   execution_owner_reconciling: {
     hostReconciling: causeWords('hostReconciling', 'wait', 'waitMoment'),
-    recordUnreadable: causeWords('recordUnreadable', 'hostFinding')
+    recordUnreadable: causeWords('recordUnreadable', 'hostFinding'),
+    // 'wait', not 'retry': a card's Send stays the same control, so its step is always said.
+    mailOwnerUnconfirmed: causeWords('mailOwnerUnconfirmed', 'wait', 'tryAgain')
   },
   agent_session_checkpoint_stale: {
     fenceStale: codeWords('retry'),
@@ -158,7 +166,8 @@ const REASON_WORDS = {
   },
   agent_session_identity_required: {
     recordMissing: causeWords('chatNotFound', 'goElsewhere', 'startNewChat'),
-    transcriptNotFound: codeWords('retry'),
+    // Usually not written yet: the agent saves it after its first reply.
+    transcriptNotFound: causeWords('historyUnavailable', 'retry', 'tryAgain'),
     transcriptUnreadable: causeWords('historyUnavailable', 'retry', 'tryAgain')
   },
   agent_session_operation_conflict: {
@@ -181,6 +190,8 @@ const REASON_WORDS = {
     journalCorrupt: causeWords('historyUnusable', 'hostFinding'),
     // Says its step despite 'retry' unless a Retry stands beside it: the phone often has none.
     journalUnavailable: causeWords('historyUnavailable', 'retry', 'tryAgain'),
+    // The step stays beside a Retry: retrying before space is freed fails again.
+    journalStorageFull: causeWords('diskFull', 'actFirst', 'freeDiskSpace'),
     // Writes meet newer/read-only databases; reads meet this chat, opened only by an update.
     journalWrittenByNewerOrca: {
       ...causeWords('savedByNewerOrca', 'updateOrca', 'updateOrcaToKeepUsing'),
@@ -201,11 +212,33 @@ const REASON_WORDS = {
   >
 }
 
+const HELD_IN_TERMINAL: AgentSessionRefusalReasonWords = {
+  fact: 'conversationOpenInTerminal',
+  action: 'actFirst'
+}
+
+const SAVED_IN_OTHER_FOLDER = causeWords('savedInOtherFolder', 'goElsewhere')
+
+/** The chat a failed start's refusal named as holding the conversation, or null when it named
+ *  none; absent where the refusal's owner was not kept, so who holds it is unknown. */
+export type AgentSessionRefusalHolder = { owner?: AgentSessionConversationOwner | null }
+
 /** The words and next step a reason gets; undefined when the refusal names none. */
 export function agentSessionRefusalReasonWords(
-  failure: AgentSessionWriteRefusal
+  failure: AgentSessionWriteRefusal & AgentSessionRefusalHolder
 ): AgentSessionRefusalReasonWords | undefined {
   const reason = failure.details?.reason
+  // A holder that is no chat is a terminal's agent, which the host found still running.
+  if (
+    failure.code === 'agent_session_conflict' &&
+    reason === 'conversationHeldElsewhere' &&
+    failure.owner === null
+  ) {
+    return HELD_IN_TERMINAL
+  }
+  if (failure.code === 'agent_session_identity_required' && failure.details?.otherFolder) {
+    return SAVED_IN_OTHER_FOLDER
+  }
   const byReason: Partial<Record<string, AgentSessionRefusalReasonWords>> | undefined =
     REASON_WORDS[failure.code]
   return reason === undefined ? undefined : byReason?.[reason]

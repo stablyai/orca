@@ -13,14 +13,20 @@ import {
 } from './agent-session-write-notice-copy'
 import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
 import {
+  agentSessionRefusalNamesTooOldCli,
   agentSessionRefusalFailure,
   parseAgentSessionWriteFailure,
   type AgentSessionWriteFailure,
   type AgentSessionWriteKind,
   type AgentSessionWriteRefusal
 } from './agent-session-write-failure'
-import { agentSessionRefusalReasonWords } from './agent-session-refusal-reason-words'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../tui-agent-display-names'
+import {
+  agentSessionRefusalReasonWords,
+  type AgentSessionRefusalHolder
+} from './agent-session-refusal-reason-words'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../agent-launch/catalog/tui-agent-display-names'
+import { expiredAttachmentsSentence } from './agent-session-attachment-failure-words'
+import { agentSessionExpiredAttachmentNames } from './agent-session-expired-attachments'
 
 const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> = {
   'read-history': 'notDoneReadHistory',
@@ -70,6 +76,10 @@ function causeParts(
   if (cause === 'notAvailable') {
     return write === 'read-history' ? [NOT_DONE[write]] : [cause]
   }
+  // Only a queued message's Send gives this cause; whatever kind of write that is, a message wasn't sent.
+  if (cause === 'mailOwnerUnconfirmed') {
+    return [cause, 'notDoneSend']
+  }
   const saysNotDone =
     (write === 'read-history' && AGENT_SESSION_HISTORY_UNREAD_CAUSES.has(cause)) ||
     (cause === 'questionChanged' && write === 'answer') ||
@@ -79,13 +89,12 @@ function causeParts(
 
 /** The notice a named reason has of its own; undefined leaves the code's words. */
 function reasonParts(
-  failure: AgentSessionWriteRefusal,
+  failure: AgentSessionWriteRefusal & AgentSessionRefusalHolder,
   write: AgentSessionWriteKind,
   context: AgentSessionFailureWordsContext
 ): AgentSessionWriteNoticePart[] | undefined {
   if (
-    failure.code === 'agent_session_operation_invalid' &&
-    (failure.details?.agentInstallation || failure.details?.codexInstallation) &&
+    agentSessionRefusalNamesTooOldCli(failure) &&
     (write === 'send' || write === 'composer-send')
   ) {
     return [
@@ -107,6 +116,17 @@ function reasonParts(
         context: { ...context, agentName: argumentProblem.agent }
       }
     ]
+  }
+  if (failure.code === 'agent_session_operation_invalid' && failure.details?.expiredAttachments) {
+    const expired = failure.details.expiredAttachments
+    const names = agentSessionExpiredAttachmentNames(expired)
+    if (names.length > 0) {
+      return [
+        { expiredAttachmentNames: names },
+        NOT_DONE[write],
+        expired.length > 1 ? 'reattachFiles' : 'reattachFile'
+      ]
+    }
   }
   const commandWhileWorking =
     failure.code === 'agent_session_operation_invalid'
@@ -164,16 +184,35 @@ function reasonParts(
   return step && !retried ? [...said, step] : said
 }
 
-/** Cause for a failed start already showing Retry; empty without a reason carrying its own wording. */
+/** Cause for a failed start already showing Retry; empty without a reason carrying its own wording.
+ *  A failed start's refusal keeps the holder it named, which tells a chat from a terminal. */
 export function agentSessionRefusalCauseParts(
-  failure: AgentSessionWriteFailure,
-  context: { agentName?: string } = {}
+  failure: AgentSessionWriteFailure & AgentSessionRefusalHolder,
+  context: Pick<AgentSessionFailureWordsContext, 'agentName' | 'hostName'> = {}
 ): AgentSessionWriteNoticePart[] {
   const parts =
     failure.kind === 'refused'
       ? reasonParts(failure, 'send', { ...context, retryControl: true })
       : undefined
   return parts?.filter((part) => part !== 'notDoneSend') ?? []
+}
+
+/** A refused start worded for a toast or a run's card, which is retried by asking again: the refusal's
+ *  cause when it names one, else that the agent couldn't start. */
+export function agentSessionStartRefusalParts(
+  failure: AgentSessionWriteRefusal,
+  context: Pick<AgentSessionFailureWordsContext, 'agentName' | 'hostName'> = {}
+): AgentSessionWriteNoticePart[] {
+  const cause = agentSessionRefusalCauseParts(failure, context)
+  return cause.length > 0
+    ? cause
+    : [
+        {
+          failure: { kind: 'startFailed', refusal: failure },
+          surface: 'rejection',
+          context: { ...context, retryControl: true }
+        }
+      ]
 }
 
 /** retryControl replaces retry/send-again advice only; preserve any other next step. */
@@ -257,7 +296,9 @@ export function agentSessionWriteNoticeEnglish(
         ? AGENT_SESSION_WRITE_NOTICE_COPY[part]
         : 'text' in part
           ? part.text
-          : agentSessionFailureSentence(part.failure, part.surface, part.context)
+          : 'expiredAttachmentNames' in part
+            ? expiredAttachmentsSentence(part.expiredAttachmentNames)
+            : agentSessionFailureSentence(part.failure, part.surface, part.context)
     )
     .join(' ')
 }

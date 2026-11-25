@@ -3,24 +3,24 @@ import {
   type MobileTerminalCreateOptions,
   type OwnedMobileTerminalCreateOptions
 } from './mobile-terminal-create'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   prepareStructuredChatCliFork,
   isStructuredChatCliForkSourceCurrent
-} from '../../../ai-vault/structured-chat-cli-fork'
+} from '../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
-import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
-import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
+import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/execution-host/project-runtime-repair-message'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/workspace-layout-load'
-import { nameBasedLoadContext } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
+import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import { resolveSessionTabRow } from '../../../../shared/workspace-layout/old-client/old-client-session-tab-rows'
 
 function resolveSavedChatForkAnchor(
@@ -105,7 +105,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
           }),
           opts.terminalImageViewerSupported
         )
-        const win = this.getAvailableAuthoritativeWindow()
+        const windowId = this.getAvailableAuthoritativeWindowId()
         const placement = resolveSavedChatForkAnchor(
           this.getWorkspaceSessionForWorktree(worktreeId),
           worktreeId,
@@ -119,7 +119,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         return {
           startup,
           launchRuntime,
-          win,
+          windowId,
           phoneAnchor,
           ...placement,
           targetGroupId: opts.targetGroupId ?? placement.targetGroupId
@@ -144,13 +144,13 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         throw new Error('chat_fork_source_unavailable')
       }
     })()
-    const { startup, launchRuntime, win, phoneAnchor, targetGroupId, afterDesktopTabId } = preflight
+    const { startup, launchRuntime, windowId, phoneAnchor, targetGroupId, afterDesktopTabId } =
+      preflight
+    const desktop = getRuntimeDesktopSurface()
     const clientIdentity = opts.clientNavigationId ?? 'local'
     const seed = `${clientIdentity}\0${worktreeId}\0${mutationId}`
     const releaseThrottle =
-      win && !win.webContents.isDestroyed?.()
-        ? rendererPublicationThrottle.acquire(win.webContents)
-        : () => {}
+      windowId !== null ? (desktop.holdRendererPublication?.(windowId) ?? (() => {})) : () => {}
     try {
       const created = await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
@@ -173,7 +173,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
           signal: opts.signal
         }
       )
-      if (!win) {
+      if (windowId === null) {
         return created
       }
       const tab = created.tab
@@ -185,7 +185,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         !tab.ptyId ||
         !tab.incarnationId ||
         pty.incarnationId !== tab.incarnationId ||
-        win.webContents.isDestroyed?.()
+        !desktop.hasLiveRenderer(windowId)
       ) {
         return { ...created, warning: 'desktop-tab-not-shown' }
       }

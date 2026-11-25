@@ -2,13 +2,13 @@ import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
   getRuntimeGitDiff
-} from '@/runtime/runtime-git-diff-client'
-import type { OpenFile } from '@/store/slices/editor'
+} from '@/runtime/source-control/git/runtime-git-diff-client'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type {
   GitBranchChangeEntry,
   GitDiffResult
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { acquireCombinedDiffSectionOperation } from './combined-diff-section-connection'
 import { withDiffSectionLoadTimeout } from './combined-diff-section-load-timeout'
 

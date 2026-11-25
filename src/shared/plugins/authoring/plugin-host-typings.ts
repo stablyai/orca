@@ -1,11 +1,13 @@
 import { PLUGIN_EVENT_PAYLOAD_SCHEMAS, PLUGIN_EVENT_SUMMARIES } from '../events/plugin-events'
+import { PLUGIN_HOOK_NAMES } from '../contributions/plugin-hook-contribution'
+import { PLUGIN_HOOK_SPECS } from '../events/plugin-hook-payloads'
 import { PLUGIN_ERROR_CODES } from '../frames/plugin-protocol'
 import { PLUGIN_EVENT_NAMES } from '../manifest/plugin-manifest'
 import { PLUGIN_HOST_API_MAJOR } from '../workers/plugin-host-api-major'
 import {
   PLUGIN_HOST_API,
   PLUGIN_HOST_API_MINOR,
-  PLUGIN_HOST_METHOD_NAMES,
+  PLUGIN_STABLE_HOST_METHOD_NAMES,
   pluginHostMethodsFor
 } from '../workers/plugin-host-api'
 import { zodTypeText, type SchemaTypeTextOptions } from '../workers/plugin-schema-type-text'
@@ -42,7 +44,9 @@ export function renderPluginHostMethodMembers(
   } = {}
 ): string {
   const names =
-    options.surface === undefined ? PLUGIN_HOST_METHOD_NAMES : pluginHostMethodsFor(options.surface)
+    options.surface === undefined
+      ? PLUGIN_STABLE_HOST_METHOD_NAMES
+      : pluginHostMethodsFor(options.surface)
   return names
     .map((name) => {
       const spec = PLUGIN_HOST_API[name]
@@ -55,7 +59,10 @@ export function renderPluginHostMethodMembers(
       }
       const frames =
         spec.framesSince === undefined ? '' : ` (panels and editors: ${version(spec.framesSince)})`
-      const since = `Since host API ${version(spec.since)}${frames}.`
+      const addedParams = Object.entries(spec.paramsSince ?? {})
+        .map(([param, minor]) => `; \`${param}\` since ${version(minor)}`)
+        .join('')
+      const since = `Since host API ${version(spec.since)}${frames}${addedParams}.`
       const deprecated =
         spec.deprecatedSince === undefined
           ? ''
@@ -77,6 +84,18 @@ export function renderPluginEventPayloadMembers(indent = ''): string {
   return PLUGIN_EVENT_NAMES.map((name) => {
     const payload = zodTypeText(PLUGIN_EVENT_PAYLOAD_SCHEMAS[name], 'output', HOST_TYPE_TEXT)
     return `${docComment(indent, PLUGIN_EVENT_SUMMARIES[name])}${indent}${JSON.stringify(name)}: ${payload}\n`
+  }).join('')
+}
+
+/** Members of a `PluginHooks` type literal: hook name → the event a handler gets and what it
+ *  may return to stop the chain (`never` for observe-only hooks). */
+export function renderPluginHookMembers(indent = ''): string {
+  return PLUGIN_HOOK_NAMES.map((name) => {
+    const spec = PLUGIN_HOOK_SPECS[name]
+    const event = zodTypeText(spec.payload, 'output', HOST_TYPE_TEXT)
+    const result =
+      spec.result === null ? 'never' : zodTypeText(spec.result, 'input', HOST_TYPE_TEXT)
+    return `${docComment(indent, spec.summary)}${indent}${JSON.stringify(name)}: { event: ${event}; result: ${result} }\n`
   }).join('')
 }
 
@@ -140,6 +159,11 @@ ${renderPluginHostMethodMembers('    ')}  }
   export type PluginEvents = {
 ${renderPluginEventPayloadMembers('    ')}  }
   export type PluginEventName = keyof PluginEvents
+
+  /** Worker \`orca.hooks.on(hook, handler)\`: the event each hook carries and its stop result. */
+  export type PluginHooks = {
+${renderPluginHookMembers('    ')}  }
+  export type PluginHookName = keyof PluginHooks
 }
 `
 }

@@ -287,7 +287,7 @@ components panel against `mockHost()` and reports what the panel threw (with `fi
 Orca would refuse, props it would drop, and host calls Orca would refuse (a warning even when the
 panel caught the error). Repeated identical issues are reported once. Each result says what the
 panel drew in a few lines (`summary`: headings, callouts, empty states, table and tree sizes, the
-selected tab, loading placeholders, danger or warning text), and `--json` adds the whole drawn
+selected tab, loading placeholders, danger or warning text and boxes), and `--json` adds the whole drawn
 `tree`, so a scenario can be read without opening Orca. When the plugin has a worker
 (`main`), check mounts it on the same host first, so the panel's `plugin.request` reaches its
 `orca.panels.handle` handlers as in Orca; a worker that fails to activate is reported as an issue
@@ -396,6 +396,40 @@ Table cells (`ui.has('RelativeTime')`).
 | `Callout`      | `tone`, `title`, `icon`                                                                                                                                                                                                                                                                                                                              | any        |
 | `Skeleton`     | `shape` (`text` `block` `circle`), `lines` (1–10, for `text`), `label` (its screen-reader name; default "Loading")                                                                                                                                                                                                                                   | none       |
 | `RelativeTime` | `at` (required: ms since the epoch), `format` (`short` "5m ago", `long` "5 minutes ago", `duration` "5m"), `tone`, `muted`; Orca re-renders it as time passes, so the plugin never polls. Catalog 3; may sit inside `Text`                                                                                                                           | none       |
+
+### Added in Orca 1.4.248 (`ui.catalog` 4)
+
+Check `ui.has('Box')` (or `ui.catalog >= 4`) when your `engines.orca` minimum is older.
+
+| Component | Props                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Children |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| `Box`     | `direction` (`column` default, `row`), `gap` `padding` `paddingX` `paddingY` `margin` (the gap scale), `align`, `justify` (`start` `center` `end` `between`), `wrap`, `grow`, `shrink`, `width` `height` `minWidth` `minHeight` `maxWidth` `maxHeight` (pixels 0–4096, or a whole percent such as `'50%'`), `columns` (1–6 equal grid columns), `scroll` (`x` `y` `both`), `border` (`true` or a tone), `radius` (`none` `sm` `md` `lg` `full`), `background` (`none` `muted` `card` or a tone's tint) | any      |
+
+**Box** is the general container for layouts the others don't cover, without raw elements or CSS: it
+has no colours, fonts or styles of its own beyond theme surfaces and tones, so it follows light and
+dark themes. `paddingX` and `paddingY` override `padding` on their sides. Unset, a column fills the
+width (buttons keep theirs) and a row centres its children, as `Stack` and `Row` do. An invalid prop,
+such as a hex colour, `'50px'` or `'120%'`, is dropped with a warning like any other.
+
+```tsx
+<Box
+  direction="row"
+  gap="md"
+  padding="sm"
+  border
+  radius="md"
+  background="muted"
+  width="50%"
+  minHeight={120}
+  align="center"
+  justify="between"
+  wrap
+  scroll="y"
+>
+  <Text>Deploys</Text>
+  <Badge tone="success">Healthy</Badge>
+</Box>
+```
 
 `maxHeight` (`sm` `md` `lg` `none`) gives long content its own scroll area: a `Table` and a `CodeView`
 default to `md`, a `Tree` to `none`.

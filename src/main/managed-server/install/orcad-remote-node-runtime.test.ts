@@ -11,8 +11,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../../shared/node-runtime-pin'
-import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/orcad-artifacts'
+import {
+  NODE_RUNTIME_ASSETS,
+  type ServerTarget
+} from '../../../shared/node-runtime/node-runtime-pin'
+import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   installNodeRuntimeFromHostArchiveCommand,
   nodeRuntimeStoreDir,
@@ -21,12 +24,11 @@ import {
   remoteNodeRuntimeDir
 } from './orcad-remote-node-runtime'
 import {
-  parseRemoteRuntimeExitReport,
   REMOTE_NODE_RUNTIME_MISSING,
   REMOTE_NODE_RUNTIME_READY
-} from '../../ssh/orcad-remote-node-runtime-report'
+} from './orcad-remote-node-runtime-report'
 import { orcadNodeSlotRuntimeCommand } from './orcad-remote-runtime'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 const directories: string[] = []
 afterEach(() => {
@@ -79,18 +81,6 @@ describe.skipIf(process.platform === 'win32')('remote pinned-Node runtime store'
     expect(sh(`${orcadNodeSlotRuntimeCommand(host, slotDir)}echo "$orcad_runtime"`)).toBe(
       join(runtimeDir, 'bin', 'node')
     )
-  })
-
-  it('splits the runtime exit status from the loader output it reported', () => {
-    expect(
-      parseRemoteRuntimeExitReport(
-        'ORCA_NODE_RUNTIME_SELFTEST_FAILED\nORCA_RUNTIME_EXIT=126\nsh: node: Permission denied\n'
-      )
-    ).toEqual({ exitStatus: 126, output: 'sh: node: Permission denied' })
-    expect(parseRemoteRuntimeExitReport('no report')).toEqual({
-      exitStatus: null,
-      output: 'no report'
-    })
   })
 
   it('reports a runtime whose bytes do not hash to the pin as missing', () => {

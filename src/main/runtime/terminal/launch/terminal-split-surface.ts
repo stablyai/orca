@@ -1,18 +1,25 @@
 import { OrcaRuntimeWithSplitTerminal } from './terminal-split'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import type { TerminalPaneSplitSource } from '../../../../shared/feature-education/feature-education-telemetry'
+import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import {
+  recordPtySurface,
+  spawnSurfaceClaimSequence
+} from '../surface/pty-recorded-surface-topology'
 import { randomUUID } from 'node:crypto'
-import { runtimeSplitPlacement } from '../../runtime-terminal-spawn-placement'
-import { REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS, ownerSurfacing } from '../../orca-runtime-core'
+import { runtimeSplitPlacement } from '../layout/runtime-terminal-spawn-placement'
+import { ownerSurfacing } from './terminal-presentation'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { spawnInAdmittedPane, withdrawRuntimePane } from '../../runtime-pane-admission'
-import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/pty-first-size'
-import { resolveLaunchCommandPaneAgent } from '../../runtime-agent-launch-resolution'
+import { spawnInAdmittedPane, withdrawRuntimePane } from './runtime-pane-admission'
+import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/delivery/pty-first-size'
+import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
+import { recordFreshLaunch } from './launch-evidence'
+import type { TerminalCreateOptions } from './terminal-create-options'
+// Rejected splits need only a quick teardown verdict before fallback kill; unreachable hosts must not stall rejection.
+const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 
-export type TerminalSplitOptions = {
+export type TerminalSplitOptions = Pick<TerminalCreateOptions, 'terminalImageViewerSupported'> & {
   direction?: 'horizontal' | 'vertical'
   command?: string
   env?: Record<string, string>
@@ -24,6 +31,8 @@ export type TerminalSplitOptions = {
   telemetrySource?: TerminalPaneSplitSource
   /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
   wslUserAct?: true
+  /** The new terminal's handle, drawn by a caller that must know it before the process starts. */
+  preAllocatedHandle?: string
 }
 
 export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitTerminal {
@@ -62,7 +71,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     const sourceIncarnationId =
       sourceAuthority.liveIncarnationId ?? sourceAuthority.persistedIncarnationId
     const leafId = randomUUID()
-    const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
+    const preAllocatedHandle = opts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
     const splitArgs: Parameters<typeof spawnInAdmittedPane>[2] = {
       // Why unmeasured: a new split pane has no size of its own until the window lays it out.
@@ -124,6 +133,9 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       )
       createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
       createdPty.launchCommandAgent = resolveLaunchCommandPaneAgent(opts.command)
+      if (!result.isReattach) {
+        recordFreshLaunch(createdPty)
+      }
       this.watchLaunchComposer(result.id, createdPty.launchCommandAgent)
       this.setPairedRendererSessionOwnership(
         createdPty.ptyId,
@@ -136,6 +148,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         ptyId: result.id,
         title: null,
         activate: opts.activate !== false,
+        ...(opts.activate === false ? { presentation: 'background' } : {}),
         ...ownerSurfacing(opts.surfaceOwner !== false),
         tabId: parentTabId,
         leafId,

@@ -1,24 +1,29 @@
-import { ClaudeControlRequestError } from '../../claude-agent-sdk-control-requests'
+import { ClaudeControlRequestError } from '../../sdk-transport/claude-agent-sdk-control-requests'
 import {
   AgentSessionOptionRejectedError,
   ClaudeEffortValidationError
-} from '../../../native-chat/agent-session-wire/structured-agent-session-option-error'
+} from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import {
   observeClaudeSettingsApplied,
-  readClaudeSettingsEffort,
+  observeClaudeSettingsEffort,
   readClaudeSettingsFastMode
 } from './claude-structured-session-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 
-import { beginClaudeOptionMutation } from '../claude-structured-execution-observations'
+import { beginClaudeOptionMutation } from '../turns/claude-structured-execution-observations'
 import {
   CLAUDE_APPLY_FLAG_SETTINGS_CONTROL,
   CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS
-} from '../../claude-cli-flag-support'
+} from '../../cli-capabilities/claude-cli-flag-support'
 
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+
+export function claudeEffortLevel(value: string) {
+  return value === 'ultracode' ? 'xhigh' : EFFORT_LEVELS.find((level) => level === value)
+}
 
 const OPTION_ORDER = ['model', 'effort', 'fastMode'] as const
 
@@ -55,7 +60,7 @@ export function restoredClaudeStructuredSessionOptions(
   )
 }
 
-const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'effort', 'fastMode'])
+const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'effort', 'fastMode', 'interactionMode'])
 
 export function isClaudeStructuredOptionKey(key: string): boolean {
   return CLAUDE_STRUCTURED_OPTION_KEYS.has(key)
@@ -98,6 +103,26 @@ export async function claudeTakesFlagSettings(
   return session.flagSettingsControl !== 'unsupported'
 }
 
+/** A model pick, even of the unchanged saved value, asks Claude to leave its fallback at the next turn. */
+export function noteClaudeModelPick(
+  sessions: ReadonlyMap<string, ClaudeSession>,
+  { sessionId, fence }: { sessionId: string; fence: number },
+  emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
+): void {
+  const session = sessions.get(sessionId)
+  if (session?.fence !== fence || !session.modelFallback || session.modelFallback.picked) {
+    return
+  }
+  session.modelFallback = { ...session.modelFallback, picked: true }
+  emit(session, {
+    type: 'options-reported',
+    sessionId,
+    fence,
+    acquisitionGeneration: session.acquisitionGeneration,
+    reportedOptions: { fallbackModel: undefined }
+  })
+}
+
 /** A client's write to a live session. */
 export function setClaudeStructuredSessionOption(
   session: ClaudeSession,
@@ -116,7 +141,11 @@ export async function setClaudeStructuredOption(
     input.key === 'fastMode'
       ? decodeStructuredAgentSessionOptionValue('fastMode', input.value)
       : null
-  const effort = EFFORT_LEVELS.find((value) => value === input.value)
+  const effort = claudeEffortLevel(input.value)
+  const ultracode = input.value === 'ultracode'
+  const leavesUltracode =
+    session.options.get('effort') === 'ultracode' ||
+    session.appliedInputOptions.get('effort') === 'ultracode'
   if (input.key === 'effort' && effort === undefined) {
     throw new ClaudeEffortValidationError()
   }
@@ -132,7 +161,11 @@ export async function setClaudeStructuredOption(
     input.key === 'model'
       ? () => session.connection.setModel(input.value, { timeoutMs })
       : input.key === 'effort' && effort !== undefined
-        ? () => session.connection.applyFlagSettings({ effortLevel: effort }, { timeoutMs })
+        ? () =>
+            session.connection.applyFlagSettings(
+              { effortLevel: effort, ...(ultracode || leavesUltracode ? { ultracode } : {}) },
+              { timeoutMs }
+            )
         : input.key === 'fastMode' && typeof fastMode === 'boolean'
           ? () => session.connection.applyFlagSettings({ fastMode }, { timeoutMs })
           : null
@@ -145,27 +178,18 @@ export async function setClaudeStructuredOption(
     if (typeof fastMode !== 'boolean') {
       throw new AgentSessionOptionRejectedError('claude fast mode must be encoded as true or false')
     }
-    if (
-      fastMode &&
-      session.fastModeDisabledReason &&
-      !['preference', 'sdk_opt_in_required'].includes(session.fastModeDisabledReason)
-    ) {
-      throw new AgentSessionOptionRejectedError(
-        `claude Fast mode is unavailable (${session.fastModeDisabledReason})`
-      )
-    }
   }
   const mutationSequence = beginClaudeInputWrite(session, input.key, input.value)
   // Read with the fence bump, so a write that lands after an earlier one's bookkeeping compares against it.
   const held = session.options.get(input.key)
+  if (input.key === 'effort' && ultracode) {
+    // A lost acknowledgement can leave our enable running; retain intent until an exit acknowledges.
+    session.options.set('effort', input.value)
+  }
   try {
     await apply()
     if (mutationSequence === session.optionMutationSequence) {
       session.appliedInputOptions.set(input.key, input.value)
-      if (input.key === 'model' && session.fastModeDisabledMutation !== mutationSequence) {
-        delete session.fastModeDisabledReason
-        delete session.fastModeDisabledMutation
-      }
     }
     // Notify the translator even if a newer write superseded this applied control.
     if (input.key === 'model' && input.value !== held) {
@@ -173,6 +197,7 @@ export async function setClaudeStructuredOption(
     }
     if (input.key === 'model') {
       session.translator?.modelWritten(input.value)
+      delete session.modelFallback
     }
   } catch (error) {
     if (error instanceof ClaudeControlRequestError) {
@@ -215,23 +240,18 @@ async function confirmClaudeOption(
     return
   }
   observeClaudeSettingsApplied(session, settings)
-  const adopted =
-    input.key === 'fastMode'
-      ? readClaudeSettingsFastMode(settings)
-      : readClaudeSettingsEffort(settings)
-  const decoded =
-    input.key === 'fastMode'
-      ? decodeStructuredAgentSessionOptionValue('fastMode', input.value)
-      : input.value
-  if (input.key === 'fastMode' && typeof adopted === 'boolean') {
-    session.reportedOptions.fastMode = adopted
-    if (!adopted) {
-      delete session.fastModeReportedMutation
+  if (input.key === 'effort') {
+    observeClaudeSettingsEffort(session, settings)
+  } else if (input.key === 'fastMode') {
+    const adopted = readClaudeSettingsFastMode(settings)
+    if (typeof adopted === 'boolean') {
+      session.reportedOptions.fastMode = adopted
     }
-  } else if (typeof adopted === 'string' && adopted !== decoded) {
-    session.reportedOptions.effort = adopted
-  }
-  if (adopted !== null && adopted === decoded) {
-    session.confirmedOptions.add(input.key)
+    if (
+      adopted !== null &&
+      adopted === decodeStructuredAgentSessionOptionValue('fastMode', input.value)
+    ) {
+      session.confirmedOptions.add('fastMode')
+    }
   }
 }

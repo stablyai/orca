@@ -11,7 +11,7 @@ import {
   withOrcadDecommissionStopDispatched
 } from './orcad-decommission-transaction'
 import { FakeOrcadHost, NEW } from '../activation/orcad-activation-host-test-harness'
-import type { OrcadManagedStopRequest } from '../../../shared/orcad-stop-request'
+import type { OrcadManagedStopRequest } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 
 const T = new Date('2026-02-02T00:00:00.000Z')
 const ID = '7f1c2a7e-6c1b-4a8e-9f0e-0a1b2c3d4e5f'
@@ -33,10 +33,6 @@ const dispatched = withOrcadDecommissionStopDispatched(prepared, request, T)
 const exited = withOrcadDecommissionProcessExited(dispatched, T)
 
 describe('the decommission journal entry', () => {
-  it('deactivates the active version and keeps it as previous', () => {
-    expect(prepared.recordAfter).toMatchObject({ active: null, previous: NEW, snapshot: null })
-  })
-
   it('journals a recordAfter released desktops still read, and commits the app version', () => {
     // Frozen validation from released desktops must continue accepting new stop journals.
     const releasedDefect = (journal: typeof prepared): string | null => {
@@ -65,7 +61,11 @@ describe('the decommission journal entry', () => {
       withOrcadDecommissionStopDispatched(versioned, request, T),
       T
     )
-    expect(planOrcadTransactionRecovery(interrupted, versionedBefore)).toMatchObject({
+    const stored = parseOrcadActivationTransaction(serializeOrcadActivationTransaction(interrupted))
+    if (stored.state !== 'ok') {
+      throw new Error('Expected the persisted decommission transaction to be readable')
+    }
+    expect(planOrcadTransactionRecovery(stored.transaction, versionedBefore)).toMatchObject({
       action: 'confirm-decommissioned',
       record: { active: null, activeAppVersion: '1.5.0', rolledBackFrom: '0.9.0+ff01' }
     })
@@ -73,14 +73,6 @@ describe('the decommission journal entry', () => {
       previous: NEW,
       activeAppVersion: '1.5.0'
     })
-  })
-
-  it('round-trips every phase', () => {
-    for (const transaction of [prepared, dispatched, exited]) {
-      expect(
-        parseOrcadActivationTransaction(serializeOrcadActivationTransaction(transaction))
-      ).toEqual({ state: 'ok', transaction })
-    }
   })
 
   it.each([

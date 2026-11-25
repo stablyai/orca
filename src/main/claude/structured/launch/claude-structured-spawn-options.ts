@@ -1,20 +1,16 @@
-import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk'
-import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 import type {
   ClaudeStructuredLaunch,
   ClaudeStructuredSdkOptions
 } from './claude-structured-launch-resolution'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import { restoredClaudeStructuredSessionOptions } from './claude-structured-options'
-import type { ClaudeCliFlagFact } from '../../claude-cli-flag-support'
+import { claudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
+import {
+  claudeEffortLevel,
+  restoredClaudeStructuredSessionOptions
+} from './claude-structured-options'
+import type { ClaudeCliFlagFact } from '../../cli-capabilities/claude-cli-flag-support'
 
-const EFFORT_LEVELS: ReadonlySet<string> = new Set<EffortLevel>([
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max'
-])
 /** Saved choices replace configured flags so the CLI receives each flag once. */
 function withoutConfiguredFlag(
   options: ClaudeStructuredSdkOptions,
@@ -25,10 +21,6 @@ function withoutConfiguredFlag(
   }
   const { [flag]: _configured, ...extraArgs } = options.extraArgs
   return { ...options, extraArgs }
-}
-
-function isEffortLevel(value: string): value is EffortLevel {
-  return EFFORT_LEVELS.has(value)
 }
 
 export type ClaudeStructuredSpawnOptions = {
@@ -56,9 +48,10 @@ export function claudeStructuredSpawnOptions(input: {
   }
   const effort = saved.get('effort')
   // Without a proven flag, the first message's control applies saved effort where the CLI has one.
-  if (effort !== undefined && isEffortLevel(effort) && input.effortFlag === 'supported') {
+  const numericEffort = effort === undefined ? undefined : claudeEffortLevel(effort)
+  if (effort !== undefined && numericEffort !== undefined && input.effortFlag === 'supported') {
     options.set('effort', effort)
-    sdkOptions = { ...withoutConfiguredFlag(sdkOptions, 'effort'), effort }
+    sdkOptions = { ...withoutConfiguredFlag(sdkOptions, 'effort'), effort: numericEffort }
   }
   const fastMode = saved.get('fastMode')
   if (fastMode !== undefined) {
@@ -70,7 +63,9 @@ export function claudeStructuredSpawnOptions(input: {
         !Object.hasOwn(sdkOptions.extraArgs ?? {}, 'settings')
       ) {
         options.set('fastMode', fastMode)
-        sdkOptions.settings = { fastMode: decoded }
+        // Laid over the launch's own overlay: a tidy-up's turns every configured hook off there.
+        const overlay = typeof sdkOptions.settings === 'object' ? sdkOptions.settings : {}
+        sdkOptions.settings = { ...overlay, fastMode: decoded }
       } else if (input.flagSettingsControl !== 'unsupported') {
         options.set('fastMode', fastMode)
         fastModeAtStart = true
@@ -78,6 +73,13 @@ export function claudeStructuredSpawnOptions(input: {
     }
   }
   return { sdkOptions, options, fastModeAtStart }
+}
+
+/** Orca passes this flag only for a Full access chat; the agent's own arguments cannot carry it. */
+export function claudeLaunchSkipsPermissions(
+  options: Pick<ClaudeStructuredSdkOptions, 'extraArgs'>
+): boolean {
+  return Object.hasOwn(options.extraArgs ?? {}, 'dangerously-skip-permissions')
 }
 
 export function adoptClaudeStructuredSpawnOptions(
@@ -89,6 +91,7 @@ export function adoptClaudeStructuredSpawnOptions(
     | 'appliedInputOptions'
     | 'cliFlag'
     | 'flagSettingsControl'
+    | 'promptSuggestionPause'
   >,
   spawn: ClaudeStructuredSpawnOptions
 ): void {
@@ -97,13 +100,16 @@ export function adoptClaudeStructuredSpawnOptions(
   const configuredModel = typeof extraArgs?.model === 'string' ? extraArgs.model : undefined
   session.launchIntent = {
     model: spawn.sdkOptions.model ?? configuredModel,
-    permissionMode: Object.hasOwn(extraArgs ?? {}, 'dangerously-skip-permissions')
+    permissionMode: claudeLaunchSkipsPermissions(spawn.sdkOptions)
       ? 'bypassPermissions'
       : permissionMode
   }
   session.fastModeAtStart = spawn.fastModeAtStart
   session.cliFlag = spawn.cliFlag
   session.flagSettingsControl = spawn.flagSettingsControl
+  session.promptSuggestionPause = spawn.sdkOptions.promptSuggestions
+    ? claudePromptSuggestionPause()
+    : undefined
   const fastMode = spawn.options.get('fastMode')
   if (fastMode !== undefined && !spawn.fastModeAtStart) {
     session.appliedInputOptions.set('fastMode', fastMode)

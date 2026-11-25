@@ -1,6 +1,8 @@
 /** The `orca` object a worker's `activate(orca)` receives; shared so orca/testing hands tests the same one. */
 import type { PluginEventName } from '../manifest/plugin-manifest'
 import { PLUGIN_V1_EVENT_ALIASES } from '../contributions/plugin-event-contribution'
+import { isPluginHookName, type PluginHookName } from '../contributions/plugin-hook-contribution'
+import type { PluginHookHandler } from './plugin-worker-hooks'
 import { PLUGIN_HOST_API_MINOR, pluginHostMethodsFor } from './plugin-host-api'
 import { PLUGIN_HOST_API_MAJOR } from './plugin-host-api-major'
 import {
@@ -38,6 +40,9 @@ export type PluginWorkerOrcaApi = {
       event: PluginEventName,
       handler: (payload: unknown) => void | Promise<void>
     ): PluginDisposable
+  }
+  hooks: {
+    on(event: PluginHookName, handler: PluginHookHandler): PluginDisposable
   }
   host: {
     call: HostCall
@@ -92,11 +97,13 @@ function addTo<T>(set: Set<T>, entry: T): PluginDisposable {
 }
 
 const WORKER_METHOD_NAMES: ReadonlySet<string> = new Set(pluginHostMethodsFor('worker'))
+const DEV_WORKER_METHOD_NAMES: ReadonlySet<string> = new Set(pluginHostMethodsFor('worker', true))
 
 /** The tables the runtime dispatches from; this module only fills them. */
 export type PluginWorkerApiTables = {
   commands: Map<string, (args: unknown, context: { signal: AbortSignal }) => unknown>
   events: Map<string, Set<(payload: unknown) => void | Promise<void>>>
+  hooks: Map<PluginHookName, Set<PluginHookHandler>>
   panelRequests: Map<string, PluginPanelRequestHandler>
   dataListeners: Record<PluginDataChanged['area'], Set<DataListener>>
 }
@@ -105,6 +112,7 @@ export function createPluginWorkerApiTables(): PluginWorkerApiTables {
   return {
     commands: new Map(),
     events: new Map(),
+    hooks: new Map(),
     panelRequests: new Map(),
     dataListeners: { storage: new Set(), settings: new Set() }
   }
@@ -116,8 +124,11 @@ export function createPluginWorkerOrcaApi(input: {
   postToPanels: (post: PluginWorkerPanelPost) => void
   log: (message: string) => void
   grantedCapabilities: readonly string[]
+  /** A development plugin: `host.has` also answers for proposed methods. */
+  allowProposed?: boolean
 }): PluginWorkerOrcaApi {
   const { tables, hostCall } = input
+  const methodNames = input.allowProposed ? DEV_WORKER_METHOD_NAMES : WORKER_METHOD_NAMES
   const ok = async (method: string, params: unknown): Promise<void> => {
     await hostCall(method, params)
   }
@@ -128,8 +139,16 @@ export function createPluginWorkerOrcaApi(input: {
         commandId: string,
         handler: Parameters<PluginWorkerOrcaApi['commands']['register']>[1]
       ) {
-        tables.commands.set(commandId, handler)
-        return { dispose: () => void tables.commands.delete(commandId) }
+        // Why: a second register of the same function is still a new owner.
+        const registered: typeof handler = (args, context) => handler(args, context)
+        tables.commands.set(commandId, registered)
+        return {
+          dispose: () => {
+            if (tables.commands.get(commandId) === registered) {
+              tables.commands.delete(commandId)
+            }
+          }
+        }
       }
     }),
     events: Object.freeze({
@@ -158,10 +177,23 @@ export function createPluginWorkerOrcaApi(input: {
         }
       }
     }),
+    hooks: Object.freeze({
+      on(event: PluginHookName, handler: PluginHookHandler) {
+        if (!isPluginHookName(event)) {
+          throw new TypeError(`orca.hooks.on: unknown hook ${String(event)}`)
+        }
+        if (typeof handler !== 'function') {
+          throw new TypeError('orca.hooks.on needs a handler function')
+        }
+        const handlers = tables.hooks.get(event) ?? new Set()
+        tables.hooks.set(event, handlers)
+        return addTo(handlers, handler)
+      }
+    }),
     host: Object.freeze({
       call: (method: string, params?: unknown, options?: { signal?: AbortSignal }) =>
         hostCall(method, params, options),
-      has: (method: string) => WORKER_METHOD_NAMES.has(method)
+      has: (method: string) => methodNames.has(method)
     }),
     panels: Object.freeze({
       handle(name: string, handler: PluginPanelRequestHandler) {

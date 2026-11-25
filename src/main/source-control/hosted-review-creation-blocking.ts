@@ -3,7 +3,7 @@ import type {
   HostedReviewCreationBlockedReason,
   HostedReviewCreationEligibility,
   HostedReviewProvider
-} from '../../shared/hosted-review'
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import { reviewCopy } from './hosted-review-creation-provider'
 
 function blockedCreateResultForReason(

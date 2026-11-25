@@ -4,7 +4,7 @@ const {
   NATIVE_BUILD_PACKAGES,
   isNativeBuildEntryName,
   nativeBuildEntryName
-} = require('./scripts/native-build-entry.cjs')
+} = require('./scripts/native-build/node-addons/native-build-entry.cjs')
 
 // Normalize shared-store dev build/<entry> to packaged build/Release, matching CI and daemon/mac terminal/job-ownership consumers (scripts/native-build-entry.cjs).
 function adoptPackagedNativeBuildEntries(resourcesDir, electronPlatformName, architecture) {

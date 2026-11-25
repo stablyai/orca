@@ -1,38 +1,41 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useForceReconnect } from '../transport/host-client-hooks'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
-import { getWorktreeLabel } from '../session/worktree-label'
-import { useMobileGitRequests } from './use-mobile-git-requests'
-import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
-import { useMobileSourceControlOpeners } from './use-mobile-source-control-openers'
-import type { MobileSourceControlPrimaryActionArgs } from './mobile-source-control-primary-action'
-import { useMobileSourceControlSections } from './mobile-source-control-sections'
-import { useMobileSourceControlRunners } from './use-mobile-source-control-runners'
-import { useMobileSourceControlCreatePrAction } from './use-mobile-source-control-create-pr-action'
-import { useMobileSourceControlKeyboardLift } from './use-mobile-source-control-keyboard-lift'
-import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
+import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
+import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
+import { useDurableDraftField } from '../drafts/durable-draft-fields'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { useMobileGitRequests } from './git/use-mobile-git-requests'
+import { useMobileSourceControlLoaders } from './changes/use-mobile-source-control-loaders'
+import { useMobileSourceControlOpeners } from './panel/use-mobile-source-control-openers'
+import type { MobileSourceControlPrimaryActionArgs } from './workflows/mobile-source-control-primary-action'
+import { useMobileSourceControlSections } from './changes/mobile-source-control-sections'
+import { useMobileSourceControlRunners } from './workflows/use-mobile-source-control-runners'
+import { useMobileSourceControlCreatePrAction } from './review/creation/use-mobile-source-control-create-pr-action'
+import { useKeyboardOcclusion as useMobileSourceControlKeyboardLift } from '../platform/keyboard/keyboard-occlusion'
+import type { RuntimeGitLocalBranches } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import {
   buildMobileBranchCompareSection,
-  canOpenMobileBranchCompareDiff,
-  formatMobileBranchCompareSummary
-} from './mobile-branch-compare'
+  canOpenMobileBranchCompareDiff
+} from './branches/mobile-branch-compare'
 
 import {
   countStagedEntries,
   countUnstagedEntries,
   getStageablePaths,
-  getUnstageablePaths,
-  type MobileGitStatusEntry
-} from './mobile-git-status'
-import { getMobileCommitFailureStagedEntries } from './mobile-commit-failure-recovery'
-import { useMobileSourceControlCommitFailure } from './use-mobile-source-control-commit-failure'
+  getUnstageablePaths
+} from './changes/mobile-git-status'
+import type { MobileGitStatusEntry } from './git/git-status-reply-schema'
+import { getMobileCommitFailureStagedEntries } from './commits/mobile-commit-failure-recovery'
+import { useMobileSourceControlCommitFailure } from './commits/use-mobile-source-control-commit-failure'
+import { useMobileSourceControlAiEnabled } from './commits/use-mobile-source-control-ai-enabled'
 import {
   buildMobileGitStatusEntryViews,
   formatBranchLabel,
   type MobileBranchEntryView
-} from './mobile-source-control-screen-state'
+} from './changes/mobile-source-control-screen-state'
 
 export type MobileSourceControlStateParams = {
   hostId: string
@@ -49,7 +52,12 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
   const [busyAction, setBusyAction] = useState<string | null>(null)
-  const [commitMessage, setCommitMessage] = useState('')
+  const executionHost = useWorkspaceExecutionHost()
+  // The message waits through leaving the screen and the app being killed; a commit clears it.
+  const [commitMessage, setCommitMessage] = useDurableDraftField(
+    workspaceDraftRowKey('commit', { hostId, executionHost, worktreeId }, ''),
+    'message'
+  )
   const [generatingMessage, setGeneratingMessage] = useState(false)
   const [showBranchPicker, setShowBranchPicker] = useState(false)
   const [localBranches, setLocalBranches] = useState<RuntimeGitLocalBranches | null>(null)
@@ -69,6 +77,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   }, [recordCommitFailure])
 
   const loaders = useMobileSourceControlLoaders({
+    hostId,
     client,
     connState,
     statusIdentityKey,
@@ -77,6 +86,14 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     onStatusLoadSuccess: clearCommitFailureRecovery
   })
   const { screenState, branchCompareState, mountedRef, setRootRef, loadStatus, settings } = loaders
+  const commitMessageAiEnabled = useMobileSourceControlAiEnabled({
+    hostId,
+    client,
+    connState,
+    worktreeId,
+    executionHost,
+    hostEnabled: settings.sourceControlAiEnabled
+  })
 
   const { router, openDiffForFile } = useMobileSourceControlOpeners({ hostId, worktreeId, name })
 
@@ -89,9 +106,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     () => buildMobileBranchCompareSection(branchCompareResult?.entries ?? []),
     [branchCompareResult, t]
   )
-  const branchCompareSummaryText = branchCompareResult
-    ? formatMobileBranchCompareSummary(branchCompareResult.summary)
-    : null
   const branchCompareCanOpen = branchCompareResult
     ? canOpenMobileBranchCompareDiff(branchCompareResult.summary)
     : false
@@ -124,12 +138,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const branchLabel = formatBranchLabel(status?.branch, status?.head)
   const upstream = status?.upstreamStatus
   const upstreamKnown = upstream !== undefined
-  const syncLabel =
-    upstream && upstream.hasUpstream
-      ? t('sourceControl.state.syncStatus', '{{ahead}} ahead, {{behind}} behind', upstream)
-      : upstream && !upstream.hasUpstream
-        ? t('sourceControl.state.noUpstream', 'No upstream')
-        : null
 
   const { sendGitRequest, sendCommitRequest, runGitSyncSteps } = useMobileGitRequests({
     client,
@@ -214,13 +222,14 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     insets,
     router,
     setRootRef,
-    worktreeLabel,
+    worktreeLabel: status ? branchLabel : worktreeLabel,
     screenState,
     branchCompareState,
     busyAction,
     commitMessage,
     setCommitMessage,
     generatingMessage,
+    commitMessageAiEnabled,
     showBranchPicker,
     setShowBranchPicker,
     localBranches,
@@ -239,7 +248,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     status,
     sections,
     branchCompareResult,
-    branchCompareSummaryText,
     branchEntries,
     shouldShowBranchCompareSection,
     hasVisibleChanges,
@@ -249,11 +257,11 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     unstagedCount,
     branchLabel,
     upstreamKnown,
-    syncLabel,
     primaryActionArgs,
     createPrAction,
     loadStatus,
     rebaseBaseRef: loaders.rebaseBaseRef,
+    refreshing: loaders.refreshing,
     openDiffForFile,
     ...runners
   }

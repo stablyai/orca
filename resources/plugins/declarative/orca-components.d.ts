@@ -295,4 +295,5 @@ declare module 'orca' {
     | 'Callout'
     | 'Skeleton'
     | 'RelativeTime'
+    | 'Box'
 }

@@ -1,4 +1,4 @@
-import type { HostedReviewForBranchOutcome } from '../../shared/hosted-review'
+import type { HostedReviewForBranchOutcome } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
   MAX_INFLIGHT_LOOKUPS
@@ -79,10 +79,4 @@ export function trackInflight(key: string, record: InflightRecord): void {
     // Eviction bounds memory without expiring callers, but loses wall-clock sweeping; keep the cap above realistic concurrency.
     inflight.delete(oldest)
   }
-}
-
-/** @internal - exposed for tests only */
-export function __resetHostedReviewInflightLookupsForTests(): void {
-  inflight.clear()
-  retired.clear()
 }

@@ -1,8 +1,6 @@
-import { z } from 'zod'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
-import { isTuiAgent } from '../../../src/shared/tui-agent-config'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import * as z from 'zod'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import {
   automationListSchema,
   automationSchema,
@@ -76,6 +74,16 @@ export const automationRunsRead = bindDeferredRpcOperation(
     read: rpcResultVariant('runs-page', runsPageSchema)
   })
 )
+// An old host ignores `runId` and lists instead, which reads as no `run`.
+export const automationRunRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'automation.mobile-run',
+    method: 'automation.runs',
+    acceptance: 'require-result-or-throw',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('run', z.object({ run: runSchema.optional() }))
+  })
+)
 export const automationProjectsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'project.mobile-automation-inventory',
@@ -117,26 +125,6 @@ export const automationWorkspacesRead = bindDeferredRpcOperation(
         totalCount: z.number(),
         truncated: z.boolean(),
         hostScope: z.object({ hostIds: z.array(z.string()), omittedHostIds: z.array(z.string()) })
-      })
-    )
-  })
-)
-
-export const automationAgentSettingsRead = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'settings.mobile-automation-agent-policy',
-    method: 'settings.getAgentLaunch',
-    acceptance: 'require-result-or-throw',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant(
-      'agent-policy',
-      z.object({
-        settings: z.object({
-          defaultTuiAgent: z
-            .custom<TuiAgent | 'blank'>((value) => isTuiAgent(value) || value === 'blank')
-            .nullish(),
-          disabledTuiAgents: z.array(z.string()).optional()
-        })
       })
     )
   })

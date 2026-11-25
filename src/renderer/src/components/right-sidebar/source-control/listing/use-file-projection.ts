@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import { compareFileNames } from '../../../../../../shared/file-name-sort'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome/ui-chrome-types'
+import { compareFileNames } from '../../../../../../shared/file-listing/file-name-sort'
 import {
   filterSourceControlPathEntries,
   getSourceControlFileFilterState,
@@ -16,7 +16,7 @@ import {
   flattenSourceControlTree,
   namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
-} from '../../../../../../shared/source-control-tree'
+} from '../../../../../../shared/source-control/listing/source-control-tree'
 import {
   buildSourceControlDisplaySections,
   groupSourceControlEntries,
@@ -24,7 +24,7 @@ import {
   type SourceControlDisplaySectionId,
   type SourceControlEntryGroups,
   type SourceControlDisplaySectionArea
-} from '../../../../../../shared/source-control-section-order'
+} from '../../../../../../shared/source-control/listing/source-control-section-order'
 import {
   collectListSelectionEntries,
   injectExpandedSubmoduleEntries,
@@ -37,6 +37,8 @@ import type { FlatEntry } from './use-selection'
 import type { GitStatusSourceControlTreeNode } from './directory-action-paths'
 import { getSubmoduleEmptyLabel, getSubmoduleLoadingLabel } from './row-layout'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useTranslate } from '@/i18n/use-translate'
+import type { SourceControlChangeScope } from '../panel/change-scope'
 
 export type SourceControlFileProjection = {
   grouped: SourceControlEntryGroups
@@ -71,10 +73,14 @@ const EMPTY_LIST_ROWS_BY_SECTION: Readonly<
 > = Object.freeze({})
 const EMPTY_BRANCH_TREE_NODES: readonly SourceControlTreeNode<GitBranchChangeEntry, 'branch'>[] =
   Object.freeze([])
+const EMPTY_BRANCH_ENTRIES: GitBranchChangeEntry[] = []
+const EMPTY_DISPLAY_SECTIONS: SourceControlDisplaySection[] = []
 
 export function useSourceControlFileProjection({
   entries,
   branchEntries,
+  changeScopeKind = 'all',
+  commitScopeEntries = null,
   filterQuery,
   sourceControlGroupOrder,
   activeWorktreeId,
@@ -88,6 +94,9 @@ export function useSourceControlFileProjection({
 }: {
   entries: GitStatusEntry[]
   branchEntries: GitBranchChangeEntry[]
+  /** Uncommitted hides committed rows; commit shows only that commit's files in the branch slot. */
+  changeScopeKind?: SourceControlChangeScope['kind']
+  commitScopeEntries?: GitBranchChangeEntry[] | null
   filterQuery: string
   sourceControlGroupOrder: readonly SourceControlDisplaySectionArea[]
   activeWorktreeId: string | null
@@ -99,14 +108,18 @@ export function useSourceControlFileProjection({
   sourceControlViewMode: SourceControlViewMode
   collapsedSections: Set<string>
 }): SourceControlFileProjection {
+  const t = useTranslate()
   const grouped = useMemo(() => groupSourceControlEntries(entries), [entries])
 
   const fileFilterState = useMemo(() => getSourceControlFileFilterState(filterQuery), [filterQuery])
   const normalizedFilter = fileFilterState.normalizedFilter
-  const isGitHistoryVisible =
-    !normalizedFilter &&
-    !fileFilterState.tooLarge &&
-    Boolean(activeWorktreeId && worktreePath && !isFolder)
+  const isGitHistoryVisible = Boolean(activeWorktreeId && worktreePath && !isFolder)
+  const scopedBranchEntries =
+    changeScopeKind === 'all'
+      ? branchEntries
+      : changeScopeKind === 'commit'
+        ? (commitScopeEntries ?? EMPTY_BRANCH_ENTRIES)
+        : EMPTY_BRANCH_ENTRIES
 
   const unfilteredDisplaySections = useMemo(
     () => buildSourceControlDisplaySections(grouped, sourceControlGroupOrder),
@@ -114,13 +127,15 @@ export function useSourceControlFileProjection({
   )
   const displaySections = useMemo(
     () =>
-      unfilteredDisplaySections
-        .map((section) => ({
-          ...section,
-          items: filterSourceControlPathEntries(section.items, fileFilterState)
-        }))
-        .filter((section) => section.items.length > 0),
-    [fileFilterState, unfilteredDisplaySections]
+      changeScopeKind === 'commit'
+        ? EMPTY_DISPLAY_SECTIONS
+        : unfilteredDisplaySections
+            .map((section) => ({
+              ...section,
+              items: filterSourceControlPathEntries(section.items, fileFilterState)
+            }))
+            .filter((section) => section.items.length > 0),
+    [changeScopeKind, fileFilterState, unfilteredDisplaySections]
   )
   const unfilteredDisplaySectionsById = useMemo(
     () => new Map(unfilteredDisplaySections.map((section) => [section.id, section])),
@@ -129,8 +144,8 @@ export function useSourceControlFileProjection({
 
   // Stable sorting commutes with filtering, including ties; sort once to keep collator work off keystrokes.
   const sortedBranchEntries = useMemo(
-    () => [...branchEntries].sort((a, b) => compareFileNames(a.path, b.path)),
-    [branchEntries]
+    () => [...scopedBranchEntries].sort((a, b) => compareFileNames(a.path, b.path)),
+    [scopedBranchEntries]
   )
   const filteredBranchEntries = useMemo(
     () => filterSourceControlPathEntries(sortedBranchEntries, fileFilterState),
@@ -168,8 +183,8 @@ export function useSourceControlFileProjection({
         flattenSourceControlTree(treeRootsBySection[section.id] ?? [], collapsedTreeDirs),
         expandedSubmoduleKeys,
         submoduleStatusByKey,
-        getSubmoduleLoadingLabel(),
-        getSubmoduleEmptyLabel()
+        getSubmoduleLoadingLabel(t),
+        getSubmoduleEmptyLabel(t)
       )
     }
     return rows
@@ -181,7 +196,8 @@ export function useSourceControlFileProjection({
     expandedSubmoduleKeys,
     sourceControlViewMode,
     submoduleStatusByKey,
-    languageRevision
+    languageRevision,
+    t
   ])
 
   // List view needs the same lazy submodule expansion as tree view, spliced into the flat entry list.
@@ -195,8 +211,8 @@ export function useSourceControlFileProjection({
         section.items,
         expandedSubmoduleKeys,
         submoduleStatusByKey,
-        getSubmoduleLoadingLabel(),
-        getSubmoduleEmptyLabel()
+        getSubmoduleLoadingLabel(t),
+        getSubmoduleEmptyLabel(t)
       )
     }
     return rows
@@ -206,7 +222,8 @@ export function useSourceControlFileProjection({
     expandedSubmoduleKeys,
     sourceControlViewMode,
     submoduleStatusByKey,
-    languageRevision
+    languageRevision,
+    t
   ])
 
   const branchTreeRoots = useMemo(

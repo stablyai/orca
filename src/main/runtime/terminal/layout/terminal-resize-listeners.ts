@@ -1,32 +1,34 @@
-import { sessionIdFromStructuredWorkerIncarnation } from '../../structured-worker-identity'
-import { observeStructuredWorker } from '../../rpc/methods/orchestration-structured-worker-lifecycle'
+import { sessionIdFromStructuredWorkerIncarnation } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import '../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle'
+import { observeStructuredWorker } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
-import { addListenerToMap } from '../../orca-runtime-core'
-import { notifyRuntimeListeners, withTimeoutResult } from '../../runtime-async-boundaries'
-import type { TerminalExitCause } from '../../../../shared/terminal-exit-cause'
-import {
-  describeTerminalExitCause,
-  isDeliberateTerminalExit
-} from '../../../../shared/terminal-exit-cause'
-import {
-  DEFAULT_TERMINAL_LIST_LIMIT,
-  PTY_CONTROLLER_LIST_TIMEOUT_MS
-} from '../../orca-runtime-postlude'
+import { addListenerToMap } from './terminal-listener-map'
+import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
+import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
+
+import { DEFAULT_TERMINAL_LIST_LIMIT } from '../query/terminal-list-limit'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../lifecycle/pty-controller-inventory-budget'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
-} from '../../../../shared/runtime-terminal-contracts'
-import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
-import { parseWorkerTerminalHostScope } from '../../../../shared/worker-terminal-host-scope'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import {
+  classifyIndexedWorkerTerminalProcessIncarnation,
+  indexWorkerTerminalProcesses,
+  type WorkerTerminalHostInventory
+} from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
+import { InProcessWorkerExitEvidence } from '../../orchestration/terminal-authority/release/in-process-worker-exit-evidence'
+import { parseWorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { escalateWorkerFailure } from '../../orchestration/worker-failure-escalation'
-import { dispatchReportMailbox } from '../../orchestration/dispatch-report-mailbox'
-import { reportWorkerTurnStop } from '../../orchestration/worker-turn-stop-report'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
-import type { OrchestrationDb } from '../../orchestration/db'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
+  private readonly inProcessWorkerExits = new InProcessWorkerExitEvidence()
   subscribeToTerminalResize(
     ptyId: string,
     listener: (event: {
@@ -51,155 +53,6 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     notifyRuntimeListeners(listeners, (listener) => listener(event), 'pty-resize')
   }
 
-  // Section 7.2: observe exits directly so dispatch recovery need not wait for coordinator polling.
-  protected failActiveDispatchOnExit(
-    handle: string,
-    paneKey: string | null,
-    exitCode: number,
-    cause: TerminalExitCause
-  ): void {
-    const errorContext = describeTerminalExitCause(cause)
-    const settledLocally = this.failActiveDispatchAndEscalate(handle, paneKey ?? undefined, {
-      error: errorContext,
-      options: { workerProcessExited: true, terminationReason: cause.kind },
-      processExited: true,
-      // Escalate unexpected exits on the next coordinator check even before its circuit breaker trips.
-      escalate: !isDeliberateTerminalExit(cause),
-      describe: (task, outcome) => ({
-        subject: `Agent exited unexpectedly (${errorContext})`,
-        body: `Worker ${handle} stopped while running task ${task}. ${errorContext}.${outcome}`
-      }),
-      payload: { exitCode, exitCause: cause }
-    })
-    if (!settledLocally && paneKey) {
-      this.reportRemoteWorkerExit(handle, paneKey, errorContext)
-    }
-  }
-
-  /** A paired server's worker has no local Dispatch; any exit it did not report reaches the Run home through the stop relay. */
-  private reportRemoteWorkerExit(handle: string, paneKey: string, exitCause: string): void {
-    const db = this._orchestrationDb
-    const attachment = db?.findActiveRemoteAttachmentForPane(paneKey)
-    const processIncarnation = this.getTerminalProcessIncarnation(handle)
-    if (
-      !db ||
-      !attachment ||
-      !db.isRemoteAttachmentProcessCurrent({
-        dispatchId: attachment.dispatch_id,
-        paneKey,
-        processIncarnation
-      })
-    ) {
-      return
-    }
-    reportWorkerTurnStop(
-      db,
-      { kind: 'remote', attachment },
-      {
-        from: handle,
-        stopKey: `exit:${processIncarnation}`,
-        reason: 'exited',
-        lastOutput: undefined,
-        exitCause
-      },
-      this.workerTurnStopReportDeps
-    )
-  }
-
-  /** Codex outlives a failed reconnect, so no PTY exit will ever settle its dispatch (#24791). */
-  protected settleLostAgentSession(ptyId: string): void {
-    const surfaces: { handle: string | undefined; paneKey?: string }[] = [
-      ...this.getLeavesForPty(ptyId).map((leaf) => ({
-        handle: this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)),
-        paneKey: this.makeRuntimePaneKey(leaf)
-      })),
-      // Pane identity survives handle reminting, as on the exit path.
-      {
-        handle: this.handleByPtyId.get(ptyId),
-        paneKey: this.paneOfPty(this.ptysById.get(ptyId)).paneKey ?? undefined
-      }
-    ]
-    const reason = 'Codex lost its app-server and could not reconnect; relaunch Codex to continue'
-    try {
-      surfaces.some(
-        ({ handle, paneKey }) =>
-          handle !== undefined &&
-          this.failActiveDispatchAndEscalate(handle, paneKey, {
-            error: reason,
-            // The terminal and worktree stay up for inspection; workerProcessExited bypasses the active-worker guard for this dead session.
-            options: { workerProcessExited: true, workerStage: 'agent_session_lost' },
-            processExited: false,
-            escalate: true,
-            describe: (task, outcome) => ({
-              subject: 'Agent session lost',
-              body: `Worker ${handle} can no longer run task ${task}: ${reason}. Its terminal is still open for inspection.${outcome}`
-            }),
-            payload: { reason }
-          })
-      )
-    } catch (error) {
-      console.warn('[orchestration] failed to settle a lost agent session', ptyId, error)
-    }
-  }
-
-  /** Returns whether the surface had an active dispatch. */
-  private failActiveDispatchAndEscalate(
-    handle: string,
-    paneKey: string | undefined,
-    failure: {
-      error: string
-      options: Parameters<OrchestrationDb['failDispatch']>[2]
-      processExited: boolean
-      escalate: boolean
-      describe: (task: string, outcome: string) => { subject: string; body: string }
-      payload: Record<string, unknown>
-    }
-  ): boolean {
-    const db = this._orchestrationDb
-    // Pane identity survives handle reminting.
-    const dispatch = db?.getActiveDispatchForTerminal(handle, paneKey)
-    if (!db || !dispatch) {
-      return false
-    }
-    // Only this runtime's in-flight stop claims the outcome; durable stopping rows from a crashed runtime cannot absorb later failures.
-    const stopping = db.getWorkerDispatch?.(dispatch.id)
-    if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
-      if (failure.processExited) {
-        db.settleWorkerStop(dispatch.id)
-      }
-      return true
-    }
-    const settled = db.failDispatch(dispatch.id, failure.error, failure.options)
-    if (!failure.escalate) {
-      return true
-    }
-    escalateWorkerFailure(
-      db,
-      dispatch,
-      {
-        from: handle,
-        mailbox: () => dispatchReportMailbox(db, dispatch),
-        describe: (task) =>
-          failure.describe(
-            task,
-            settled?.status === 'circuit_broken'
-              ? ' This task has now failed too many times, so it will not be retried automatically.'
-              : settled?.status === 'failed'
-                ? ' The task is ready to be dispatched again.'
-                : ''
-          ),
-        payload: {
-          taskId: dispatch.task_id,
-          dispatchId: dispatch.id,
-          ...failure.payload,
-          handle
-        }
-      },
-      (to, type) => this.notifyMessageArrived(to, type)
-    )
-    return true
-  }
-
   async listTerminals(
     worktreeSelector?: string,
     limit = DEFAULT_TERMINAL_LIST_LIMIT,
@@ -212,9 +65,11 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     return this.terminalList.list(worktreeSelector, limit, opts)
   }
 
+  /** `inventories`, shared across one sweep's calls, lists each host once instead of once per call. */
   async inspectTerminalProcessIncarnationLiveness(
     processIncarnation: string,
-    serializedHostScope: string | null
+    serializedHostScope: string | null,
+    inventories?: Map<string, Promise<WorkerTerminalHostInventory | null>>
   ): Promise<'live' | 'exited' | 'unverifiable'> {
     const structuredSessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
     if (structuredSessionId) {
@@ -222,21 +77,61 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       return observeStructuredWorker({ sessionId: structuredSessionId }).status
     }
     const hostScope = parseWorkerTerminalHostScope(serializedHostScope)
-    if (!hostScope || !this.ptyController?.listProcesses) {
+    if (!hostScope) {
       return 'unverifiable'
     }
-    const listed = await withTimeoutResult(
-      this.ptyController.listProcesses(
-        hostScope.kind === 'ssh'
-          ? toSshExecutionHostId(hostScope.targetId)
-          : LOCAL_EXECUTION_HOST_ID
-      ),
-      PTY_CONTROLLER_LIST_TIMEOUT_MS
+    const hostId =
+      hostScope.kind === 'ssh' ? toSshExecutionHostId(hostScope.targetId) : LOCAL_EXECUTION_HOST_ID
+    let listing = inventories?.get(hostId) ?? null
+    if (!listing) {
+      listing = this.listHostInventoryForExitProof(hostId)
+      if (!listing) {
+        return 'unverifiable'
+      }
+      inventories?.set(hostId, listing)
+    }
+    const inventory = await listing
+    if (!inventory) {
+      return 'unverifiable'
+    }
+    // This process's own provider can vouch only for PTYs it saw exit; others may live in a daemon it never reached.
+    const absenceProvesExit =
+      !inventory.inProcessOwner ||
+      this.inProcessWorkerExits.has(this.getOrchestrationDbIfAvailable(), processIncarnation)
+    return classifyIndexedWorkerTerminalProcessIncarnation(
+      processIncarnation,
+      inventory.index,
+      absenceProvesExit
     )
-    if (!listed.ok) {
-      return 'unverifiable'
+  }
+
+  /** An SSH relay answers only for its own host; locally, the provider that answered decides what silence means. */
+  private listHostInventoryForExitProof(
+    hostId: ExecutionHostId
+  ): Promise<WorkerTerminalHostInventory | null> | null {
+    const controller = this.ptyController
+    const listed =
+      hostId === LOCAL_EXECUTION_HOST_ID
+        ? controller?.listLocalProcessesForExitProof?.()
+        : controller?.listProcesses?.(hostId).then((processes) => ({
+            processes,
+            inProcessOwner: false
+          }))
+    if (!listed) {
+      return null
     }
-    return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
+    return withTimeoutResult(listed, PTY_CONTROLLER_LIST_TIMEOUT_MS).then((result) =>
+      result.ok
+        ? {
+            index: indexWorkerTerminalProcesses(result.value.processes),
+            inProcessOwner: result.value.inProcessOwner
+          }
+        : null
+    )
+  }
+
+  recordInProcessPtyExit(processIncarnation: string): void {
+    this.inProcessWorkerExits.record(this.getOrchestrationDbIfAvailable(), processIncarnation)
   }
 
   protected getTerminalTopologyRevision(worktreeId: string): number {

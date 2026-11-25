@@ -6,8 +6,10 @@ import {
   type PluginHostMethodName
 } from '../../workers/plugin-host-api'
 import { PLUGIN_HOST_API_MAJOR } from '../../workers/plugin-host-api-major'
+import { missingPluginParamCapability } from '../../capabilities/plugin-capability-gate'
 
 import { hostError } from './testing-host-error'
+import { resolvePluginEditorTypography } from '../../workers/plugin-host-api-editor-typography'
 import {
   createMockPluginData,
   type MockPluginDataOptions,
@@ -41,13 +43,36 @@ function isResultFunction(value: unknown): value is (params: unknown) => unknown
   return typeof value === 'function'
 }
 
+const OK = { ok: true } as const
+
+/** Fire-and-forget methods (their result is `{ ok: true }`, like `statusBar.update`) succeed
+ *  unless a test configures otherwise. */
+export function acknowledgesByDefault(spec: {
+  result: { safeParse(value: unknown): { success: boolean } }
+}): boolean {
+  return spec.result.safeParse(OK).success
+}
+
 // What a desktop Orca answers when a test configures nothing for these.
 const DEFAULT_RESULTS: Record<string, unknown> = {
   'workspace.readContext': null,
   'notifications.show': { delivered: true },
   'shell.openExternal': { opened: true },
   'files.saveAs': { status: 'saved' },
-  'agents.list': { agents: [] }
+  'agents.list': { agents: [] },
+  'project.list': { projects: [], truncated: false },
+  // Echoes the request, as a host that changed the copy does.
+  'project.setHidden': (params: { hostId?: string; hidden: boolean }) => ({
+    hostId: params.hostId ?? 'local',
+    hidden: params.hidden
+  }),
+  'terminal.list': { terminals: [], truncated: false },
+  'terminal.focus': { focused: true },
+  'terminal.close': { closed: true },
+  'automation.list': { automations: [], truncated: false },
+  'agent.listSessions': { sessions: [], truncated: false },
+  // Orca's default size: the editor follows a 14 px terminal font, unzoomed (the family is platform-specific).
+  'editor.readTypography': resolvePluginEditorTypography({ terminalFontSize: 14 }, 0)
 }
 
 type MockHostSurface = {
@@ -96,7 +121,8 @@ export function createMockHost(
   const data = createMockPluginData(options)
   const surfaceMethods: Record<Surface, readonly PluginHostMethodName[]> = {
     panel: pluginFrameMethodsFor('panel', true),
-    worker: pluginHostMethodsFor('worker')
+    // The plugin under test is a development plugin, which may call proposed methods.
+    worker: pluginHostMethodsFor('worker', true)
   }
   const calls: MockHostCall[] = []
   const refusals: MockHostRefusal[] = []
@@ -128,6 +154,13 @@ export function createMockHost(
     if (!parsedParams.success) {
       return refuse('invalid_params', parsedParams.error.issues[0]?.message ?? 'invalid params')
     }
+    const missing = missingPluginParamCapability(spec, parsedParams.data, [...capabilities])
+    if (missing) {
+      return refuse(
+        'capability_denied',
+        `${method} with ${missing.param} needs the ${missing.capability} capability`
+      )
+    }
     return parsedParams.data
   }
 
@@ -147,10 +180,20 @@ export function createMockHost(
       throw hostError('unknown_method', method)
     }
     const builtIn = !results.has(method) && data.handles(method)
-    if (!results.has(method) && !builtIn && !Object.hasOwn(DEFAULT_RESULTS, method)) {
+    const acknowledges = acknowledgesByDefault(spec)
+    if (
+      !results.has(method) &&
+      !builtIn &&
+      !Object.hasOwn(DEFAULT_RESULTS, method) &&
+      !acknowledges
+    ) {
       throw hostError('unavailable', `the test configured no result for ${method}`)
     }
-    const configured: unknown = results.has(method) ? results.get(method) : DEFAULT_RESULTS[method]
+    const configured: unknown = results.has(method)
+      ? results.get(method)
+      : Object.hasOwn(DEFAULT_RESULTS, method)
+        ? DEFAULT_RESULTS[method]
+        : OK
     const value = builtIn
       ? await data.answer(method, checkedParams)
       : isResultFunction(configured)

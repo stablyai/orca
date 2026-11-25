@@ -1,12 +1,13 @@
 import { existsSync } from 'node:fs'
-import { Worker } from 'node:worker_threads'
-import type { WorkerThreadFactory } from '../lazy-worker-thread-host'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
+import type { WorkerThreadFactory } from '../worker-threads/worker-thread-transport'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath,
   type WorkerEntryLayout
-} from '../worker-thread-entry-path'
-import { WorkerThreadRequestQueue } from '../worker-thread-request-queue'
+} from '../worker-threads/worker-thread-entry-path'
+import { WorkerThreadRequestQueue } from '../worker-threads/worker-thread-request-queue'
 import {
   PORT_SCAN_COMMAND_TIMEOUT_MS,
   PortScanCommandTimeoutError,
@@ -67,10 +68,17 @@ export class PortScanCommandClient {
   async run(
     command: string,
     args: string[],
-    darwinOperation?: DarwinPortScanOperation
+    darwinOperation?: DarwinPortScanOperation,
+    linuxSocketInodes?: number[]
   ): Promise<PortScanCommandResult> {
     const response = await this.requests.dispatch(
-      (id) => ({ id, command, args, ...(darwinOperation ? { darwinOperation } : {}) }),
+      (id) => ({
+        id,
+        command,
+        args,
+        ...(darwinOperation ? { darwinOperation } : {}),
+        ...(linuxSocketInodes ? { linuxSocketInodes } : {})
+      }),
       CALL_DEADLINE_MS
     )
     if (response.ok) {
@@ -100,7 +108,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Port scan command worker entry not found: ${workerPath}`)
   }
-  return new Worker(workerPath)
+  return spawnWorkerThread(workerPath, { name: 'orca-port-scan' })
 }
 
 let sharedClient: PortScanCommandClient | null = null
@@ -108,8 +116,9 @@ let sharedClient: PortScanCommandClient | null = null
 export function runPortScanCommand(
   command: string,
   args: string[],
-  darwinOperation?: DarwinPortScanOperation
+  darwinOperation?: DarwinPortScanOperation,
+  linuxSocketInodes?: number[]
 ): Promise<PortScanCommandResult> {
   sharedClient ??= new PortScanCommandClient({ workerFactory: defaultWorkerFactory })
-  return sharedClient.run(command, args, darwinOperation)
+  return sharedClient.run(command, args, darwinOperation, linuxSocketInodes)
 }

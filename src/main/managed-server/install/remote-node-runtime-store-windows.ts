@@ -4,7 +4,7 @@ import {
   ORCAD_NODE_RUNTIME_DIR_PREFIX,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_RUNTIMES_DIRNAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { RUNTIME_STORE_STAGE_PREFIX } from './orcad-remote-node-runtime'
 import {
   INVENTORY_OK,
@@ -14,14 +14,14 @@ import {
   RUNTIME_STORE_TOMBSTONE_PREFIX,
   runtimeStoreInventoryCommand
 } from './remote-node-runtime-store-inventory'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+import { RELAY_REMOTE_DIR } from './remote-install-root'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
-import { powerShellCommand } from '../../ssh/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import { powerShellCommand } from '../../ssh/remote-exec/ssh-remote-powershell'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 
 const REPARSE = '[IO.FileAttributes]::ReparsePoint'
 

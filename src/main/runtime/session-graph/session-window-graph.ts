@@ -1,86 +1,47 @@
-import { OrcaRuntimeWithAttachWindow } from './session-graph-promotion'
+import { OrcaRuntimeWithAdmitWindowPublisher } from './session-window-publisher'
 import type {
   RuntimeRendererSyncWindowGraph,
-  RuntimeSyncedTab,
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult
-} from '../../../shared/runtime-session-contracts'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
-
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { assertUniqueRuntimeGraphTabIds } from './runtime-graph-tab-ids'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
+import { AgentOrchestrationGraphRevision } from '../orchestration/crew/agent-orchestration-graph-revision'
+import { assertBrowserPageInventoryFrames } from '../session-tabs/inventory/mobile-session-inventory-base'
 
 type Graph = RuntimeSyncWindowGraph
 
-/** The runtime indexes graph tabs by bare id, so duplicate ids cannot be routed safely. */
-function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void {
-  const seen = new Set<string>()
-  for (const tab of tabs) {
-    if (seen.has(tab.tabId)) {
-      throw new Error('duplicate_runtime_tab_id')
-    }
-    seen.add(tab.tabId)
-  }
-}
-
-export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow {
+export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmitWindowPublisher {
   /** Layout-owner builds: main's panes in place of the window's (session-tabs-inventory.ts). */
   protected abstract withMainSurfaces(windowId: number, graph: Graph): Graph
   declare protected terminalGroupGridSizes?: RuntimeSyncWindowGraph['terminalGroupGridSizes']
   declare protected singleGroupWorkspaceGridSize?: RuntimeSyncWindowGraph['singleGroupWorkspaceGridSize']
+  private readonly orchestrationReply = new AgentOrchestrationGraphRevision(
+    this.agentOrchestrationProjection
+  )
 
-  // Remounts briefly clear ptyId; retain the live handle paired clients still use (#23759).
-  private isLeafRemountingLivePty(
-    ptyId: string,
-    incomingPtyIds: ReadonlySet<string | null>
-  ): boolean {
-    return (
-      !incomingPtyIds.has(ptyId) &&
-      this.controllerKnowsPtyIsLive(ptyId) &&
-      this.getPtyLivenessVerdict(ptyId)?.status !== 'exited'
-    )
-  }
+  /** A serve or orcad host: no owner window here ever answers a card. */
+  servesWithoutWindow = (): boolean => this.servesHeadlessGraph
 
   shouldRelayTerminalBrowserOpens(): boolean {
     return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
   }
 
-  syncWindowGraph(
+  async syncWindowGraph(
     windowId: number,
-    graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph
-  ): RuntimeSyncWindowGraphResult {
+    graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph,
+    options?: { includeAgentSenders?: boolean }
+  ): Promise<RuntimeSyncWindowGraphResult> {
     // Reject duplicate bare tab ids before mutating authority/state or indexes could route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
-    if (
-      windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
-      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
-      this.headlessGraphFallbackAvailable
-    ) {
-      if (windowId !== this.pendingHeadlessPromotionWindowId) {
-        throw new Error('Runtime graph publisher does not match the pending desktop promotion')
-      }
-      // Accept late healthy graphs after failed promotion restores headless authority.
-      this.attachWindow(windowId)
-    }
-    if (this.authoritativeWindowId === null) {
-      this.authoritativeWindowId = windowId
-    }
-    if (windowId !== this.authoritativeWindowId) {
-      throw new Error('Runtime graph publisher does not match the authoritative window')
-    }
-    const rendererGeneration =
-      windowId === HEADLESS_RUNTIME_WINDOW_ID
-        ? null
-        : 'rendererGeneration' in graph && typeof graph.rendererGeneration === 'string'
-          ? graph.rendererGeneration
-          : undefined
-    if (
-      typeof rendererGeneration === 'string' &&
-      rendererGeneration === this.rendererGeneration &&
-      this.graphStatus !== 'ready'
-    ) {
-      throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
-    }
+    assertBrowserPageInventoryFrames(graph.mobileSessionTabs)
+    const rendererGeneration = this.admitWindowPublisher(windowId, graph)
+    const previousTitleAuthority = this.captureSessionTitleAuthority()
+    const publishedMobileSessionTabs = graph.mobileSessionTabs
+    const rendererGraph = graph
     if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
       this.headlessGraphFallbackAvailable = true
       this.servesHeadlessGraph = true
@@ -109,9 +70,14 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       graph.mobileSessionTabs,
       graph.unchangedMobileSessionWorktrees,
       mobileSessionResyncWorktrees,
-      rendererGeneration
+      rendererGeneration,
+      publishedMobileSessionTabs
     )
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
+    const rendererBindings =
+      graph === rendererGraph
+        ? new Map<string, string | null>()
+        : this.captureRendererStatusBindings(rendererGraph, changedMobileWorktrees)
     const graphSyncedAt = this.nextTitleObservationSequence()
     // Stamp this graph's surfaces; newer records survive until the next statement (pty-recorded-surface-topology.ts).
     // Exempt the one-shot headless placeholder: it names no renderer panes and cannot re-stamp later claims (#18191).
@@ -132,6 +98,14 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       }
       const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
       const existing = this.leaves.get(leafKey)
+      // Why: status rows are keyed by UUID leaf ids; older or mirrored leaves can't carry one.
+      if (
+        graph === rendererGraph &&
+        isTerminalLeafId(leaf.leafId) &&
+        (changedMobileWorktrees.has(leaf.worktreeId) || existing?.ptyId !== leaf.ptyId)
+      ) {
+        rendererBindings.set(makePaneKey(leaf.tabId, leaf.leafId), leaf.ptyId)
+      }
       const ptyId =
         leaf.ptyId === null &&
         existing?.ptyId &&
@@ -277,11 +251,6 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       })
       changedMobileWorktrees.add(worktreeId)
     }
-    for (const worktreeId of changedMobileWorktrees) {
-      if (this.mobileSessionTabsByWorktree.has(worktreeId)) {
-        this.scheduleMobileSessionTabsChanged(worktreeId)
-      }
-    }
     const isAuthoritativeGraphPublisher = windowId === this.authoritativeWindowId
     this.markGraphReady(windowId)
     if (
@@ -297,8 +266,25 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     if (rendererGeneration !== undefined) {
       this.rendererGeneration = rendererGeneration
     }
+    if (typeof rendererGeneration === 'string') {
+      this.reconcileRendererStatusMembership(
+        rendererGeneration,
+        rendererGraph,
+        rendererBindings,
+        changedMobileWorktrees
+      )
+    }
+    this.republishSessionTitleAuthorityChanges(previousTitleAuthority, changedMobileWorktrees)
+    for (const worktreeId of changedMobileWorktrees) {
+      if (this.mobileSessionTabsByWorktree.has(worktreeId)) {
+        this.scheduleMobileSessionTabsChanged(worktreeId)
+      }
+    }
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
+      if (leaf.ptyId && this._orchestrationDb?.hasAnyDispatchContexts()) {
+        this.issueHandle(leaf)
+      }
       const previousLeaf = previousLeaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
       // A pane newly showing a terminal can bind it to the pane's Run or Dispatch mailbox.
       if (
@@ -316,18 +302,35 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       cb()
     }
 
-    const agentOrchestrationByPaneKey = this.agentOrchestrationProjection.buildByPaneKey()
-    const nativeChatLaunchDraftResolutions =
-      this.getNativeChatLaunchDraftResolutionClientEventSnapshot().map(
-        ({ tabId, text, createdAt }) => ({ tabId, text, createdAt })
-      )
-    return {
-      ...this.getStatus(),
-      ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
-      ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {}),
-      ...(mobileSessionResyncWorktrees.size > 0
-        ? { mobileSessionResyncWorktrees: [...mobileSessionResyncWorktrees] }
-        : {})
+    const replyLeaves = this.leaves
+    const consume = () => {
+      if (
+        this.leaves !== replyLeaves ||
+        this.authoritativeWindowId !== windowId ||
+        this.graphStatus !== 'ready'
+      ) {
+        throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
+      }
+      const nativeChatLaunchDraftResolutions =
+        this.getNativeChatLaunchDraftResolutionClientEventSnapshot().map(
+          ({ tabId, text, createdAt }) => ({ tabId, text, createdAt })
+        )
+      return {
+        ...this.getStatus(),
+        ...(options?.includeAgentSenders === false || windowId === HEADLESS_RUNTIME_WINDOW_ID
+          ? {}
+          : this.agentSenderGraphReply(graph.agentSenderBase)),
+        ...this.orchestrationReply.since(graph.agentOrchestrationBase),
+        ...(nativeChatLaunchDraftResolutions.length > 0
+          ? { nativeChatLaunchDraftResolutions }
+          : {}),
+        ...(mobileSessionResyncWorktrees.size > 0
+          ? { mobileSessionResyncWorktrees: [...mobileSessionResyncWorktrees] }
+          : {})
+      }
     }
+    return options?.includeAgentSenders === false || windowId === HEADLESS_RUNTIME_WINDOW_ID
+      ? consume()
+      : this.agentProjections.senders.withPreparedPublication(consume)
   }
 }

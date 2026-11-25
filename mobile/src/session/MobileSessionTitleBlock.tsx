@@ -1,17 +1,28 @@
-import { Fragment } from 'react'
-import { DetailCardFocusBoundary } from '../components/detail-card-host'
-import { Platform, Pressable, StyleSheet, Text } from 'react-native'
-import type { SessionTitleCard } from './use-session-title-card'
-import { StatusDot } from '../components/StatusDot'
-import type { ConnectionState } from '../transport/types'
+import { Fragment, useCallback, type ReactNode } from 'react'
+import { DetailCardFocusBoundary } from '../components/detail-cards/detail-card-host'
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type HostInstance,
+  type StyleProp,
+  type TextStyle
+} from 'react-native'
+import type { SessionTitleCard } from './tabs/use-session-title-card'
+import { StatusDot } from '../components/feedback/StatusDot'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import { styles } from './mobile-session-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { pressedStyle } from '../theme/mobile-theme'
+import { useKeyboardPersistingTaps } from '../platform/keyboard/keyboard-persisting-taps'
 
 /** The session's title and status line. A tap opens a card with the full name, where it lives
  *  and its host, as desktop's tab card does, because a sideways phone cuts the title short. */
 export function MobileSessionTitleBlock({
   title,
+  leading,
   connState,
   details,
   meta,
@@ -20,6 +31,8 @@ export function MobileSessionTitleBlock({
   onRetry
 }: {
   title: string
+  /** Before the title, as a bot's avatar is. */
+  leading?: ReactNode
   connState: ConnectionState
   details: SessionTitleCard
   meta: string
@@ -29,9 +42,31 @@ export function MobileSessionTitleBlock({
   onRetry: () => void
 }): React.JSX.Element {
   const t = useMobileTranslation()
+  const titleText = (extra?: StyleProp<TextStyle>) => (
+    <Text
+      ref={details.titleRef}
+      onLayout={details.onAnchorLayout}
+      onPress={Platform.OS === 'web' ? details.toggle : undefined}
+      style={[styles.sessionTitle, centered && centeredStyles.title, extra]}
+      numberOfLines={1}
+    >
+      {title}
+    </Text>
+  )
+  // Why: opening the card must keep a focused field's keyboard. 'always' because the whole block
+  // is one button; 'handled' would let its own text through.
+  const titleKeepsKeyboard = useKeyboardPersistingTaps('always')
+  const { openerRef } = details
+  const attachOpener = useCallback(
+    (view: HostInstance | null) => {
+      openerRef.current = view
+      titleKeepsKeyboard(view)
+    },
+    [openerRef, titleKeepsKeyboard]
+  )
   return (
     <>
-      <DetailCardFocusBoundary refs={details.boundaryRefs} index={0} active={details.titleActive} />
+      <DetailCardFocusBoundary refs={details.boundaryRefs} index={0} active={details.active} />
       <Fragment key="title">
         <Pressable
           style={({ pressed }) => [
@@ -43,25 +78,24 @@ export function MobileSessionTitleBlock({
                 ],
             pressed && pressedStyle
           ]}
-          ref={details.openerRef}
+          ref={attachOpener}
           onLayout={details.onAnchorLayout}
           onPress={details.toggle}
-          aria-expanded={details.titleRequestedOpen}
+          aria-expanded={details.requestedOpen}
           accessibilityRole="button"
           accessibilityHint={t(
             'session.header.workspaceDetailsHint',
             'Shows the full workspace name and where it is'
           )}
         >
-          <Text
-            ref={details.titleRef}
-            onLayout={details.onAnchorLayout}
-            onPress={Platform.OS === 'web' ? details.toggle : undefined}
-            style={[styles.sessionTitle, centered && centeredStyles.title]}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
+          {leading ? (
+            <View style={styles.sessionBotTitleRow}>
+              {leading}
+              {titleText(styles.sessionBotTitle)}
+            </View>
+          ) : (
+            titleText()
+          )}
           <Pressable
             style={({ pressed }) => [styles.sessionMetaRow, pressed && pressedStyle]}
             disabled={!showConnectionRetry}
@@ -80,7 +114,7 @@ export function MobileSessionTitleBlock({
           </Pressable>
         </Pressable>
       </Fragment>
-      <DetailCardFocusBoundary refs={details.boundaryRefs} index={1} active={details.titleActive} />
+      <DetailCardFocusBoundary refs={details.boundaryRefs} index={1} active={details.active} />
     </>
   )
 }

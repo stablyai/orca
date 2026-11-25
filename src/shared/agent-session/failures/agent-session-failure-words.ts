@@ -1,5 +1,3 @@
-// Build legacy text/reason/error and newer typed facts together. Quote provider text only when authored for a person; shared sentence pieces let desktop translate the same fact.
-
 import {
   isSubmissionRejectionFact,
   type AgentSessionFailureFact,
@@ -7,15 +5,15 @@ import {
   type SubmissionRejectionFact,
   type SubmissionRejectionKind
 } from './agent-session-failure'
-import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
-import { cliMissingSentence, notSignedInSentence } from '../agent-session-availability-sentences'
+import type { AgentSessionConversationCommand } from '../conversation-context/agent-session-conversation-command'
+import { cliMissingSentence, notSignedInSentence } from './agent-session-availability-sentences'
 import {
   agentCliInstallationFailureWords,
   sayAgentSessionFailureEnglish,
   type AgentSessionFailureCopyId,
   type AgentSessionFailureSay
 } from './agent-session-failure-copy'
-import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../agent-session-goal-control-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../view/agent-session-goal-control-copy'
 import { START_REFUSAL_RESUMABLE } from './agent-session-start-refusal-resumable'
 import { providerRetryWords, withRetryCause } from './agent-session-provider-retry-words'
 import {
@@ -24,15 +22,19 @@ import {
 } from './agent-session-usage-limit-words'
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { agent, attachmentProblemSentence } from './agent-session-attachment-failure-words'
-import { joinSentences } from '../../sentence-joining'
-import { quotingPersonDetail } from '../../agent-session-failure-quoted-detail'
-import { requestTimeoutSeconds } from '../agent-session-request-timeout'
+import { joinSentences } from '../../text/sentence-joining'
+import { modelUnavailableSentence } from './agent-session-model-failure-words'
+import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
+import { requestTimeoutSeconds } from './agent-session-request-timeout'
+import { namingAgent, SETUP_REFUSAL_SENTENCES } from './agent-session-setup-refusal-words'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
   DISPATCH_REJECTED_QUEUE_FULL,
   DISPATCH_REJECTED_WRITE_FAILED
 } from '../requests/structured-agent-session-dispatch-rejection'
+
+// Build legacy text/reason/error and newer typed facts together. Quote provider text only when authored for a person; shared sentence pieces let desktop translate the same fact.
 
 declare const failureSentence: unique symbol
 
@@ -67,19 +69,25 @@ export type AgentSessionFailureWordsContext = {
   messageSubmitted?: boolean
   /** The chat runs on this WSL distro's host; desktop-only, since the host can't name itself so. */
   wslDistro?: string
+  /** Where the chat runs as this reader names it ("this computer", a server's name); desktop-only. */
+  hostName?: string
   /** How this reader says a usage limit's reset; without it the words name no time. */
   usageLimitReset?: AgentSessionUsageLimitResetWords
 }
 
-type Sentence = (
+export type Sentence = (
   context: AgentSessionFailureWordsContext,
   fact: AgentSessionFailureFact,
   surface: AgentSessionFailureSurface,
   say: AgentSessionFailureSay
 ) => string
 
-function namingAgent(id: AgentSessionFailureCopyId): Sentence {
-  return (context, _fact, _surface, say) => say(id, agent(say, context))
+function quotingForAgent(
+  lead: AgentSessionFailureCopyId,
+  quotedLead: AgentSessionFailureCopyId
+): Sentence {
+  return (context, fact, _surface, say) =>
+    quotingPersonDetail(say, lead, quotedLead, fact.detail, agent(say, context))
 }
 
 /** The next step after a start or restart that failed: the command, or the message, again. */
@@ -100,9 +108,9 @@ function startRetry(
 
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
   return (context, fact, _surface, say) => {
-    const installationFailure = agentCliInstallationFailureWords(fact.refusal, say)
-    if (installationFailure) {
-      return installationFailure
+    const installation = agentCliInstallationFailureWords(fact.refusal, say, context.hostName)
+    if (installation) {
+      return installation
     }
     const failed = say(verb, agent(say, context))
     if (fact.argumentProblem) {
@@ -152,29 +160,23 @@ function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
 }
 
 const FAILURE_SENTENCES = {
+  ...SETUP_REFUSAL_SENTENCES,
   providerStartFailed: (context, _fact, _surface, say) =>
     joinSentences([say('providerStartFailed', agent(say, context)), ...startRetry(say, context)]),
+  savedConversationMissing: (context, _fact, _surface, say) =>
+    joinSentences([say('savedConversationMissing', agent(say, context)), say('startNewChat')]),
   startFailed: couldNot('couldNotStart'),
   notSignedIn: (context, fact, surface, say) => notSignedInSentence(context, fact, say, surface),
   cliMissing: (context, _fact, _surface, say) => cliMissingSentence(context, say),
   historyTooLarge: (_context, _fact, _surface, say) =>
     joinSentences([say('historyTooLarge'), say('startNewChat')]),
-  managedAccountEnvOverride: (_context, _fact, _surface, say) => say('managedAccountEnvOverride'),
-  accountSwitchInProgress: namingAgent('accountSwitchInProgress'),
-  launchFolderMissing: (_context, _fact, _surface, say) => say('launchFolderMissing'),
-  historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
-  claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
-  claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
-  agentCommandNotRunnable: namingAgent('agentCommandNotRunnable'),
-  runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
-  fullAccessAsRoot: namingAgent('fullAccessAsRoot'),
+  // A Command that failed names the program it ran and what it said.
+  agentCommandNotRunnable: quotingForAgent('agentCommandNotRunnable', 'agentCommandFailed'),
   launchPreparationFailed: (context, _fact, _surface, say) =>
     joinSentences([
       say('launchPreparationFailed', agent(say, context)),
       ...startRetry(say, context)
     ]),
-  conversationOpenInTerminal: namingAgent('conversationOpenInTerminal'),
-  conversationOpenElsewhere: (_context, _fact, _surface, say) => say('conversationOpenElsewhere'),
   managedAccountUnsupported: (context, _fact, _surface, say) =>
     joinSentences([
       say('managedAccountUnsupported'),
@@ -195,16 +197,17 @@ const FAILURE_SENTENCES = {
     ),
   restartFailed: couldNot('couldNotRestart'),
   claudeEffortInvalid: (_context, _fact, _surface, say) => say('claudeEffortInvalid'),
-  modelUnavailable: (context, fact, _surface, say) =>
-    say('modelUnavailable', { ...agent(say, context), detail: fact.detail?.text ?? 'this model' }),
-  providerRejected: (context, fact, _surface, say) =>
-    quotingPersonDetail(
-      say,
-      'providerRejected',
-      'providerRejectedQuoted',
-      fact.detail,
-      agent(say, context)
-    ),
+  modelUnavailable: modelUnavailableSentence,
+  modelNotSelected: (context, _fact, _surface, say) => say('modelNotSelected', agent(say, context)),
+  providerUnavailable: namingAgent('providerUnavailable'),
+  providerSafetyStopped: namingAgent('providerSafetyStopped'),
+  providerResponseFailed: quotingForAgent('providerResponseFailed', 'providerResponseFailedQuoted'),
+  providerRejected: quotingForAgent('providerRejected', 'providerRejectedQuoted'),
+  pluginInputRequired: (context, fact, _surface, say) =>
+    say('pluginInputRequired', {
+      ...agent(say, context),
+      plugin: fact.detail?.text ?? 'unnamed'
+    }),
   attachmentInvalid: (context, fact, _surface, say) =>
     fact.attachment
       ? attachmentProblemSentence(say, context, fact.attachment)
@@ -216,6 +219,7 @@ const FAILURE_SENTENCES = {
   writeFailed: (_context, _fact, _surface, say) => say('writeFailed'),
   cancelled: (_context, _fact, _surface, say) => say('cancelled'),
   chatClosed: (_context, _fact, _surface, say) => say('chatClosed'),
+  unconfirmed: (_context, _fact, _surface, say) => say('unconfirmed'),
   hostRestarted: (_context, _fact, _surface, say) => say('hostRestarted'),
   notDelivered: ({ retryControl }, _fact, _surface, say) =>
     say(retryControl ? 'notDelivered' : 'notDeliveredSendAgain'),
@@ -244,8 +248,8 @@ const FAILURE_SENTENCES = {
   backgroundTaskNotStopped: (_context, fact, _surface, say) =>
     say(fact.backgroundStop === 'task' ? 'backgroundTaskNotStopped' : 'backgroundTasksNotStopped'),
   answerUnconfirmed: (_context, _fact, _surface, say) => say('answerUnconfirmed'),
-  hostFault: ({ retryControl }, _fact, _surface, say) =>
-    say(retryControl ? 'hostFault' : 'hostFaultTryAgain'),
+  hostFault: ({ agentName, retryControl }, _fact, _surface, say) =>
+    (agentName ? `${agentName}: ` : '') + say(retryControl ? 'hostFault' : 'hostFaultTryAgain'),
   hostStopped: (context, _fact, _surface, say) => say('hostStopped', agent(say, context)),
   // A provider that says how its retry is going, for a person, is quoted: that is the progress.
   providerRetrying: (context, { retry, detail }, _surface, say) =>
@@ -274,7 +278,7 @@ export function agentSessionFailureSentence(
   fact: AgentSessionFailureFact,
   surface: AgentSessionFailureSurface,
   context: AgentSessionFailureWordsContext = {},
-  /** Desktop passes its translations; the host and the phone keep English. */
+  /** Desktop and phone pass their translations; the host keeps English. */
   say: AgentSessionFailureSay = sayAgentSessionFailureEnglish
 ): string {
   const sentence: Sentence = FAILURE_SENTENCES[fact.kind]

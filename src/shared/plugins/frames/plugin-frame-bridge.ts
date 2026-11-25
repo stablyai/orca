@@ -25,6 +25,10 @@ export const FRAME_EVENTS = {
   editorKeydown: 'editor.keydown',
   /** host → frame: the document, on ready and whenever it changes outside the frame. */
   editorDocument: 'editor.document',
+  /** frame → host, once: the editor asked for its document, so `plugin shot` knows it is wired. */
+  editorSubscribed: 'editor.subscribed',
+  /** frame → host, once: its document session merges outside changes into unsaved work. */
+  editorMerges: 'editor.merges',
   /** host → frame, payload `PluginPanelPush`: a worker post, an event or a data change. */
   push: 'plugin.push'
 } as const

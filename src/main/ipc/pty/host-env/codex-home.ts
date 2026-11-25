@@ -1,22 +1,25 @@
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
-} from '../../../codex-accounts/managed-codex-auth-readiness'
-import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
+} from '../../../codex-accounts/credentials/managed-codex-auth-readiness'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   forgetCodexPaneAccount,
   getCodexPaneAccount,
-  recordCodexPaneAccount,
-  type CodexPaneHomeRoute
-} from '../../../codex/codex-pane-account-registry'
-import { resolveCodexPaneLaunchAccount } from '../../../codex/codex-pane-launch-account'
-import { getSystemCodexHomePath } from '../../../codex/codex-home-paths'
-import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../../pty/codex-home-wsl-env'
-import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
-import { parseWslPath } from '../../../wsl'
-import { isWslTerminalSpawn } from '../wsl-terminal-spawn'
+  recordCodexPaneAccount
+} from '../../../codex/configuration/homes/codex-pane-account-registry'
+import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
+import { resolveCodexPaneLaunchAccount } from '../../../codex/configuration/homes/codex-pane-launch-account'
+import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
+import {
+  isHostCodexHomeForWsl,
+  isWslCodexHomeForHost
+} from '../../../pty/shell-startup/codex-home-wsl-env'
+import { isWslShellName } from '../../../../shared/shell/launch/local-windows-terminal-runtime'
+import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
+import { isWslTerminalSpawn } from './wsl-terminal-spawn'
 
 export function shouldSkipCodexHomeEnvForWindowsShell(
   shellPath: string | undefined,

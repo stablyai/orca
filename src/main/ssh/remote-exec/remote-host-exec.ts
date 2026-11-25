@@ -1,6 +1,6 @@
 import type { RemoteInstallTransport } from '../../managed-server/install/remote-install-transport'
 import { execCommand } from './remote-exec-command'
-import type { RemoteHostPlatform } from '../ssh-remote-platform'
+import type { RemoteHostPlatform } from '../remote-host/ssh-remote-platform'
 
 export function execHostCommand(
   conn: RemoteInstallTransport,

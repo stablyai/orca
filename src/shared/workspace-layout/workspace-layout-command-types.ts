@@ -1,20 +1,22 @@
 // Pure commands change layout only; runtime owns catalog/path/host-support/liveness refusals requiring external facts.
 
-import type { LiveTerminalAdoption } from './workspace-layout-terminal-adoption'
+import type { DrawnTabPlacement } from './workspace-layout-tab-placement'
+import type { LayoutClientVisibility } from './client-views/workspace-layout-client-visibility'
+import type { LiveTerminalAdoption } from './commands/workspace-layout-terminal-adoption'
 import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
-import type { AgentType } from '../agent-status-types'
-import type { AiVaultSessionTitle } from '../ai-vault-session-title'
-import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
+import type { AgentType } from '../agent-status/contracts/agent-status-types'
+import type { AiVaultSessionTitle } from '../ai-vault/contracts/ai-vault-session-title'
+import type { TabContentType, TabGroupLayoutNode } from './tab-groups/tab-types'
 import type {
   TerminalGrid,
   TerminalPaneLayoutNode,
   TerminalPaneSplitDirection
-} from '../terminal-tab-types'
-import type { PaneSide } from './terminal-pane-tree'
-import type { SplitRatioIntent } from './split-ratio-intents'
-import type { PaneOutcomeChanges } from './workspace-layout-pane-outcomes'
-import type { LayoutEditorView } from './layout-editor-view'
-import type { LayoutEditorFile, LayoutTerminalCreation } from './workspace-layout-model'
+} from './terminal-tab-types'
+import type { PaneSide } from './terminal-topology/terminal-pane-tree'
+import type { SplitRatioIntent } from './tab-groups/split-ratio-intents'
+import type { PaneOutcomeChanges } from './commands/workspace-layout-pane-outcomes'
+import type { LayoutEditorView } from './editor-tabs/layout-editor-view'
+import type * as LayoutModel from './workspace-layout-model'
 
 type On = { workspace: string }
 
@@ -43,7 +45,7 @@ export type LayoutCommand =
       createdAt?: number
       /** A quick command tab's label, so a later save of it matches main's copy. */
       quickCommandLabel?: string
-      creation?: Partial<LayoutTerminalCreation>
+      creation?: Partial<LayoutModel.LayoutTerminalCreation>
       initial?: InitialSurfaceReason
       /** A live terminal no pane shows: its pane when main holds one, else this tab, bound to it. */
       adopt?: LiveTerminalAdoption
@@ -133,9 +135,12 @@ export type LayoutCommand =
       tabId?: string
       /** Main-only opens may derive file ID; wire commands must still provide it. */
       fileId?: string
-      contentType: Exclude<TabContentType, 'terminal' | 'browser' | 'agent-session' | 'simulator'>
+      contentType: Exclude<
+        TabContentType,
+        'terminal' | 'browser' | 'agent-session' | 'simulator' | 'room'
+      >
       /** Present for edit-mode files, which are restored after restart. */
-      file?: LayoutEditorFile
+      file?: LayoutModel.LayoutEditorFile
       /** What the tab shows beyond its file; not saved. */
       view?: LayoutEditorView
       groupId?: string
@@ -169,7 +174,7 @@ export type LayoutCommand =
       tabs: { tabId: string; newTabId: string; newEntityId: string; view?: LayoutEditorView }[]
       groupId: string
       /** The moved edit-mode file's record in its new workspace. */
-      file?: LayoutEditorFile
+      file?: LayoutModel.LayoutEditorFile
     })
   | (On & {
       type: 'renameEditorFiles'
@@ -198,8 +203,8 @@ export type LayoutCommand =
     })
   | (On & { type: 'openBrowserPage'; browserTabId: string; pageId: string })
   | (On & { type: 'closeBrowserPage'; browserTabId: string; pageId: string })
-  /** A page the address bar converted: the new page takes the old one's place. */
-  | (On & { type: 'replaceBrowserPage'; browserTabId: string; pageId: string; newPageId: string })
+  /** Swaps what a tab shows; its id, group, order, pin and presentation stay. */
+  | (On & { type: 'replaceTabContent'; replacement: LayoutModel.TabContentReplacement })
   | (On & {
       type: 'setBrowserTabProfile'
       browserTabId: string
@@ -221,6 +226,8 @@ export type LayoutCommand =
       initial?: InitialSurfaceReason
       split?: NewGroupSplit
     })
+  /** A bot group's room; `botGroupId` is the tab's entity: the group's id, or a thread's. */
+  | (On & DrawnTabPlacement & { type: 'openRoomTab'; tabId?: string; botGroupId: string })
   | (On & { type: 'startPane'; paneKey: string })
   | (On & { type: 'restartPane'; paneKey: string })
   | (On & {
@@ -246,7 +253,7 @@ export type DefaultTerminalTab = {
   leafId: string
   title?: string
   color?: string
-  creation?: Partial<LayoutTerminalCreation>
+  creation?: Partial<LayoutModel.LayoutTerminalCreation>
 }
 
 export type CommandOf<T extends LayoutCommand['type']> = Extract<LayoutCommand, { type: T }>
@@ -255,7 +262,7 @@ export type CommandOf<T extends LayoutCommand['type']> = Extract<LayoutCommand, 
 export type EditorFileRename = {
   fileId: string
   newFileId: string
-  record?: { fromFilePath: string; file: LayoutEditorFile }
+  record?: { fromFilePath: string; file: LayoutModel.LayoutEditorFile }
   /** A non-plain tab's view under the file's new path. */
   view?: LayoutEditorView
 }
@@ -363,6 +370,7 @@ export type LayoutApplyReply = (
 ) & { frameSeq?: number }
 
 export type LayoutContext = {
+  visibility?: LayoutClientVisibility
   mintId: () => string
   /** Pane ids must be UUIDs (pane keys and PTY env carry them). */
   mintLeafId: () => string

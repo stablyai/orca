@@ -42,6 +42,9 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   historyUnreadable: "Orca couldn't read this chat's saved history.",
   historyUnusable: 'Unable to load this chat.',
   historyUnavailable: "Orca couldn't open this chat's history right now.",
+  diskFull: 'The disk on the computer running this chat is full.',
+  freeDiskSpace: 'Free up space on that disk, then try again.',
+  savedInOtherFolder: 'This conversation was saved in another folder.',
   savedByNewerOrca: 'Chats were saved by a newer Orca.',
   updateOrcaToKeepUsing: 'Update Orca to keep using them.',
   chatSavedByNewerOrca: 'This chat was saved by a newer Orca.',
@@ -54,6 +57,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   recordFailed: "Orca couldn't save this to the chat's history.",
   attachmentExpired: 'This attachment expired.',
   reattachFile: 'Remove it and attach it again.',
+  reattachFiles: 'Remove them and attach them again.',
   conversationCleared: 'This conversation has been cleared.',
   openCurrentConversation: 'Open the current conversation to continue.',
   clearUnfinished: "The last /clear didn't finish.",
@@ -93,6 +97,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   hostReconciling: 'Orca is still checking on this chat after restarting.',
   waitMoment: 'Wait a moment.',
   recordUnreadable: "Orca couldn't read this chat's saved state.",
+  mailOwnerUnconfirmed: "Orca couldn't confirm this message is still meant for this chat.",
   chatNotFound: "Orca can't find this chat.",
   startNewChat: START_NEW_CHAT,
   tryAgain: 'Try again.'
@@ -109,6 +114,7 @@ export type AgentSessionWriteNoticeFailurePart = {
 export type AgentSessionWriteNoticePart =
   | AgentSessionWriteNoticeSentence
   | { text: string }
+  | { expiredAttachmentNames: readonly string[] }
   | AgentSessionWriteNoticeFailurePart
 
 /** Causes that already say the history can't be read here, so no sentence after them says it

@@ -6,7 +6,7 @@ import {
   type BrowserExtensionInstallPromptRequest,
   type BrowserExtensionInstallPromptResponse,
   type BrowserExtensionWebStoreInstallResult
-} from '../../../shared/browser-extension-webstore'
+} from '../../../shared/browser/extensions/browser-extension-webstore'
 
 /** "Add from Chrome Web Store" and Orca's install/uninstall confirmation round trip. */
 export const browserExtensionWebStoreApi = {

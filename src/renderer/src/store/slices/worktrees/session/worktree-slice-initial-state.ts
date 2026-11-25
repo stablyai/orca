@@ -1,12 +1,15 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 
 export const worktreeSliceInitialState: Pick<
   WorktreeSlice,
   | 'worktreesByRepo'
   | 'detectedWorktreesByRepo'
   | 'worktreeCatalogVersionByRepoHost'
+  | 'worktreeCatalogAuthorityByRepoHost'
   | 'worktreeLineageById'
   | 'workspaceLineageByChildKey'
+  | 'crossStoreLineageByStoreKey'
+  | 'ownLineageInstallationId'
   | 'activeWorktreeId'
   | 'activeWorkspaceKey'
   | 'activeWorkspaceExecutionHostId'
@@ -27,8 +30,11 @@ export const worktreeSliceInitialState: Pick<
   worktreesByRepo: {},
   detectedWorktreesByRepo: {},
   worktreeCatalogVersionByRepoHost: {},
+  worktreeCatalogAuthorityByRepoHost: {},
   worktreeLineageById: {},
   workspaceLineageByChildKey: {},
+  crossStoreLineageByStoreKey: {},
+  ownLineageInstallationId: undefined,
   activeWorktreeId: null,
   activeWorkspaceKey: null,
   activeWorkspaceExecutionHostId: null,

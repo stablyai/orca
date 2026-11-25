@@ -1,30 +1,36 @@
 import { Suspense, useCallback, useMemo } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import TabBar from '../tab-bar/TabBar'
 
-import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
-import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
-import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
-import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
-import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
-import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
-import { registerTabGroupBody } from './tab-group-body-geometry'
-import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
-import { translate } from '@/i18n/i18n'
-import type { TabGroup } from '../../../../shared/tab-types'
+import { TabGroupStripActions } from './panel/TabGroupStripActions'
+import { useTabGroupWorkspaceModel } from './workspace-model/useTabGroupWorkspaceModel'
+import { closeTerminalTab } from '../terminal/tab-lifecycle/terminal-tab-actions'
+import { resolveGroupTabFromVisibleId } from './workspace-model/tab-group-visible-id'
+import { getTabPaneBodyDroppableId } from './drag/useTabDragSplit'
+import type { HoveredTabInsertion } from './drag/tab-insertion'
+import { tabGroupBodyAnchorName } from './retained-pane/tab-group-body-anchor'
+import { registerTabGroupBody } from './retained-pane/tab-group-body-geometry'
+import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
+import { useTranslate } from '@/i18n/use-translate'
+import {
+  toVisibleTabType,
+  type TabGroup
+} from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
-import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
-import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
-import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
-import { cn } from '@/lib/utils'
-import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
-import { useWindowBackdropActive } from '@/lib/window-backdrop'
-import { useThemeBackgroundStore } from '@/store/theme-background'
-import { EditorRevealFlash } from './EditorRevealFlash'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
+import { useClientHostedBrowserRows } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
+import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/browser-tabs/client-hosted-browser-row-strip-placement'
+import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
+import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './panel/split-group-dim'
+import { useBotForWorkspace } from '../bots/bot-workspace'
+import { BotPausedBanner } from '../bots/BotPausedBanner'
+import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
+import { EditorRevealFlash } from './editor-reveal/EditorRevealFlash'
+import { SplitPaneLanding } from './landing/SplitPaneLanding'
+import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
+import { useTitlebarChromeOwnerFold } from '@/app-shell/chrome/titlebar-chrome-fold'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -71,9 +77,16 @@ export default function TabGroupPanel({
   isTabDragActive?: boolean
   hoveredTabInsertion?: HoveredTabInsertion | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const reserveRightTitlebarSpace = reserveClosedExplorerToggleSpace && !rightSidebarOpen
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
+  // A bot's page chrome sits in the top-right strip, the one that spacing flag marks, so splits show it once.
+  const bot = useBotForWorkspace(reserveClosedExplorerToggleSpace ? worktreeId : null)
+  const { foldLevel, setOwnerStripElement } = useTitlebarChromeOwnerFold(
+    tabStrip === 'attached' && isVisible && reserveCollapsedSidebarHeaderSpace && !sidebarOpen
+  )
   const {
     activeTab,
     agentSessionItems,
@@ -83,6 +96,9 @@ export default function TabGroupPanel({
     tabBarOrder,
     terminalTabs
   } = model
+  const showsSplitLanding = useAppStore((state) =>
+    isSplitLandingGroup(state, worktreeId, model.group ?? undefined)
+  )
   // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
   const ownsClientHostedRows = useAppStore(
     (state) =>
@@ -121,7 +137,6 @@ export default function TabGroupPanel({
   )
   const attachEditorFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const backdropActive = useWindowBackdropActive()
-  const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   // Why: per-group anchor-name lets the worktree-level overlay position panes via CSS anchor positioning, so moving a tab between groups re-targets the anchor instead of remounting xterm (loses alt-screen TUI state) or reloading `<webview>`.
   const bodyAnchorName = tabGroupBodyAnchorName(groupId)
   // Why: memoize so a fresh style object each render doesn't break downstream memoization keyed on referential equality.
@@ -136,7 +151,7 @@ export default function TabGroupPanel({
       activeTabId={
         activeTab?.contentType === 'terminal'
           ? activeTab.entityId
-          : activeTab?.contentType === 'agent-session'
+          : activeTab && toVisibleTabType(activeTab.contentType) === 'agent-session'
             ? activeTab.id
             : null
       }
@@ -147,12 +162,16 @@ export default function TabGroupPanel({
       onActivate={commands.activateTerminal}
       onClose={(terminalId) => {
         const item = resolveGroupTabFromVisibleId(model.groupTabs, terminalId)
-        if (item?.contentType === 'terminal' || item?.contentType === 'agent-session') {
+        if (
+          item?.contentType === 'terminal' ||
+          item?.contentType === 'agent-session' ||
+          item?.contentType === 'room'
+        ) {
           commands.closeItem(item.id)
           return
         }
         // Why: agent quick-launch can briefly desync unified/runtime tab ids before the host snapshot lands, so still route close through the shared helper.
-        closeTerminalTab(terminalId)
+        closeTerminalTab(terminalId, { reason: 'user' })
       }}
       onCloseOthers={(visibleId) => {
         // Why: TabBar emits entityId for terminals/browsers but unifiedTabId for editors; match both so the menu works on every tab kind.
@@ -186,28 +205,15 @@ export default function TabGroupPanel({
       browserTabs={browserItems}
       clientHostedBrowserRows={clientHostedRows}
       groupActiveTabId={activeTab?.id ?? null}
+      newTabButtonFolded={foldLevel === 2}
+      isGroupFocused={isFocused}
       agentSessionTabs={agentSessionItems}
       activeFileId={
-        activeTab?.contentType === 'terminal' ||
-        activeTab?.contentType === 'agent-session' ||
-        activeTab?.contentType === 'browser' ||
-        activeTab?.contentType === 'simulator'
-          ? null
-          : activeTab?.id
+        activeTab && toVisibleTabType(activeTab.contentType) !== 'editor' ? null : activeTab?.id
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
       activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
-      activeTabType={
-        activeTab?.contentType === 'terminal'
-          ? 'terminal'
-          : activeTab?.contentType === 'agent-session'
-            ? 'agent-session'
-            : activeTab?.contentType === 'browser'
-              ? 'browser'
-              : activeTab?.contentType === 'simulator'
-                ? 'simulator'
-                : 'editor'
-      }
+      activeTabType={activeTab ? toVisibleTabType(activeTab.contentType) : 'editor'}
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
       onActivateBrowserTab={commands.activateBrowser}
@@ -247,12 +253,10 @@ export default function TabGroupPanel({
     />
   )
 
-  const actionChromeClassName = cn(
-    'ml-1.5 flex shrink-0 items-center gap-0.5 transition-opacity duration-150',
-    !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
-  )
   return (
     <div
+      // Why: store focus (last focused group), not DOM focus, so clicking the sidebar or a dialog keeps the active tab's underline.
+      data-unfocused-split-group={hasSplitGroups && !isFocused ? '' : undefined}
       // Dim unfocused splits only when siblings exist; keep vertical seams neutral and change only the bottom focus border.
       className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups
@@ -280,12 +284,12 @@ export default function TabGroupPanel({
       {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
       {tabStrip !== 'attached' ? null : (
         <div
-          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-tab-bar"
+          className="h-(--workspace-tab-row-height) shrink-0 border-b border-border bg-tab-bar"
           data-tab-group-strip-id={groupId}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
         >
-          <div className="flex h-full items-stretch pr-1.5">
+          <div className="flex h-full items-stretch pr-1">
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
             {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
               <div
@@ -298,22 +302,28 @@ export default function TabGroupPanel({
                 }
               />
             ) : null}
-            <div className="min-w-0 flex-1 h-full">{tabBar}</div>
+            {/* Why: the tab-strip container excludes the reserved spacers, so width rules see only the room tabs and actions share. */}
             <div
-              className={actionChromeClassName}
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              ref={setOwnerStripElement}
+              className="@container/tab-strip group/tab-strip-row flex min-w-0 flex-1 items-stretch"
             >
-              <TabBarQuickCommandsButton
+              <div className="min-w-10 flex-1 h-full">{tabBar}</div>
+              {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It goes first in narrow strips: 203 = 40 gap + 163 for the tab floor and every control, so controls never clip behind it.
+                  A pinned bot Home beside other tabs adds a second 40px floor, so that moves up to 243. */}
+              {reserveRightTitlebarSpace ? (
+                <div className="workspace-tab-drag-handle w-10 min-w-0 @max-[203px]/tab-strip:hidden group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[243px]/tab-strip:hidden" />
+              ) : null}
+              <TabGroupStripActions
+                isFocused={isFocused}
                 worktreeId={worktreeId}
                 groupId={groupId}
-                isFocused={isFocused}
+                onCloseGroup={hasSplitGroups ? commands.closeGroup : undefined}
+                foldLevel={foldLevel}
+                onNewTab={commands.newTerminalTab}
               />
-              {hasSplitGroups ? (
-                <TabGroupPaneActionsMenu isFocused={isFocused} onCloseGroup={commands.closeGroup} />
-              ) : null}
             </div>
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
-            {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
+            {reserveRightTitlebarSpace ? (
               <div
                 className="shrink-0"
                 style={
@@ -328,13 +338,14 @@ export default function TabGroupPanel({
         </div>
       )}
 
+      {bot?.paused ? <BotPausedBanner bot={bot} /> : null}
       <div
         ref={setBodyRef}
         data-tab-group-body-id={groupId}
-        // Why: the pane overlays paint terminals and chats above this body; only they show the theme image.
+        // Why: the pane overlays paint terminals and chats above this body; only they show the backdrop.
         data-translucent-tab-body={
           activeTab?.contentType === 'terminal' ||
-          (activeTab && isStructuredTab(activeTab) && themeBackgroundActive)
+          (activeTab && isStructuredTab(activeTab) && backdropActive)
             ? ''
             : undefined
         }
@@ -347,37 +358,41 @@ export default function TabGroupPanel({
           <div
             className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
             data-contextual-tour-target="workspace-agent-terminal-tip"
+            // Picks the chat or terminal split step of the agent-sessions tour.
+            data-active-content-type={activeTab?.contentType}
           />
         ) : null}
-        {activeTab &&
-          activeTab.contentType !== 'terminal' &&
-          activeTab.contentType !== 'agent-session' &&
-          activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
-            // Why: a capture-phase owner, so Monaco never sees the drop and the file opens as a tab here.
-            <div ref={attachEditorFileDropOwner} className="absolute inset-0 flex min-h-0 min-w-0">
-              {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
-              <Suspense
-                fallback={
-                  <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    {translate(
-                      'auto.components.tab.group.TabGroupPanel.814fb04c43',
-                      'Loading editor...'
-                    )}
-                  </div>
-                }
-              >
-                <EditorPanel
-                  activeFileId={activeTab.entityId}
-                  activeViewStateId={activeTab.id}
-                  isVisible={isVisible}
-                  isCmdSaveOwner={isFocused}
-                  markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-                />
-              </Suspense>
-              <EditorRevealFlash viewStateId={activeTab.id} />
-            </div>
-          )}
+        {activeTab && toVisibleTabType(activeTab.contentType) === 'editor' && (
+          // Why: a capture-phase owner, so Monaco never sees the drop and the file opens as a tab here.
+          <div ref={attachEditorFileDropOwner} className="absolute inset-0 flex min-h-0 min-w-0">
+            {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
+            <Suspense
+              fallback={
+                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                  {t('auto.components.tab.group.TabGroupPanel.814fb04c43', 'Loading editor...')}
+                </div>
+              }
+            >
+              <EditorPanel
+                activeFileId={activeTab.entityId}
+                activeViewStateId={activeTab.id}
+                isVisible={isVisible}
+                isCmdSaveOwner={isFocused}
+                markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+              />
+            </Suspense>
+            <EditorRevealFlash viewStateId={activeTab.id} />
+          </div>
+        )}
+
+        {showsSplitLanding ? (
+          <SplitPaneLanding
+            worktreeId={worktreeId}
+            groupId={groupId}
+            autoFocus={isFocused}
+            onClosePane={hasSplitGroups ? commands.closeGroup : undefined}
+          />
+        ) : null}
 
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
       </div>

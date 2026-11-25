@@ -1,18 +1,19 @@
-import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
-import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
+import type { RemoteOpKind } from '@/components/right-sidebar/source-control/review/source-control-primary-action-types'
+import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type {
   GitBranchLineTotal,
   GitConflictKind,
   GitConflictOperation,
   GitStatusEntry,
   GitStatusResult,
-  GitUpstreamStatus
-} from '../../../../../../shared/git-status-types'
-import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session-state-types'
+  GitUpstreamStatus,
+  RebaseFromBaseResult
+} from '../../../../../../shared/git/status/git-status-types'
+import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import type { PendingEditorFocusRequest, PendingEditorReveal } from './pending-editor-reveal'
 import type { FileSearchWorktreeState } from './file-search-worktree-state'
@@ -24,6 +25,7 @@ export type EditorGitSlice = {
 
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
   gitStatusHeadByWorktree: Record<string, string>
+  gitRebaseIndexObservationByWorktree: Record<string, string | undefined>
   // Why: set when status hit the entry limit; SCM shows "too many changes" and pauses polling. `{ limit }` when huge, else absent.
   gitStatusHugeByWorktree: Record<string, { limit: number }>
   // Git's error from the latest failed status read; entries keep the last successful read.
@@ -85,7 +87,7 @@ export type EditorGitSlice = {
     connectionId?: string,
     pushTarget?: GitPushTarget,
     options?: GitRuntimeOperationOptions
-  ) => Promise<void>
+  ) => Promise<RebaseFromBaseResult>
   fetchBranch: (
     worktreeId: string,
     worktreePath: string,
