@@ -628,6 +628,76 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     expect(timers).toHaveLength(0)
   })
 
+  it.each([
+    ['succeeds and spends read credit', 'ink'],
+    ['throws after being selected', 'throw']
+  ])('keeps serving the next pending atlas after the first %s', (_name, firstMode) => {
+    const busy = fakePane(atlas())
+    const first = fakePane(atlas([glyph(0)], 513))
+    const second = fakePane(atlas())
+    register(true, [busy, first, second])
+    if (firstMode === 'throw') {
+      Object.defineProperty(atlasOfPaneFor(first) as MutableAtlas, 'pageLayoutVersion', {
+        get: () => {
+          throw new Error('internals changed')
+        }
+      })
+    }
+    const reader: GlyphInkReader = (canvas) => (canvas.width === 513 ? 'ink' : 'blank')
+    verifyPaneWebglAtlasIntegrity(busy, 'reveal', deps(ink))
+    verifyPaneWebglAtlasIntegrity(first, 'reveal', deps(reader))
+    verifyPaneWebglAtlasIntegrity(second, 'reveal', deps(reader))
+
+    runTimers()
+
+    expect(second.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(timers).toHaveLength(0)
+  })
+
+  it('re-arms a pending wake that later direct work denied, and still serves it', () => {
+    const busy = fakePane(atlas())
+    const pending = fakePane(atlas())
+    const later = fakePane(atlas())
+    register(true, [busy, pending, later])
+    verifyPaneWebglAtlasIntegrity(busy, 'reveal', deps(ink))
+    verifyPaneWebglAtlasIntegrity(pending, 'reveal', deps(blank))
+    const wake = timers.shift()
+    clock += wake?.ms ?? 0
+    // Direct work takes the slot the wake was armed for.
+    verifyPaneWebglAtlasIntegrity(later, 'reveal', deps(ink))
+    wake?.callback()
+    expect(pending.addon.clearTextureAtlas).not.toHaveBeenCalled()
+
+    runTimers()
+
+    expect(pending.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(timers).toHaveLength(0)
+  })
+
+  it.each([
+    ['an invalid read', (() => 'unreadable') as GlyphInkReader, true],
+    [
+      'a throwing read',
+      (() => {
+        throw new Error('readback failed')
+      }) as GlyphInkReader,
+      true
+    ],
+    ['an unavailable scratch', (() => 'unavailable') as GlyphInkReader, false]
+  ])('charges the shared read budget for %s only if a read was issued', (_name, read, charged) => {
+    const spender = fakePane(atlas())
+    const third = fakePane(atlas())
+    register(true, [spender, third])
+    state.readTimes.push(...Array.from({ length: 15 }, () => clock))
+
+    verifyPaneWebglAtlasIntegrity(spender, 'reveal', deps(read))
+    clock += 100
+    verifyPaneWebglAtlasIntegrity(third, 'reveal', deps(blank))
+
+    expect(third.addon.clearTextureAtlas).toHaveBeenCalledTimes(charged ? 0 : 1)
+    expect(timers).toHaveLength(charged ? 1 : 0)
+  })
+
   it('never throws into its caller when atlas internals throw', () => {
     const throwing = atlas()
     Object.defineProperty(throwing.pages[0], 'glyphs', {
