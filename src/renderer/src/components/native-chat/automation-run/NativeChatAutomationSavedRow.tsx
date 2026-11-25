@@ -83,9 +83,45 @@ export function NativeChatAutomationSavedRow({
   /** The transcript row's id, so the row stays open while it scrolls out of view. */
   disclosureId?: string
 }): React.JSX.Element {
+  const owner = useNativeChatVisualOwner()
+  const { automation } = saved
+  const hookId = automationHookId(automation)
+  const botName = useBotForWorkspace(owner?.worktreeId ?? null)?.name ?? webhookUnknownBotName()
+  if (hookId && owner) {
+    // Its URL is what the user needs next, so a webhook automation is a card, not a folded row.
+    return (
+      <NativeChatWebhookSetupCard
+        target={owner.target}
+        hookId={hookId}
+        botName={botName}
+        name={automation.name}
+      />
+    )
+  }
+  // Receipt-time work (time label, Find, disclosure) belongs to the ordinary card only.
+  return (
+    <SavedAutomationCard
+      saved={saved}
+      timestamp={timestamp}
+      disclosureId={disclosureId}
+      owner={owner}
+    />
+  )
+}
+
+function SavedAutomationCard({
+  saved,
+  timestamp,
+  disclosureId,
+  owner
+}: {
+  saved: AutomationSaved
+  timestamp: number | null
+  disclosureId?: string
+  owner: NativeChatVisualOwner | null
+}): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
-  const owner = useNativeChatVisualOwner()
   const { automation } = saved
   const { open, setOpen } = useNativeChatDisclosure(
     disclosureId === undefined ? undefined : `${AUTOMATION_CARD_DISCLOSURE}${disclosureId}`,
@@ -94,8 +130,6 @@ export function NativeChatAutomationSavedRow({
   )
   const toggle = useRef<HTMLButtonElement>(null)
   const wording = useAutomationRunWording(automation)
-  const hookId = automationHookId(automation)
-  const botName = useBotForWorkspace(owner?.worktreeId ?? null)?.name ?? webhookUnknownBotName()
   const when = botAutomationWhen(automation)
   const facts = [
     when,
@@ -111,23 +145,13 @@ export function NativeChatAutomationSavedRow({
   const pausedWord = savedWhen
     ? t('components.native-chat.automationSaved.paused', 'paused')
     : wording.say('paused')
+  // No clock for a receipt with no time to show.
   const time = useNativeChatMessageTimeLabel(timestamp)
   // Find searches drawn, unclipped text: while it has a query the saved facts are drawn whole, as
   // the row did before; the live Details still wait for a real open.
   const { findActive } = useContext(NativeChatToolRunWindowContext)
   const shown = open || findActive
   const detailsId = useId()
-  if (hookId && owner) {
-    // Its URL is what the user needs next, so a webhook automation is a card, not a folded row.
-    return (
-      <NativeChatWebhookSetupCard
-        target={owner.target}
-        hookId={hookId}
-        botName={botName}
-        name={automation.name}
-      />
-    )
-  }
   const openAutomation = (): void =>
     openBotAutomation(
       getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
@@ -170,10 +194,12 @@ export function NativeChatAutomationSavedRow({
           <div className="pointer-events-none min-w-0 flex-1">
             <div className="mb-0.5 flex flex-wrap items-baseline gap-x-2 text-2xs text-muted-foreground">
               <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
-              <NativeChatMessageTimestamp
-                timestamp={timestamp}
-                className="ml-auto text-2xs text-muted-foreground"
-              />
+              {timestamp === null ? null : (
+                <NativeChatMessageTimestamp
+                  timestamp={timestamp}
+                  className="ml-auto text-2xs text-muted-foreground"
+                />
+              )}
             </div>
             <div className="flex items-end justify-between gap-3">
               <div className="flex min-w-0 flex-1 items-end justify-between gap-2">

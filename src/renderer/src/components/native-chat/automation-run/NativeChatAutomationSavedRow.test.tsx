@@ -9,11 +9,14 @@ import {
 } from '../../../../../shared/automation-event-triggers'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import type * as UseNow from '@/lib/window-activity/use-now'
 import { NativeChatToolRunWindowContext } from '../tools/runs/native-chat-tool-run-window-context'
 import {
   NativeChatVisualOwnerContext,
   type NativeChatVisualOwner
 } from '../media/visuals/native-chat-visual-owner'
+import { webhookRuleId } from '../../../../../shared/connector-webhook-contract'
+import { setWebhookHostTransportForTests } from '../../bots/webhooks/webhook-host-client'
 import { NativeChatAutomationSavedRow } from './NativeChatAutomationSavedRow'
 
 const opened = vi.hoisted((): unknown[][] => [])
@@ -22,6 +25,21 @@ vi.mock('@/components/bots/bot-automation-open', () => ({
     opened.push(args)
   }
 }))
+
+// Which shared clocks a render subscribes to, by cadence: the day clock behind a shown time is 30 s.
+const subscribedClocks = vi.hoisted((): number[] => [])
+vi.mock('@/lib/window-activity/use-now', async (importOriginal) => {
+  const actual = await importOriginal<typeof UseNow>()
+  return {
+    ...actual,
+    useNowSnapshot: <T,>(intervalMs: number, select: (now: number) => T, enabled = true): T => {
+      if (enabled) {
+        subscribedClocks.push(intervalMs)
+      }
+      return actual.useNowSnapshot(intervalMs, select, enabled)
+    }
+  }
+})
 
 type Saved = NonNullable<NativeChatMessage['automationSaved']>
 
@@ -32,6 +50,7 @@ let root: ReturnType<typeof createRoot>
 beforeEach(() => {
   calls.length = 0
   opened.length = 0
+  subscribedClocks.length = 0
   vi.stubGlobal('api', {
     ...window.api,
     runtime: {
@@ -52,6 +71,7 @@ afterEach(() => {
   act(() => root.unmount())
   container.remove()
   vi.unstubAllGlobals()
+  setWebhookHostTransportForTests(null)
 })
 
 const OWNER: NativeChatVisualOwner = {
@@ -100,7 +120,7 @@ const slack: Saved = {
 const FINDING = { isVisible: true, findActive: true }
 const NOT_FINDING = { isVisible: true, findActive: false }
 
-function render(saved: Saved, findActive = false): void {
+function render(saved: Saved, findActive = false, timestamp: number | null = 0): void {
   act(() =>
     root.render(
       <TooltipProvider>
@@ -108,7 +128,7 @@ function render(saved: Saved, findActive = false): void {
           <NativeChatVisualOwnerContext.Provider value={OWNER}>
             <NativeChatAutomationSavedRow
               saved={saved}
-              timestamp={0}
+              timestamp={timestamp}
               disclosureId={saved.automation.id}
             />
           </NativeChatVisualOwnerContext.Provider>
@@ -266,4 +286,34 @@ it('draws the folded facts whole for Find without opening the live Details', () 
   expect(container.textContent).not.toContain('results to Chat')
   expect(container.querySelector('[data-saved-when]')?.className).toContain('line-clamp-2')
   expect(automationReads()).toEqual([])
+})
+
+it('runs no day clock for a receipt with no time, and draws no time', () => {
+  render(daily, false, null)
+  expect(container.querySelector('time')).toBeNull()
+  expect(subscribedClocks).not.toContain(30_000)
+
+  // Control: a receipt with a time does subscribe.
+  render(daily, false, Date.UTC(2026, 10, 16, 1, 12))
+  expect(container.querySelector('time')).not.toBeNull()
+  expect(subscribedClocks).toContain(30_000)
+})
+
+it('runs no receipt-time clock for a dated webhook receipt, which shows no time', () => {
+  // The setup card's own reads never answer here; only what the receipt mounts is under test.
+  setWebhookHostTransportForTests(() => new Promise(() => {}))
+  const hookId = 'wh_SavedRowClock001'
+  render(
+    {
+      ...slack,
+      automation: {
+        ...slack.automation,
+        on: [{ id: webhookRuleId(hookId), source: 'webhook', event: 'call' }]
+      }
+    },
+    false,
+    Date.UTC(2026, 10, 16, 1, 12)
+  )
+  expect(container.querySelector('button[aria-expanded]')).toBeNull()
+  expect(subscribedClocks).not.toContain(30_000)
 })
