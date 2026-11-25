@@ -54,6 +54,7 @@ export type UISliceContextual = {
     | 'setup-guide'
     | 'feature-wall'
     | 'bot-templates'
+    | 'bots-needs-you'
     | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'

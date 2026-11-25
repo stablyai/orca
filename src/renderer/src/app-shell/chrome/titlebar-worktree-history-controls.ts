@@ -10,11 +10,13 @@ export function shouldShowWorktreeHistoryControls(activeView: UISlice['activeVie
   )
 }
 
-/** Back/forward act on the view behind; not while Bot templates is open over it. */
+/** Back/forward act on the view behind; not while Bot templates or the Needs you inbox is open over it. */
 export function canNavigateWorktreeHistory(
   state: Pick<UISlice, 'activeView' | 'activeModal'>
 ): boolean {
   return (
-    state.activeModal !== 'bot-templates' && shouldShowWorktreeHistoryControls(state.activeView)
+    state.activeModal !== 'bot-templates' &&
+    state.activeModal !== 'bots-needs-you' &&
+    shouldShowWorktreeHistoryControls(state.activeView)
   )
 }

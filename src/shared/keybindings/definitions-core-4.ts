@@ -217,5 +217,15 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     conflictGroups: ['global', 'tabs', 'botItem'],
     searchKeywords: ['shortcut', 'bot', 'item', 'items', 'next', 'down'],
     defaultBindings: platformBindings(['Mod+Alt+ArrowDown'])
+  },
+  {
+    id: 'bots.needsYouInbox',
+    title: 'Open Needs you inbox',
+    group: 'Bots',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'bot', 'bots', 'needs you', 'inbox', 'items', 'questions', 'ask'],
+    // Why: unbound by default, like other new global surfaces, so it takes no chord terminal users rely on.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
   }
 ]

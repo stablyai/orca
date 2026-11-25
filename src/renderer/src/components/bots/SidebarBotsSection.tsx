@@ -42,6 +42,7 @@ import { BotSidebarSearchButton, BotSidebarSearchHost } from './BotSidebarSearch
 import { useBotCollapseAll } from './use-bot-collapse-all'
 import { useBotSidebarSearch } from './use-bot-sidebar-search'
 import { BotsCollapseAllButton } from './BotsCollapseAllButton'
+import { BotsNeedsYouInboxButton } from './needs-you-inbox/BotsNeedsYouInboxButton'
 import { useBotsSidebarReveal } from './bots-sidebar-reveal'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
@@ -226,6 +227,7 @@ export function SidebarBotsSection({
         actions={
           collapsed ? null : (
             <>
+              <BotsNeedsYouInboxButton sectionListsBots={hasEntries} />
               {hasEntries ? (
                 <BotSidebarSearchButton
                   open={searchOpen}

@@ -149,6 +149,8 @@ const STATIC_TITLE_COPY = {
   'botItem.back': () => translate('keybindings.title.botItemBack', 'Back to items'),
   'botItem.previous': () => translate('keybindings.title.botItemPrevious', 'Previous item'),
   'botItem.next': () => translate('keybindings.title.botItemNext', 'Next item'),
+  'bots.needsYouInbox': () =>
+    translate('keybindings.title.botsNeedsYouInbox', 'Open Needs you inbox'),
   'terminal.toggleNativeChat': () =>
     translate('keybindings.title.terminalToggleNativeChat', 'Switch between Chat UI and terminal'),
   'sidebar.childWorkspaces.toggle': () =>
