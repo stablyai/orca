@@ -26,32 +26,49 @@ export async function feishuThreadContext(
   m: FeishuMessage,
   signal: AbortSignal
 ): Promise<string> {
-  if (!m.thread_id) {
+  const parent = m.root_id || m.reply_to
+  if (!m.thread_id && !parent) {
     return ''
   }
   try {
-    const result = await feishuCommand(
-      [
-        '--profile',
-        b.app,
-        'api',
-        'GET',
-        '/open-apis/im/v1/messages',
-        '--as',
-        'bot',
-        '--params',
-        JSON.stringify({
-          container_id_type: 'thread',
-          container_id: m.thread_id,
-          sort_type: 'ByCreateTimeDesc',
-          page_size: 50
-        })
-      ],
-      signal
+    const requests: Promise<unknown>[] = []
+    const args = ['--profile', b.app, 'api', 'GET']
+    if (m.thread_id) {
+      requests.push(
+        feishuCommand(
+          [
+            ...args,
+            '/open-apis/im/v1/messages',
+            '--as',
+            'bot',
+            '--params',
+            JSON.stringify({
+              container_id_type: 'thread',
+              container_id: m.thread_id,
+              sort_type: 'ByCreateTimeDesc',
+              page_size: 50
+            })
+          ],
+          signal
+        )
+      )
+    }
+    // Feishu's thread list excludes the root message.
+    if (parent && parent !== m.message_id) {
+      requests.push(
+        feishuCommand([...args, `/open-apis/im/v1/messages/${parent}`, '--as', 'bot'], signal)
+      )
+    }
+    const results = await Promise.allSettled(
+      requests.map(async (request) => messages.parse(await request).data.items)
     )
-    const lines = messages
-      .parse(result)
-      .data.items.filter(
+    if (results.every((result) => result.status === 'rejected')) {
+      return 'Earlier thread messages could not be read.\n\nCurrent request:\n'
+    }
+    const items = results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+    const lines = [...new Map(items.map((item) => [item.message_id, item])).values()]
+      .sort((a, b) => Number(b.create_time) - Number(a.create_time))
+      .filter(
         (item) =>
           item.chat_id === m.chat_id &&
           item.sender.id_type === 'open_id' &&
