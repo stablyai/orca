@@ -7,10 +7,12 @@ type HomeTabPaneProps = {
   shown: boolean
   /** Another screen sits over Home. */
   covered: boolean
+  /** Keep the last render while hidden; only for a tab whose rows own no clocks or subscriptions. */
+  freezeHidden: boolean
   children: ReactNode
 }
 
-/** A visited Home tab. Hidden, it keeps its last render and its working loops stop until it shows again. */
+/** A visited Home tab: hidden or covered, its working loops stop until it shows again. */
 export const HomeTabPane = memo(
   function HomeTabPane({ shown, covered, children }: HomeTabPaneProps) {
     return (
@@ -21,8 +23,8 @@ export const HomeTabPane = memo(
       </View>
     )
   },
-  // Home's data changes would otherwise rebuild every visited tab's list while nobody sees it.
-  (previous, next) => !previous.shown && !next.shown
+  // A frozen tab skips rebuilding its list on every Home data change while nobody sees it.
+  (previous, next) => next.freezeHidden && !previous.shown && !next.shown
 )
 
 const styles = themedStyleSheet(() => ({

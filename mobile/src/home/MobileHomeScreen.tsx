@@ -224,7 +224,13 @@ export function MobileHomeScreen() {
         <View style={styles.fill}>
           {HOME_TABS.map((id) =>
             visitedTabs.has(id) ? (
-              <HomeTabPane key={id} shown={id === tab} covered={!focused}>
+              <HomeTabPane
+                key={id}
+                shown={id === tab}
+                covered={!focused}
+                // Agents rows draw only what the tab hands them: no clocks or subscriptions to outlive a removal.
+                freezeHidden={id === 'agents'}
+              >
                 {id === 'feed' ? (
                   <MobileHomeFeedTab
                     data={data}
