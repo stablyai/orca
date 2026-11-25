@@ -30,7 +30,7 @@ import {
   readCodexStdioToolNames
 } from './bot-tools-codex'
 import {
-  botOwnTool,
+  botOwnTools,
   readBotToolServers,
   changeBotToolServers,
   type BotToolNewCredential
@@ -158,7 +158,7 @@ export async function listBotTools(cli: BotToolsHome): Promise<BotTools> {
   ])
   return {
     agent: cli.agent,
-    own: servers.map((server) => botOwnTool(server, cli.folder)),
+    own: botOwnTools(servers, cli.folder),
     inherited
   }
 }

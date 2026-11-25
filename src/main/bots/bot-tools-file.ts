@@ -25,15 +25,16 @@ import {
   commitBotToolOAuth,
   newBotToolCredentialId,
   botToolCredentialsFingerprint,
+  botToolOAuthReader,
   readBotToolCredential,
-  readBotToolOAuth,
-  type BotToolCredential
+  type BotToolCredential,
+  type BotToolOAuthEntry
 } from './bot-tool-credentials'
 
 /** A credential saved with a tools change: saved or sourced headers, or a new Orca sign-in. */
 export type BotToolNewCredential = BotToolCredential | { url: string; signIn: true }
 import { revokeBotToolSignIns } from './tool-oauth/bot-tool-oauth-revoke'
-import { botToolSignInState } from './tool-oauth/bot-tool-oauth-tokens'
+import { botToolSignInStatusOf } from './tool-oauth/bot-tool-oauth-tokens'
 
 const BotToolsFile = z.looseObject({ servers: z.array(z.record(z.string(), z.unknown())) })
 const stale = () =>
@@ -125,16 +126,17 @@ function writeServers(
       added.set(id, credential)
     }
   }
+  // Names are unique in a read file, so each entry finds its previous one without a search.
+  const previousByName = new Map(snapshot.file.servers.map((entry) => [entry.name, entry]))
+  const readOAuth = lazyOAuthReader(folder)
   const stored = entries.map(({ server, extras }): Record<string, unknown> => {
-    const previous = snapshot.file.servers.find(
-      (entry) => entry.name === (rename?.to === server.name ? rename.from : server.name)
-    )
+    const previous = previousByName.get(rename?.to === server.name ? rename.from : server.name)
     const unknown = botToolEntryExtras(extras ?? previous)
     if (!('url' in server)) {
       return { ...unknown, ...server }
     }
     const { headers, credential, ...rest } = server
-    const signIn = credential ? readBotToolOAuth(folder, credential) : null
+    const signIn = credential ? readOAuth(credential) : null
     if (signIn && signIn.url !== server.url) {
       // A new address is another app to sign in to: the old sign-in goes, and a new one starts out.
       const id = newBotToolCredentialId()
@@ -234,37 +236,43 @@ export function changeBotToolServers(
   rename?: { from: string; to: string },
   credentials?: ReadonlyMap<string, BotToolNewCredential>
 ): Promise<void> {
-  const changeServers = (entries: BotToolEntry[]) =>
-    change(entries.map((entry) => entry.server)).map((server) => ({ server }))
-  return changeBotToolEntries(folder, changeServers, { expectedVersion, rename, credentials })
+  // Each server's extras carry over from its previous entry inside the write.
+  const changeServers = (snapshot: BotToolsSnapshot) =>
+    change([...snapshot.servers]).map((server) => ({ server }))
+  return changeSnapshot(folder, changeServers, { expectedVersion, rename, credentials })
 }
 
 /** A server to write; with `extras`, they replace the ones its entry kept. */
 type BotToolChange = { server: BotToolServer; extras?: Record<string, unknown> }
+
+type ChangeOptions = {
+  expectedVersion?: string
+  rename?: { from: string; to: string }
+  credentials?: ReadonlyMap<string, BotToolNewCredential>
+  topLevel?: (file: Readonly<Record<string, unknown>>) => Record<string, unknown>
+}
 
 /** As `changeBotToolServers`; the change can also set each server's extra keys, and `topLevel`
  *  the file's own keys beside `servers`. */
 export function changeBotToolEntries(
   folder: string,
   change: (entries: BotToolEntry[]) => BotToolChange[],
-  {
-    expectedVersion,
-    rename,
-    credentials,
-    topLevel
-  }: {
-    expectedVersion?: string
-    rename?: { from: string; to: string }
-    credentials?: ReadonlyMap<string, BotToolNewCredential>
-    topLevel?: (file: Readonly<Record<string, unknown>>) => Record<string, unknown>
-  } = {}
+  options: ChangeOptions = {}
+): Promise<void> {
+  return changeSnapshot(folder, (snapshot) => change(botToolEntries(snapshot)), options)
+}
+
+function changeSnapshot(
+  folder: string,
+  change: (snapshot: BotToolsSnapshot) => BotToolChange[],
+  { expectedVersion, rename, credentials, topLevel }: ChangeOptions
 ): Promise<void> {
   return botToolCredentialsTransaction(folder, async () => {
     const snapshot = await readMigratedSnapshot(folder)
     if (expectedVersion !== undefined && expectedVersion !== snapshot.version) {
       throw stale()
     }
-    const entries = change(botToolEntries(snapshot))
+    const entries = change(snapshot)
     const file = topLevel ? { ...topLevel(snapshot.file), servers: snapshot.file.servers } : null
     await mkdir(dirname(botToolsPath(folder)), { recursive: true })
     writeServers(folder, file ? { ...snapshot, file } : snapshot, entries, rename, credentials)
@@ -294,11 +302,30 @@ export async function writeBotToolServers(
   await changeBotToolServers(folder, () => [...servers])
 }
 
+/** Reads the credential store at most once, on the first sign-in asked for. */
+function lazyOAuthReader(folder: string): (id: string) => BotToolOAuthEntry | null {
+  let read: ((id: string) => BotToolOAuthEntry | null) | undefined
+  return (id) => (read ??= botToolOAuthReader(folder))(id)
+}
+
 /** `folder` is the bot's home, where a tool Orca signs in to has its sign-in. */
 export function botOwnTool(server: BotToolServer, folder: string): BotOwnTool {
+  return ownTool(server, lazyOAuthReader(folder))
+}
+
+/** `botOwnTool` for every server, from one read of the credential store. */
+export function botOwnTools(servers: readonly BotToolServer[], folder: string): BotOwnTool[] {
+  const readOAuth = lazyOAuthReader(folder)
+  return servers.map((server) => ownTool(server, readOAuth))
+}
+
+function ownTool(
+  server: BotToolServer,
+  readOAuth: (id: string) => BotToolOAuthEntry | null
+): BotOwnTool {
   const signIn =
     'url' in server && server.credential
-      ? botToolSignInState({ folder, credentialId: server.credential })
+      ? botToolSignInStatusOf(readOAuth(server.credential))
       : null
   return {
     name: server.name,

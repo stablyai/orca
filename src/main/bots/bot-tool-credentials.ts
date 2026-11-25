@@ -174,7 +174,13 @@ export function readBotToolCredential(folder: string, id: string): BotToolCreden
 
 /** The sign-in a credential id holds, or null when it holds none or something else. */
 export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry | null {
-  return oauthOf(entryOf(readSealed(folder), id))
+  return botToolOAuthReader(folder)(id)
+}
+
+/** `readBotToolOAuth` for many ids from one read of the store, which opens every entry. */
+export function botToolOAuthReader(folder: string): (id: string) => BotToolOAuthEntry | null {
+  const sealed = readSealed(folder)
+  return (id) => oauthOf(entryOf(sealed, id))
 }
 
 function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {

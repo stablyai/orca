@@ -3,7 +3,12 @@
 // workspaces and shared-process choice ride on the entry's extra keys, which bot tools keep as they are.
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { freeBotToolName, type BotToolInput, type BotToolServer } from '../../shared/bot-tools'
+import {
+  freeBotToolName,
+  type BotOwnTool,
+  type BotToolInput,
+  type BotToolServer
+} from '../../shared/bot-tools'
 import {
   McpServerWorkspacesSchema,
   mergeMcpServerWorkspaces,
@@ -19,6 +24,7 @@ import {
 } from '../bots/bot-tool-credentials'
 import {
   botOwnTool,
+  botOwnTools,
   botToolEntries,
   changeBotToolEntries,
   readBotToolsSnapshot
@@ -40,8 +46,7 @@ const gone = (): McpServersError =>
 const nameTaken = (name: string): McpServersError =>
   new McpServersError('mcp_server_name_taken', `This host already has a server named ${name}.`)
 
-function viewOf(entry: HostEntry, folder: string): McpServer {
-  const { signIn, ...tool } = botOwnTool(entry.server, folder)
+function viewOf(entry: HostEntry, { signIn, ...tool }: BotOwnTool): McpServer {
   return {
     ...settingsOf(entry.extras),
     id: entry.id,
@@ -110,7 +115,8 @@ export async function entryById(folder: string, id: string): Promise<HostEntry> 
 
 /** The server as the write stored it: its credential id and sign-in are the file's, not the input's. */
 export async function storedView(folder: string, id: string): Promise<McpServer> {
-  return viewOf(await entryById(folder, id), folder)
+  const entry = await entryById(folder, id)
+  return viewOf(entry, botOwnTool(entry.server, folder))
 }
 
 /** The server's own settings and saved values, never its switches. */
@@ -131,7 +137,14 @@ export async function readMcpHostList(
   folder = mcpHostListFolder()
 ): Promise<{ servers: McpServer[]; agentFiles: McpAgentFiles }> {
   const { entries, file } = await readHostEntries(folder)
-  return { servers: entries.map((entry) => viewOf(entry, folder)), agentFiles: agentFilesOf(file) }
+  const tools = botOwnTools(
+    entries.map((entry) => entry.server),
+    folder
+  )
+  return {
+    servers: entries.map((entry, i) => viewOf(entry, tools[i]!)),
+    agentFiles: agentFilesOf(file)
+  }
 }
 
 /** The user's consent, or its withdrawal, for Orca to keep its servers in `agent`'s own MCP file. */
