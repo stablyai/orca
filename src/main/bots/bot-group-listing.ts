@@ -143,17 +143,21 @@ function keepLatestReplies(previews: Map<string, Preview>, message: BotGroupMess
       (turn.replyAt === undefined || turn.replyMessageId === undefined)
         ? botGroupCompletedReply(turn.frozenItems)
         : null
-    const reply = botGroupTurnReplyText(turn.reply ?? frozen?.text, turn.answer)
+    const nativeReply = turn.reply ?? frozen?.text
+    const hasNativeReply = Boolean(botGroupTurnReplyText(nativeReply, undefined)?.trim())
+    const reply = botGroupTurnReplyText(nativeReply, turn.answer)
+    if (!reply) {
+      continue
+    }
     keepPreview(previews, {
       ...anchor,
-      text: reply ?? '',
-      at: turn.replyAt ?? frozen?.completedAt ?? turn.answerAt ?? null,
+      text: reply,
+      at: hasNativeReply ? (turn.replyAt ?? frozen?.completedAt ?? null) : (turn.answerAt ?? null),
       botId: turn.botId,
       operationId: turn.operationId,
-      replyMessageId:
-        turn.replyMessageId ??
-        frozen?.messageId ??
-        (turn.answer ? `${turn.operationId}:answer` : undefined)
+      replyMessageId: hasNativeReply
+        ? (turn.replyMessageId ?? frozen?.messageId)
+        : `${turn.operationId}:answer`
     })
   }
   for (const ask of message.remoteAsks ?? []) {

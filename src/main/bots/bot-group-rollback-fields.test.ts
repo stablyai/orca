@@ -219,8 +219,45 @@ describe('a remote answer arriving', () => {
     })
     saveGroupPeerAnswer(groups, 'mailed-reply', message!)
 
+    const mailPreview = {
+      at,
+      messageId: 'mailed-answer',
+      replyMessageId: 'mailed-reply:answer',
+      text: message!.body
+    }
+    expect((await groups.store.listing(true))[0].replyPreviews).toMatchObject([mailPreview])
+
+    const mailed = groups.store.message('mailed-answer')!
+    groups.store.update({
+      ...mailed,
+      turns: [
+        {
+          ...mailed.turns[0],
+          reply: 'NO_REPLY',
+          replyAt: at + 1000,
+          replyMessageId: 'quiet-marker'
+        }
+      ]
+    })
+    expect((await groups.store.listing(true))[0].replyPreviews).toMatchObject([mailPreview])
+
+    groups.store.update({
+      ...mailed,
+      turns: [
+        {
+          ...mailed.turns[0],
+          reply: message!.body,
+          replyAt: at + 2000,
+          replyMessageId: 'visible-journal-answer'
+        }
+      ]
+    })
     expect((await groups.store.listing(true))[0].replyPreviews).toMatchObject([
-      { at, messageId: 'mailed-answer', replyMessageId: 'mailed-reply:answer', text: message!.body }
+      {
+        ...mailPreview,
+        at: at + 2000,
+        replyMessageId: 'visible-journal-answer'
+      }
     ])
   })
 
