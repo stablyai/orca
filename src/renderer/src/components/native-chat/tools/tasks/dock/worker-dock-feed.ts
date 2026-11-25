@@ -9,9 +9,9 @@ import {
 } from '@/lib/window-activity/window-park-visibility'
 import {
   WorkerDockSnapshot,
-  type WorkerDockEntry,
-  type WorkerDockResultRef
+  type WorkerDockEntry
 } from '../../../../../../../shared/orchestration/dock/worker-dock'
+import { currentOnOlderHosts } from './worker-dock-older-host-roster'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
@@ -21,8 +21,12 @@ type State = {
   snapshot: WorkerDockSnapshot | null
   available: boolean
   rows: ReadonlyMap<string, WorkerDockEntry>
+  /** Counts every publication that lost the feed. It is read live, so a loss and a recovery
+   *  published before React renders still show as a change. */
+  losses: number
 }
-const EMPTY: State = { snapshot: null, available: true, rows: new Map() }
+const EMPTY: State = { snapshot: null, available: true, rows: new Map(), losses: 0 }
+
 class WorkerDockFeed {
   state = EMPTY
   private listeners = new Set<() => void>()
@@ -30,12 +34,13 @@ class WorkerDockFeed {
   private detailed = false
   private stop: (() => void) | undefined
   private retry: ReturnType<typeof setTimeout> | undefined
+  private aging: ReturnType<typeof setTimeout> | undefined
   private generation = 0
   private active = false
   get unused(): boolean {
     return this.listeners.size === 0
   }
-  private loading = new Set<string>()
+  private loading = new Map<string, Promise<void>>()
   constructor(
     readonly target: RuntimeClientTarget,
     readonly party: string
@@ -43,6 +48,30 @@ class WorkerDockFeed {
   private publish(snapshot: WorkerDockSnapshot | null, available: boolean): void {
     if (snapshot && this.state.snapshot && snapshot.revision < this.state.snapshot.revision) {
       return
+    }
+    // Hosts predating currentOnly still include settled entries in the same snapshot.
+    if (snapshot && !snapshot.currentOnly) {
+      const now = Date.now()
+      const { kept, nextExpiry } = currentOnOlderHosts(snapshot.identities, now)
+      if (kept.size !== snapshot.identities.length) {
+        snapshot = {
+          ...snapshot,
+          identities: snapshot.identities.filter((row) => kept.has(row.id)),
+          rows: snapshot.rows.filter((row) => kept.has(row.id))
+        }
+      }
+      // An older host sends nothing when a row ages out, so the feed wakes itself for the next one.
+      clearTimeout(this.aging)
+      this.aging =
+        nextExpiry === undefined
+          ? undefined
+          : setTimeout(() => {
+              if (this.listeners.size && this.state.snapshot) {
+                this.publish(this.state.snapshot, this.state.available)
+              }
+            }, nextExpiry - now)
+    } else if (snapshot) {
+      clearTimeout(this.aging)
     }
     const rows = new Map(this.state.rows)
     for (const row of snapshot?.rows ?? []) {
@@ -64,14 +93,12 @@ class WorkerDockFeed {
         }
       }
     }
-    if (
-      snapshot &&
-      this.state.snapshot &&
-      JSON.stringify(snapshot.results) === JSON.stringify(this.state.snapshot.results)
-    ) {
-      snapshot.results = this.state.snapshot.results
+    this.state = {
+      snapshot: snapshot ?? this.state.snapshot,
+      available,
+      rows,
+      losses: this.state.losses + (available ? 0 : 1)
     }
-    this.state = { snapshot: snapshot ?? this.state.snapshot, available, rows }
     for (const listener of this.listeners) {
       listener()
     }
@@ -102,7 +129,7 @@ class WorkerDockFeed {
     void subscribeRuntimeRpc(
       this.target,
       'orchestration.workerDockSubscribe',
-      { party: this.party, includeRows: this.detailed },
+      { party: this.party, includeRows: this.detailed, currentOnly: true },
       {
         onEvent: (value) => {
           if (!live()) {
@@ -151,6 +178,7 @@ class WorkerDockFeed {
           ++this.generation
           this.active = false
           clearTimeout(this.retry)
+          clearTimeout(this.aging)
           this.stop?.()
           this.stop = undefined
         } else {
@@ -160,18 +188,31 @@ class WorkerDockFeed {
     }
   }
   read = (): State => this.state
-  window = async (anchor: string): Promise<void> => {
-    if (!this.listeners.size || this.loading.has(anchor)) {
-      return
+  /** One read per anchor at a time: a second ask while it runs waits on the same read, so a caller
+   *  counting its tries counts real requests. */
+  window = (anchor: string): Promise<void> => {
+    if (!this.listeners.size) {
+      return Promise.resolve()
     }
-    this.loading.add(anchor)
+    const running = this.loading.get(anchor)
+    if (running) {
+      return running
+    }
+    const read = this.readWindow(anchor).finally(() => {
+      this.loading.delete(anchor)
+    })
+    this.loading.set(anchor, read)
+    return read
+  }
+  private async readWindow(anchor: string): Promise<void> {
     const generation = this.generation
     const revision = this.state.snapshot?.revision
     try {
       const result = await callRuntimeRpc(this.target, 'orchestration.workerDockRead', {
         party: this.party,
         revision,
-        anchor
+        anchor,
+        currentOnly: true
       })
       if (generation === this.generation && this.listeners.size) {
         this.publish(WorkerDockSnapshot.parse(result), true)
@@ -180,20 +221,17 @@ class WorkerDockFeed {
       if (generation === this.generation && this.state.snapshot?.revision === revision) {
         this.publish(null, false)
       }
-    } finally {
-      this.loading.delete(anchor)
     }
   }
 }
 const feeds = new Map<string, WorkerDockFeed>()
 const noopSubscribe = () => () => {}
-function useWorkerDockSource<T>(
+export function useWorkerDockFeed(
   target: RuntimeClientTarget,
   sessionId: string,
   visible: boolean,
-  presence: WorkerDockPresence | undefined,
-  detailed: boolean,
-  select: (state: State) => T
+  presence?: WorkerDockPresence,
+  detailed = true
 ) {
   const windowVisible = useSyncExternalStore(
     subscribeWindowParkVisibility,
@@ -223,32 +261,11 @@ function useWorkerDockSource<T>(
         : noopSubscribe(),
     [feed, visible, windowVisible, presence, detailed]
   )
-  const read = useCallback(() => select(feed?.read() ?? EMPTY), [feed, select])
+  const read = useCallback(() => feed?.read() ?? EMPTY, [feed])
   const value = useSyncExternalStore(subscribe, read)
-  return { value, party: feed?.party ?? null, loadWindow: feed?.window }
-}
-
-const readState = (state: State) => state
-const NO_RESULTS: readonly WorkerDockResultRef[] = []
-const readResults = (state: State) => state.snapshot?.results ?? NO_RESULTS
-export function useWorkerDockFeed(
-  target: RuntimeClientTarget,
-  sessionId: string,
-  visible: boolean,
-  presence?: WorkerDockPresence,
-  detailed = true
-) {
-  const source = useWorkerDockSource(target, sessionId, visible, presence, detailed, readState)
-  return { ...source.value, party: source.party, loadWindow: source.loadWindow }
-}
-export function useWorkerDockResults(
-  target: RuntimeClientTarget,
-  sessionId: string,
-  visible: boolean,
-  presence?: WorkerDockPresence
-) {
-  const source = useWorkerDockSource(target, sessionId, visible, presence, false, readResults)
-  return { results: source.value, party: source.party }
+  // The live loss count, not the rendered one: a press compares it from start to activation.
+  const readLosses = useCallback(() => feed?.read().losses ?? 0, [feed])
+  return { ...value, party: feed?.party ?? null, loadWindow: feed?.window, readLosses }
 }
 
 const seededSources = new Set<string>()
@@ -279,7 +296,8 @@ export function useWorkerDockColdSeed(
       void callRuntimeRpc(target, 'orchestration.workerDockRead', {
         party: formatOrcaSessionAddress(sessionId),
         seed: true,
-        includeRows: false
+        includeRows: false,
+        currentOnly: true
       })
         .then(() => {
           seededSources.add(key)

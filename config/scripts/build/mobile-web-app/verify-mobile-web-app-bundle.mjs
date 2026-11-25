@@ -34,8 +34,10 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 // fetched only for the active language, never before the first route. Code keeps its own fence.
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
-// The host sends a catalog's JSON in one reply, which must fit a 1 MiB relay frame once encrypted.
-export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
+// A budget, not a frame limit: the host sends a catalog as plain JSON in one reply (gzipped when the phone
+// reads compressed frames) under the 4 MiB REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES. This keeps the first-paint
+// read short and the page's gzipped stored copy under DEVICE_STORE_MAX_VALUE_LENGTH.
+export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 1024 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
@@ -44,8 +46,11 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 // budget holds only files outfitSheetsOnDemand proves are fetched when used, and any that the document
 // names count as eager. The phone shell still downloads each on-demand file to disk once per bundle
 // update (shellDownloadedAssets), so this budget also bounds that download.
-// Eager: main's own fence. 10.90625 MiB since a size pass took the page to 11,252,196 bytes (2026-11-22).
-export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 10.90625 * 1024 * 1024
+// Eager: main's own fence. 8 MiB since the diagram engine left it, at about 8,280,000 bytes (2026-11-24).
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 8 * 1024 * 1024
+// The diagram engine: shells that serve deferred code fetch it from the desktop when a page first draws a
+// diagram, and older shells download it with the rest. Never loaded to open a page.
+export const MOBILE_WEB_APP_BUNDLE_MAX_DEFERRED_BYTES = 3.5 * 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
 
@@ -268,14 +273,24 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   if (oversized) {
     fail(
       `the ${oversized.locale} host catalog is ${String(oversized.byteLength)} bytes, over the ` +
-        `${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)} one reply carries`
+        `host catalog budget of ${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)}`
     )
   }
   const onDemandBytes = assertOnDemandFits(await outfitSheetsOnDemand(manifest, bundleDir))
-  const eagerBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes - onDemandBytes
+  if (first.deferredBytes > MOBILE_WEB_APP_BUNDLE_MAX_DEFERRED_BYTES) {
+    fail(
+      `the deferred diagram engine is ${String(first.deferredBytes)} bytes, over its budget of ` +
+        `${String(MOBILE_WEB_APP_BUNDLE_MAX_DEFERRED_BYTES)}`
+    )
+  }
+  const eagerBytes =
+    mobileWebAppBundleBudgetBytes(manifest) -
+    first.catalogBytes -
+    onDemandBytes -
+    first.deferredBytes
   if (eagerBytes > MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES) {
     fail(
-      `bundle excluding the approved fonts, locale catalogs and on-demand files is ${String(eagerBytes)} bytes, ` +
+      `bundle excluding the approved fonts, locale catalogs, on-demand files and deferred code is ${String(eagerBytes)} bytes, ` +
         `over the Phase C eager budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES)}`
     )
   }
@@ -307,7 +322,13 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES)}`
     )
   }
-  return { ...manifest, catalogBytes: first.catalogBytes, eagerBytes, onDemandBytes }
+  return {
+    ...manifest,
+    catalogBytes: first.catalogBytes,
+    deferredBytes: first.deferredBytes,
+    eagerBytes,
+    onDemandBytes
+  }
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {
@@ -318,6 +339,7 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
         `${String(manifest.totalBytes)} total bytes, ` +
         `${String(manifest.eagerBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES)} eager bytes excluding the approved fonts, ` +
         `${String(manifest.onDemandBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES)} on-demand bytes, ` +
+        `${String(manifest.deferredBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_DEFERRED_BYTES)} deferred bytes, ` +
         `${String(manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes of language catalogs, ` +
         `reproducible buildId ${manifest.buildId}`
     )

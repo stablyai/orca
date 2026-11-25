@@ -7,9 +7,6 @@ import { UI_STORAGE_KEY, writeJson } from '../web-storage'
 export function createWebAppApi(): Partial<PreloadApi> {
   return {
     app: {
-      // Browser preferences do not use the desktop profile writer.
-      isProfileStateSaveDelayed: () => Promise.resolve(false),
-      onProfileStateSaveDelayChanged: () => () => undefined,
       getWindowsAdministratorStatus: () => Promise.resolve(null),
       getMacosUpgradeSupport: () => Promise.resolve('unknown'),
       restartAsAdministrator: () =>
@@ -28,6 +25,8 @@ export function createWebAppApi(): Partial<PreloadApi> {
       setWindowMaterialSuppressed: () => Promise.resolve(),
       relaunch: () => Promise.resolve(window.location.reload()),
       restart: () => Promise.resolve(window.location.reload()),
+      // The browser client never shows desktop install-on-quit recovery.
+      quit: () => Promise.resolve(),
       reload: () => Promise.resolve(window.location.reload()),
       stageBeforeUnloadSync: ({ sessions, ui }) => {
         // Why: beforeunload cannot await the paired runtime, so the web adapter

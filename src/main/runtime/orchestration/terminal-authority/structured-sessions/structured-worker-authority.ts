@@ -290,7 +290,9 @@ export function observeStructuredSession(sessionId: string): StructuredWorkerObs
   }
   return {
     status: 'unverifiable',
-    reason: 'The session has no attached provider child in this runtime generation.'
+    reason: host.reads.agentStarting(sessionId)
+      ? 'Its agent is still starting; the task is delivered once it is up.'
+      : 'The session has no attached provider child in this runtime generation.'
   }
 }
 

@@ -196,14 +196,22 @@ export function parseKeybinding(binding: string): ParsedKeybinding | null {
   return parsed
 }
 
+// `+` is both the separator and the Plus key: a trailing `+` right after a separator (`Mod++`) is the key.
+export function endsWithPlusKey(binding: string): boolean {
+  const trimmed = binding.trimEnd()
+  if (!trimmed.endsWith('+')) {
+    return false
+  }
+  const beforeKey = trimmed.slice(0, -1).trimEnd()
+  return beforeKey === '' || beforeKey.endsWith('+')
+}
+
 function parseKeybindingUncached(binding: string): ParsedKeybinding | null {
+  // Empty segments are ignored so hand-edited typos like `Mod++K` still load.
   const rawParts = binding
     .split('+')
     .map((part) => part.trim())
     .filter(Boolean)
-  if (rawParts.length === 0) {
-    return null
-  }
 
   if (rawParts.some((part) => part.toLowerCase() === 'doubletap')) {
     return parseDoubleTapKeybinding(rawParts)
@@ -224,6 +232,9 @@ function parseKeybindingUncached(binding: string): ParsedKeybinding | null {
       return null
     }
     parsed.key = key
+  }
+  if (!parsed.key && endsWithPlusKey(binding)) {
+    parsed.key = 'Plus'
   }
 
   return parsed.key ? parsed : null

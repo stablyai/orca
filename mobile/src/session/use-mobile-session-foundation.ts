@@ -15,6 +15,7 @@ import { type ActivePanel, canDockSessionPanel } from './session-panel-host'
 import { useMobilePrBranchContext } from '../source-control/review/pull-request/use-mobile-pr-branch-context'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { useLiveWorktreeName } from '../worktree/row-presentation/use-live-worktree-name'
+import { useMobileSessionProjectName } from './use-mobile-session-project-name'
 import { useMissingWorktreeBounce } from './use-missing-worktree-bounce'
 import { hostRouteWithNotice } from '../host-route-notice'
 import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
@@ -62,6 +63,13 @@ export function useMobileSessionFoundation() {
     connState,
     routeName: routeWorktreeName,
     worktreeId
+  })
+  const worktreeRepo = useMobileSessionProjectName({
+    hostId,
+    client,
+    connState,
+    worktreeId,
+    executionHost: worktreeHostId
   })
   useMissingWorktreeBounce({
     hostId,
@@ -121,6 +129,7 @@ export function useMobileSessionFoundation() {
     worktreePath,
     worktreeHostId,
     worktreeBranch,
+    worktreeRepo,
     worktreeResolution,
     isWideLayout,
     activePanel,

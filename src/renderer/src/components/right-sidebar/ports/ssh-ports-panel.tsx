@@ -18,6 +18,7 @@ import { SshForwardedPortRow } from './ssh-forwarded-port-row'
 import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'
 import { SshDetectedPortRow } from './ssh-detected-port-row'
 import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-forward-dialog'
+import type { PortForwardOwner } from './port-forward-owner'
 import { portForwardKey, portForwardRemoteHost } from './port-forward-remote-host'
 
 const NO_UNRESTORED: readonly UnrestoredPortForward[] = []
@@ -63,22 +64,29 @@ export function SshPortsPanel({
   const [forwardedCollapsed, setForwardedCollapsed] = useState(false)
   const [detectedCollapsed, setDetectedCollapsed] = useState(false)
   const [dialogState, setDialogState] = useState<PortForwardDialogState>({ mode: 'closed' })
+  const owner = useMemo<PortForwardOwner>(
+    () => ({ kind: 'ssh', targetId: activeConnectionId }),
+    [activeConnectionId]
+  )
 
   const handleForwardDetected = useCallback((port: EnrichedDetectedPort & { targetId: string }) => {
     setDialogState({
       mode: 'add',
+      owner: { kind: 'ssh', targetId: port.targetId },
       defaults: {
         remotePort: port.port,
         remoteHost: portForwardRemoteHost(port.host),
-        label: port.processName,
-        targetId: port.targetId
+        label: port.processName
       }
     })
   }, [])
 
-  const handleEdit = useCallback((entry: PortForwardEntry) => {
-    setDialogState({ mode: 'edit', entry })
-  }, [])
+  const handleEdit = useCallback(
+    (entry: PortForwardEntry) => {
+      setDialogState({ mode: 'edit', owner, entry })
+    },
+    [owner]
+  )
 
   const handleOpenForwardInBrowser = useCallback(
     (entry: PortForwardEntry, event?: React.MouseEvent<HTMLButtonElement>) => {
@@ -152,9 +160,7 @@ export function SshPortsPanel({
         <button
           type="button"
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          onClick={() =>
-            setDialogState({ mode: 'add', defaults: { targetId: activeConnectionId } })
-          }
+          onClick={() => setDialogState({ mode: 'add', owner, defaults: {} })}
         >
           <Plus size={14} />
           {t('auto.components.right.sidebar.PortsPanel.a103dae837', 'Add')}
@@ -186,6 +192,7 @@ export function SshPortsPanel({
             allForwards.map((entry) => (
               <SshForwardedPortRow
                 key={entry.id}
+                owner={owner}
                 entry={entry}
                 onEdit={() => handleEdit(entry)}
                 onOpenInBrowser={(event) => handleOpenForwardInBrowser(entry, event)}
@@ -246,23 +253,14 @@ export function SshPortsPanel({
           <button
             type="button"
             className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            onClick={() =>
-              setDialogState({
-                mode: 'add',
-                defaults: { targetId: activeConnectionId }
-              })
-            }
+            onClick={() => setDialogState({ mode: 'add', owner, defaults: {} })}
           >
             {t('auto.components.right.sidebar.PortsPanel.907eb53ed2', 'Forward a Port')}
           </button>
         </div>
       )}
 
-      <SshPortForwardDialog
-        state={dialogState}
-        activeConnectionId={activeConnectionId}
-        onClose={handleDialogClose}
-      />
+      <SshPortForwardDialog state={dialogState} onClose={handleDialogClose} />
     </div>
   )
 }

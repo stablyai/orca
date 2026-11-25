@@ -21,8 +21,6 @@ export type AppApi = {
   getSystemLanguageDetection?: (
     browserPreferences?: readonly string[]
   ) => Promise<UiLanguageDetection | null>
-  isProfileStateSaveDelayed: () => Promise<boolean>
-  onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void) => () => void
   getIdentity: () => Promise<AppIdentity>
   /** Local Windows desktop elevation; null when unavailable. Does not describe remote hosts. */
   getWindowsAdministratorStatus: () => Promise<boolean | null>
@@ -38,6 +36,8 @@ export type AppApi = {
   relaunch: () => Promise<void>
   /** Uses normal quit handling so daemon terminals survive for reattachment. */
   restart: () => Promise<void>
+  /** Ordinary user quit, like the app menu Quit; close guards may cancel it. */
+  quit: () => Promise<void>
   /** Main classifies teardown before Electron emits process-gone events. */
   reload: () => Promise<void>
   stageBeforeUnloadSync: (args: {

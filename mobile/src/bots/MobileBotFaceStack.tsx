@@ -10,7 +10,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { MobileBotAvatar } from './MobileBotAvatar'
 
-/** A group's members as overlapping circles in a bot avatar's square, laid out as on desktop. */
+/** A group's members as overlapping circles filling a bot avatar's square. */
 export function MobileBotFaceStack({
   faces,
   slot = 32,
@@ -31,7 +31,7 @@ export function MobileBotFaceStack({
       accessibilityElementsHidden
       importantForAccessibility="no"
     >
-      {botGroupFaces(faces, (face) => face.id).map((face, index) => {
+      {botGroupFaces(faces, (face) => face.id, 1, true).map((face, index) => {
         const size = face.size * scale
         // Later circles sit on earlier ones; a ring in the row's colour keeps them apart.
         const ring = index > 0 ? gap : 0

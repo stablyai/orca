@@ -30,6 +30,24 @@ export class JournalSqlConnectorReplies {
     return result.rows
   }
 
+  /** Whether a turn's answer to one conversation is still unsent (a leave's line waits for it). */
+  async unsentAnswer(
+    sessionId: string,
+    conversation: { source: string; externalId: string },
+    turnStartedAt: number
+  ): Promise<boolean> {
+    const result = await this.db.readers.database({
+      kind: 'connector-reply-unsent',
+      sessionId,
+      conversation,
+      turnStartedAt
+    })
+    if (result.kind !== 'connector-reply-unsent') {
+      throw new Error('journal reader returned no unsent answer check')
+    }
+    return result.unsent
+  }
+
   /** One page of an account's filled, unsent rows after a delivery id (null: from the start). */
   async readOwed(
     account: string,

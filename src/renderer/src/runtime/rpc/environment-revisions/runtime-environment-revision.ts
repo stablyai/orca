@@ -1,10 +1,13 @@
-const revisionByEnvironmentId = new Map<string, number>()
+export type RuntimeEnvironmentRegistration = Readonly<{ revision: number }>
+
+const registrations = new Map<string, RuntimeEnvironmentRegistration>()
 // Pairings proven to continue the same machine: old revision → the revision that replaced it.
 const continuedRevisionsByEnvironmentId = new Map<string, Map<number, number>>()
 // Re-pairs whose host identity is not decided yet: id → the pairing they may continue.
 const pendingContinuationByEnvironmentId = new Map<string, number>()
 const retirementListeners = new Set<(environmentIds: readonly string[]) => void>()
 const revisionChangeListeners = new Set<(environmentIds: readonly string[]) => void>()
+const publicationListeners = new Set<() => void>()
 
 export type RuntimeEnvironmentContinuity = {
   /** Ids now naming a different machine. */
@@ -19,7 +22,7 @@ export function replaceRuntimeEnvironmentRevisions(
   environments: readonly { id: string; createdAt: number; pairingRevision?: number }[],
   continuity: RuntimeEnvironmentContinuity = { retired: [], sameHost: [] }
 ): void {
-  const previous = new Map(revisionByEnvironmentId)
+  const previous = new Map(registrations)
   const nextIds = new Set(environments.map((environment) => environment.id))
   const retired = new Set([
     ...continuity.retired,
@@ -48,21 +51,33 @@ export function replaceRuntimeEnvironmentRevisions(
       pendingContinuationByEnvironmentId.set(id, fromRevision)
     }
   }
-  revisionByEnvironmentId.clear()
+  registrations.clear()
   for (const environment of environments) {
-    revisionByEnvironmentId.set(
-      environment.id,
-      environment.pairingRevision ?? environment.createdAt
+    const { id } = environment
+    const previousRegistration = previous.get(id)
+    const revision = environment.pairingRevision ?? environment.createdAt
+    registrations.set(
+      id,
+      previousRegistration?.revision === revision && !retired.has(id)
+        ? previousRegistration
+        : { revision }
     )
   }
-  const changed = [...previous].flatMap(([id, revision]) =>
-    retired.has(id) || revisionByEnvironmentId.get(id) === revision ? [] : [id]
+  const changed = [...previous].flatMap(([id, { revision }]) =>
+    retired.has(id) || registrations.get(id)?.revision === revision ? [] : [id]
   )
   if (changed.length > 0) {
     for (const listener of revisionChangeListeners) {
       listener(changed)
     }
   }
+  publicationListeners.forEach((listener) => listener())
+}
+
+/** Fires after the registry is populated, including removed or newly registered environments. */
+export function onRuntimeEnvironmentRevisionsPublished(listener: () => void): () => void {
+  publicationListeners.add(listener)
+  return () => publicationListeners.delete(listener)
 }
 
 /** Fires, before the new revisions are published, with ids removed or now naming another machine. */
@@ -82,13 +97,35 @@ export function onRuntimeEnvironmentRevisionsChanged(
 }
 
 export function getRuntimeEnvironmentRevision(environmentId: string): number | undefined {
-  return revisionByEnvironmentId.get(environmentId)
+  return registrations.get(environmentId)?.revision
+}
+
+/** Identity survives equal-revision publications, but never removal or a pairing transition. */
+export function getRuntimeEnvironmentRegistration(
+  environmentId: string
+): RuntimeEnvironmentRegistration | undefined {
+  return registrations.get(environmentId)
+}
+
+/**
+ * The registrations `environmentIds` hold right now. A publisher takes this in the same turn it
+ * publishes, so a later publication (even of an equal revision after a removal) cannot lend it its identity.
+ */
+export function snapshotRuntimeEnvironmentRegistrations(
+  environmentIds: readonly string[]
+): ReadonlyMap<string, RuntimeEnvironmentRegistration> {
+  return new Map(
+    environmentIds.flatMap((id) => {
+      const registration = registrations.get(id)
+      return registration ? [[id, registration] as const] : []
+    })
+  )
 }
 
 /** Selected catalog projection also changes when a pending host key is proved at the same revision. */
 export function runtimeEnvironmentContinuityStamp(environmentId: string): string {
   return JSON.stringify([
-    revisionByEnvironmentId.get(environmentId),
+    getRuntimeEnvironmentRevision(environmentId),
     pendingContinuationByEnvironmentId.get(environmentId)
   ])
 }

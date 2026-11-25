@@ -88,7 +88,7 @@ export function queuedMessageCardCaption(
 
 /** Steer's or Send's label and tooltip: Steer only into a turn that is running (`queuedMessageCardSteers`). */
 export function queuedMessageCardSendNow(
-  card: QueuedMessageCard,
+  card: Pick<QueuedMessageCard, 'hold' | 'command'>,
   agentWorking: boolean,
   t: Translate = translate
 ): {
@@ -270,7 +270,9 @@ export function NativeChatQueuedMessageCard({
             </p>
           ) : null}
         </div>
-        <div className="relative flex shrink-0 items-center gap-1">
+        {/* No gap: each glyph's own box spacing (an icon button's 5px, the image count's padding) sets
+            the even rhythm the hover-revealed tools, which sit outside this flow, already have. */}
+        <div className="relative flex shrink-0 items-center">
           {toolCount > 0 ? (
             <div
               className={cn(
@@ -298,7 +300,9 @@ export function NativeChatQueuedMessageCard({
               </QueuedMessageRowTool>
             </div>
           ) : null}
-          {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
+          {card.images ? (
+            <QueuedMessageImageCount images={card.images} className="h-6 rounded-md px-[5px]" />
+          ) : null}
           {expanded || clipped ? (
             <QueuedMessageExpandToggle
               expanded={expanded}
@@ -379,6 +383,8 @@ function QueuedMessageExpandToggle({
           type="button"
           variant="ghost"
           size="icon-xs"
+          // The chevron's ink is narrower than the other icons': a narrower box keeps its gaps even.
+          className="w-5"
           aria-label={label}
           aria-expanded={expanded}
           aria-controls={controls}

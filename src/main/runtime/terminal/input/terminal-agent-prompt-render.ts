@@ -206,6 +206,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       signal?: AbortSignal
       launchReadiness?: boolean
       acceptsMidTurnInput?: boolean
+      outlivesRenderer?: true
     }
   ): Promise<RuntimeTerminalWait> {
     // A slept agent waits as an idle one rather than waking for a read.

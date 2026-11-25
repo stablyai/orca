@@ -104,6 +104,8 @@ export type WorkspaceCleanupCandidate = {
     upstreamAhead: number | null
     upstreamBehind: number | null
     checkedAt: number | null
+    /** Changed/untracked entries in `git status`; absent from older hosts. */
+    dirtyFileCount?: number | null
     /** Absent when Git was not read or the base ref could not be resolved. */
     merge?: WorkspaceCleanupMergeEvidence
     /** Absent from older hosts, which never checked ignored files. */

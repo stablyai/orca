@@ -5,25 +5,21 @@ import {
   ExternalLink,
   RefreshCw,
   RotateCw,
-  UserRound
+  UserRound,
+  X
 } from 'lucide-react-native'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { isBlankBrowserUrl } from '../../browser/pane-view/browser-url'
-import { canOpenExternalLink, openExternalLink } from '../../platform/external-links/external-link'
-import { resolveRemoteFailureExternalUrl } from '../../../../src/shared/browser/navigation/browser-url'
+import { openExternalLink } from '../../platform/external-links/external-link'
+import { phoneOpenableBrowserUrl } from '../../browser/link-open/phone-openable-browser-url'
+import { mobileSessionTabMenuHeader } from './MobileSessionTabMark'
 
 type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>
 export type MobileBrowserNavigationMethod = 'browser.back' | 'browser.forward' | 'browser.reload'
 export type MobileBrowserNavigationOptions = { ignoreCache?: boolean }
-
-/** As desktop's streamed pane: only a public URL, since a local one names the host, not the phone. */
-function phoneOpenableBrowserUrl(url: string): string | null {
-  const external = resolveRemoteFailureExternalUrl(url)
-  return external && canOpenExternalLink(external) ? external : null
-}
 
 export function MobileBrowserTabActionSheet(props: {
   target: BrowserTab | null
@@ -59,6 +55,8 @@ export function MobileBrowserTabActionSheet(props: {
   return (
     <ActionSheetModal
       visible={target != null}
+      {...mobileSessionTabMenuHeader(target, [])}
+      groupDestructive
       title={
         target
           ? getMobileSessionTabTitle(target)
@@ -163,7 +161,8 @@ export function MobileBrowserTabActionSheet(props: {
           : []),
         {
           id: 'close',
-          label: t('common.close', 'Close'),
+          label: t('session.tabMenu.closeTab', 'Close Tab'),
+          icon: X,
           destructive: true,
           onPress: () => {
             const current = target
