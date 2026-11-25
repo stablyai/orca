@@ -110,9 +110,8 @@ export class PairedRuntimeBrowserNetworkRoute {
       if (!this.outboundMemory) {
         throw new Error('Browser network route outbound memory admission failed')
       }
-      // Listen first: a listener that can't start must not attach a tunnel on the server.
-      const address = await this.socks.listen()
       await this.connectTransport()
+      const address = await this.socks.listen()
       if (this.closed || !this.transport?.tunnel) {
         throw new Error('Browser network route closed during startup')
       }
