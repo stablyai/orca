@@ -29,6 +29,10 @@ import {
 } from './config-plugin-registration-promotion'
 import { hasCodexRegistrationEntries } from '../toml/config-toml-plugin-registration-tables'
 import {
+  isCodexNativeSourceCheckPending,
+  startCodexNativeSourceCheck
+} from './codex-native-source-check'
+import {
   EMPTY_GUEST_CARRY_FORWARD,
   type CodexGuestCarryForward,
   type CodexGuestRegeneration
@@ -43,6 +47,8 @@ export type CodexSettingsBaselineSnapshotOptions = {
   mirroredMcpServerRoot?: boolean
   guestCarryForward?: CodexGuestCarryForward
   nativeSource?: boolean
+  /** Source config whose native-source mark this pass trusted without resolving it. */
+  confirmNativeSource?: string
 }
 
 /** Snapshot only after a successful mirror so pending runtime changes remain promotable. */
@@ -79,6 +85,13 @@ export function snapshotCodexRuntimeSettingsBaseline(
       guestCarryForward: options.guestCarryForward,
       nativeSource: options.nativeSource
     })
+    if (options.confirmNativeSource) {
+      startCodexNativeSourceCheck(
+        runtimeHomePath,
+        options.confirmNativeSource,
+        observation.kind === 'present' ? observation.value : null
+      )
+    }
     return true
   } catch (error) {
     console.warn('[codex-settings-promotion] failed to snapshot settings baseline', error)
@@ -105,6 +118,7 @@ export type CodexSettingsPromotionPlan = {
   guestCarryForward?: CodexGuestCarryForward
   /** A pass found ~/.codex outside any WSL distro; the baseline records it to skip that check later. */
   nativeSource?: boolean
+  confirmNativeSource?: string
 }
 
 function getHostPromotionHomes(): CodexSettingsPromotionHomes {
@@ -160,7 +174,9 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   // Scalars need a baseline to distinguish stale copies from new Codex edits.
   const baselineObservation = observeCodexSettingsBaseline(runtimeHomePath)
   const knownNative =
-    baselineObservation.kind === 'present' && baselineObservation.baseline.nativeSource === true
+    baselineObservation.kind === 'present' &&
+    baselineObservation.baseline.nativeSource === true &&
+    !isCodexNativeSourceCheckPending(runtimeHomePath)
   // So is a host ~/.codex linked into a distro; resolved only when this pass can need it.
   const resolveHostSource = (): HostSource => {
     try {
@@ -172,7 +188,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   }
   if (runtimeTomlObservation.kind === 'absent') {
     if (knownNative) {
-      return { ...emptyPromotionPlan(), nativeSource: true }
+      return { ...emptyPromotionPlan(), nativeSource: true, confirmNativeSource: systemTomlPath }
     }
     const hostSource = resolveHostSource()
     return hostSource.guest
@@ -218,14 +234,9 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
           baseline?.registrations ?? new Map()
         ).length === 0))
   const clean = nothingToWrite && conflicts.size === 0 && runtimeValuesToPreserve.size === 0
+  const pending = { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   if (clean && knownNative) {
-    return {
-      conflicts,
-      runtimeValuesToPreserve,
-      mirroredMcpServers,
-      mirroredMcpServerRoot,
-      nativeSource: true
-    }
+    return { ...pending, nativeSource: true, confirmNativeSource: systemTomlPath }
   }
   const { writeTarget, guest } = resolveHostSource()
   if (guest) {
@@ -233,25 +244,13 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   }
   const resolved = 'path' in writeTarget
   if (clean) {
-    return {
-      conflicts,
-      runtimeValuesToPreserve,
-      mirroredMcpServers,
-      mirroredMcpServerRoot,
-      nativeSource: resolved
-    }
+    return { ...pending, nativeSource: resolved }
   }
   // An unresolvable ~/.codex link could lead into a distro; stall rather than write through it.
   if (!resolved) {
     throw writeTarget.error
   }
-  const plan = {
-    conflicts,
-    runtimeValuesToPreserve,
-    mirroredMcpServers,
-    mirroredMcpServerRoot,
-    nativeSource: true
-  }
+  const plan = { ...pending, nativeSource: true }
   if (nothingToWrite) {
     return plan
   }

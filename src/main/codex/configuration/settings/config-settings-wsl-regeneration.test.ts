@@ -46,6 +46,7 @@ const { homedirMock, resolveWriteTargetSpy, wslTestState } = vi.hoisted(() => {
 vi.mock('./config-settings-promotion-write-target', async (importOriginal) => {
   const actual = await importOriginal<typeof WriteTarget>()
   return {
+    ...actual,
     resolvePromotionWriteTarget: (path: string) => {
       resolveWriteTargetSpy(path)
       return actual.resolvePromotionWriteTarget(path)
@@ -123,6 +124,7 @@ vi.mock('node:os', async (importOriginal) => ({
 }))
 
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
+import { isCodexNativeSourceCheckPending } from './codex-native-source-check'
 import {
   applyCodexRegistrationPromotions,
   planCodexRegistrationPromotion
@@ -164,6 +166,10 @@ const systemConfigPath = (): string => join(tmpHome, '.codex', 'config.toml')
 const runtimeConfigPath = (): string =>
   join(userDataDir, 'codex-runtime-home', 'home', 'config.toml')
 const readRuntimeConfig = (): string => readFileSync(runtimeConfigPath(), 'utf-8')
+const nativeSourceCheckSettled = (): Promise<void> =>
+  vi.waitFor(() =>
+    expect(isCodexNativeSourceCheckPending(join(runtimeConfigPath(), '..'))).toBe(false)
+  )
 
 function writeSystemConfig(content: string): void {
   mkdirSync(join(tmpHome, '.codex'), { recursive: true })
@@ -489,13 +495,15 @@ describe('managed Codex config for a WSL distro config', () => {
     }
   )
 
-  it('resolves a native ~/.codex only once, then skips it on clean passes', () => {
+  it('resolves a native ~/.codex only once, then skips it on clean passes', async () => {
     writeSystemConfig('model = "gpt-5"\n\n[plugins."docs@market"]\nenabled = true\n')
     syncSystemConfigIntoManagedCodexHome()
     syncSystemConfigIntoManagedCodexHome()
+    await nativeSourceCheckSettled()
     resolveWriteTargetSpy.mockClear()
 
     syncSystemConfigIntoManagedCodexHome()
+    await nativeSourceCheckSettled()
     syncSystemConfigIntoManagedCodexHome()
 
     expect(resolveWriteTargetSpy).not.toHaveBeenCalled()
@@ -564,4 +572,45 @@ describe('managed Codex config for a WSL distro config', () => {
 
     expect(readRuntimeConfig()).toMatch(/^model = "o4" # orca: /m)
   })
+
+  describe.skipIf(process.platform === 'win32')(
+    'a native ~/.codex later linked into a distro',
+    () => {
+      async function linkAfterNativePasses(): Promise<string> {
+        const guestCodexDir = join(tmpHome, 'guest-codex')
+        mkdirSync(guestCodexDir, { recursive: true })
+        writeFileSync(join(guestCodexDir, 'config.toml'), 'model = "gpt-5"\n', 'utf-8')
+        symlinkSync(guestCodexDir, join(tmpHome, '.codex'))
+        syncSystemConfigIntoManagedCodexHome()
+        syncSystemConfigIntoManagedCodexHome()
+        await nativeSourceCheckSettled()
+        // The link now leads into a distro.
+        wslTestState.wslPath = join(realpathSync(guestCodexDir), 'config.toml')
+        return guestCodexDir
+      }
+
+      it('replaces a later tab edit once a clean pass has seen the link', async () => {
+        const guestCodexDir = await linkAfterNativePasses()
+        syncSystemConfigIntoManagedCodexHome()
+        await nativeSourceCheckSettled()
+
+        simulateCodexSettingWrite('model', '"o4"')
+        syncSystemConfigIntoManagedCodexHome()
+
+        expect(readRuntimeConfig()).toMatch(/^model = "gpt-5"$/m)
+        expect(readFileSync(join(guestCodexDir, 'config.toml'), 'utf-8')).toBe('model = "gpt-5"\n')
+      })
+
+      it('keeps a tab edit made before the check confirms the link', async () => {
+        await linkAfterNativePasses()
+        syncSystemConfigIntoManagedCodexHome()
+        simulateCodexSettingWrite('model', '"o4"')
+        await nativeSourceCheckSettled()
+
+        syncSystemConfigIntoManagedCodexHome()
+
+        expect(readRuntimeConfig()).toMatch(/^model = "o4" # orca: /m)
+      })
+    }
+  )
 })

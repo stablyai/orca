@@ -7,7 +7,10 @@ import {
   readAgentStateFileSync,
   readAgentStateJsonFileSync
 } from '../agent-state-file-reader'
-import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
+import {
+  writeFileAtomically,
+  writeFileAtomicallyIfUnchanged
+} from '../../../filesystem/atomic-file-publication'
 import {
   EMPTY_GUEST_CARRY_FORWARD,
   isGuestCarryForwardEmpty,
@@ -251,6 +254,31 @@ export function writeCodexSettingsBaseline(
   }
   // Atomic: kept tab edits live only here, so a cut-off write must leave the previous file whole.
   writeFileAtomically(baselinePath, serialized, { mode: 0o600 })
+}
+
+/**
+ * Drop the native-source mark a clean pass trusted once a later check finds otherwise. `regenerated`
+ * also records what a regeneration from the distro would have: no kept values. Skipped unless the
+ * baseline still carries that mark and no kept values, so a newer pass's record always wins.
+ */
+export function retireCodexNativeSourceMark(runtimeHomePath: string, regenerated: boolean): void {
+  const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
+  const existing = readAgentStateFileSync(baselinePath)
+  const parsed: unknown = JSON.parse(existing)
+  if (
+    !isStoredSettingsBaseline(parsed) ||
+    parsed.nativeSource !== true ||
+    parsed.guestCarryForward
+  ) {
+    return
+  }
+  const { nativeSource: _retired, ...rest } = parsed
+  const next: StoredSettingsBaseline = regenerated
+    ? { ...rest, guestCarryForward: { settings: {}, registrations: [] } }
+    : rest
+  writeFileAtomicallyIfUnchanged(baselinePath, existing, `${JSON.stringify(next, null, 2)}\n`, {
+    mode: 0o600
+  })
 }
 
 export function getCodexSettingsBaselinePath(runtimeHomePath: string): string {
