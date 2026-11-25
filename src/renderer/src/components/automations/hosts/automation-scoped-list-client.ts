@@ -91,7 +91,7 @@ export function ownerPrecondition(owner: AutomationOwnerRef): AutomationOwnerPre
   }
 }
 
-async function callAuthority<TResult>(
+export async function callAuthority<TResult>(
   authority: AutomationAuthorityRef,
   method: string,
   params: unknown

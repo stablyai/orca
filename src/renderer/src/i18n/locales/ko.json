@@ -26697,7 +26697,10 @@
       "botsOffByTeam": "팀에서 봇을 꺼 두어 Orca가 이 실행을 건너뛰었습니다.",
       "botMissing": "이 자동화를 실행하는 봇이 더 이상 존재하지 않습니다.",
       "botFolderMissing": "봇의 폴더를 더 이상 사용할 수 없습니다.",
-      "botPaused": "{{bot}}이(가) 일시 중지되어 Orca가 이 실행을 건너뛰었습니다."
+      "botPaused": "{{bot}}이(가) 일시 중지되어 Orca가 이 실행을 건너뛰었습니다.",
+      "agentModelUnavailable": "{{agent}}이(가) {{model}}을(를) 사용할 수 없었습니다.",
+      "theAgent": "에이전트",
+      "selectedModel": "선택한 모델"
     },
     "extraAgentArgs": {
       "errors": {
@@ -26733,7 +26736,25 @@
     "webhooksOff": "실행되지 않음: Orca Cloud는 아직 웹훅을 지원하지 않습니다",
     "webhooksOffScheduled": "일정에 따라서만 실행됨: Orca Cloud는 아직 웹훅을 지원하지 않습니다",
     "openConnectors": "커넥터 열기",
-    "hostUnreachable": "{{host}}에 연결할 수 없습니다. 다시 연결되면 다시 시도하세요."
+    "hostUnreachable": "{{host}}에 연결할 수 없습니다. 다시 연결되면 다시 시도하세요.",
+    "runModelFix": {
+      "model": "모델",
+      "changed": "이 자동화가 변경되어 모델을 저장하지 않았습니다. 편집에서 변경하세요.",
+      "rerunFailed": "모델을 저장했습니다. 재실행이 시작되지 않았습니다.",
+      "saved": "이 자동화의 모델을 {{model}}(으)로 설정했습니다.",
+      "queuedWithNewerModel": "자동화의 최신 모델로 실행을 대기열에 추가했습니다.",
+      "modelUnavailable": "모델을 사용할 수 없습니다.",
+      "errorWithPicker": "{{agent}}에서 이 모델을 사용할 수 없었습니다.",
+      "failed": "실패",
+      "busy": "이미 모델을 변경하는 중입니다.",
+      "rerunUnconfirmed": "모델을 저장했습니다. 재실행을 확인할 수 없습니다.",
+      "unconfirmed": "모델 변경을 확인할 수 없습니다. 다시 실행하기 전에 자동화를 확인하세요."
+    },
+    "runPage": {
+      "edit": "편집",
+      "editAutomation": "자동화 편집",
+      "running": "실행 중"
+    }
   },
   "codeHost": {
     "errors": {

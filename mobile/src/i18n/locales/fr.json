@@ -4432,7 +4432,10 @@
       "botsOff": "Les bots sont désactivés dans les Réglages, donc Orca a ignoré cette exécution.",
       "botMissing": "Le bot sous lequel cette automatisation s’exécute n’existe plus.",
       "botFolderMissing": "Le dossier du bot n’est plus disponible.",
-      "botPaused": "{{bot}} est en pause, donc Orca a ignoré cette exécution."
+      "botPaused": "{{bot}} est en pause, donc Orca a ignoré cette exécution.",
+      "agentModelUnavailable": "{{agent}} n’a pas pu utiliser {{model}}.",
+      "theAgent": "L’agent",
+      "selectedModel": "le modèle sélectionné"
     },
     "eventsWontFire": "S’exécute uniquement selon sa planification : nécessite le connecteur {{connectors}}",
     "wontFire": "Ne s’exécutera pas : nécessite le connecteur {{connectors}}"

@@ -4501,7 +4501,10 @@
       "botsOff": "설정에서 봇이 꺼져 있어 Orca가 이 실행을 건너뛰었습니다.",
       "botMissing": "이 자동화를 실행하는 봇이 더 이상 존재하지 않습니다.",
       "botFolderMissing": "봇의 폴더를 더 이상 사용할 수 없습니다.",
-      "botPaused": "{{bot}}이(가) 일시 중지되어 Orca가 이 실행을 건너뛰었습니다."
+      "botPaused": "{{bot}}이(가) 일시 중지되어 Orca가 이 실행을 건너뛰었습니다.",
+      "agentModelUnavailable": "{{agent}}이(가) {{model}}을(를) 사용할 수 없었습니다.",
+      "theAgent": "에이전트",
+      "selectedModel": "선택한 모델"
     },
     "eventsWontFire": "일정에 따라서만 실행됨: {{connectors}} 커넥터가 필요합니다",
     "wontFire": "실행되지 않음: {{connectors}} 커넥터가 필요합니다"

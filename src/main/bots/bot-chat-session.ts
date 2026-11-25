@@ -2,10 +2,7 @@
 import { OWNER_ACTS_FOR, type AutomationTriggeredBy } from '../../shared/bots/bot-acts-for'
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import { randomUUID } from 'node:crypto'
-import {
-  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
-  newChatPermissionMode
-} from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import type { Bot, BotAgent } from '../../shared/bot-types'
 import { botOnSetup } from '../../shared/bots/bot-agent-setup'
@@ -36,7 +33,7 @@ import { closeReplacedBotChat, dropReplacedChatMail } from './bot-chat-replaceme
 import { carryQueuedMessages, type QueuedCarryHost } from './bot-chat-queued-carry'
 import type { TookOverNotice } from '../../shared/native-chat/took-over-notice'
 import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
-import { botStartOptions } from './bot-start-options'
+import { botStartOptions, botStartPermission } from './bot-start-options'
 import { BotSessionRefusedError } from './bot-session-refused-error'
 import { showBotSessionTab } from './bot-session-tab-show'
 import { supportedStructuredSeedOptions } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
@@ -265,6 +262,7 @@ export async function startBotSession(
     sessionId?: string
     message?: { text: string; clientMessageId: string; run?: BotRunFields }
     background?: true
+    onLaunchModel?: (model: string | undefined) => void
     /** Whom the conversation acts for, recorded before it starts; unrecorded, its first message says. */
     actsFor?: BotConversationActsFor
   } & Pick<StructuredAgentSessionCreateOptions, 'beforeFirstMessage' | 'beforeDelivery'> = {}
@@ -273,7 +271,7 @@ export async function startBotSession(
   if (input.actsFor) {
     runtime.getOrchestrationDb().recordBotConversationActsFor(sessionId, input.actsFor)
   }
-  const permissionMode = bot.permissionMode && newChatPermissionMode(bot.agent, bot.permissionMode)
+  const permissionMode = botStartPermission(bot)
   // A model the agent no longer lists still goes through: the agent's own failure names it, as for any chat.
   const saved = botStartOptions(
     () => runtime.requireStore().getSettings(),
@@ -281,6 +279,7 @@ export async function startBotSession(
     input.background === true
   )
   const launch = supportedStructuredSeedOptions(bot.agent, saved)
+  input.onLaunchModel?.(launch.model)
   const dropped = Object.keys(saved).filter((key) => !(key in launch))
   if (dropped.length) {
     console.warn(

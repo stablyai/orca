@@ -26496,7 +26496,10 @@
       "botsOffByTeam": "你的团队已关闭 Bots，因此 Orca 跳过了此次运行",
       "botMissing": "运行这个自动化的机器人已不存在。",
       "botFolderMissing": "机器人的文件夹已不可用。",
-      "botPaused": "{{bot}} 已暂停，因此 Orca 跳过了这次运行。"
+      "botPaused": "{{bot}} 已暂停，因此 Orca 跳过了这次运行。",
+      "agentModelUnavailable": "{{agent}} 无法使用 {{model}}。",
+      "theAgent": "智能体",
+      "selectedModel": "所选模型"
     },
     "extraAgentArgs": {
       "errors": {
@@ -26606,7 +26609,25 @@
     "webhooksOff": "无法运行：Orca Cloud 尚不支持 Webhook",
     "webhooksOffScheduled": "仅按计划运行：Orca Cloud 尚不支持 Webhook",
     "openConnectors": "打开连接器",
-    "hostUnreachable": "无法连接到 {{host}}，待其恢复后请重试"
+    "hostUnreachable": "无法连接到 {{host}}，待其恢复后请重试",
+    "runModelFix": {
+      "model": "模型",
+      "changed": "此自动化已更改，因此未保存模型。请使用编辑进行更改。",
+      "rerunFailed": "模型已保存。重新运行未开始。",
+      "saved": "已将此自动化的模型设为 {{model}}。",
+      "queuedWithNewerModel": "已使用此自动化最新保存的模型将运行加入队列。",
+      "modelUnavailable": "模型不可用。",
+      "errorWithPicker": "{{agent}} 无法使用此模型。",
+      "failed": "失败",
+      "busy": "正在更换模型。",
+      "rerunUnconfirmed": "模型已保存。无法确认重新运行是否已开始。",
+      "unconfirmed": "无法确认模型是否已更换。请先检查自动化，再重新运行。"
+    },
+    "runPage": {
+      "edit": "编辑",
+      "editAutomation": "编辑自动化",
+      "running": "运行中"
+    }
   },
   "codeHost": {
     "errors": {

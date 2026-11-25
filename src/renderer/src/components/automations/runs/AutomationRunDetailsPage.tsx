@@ -1,11 +1,10 @@
-import React, { useEffect, useRef } from 'react'
-import { ArrowUpRight, ChevronLeft, ChevronRight, KeyRound, Monitor } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, KeyRound, Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { cn } from '@/lib/class-names'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
-import { isRowActivationKey } from '@/lib/list-interaction/list-row-interaction'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
@@ -20,13 +19,12 @@ import type { SetupTrustMismatch } from '../../../../../shared/worktree/create-t
 import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
 import {
   AUTOMATION_EDITOR_SECTION_LABEL_CLASS,
-  AutomationRunErrorNotice,
   AutomationRunSetupSkippedNotice,
   formatAutomationDateTime,
   formatAutomationDateTimeWithRelative
 } from '../automation-page-parts'
 import { AutomationRunStatusLabel } from './AutomationRunStatusDot'
-import { AutomationRunRerunButton } from './AutomationRunRerunButton'
+import { AutomationRunToolbar } from './AutomationRunToolbar'
 import { formatAutomationCost, formatAutomationTokens } from './automation-usage-model'
 import {
   RUN_START_DRIFT_LABEL_MS,
@@ -36,6 +34,14 @@ import {
   getAutomationRunStepKey
 } from './automation-run-identity-label'
 import { AutomationsPageFrame, AutomationsPageTitle } from '../AutomationsPageFrame'
+import type { Bot } from '../../../../../shared/bot-types'
+import type {
+  AutomationRunModelConfirmation,
+  AutomationRunModelOption
+} from './automation-run-model-fix'
+import { AutomationRunFailureNotice } from './AutomationRunFailureNotice'
+import { AutomationRunModelPicker } from './AutomationRunModelPicker'
+import type { AutomationRecoveryModelRead } from './use-automation-recovery-model'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function AutomationRunDetailsPage({
@@ -51,6 +57,13 @@ export function AutomationRunDetailsPage({
   canRerun,
   isRerunPending,
   onRerun,
+  bot = null,
+  defaultModel,
+  modelRead = 'ready',
+  modelConfirmation = null,
+  onEdit,
+  onPickModel,
+  modelPicker: ModelPicker = AutomationRunModelPicker,
   onOpenWorkspace,
   onSignIn,
   onReviewSetup,
@@ -70,6 +83,17 @@ export function AutomationRunDetailsPage({
   canRerun: boolean
   isRerunPending: boolean
   onRerun: () => void
+  /** The bot a bot automation runs as; its host lists the models a failed model can be swapped for. */
+  bot?: Pick<Bot, 'agent' | 'launch' | 'hostId' | 'folderWorkspaceId'> | null
+  defaultModel?: string | null
+  modelRead?: AutomationRecoveryModelRead['status']
+  modelConfirmation?: AutomationRunModelConfirmation | null
+  /** Opens the automation's editor. */
+  onEdit?: () => void
+  /** Saves `model` to the automation, then reruns it; settles once both are done or one failed. */
+  onPickModel?: (model: AutomationRunModelOption) => Promise<void>
+  /** Fixtures swap in a picker with fixed models; the host's menu reads live agents. */
+  modelPicker?: typeof AutomationRunModelPicker
   onOpenWorkspace: () => void
   /** Reconnects the host that needed credentials; absent when nothing can sign in. */
   onSignIn?: () => void
@@ -108,7 +132,7 @@ export function AutomationRunDetailsPage({
   const reviewContent = setupReview?.content
   const { newer, older } = getAutomationRunNeighbors(runs, listedRun.id)
   const needsCredentials = run.status === 'skipped_needs_interactive_auth'
-
+  const [isModelFixPending, setIsModelFixPending] = useState(false)
   const stepRef = useRef({ newer, older, onSelectRun })
   useEffect(() => {
     stepRef.current = { newer, older, onSelectRun }
@@ -149,17 +173,18 @@ export function AutomationRunDetailsPage({
 
   return (
     <AutomationsPageFrame nav={nav}>
-      <div className="flex flex-col gap-4 pt-5">
-        <header className="@container/run-header min-w-0">
+      <div className="@container flex flex-col gap-4 pt-5">
+        <header className="min-w-0">
           <div className="flex min-w-0 items-center gap-2.5">
             <AutomationsPageTitle>
               {formatAutomationRunLabel(run, t, intlLocale)}
             </AutomationsPageTitle>
-            <AutomationRunStatusLabel status={run.status} pill />
+            <AutomationRunStatusLabel
+              status={run.status}
+              pill
+              tracksCompletion={run.sessionKind === 'chat' && Boolean(automation?.bot)}
+            />
             <span className="flex-1" />
-            {canRerun && automation ? (
-              <AutomationRunRerunButton pending={isRerunPending} onRerun={onRerun} />
-            ) : null}
             {/* Why: left reads as back in time, so Older sits left and Newer right. */}
             {(['older', 'newer'] as const).map((step) => {
               const target = step === 'newer' ? newer : older
@@ -231,43 +256,13 @@ export function AutomationRunDetailsPage({
               </span>
             ) : null}
             {triggerLabel}
-            {workspaceName ? <span aria-hidden="true">{'\u00a0·\u00a0'}</span> : dot}
             {workspaceName ? (
-              <>
-                {workspaceActionLabel ? (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    aria-label={
-                      workspaceName === workspaceActionLabel
-                        ? workspaceActionLabel
-                        : `${workspaceName}, ${workspaceActionLabel}`
-                    }
-                    className="cursor-pointer rounded-sm box-decoration-clone wrap-anywhere text-foreground outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    onClick={onOpenWorkspace}
-                    onKeyDown={(event) => {
-                      if (isRowActivationKey(event)) {
-                        event.preventDefault()
-                        if (!event.repeat) {
-                          onOpenWorkspace()
-                        }
-                      }
-                    }}
-                  >
-                    {workspaceName}
-                    {'\u2060'}
-                    <ArrowUpRight
-                      aria-hidden="true"
-                      className="ml-0.5 inline size-3 align-[-0.125em] text-muted-foreground"
-                    />
-                    {'\u2060'}
-                  </span>
-                ) : (
-                  <span className="wrap-anywhere">{workspaceName}</span>
-                )}
+              <span className="wrap-anywhere">
                 {dot}
-              </>
+                {workspaceName}
+              </span>
             ) : null}
+            {dot}
             <span className="inline-block max-w-full wrap-anywhere">
               <Monitor aria-hidden="true" className="mr-1 inline size-3.5 align-[-0.15em]" />
               {'\u2060'}
@@ -328,18 +323,51 @@ export function AutomationRunDetailsPage({
               </Button>
             ) : null}
           </div>
+        ) : modelConfirmation ? (
+          <div
+            role="status"
+            className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
+          >
+            {modelConfirmation.newerModel
+              ? t(
+                  'automations.runModelFix.queuedWithNewerModel',
+                  "Run queued with the automation's latest model."
+                )
+              : t('automations.runModelFix.saved', 'Model set to {{model}} for this automation.', {
+                  model: modelConfirmation.model
+                })}
+          </div>
         ) : failed ? (
-          <AutomationRunErrorNotice
-            label={t('auto.components.automations.runIdentity.runFailed', 'Run failed.')}
-            error={
-              errorText ??
-              t(
-                'auto.components.automations.runIdentity.noFailureReason',
-                'This run did not start, and no reason was recorded.'
-              )
+          <AutomationRunFailureNotice
+            run={run}
+            automation={automation}
+            bot={bot}
+            defaultModel={defaultModel}
+            modelRead={modelRead}
+            canRerun={canRerun}
+            isRerunPending={isRerunPending}
+            isModelFixPending={isModelFixPending}
+            errorText={errorText}
+            modelPicker={ModelPicker}
+            onPickModel={
+              onPickModel
+                ? (model) => {
+                    setIsModelFixPending(true)
+                    void onPickModel(model).finally(() => setIsModelFixPending(false))
+                  }
+                : undefined
             }
           />
         ) : null}
+
+        <AutomationRunToolbar
+          workspaceActionLabel={workspaceActionLabel}
+          onOpenWorkspace={onOpenWorkspace}
+          onRerun={canRerun && automation ? onRerun : undefined}
+          onEdit={automation ? onEdit : undefined}
+          isRerunPending={isRerunPending}
+          isModelFixPending={isModelFixPending}
+        />
 
         <section className="min-w-0 rounded-lg border border-border/60">
           <h3

@@ -24703,7 +24703,10 @@
       "botsOffByTeam": "Les bots sont désactivés par votre équipe ; Orca a donc ignoré cette exécution.",
       "botMissing": "Le bot sous lequel cette automatisation s’exécute n’existe plus.",
       "botFolderMissing": "Le dossier du bot n’est plus disponible.",
-      "botPaused": "{{bot}} est en pause, donc Orca a ignoré cette exécution."
+      "botPaused": "{{bot}} est en pause, donc Orca a ignoré cette exécution.",
+      "agentModelUnavailable": "{{agent}} n’a pas pu utiliser {{model}}.",
+      "theAgent": "L’agent",
+      "selectedModel": "le modèle sélectionné"
     },
     "extraAgentArgs": {
       "errors": {
@@ -24734,7 +24737,25 @@
     "botTarget": {
       "hostNeedsUpdate": "Mettez à jour le serveur Orca sur {host} pour que ses bots puissent utiliser des automatisations."
     },
-    "hostUnreachable": "Impossible de joindre {{host}}. Réessayez une fois la connexion rétablie."
+    "hostUnreachable": "Impossible de joindre {{host}}. Réessayez une fois la connexion rétablie.",
+    "runModelFix": {
+      "model": "Modèle",
+      "changed": "Cette automatisation a changé, le modèle n’a donc pas été enregistré. Utilisez Modifier pour le changer.",
+      "rerunFailed": "Modèle enregistré. La relance n’a pas démarré.",
+      "saved": "Modèle défini sur {{model}} pour cette automatisation.",
+      "queuedWithNewerModel": "L’exécution a été mise en file d’attente avec le dernier modèle de l’automatisation.",
+      "modelUnavailable": "Modèle indisponible.",
+      "errorWithPicker": "{{agent}} n’a pas pu utiliser ce modèle.",
+      "failed": "Échec",
+      "busy": "Un changement de modèle est déjà en cours.",
+      "rerunUnconfirmed": "Modèle enregistré. Impossible de confirmer la relance.",
+      "unconfirmed": "Impossible de confirmer le changement de modèle. Vérifiez l’automatisation avant de la relancer."
+    },
+    "runPage": {
+      "edit": "Modifier",
+      "editAutomation": "Modifier l’automatisation",
+      "running": "En cours"
+    }
   },
   "codeHost": {
     "errors": {

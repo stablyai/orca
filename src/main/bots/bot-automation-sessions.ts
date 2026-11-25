@@ -35,6 +35,7 @@ export type BotAutomationSessionDependencies = {
     gates?: {
       beforeFirstMessage?: () => void | Promise<void>
       beforeDelivery?: () => boolean
+      onLaunchModel?: (model: string | undefined) => void
     }
   ) => Promise<string>
   nameSession: (sessionId: string, name: string) => Promise<void>
@@ -86,12 +87,19 @@ export function botAutomationSessions(
       { text, title, sessionId: named, run, actsFor, beforeFirstMessage, beforeDelivery }
     ) => {
       const clientMessageId = randomUUID()
+      let launchModel: string | undefined
       const sessionId = await deps.startSession(
         bot,
         { text, clientMessageId, ...(run ? { run } : {}) },
         actsFor,
         named,
-        ...(beforeFirstMessage || beforeDelivery ? [{ beforeFirstMessage, beforeDelivery }] : [])
+        {
+          beforeFirstMessage,
+          beforeDelivery,
+          onLaunchModel: (model) => {
+            launchModel = model
+          }
+        }
       )
       // The prompt is already in: a failed rename must not disown the run's session.
       await deps.nameSession(sessionId, title).catch((error: unknown) => {
@@ -100,7 +108,8 @@ export function botAutomationSessions(
       return {
         sessionId,
         clientMessageId,
-        fingerprint: agentSessionSendBodyFingerprint(sessionId, botMessageBody(text))
+        fingerprint: agentSessionSendBodyFingerprint(sessionId, botMessageBody(text)),
+        launchModel
       }
     },
     sendToBotChat: async (bot, chatId, text, run, homeIfGone) => {

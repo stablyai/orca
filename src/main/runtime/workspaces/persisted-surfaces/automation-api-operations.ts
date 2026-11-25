@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import type { AutomationModelRecoveryInput } from '../../../../shared/automations/history/automation-model-recovery'
 import type {
   RuntimeAutomationCreateInput,
   RuntimeAutomationUpdateInput
@@ -178,6 +179,20 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
     return this.automation.withExternalProbePriority(() =>
       this.automation.runNow(id, expectedOwner)
     )
+  }
+
+  recoverAutomationModel(
+    input: AutomationModelRecoveryInput,
+    expectedOwner?: AutomationOwnerPrecondition
+  ) {
+    return this.automation.withExternalProbePriority(async () => {
+      const source = this.automationChangeSelector(input.id)
+      const result = await this.automation.recoverModel(input, expectedOwner)
+      if (result.status !== 'changed' && result.status !== 'busy') {
+        this.publishAutomationDefinitionChange(source, this.automationChangeSelector(input.id))
+      }
+      return result
+    })
   }
 
   listAutomationsForScope(params = {}): AutomationListResult {

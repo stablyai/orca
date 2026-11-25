@@ -26903,7 +26903,10 @@
         "approval": "Ajan bir işlemi onaylamanızı bekliyor.",
         "signIn": "Ajan oturum açmanızı bekliyor.",
         "prompt": "Ajan, yanıtınızı gerektiren bir soruda durdu."
-      }
+      },
+      "agentModelUnavailable": "{{agent}}, {{model}} modelini kullanamadı.",
+      "theAgent": "Ajan",
+      "selectedModel": "seçilen model"
     },
     "extraAgentArgs": {
       "errors": {
@@ -27013,7 +27016,25 @@
     "webhooksOff": "Çalışmayacak: Orca Cloud henüz webhook’ları desteklemiyor",
     "webhooksOffScheduled": "Yalnızca zamanlamaya göre çalışır: Orca Cloud henüz webhook’ları desteklemiyor",
     "openConnectors": "Bağlayıcıları aç",
-    "hostUnreachable": "{{host}} sunucusuna ulaşılamadı. Yeniden bağlandığında tekrar deneyin."
+    "hostUnreachable": "{{host}} sunucusuna ulaşılamadı. Yeniden bağlandığında tekrar deneyin.",
+    "runModelFix": {
+      "model": "Model",
+      "changed": "Bu otomasyon değişti, bu yüzden model kaydedilmedi. Değiştirmek için Düzenle'yi kullanın.",
+      "rerunFailed": "Model kaydedildi. Yeniden çalıştırma başlamadı.",
+      "saved": "Bu otomasyonun modeli {{model}} olarak ayarlandı.",
+      "queuedWithNewerModel": "Çalıştırma, otomasyonun en son kaydedilen modeliyle kuyruğa alındı.",
+      "modelUnavailable": "Model kullanılamıyor.",
+      "errorWithPicker": "{{agent}} bu modeli kullanamadı.",
+      "failed": "Başarısız",
+      "busy": "Model değişikliği zaten devam ediyor.",
+      "rerunUnconfirmed": "Model kaydedildi. Yeniden çalıştırma doğrulanamadı.",
+      "unconfirmed": "Model değişikliği doğrulanamadı. Yeniden çalıştırmadan önce otomasyonu kontrol edin."
+    },
+    "runPage": {
+      "edit": "Düzenle",
+      "editAutomation": "Otomasyonu düzenle",
+      "running": "Çalışıyor"
+    }
   },
   "codeHost": {
     "errors": {

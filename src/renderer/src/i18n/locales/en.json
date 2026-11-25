@@ -27034,7 +27034,10 @@
       "botsOffByTeam": "Bots are turned off by your team, so Orca skipped this run.",
       "botMissing": "The bot this automation runs as no longer exists.",
       "botFolderMissing": "The bot's folder is no longer available.",
-      "botPaused": "{{bot}} is paused, so Orca skipped this run."
+      "botPaused": "{{bot}} is paused, so Orca skipped this run.",
+      "agentModelUnavailable": "{{agent}} couldn't use {{model}}.",
+      "theAgent": "The agent",
+      "selectedModel": "the selected model"
     },
     "extraAgentArgs": {
       "errors": {
@@ -27144,7 +27147,29 @@
     "webhooksOff": "Won’t run: Orca Cloud doesn’t support webhooks yet",
     "webhooksOffScheduled": "Runs on its schedule only: Orca Cloud doesn’t support webhooks yet",
     "openConnectors": "Open connectors",
-    "hostUnreachable": "Couldn't reach {{host}}. Try again once it's back."
+    "hostUnreachable": "Couldn't reach {{host}}. Try again once it's back.",
+    "runModelFix": {
+      "model": "Model",
+      "defaultModel": "Default model",
+      "changed": "This automation changed, so the model wasn't saved. Use Edit to change it.",
+      "rerunFailed": "Model saved. Rerun didn't start.",
+      "saved": "Model set to {{model}} for this automation.",
+      "queuedWithNewerModel": "Run queued with the automation's latest model.",
+      "modelUnavailable": "Model unavailable.",
+      "modelChanged": "Model changed.",
+      "errorWithPicker": "{{agent}} couldn't use this model.",
+      "failed": "Failed",
+      "busy": "A model change is already in progress.",
+      "rerunUnconfirmed": "Model saved. Couldn't confirm the rerun.",
+      "unconfirmed": "Couldn't confirm the model change. Check the automation before rerunning.",
+      "unsupported": "Update Orca on {{host}} to switch models.",
+      "thisComputer": "this computer"
+    },
+    "runPage": {
+      "edit": "Edit",
+      "editAutomation": "Edit automation",
+      "running": "Running"
+    }
   },
   "codeHost": {
     "errors": {

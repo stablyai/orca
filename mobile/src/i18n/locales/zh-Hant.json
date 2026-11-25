@@ -4320,7 +4320,10 @@
       "botsOff": "設定中已關閉機器人，因此 Orca 略過了這次執行。",
       "botMissing": "執行這個自動化的機器人已不存在。",
       "botFolderMissing": "機器人的資料夾已無法使用。",
-      "botPaused": "{{bot}} 已暫停，因此 Orca 略過了這次執行。"
+      "botPaused": "{{bot}} 已暫停，因此 Orca 略過了這次執行。",
+      "agentModelUnavailable": "{{agent}} 無法使用 {{model}}。",
+      "theAgent": "代理程式",
+      "selectedModel": "所選模型"
     },
     "eventsWontFire": "只會依排程執行：需要 {{connectors}} 連接器",
     "wontFire": "不會執行：需要 {{connectors}} 連接器"

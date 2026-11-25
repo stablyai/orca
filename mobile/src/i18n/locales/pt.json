@@ -5006,7 +5006,10 @@
       "botsOff": "Os bots estão desativados nas Configurações, então o Orca pulou esta execução.",
       "botMissing": "O bot com que esta automação é executada não existe mais.",
       "botFolderMissing": "A pasta do bot não está mais disponível.",
-      "botPaused": "{{bot}} está pausado, então o Orca pulou esta execução."
+      "botPaused": "{{bot}} está pausado, então o Orca pulou esta execução.",
+      "agentModelUnavailable": "{{agent}} não conseguiu usar {{model}}.",
+      "theAgent": "O agente",
+      "selectedModel": "o modelo selecionado"
     },
     "eventsWontFire": "Executa só no horário programado: precisa do conector {{connectors}}",
     "wontFire": "Não vai executar: precisa do conector {{connectors}}"

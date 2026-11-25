@@ -25222,7 +25222,10 @@
       "botsOffByTeam": "Os bots foram desativados pela sua equipe, então o Orca ignorou esta execução.",
       "botMissing": "O bot com que esta automação é executada não existe mais.",
       "botFolderMissing": "A pasta do bot não está mais disponível.",
-      "botPaused": "{{bot}} está pausado, então o Orca pulou esta execução."
+      "botPaused": "{{bot}} está pausado, então o Orca pulou esta execução.",
+      "agentModelUnavailable": "{{agent}} não conseguiu usar {{model}}.",
+      "theAgent": "O agente",
+      "selectedModel": "o modelo selecionado"
     },
     "extraAgentArgs": {
       "errors": {
@@ -25253,7 +25256,25 @@
     "botTarget": {
       "hostNeedsUpdate": "Atualize o servidor Orca em {host} para que os bots dele possam ter automações."
     },
-    "hostUnreachable": "Não foi possível acessar {{host}}. Tente novamente quando ele voltar."
+    "hostUnreachable": "Não foi possível acessar {{host}}. Tente novamente quando ele voltar.",
+    "runModelFix": {
+      "model": "Modelo",
+      "changed": "Esta automação mudou, então o modelo não foi salvo. Use Editar para alterá-lo.",
+      "rerunFailed": "Modelo salvo. A nova execução não começou.",
+      "saved": "Modelo definido como {{model}} para esta automação.",
+      "queuedWithNewerModel": "A execução foi colocada na fila com o modelo mais recente da automação.",
+      "modelUnavailable": "Modelo indisponível.",
+      "errorWithPicker": "{{agent}} não conseguiu usar este modelo.",
+      "failed": "Falhou",
+      "busy": "Já há uma alteração de modelo em andamento.",
+      "rerunUnconfirmed": "Modelo salvo. Não foi possível confirmar a nova execução.",
+      "unconfirmed": "Não foi possível confirmar a alteração do modelo. Verifique a automação antes de executá-la novamente."
+    },
+    "runPage": {
+      "edit": "Editar",
+      "editAutomation": "Editar automação",
+      "running": "Em execução"
+    }
   },
   "codeHost": {
     "errors": {

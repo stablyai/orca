@@ -8202,7 +8202,10 @@
       "botsOffByTeam": "Bots are turned off by your team, so Orca skipped this run.",
       "botMissing": "The bot this automation runs as no longer exists.",
       "botFolderMissing": "The bot's folder is no longer available.",
-      "botPaused": "{{bot}} is paused, so Orca skipped this run."
+      "botPaused": "{{bot}} is paused, so Orca skipped this run.",
+      "agentModelUnavailable": "{{agent}} couldn't use {{model}}.",
+      "theAgent": "The agent",
+      "selectedModel": "the selected model"
     },
     "botTarget": {
       "fieldLabel": "Bot or project",

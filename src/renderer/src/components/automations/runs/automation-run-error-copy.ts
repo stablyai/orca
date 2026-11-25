@@ -4,6 +4,8 @@ import {
   type AutomationRunFailureCode
 } from '../../../../../shared/automations/history/automation-run-failure-copy'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
+import { readLegacyAutomationModelFailure } from '../../../../../shared/automations/history/automation-run-legacy-model-failure'
+import { tuiAgentDisplayName } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 // One whole sentence per non-ready setup state; unknown states keep the stored English.
 const SETUP_STATE_COPY: Record<string, () => string> = {
@@ -27,6 +29,13 @@ const SETUP_STATE_COPY: Record<string, () => string> = {
       'automations.runFailures.projectSetupState.unsupported',
       'The selected automation host does not support this project.'
     )
+}
+
+function modelUnavailableText(agent: string | undefined, model: string | undefined): string {
+  return translate('automations.runFailures.agentModelUnavailable', EN.agentModelUnavailable, {
+    agent: agent ?? translate('automations.runFailures.theAgent', EN.theAgent),
+    model: model ?? translate('automations.runFailures.selectedModel', EN.selectedModel)
+  })
 }
 
 // null = unusable params; caller shows the stored English `error`.
@@ -89,6 +98,15 @@ const COPY: Record<
   agentInterrupted: () =>
     translate('automations.runFailures.agentInterrupted', EN.agentInterrupted),
   watchTimedOut: () => translate('automations.runFailures.watchTimedOut', EN.watchTimedOut),
+  agentModelUnavailable: (params) => {
+    const agent = params?.agent
+    const model = params?.model
+    // A newer host's agent this build doesn't know is "The agent", never its raw id.
+    return modelUnavailableText(
+      typeof agent === 'string' ? (tuiAgentDisplayName(agent) ?? undefined) : undefined,
+      typeof model === 'string' && model ? model : undefined
+    )
+  },
   wslDistroStopped: (params) => {
     const distro = params?.distro
     return typeof distro === 'string'
@@ -165,7 +183,6 @@ function blockedAgentText(reason: string, agentLabel: string | undefined): strin
   }
 }
 
-/** Old records and older hosts omit the code; newer hosts may send unknown codes. Both show `error`. */
 export function automationRunErrorText(
   run: Pick<AutomationRun, 'error' | 'errorCode' | 'errorParams'>,
   /** Names the agent in prompts it is waiting on, e.g. "Claude". */
@@ -174,9 +191,16 @@ export function automationRunErrorText(
   if (run.error === null) {
     return null
   }
-  if (!isAutomationRunFailureCode(run.errorCode)) {
-    const blocked = BLOCKED_AGENT_ERROR.exec(run.error)
-    return blocked ? blockedAgentText(blocked[1], agentLabel) : run.error
+  if (isAutomationRunFailureCode(run.errorCode)) {
+    return COPY[run.errorCode](run.errorParams) ?? run.error
   }
-  return COPY[run.errorCode](run.errorParams) ?? run.error
+  if (run.errorCode == null) {
+    const blocked = BLOCKED_AGENT_ERROR.exec(run.error)
+    if (blocked) {
+      return blockedAgentText(blocked[1], agentLabel)
+    }
+    const legacy = readLegacyAutomationModelFailure(run.error)
+    return legacy ? modelUnavailableText(legacy.agent, legacy.model) : run.error
+  }
+  return run.error
 }

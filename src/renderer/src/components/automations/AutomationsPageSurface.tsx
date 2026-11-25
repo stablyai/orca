@@ -30,6 +30,7 @@ import { AutomationsPageFrame, AutomationsPageNoticeContext } from './Automation
 import { useAutomationsPageRouting } from './use-automations-page-routing'
 import { formatAutomationRunLabel } from './runs/automation-run-identity-label'
 import { automationRowHostLabel } from './listing/automation-list-host'
+import { useAutomationRunModelActions } from './runs/automation-run-model-actions'
 
 export function AutomationsPageSurface({
   controller
@@ -157,6 +158,7 @@ export function AutomationsPageSurface({
     (selectedRecoveryHost.stableRef.selector.kind === 'ssh' ||
       selectedRecoveryHost.stableRef.authority.kind === 'runtime')
 
+  const modelActions = useAutomationRunModelActions(controller, bots, selectedHostLabel)
   const pendingNavigation = store.pendingAutomationRunNavigation
   const renderPage = (): React.ReactNode => {
     // Why: Back/Forward to an automation resolves through pending navigation; until it lands,
@@ -255,6 +257,8 @@ export function AutomationsPageSurface({
               runActions.rerunAutomationRun(row, selectedAutomationRunPage)
             )
           }
+          {...modelActions}
+          onEdit={() => runSelectedRowAction((row) => void editorActions.openEditDialog(row))}
           onOpenWorkspace={() => openRunWorkspace(selectedAutomationRunPage)}
           onSignIn={
             canSignIn ? () => hostCatalog.recover('reconnect', selectedRecoveryHost) : undefined

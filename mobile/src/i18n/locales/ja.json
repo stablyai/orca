@@ -4323,7 +4323,10 @@
       "botsOff": "設定でボットがオフになっているため、Orca はこの実行をスキップしました。",
       "botMissing": "このオートメーションを実行するボットはもう存在しません。",
       "botFolderMissing": "ボットのフォルダーは利用できなくなりました。",
-      "botPaused": "{{bot}} は一時停止中のため、Orca はこの実行をスキップしました。"
+      "botPaused": "{{bot}} は一時停止中のため、Orca はこの実行をスキップしました。",
+      "agentModelUnavailable": "{{agent}} は {{model}} を使用できませんでした。",
+      "theAgent": "エージェント",
+      "selectedModel": "選択したモデル"
     },
     "eventsWontFire": "スケジュールでのみ実行されます：{{connectors}} コネクタが必要です",
     "wontFire": "実行されません：{{connectors}} コネクタが必要です"
