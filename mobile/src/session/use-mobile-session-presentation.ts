@@ -1,10 +1,7 @@
 import { useMemo } from 'react'
 import type { MobileAnimatedInterpolation } from '../platform/animated-handles'
-import {
-  classifyConnection,
-  isConnectionOutage,
-  verdictDisplayLabel
-} from '../transport/connection/connection-health'
+import { isConnectionOutage, verdictDisplayLabel } from '../transport/connection/connection-health'
+import { useRelayRecoveryStatus } from '../transport/connection/client-context-connection-metrics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useInitialSessionTerminalAutoCreate } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from '../transport/connection/mobile-session-connection-copy'
@@ -12,6 +9,7 @@ import type { MobileSessionBulkCloseModel } from './tabs/use-mobile-session-bulk
 import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
 import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
+import { sessionConnectionVerdict } from './session-connection-verdict'
 
 // The toast rises this far as it fades in; Reduce Motion keeps the fade alone.
 const TOAST_RISE_PX = 8
@@ -27,6 +25,8 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
   const t = useMobileTranslation()
   const {
     created,
+    hostId,
+    hostName,
     worktreeId,
     router,
     insets,
@@ -67,11 +67,14 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
   })
 
   // Offer explicit retry after reconnect backoff reaches 90s so recovery need not wait for the next attempt.
-  const connectionVerdict = classifyConnection({
+  const relayRecovery = useRelayRecoveryStatus(hostId)
+  const connectionVerdict = sessionConnectionVerdict({
     state: connState,
     reconnectAttempts,
     lastConnectedAt,
-    endpoint: hostEndpoint
+    endpoint: hostEndpoint,
+    hostName,
+    ...relayRecovery
   })
   const connectionEscalated = isConnectionOutage(connectionVerdict)
   const showConnectionRetry = connectionEscalated && forceReconnectHost !== null
