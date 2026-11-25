@@ -13,6 +13,7 @@ import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent
 import { createCodexJournalTranslator } from '../structured/journal/codex-structured-journal-translation'
 import {
   restateKeptCodexBackgroundWork,
+  seedKeptCodexCommandOutput,
   seedKeptCodexTurnOrdinals
 } from '../structured/threads/codex-kept-turn-ordinals'
 import { CodexBackgroundTaskTracker } from '../structured/background-work/codex-background-task-tracker'
@@ -270,7 +271,7 @@ describe('codex rows across a reattach', () => {
     expect(rows.get(saved[0]![0])).toContain('Hello world')
   })
 
-  it('a replay that starts mid-command streams onto its row and keeps the command', () => {
+  it('a replay that starts mid-command streams onto its row, keeping its command and earlier output', async () => {
     const rows = new Map<string, string>()
     const translatorFor = () =>
       createCodexJournalTranslator({
@@ -298,17 +299,35 @@ describe('codex rows across a reattach', () => {
     const first = translatorFor()
     send(first, 'turn/started', { turn: { id: 'turn-a' } })
     send(first, 'item/started', { item: { ...command, status: 'inProgress' } })
+    send(first, 'item/commandExecution/outputDelta', { itemId: 'cmd', delta: 'line-one\n' })
     first.flush()
-    const saved = [...rows.entries()].find(([, body]) => body.includes('seq 1 9'))
+    const saved = [...rows.entries()].find(([, body]) => body.includes('line-one'))
     expect(saved).toBeDefined()
     // The next launch replays from its cursor, past the command's start; Codex's history has it.
     const next = translatorFor()
     const running = readCodexThreadItem({ ...command, status: 'inProgress' })
-    next.seedRunningItems('t', 'turn-a', running ? [running] : [])
+    const identities = next.seedRunningItems('t', 'turn-a', running ? [running] : [])
+    const journal = {
+      reads: {
+        itemBody: async (key: string) => {
+          const body = rows.get(key)
+          return body ? JSON.parse(body) : null
+        }
+      }
+    }
+    await seedKeptCodexCommandOutput(next, journal, [
+      {
+        threadId: 't',
+        turnId: 'turn-a',
+        status: 'inProgress',
+        items: [],
+        running: [{ itemId: 'cmd', identity: identities[0]! }]
+      }
+    ])
     send(next, 'item/commandExecution/outputDelta', { itemId: 'cmd', delta: 'line-two\n' })
     next.flush()
     expect(rows.get(saved![0])).toContain('seq 1 9')
-    expect(rows.get(saved![0])).toContain('line-two')
+    expect(rows.get(saved![0])).toContain('line-one\\nline-two')
     send(next, 'item/completed', {
       item: { ...command, status: 'completed', aggregatedOutput: '1\n2\n3\n', exitCode: 0 }
     })
@@ -339,7 +358,7 @@ describe('codex rows across a reattach', () => {
       translator: {
         seedTurnOrdinals: (threadId, turnId, ids) =>
           ids.forEach((id) => ordinals.ordinalFor(threadId, turnId, id)),
-        seedRunningItems: () => {}
+        seedRunningItems: () => []
       },
       threadId: 'main',
       timeoutMs: 1_000

@@ -269,6 +269,13 @@ export function createCodexStructuredItemStreams(
       }
       return { handled: true, admission: { accepted: true } }
     },
+    seedText: (threadId, itemId, text) => {
+      const key = codexStructuredItemKey(threadId, itemId)
+      // The row already holds this text: it is where the stream resumes, not a change to save.
+      if (states.get(key) && !coalescer.snapshot(key) && coalescer.append(key, text)) {
+        checkpointLengths.set(key, text.length)
+      }
+    },
     forget: (threadId, itemId) => {
       const key = codexStructuredItemKey(threadId, itemId)
       forgetState(key)

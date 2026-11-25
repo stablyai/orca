@@ -1,6 +1,7 @@
 import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../../app-server/codex-app-server-connection'
 import {
   restateKeptCodexBackgroundWork,
+  seedKeptCodexCommandOutput,
   seedKeptCodexTurnOrdinals,
   type KeptCodexTurn
 } from '../threads/codex-kept-turn-ordinals'
@@ -182,6 +183,12 @@ export async function openCodexStructuredSession(
             error
           })
       }),
+      openInput.signal
+    )
+    current()
+    const journal = input.events?.journalHistory?.() ?? null
+    await waitForPromiseWithSignal(
+      seedKeptCodexCommandOutput(translator, journal, keptTurns),
       openInput.signal
     )
     current()
