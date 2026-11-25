@@ -25,8 +25,10 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
 import {
   isConnectionOutage,
+  verdictDisplayLabel,
   type ConnectionVerdict
 } from '../transport/connection/connection-health'
+import { useHostOfflineBanner } from '../components/host-connection/HostOfflineBanner'
 import { formatOfflineAsOfTime } from '../components/host-connection/offline-as-of-time'
 import type { HostScreenController } from './use-host-screen-controller'
 import { HostSharedLinksSheet } from './host-shared-links-sheet'
@@ -48,30 +50,48 @@ export function HostConnectionStatus({
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const { connectionVerdict, connState, hostDisplay, lastConnectedAt } = controller
+  const { client, catalog, connectionVerdict, connState, hostDisplay, lastConnectedAt } = controller
   // Why: a drop healed in a few seconds must not flash the host dot amber.
   const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
   const calmed = presentedConnState !== connState && !isErrorVerdict(connectionVerdict)
   const outage = isConnectionOutage(connectionVerdict)
-  const statusText =
-    outage && lastConnectedAt !== null
+  // When the shown rows were last live: the drop this document saw, else when they were read.
+  const offlineAsOf =
+    useHostOfflineBanner({
+      client,
+      connState,
+      lastConnectedAt,
+      outage,
+      forceReconnect: null,
+      hasData: true,
+      asOf: catalog.readAt
+    })?.asOf ?? null
+  // A relay's own reason (sign in, computer off) says more than a time.
+  const offlineSince =
+    outage && !connectionVerdict.detail && offlineAsOf !== null
       ? t('hostScreen.hostScreenHeader.offlineSince', 'Offline since {{time}}', {
-          time: formatOfflineAsOfTime(lastConnectedAt)
+          time: formatOfflineAsOfTime(offlineAsOf)
         })
+      : null
+  const statusText =
+    offlineSince !== null
+      ? outage && connectionVerdict.hint
+        ? verdictDisplayLabel({ ...connectionVerdict, label: offlineSince })
+        : offlineSince
       : connectionVerdict.kind === 'auth-failed'
         ? t('hostScreen.hostScreenHeader.notConnected', 'Not connected')
         : isErrorVerdict(connectionVerdict)
-          ? connectionVerdict.label
+          ? verdictDisplayLabel(connectionVerdict)
           : presentedConnState === 'connected'
             ? (hostDisplay.machineLine ??
               hostDisplay.descriptorLine ??
               t('connection.connectionHealth.connected', 'Connected'))
             : connectionVerdict.label
-  // An empty list offers Reconnect in its own body instead.
-  const reconnect =
-    withReconnect && outage && controller.sectionsResult.sections.length > 0
-      ? controller.reconnect
-      : null
+  // A list with nothing to show offers Reconnect in its own body instead.
+  const shownRows = controller.feed
+    ? controller.sectionsResult.sections.length
+    : controller.displayWorktrees.length
+  const reconnect = withReconnect && outage && shownRows > 0 ? controller.reconnect : null
   return (
     <>
       {calmed ? (

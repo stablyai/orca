@@ -86,12 +86,14 @@ export function HostWorkspaceList({
   const toast = useTransientToast()
   const { showToast } = toast
   // Notices and action errors are one-line toasts, not banners stacked over the title.
+  // A sheet over the list would hide the toast, so an error waits until the sheets close.
+  const sheetOpen = state.showWorkspaceOptions || state.actionTarget !== null
   useEffect(() => {
-    if (state.actionError !== '') {
+    if (state.actionError !== '' && !sheetOpen) {
       showToast(state.actionError)
       state.setActionError('')
     }
-  }, [state, showToast])
+  }, [state, showToast, sheetOpen])
   useEffect(() => {
     if (state.serverNotice) {
       showToast(state.serverNotice)
