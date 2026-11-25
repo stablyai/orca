@@ -8,12 +8,12 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
-import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   claudeBindingLabel,
-  hostClaudeAccounts
+  hostClaudeAccounts,
+  inheritedClaudeAccountGroupName
 } from '@/components/settings/repository/claude-account/claude-account-binding-options'
 
 export type ProjectGroupClaudeAccount = {
@@ -24,31 +24,6 @@ export type ProjectGroupClaudeAccount = {
   usage: ProviderRateLimits | null
   /** The nearest parent group whose account an unbound group's projects run on. */
   inheritedFrom: string | null
-}
-
-/** Name of the nearest local ancestor with its own binding, which an unbound group inherits. */
-function inheritedBindingGroupName(
-  groups: readonly ProjectGroup[],
-  groupId: string
-): string | null {
-  const local = new Map(
-    groups
-      .filter((group) => getRepoExecutionHostId(group) === 'local')
-      .map((group) => [group.id, group])
-  )
-  const seen = new Set([groupId])
-  // Why the seen set: a corrupt parent chain must not loop forever.
-  for (
-    let parent = local.get(local.get(groupId)?.parentGroupId ?? '');
-    parent && !seen.has(parent.id);
-    parent = local.get(parent.parentGroupId ?? '')
-  ) {
-    seen.add(parent.id)
-    if (parent.claudeAccount) {
-      return parent.name
-    }
-  }
-  return null
 }
 
 /** A saved account's last reading: the meter's own when it reads that account on the host. */
@@ -86,7 +61,7 @@ export function useProjectGroupClaudeAccount(
     )
   )
   const inheritedFrom = useAppStore((state) =>
-    inheritedBindingGroupName(state.projectGroups, groupId)
+    inheritedClaudeAccountGroupName(state.projectGroups, groupId)
   )
   const settings = useAppStore((state) => state.settings)
   const rateLimits = useAppStore((state) => state.rateLimits)

@@ -10,6 +10,7 @@ import { useAppStore } from '@/store'
 import { searchKeywords } from '../../search/settings-search-keywords'
 import type { SettingsSearchEntry } from '../../search/settings-search'
 import { ClaudeAccountBindingSelect } from './ClaudeAccountBindingSelect'
+import { inheritedClaudeAccountGroupName } from './claude-account-binding-options'
 
 type RepositoryClaudeAccountSectionProps = {
   repo: Repo
@@ -66,6 +67,12 @@ export function RepositoryClaudeAccountSection({
         )
       : undefined
   )
+  // An unbound group runs on its nearest bound parent's account, not the selection.
+  const inheritedFrom = useAppStore((state) =>
+    repo.projectGroupId
+      ? inheritedClaudeAccountGroupName(state.projectGroups, repo.projectGroupId)
+      : null
+  )
   const updateProjectGroup = useAppStore((state) => state.updateProjectGroup)
   const isLocal = isClaudeAccountBindableRepo(repo)
 
@@ -114,10 +121,18 @@ export function RepositoryClaudeAccountSection({
     )
   }
 
-  const followSelection = t(
-    'auto.components.settings.RepositoryClaudeAccountSection.followSelection',
-    'Follow the selected account'
-  )
+  const groupUnboundLabel = inheritedFrom
+    ? t(
+        'auto.components.sidebar.ProjectGroupClaudeAccount.useParentGroup',
+        'Use {{group}}’s account',
+        {
+          group: inheritedFrom
+        }
+      )
+    : t(
+        'auto.components.settings.RepositoryClaudeAccountSection.followSelection',
+        'Follow the selected account'
+      )
 
   return (
     <SearchableSetting
@@ -147,7 +162,7 @@ export function RepositoryClaudeAccountSection({
                 'auto.components.settings.RepositoryClaudeAccountSection.useGroup',
                 'Use the group’s account'
               )
-            : followSelection
+            : groupUnboundLabel
         }
         binding={repo.claudeAccount}
         accounts={accounts}
@@ -161,12 +176,18 @@ export function RepositoryClaudeAccountSection({
             'Default for the projects in {{group}}',
             { group: group.name }
           )}
-          unboundLabel={followSelection}
+          unboundLabel={groupUnboundLabel}
           binding={group.claudeAccount}
           accounts={accounts}
           disabled={saving}
           onChange={(binding) =>
-            void save(() => updateProjectGroup(group.id, { claudeAccount: binding }))
+            void save(() =>
+              updateProjectGroup(
+                group.id,
+                { claudeAccount: binding },
+                { hostId: getRepoExecutionHostId(group) }
+              )
+            )
           }
         />
       ) : null}

@@ -3,6 +3,8 @@ import type { ClaudeManagedAccount } from '../../../../../../shared/agent-accoun
 import type { ManagedAccountDisplayNames } from '../../../../../../shared/agent-accounts/managed-account-display-names'
 import { getManagedAccountDisplayName } from '../../../../../../shared/agent-accounts/managed-account-display-names'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { Translate } from '@/i18n/use-translate'
 
 // Why: Radix forbids empty item values, so "no binding" needs a sentinel.
@@ -53,4 +55,29 @@ export function claudeBindingLabel(
   return account
     ? claudeAccountName(account, names)
     : t('auto.components.settings.RepositoryClaudeAccountSection.missingAccount', 'Removed account')
+}
+
+/** Name of the nearest local ancestor with its own binding, which an unbound group inherits. */
+export function inheritedClaudeAccountGroupName(
+  groups: readonly ProjectGroup[],
+  groupId: string
+): string | null {
+  const local = new Map(
+    groups
+      .filter((group) => getRepoExecutionHostId(group) === 'local')
+      .map((group) => [group.id, group])
+  )
+  const seen = new Set([groupId])
+  // Why the seen set: a corrupt parent chain must not loop forever.
+  for (
+    let parent = local.get(local.get(groupId)?.parentGroupId ?? '');
+    parent && !seen.has(parent.id);
+    parent = local.get(parent.parentGroupId ?? '')
+  ) {
+    seen.add(parent.id)
+    if (parent.claudeAccount) {
+      return parent.name
+    }
+  }
+  return null
 }
