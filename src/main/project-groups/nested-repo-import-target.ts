@@ -4,6 +4,8 @@ import { listWorktreeGraph } from '../git/worktrees/catalog/worktree-scan-cache'
 
 export type NestedRepoImportTargetResolver = {
   resolveLocal: (repoPath: string) => Promise<string>
+  /** Checkouts sharing a resolved target's worktree graph; [] when Git could not prove one. */
+  getFamilyPaths: (targetPath: string) => readonly string[]
 }
 
 function findImportTarget(
@@ -28,6 +30,7 @@ function findImportTarget(
 async function resolveWithCache(
   repoPath: string,
   cache: Map<string, string>,
+  familyByTarget: Map<string, string[]>,
   readWorktreeGraph: (path: string) => Promise<GitWorktreeInfo[]>
 ): Promise<string> {
   const repoPathKey = normalizeRuntimePathForComparison(repoPath)
@@ -42,6 +45,7 @@ async function resolveWithCache(
       for (const graphPath of target.graphPaths) {
         cache.set(normalizeRuntimePathForComparison(graphPath), target.targetPath)
       }
+      familyByTarget.set(normalizeRuntimePathForComparison(target.targetPath), target.graphPaths)
       return target.targetPath
     }
   } catch {
@@ -53,9 +57,12 @@ async function resolveWithCache(
 
 export function createNestedRepoImportTargetResolver(): NestedRepoImportTargetResolver {
   const localCache = new Map<string, string>()
+  const familyByTarget = new Map<string, string[]>()
   return {
     resolveLocal: (repoPath) =>
-      resolveWithCache(repoPath, localCache, (path) => listWorktreeGraph(path))
+      resolveWithCache(repoPath, localCache, familyByTarget, (path) => listWorktreeGraph(path)),
+    getFamilyPaths: (targetPath) =>
+      familyByTarget.get(normalizeRuntimePathForComparison(targetPath)) ?? []
   }
 }
 

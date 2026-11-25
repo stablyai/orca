@@ -20,7 +20,10 @@ import {
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
-import { matchLinkedWorktreeMainCheckout } from '../../workspaces/catalog/linked-worktree-main-checkout'
+import {
+  matchCheckoutFamily,
+  readCheckoutFamilyMatch
+} from '../../workspaces/catalog/checkout-family'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
@@ -100,22 +103,20 @@ export class RuntimeRepositoryRegistrationController {
       sameHostRepos().find(
         (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
       )
-    const isMainCheckout = matchLinkedWorktreeMainCheckout(gitInfo)
     const existing =
       findAtPath() ??
       (await findProjectAtSameRealPath(sameHostRepos(), repoPath)) ??
-      sameHostRepos().find(isMainCheckout)
+      sameHostRepos().find(matchCheckoutFamily(gitInfo))
     if (existing) {
       return this.reuseExisting(store, existing, executionHostId)
     }
     // This controller validated/read the path locally; runtime: is the paired-client address, not another machine.
-    const detected = await detectRepoLocalMetadata({
-      repoPath,
-      kind,
-      executionHostId: LOCAL_EXECUTION_HOST_ID
-    })
-    // A concurrent add of the same folder can finish while the awaits above are pending.
-    const raceWinner = findAtPath() ?? sameHostRepos().find(isMainCheckout)
+    const [isSameFamily, detected] = await Promise.all([
+      readCheckoutFamilyMatch(gitInfo),
+      detectRepoLocalMetadata({ repoPath, kind, executionHostId: LOCAL_EXECUTION_HOST_ID })
+    ])
+    // A concurrent add of the same folder or a sibling worktree can finish while the awaits above are pending.
+    const raceWinner = findAtPath() ?? sameHostRepos().find(isSameFamily)
     if (raceWinner) {
       return this.reuseExisting(store, raceWinner, executionHostId)
     }
@@ -132,8 +133,7 @@ export class RuntimeRepositoryRegistrationController {
     }
     store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
-    this.invalidate(repo.id)
-    bumpWorktreeScanGeneration(repo.path)
+    this.invalidate(repo)
     return store.getRepo(repo.id) ?? repo
   }
 
@@ -149,12 +149,10 @@ export class RuntimeRepositoryRegistrationController {
       const adopted =
         store.updateRepo(existing, { executionHostId }) ??
         ({ ...existing, executionHostId } as Repo)
-      this.invalidate(existing.id)
-      bumpWorktreeScanGeneration(adopted.path)
+      this.invalidate(adopted)
       return adopted
     }
-    this.invalidate(existing.id)
-    bumpWorktreeScanGeneration(existing.path)
+    this.invalidate(existing)
     return existing
   }
 
@@ -264,7 +262,7 @@ export class RuntimeRepositoryRegistrationController {
     store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
     invalidateAuthorizedRootsCache()
-    this.invalidate(repo.id)
+    this.invalidate(repo)
     return { repo: store.getRepo(repo.id) ?? repo }
   }
 
@@ -315,9 +313,11 @@ export class RuntimeRepositoryRegistrationController {
     return store
   }
 
-  private invalidate(repoId: string): void {
+  /** Also fence in-flight host scans so the next catalog read sees this registration. */
+  private invalidate(repo: Pick<Repo, 'id' | 'path'>): void {
     this.deps.invalidateResolvedWorktrees()
-    this.deps.invalidateWorktreeScan(repoId)
+    this.deps.invalidateWorktreeScan(repo.id)
+    bumpWorktreeScanGeneration(repo.path)
     this.deps.notifyReposChanged()
   }
 }

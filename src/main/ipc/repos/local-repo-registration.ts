@@ -9,7 +9,10 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host/execution-host'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
-import { matchLinkedWorktreeMainCheckout } from '../../workspaces/catalog/linked-worktree-main-checkout'
+import {
+  matchCheckoutFamily,
+  readCheckoutFamilyMatch
+} from '../../workspaces/catalog/checkout-family'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
@@ -63,7 +66,7 @@ export async function addLocalRepoFromPath(
     return { repo: existingAtRealPath, alreadyExisted: true }
   }
 
-  const isMainCheckout = matchLinkedWorktreeMainCheckout(gitInfo)
+  const isMainCheckout = matchCheckoutFamily(gitInfo)
   const trackedMainRepo = store
     .getRepos()
     .find((repo) => !repo.connectionId && isMainCheckout(repo))
@@ -71,18 +74,21 @@ export async function addLocalRepoFromPath(
     return { repo: trackedMainRepo, alreadyExisted: true }
   }
 
-  const detected = await detectRepoLocalMetadata({
-    repoPath: resolvedPath,
-    kind: repoKind,
-    executionHostId: LOCAL_EXECUTION_HOST_ID
-  })
-  // Another registration can finish while icon discovery is pending.
+  const [isSameCheckoutFamily, detected] = await Promise.all([
+    readCheckoutFamilyMatch(gitInfo),
+    detectRepoLocalMetadata({
+      repoPath: resolvedPath,
+      kind: repoKind,
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
+  ])
+  // Another registration, including a sibling worktree's, can finish while these reads are pending.
   const raceWinner = store.getRepos().find((repo) => {
     if (repo.connectionId) {
       return false
     }
     const repoPathKey = normalizeRuntimePathForComparison(repo.path)
-    return repoPathKey === pathKey || repoPathKey === resolvedPathKey || isMainCheckout(repo)
+    return repoPathKey === pathKey || repoPathKey === resolvedPathKey || isSameCheckoutFamily(repo)
   })
   if (raceWinner) {
     return { repo: raceWinner, alreadyExisted: true }
