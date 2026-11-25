@@ -28446,7 +28446,8 @@
       "delete": "Sohbeti sil",
       "open": "Aç",
       "actions": "Sohbet işlemleri",
-      "needsYouCount": "{{count}} sizi bekliyor"
+      "needsYouCount": "{{count}} sizi bekliyor",
+      "hideOlder": "Eski kayıtları gizle"
     },
     "needs": {
       "chat": "{{name}} ile sohbetiniz",

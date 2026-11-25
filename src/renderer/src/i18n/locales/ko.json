@@ -27920,7 +27920,9 @@
       "delete": "채팅 삭제",
       "open": "열기",
       "actions": "채팅 작업",
-      "needsYouCount": "확인 필요 {{count}}개"
+      "needsYouCount": "확인 필요 {{count}}개",
+      "older": "이전 항목 {{count}}개 보기",
+      "hideOlder": "이전 항목 숨기기"
     },
     "needs": {
       "chat": "{{name}} 채팅",

@@ -25962,7 +25962,9 @@
       "untitled": "Novo chat",
       "loading": "Carregando chats…",
       "readFailed": "Não foi possível ler os chats deste bot.",
-      "searchRetry": "Tentar novamente"
+      "searchRetry": "Tentar novamente",
+      "older": "Mostrar {{count}} mais antigos",
+      "hideOlder": "Ocultar mais antigos"
     },
     "needs": {
       "chat": "Seu chat com {{name}}",

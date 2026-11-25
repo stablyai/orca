@@ -26111,7 +26111,9 @@
       "untitled": "新しいチャット",
       "searchRetry": "再試行",
       "loading": "チャットを読み込み中…",
-      "readFailed": "このボットのチャットを読み取れませんでした。"
+      "readFailed": "このボットのチャットを読み取れませんでした。",
+      "older": "古い{{count}}件を表示",
+      "hideOlder": "古い項目を隠す"
     },
     "needs": {
       "chat": "{{name}} とのチャット",

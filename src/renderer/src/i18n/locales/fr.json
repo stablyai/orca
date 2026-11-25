@@ -25443,7 +25443,9 @@
       "untitled": "Nouveau chat",
       "searchRetry": "Réessayer",
       "loading": "Chargement des chats…",
-      "readFailed": "Impossible de lire les chats de ce bot."
+      "readFailed": "Impossible de lire les chats de ce bot.",
+      "older": "Afficher {{count}} plus anciens",
+      "hideOlder": "Masquer les plus anciens"
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",
