@@ -754,8 +754,10 @@
 3 src/main/managed-server/lifecycle/orcad-runtime-maintenance.ts
 1 src/main/managed-server/lifecycle/orcad-runtime-status.ts
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
+1 src/main/mcp-servers/agent-files/mcp-agent-file-sync.ts # resolves this app's CLI launcher once when the sync starts (the Linux packaged shim check)
+1 src/main/mcp-servers/mcp-host-list-launch.ts # mcpServersForLaunch moved from mcp-host-list.ts: reads the host list per chat launch and per orca mcp connect
 3 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
-9 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does; +1 mcpServersForLaunch reads it per chat launch
+8 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 1 src/main/mcp-servers/session-mcp-launch.ts # the bot launch read of its tools file, moved here from bot-tools-file.ts
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts

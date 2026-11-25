@@ -1,7 +1,7 @@
 import { findNodeAtLocation, parseTree, type ParseError } from 'jsonc-parser'
 
 /** The offset of the first character after spaces and comments from `index`. */
-function skipTrivia(text: string, index: number): number {
+export function skipTrivia(text: string, index: number): number {
   let at = index
   while (at < text.length) {
     if (/\s/.test(text[at]!)) {

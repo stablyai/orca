@@ -5,6 +5,7 @@ import type { McpServer } from '../../../../shared/mcp-servers/mcp-servers'
 import {
   McpServerAdd,
   McpServerAgentFilesAllow,
+  McpServerConnect,
   McpServerDiscover,
   McpServerImport,
   McpServerProblems,
@@ -39,6 +40,7 @@ import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
 import { mcpHostListFolder } from '../../../mcp-servers/mcp-host-list-folder'
 import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
+import { mcpServerConnection } from '../../../mcp-servers/mcp-server-connection'
 import { defineMethod, type RpcContext } from '../core'
 import { botToolServerOf, toolsHomeFor } from './bots-tools'
 import {
@@ -244,6 +246,22 @@ export const MCP_SERVER_METHODS = [
         context,
         async () => ({ agentFiles: await setMcpAgentFileAllowed(params.agent, params.allowed) }),
         true
+      )
+  }),
+  defineMethod({
+    // `orca mcp connect` in Grok's, Cursor's and Droid's own MCP files. The answer carries the
+    // relay token or a command's secret env, so this host's own CLI is the only caller it serves.
+    name: 'mcpServers.connect',
+    permission: 'workspace',
+    params: McpServerConnect,
+    handler: (params, context) =>
+      onHost(context, () =>
+        mcpServerConnection(context.runtime, {
+          ...params,
+          ...(context.pairedDeviceId !== undefined
+            ? { pairedDeviceId: context.pairedDeviceId }
+            : {})
+        })
       )
   }),
   defineMethod({
