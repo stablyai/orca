@@ -21872,8 +21872,6 @@
         "cleared_other": "워커 {{count}}개를 지웠습니다",
         "stopAll": "모두 중지",
         "clearFailed": "실패한 워커 지우기",
-        "pillLabel_one": "워커 {{count}}개, 최근: {{title}}",
-        "pillLabel_other": "워커 {{count}}개, 최근: {{title}}",
         "unlisted": "백그라운드 작업 실행 중",
         "unlistedDetail": "일부 백그라운드 작업은 여기에 표시되지 않습니다",
         "unread": "워커를 불러오지 못했습니다",

@@ -13,6 +13,7 @@ import {
   toggle
 } from './fixture-session.mjs'
 import { runLoadingAndLayerChecks } from './loading-and-layer-checks.mjs'
+import { runChipNameChecks } from './chip-name-checks.mjs'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 
@@ -118,30 +119,10 @@ await check('opens and folds after a held gesture that ended outside the card', 
   })
 )
 
-for (const [count, label] of [
-  ['oneFolded720', /^1 worker, latest: /],
-  ['fourOpen720', /^4 workers, latest: /],
-  ['twentyOpen720', /^20 workers, latest: /]
-]) {
-  await check(`names the count and the most relevant worker on the pill (${count})`, () =>
-    scene(count, {}, async (page) => {
-      const name = await toggle(page).getAttribute('aria-label')
-      assert(label.test(name), `pill label "${name}"`)
-      const total = Number(name.match(/^(\d+)/)[1])
-      const text = (await toggle(page).textContent()) ?? ''
-      const shown = (await expanded(page)) ? /^Workers\s*(\d+)$/ : /^(\d+) workers?$/
-      assert(Number(text.match(shown)?.[1]) === total, `pill shows "${text}"`)
-      const box = await toggle(page).boundingBox()
-      const tall = (await expanded(page)) ? 30 : 26
-      assert(Math.abs(box.height - tall) <= 1, `pill is ${box.height}px tall`)
-    })
-  )
-}
+await runChipNameChecks({ check, scene, assert })
 
 await check('a worker waiting on you leads the pill and the card, then failed, running, done', () =>
   scene('askOpen720', {}, async (page) => {
-    const title = await toggle(page).getAttribute('aria-label')
-    assert(title.includes('latest: Approve: run the migration'), `pill says "${title}"`)
     const order = (await rows(page)).map((row) => row.state)
     assert(order[0] === 'needs-you', `first row is ${order[0]}`)
     const rank = (state) =>
@@ -155,12 +136,16 @@ await check('a worker waiting on you leads the pill and the card, then failed, r
       assert(!text.includes(banned), `card shows "${banned}"`)
     }
     await shot(page, 'ask-open')
+    await toggle(page).click()
+    const title = await toggle(page).getAttribute('aria-label')
+    assert(title.includes('latest: Approve: run the migration'), `pill says "${title}"`)
   })
 )
 
 await check('updates the pill count live as workers start and finish', () =>
   scene('fourOpen720', {}, async (page) => {
-    const name = async () => toggle(page).getAttribute('aria-label')
+    const name = async () =>
+      ((await toggle(page).textContent()) ?? '').replace(/^Workers\s*(\d+)$/, '$1 workers')
     await page.evaluate(() => window.__workerDockHarness.start('Fresh worker'))
     await page.waitForTimeout(150)
     assert((await name()).startsWith('5 workers'), `after start: ${await name()}`)
@@ -488,12 +473,10 @@ await check('Show in dock again restores the acknowledged failure', () =>
     await row.waitFor({ state: 'detached' })
     await page.getByRole('button', { name: 'Show in dock again' }).click()
     // The toast is outside the card, so pressing it folds the card; the row is back on reopening.
-    await page.waitForFunction(() =>
-      document
-        .querySelector('[data-worker-dock-pill]')
-        ?.getAttribute('aria-label')
-        ?.startsWith('20 ')
-    )
+    await page.waitForFunction(() => {
+      const chip = document.querySelector('[data-worker-dock-pill]')
+      return /(^|\D)20(\D|$)/.test(chip?.getAttribute('aria-label') ?? chip?.textContent ?? '')
+    })
     if (!(await expanded(page))) {
       await toggle(page).click()
     }
@@ -515,7 +498,8 @@ await check('Jump to latest rests in the transcript, clear above the chip row', 
     await jump.waitFor()
     const [a, b] = await Promise.all([jump.boundingBox(), toggle(page).boundingBox()])
     const gap = b.y - (a.y + a.height)
-    assert(gap >= 8, `Jump to latest sits ${gap}px above the pill`)
+    // Jump keeps its 12px rest in the transcript; the chip's row starts 8px below that.
+    assert(Math.abs(gap - 20) <= 1, `Jump to latest sits ${gap}px above the pill`)
     const transcript = await page.locator('[data-fixture-transcript]').boundingBox()
     assert(b.y >= transcript.y + transcript.height, 'the chip is drawn over the transcript')
     await shot(page, 'jump-stacked')

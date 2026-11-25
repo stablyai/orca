@@ -22802,8 +22802,6 @@
         "cleared_other": "{{count}} çalışan temizlendi",
         "stopAll": "Tümünü durdur",
         "clearFailed": "Başarısızları temizle",
-        "pillLabel_one": "{{count}} çalışan, en son: {{title}}",
-        "pillLabel_other": "{{count}} çalışan, en son: {{title}}",
         "unlistedDetail": "Bazı arka plan işleri burada listelenmiyor",
         "unlisted": "Arka plan işi çalışıyor",
         "unread": "Çalışanlar yüklenemedi",

@@ -1,6 +1,6 @@
 // Checks for rows whose details load late, monitoring with no listed rows, dialogs a row opens,
 // and Jump to latest over the open card. Imported by run.mjs.
-import { card, events, expanded, focusedRow, toggle } from './fixture-session.mjs'
+import { card, events, expanded, focusedRow, rows, toggle } from './fixture-session.mjs'
 
 const rowOf = (id) => `[data-worker-dock-row="${id}"]`
 const focusedIs = (page, id) =>
@@ -27,26 +27,51 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
             .evaluate((root, value) => root.setAttribute('data-native-chat-dock-fit', value), fit)
           await page.waitForTimeout(100)
         }
-        const width = await toggle(page).evaluate((chip) => {
+        const { width, fitNow } = await toggle(page).evaluate((chip) => {
           const label = chip.querySelector('[data-worker-dock-pill-title]')
-          return chip.getBoundingClientRect().width - label.getBoundingClientRect().width
+          return {
+            width: chip.getBoundingClientRect().width - label.getBoundingClientRect().width,
+            fitNow:
+              chip.closest('[data-native-chat-root]').getAttribute('data-native-chat-dock-fit') ??
+              ''
+          }
         })
+        assert(fitNow === fit, `dock fit read "${fitNow}", not "${fit}"`)
         // Glyph, gap, padding and border only.
         assert(width <= 44, `the chip is ${width}px wider than its label`)
       })
     )
   }
 
+  await check('a panel opened under a resting pointer keeps its row order as states change', () =>
+    scene('twentyFolded720', {}, async (page) => {
+      const box = await toggle(page).boundingBox()
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+      await card(page).waitFor()
+      await page.waitForTimeout(150)
+      const before = (await rows(page)).map((row) => row.id)
+      await page.evaluate(() => window.__workerDockHarness.fail('Late failure'))
+      await page.waitForTimeout(200)
+      const after = (await rows(page)).map((row) => row.id)
+      // A failure sorts before running rows; held, it joins the end instead.
+      assert(
+        before.every((id, index) => after[index] === id),
+        `rows re-sorted under the pointer: ${before.slice(0, 5)} -> ${after.slice(0, 5)}`
+      )
+    })
+  )
+
   await check('incomplete monitoring with no listed rows keeps the pill and Stop all', () =>
     scene('unlistedOpen720', {}, async (page) => {
-      const title = await toggle(page).getAttribute('aria-label')
-      assert(title === 'Background work running', `pill says "${title}"`)
       assert(!(await card(page).textContent()).includes('unavailable'), 'card says unavailable')
       await page.getByRole('button', { name: 'Stop all' }).click()
       assert(
         (await events(page)).some((event) => event.action === 'stop-all'),
         'no Stop all'
       )
+      await toggle(page).click()
+      const title = await toggle(page).textContent()
+      assert(title === 'Background work running', `pill says "${title}"`)
     })
   )
 
@@ -148,7 +173,8 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
         await toggle(page).click()
         await page.waitForTimeout(200)
         const [b, p] = await Promise.all([jump.boundingBox(), toggle(page).boundingBox()])
-        assert(p.y - (b.y + b.height) >= 8, 'Jump did not settle back clear of the chip')
+        const rest = p.y - (b.y + b.height)
+        assert(Math.abs(rest - 20) <= 1, `Jump settled ${rest}px above the chip, not 20px`)
         await jump.click()
         await page.waitForTimeout(200)
         const atEnd = await page.evaluate(() => {

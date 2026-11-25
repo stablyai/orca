@@ -304,6 +304,10 @@ export function WorkerDockRoster(props: {
           action={<WorkerDockStopAll stopAll={props.stopAll} />}
           onToggle={() => {
             setHeld(null)
+            // The panel opens under a pointer already inside its box, so no pointerenter follows.
+            if (!props.expanded && root.current?.matches(':hover')) {
+              hold()
+            }
             props.onExpandedChange(!props.expanded)
           }}
           onKeyDown={(event) => {

@@ -3134,8 +3134,6 @@
         "cleared_other": "Cleared {{count}} workers",
         "newQuestions_one": "{{count}} new worker question waiting on you",
         "newQuestions_other": "{{count}} new worker questions waiting on you",
-        "pillLabel_one": "{{count}} worker, latest: {{title}}",
-        "pillLabel_other": "{{count}} workers, latest: {{title}}",
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers"
       },

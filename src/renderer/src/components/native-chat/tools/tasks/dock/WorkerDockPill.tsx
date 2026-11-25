@@ -64,18 +64,14 @@ export function WorkerDockPill({
         data-worker-dock-pill=""
         aria-expanded={expanded}
         aria-controls={expanded ? listId : undefined}
+        // Open, the header's own text names it; folded, the name starts with the chip's text.
         aria-label={
-          total > 0
-            ? t(
-                'components.native-chat.workerDock.pillLabel',
-                '{{count}} workers, latest: {{title}}',
-                {
-                  count: total,
-                  title: latest,
-                  defaultValue_one: '{{count}} worker, latest: {{title}}'
-                }
-              )
-            : label
+          expanded || total === 0
+            ? undefined
+            : t('components.native-chat.workerDock.chipLabel', '{{label}}, latest: {{title}}', {
+                label,
+                title: latest
+              })
         }
         className={cn(
           'flex shrink-0 items-center gap-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
