@@ -406,11 +406,19 @@ test.describe('Move a terminal pane to a new tab', () => {
     const moved = await splitWithMarker(orcaPage)
     const before = await readTabs(orcaPage)
 
-    // Unbound by default: the chord moves nothing.
+    // Unbound by default: the chord moves nothing. Like any unbound key it reaches the shell (xterm
+    // encodes it as an escape sequence), so the line is abandoned before the shell is used again,
+    // and a command run in the source pane proves the pane stayed and its shell is clean.
     await focusActiveTerminalInput(orcaPage)
     await orcaPage.keyboard.press(MOVE_PANE_CHORD)
     await orcaPage.waitForTimeout(500)
     expect(await readTabs(orcaPage)).toEqual(before)
+    await orcaPage.keyboard.press('Control+c')
+    await runInShell(
+      orcaPage,
+      { tabId: moved.sourceTabId, leafId: moved.leafId, ptyId: moved.ptyId },
+      'MOVE_UNBOUND'
+    )
 
     await orcaPage.evaluate(
       (binding) =>
@@ -426,6 +434,8 @@ test.describe('Move a terminal pane to a new tab', () => {
       await orcaPage.keyboard.press(MOVE_PANE_CHORD)
       await orcaPage.waitForTimeout(500)
       expect((await readLeafHome(orcaPage, moved.leafId))?.tabId).toBe(newTabId)
+      // It reached the shell like an unbound key; leave the line clean for later tests.
+      await orcaPage.keyboard.press('Control+c')
     } finally {
       await orcaPage.evaluate(() =>
         window.__store!.getState().resetKeybindingOverride('terminal.movePaneToNewTab')
