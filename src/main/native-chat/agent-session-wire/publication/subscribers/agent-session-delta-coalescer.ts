@@ -144,19 +144,10 @@ export function createAgentSessionDeltaCoalescer(
   const ownTail = (stream: Stream): void => {
     const owned = stream.ownedChunks
     if (owned < stream.chunks.length) {
-      const raw = stream.chunks.slice(owned).join('')
-      // A trailing high surrogate stays raw with the next delta, so truncation, which encodes each
-      // chunk alone, still sees its pair whole.
-      const split = /[\uD800-\uDBFF]$/.test(raw)
-      const tail = ownRetainedString(split ? raw.slice(0, -1) : raw)
+      const tail = ownRetainedString(stream.chunks.slice(owned).join(''))
       stream.chunks.length = owned
-      if (tail) {
-        stream.chunks.push(tail)
-      }
+      stream.chunks.push(tail)
       stream.ownedChunks = stream.chunks.length
-      if (split) {
-        stream.chunks.push(raw.slice(-1))
-      }
     }
   }
 

@@ -24,6 +24,8 @@ export function appendWithinUtf8ByteLimit(
   return truncateStreamPrefix(current, delta, maxBytes)
 }
 
+const HIGH_SURROGATE_AT_END = /[\uD800-\uDBFF]$/
+
 function truncateStreamPrefix(
   current: string[],
   delta: string,
@@ -57,16 +59,23 @@ function truncateStreamPrefix(
 
 function writeStreamPrefix(buffer: Buffer, chunks: string[], delta: string): number {
   let end = 0
-  for (const chunk of chunks) {
+  // A pair split across chunks is written whole, so a valid character never becomes two U+FFFD.
+  let carry = ''
+  for (let i = 0; i <= chunks.length; i += 1) {
     if (end === buffer.length) {
       return end
     }
-    const written = buffer.write(chunk, end, buffer.length - end, 'utf8')
+    let piece = carry + (i < chunks.length ? chunks[i] : delta)
+    carry = ''
+    if (i < chunks.length && HIGH_SURROGATE_AT_END.test(piece)) {
+      carry = piece.slice(-1)
+      piece = piece.slice(0, -1)
+    }
+    const written = buffer.write(piece, end, buffer.length - end, 'utf8')
     end += written
-    // Independent chunk encoding preserves split-surrogate replacement.
-    if (written < Buffer.byteLength(chunk, 'utf8')) {
+    if (written < Buffer.byteLength(piece, 'utf8')) {
       return end
     }
   }
-  return end + buffer.write(delta, end, buffer.length - end, 'utf8')
+  return end
 }
