@@ -207,11 +207,12 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
       '[history] sleep retains the live terminal; the final checkpoint did not commit:',
       sessionId
     )
-    // A failed Sleep must not leave a heavy full-snapshot retry running every interval, but the
-    // live marker stays: records drained into a failed take exist only in the emulator until a
-    // later pass commits a live snapshot.
+    // Drained records may now exist only in the live emulator; retry with bounded cooldown.
     this.sessionsNeedingFullCheckpoint.delete(sessionId)
+    this.sessionsNeedingLiveCheckpoint.add(sessionId)
     this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
+    this.lastFullCheckpointAt.set(sessionId, Date.now())
+    this.markSessionDirty(sessionId)
     throw new FinalCheckpointPreservationError(sessionId)
   }
 

@@ -152,7 +152,38 @@ describe('Sleep must not retire a terminal whose final history checkpoint did no
     expect(internals.sessionsNeedingLiveCheckpoint.has(id)).toBe(true)
   })
 
-  it('commits a live snapshot on the next pass after a retryable final write', async () => {
+  function checkpointRecoveryState() {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: declared protected state exposed to drive real periodic recovery passes.
+    return adapter as unknown as {
+      checkpointDirtySessions: () => Promise<void>
+      lastFullCheckpointAt: Map<string, number>
+      dirtySessionVersions: Map<string, number>
+      sessionsNeedingLiveCheckpoint: Set<string>
+      stopCheckpointTimer: () => void
+    }
+  }
+
+  it('recovers drained output from the live screen after a final write throws', async () => {
+    const id = await spawnWithOutput('throw-then-commit-session', 'BASELINE-MARKER\r\n')
+    await checkpointRecoveryState().checkpointDirtySessions()
+    subprocesses.at(-1)!.emitData('DRAINED-TERMINAL-MARKER\r\n')
+    const checkpointSpy = vi
+      .spyOn(adapter.getHistoryManager()!, 'checkpoint')
+      .mockRejectedValueOnce(new Error('injected checkpoint failure after drain'))
+
+    await expect(
+      adapter.shutdown(id, { immediate: true, keepHistory: true })
+    ).rejects.toBeInstanceOf(FinalCheckpointPreservationError)
+    expect(adapter.hasPty(id)).toBe(true)
+    checkpointSpy.mockRestore()
+
+    await adapter.shutdown(id, { immediate: true, keepHistory: true })
+
+    expect(adapter.hasPty(id)).toBe(false)
+    expect(await onDisk(id)).toContain('DRAINED-TERMINAL-MARKER')
+  })
+
+  it('keeps empty periodic passes dirty until a live snapshot recovers rejected Sleep', async () => {
     const id = await spawnWithOutput('retry-then-commit-session', 'LATEST-TERMINAL-MARKER\r\n')
     const checkpointSpy = mockFinalCheckpoint('retryable')
 
@@ -165,7 +196,24 @@ describe('Sleep must not retire a terminal whose final history checkpoint did no
     }
     expect(internals.sessionsNeedingLiveCheckpoint.has(id)).toBe(true)
 
+    const state = checkpointRecoveryState()
+    state.stopCheckpointTimer()
+    await state.checkpointDirtySessions()
+    expect(state.dirtySessionVersions.has(id)).toBe(true)
+    expect(await onDisk(id)).not.toContain('LATEST-TERMINAL-MARKER')
+    state.lastFullCheckpointAt.set(id, 0)
+    await state.checkpointDirtySessions()
+    expect(state.dirtySessionVersions.has(id)).toBe(true)
+    expect(state.sessionsNeedingLiveCheckpoint.has(id)).toBe(true)
+    expect(state.lastFullCheckpointAt.get(id)).toBeGreaterThan(0)
+
     checkpointSpy.mockRestore()
+    state.lastFullCheckpointAt.set(id, 0)
+    await state.checkpointDirtySessions()
+    expect(adapter.hasPty(id)).toBe(true)
+    expect(state.dirtySessionVersions.has(id)).toBe(false)
+    expect(state.sessionsNeedingLiveCheckpoint.has(id)).toBe(false)
+    expect(await onDisk(id)).toContain('LATEST-TERMINAL-MARKER')
     await adapter.shutdown(id, { immediate: true, keepHistory: true })
 
     expect(adapter.hasPty(id)).toBe(false)

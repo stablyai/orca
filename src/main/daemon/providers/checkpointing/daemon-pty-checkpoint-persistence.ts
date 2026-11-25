@@ -33,9 +33,16 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       }
       return this.historyManager ? 'uncaptured' : 'unavailable'
     }
-    if (opts.final || this.sessionsNeedingFullCheckpoint.has(sessionId)) {
+    if (
+      opts.final ||
+      this.sessionsNeedingFullCheckpoint.has(sessionId) ||
+      this.sessionsNeedingLiveCheckpoint.has(sessionId)
+    ) {
       if (!opts.final && this.isFullCheckpointCoolingDown(sessionId)) {
         return 'deferred'
+      }
+      if (this.sessionsNeedingLiveCheckpoint.has(sessionId)) {
+        this.lastFullCheckpointAt.set(sessionId, Date.now())
       }
       // Drain and snapshot atomically so warm reattach cannot append records already in the checkpoint.
       const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
@@ -49,7 +56,9 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       }
       // 'committed' is the only outcome that does not settle its own markers in the take.
       this.sessionsNeedingFullCheckpoint.delete(sessionId)
-      return settledCheckpointOutcome(checkpoint)
+      return this.sessionsNeedingLiveCheckpoint.has(sessionId)
+        ? 'deferred'
+        : settledCheckpointOutcome(checkpoint)
     }
     const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
       sessionId
@@ -143,7 +152,6 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       }
       if (checkpoint === 'unavailable') {
         this.sessionsNeedingFullCheckpoint.delete(sessionId)
-        this.sessionsNeedingLiveCheckpoint.delete(sessionId)
         this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
         return { checkpoint, snapshot: take.snapshot }
       }
