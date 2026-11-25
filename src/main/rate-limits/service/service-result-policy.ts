@@ -6,7 +6,7 @@ import { isCodexUsageSignInRequired } from '../../../shared/agent-accounts/codex
 import {
   isClaudeUsageWaitingForClaude,
   isCodexUsageWaitingForCodex
-} from '../../../shared/agent-usage/status-copy/usage-error-copy'
+} from '../../../shared/agent-usage/status-copy/usage-waiting-for-cli'
 import { RateLimitServiceFetchControl } from './service-fetch-control'
 import {
   LONG_STALE_THRESHOLD_MS,

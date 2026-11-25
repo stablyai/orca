@@ -4,6 +4,7 @@ import { describeOwnerNotSetUp, getOwnerNotSetUpLabel } from './owner-not-set-up
 import { formatRateLimitUserFacingError } from './rate-limit-user-facing-error'
 import { isCodexUsageSignInRequired } from '../../agent-accounts/codex/codex-auth-errors'
 import type { UsageCopyTranslate } from './usage-copy-translate'
+import { isClaudeUsageWaitingForClaude, isCodexUsageWaitingForCodex } from './usage-waiting-for-cli'
 
 /** The fields the copy reads; strings stay open so a phone can pass a newer host's kind, which gets the generic copy. */
 export type UsageStatusCopySource = {
@@ -63,15 +64,7 @@ function getDelegatedCliRefreshProvider(
   return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
 }
 
-/** An idle login's access token lapsed, not the login: Claude refreshes it the next time it runs. */
-export function isClaudeUsageWaitingForClaude(p: UsageStatusCopySource): boolean {
-  return p.provider === 'claude' && p.usageMetadata?.failureKind === 'stale-token'
-}
-
-/** An unselected Codex login's access token lapsed; Codex renews it the next time it runs there. */
-export function isCodexUsageWaitingForCodex(p: UsageStatusCopySource): boolean {
-  return p.provider === 'codex' && p.usageMetadata?.failureKind === 'delegated-refresh-required'
-}
+export { isClaudeUsageWaitingForClaude, isCodexUsageWaitingForCodex }
 
 export function getProviderUsageStatusLabel(
   p: UsageStatusCopySource,
