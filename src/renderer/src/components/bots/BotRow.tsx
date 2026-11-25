@@ -60,7 +60,7 @@ export function BotRow({
 }: BotRowProps): React.JSX.Element {
   const t = useTranslate()
   const details = useBotRowDetails(bot, home)
-  const { workspaceId, status, hostLabel, offline, description, line, limit, now } = details
+  const { workspaceId, status, hostLabel, down, offline, description, line, limit, now } = details
   const isUnread = home.isUnread && !offline
   const upNextNew = useBotUpNextUnseen(bot)
   const age = offline ? null : botRowLineAge(line, now)
@@ -118,7 +118,7 @@ export function BotRow({
             fallback={description}
             unread={isUnread}
             now={now}
-            disconnected={offline}
+            down={down}
             leading={hostPill}
             trailing={
               upNextNew > 0 && !offline ? (

@@ -3,8 +3,19 @@ import { useSyncExternalStore } from 'react'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { readBotHostState, subscribeToBotChanges } from './bot-catalog-snapshot'
 
-/** Whether the host's bots show from its last read because it is disconnected. */
-export function useBotHostOffline(hostId: ExecutionHostId): boolean {
-  const read = (): boolean => readBotHostState(hostId) === 'offline'
+/** Why a listed host's bots can't be reached now: away, or a shared agent's first link still being
+ *  made; null while live (or not listed). */
+export type BotHostDown = 'connecting' | 'offline' | null
+
+export function useBotHostDown(hostId: ExecutionHostId): BotHostDown {
+  const read = (): BotHostDown => {
+    const state = readBotHostState(hostId)
+    return state === 'live' || state === null ? null : state
+  }
   return useSyncExternalStore(subscribeToBotChanges, read, read)
+}
+
+/** Whether the host's bots show from its last read because it can't be reached now. */
+export function useBotHostOffline(hostId: ExecutionHostId): boolean {
+  return useBotHostDown(hostId) !== null
 }

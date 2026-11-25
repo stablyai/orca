@@ -18,7 +18,8 @@ import {
   sharedBotStreamAnswer,
   sharedBotUnshared
 } from './shared-bot-host-answers'
-import { nextPairingStep, sharedBotsPollMs, type MineShare } from './shared-bot-pairing'
+import { nextPairingStep, sharedBotAccepting, sharedBotsPollMs } from './shared-bot-pairing'
+import type { MineShare } from './shared-bot-pairing'
 import { SerialRerun } from '../../../shared/concurrency/serial-rerun'
 import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
 import type { SharedBotHomes } from './shared-bot-home'
@@ -114,14 +115,16 @@ export class SharedBotHosts {
   }
 
   views(): SharedBotHostsState['hosts'] {
-    return this.listed().map((entry) =>
-      sharedBotHostView(entry, {
+    return this.listed().map((entry) => {
+      const link = this.linkFor(entry).current()
+      return sharedBotHostView(entry, {
         homeWorkspaceId: entry.homeWorkspaceId ?? null,
-        link: this.linkFor(entry).current(),
+        link,
+        accepting: sharedBotAccepting(entry, link, this.now()),
         holds: entry.hostKey !== undefined,
         held: this.held.views(entry)
       })
-    )
+    })
   }
 
   /** The kept shares, but for those the cloud's last answer no longer lists. */
@@ -172,7 +175,7 @@ export class SharedBotHosts {
     }
     this.publish()
     if (!this.stopped) {
-      const waitMs = sharedBotsPollMs(this.store.list(), (entry) => ({
+      const waitMs = sharedBotsPollMs(this.now(), this.store.list(), (entry) => ({
         link: this.linkFor(entry).current(),
         waiting: entry.held.some((held) => this.held.isWaiting(held))
       }))

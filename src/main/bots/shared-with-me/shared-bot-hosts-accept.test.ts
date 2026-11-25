@@ -3,7 +3,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from './shared-bot-hosts'
 import { newSharedBotHostEntry, SharedBotHostStore } from './shared-bot-host-store'
@@ -30,12 +30,19 @@ const offered: MineShare = {
 }
 
 /** The account's shared hosts in `dir`, over a cloud that lists `offered` and records each call. */
-function hosts(dir = mkdtempSync(join(tmpdir(), 'shared-bot-accept-'))) {
+function hosts(
+  dir = mkdtempSync(join(tmpdir(), 'shared-bot-accept-')),
+  now: () => number = () => 1_000
+) {
   dirs.push(dir)
   const accepts: string[] = []
   const declines: string[] = []
+  const reads = { count: 0 }
   const cloud: SharedBotsCloud = {
-    mine: async () => ({ ok: true, value: { v: 1, shares: [offered] } }),
+    mine: async () => {
+      reads.count += 1
+      return { ok: true, value: { v: 1, shares: [offered] } }
+    },
     accept: async (shareId) => {
       accepts.push(shareId)
       return { ok: true, value: { status: 'queued' } }
@@ -53,9 +60,9 @@ function hosts(dir = mkdtempSync(join(tmpdir(), 'shared-bot-accept-'))) {
     platform: NODE_RELAY_CLIENT_PLATFORM,
     publish: () => {},
     homes: memorySharedBotHomes(dir).homes,
-    now: () => 1_000
+    now
   })
-  return { service, accepts, declines, dir }
+  return { service, accepts, declines, dir, reads }
 }
 
 describe('a share offered to this account', () => {
@@ -86,6 +93,35 @@ describe('a share offered to this account', () => {
     expect(service.store.get('share-1')?.acceptedAt).toBe(1_000)
     expect(service.views().map((view) => view.shareId)).toEqual(['share-1'])
     expect(service.state().requests).toEqual([])
+  })
+
+  it("reads the share list again within seconds of Accept, for the host's offer", async () => {
+    vi.useFakeTimers()
+    try {
+      const { service, reads } = hosts(undefined, () => Date.now())
+      await service.refresh()
+      await service.accept('share-1')
+      const afterAccept = reads.count
+      await vi.advanceTimersByTimeAsync(5_000)
+      service.stop()
+      expect(reads.count).toBeGreaterThan(afterAccept)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reads as connecting from Accept until its link is made or two minutes pass', async () => {
+    let now = 1_000
+    const { service } = hosts(undefined, () => now)
+    await service.refresh()
+    expect(service.views()).toEqual([])
+    await service.accept('share-1')
+    service.stop()
+    expect(service.views()[0]?.accepting).toBe(true)
+    now += 119_000
+    expect(service.views()[0]?.accepting).toBe(true)
+    now += 1_000
+    expect(service.views()[0]?.accepting).toBe(false)
   })
 
   it('never pairs once declined, tells the cloud, and is not offered again after a restart', async () => {
