@@ -43,6 +43,19 @@ afterEach(() => {
 })
 
 describe("a host's MCP server list", () => {
+  // A repo's "Add a server for this repo": a second call to limit it could fail and leave it on everywhere.
+  it('stores the workspaces an add names with the server, in the same write', async () => {
+    const folder = tempDir('mcp-host-list-')
+    const onlyHere = { later: false, on: ['repo-1'], off: [] }
+    const added = await addMcpServer(
+      { name: 'postgres', command: 'npx', args: ['-y', 'server-postgres'] },
+      { nameGiven: true, workspaces: onlyHere },
+      folder
+    )
+    expect(added.workspaces).toEqual(onlyHere)
+    expect((await listMcpServers(folder))[0]?.workspaces).toEqual(onlyHere)
+  })
+
   it('keeps each server’s id, agents and workspaces and the agent-file consent through edits, and header values sealed', async () => {
     const folder = tempDir('mcp-host-list-')
     const added = await addMcpServer(

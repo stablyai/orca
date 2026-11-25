@@ -4419,6 +4419,12 @@
                 "message": "Claude の使用状況は、次に Claude を実行したときに更新されます。"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Codex の実行時に更新",
+                "message": "Codex の使用状況は、次に Codex を実行したときに更新されます。"
+              }
+            },
             "1804cd8c3f": "サインインを更新中",
             "bf2e739f18": "サインインを利用できません",
             "f8f0f9d8cc": "ネットワークの問題",
@@ -5194,7 +5200,13 @@
         "github": "Issue と PR でのメンションとイベント",
         "slack": "メッセージとメンション",
         "linear": "割り当てられた Issue とメンション",
-        "google": "あなたとして Gmail、カレンダー、ドライブを使う"
+        "google": "あなたとして Gmail、カレンダー、ドライブを使う",
+        "clickup": "タスク、リスト、ドキュメントを管理",
+        "airtable": "ベース、テーブル、レコードを照会・編集",
+        "todoist": "タスクを追加、整理、完了",
+        "zapier": "Zapier で設定したアプリでアクションを実行",
+        "granola": "会議メモと文字起こしを検索",
+        "intercom": "会話、連絡先、記事を検索"
       },
       "composioLine": {
         "outlook": "メール、カレンダー、連絡先",
@@ -5243,6 +5255,9 @@
       "continuesAt": "{{time}} に再開",
       "continues": "{{time}} に再開",
       "hitLimit": "上限に到達 · {{time}} にリセット"
+    },
+    "new": {
+      "purposeTooLongForHost": "{{host}} の Orca では、用途は 200 文字までです。短くするか、{{host}} の Orca を更新してください。"
     }
   },
   "sidebar": {

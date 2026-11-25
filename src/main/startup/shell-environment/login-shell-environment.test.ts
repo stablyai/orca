@@ -1,8 +1,15 @@
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import type * as hydrateShellPath from './hydrate-shell-path'
+import { withLaunchPath } from './hydrate-shell-path'
 import { captureLoginShellEnvironment } from './login-shell-environment'
+
+vi.mock('./hydrate-shell-path', async (actual) => {
+  const module = await actual<typeof hydrateShellPath>()
+  return { ...module, withLaunchPath: vi.fn(module.withLaunchPath) }
+})
 
 const launchPath = process.env.PATH
 let dir: string | null = null
@@ -37,3 +44,16 @@ it.skipIf(process.platform === 'win32')(
     expect(segments).toContain(orcaSeeded)
   }
 )
+
+it.skipIf(process.platform === 'win32')('a cached read builds no probe env', async () => {
+  vi.mocked(withLaunchPath).mockClear()
+  const spawner = vi.fn(async () => ({ PATH: '/captured' }))
+  const shellOverride = '/bin/cached-read-shell'
+  expect((await captureLoginShellEnvironment({ shellOverride, spawner })).status).toBe('captured')
+  expect(vi.mocked(withLaunchPath)).toHaveBeenCalledTimes(1)
+
+  await captureLoginShellEnvironment({ shellOverride, spawner })
+  await captureLoginShellEnvironment({ shellOverride, spawner, cachedOnly: true })
+  expect(spawner).toHaveBeenCalledTimes(1)
+  expect(vi.mocked(withLaunchPath)).toHaveBeenCalledTimes(1)
+})

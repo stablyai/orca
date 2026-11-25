@@ -77,6 +77,44 @@ function ExternalMenuItem({
 
 export type SetupMilestones = { done: number; total: number }
 
+/** Help's Milestones row (opens the setup guide). `badge` shows done/total as text (the rail's account menu). */
+export function MilestonesMenuItem({
+  milestones,
+  progress = 'ring'
+}: {
+  milestones: SetupMilestones
+  progress?: 'ring' | 'badge'
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <DropdownMenuItem
+      onSelect={() =>
+        useAppStore.getState().openModal('setup-guide', { telemetrySource: 'help_menu' })
+      }
+    >
+      <img
+        src={logo}
+        alt=""
+        aria-hidden="true"
+        className="size-3.5 object-contain invert opacity-55 dark:invert-0"
+      />
+      {t('auto.components.sidebar.SidebarSettingsHelpMenu.f8a2c91d4e', 'Milestones')}
+      {progress === 'badge' ? (
+        <span className="ml-auto rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground tabular-nums">
+          {milestones.done}/{milestones.total}
+        </span>
+      ) : (
+        <SetupGuideProgressRing
+          done={milestones.done}
+          total={milestones.total}
+          sizeClassName="size-4"
+          className="ml-auto"
+        />
+      )}
+    </DropdownMenuItem>
+  )
+}
+
 /** Help's menu rows and feedback dialog, so the same Help can open from its own button or as a More submenu. */
 export type HelpMenuController = {
   items: React.ReactNode
@@ -84,9 +122,14 @@ export type HelpMenuController = {
   handleMenuOpenChange: (open: boolean) => void
 }
 
-export function useHelpMenuController(milestones: SetupMilestones | null): HelpMenuController {
+/** `grouped`: links in one group, then updates + restart (the rail's account menu, which has its own groups above). */
+export type HelpMenuDividers = 'default' | 'grouped'
+
+export function useHelpMenuController(
+  milestones: SetupMilestones | null,
+  dividers: HelpMenuDividers = 'default'
+): HelpMenuController {
   const t = useTranslate()
-  const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -160,9 +203,8 @@ export function useHelpMenuController(milestones: SetupMilestones | null): HelpM
     void window.api.updater.check(getUpdateCheckClickOptions(modifiers))
   }
 
-  const openMilestones = (): void => {
-    openModal('setup-guide', { telemetrySource: 'help_menu' })
-  }
+  // Dividers that only the standalone Help menu shows.
+  const innerSeparator = dividers === 'default' ? <DropdownMenuSeparator /> : null
 
   return {
     items: (
@@ -171,28 +213,12 @@ export function useHelpMenuController(milestones: SetupMilestones | null): HelpM
           <Keyboard className="size-3.5" />
           {t('auto.components.sidebar.SidebarSettingsHelpMenu.e565171a7c', 'Keyboard Shortcuts')}
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        {innerSeparator}
         <DropdownMenuItem onSelect={handleOpenFeedback}>
           <MessageSquareText className="size-3.5" />
           {t('auto.components.sidebar.SidebarSettingsHelpMenu.4cf5b868d7', 'Send Feedback')}
         </DropdownMenuItem>
-        {milestones ? (
-          <DropdownMenuItem onSelect={openMilestones}>
-            <img
-              src={logo}
-              alt=""
-              aria-hidden="true"
-              className="size-3.5 object-contain invert opacity-55 dark:invert-0"
-            />
-            {t('auto.components.sidebar.SidebarSettingsHelpMenu.f8a2c91d4e', 'Milestones')}
-            <SetupGuideProgressRing
-              done={milestones.done}
-              total={milestones.total}
-              sizeClassName="size-4"
-              className="ml-auto"
-            />
-          </DropdownMenuItem>
-        ) : null}
+        {milestones ? <MilestonesMenuItem milestones={milestones} /> : null}
         <DropdownMenuItem
           className="whitespace-nowrap"
           onClick={handleShowOnboarding}
@@ -211,7 +237,7 @@ export function useHelpMenuController(milestones: SetupMilestones | null): HelpM
           url={CHANGELOG_URL}
           icon={<ScrollText className="size-3.5" />}
         />
-        <DropdownMenuSeparator />
+        {innerSeparator}
         <ExternalMenuItem
           label={t('auto.components.sidebar.SidebarSettingsHelpMenu.5687ab246a', 'GitHub')}
           url={GITHUB_URL}
@@ -241,7 +267,7 @@ export function useHelpMenuController(milestones: SetupMilestones | null): HelpM
           )}
           {t('auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee', 'Check for Updates')}
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        {innerSeparator}
         <DropdownMenuItem onSelect={handleRestartOrca} disabled={isRestartingOrca}>
           <RotateCw className="size-3.5" />
           {t('auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1', 'Restart Orca')}
