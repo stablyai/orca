@@ -18,6 +18,8 @@ import {
   type AiVaultSessionLimit
 } from '../session-list/ai-vault-session-limit'
 
+const MAX_COLLAPSED_GROUPS = 512
+
 export const AI_VAULT_VIEW_OPTIONS_STORAGE_KEY = 'orca.aiVault.viewOptions.v1'
 
 export type AiVaultViewOptions = {
@@ -27,6 +29,7 @@ export type AiVaultViewOptions = {
   group: AiVaultGroup
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
+  collapsedGroups: string[]
 }
 
 type AiVaultViewOptionsStorage = {
@@ -41,7 +44,8 @@ export function createDefaultAiVaultViewOptions(): AiVaultViewOptions {
     searchSort: DEFAULT_AI_VAULT_SEARCH_SORT,
     group: DEFAULT_AI_VAULT_GROUP,
     hideEmptySessions: DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
-    sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
+    sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT,
+    collapsedGroups: []
   }
 }
 
@@ -83,8 +87,34 @@ export function normalizeAiVaultViewOptions(value: unknown): AiVaultViewOptions 
       typeof record.hideEmptySessions === 'boolean'
         ? record.hideEmptySessions
         : DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
-    sessionLimit: normalizeAiVaultSessionLimit(record.sessionLimit)
+    sessionLimit: normalizeAiVaultSessionLimit(record.sessionLimit),
+    collapsedGroups: Array.isArray(record.collapsedGroups)
+      ? [
+          ...new Set(
+            record.collapsedGroups.filter(
+              (key): key is string => typeof key === 'string' && key.length > 0
+            )
+          )
+        ].slice(-MAX_COLLAPSED_GROUPS)
+      : []
   }
+}
+
+export function toggleAiVaultCollapsedGroup(
+  current: ReadonlySet<string>,
+  key: string
+): ReadonlySet<string> {
+  const next = new Set(current)
+  if (next.has(key)) {
+    next.delete(key)
+    return next
+  }
+  next.add(key)
+  const oldest = next.values().next().value
+  if (next.size > MAX_COLLAPSED_GROUPS && oldest !== undefined) {
+    next.delete(oldest)
+  }
+  return next
 }
 
 function getRendererStorage(): AiVaultViewOptionsStorage | null {

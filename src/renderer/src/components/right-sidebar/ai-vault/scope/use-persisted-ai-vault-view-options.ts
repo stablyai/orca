@@ -11,6 +11,7 @@ import {
   enabledAiVaultAgents,
   readAiVaultViewOptions,
   writeAiVaultViewOptions,
+  toggleAiVaultCollapsedGroup,
   type AiVaultViewOptions
 } from './ai-vault-view-options-persistence'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
@@ -47,6 +48,21 @@ function updateOptions(update: AiVaultViewOptionsUpdate): void {
   writeAiVaultViewOptions(candidate)
   for (const listener of listeners) {
     listener()
+  }
+}
+
+function togglePersistedGroup(key: string): void {
+  updateOptions((current) => ({
+    ...current,
+    collapsedGroups: [...toggleAiVaultCollapsedGroup(new Set(current.collapsedGroups), key)]
+  }))
+}
+
+export function usePersistedAiVaultGroupCollapse() {
+  const { collapsedGroups } = useSyncExternalStore(subscribe, getOptions)
+  return {
+    collapsedGroups: useMemo(() => new Set(collapsedGroups), [collapsedGroups]),
+    toggleGroup: togglePersistedGroup
   }
 }
 
@@ -152,6 +168,7 @@ export function usePersistedAiVaultViewOptions(localAgents?: readonly AiVaultAge
   const resetViewOptions = useCallback(() => {
     updateOptions((current) => ({
       ...createDefaultAiVaultViewOptions(),
+      collapsedGroups: current.collapsedGroups,
       ...(local ? { disabledAgents: current.disabledAgents } : {})
     }))
     if (local) {

@@ -2,25 +2,11 @@ import { useState, useSyncExternalStore } from 'react'
 import type { AiVaultScope } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { DEFAULT_AI_VAULT_SCOPE } from './ai-vault-scope-state'
 
-const MAX_COLLAPSED_GROUPS = 512
+import { toggleAiVaultCollapsedGroup } from './ai-vault-view-options-persistence'
 
 type AiVaultPanelTransientState = {
   preferredScope: AiVaultScope
   collapsedGroups: ReadonlySet<string>
-}
-
-function toggleCollapsedGroup(current: ReadonlySet<string>, key: string): ReadonlySet<string> {
-  const next = new Set(current)
-  if (next.has(key)) {
-    next.delete(key)
-    return next
-  }
-  next.add(key)
-  const oldest = next.values().next().value
-  if (next.size > MAX_COLLAPSED_GROUPS && oldest !== undefined) {
-    next.delete(oldest)
-  }
-  return next
 }
 
 function createPanelState() {
@@ -47,7 +33,10 @@ function createPanelState() {
       }
     },
     toggleGroup: (key: string) =>
-      update({ ...snapshot, collapsedGroups: toggleCollapsedGroup(snapshot.collapsedGroups, key) })
+      update({
+        ...snapshot,
+        collapsedGroups: toggleAiVaultCollapsedGroup(snapshot.collapsedGroups, key)
+      })
   }
 }
 
