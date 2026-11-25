@@ -4,14 +4,14 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { E2EEChannel } from './e2ee-channel'
+import { E2EEChannel } from '../../../main/runtime/rpc/mobile/e2ee/e2ee-channel'
 import {
   sendWebSocketRequest,
   sendWebSocketRequestWithStatusPreflight
-} from '../../../../../cli/runtime/connection/websocket-transport'
-import { replayOnlyRecipientCheck } from '../../../../../cli/orchestration/recovery/replay-only-recipient'
-import { configureRemoteRuntimeE2EEV2HostLatch } from '../../../../../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
-import type { PairedRuntimeConnection } from '../../../../../shared/remote-runtime/pairing/paired-runtime-connection'
+} from './websocket-transport'
+import { replayOnlyRecipientCheck } from '../../orchestration/recovery/replay-only-recipient'
+import { configureRemoteRuntimeE2EEV2HostLatch } from '../../../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 type Host = {
   connection: PairedRuntimeConnection
