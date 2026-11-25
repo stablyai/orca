@@ -1,64 +1,61 @@
 import type { MobileNativeChatSendErrorReporter } from './delivery/use-mobile-native-chat-send-error'
-import type { MobileStructuredSendConfirmation } from './delivery/mobile-structured-send-recorded-read'
-import type { AgentSessionDeliveryFact } from '../../../../../src/shared/agent-session/requests/structured-agent-session-send-settlement'
+import type {
+  MobileStructuredSendConfirmation,
+  MobileStructuredSendRecord
+} from './delivery/mobile-structured-send-recorded-read'
+import {
+  structuredAgentSessionReadCoversSend,
+  type AgentSessionDeliveryFact
+} from '../../../../../src/shared/agent-session/requests/structured-agent-session-send-settlement'
+import type { AgentJournalCursor } from '../../../../../src/shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { handedOffQueuedMessageIds } from '../../../../../src/shared/agent-session/view/structured-agent-session-draft-hand-off'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../../src/shared/agent-session/requests/structured-agent-session-send-evidence'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import type { UnconfirmedSendDeadlines } from './delivery/unconfirmed-send-deadlines'
 import { readWholeAgentSessionFailureFact } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { structuredAgentSessionRejectionParts } from '../../../../../src/shared/agent-session/failures/structured-agent-session-rejection-words'
 import { mobileAgentSessionWriteNoticeText } from '../agent-session/agent-session-write-notice-copy'
 import {
   readMobileNativeChatInFlightStructuredSession,
-  mobileRecoveryQueueOwns,
+  markMobileNativeChatInFlightUnconfirmed,
+  mobileNativeChatInFlightClaim,
+  readMobileNativeChatInFlightSend,
   releaseMobileNativeChatInFlightSends,
-  settleMobileNativeChatInFlightSend,
   settleRecordedMobileNativeChatInFlightSends
 } from './delivery/mobile-native-chat-in-flight-sends'
+import { UNCONFIRMED_SEND_MESSAGE } from './delivery/use-mobile-native-chat-unconfirmed-sends'
 
 export function settleMobileInstructionRecovery(
   sessionId: string | null,
   submissions: readonly AgentSessionDeliveryFact[],
   onSendError: MobileNativeChatSendErrorReporter,
-  queuedMessageIds: readonly string[]
-): void {
-  if (!sessionId || submissions.length === 0) {
+  queuedMessageIds: readonly string[],
+  ids?: readonly string[]
+): Set<string> | undefined {
+  if (!sessionId || (!submissions.length && !queuedMessageIds.length)) {
     return
   }
-  const sends = readMobileNativeChatInFlightStructuredSession(sessionId)
-  if (sends.length === 0) {
+  const sends = ids ?? readMobileNativeChatInFlightStructuredSession(sessionId).map(({ id }) => id)
+  if (!sends.length) {
     return
   }
-  const byId = new Map(submissions.map((submission) => [submission.clientMessageId, submission]))
-  const queued = new Set(queuedMessageIds)
-  for (const send of sends) {
-    const submission = send.clientMessageId && byId.get(send.clientMessageId)
-    if (
-      !submission ||
-      submission.dispatchState === 'pending' ||
-      submission.dispatchState === 'unknown'
-    ) {
+  const settled = settleRecordedMobileNativeChatInFlightSends(sends, submissions, queuedMessageIds)
+  for (const submission of submissions) {
+    if (submission.dispatchState !== 'rejected' || !settled.has(submission.clientMessageId)) {
       continue
     }
     const fact = readWholeAgentSessionFailureFact(submission.rejection)
-    if (submission.dispatchState === 'rejected' && fact?.instructionRecovery) {
-      if (!queued.has(submission.clientMessageId) && !mobileRecoveryQueueOwns(submission, queued)) {
-        continue
-      }
-      settleMobileNativeChatInFlightSend(send.id, 'sent')
+    if (fact?.instructionRecovery) {
       const message = mobileAgentSessionWriteNoticeText(
         structuredAgentSessionRejectionParts(submission.reason, 'send', fact, {
           agentName: 'Codex'
         })
       )
       onSendError(message, { announceOnly: true })
-    } else {
-      settleMobileNativeChatInFlightSend(
-        send.id,
-        submission.dispatchState === 'accepted' ||
-          queued.has(submission.clientMessageId) ||
-          mobileRecoveryQueueOwns(submission, queued)
-          ? 'sent'
-          : 'kept'
-      )
     }
   }
+  return settled
 }
 
 export function confirmMobileRecordedRecovery({
@@ -66,8 +63,8 @@ export function confirmMobileRecordedRecovery({
   clientMessageId,
   inFlightIds,
   handBack,
-  asking,
-  forget,
+  checked,
+  forgetLocalEcho,
   readDelivery,
   sessionId,
   onSendError
@@ -75,9 +72,9 @@ export function confirmMobileRecordedRecovery({
   confirm: MobileStructuredSendConfirmation | null
   clientMessageId: string
   inFlightIds: () => string[]
-  handBack: () => void
-  asking: Set<string>
-  forget: (ids: ReadonlySet<string>) => void
+  handBack: (savedIds: readonly string[]) => void
+  checked: Map<string, boolean>
+  forgetLocalEcho: (id: string) => void
   readDelivery: () => {
     submissions: readonly AgentSessionDeliveryFact[]
     queuedMessageIds: readonly string[]
@@ -85,40 +82,93 @@ export function confirmMobileRecordedRecovery({
   sessionId: string | null
   onSendError: MobileNativeChatSendErrorReporter
 }): void {
-  if (asking.has(clientMessageId)) {
+  if (checked.get(clientMessageId) || (!confirm && checked.has(clientMessageId))) {
     return
   }
-  const returnIfUnowned = () => {
-    const current = readDelivery()
-    if (
-      current &&
-      !current.submissions.some((entry) => entry.clientMessageId === clientMessageId) &&
-      !current.queuedMessageIds.includes(clientMessageId)
-    ) {
-      handBack()
+  checked.set(clientMessageId, Boolean(confirm))
+  const stillClaimed = mobileNativeChatInFlightClaim(inFlightIds())
+  const settle = (onHost?: MobileStructuredSendRecord) => {
+    const ids = stillClaimed()
+    if (!ids.length) {
+      return
     }
-  }
-  const asked = confirm?.(clientMessageId)
-  if (!asked) {
-    returnIfUnowned()
-    releaseMobileNativeChatInFlightSends(inFlightIds())
-    return
-  }
-  asking.add(clientMessageId)
-  void asked.then((onHost) => {
-    asking.delete(clientMessageId)
-    if (onHost.recorded) {
+    if (onHost?.recorded) {
       const facts =
         onHost.submission?.clientMessageId === clientMessageId
           ? [onHost.submission]
           : (readDelivery()?.submissions ?? [])
       const queuedMessageIds = onHost.ownedByQueue ? [clientMessageId] : []
-      settleMobileInstructionRecovery(sessionId, facts, onSendError, queuedMessageIds)
-      settleRecordedMobileNativeChatInFlightSends(inFlightIds(), facts, true, queuedMessageIds)
-      forget(new Set([clientMessageId]))
-    } else if (onHost.confirmedAbsent) {
-      returnIfUnowned()
+      settleMobileInstructionRecovery(sessionId, facts, onSendError, queuedMessageIds, ids)
+      markMobileNativeChatInFlightUnconfirmed(ids)
+      forgetLocalEcho(clientMessageId)
+    } else {
+      const confirmedAbsent = onHost?.confirmedAbsent
+      const current = confirmedAbsent && readDelivery()
+      if (
+        current &&
+        !ids.some((id) => readMobileNativeChatInFlightSend(id)?.recorded) &&
+        !current.submissions.some((entry) => entry.clientMessageId === clientMessageId) &&
+        !current.queuedMessageIds.some((id) => id === clientMessageId || ids.includes(id))
+      ) {
+        handBack(ids)
+      } else {
+        markMobileNativeChatInFlightUnconfirmed(
+          ids,
+          confirmedAbsent
+            ? undefined
+            : () => {
+                forgetLocalEcho(clientMessageId)
+                return onSendError(UNCONFIRMED_SEND_MESSAGE)
+              }
+        )
+      }
     }
-    releaseMobileNativeChatInFlightSends(inFlightIds())
-  })
+    releaseMobileNativeChatInFlightSends(ids)
+  }
+  if (confirm) {
+    void confirm(clientMessageId).then(settle, () => settle())
+  } else {
+    settle()
+  }
+}
+
+export function reconcileMobileStructuredSendDelivery(
+  sends: readonly StructuredAgentSessionOptimisticMessage[],
+  cursor: AgentJournalCursor | null | undefined,
+  submissions: readonly AgentJournalSubmission[],
+  queuedMessageIds: readonly string[],
+  sessionId: string | null,
+  onSendError: MobileNativeChatSendErrorReporter,
+  holds: UnconfirmedSendDeadlines<string>,
+  forget: (ids: ReadonlySet<string>) => void
+): void {
+  const settled = settleMobileInstructionRecovery(
+    sessionId,
+    submissions,
+    onSendError,
+    queuedMessageIds
+  )
+  settled?.forEach(holds.cancel)
+  if (!sends.length) {
+    return
+  }
+  const recorded = submissions.filter(
+    (entry) => entry.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
+  )
+  const observed = new Set([
+    ...(settled ?? []),
+    ...queuedMessageIds,
+    ...handedOffQueuedMessageIds(recorded),
+    ...recorded.map(({ clientMessageId }) => clientMessageId)
+  ])
+  const echoes = new Set<string>()
+  for (const send of sends) {
+    const id = send.clientMessageId
+    if (observed.has(id) || structuredAgentSessionReadCoversSend(cursor, send.recordedCursor)) {
+      echoes.add(id)
+    }
+  }
+  if (echoes.size) {
+    forget(echoes)
+  }
 }

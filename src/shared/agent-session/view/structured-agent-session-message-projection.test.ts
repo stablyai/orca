@@ -146,17 +146,91 @@ it('keeps an uncertain retry visible without calling that attempt unsent', () =>
     retryOfClientMessageId: KEPT_ID,
     rejection: undefined
   })
-  expect(
-    projectStructuredAgentSessionMessages(
-      [userItem(KEPT_ID, 'the kept words', 1), userItem('uncertain-b', 'the kept words', 3)],
-      [],
-      [a, b]
-    )
-  ).toEqual([
+  const messages = projectStructuredAgentSessionMessages(
+    [userItem(KEPT_ID, 'the kept words', 1), userItem('uncertain-b', 'the kept words', 3)],
+    [],
+    [a, b]
+  )
+  expect(messages).toEqual([
     expect.objectContaining({ id: agentJournalSubmissionKey(KEPT_ID), unsent: true }),
     expect.objectContaining({
       id: agentJournalSubmissionKey('uncertain-b'),
       deliveryState: 'unknown'
     })
   ])
+  expect(messages[1].unsent).not.toBe(true)
+})
+
+it('shows the rejected retry when the loaded original is owned by a card', () => {
+  const rejection = agentSessionFailureFact('startFailed', {
+    instructionRecovery: 'timeout',
+    neverReachedAgent: true
+  })
+  const original = rejected({ rejection, keptAsQueuedMessageId: 'returned-root' })
+  const retry = rejected({
+    clientMessageId: 'retry-b',
+    retryOfClientMessageId: KEPT_ID,
+    submittedAt: 3,
+    rejection
+  })
+  expect(
+    projectStructuredAgentSessionMessages(
+      [userItem(KEPT_ID, 'same message', 1), userItem('retry-b', 'same message', 3)],
+      [],
+      [original, retry]
+    )
+  ).toEqual([expect.objectContaining({ id: agentJournalSubmissionKey('retry-b'), unsent: true })])
+})
+
+it('removes the Send action for an off-page rejected retry that a later copy replaces', () => {
+  const retry = rejected({
+    clientMessageId: 'retry-b',
+    retryOfClientMessageId: KEPT_ID,
+    resolvedAt: 4
+  })
+  const copy = rejected({
+    clientMessageId: 'later-copy',
+    dispatchState: 'accepted',
+    rejection: undefined,
+    submittedAt: 5
+  })
+  expect(
+    projectStructuredAgentSessionMessages(
+      [userItem('retry-b', 'same message', 3), userItem('later-copy', 'same message', 5)],
+      [],
+      [retry, copy]
+    ).map(({ id }) => id)
+  ).toEqual([agentJournalSubmissionKey('later-copy')])
+})
+
+it('uses a newer confirmed retry over a stale loaded rejection and keeps an active retry pending', () => {
+  const rejection = agentSessionFailureFact('startFailed', {
+    instructionRecovery: 'timeout',
+    neverReachedAgent: true
+  })
+  const original = rejected({ rejection })
+  const retry = rejected({
+    clientMessageId: 'retry-b',
+    retryOfClientMessageId: KEPT_ID,
+    submittedAt: 3,
+    resolvedAt: 4,
+    rejection
+  })
+  const items = [userItem(KEPT_ID, 'same message', 1), userItem('retry-b', 'same message', 3)]
+  const accepted = projectStructuredAgentSessionMessages(
+    items,
+    [],
+    [{ ...original, retryLineage: { ...retry, dispatchState: 'accepted', resolvedAt: 5 } }, retry]
+  )
+  expect(accepted).toEqual([expect.objectContaining({ id: agentJournalSubmissionKey('retry-b') })])
+  expect(accepted[0].unsent).not.toBe(true)
+  const pending = projectStructuredAgentSessionMessages(
+    items,
+    [],
+    [original, { ...retry, dispatchState: 'pending', resolvedAt: null, rejection: undefined }]
+  )
+  expect(pending).toEqual([
+    expect.objectContaining({ id: agentJournalSubmissionKey('retry-b'), deliveryState: 'pending' })
+  ])
+  expect(pending[0].unsent).not.toBe(true)
 })

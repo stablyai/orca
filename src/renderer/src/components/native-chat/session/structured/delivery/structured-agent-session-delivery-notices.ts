@@ -4,7 +4,10 @@ import {
   type AgentSessionFailureFact
 } from '../../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureStatedByRow } from '../../../../../../../shared/agent-session/failures/agent-session-visible-failures'
-import { classifyDispatchRejection } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import {
+  classifyDispatchRejection,
+  dispatchWasWithdrawn
+} from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { agentJournalSubmissionKey } from '../../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionRejectionParts } from '../../../../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
@@ -31,6 +34,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
   onRetry?: (submission: AgentJournalSubmission, bodyClientMessageId: string) => void
   itemIds?: ReadonlySet<string>
   commandItemIds?: ReadonlySet<string>
+  clearSequences?: readonly number[]
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, submissions } = args
   let byId: Map<string, AgentJournalSubmission> | undefined
@@ -38,6 +42,12 @@ export function structuredAgentSessionDeliveryNotices(args: {
   let hasRejected = false
   const lineages = structuredAgentSessionRetryLineages(submissions)
   const hasItem = (id: string) => args.itemIds?.has(id) ?? true
+  const findSubmission = (id: string) =>
+    (byId ??= new Map(submissions.map((entry) => [entry.clientMessageId, entry]))).get(id)
+  const retryWasWithdrawn = (id: string) => {
+    const submission = findSubmission(id)
+    return !!submission && dispatchWasWithdrawn(submission)
+  }
   for (const submission of submissions) {
     hasRejected ||= submission.dispatchState === 'rejected'
   }
@@ -55,40 +65,57 @@ export function structuredAgentSessionDeliveryNotices(args: {
     if (entry.phase !== 'unconfirmed' && !recorded?.has(entry.clientMessageId)) {
       const root = entry.retryOfClientMessageId ?? entry.clientMessageId
       const retry = lineages.get(root)
+      const row = retry
+        ? structuredAgentSessionRetryRow(
+            root,
+            retry,
+            hasItem,
+            findSubmission(root),
+            retryWasWithdrawn(retry.clientMessageId)
+          )
+        : agentJournalSubmissionKey(root)
       notices.set(
-        retry
-          ? structuredAgentSessionRetryRow(root, retry, hasItem)
-          : agentJournalSubmissionKey(root),
+        hasItem(row) ? row : agentJournalSubmissionKey(entry.clientMessageId),
         STRUCTURED_AGENT_SESSION_DELIVERY_SENDING
       )
     }
   }
   const shown = hasRejected
-    ? structuredAgentSessionRejectedShownInPlace(submissions, args.commandItemIds ?? NO_COMMANDS)
-        .shown
+    ? structuredAgentSessionRejectedShownInPlace(
+        submissions,
+        args.commandItemIds ?? NO_COMMANDS,
+        args.clearSequences
+      ).shown
     : new Set<string>()
   for (const submission of submissions) {
-    if (submission.dispatchState === 'accepted' || submission.dispatchState === 'unknown') {
+    if (
+      submission.dispatchState === 'accepted' ||
+      submission.dispatchState === 'unknown' ||
+      dispatchWasWithdrawn(submission)
+    ) {
       continue
     }
     const root = submission.retryOfClientMessageId ?? submission.clientMessageId
     const retry = lineages.get(root)
+    const retainedOriginal =
+      retry?.dispatchState === 'unknown' && submission.clientMessageId === root
+    const withdrawn = !!retry && retryWasWithdrawn(retry.clientMessageId)
     if (
       retry?.dispatchState === 'accepted' ||
-      retry?.dispatchState === 'unknown' ||
+      (retry?.dispatchState === 'unknown' && !retainedOriginal) ||
+      (withdrawn && retry && hasItem(agentJournalSubmissionKey(retry.clientMessageId))) ||
       (retry &&
         submission.clientMessageId !== root &&
         submission.clientMessageId !== retry.clientMessageId)
     ) {
       continue
     }
-    const id = retry
-      ? structuredAgentSessionRetryRow(root, retry, hasItem)
-      : agentJournalSubmissionKey(root)
+    const id =
+      retry && !retainedOriginal
+        ? structuredAgentSessionRetryRow(root, retry, hasItem, findSubmission(root), withdrawn)
+        : agentJournalSubmissionKey(root)
     const original = submission.retryOfClientMessageId
-      ? ((byId ??= new Map(submissions.map((entry) => [entry.clientMessageId, entry]))).get(
-          submission.retryOfClientMessageId
-        ) ?? {
+      ? (findSubmission(submission.retryOfClientMessageId) ?? {
           ...submission,
           clientMessageId: submission.retryOfClientMessageId
         })
@@ -126,6 +153,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
         ),
         ...(detail ? { detail } : {}),
         ...(fact?.instructionRecovery &&
+        !retainedOriginal &&
         original.origin === 'client' &&
         (cardId || (args.onRetry && !pendingRetries?.has(original.clientMessageId)))
           ? {

@@ -3534,11 +3534,13 @@
     },
     "message": {
       "copyMessage": "Copy message",
+      "deliveryUnconfirmed": "Delivery unconfirmed",
       "forkFromResponse": "Fork from this response",
       "scrollMessageToTop": "Scroll this message to top",
       "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
     },
     "messageActionsSheet": {
+      "messageActions": "Message actions",
       "copyMessage": "Copy message",
       "copyFailed": "Copy failed",
       "clipboardRejected": "The clipboard rejected the text.",

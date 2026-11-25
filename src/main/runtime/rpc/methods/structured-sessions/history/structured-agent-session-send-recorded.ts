@@ -5,6 +5,7 @@ import type { StructuredSendAnswer } from '../../../../../native-chat/agent-sess
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
 import type { AgentSessionDeliveryFact } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
+import { orderStructuredSendAdmission } from '../conversation/structured-agent-session-send-admission-order'
 
 /** Recorded in any state, as a loaded row or card settles a send; a rejection stays in history, as a live reply's does. */
 function sendRecorded(answer: StructuredSendAnswer): boolean {
@@ -37,11 +38,20 @@ export const STRUCTURED_AGENT_SESSION_SEND_RECORDED_METHODS = [
       ownedByQueue?: true
     }> => {
       const host = await requireInstalledStructuredHost(ctx, params.sessionId)
-      const answer = await host.sendAnswer(params.sessionId, params.clientMessageId, true)
+      const answer = await orderStructuredSendAdmission(
+        ctx.runtime,
+        params.sessionId,
+        params.clientMessageId,
+        () => host.sendAnswer(params.sessionId, params.clientMessageId, true)
+      )
+      const submission: AgentSessionDeliveryFact | undefined =
+        answer.kind === 'accepted' && answer.submission?.clientMessageId !== params.clientMessageId
+          ? { clientMessageId: params.clientMessageId, dispatchState: 'accepted', reason: null }
+          : answer.submission
       return {
         recorded: sendRecorded(answer),
         ...(answer.kind === 'absent' || answer.kind === 'refused' ? { confirmedAbsent: true } : {}),
-        ...(answer.submission ? { submission: answer.submission } : {}),
+        ...(submission ? { submission } : {}),
         ...(answer.ownedByQueue ? { ownedByQueue: true } : {})
       }
     }

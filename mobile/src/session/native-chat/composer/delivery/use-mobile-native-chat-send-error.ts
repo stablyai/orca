@@ -1,5 +1,12 @@
 import { useAccessibilityAnnouncer } from '../../../../platform/accessibility/accessibility-announcer'
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MutableRefObject
+} from 'react'
 import type { StructuredAgentSessionCommandRefusalCause } from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { triggerError } from '../../../../platform/haptics/haptics'
 
@@ -12,7 +19,7 @@ export type MobileNativeChatSendErrorDetails = {
 export type MobileNativeChatSendErrorReporter = (
   message: string,
   details?: MobileNativeChatSendErrorDetails
-) => void
+) => false | void
 
 export type MobileNativeChatCommandRefusalCauses = Readonly<
   Partial<Record<StructuredAgentSessionCommandRefusalCause, boolean>>
@@ -24,7 +31,7 @@ const NATIVE_CHAT_SEND_ERROR_TOAST_MS = 1600
 // Show failures beside the composer because the keyboard covers toasts; scope banners per terminal so tab switches cannot misattribute them.
 export function useMobileNativeChatSendError(args: {
   scopeKey: string | null
-  showToast: (message: string, durationMs?: number) => void
+  showToast: (message: string, durationMs?: number) => false | void
 }): {
   message: string | null
   show: MobileNativeChatSendErrorReporter
@@ -62,12 +69,15 @@ export function useMobileNativeChatSendError(args: {
     setError(null)
   }, [clearTimer, scopeKey])
   const show = useCallback(
-    (next: string, details?: MobileNativeChatSendErrorDetails) => {
+    (next: string, details?: MobileNativeChatSendErrorDetails): false | void => {
+      // Leaving the session route can remove the toast owner as well as the chat banner.
+      const toast = liveScopeRef.current !== scopeKey || !bannerMountedRef.current
+      if (toast && showToastRef.current(next, NATIVE_CHAT_SEND_ERROR_TOAST_MS) === false) {
+        return false
+      }
       // A refused or failed send buzzes (MobilePendingButton's rule), felt even when the banner is covered.
       triggerError()
-      // Fall back to toast after leaving chat or changing tabs so late failures remain visible without misattribution.
-      if (liveScopeRef.current !== scopeKey || !bannerMountedRef.current) {
-        showToastRef.current(next, NATIVE_CHAT_SEND_ERROR_TOAST_MS)
+      if (toast) {
         return
       }
       if (details?.announceOnly) {
@@ -86,7 +96,7 @@ export function useMobileNativeChatSendError(args: {
   useEffect(() => {
     clearTimer()
   }, [clearTimer, scopeKey])
-  useEffect(
+  useLayoutEffect(
     () => () => {
       // Clear the render-written mounted ref on unmount or deferred failures target a missing banner and disappear.
       bannerMountedRef.current = false

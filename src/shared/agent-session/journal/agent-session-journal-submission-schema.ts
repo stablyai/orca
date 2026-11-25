@@ -13,7 +13,8 @@ export const AgentJournalSubmissionSchema = z.object({
     .object({
       clientMessageId: z.string().min(1),
       dispatchState: z.string().min(1),
-      submittedAt: z.number()
+      submittedAt: z.number(),
+      resolvedAt: z.number().nullable().optional()
     })
     .optional(),
   clientMessageId: z.string().min(1),

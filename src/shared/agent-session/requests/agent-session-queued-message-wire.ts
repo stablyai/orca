@@ -47,6 +47,8 @@ export type AgentSessionQueuedMessage = {
   /** Only failed submissions return cards with reason/rejection; Stop/restart withdrawals wait again. Classify returnedRejection with returnedReason as the legacy fallback, exactly as submission rejection. */
   returnedReason?: string | null
   returnedRejection?: UnreadAgentSessionFailureFact
+  /** The failed handoff this card now owns, when its send ID differs from the card ID. */
+  returnedFromClientMessageId?: string
   /** A person's message sent to steer the running turn; the host holds it only until the turn takes it in. */
   steers?: true
 }

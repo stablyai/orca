@@ -9,6 +9,46 @@ import { nativeChatRowOffersRewind } from '../../../../../../src/shared/native-c
 import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatTurnDiff } from '../../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
 import type { NativeChatActivityJoin } from '../../../../../../src/shared/native-chat/transcript/events/native-chat-activity-rows'
+import { translate } from '../../../../i18n/mobile-i18n'
+
+export type MobileNativeChatMessageProps = {
+  message: NativeChatMessage
+  // Stable placement key survives older messages joining a folded row.
+  rowKey?: string
+  runOwner?: string
+  // Only the newest live assistant row can still grow.
+  mayStillGrow?: boolean
+  // Compare plan updates against the prior write, not an empty checklist.
+  previousTodoWrite?: NativeChatToolCallBlock
+  previousUpdatePlan?: NativeChatToolCallBlock
+  fontScale?: number
+  turnStatus?: NativeChatTurnStatus | null
+  turnStatusAbove?: boolean
+  turnExpanded?: boolean
+  turnKey?: string
+  /** The chat may rewind to this row, by desktop's `nativeChatRowOffersRewind`. */
+  rewindable?: true
+  onToggleTurn?: (turnKey: string) => void
+  activeTurnIsWorking?: boolean
+  trailingRun?: boolean
+  // The run’s first row draws all members; later members render no duplicate activity.
+  workRun?: readonly NativeChatMessage[]
+  joinsWorkRun?: boolean
+  foldedAway?: boolean
+  openReasoning?: ReadonlySet<string>
+  structuredActivityUi?: boolean
+  // Hide the reasoning row while the live activity line discloses the same block.
+  reasoningIsLive?: boolean
+  reasoningExpanded?: boolean
+  onToggleReasoning?: (key: string) => void
+  unsentNotice?: string
+  receipt?: NativeChatResolvedPrompt
+  awaiting?: boolean
+  userMessageOpen?: boolean
+  onToggleUserMessage?: (messageId: string) => void
+  /** A group room draws one time line per turn; otherwise the time line always shows, so the row never shifts when copy appears. */
+  withoutMeta?: true
+}
 
 export type MobileNativeChatTurnRow = {
   turnDiff?: NativeChatTurnDiff
@@ -73,7 +113,11 @@ export function resolveMobileNativeChatRowProps(
 ): MobileNativeChatRowProps {
   const predecessors = lookups.taskListPredecessors.get(message.id)
   const { opensTurn, ...turn } = lookups.resolveTurnRow(index, message)
-  const unsentNotice = message.unsent ? lookups.unsentNotices.get(message.id) : undefined
+  const unsentNotice = message.retainedSendId
+    ? translate('chat.message.deliveryUnconfirmed', 'Delivery unconfirmed')
+    : message.unsent
+      ? lookups.unsentNotices.get(message.id)
+      : undefined
   // The phone nests no subagent sections; the chat's eligible ids still exclude other chats' rows.
   const rewindable = nativeChatRowOffersRewind(
     message,

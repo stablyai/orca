@@ -5,7 +5,10 @@ import type {
   AgentJournalSubmission
 } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { dispatchWasWithdrawn } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { structuredAgentSessionCommandItemIds } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import {
+  structuredAgentSessionClearSequences,
+  structuredAgentSessionCommandItemIds
+} from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import { agentJournalSubmissionKey } from '../../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
@@ -49,37 +52,47 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   )
   const startFailures = args.startFailures ?? loadedFailures
   const journalRows = rowsBesideStreamedText(args.journalItems)
+  const clearSequences = useMemo(() => {
+    if (hasRejected) {
+      const sequences = structuredAgentSessionClearSequences(journalRows)
+      return sequences.length ? sequences : undefined
+    }
+    return undefined
+  }, [journalRows, hasRejected])
   const commandItemIds = useStableItemIds(
     useMemo(
       () => (hasRejected ? structuredAgentSessionCommandItemIds(journalRows) : NO_ITEMS),
       [hasRejected, journalRows]
     )
   )
-  const retryOriginals = useMemo(() => {
-    let ids: Set<string> | undefined
-    for (const [root, retry] of lineages) {
-      if (retry.dispatchState === 'pending' || retry.dispatchState === 'rejected') {
-        if (!ids) {
-          ids = new Set()
-        }
-        ids.add(agentJournalSubmissionKey(root))
+  const retryItems = useMemo(() => {
+    const ids = new Set<string>()
+    for (const entry of pending) {
+      if (entry.retryOfClientMessageId) {
+        ids.add(agentJournalSubmissionKey(entry.retryOfClientMessageId))
       }
     }
-    return ids ?? NO_ITEMS
-  }, [lineages])
+    for (const [root, retry] of lineages) {
+      if (retry.dispatchState === 'pending' || retry.dispatchState === 'rejected') {
+        ids.add(agentJournalSubmissionKey(root))
+        ids.add(agentJournalSubmissionKey(retry.clientMessageId))
+      }
+    }
+    return ids
+  }, [lineages, pending])
   const itemIds = useStableItemIds(
     useMemo(() => {
-      if (retryOriginals.size === 0) {
+      if (retryItems.size === 0) {
         return NO_ITEMS
       }
       const found = new Set<string>()
       for (const item of journalRows) {
-        if (retryOriginals.has(item.itemId)) {
+        if (retryItems.has(item.itemId)) {
           found.add(item.itemId)
         }
       }
       return found
-    }, [journalRows, retryOriginals])
+    }, [journalRows, retryItems])
   )
   const notices = useMemo(
     () =>
@@ -89,10 +102,21 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
         agentName,
         startFailures,
         commandItemIds,
+        clearSequences,
         itemIds,
         onRetry: retryEnabled ? onRetry : undefined
       }),
-    [pending, submissions, agentName, startFailures, commandItemIds, itemIds, retryEnabled, onRetry]
+    [
+      pending,
+      submissions,
+      agentName,
+      startFailures,
+      commandItemIds,
+      clearSequences,
+      itemIds,
+      retryEnabled,
+      onRetry
+    ]
   )
   // Reuse unchanged notices/maps across submission batches to avoid rerendering rows.
   const previousRef = useRef(notices)
@@ -137,7 +161,7 @@ function sameNoticesKept(
       before.failureKind === notice.failureKind &&
       before.signIn?.agentName === notice.signIn?.agentName &&
       before.signIn?.account === notice.signIn?.account &&
-      (before.onSend === undefined) === (notice.onSend === undefined) &&
+      before.onSend === notice.onSend &&
       before.recoveryFocus === notice.recoveryFocus &&
       before.recoveryCardId === notice.recoveryCardId &&
       (before.onDismiss === undefined) === (notice.onDismiss === undefined)

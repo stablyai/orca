@@ -12,6 +12,7 @@ import {
 import {
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_RECORDED_ABSENCE_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
@@ -75,7 +76,7 @@ export type StructuredAgentSessionHostSupport = {
   permissionOwn?: boolean
   itemDetail: boolean
   /** The host says whether it recorded a send; older hosts answer only through loaded pages. */
-  sendRecorded?: boolean
+  sendRecorded?: boolean | 'confirmed-absence'
   phoneAttachments: boolean
   /** Older hosts lack Continue on an Orca-stopped turn or refuse it from a phone; the phone sends an ordinary message there. */
   continueInterrupted?: boolean
@@ -102,55 +103,46 @@ export type StructuredAgentSessionHostSupport = {
 export function structuredAgentSessionHostSupport(
   capabilities: readonly string[]
 ): StructuredAgentSessionHostSupport {
+  const supports = (capability: string): boolean => capabilities.includes(capability)
   return {
-    commandsOnRequest: capabilities.includes(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY),
-    coherentModelCatalog: capabilities.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY),
-    modelEffortDiscovery: capabilities.includes(AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY),
-    promptCancel: capabilities.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY),
-    questionAnswers: capabilities.includes(AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY),
-    queuedMessages: capabilities.includes(AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY),
-    queuedCommands: capabilities.includes(AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY),
-    queuedMessageEdit: capabilities.includes(AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY),
-    queuedMessageSkillsEdit: capabilities.includes(
-      AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY
-    ),
-    queuedMessageReorder: capabilities.includes(
-      AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY
-    ),
-    queuedMessageImageEdit: capabilities.includes(
-      AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY
-    ),
-    statusFeed: capabilities.includes(AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY),
-    quietRepeatedStop: capabilities.includes(AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY),
-    sendSelection: capabilities.includes(AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY),
-    sendOptions: capabilities.includes(AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY),
-    sendSkills: capabilities.includes(AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY),
-    discoverWorkspaceSkills: capabilities.includes(SKILL_DISCOVER_WORKSPACE_CAPABILITY),
-    conversationStop: capabilities.includes(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY),
-    permissionOwn: capabilities.includes(AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY),
-    permissionModes: capabilities.includes(AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY),
-    itemDetail: capabilities.includes(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY),
-    sendRecorded: capabilities.includes(AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY),
-    phoneAttachments: capabilities.includes(AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY),
-    continueInterrupted: capabilities.includes(
-      AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
-    ),
-    phoneThreadGoal: capabilities.includes(AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY),
-    mcp: capabilities.includes(AGENT_SESSION_MCP_RUNTIME_CAPABILITY),
-    phoneAccountUsage: capabilities.includes(AGENT_SESSION_PHONE_ACCOUNT_USAGE_RUNTIME_CAPABILITY),
-    phoneRewind: capabilities.includes(AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY),
-    usageLimitAutoContinue: capabilities.includes(
-      AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY
-    ),
-    usageLimitContinueCancel: capabilities.includes(
+    commandsOnRequest: supports(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY),
+    coherentModelCatalog: supports(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY),
+    modelEffortDiscovery: supports(AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY),
+    promptCancel: supports(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY),
+    questionAnswers: supports(AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY),
+    queuedMessages: supports(AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY),
+    queuedCommands: supports(AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY),
+    queuedMessageEdit: supports(AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY),
+    queuedMessageSkillsEdit: supports(AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY),
+    queuedMessageReorder: supports(AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY),
+    queuedMessageImageEdit: supports(AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY),
+    statusFeed: supports(AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY),
+    quietRepeatedStop: supports(AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY),
+    sendSelection: supports(AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY),
+    sendOptions: supports(AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY),
+    sendSkills: supports(AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY),
+    discoverWorkspaceSkills: supports(SKILL_DISCOVER_WORKSPACE_CAPABILITY),
+    conversationStop: supports(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY),
+    permissionOwn: supports(AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY),
+    permissionModes: supports(AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY),
+    itemDetail: supports(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY),
+    sendRecorded: supports(AGENT_SESSION_SEND_RECORDED_ABSENCE_RUNTIME_CAPABILITY)
+      ? 'confirmed-absence'
+      : supports(AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY),
+    phoneAttachments: supports(AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY),
+    continueInterrupted: supports(AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY),
+    phoneThreadGoal: supports(AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY),
+    mcp: supports(AGENT_SESSION_MCP_RUNTIME_CAPABILITY),
+    phoneAccountUsage: supports(AGENT_SESSION_PHONE_ACCOUNT_USAGE_RUNTIME_CAPABILITY),
+    phoneRewind: supports(AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY),
+    usageLimitAutoContinue: supports(AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY),
+    usageLimitContinueCancel: supports(
       AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY
     ),
-    sendUsageLimitContinuation: capabilities.includes(
+    sendUsageLimitContinuation: supports(
       AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY
     ),
-    skipAsyncQuestions: capabilities.includes(
-      AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY
-    ),
-    mcpServers: capabilities.includes(MCP_SERVERS_RUNTIME_CAPABILITY)
+    skipAsyncQuestions: supports(AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY),
+    mcpServers: supports(MCP_SERVERS_RUNTIME_CAPABILITY)
   }
 }

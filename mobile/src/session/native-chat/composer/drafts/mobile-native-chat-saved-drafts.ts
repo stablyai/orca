@@ -25,6 +25,7 @@ export type MobileNativeChatInFlightSend = {
   baselineTailMessageId: string | null
   queuedDuringWork?: boolean
   command?: boolean
+  deliveryUnconfirmed?: true
 }
 
 // A message queued while the desktop was out; it comes back paused, never sent by itself.
@@ -99,7 +100,8 @@ function parseInFlight(send: Record<string, unknown>): MobileNativeChatInFlightS
     baselineTailMessageId:
       typeof send.baselineTailMessageId === 'string' ? send.baselineTailMessageId : null,
     ...(send.queuedDuringWork === true ? { queuedDuringWork: true } : {}),
-    ...(send.command === true ? { command: true } : {})
+    ...(send.command === true ? { command: true } : {}),
+    deliveryUnconfirmed: send.deliveryUnconfirmed === true ? true : undefined
   }
 }
 

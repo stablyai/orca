@@ -30,7 +30,7 @@ export type QueuedMessageRow = {
   holdReason: string | null
   returnedReason: string | null
   returnedRejection: UnreadAgentSessionFailureFact | null
-  /** Host-only handoff link; clear on proven withdrawal, retain on return. Clients use queuedMessageId. */
+  /** Clear this handoff link on proven withdrawal. Returned cards publish it for reconciliation. */
   consumedAs: string | null
   recovers?: string
   /** Where the journal stood when it was queued: a Stop's pause holds only cards queued before

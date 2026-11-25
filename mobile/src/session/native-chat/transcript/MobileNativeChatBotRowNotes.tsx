@@ -38,5 +38,5 @@ export function MobileNativeChatAutomationResultsCarried({
 }: {
   count: number
 }): React.JSX.Element {
-  return <Text style={styles.automationResultsCarried}>{automationResultsCarriedText(count)}</Text>
+  return <Text style={styles.mutedNotice}>{automationResultsCarriedText(count)}</Text>
 }

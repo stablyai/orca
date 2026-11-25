@@ -8,6 +8,7 @@ export type AgentJournalRetryLineage = {
   clientMessageId: string
   dispatchState: AgentJournalDispatchState
   submittedAt: number
+  resolvedAt?: number | null
 }
 /** Durable answer to a send, keyed by client id and preserved beyond the journal tail. */
 export type AgentJournalAcceptanceReceipt = {

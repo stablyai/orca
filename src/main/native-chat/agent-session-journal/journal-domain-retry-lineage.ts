@@ -8,7 +8,8 @@ import { SEND_RETRY_ROOT_SQL } from './database/journal-submission-window-indexe
 import type { JournalSqlScope } from './journal-sql-scope'
 
 export function journalRetryLookupSql(liveOnly: boolean): string {
-  return `SELECT message_id,dispatch_state,submitted_at FROM journal_submission_attempts
+  return `SELECT message_id,dispatch_state,submitted_at,
+    json_extract(payload_json,'$.resolvedAt') AS resolved_at FROM journal_submission_attempts
     WHERE session_id=? AND epoch=? AND current=1 AND ${SEND_RETRY_ROOT_SQL}=?
       ${liveOnly ? "AND dispatch_state<>'rejected'" : ''}
     ORDER BY ordinal DESC LIMIT 1`
@@ -23,7 +24,12 @@ export function journalDomainLastRetry(
   const dispatchState = AGENT_JOURNAL_DISPATCH_STATES.find((state) => state === row?.dispatch_state)
   if (row && typeof row.message_id === 'string' && dispatchState) {
     scope.examined(row)
-    return { clientMessageId: row.message_id, dispatchState, submittedAt: Number(row.submitted_at) }
+    return {
+      clientMessageId: row.message_id,
+      dispatchState,
+      submittedAt: Number(row.submitted_at),
+      resolvedAt: typeof row.resolved_at === 'number' ? row.resolved_at : null
+    }
   }
   return undefined
 }

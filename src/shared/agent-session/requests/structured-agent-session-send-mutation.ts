@@ -116,7 +116,7 @@ export class SkillRefLimitError extends Error {}
 /** Text then images, retaining only picked skills still mentioned by $name. */
 export function structuredAgentSessionSendBody(
   text: string,
-  attachments: readonly StructuredAgentSessionAttachment[],
+  attachments: readonly Pick<StructuredAgentSessionAttachment, 'path'>[],
   skills: readonly AgentJournalSkillRef[] = []
 ): z.infer<typeof SendBody> {
   const picked = pickedSkillsInText(text, skills)

@@ -63,7 +63,7 @@ export function Prose({
   /** The reply may still be growing: a directive still being typed at its tail is held back. */
   growing?: boolean
   revealing?: boolean
-  /** Android only: routes a long press on a link span to the row's actions sheet. */
+  /** Routes a long press to the row's actions sheet when it owns the gesture. */
   onLongPress?: () => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
@@ -95,7 +95,7 @@ export function Prose({
           content={text}
           tone="userMessage"
           slackMentions={slackMentions}
-          rangeSelectable
+          rangeSelectable={!INLINE_TEXT_SELECTION || !onLongPress}
           {...prose}
           onLongPress={onLongPress}
           renderImage={renderImage}

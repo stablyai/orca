@@ -46,6 +46,7 @@ export type StructuredAgentSessionOptimisticMessage = {
   /** Null when this client did not make the send and nothing dates it. */
   queuedAt: number | null
   phase?: 'sending' | 'recorded' | 'unconfirmed'
+  retainedSendId?: string
   recordedCursor?: AgentJournalCursor
   /** In-memory placement captured at Send, independent of any acknowledgement. */
   afterSequence?: number
@@ -62,6 +63,12 @@ export function structuredAgentSessionCommandItemIds(
       .filter((item) => item.body.kind === 'message' && item.body.command)
       .map((item) => item.itemId)
   )
+}
+
+export function structuredAgentSessionClearSequences(
+  items: readonly AgentJournalRenderItem[]
+): number[] {
+  return items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
 }
 
 export { structuredAgentSessionRejectedShownInPlace }
@@ -119,24 +126,18 @@ export function projectStructuredAgentSessionMessageRows(
       )
       .map((submission) => [agentJournalSubmissionKey(submission.clientMessageId), submission])
   )
-  // Other rejections are ledger-only unless explicitly shown in place as unsent.
-  const rejected = new Set(
-    submissions
-      .filter((submission) => submission.dispatchState === 'rejected')
-      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
-      .filter((itemId) => !stoppedBeforeStart.has(itemId))
-  )
   // Avoid placement work on every stream commit when no stopped sends exist.
   const placement =
     stoppedBeforeStart.size > 0 ? placeStoppedSends(items, submissions, stoppedBeforeStart) : null
   const { shown: inPlace, resent } = structuredAgentSessionRejectedShownInPlace(
     submissions,
     structuredAgentSessionCommandItemIds(items),
-    items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
+    structuredAgentSessionClearSequences(items)
   )
   const replacedFailures = resent.size > 0 ? startFailureRowsAfter(items, resent) : resent
   const visibleItems: AgentJournalRenderItem[] = []
   const unsentItems: AgentJournalRenderItem[] = []
+  let pendingDelivery: Map<string, 'pending' | 'unknown'> | undefined
   let itemIds: Set<string> | undefined
   const hasItem = (id: string): boolean =>
     (itemIds ??= new Set(items.map((item) => item.itemId))).has(id)
@@ -146,31 +147,54 @@ export function projectStructuredAgentSessionMessageRows(
     submissionsByItemId.set(agentJournalSubmissionKey(submission.clientMessageId), submission)
   }
   for (const item of items) {
-    const send = lineages.size ? submissionsByItemId.get(item.itemId) : undefined
+    const { itemId } = item
+    const send = submissionsByItemId.get(itemId)
     const root = send && (send.retryOfClientMessageId ?? send.clientMessageId)
     const retry = root ? lineages.get(root) : undefined
-    if (send && retry && root && send.dispatchState !== 'accepted') {
+    let state = send?.dispatchState
+    if (
+      send &&
+      retry &&
+      root &&
+      (state !== 'accepted' || send.clientMessageId === retry.clientMessageId)
+    ) {
       const retainedOriginal = retry.dispatchState === 'unknown' && send.clientMessageId === root
       if (
         !retainedOriginal &&
-        item.itemId !== structuredAgentSessionRetryRow(root, retry, hasItem)
+        itemId !==
+          structuredAgentSessionRetryRow(
+            root,
+            retry,
+            hasItem,
+            submissionsByItemId.get(agentJournalSubmissionKey(root)),
+            stoppedBeforeStart.has(agentJournalSubmissionKey(retry.clientMessageId))
+          )
       ) {
         continue
       }
-      if (send.dispatchState === 'rejected' && send.retryOfClientMessageId) {
-        if (!agentJournalSubmissionReturnedToCard(send)) {
+      if (!retainedOriginal) {
+        state = retry.dispatchState
+      }
+      if (state === 'rejected' && send.retryOfClientMessageId && !stoppedBeforeStart.has(itemId)) {
+        if (!agentJournalSubmissionReturnedToCard(send) && !resent.has(itemId)) {
           unsentItems.push(item)
         }
         continue
       }
     }
-    if (inPlace.has(item.itemId)) {
+    if (state === 'rejected' && inPlace.has(itemId)) {
       unsentItems.push(item)
-    } else if (!rejected.has(item.itemId) && !replacedFailures.has(item.itemId)) {
+    } else if (
+      (state !== 'rejected' || stoppedBeforeStart.has(itemId)) &&
+      !replacedFailures.has(itemId)
+    ) {
+      if (state === 'pending' || state === 'unknown') {
+        ;(pendingDelivery ??= new Map()).set(itemId, state)
+      }
       visibleItems.push(item)
     }
   }
-  const journalled = new Set(visibleItems.map((item) => item.itemId))
+  const journalled = new Set([...visibleItems, ...unsentItems].map(({ itemId }) => itemId))
   const marks = automationResultMarks(visibleItems)
   const delivered: NativeChatMessage[] = []
   const held: NativeChatMessage[] = []
@@ -178,22 +202,15 @@ export function projectStructuredAgentSessionMessageRows(
   let moved = false
   for (const row of projectItems(visibleItems)) {
     const submission = submissionsByItemId.get(row.id)
-    const message: NativeChatMessage =
-      submission?.dispatchState === 'pending' || submission?.dispatchState === 'unknown'
-        ? {
-            ...row,
-            deliveryState: submission.dispatchState,
-            ...(submission.queuedMessageId ? { queuedMessageId: submission.queuedMessageId } : {})
-          }
-        : submission?.queuedMessageId && row.from
-          ? deliveredAgentMailRow(row, submission.queuedMessageId)
-          : row
+    const queuedMessageId = submission?.queuedMessageId
+    const deliveryState = pendingDelivery?.get(row.id)
+    const message: NativeChatMessage = deliveryState
+      ? { ...row, deliveryState, ...(queuedMessageId ? { queuedMessageId } : {}) }
+      : queuedMessageId && row.from
+        ? deliveredAgentMailRow(row, queuedMessageId)
+        : row
     // Until handover, queued sends have no conversation position.
-    if (
-      submission &&
-      submission.queuedMessageId === undefined &&
-      isQueuedAgentJournalSubmission(submission)
-    ) {
+    if (submission && queuedMessageId === undefined && isQueuedAgentJournalSubmission(submission)) {
       held.push({ ...message, queued: true })
     } else if (!placement || !stoppedBeforeStart.has(message.id)) {
       delivered.push(withAutomationResultMarks(message, marks))
@@ -227,25 +244,41 @@ export function projectStructuredAgentSessionMessageRows(
           projectItems(unsentItems).map((message) => ({ ...message, unsent: true as const }))
         )
       : conversation
-  const output = [
-    ...placed,
-    // Held cards follow the conversation outside its runs.
-    ...held,
-    // Host rows supersede client echoes under either client or provider IDs.
-    ...structuredAgentSessionEchoRows(
-      optimistic.filter(
-        (entry) =>
-          !entry.retryOfClientMessageId ||
-          (lineages.get(entry.retryOfClientMessageId)?.dispatchState !== 'accepted' &&
-            !hasItem(agentJournalSubmissionKey(entry.retryOfClientMessageId)))
-      ),
-      journalled,
-      submissionsByItemId
-    )
-  ]
+  const uncertainRoots = new Set<string>()
+  const echoes = structuredAgentSessionEchoRows(
+    optimistic.filter((entry) => {
+      const root = entry.retryOfClientMessageId
+      if (!root) {
+        return true
+      }
+      const retry = lineages.get(root)
+      if (entry.phase === 'unconfirmed') {
+        return retry?.dispatchState !== 'accepted' && retry?.dispatchState !== 'pending'
+      }
+      return (
+        retry?.dispatchState !== 'accepted' &&
+        !hasItem(agentJournalSubmissionKey(root)) &&
+        (!retry || !journalled.has(agentJournalSubmissionKey(retry.clientMessageId)))
+      )
+    }),
+    journalled,
+    submissionsByItemId,
+    uncertainRoots
+  )
+  // An uncertain retry replaces the prior failure only when it actually has an echo.
+  const rows = uncertainRoots.size
+    ? placed.filter((row) => {
+        const send = submissionsByItemId.get(row.id)
+        return (
+          !row.unsent ||
+          !send ||
+          !uncertainRoots.has(send.retryOfClientMessageId ?? send.clientMessageId)
+        )
+      })
+    : placed
   return {
-    output,
-    conversationEnd: placed.length,
+    output: [...rows, ...held, ...echoes],
+    conversationEnd: rows.length,
     hasStoppedSends: stoppedBeforeStart.size > 0
   }
 }

@@ -144,21 +144,17 @@ export const START_FAILURE_COPY = {
   interactiveAgentNotSignedIn: (values) =>
     translate(
       'session.failure.interactiveAgentNotSignedIn',
-      'Sign in to {{agent}} by running `{{loginCommand}}` and using `{{slashCommand}}` on the computer running this chat.',
+      AGENT_SESSION_FAILURE_COPY.interactiveAgentNotSignedIn,
       values
     ),
   agentNotSignedIn: (values) =>
     translate('session.failure.agentNotSignedIn', 'Sign in to {{agent}}.', values),
   cliMissing: (values) =>
-    translate(
-      'session.failure.cliMissing',
-      "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
-      values
-    ),
+    translate('session.failure.cliMissing', AGENT_SESSION_FAILURE_COPY.cliMissing, values),
   cliMissingInWslDistro: (values) =>
     translate(
       'session.failure.cliMissingInWslDistro',
-      "{{agent}} isn't installed in the WSL distro {{distro}}. Install it inside {{distro}}, or check its Command in Settings → Agents.",
+      AGENT_SESSION_FAILURE_COPY.cliMissingInWslDistro,
       values
     ),
   signInFirst: (values) => translate('session.failure.signInFirst', 'Sign in first.', values),
@@ -235,13 +231,13 @@ export const START_FAILURE_COPY = {
   runtimeNotInstalled: (values) =>
     translate(
       'session.failure.runtimeNotInstalled',
-      "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+      AGENT_SESSION_FAILURE_COPY.runtimeNotInstalled,
       values
     ),
   fullAccessAsRoot: (values) =>
     translate(
       'session.failure.fullAccessAsRoot',
-      "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+      AGENT_SESSION_FAILURE_COPY.fullAccessAsRoot,
       values
     ),
   botToolsNeedStatusHooks: (values) =>
@@ -271,7 +267,7 @@ export const START_FAILURE_COPY = {
   conversationOpenInTerminal: (values) =>
     translate(
       'session.failure.conversationOpenInTerminal',
-      '{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.',
+      AGENT_SESSION_FAILURE_COPY.conversationOpenInTerminal,
       values
     ),
   chooseClaudeAccount: (values) =>

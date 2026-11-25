@@ -1,17 +1,17 @@
 import {
-  settleMobileInstructionRecovery,
+  reconcileMobileStructuredSendDelivery,
   confirmMobileRecordedRecovery
 } from '../mobile-native-chat-recovery-delivery'
-import type { MobileStructuredSendConfirmation } from './mobile-structured-send-recorded-read'
+import type {
+  MobileStructuredSends,
+  MobileStructuredSendStateArgs
+} from './mobile-structured-send-state'
+import { retainMobileStructuredSends } from './mobile-retained-structured-sends'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AgentJournalCursor } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalSubmission } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
-import { structuredAgentSessionReadCoversSend } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-settlement'
 import { mergeSentImagePreviews } from '../drafts/mobile-native-chat-draft-reconcile'
-import type { AgentSessionQueuedMessage } from '../../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 import {
   UNCONFIRMED_SEND_MESSAGE,
   UNCONFIRMED_SEND_RESTORED_MESSAGE
@@ -20,11 +20,10 @@ import { createUnconfirmedSendDeadlines } from './unconfirmed-send-deadlines'
 import { returnMobileNativeChatInFlightSend } from '../drafts/mobile-native-chat-draft-store'
 import {
   claimMobileNativeChatInFlightSends,
+  mobileNativeChatInFlightClaim,
   mobileNativeChatInFlightSendIds,
-  mobileNativeChatRecordedSendIds,
   readMobileNativeChatInFlightSend,
   releaseMobileNativeChatInFlightSends,
-  settleRecordedMobileNativeChatInFlightSends,
   useMobileNativeChatSavedInFlightVersion
 } from './mobile-native-chat-in-flight-sends'
 // Ordinary in-memory input outlives its request; exact host IDs retire it, and a lost reply hands it back at the deadline.
@@ -34,35 +33,21 @@ type MobileStructuredSend = StructuredAgentSessionOptimisticMessage
 const NO_SENDS: readonly MobileStructuredSend[] = []
 const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
 
-export type MobileStructuredSends = {
-  optimistic: readonly StructuredAgentSessionOptimisticMessage[]
-  imagePreviewsByMessageId: Record<string, string[]>
-  accept: (send: StructuredAgentSessionOptimisticMessage, images?: string[]) => void
-  acknowledge: (clientMessageId: string, cursor?: AgentJournalCursor) => void
-  reject: (clientMessageId: string) => void
-  holdUnconfirmed: (clientMessageId: string, onUnconfirmed: () => void) => void
-}
+export type { MobileStructuredSends } from './mobile-structured-send-state'
 
-export function useMobileStructuredSends(args: {
-  sessionKey: string
-  sessionId?: string | null
-  connected?: boolean
-  cursor?: AgentJournalCursor | null
-  submissions: readonly AgentJournalSubmission[]
-  queuedMessages: readonly AgentSessionQueuedMessage[] | null
-  onSendError: MobileNativeChatSendErrorReporter
-  /** Asks the host whether it recorded a send; null where only the loaded pages can say. */
-  confirmRecorded?: MobileStructuredSendConfirmation | null
-}): MobileStructuredSends {
+export function useMobileStructuredSends(
+  args: MobileStructuredSendStateArgs
+): MobileStructuredSends {
   const {
-    confirmRecorded = null,
     connected = true,
+    confirmRecorded,
     cursor,
     onSendError,
     queuedMessages,
     sessionId = null,
     sessionKey,
-    submissions
+    submissions,
+    draftScope
   } = args
   const [sendsBySession, setSendsBySession] = useState<
     Record<string, readonly MobileStructuredSend[]>
@@ -71,249 +56,241 @@ export function useMobileStructuredSends(args: {
     Record<string, Record<string, string[]>>
   >({})
   const mountedRef = useRef(false)
-  const sendsBySessionRef = useRef(sendsBySession)
+  const sends = sendsBySession[sessionKey] ?? NO_SENDS
+  // One actual lookup per chat open; false keeps an unavailable lookup eligible when support arrives.
+  const checked = useMemo(() => new Map<string, boolean>(), [sessionKey])
   const queuedMessageIds = useMemo(
-    () => (queuedMessages ?? []).map((message) => message.messageId),
+    () =>
+      (queuedMessages ?? []).flatMap(({ messageId, returnedFromClientMessageId }) =>
+        returnedFromClientMessageId ? [messageId, returnedFromClientMessageId] : [messageId]
+      ),
     [queuedMessages]
   )
-  const deliveryRef = useRef({ sessionKey, submissions, queuedMessageIds })
+  const delivery = { checked, submissions, queuedMessageIds, sends, confirmRecorded }
+  const deliveryRef = useRef(delivery)
   useLayoutEffect(() => {
-    sendsBySessionRef.current = sendsBySession
-    deliveryRef.current = { sessionKey, submissions, queuedMessageIds }
-  }, [sendsBySession, sessionKey, submissions, queuedMessageIds])
+    deliveryRef.current = delivery
+  })
+  const readDelivery = useCallback(
+    () =>
+      mountedRef.current && deliveryRef.current.checked === checked ? deliveryRef.current : null,
+    [checked]
+  )
   // Held sends by journal id; their deadlines pause while the host is out.
   const [holds] = useState(createUnconfirmedSendDeadlines<string>)
-  // Expired holds whose host lookup is out: a row arriving meanwhile still settles them.
-  const [asking] = useState(() => new Set<string>())
   useLayoutEffect(() => {
     holds.setConnected(connected)
   }, [connected, holds])
   const savedInFlightVersion = useMobileNativeChatSavedInFlightVersion()
 
-  // Capture chat ownership before asynchronous replies can cross a tab switch.
-  const keep = useCallback(
-    (send: MobileStructuredSend) => {
-      if (mountedRef.current) {
-        setSendsBySession((previous) => ({
-          ...previous,
-          [sessionKey]: (previous[sessionKey] ?? []).some(
-            (entry) => entry.clientMessageId === send.clientMessageId
-          )
-            ? previous[sessionKey].map((entry) =>
-                entry.clientMessageId === send.clientMessageId ? send : entry
-              )
-            : [...(previous[sessionKey] ?? []), send]
-        }))
+  const update = useCallback(
+    (change: (sends: readonly MobileStructuredSend[]) => readonly MobileStructuredSend[]) => {
+      if (!mountedRef.current) {
+        return
       }
+      setSendsBySession((previous) => {
+        const current = previous[sessionKey] ?? NO_SENDS
+        const updated = change(current)
+        if (updated === current) {
+          return previous
+        }
+        const next = { ...previous, [sessionKey]: updated }
+        if (updated.length === 0) {
+          delete next[sessionKey]
+        }
+        return next
+      })
     },
     [sessionKey]
   )
   const forget = useCallback(
     (ids: ReadonlySet<string>) =>
-      setSendsBySession((previous) => {
-        const current = previous[sessionKey] ?? []
+      update((current) => {
         const kept = current.filter((send) => !ids.has(send.clientMessageId))
-        if (kept.length === current.length) {
-          return previous
+        return kept.length === current.length ? current : kept
+      }),
+    [update]
+  )
+  const replace = useCallback(
+    (id: string, revise: (send?: MobileStructuredSend) => MobileStructuredSend | undefined) =>
+      update((current) => {
+        const index = current.findIndex((send) => send.clientMessageId === id)
+        const send = revise(current[index])
+        if (!send) {
+          return current
         }
-        const next = { ...previous, [sessionKey]: kept }
-        if (kept.length === 0) {
-          delete next[sessionKey]
-        }
+        const next = current.slice()
+        next[index === -1 ? next.length : index] = send
         return next
       }),
-    [sessionKey]
+    [update]
   )
   const accept = useCallback(
     (send: StructuredAgentSessionOptimisticMessage, images?: string[]) => {
-      keep(send)
+      replace(send.clientMessageId, () => send)
       if (images?.length) {
-        // Use the host’s row id so attached photos survive acceptance or failure.
         const messageId = agentJournalSubmissionKey(send.clientMessageId)
         setImagePreviewsBySession((previous) =>
           mergeSentImagePreviews(previous, sessionKey, [{ messageId, images }])
         )
       }
     },
-    [keep, sessionKey]
+    [replace, sessionKey]
   )
   const acknowledge = useCallback(
-    (clientMessageId: string, recordedCursor?: AgentJournalCursor) => {
-      if (mountedRef.current) {
-        setSendsBySession((previous) => {
-          const sends = previous[sessionKey]
-          if (!sends?.some((send) => send.clientMessageId === clientMessageId)) {
-            return previous
+    (clientMessageId: string, recordedCursor?: AgentJournalCursor) =>
+      replace(
+        clientMessageId,
+        (send) =>
+          send && {
+            ...send,
+            phase: 'recorded',
+            ...(recordedCursor ? { recordedCursor } : {})
           }
-          return {
-            ...previous,
-            [sessionKey]: sends.map((send) =>
-              send.clientMessageId === clientMessageId
-                ? { ...send, phase: 'recorded', ...(recordedCursor ? { recordedCursor } : {}) }
-                : send
-            )
-          }
-        })
-      }
-    },
-    [sessionKey]
+      ),
+    [replace]
   )
   const reject = useCallback(
     (clientMessageId: string) => forget(new Set([clientMessageId])),
     [forget]
   )
-  // Host identity supersedes the echo; recovery copies wait for terminal delivery or queue ownership.
-  const recorded = useCallback(
-    (ids: readonly string[]): Set<string> =>
-      mobileNativeChatRecordedSendIds(ids, submissions, queuedMessages),
-    [queuedMessages, submissions]
-  )
-
   // Before a send returns to the box, ask its chat's host: the record can sit past the pages loaded here.
-  const handBackUnlessRecorded = useCallback(
+  const holdForRecordedAnswer = useCallback(
     (
-      confirm: typeof confirmRecorded,
       clientMessageId: string,
       inFlightIds: () => string[],
-      handBack: () => void
+      handBack: (savedIds: readonly string[]) => void
     ): void => {
-      confirmMobileRecordedRecovery({
-        confirm,
-        clientMessageId,
-        inFlightIds,
-        handBack,
-        asking,
-        forget,
-        readDelivery: () =>
-          deliveryRef.current.sessionKey === sessionKey ? deliveryRef.current : null,
-        sessionId,
-        onSendError
+      const owned = mobileNativeChatInFlightClaim(inFlightIds())
+      holds.hold(clientMessageId, () => {
+        const current = readDelivery()
+        if (!current) {
+          releaseMobileNativeChatInFlightSends(owned())
+          return
+        }
+        confirmMobileRecordedRecovery({
+          confirm: current.confirmRecorded,
+          clientMessageId,
+          inFlightIds,
+          handBack,
+          checked,
+          forgetLocalEcho: reject,
+          readDelivery,
+          sessionId,
+          onSendError
+        })
       })
     },
-    [asking, forget, sessionId, sessionKey, onSendError]
+    [checked, reject, holds, sessionId, onSendError, readDelivery]
   )
 
-  const isHeld = useCallback(
-    (clientMessageId: string) =>
-      (sendsBySessionRef.current[sessionKey] ?? []).some(
-        (send) => send.clientMessageId === clientMessageId
-      ),
-    [sessionKey]
-  )
   const holdUnconfirmed = useCallback(
     (clientMessageId: string, onUnconfirmed: () => void) => {
-      if (!mountedRef.current) {
+      if (!readDelivery()) {
         // The saved copy waits for the chat's next open instead.
         releaseMobileNativeChatInFlightSends(
           mobileNativeChatInFlightSendIds(new Set([clientMessageId]))
         )
         return
       }
-      holds.hold(clientMessageId, () =>
-        handBackUnlessRecorded(
-          confirmRecorded,
-          clientMessageId,
-          () => mobileNativeChatInFlightSendIds(new Set([clientMessageId])),
-          () => {
-            // The host's record can arrive before the lost reply settles, so read what is still unrecorded now.
-            if (isHeld(clientMessageId)) {
-              forget(new Set([clientMessageId]))
-              onUnconfirmed()
-            }
+      holdForRecordedAnswer(
+        clientMessageId,
+        () => mobileNativeChatInFlightSendIds(new Set([clientMessageId])),
+        (savedIds) => {
+          // The host's record can arrive before the lost reply settles, so read what is still unrecorded now.
+          if (
+            savedIds.length ||
+            deliveryRef.current.sends.some((send) => send.clientMessageId === clientMessageId)
+          ) {
+            reject(clientMessageId)
+            onUnconfirmed()
           }
-        )
+        }
       )
     },
-    [confirmRecorded, forget, handBackUnlessRecorded, holds, isHeld]
+    [readDelivery, reject, holdForRecordedAnswer]
   )
-
-  useEffect(() => {
-    settleMobileInstructionRecovery(sessionId, submissions, onSendError, queuedMessageIds)
-  }, [onSendError, queuedMessageIds, savedInFlightVersion, sessionId, submissions])
 
   // Sends saved before the page last closed wait like live ones once their chat opens.
   useEffect(() => {
     if (sessionId === null) {
       return
     }
-    for (const send of claimMobileNativeChatInFlightSends(
-      (_scope, saved) => saved.kind === 'structured' && saved.sessionId === sessionId
-    )) {
+    for (const send of claimMobileNativeChatInFlightSends((_scope, saved) => {
+      const attempted = checked.get(saved.clientMessageId ?? saved.id)
+      return (
+        saved.kind === 'structured' &&
+        saved.sessionId === sessionId &&
+        (attempted === undefined || (!attempted && confirmRecorded !== null))
+      )
+    })) {
       const clientMessageId = send.clientMessageId ?? send.id
-      if (recorded([clientMessageId]).has(clientMessageId)) {
-        settleRecordedMobileNativeChatInFlightSends([send.id], submissions, false, queuedMessageIds)
-        continue
-      }
-      holds.hold(clientMessageId, () =>
-        handBackUnlessRecorded(
-          confirmRecorded,
-          clientMessageId,
-          () => [send.id],
-          () => {
-            if (readMobileNativeChatInFlightSend(send.id)) {
-              returnMobileNativeChatInFlightSend(send.id)
-              onSendError(
-                send.command ? UNCONFIRMED_SEND_MESSAGE : UNCONFIRMED_SEND_RESTORED_MESSAGE
-              )
-            }
+      holdForRecordedAnswer(
+        clientMessageId,
+        () => {
+          const current = readMobileNativeChatInFlightSend(send.id)?.send
+          return current && current.clientMessageId === send.clientMessageId ? [send.id] : []
+        },
+        (savedIds) => {
+          if (savedIds.length) {
+            returnMobileNativeChatInFlightSend(send.id)
+            onSendError(send.command ? UNCONFIRMED_SEND_MESSAGE : UNCONFIRMED_SEND_RESTORED_MESSAGE)
           }
-        )
+        }
       )
     }
   }, [
+    checked,
     confirmRecorded,
-    handBackUnlessRecorded,
+    holdForRecordedAnswer,
+    onSendError,
+    savedInFlightVersion,
+    sessionId
+  ])
+
+  useEffect(() => {
+    reconcileMobileStructuredSendDelivery(
+      sends,
+      cursor,
+      submissions,
+      queuedMessageIds,
+      sessionId,
+      onSendError,
+      holds,
+      forget
+    )
+  }, [
+    cursor,
+    forget,
     holds,
     onSendError,
-    recorded,
     savedInFlightVersion,
+    sends,
     sessionId,
     submissions,
     queuedMessageIds
   ])
 
-  const sends = sendsBySession[sessionKey] ?? NO_SENDS
-  useEffect(() => {
-    const held = [...holds.keys(), ...asking]
-    if (sends.length === 0 && held.length === 0) {
-      return
-    }
-    const settled = recorded([...sends.map((send) => send.clientMessageId), ...held])
-    for (const send of sends) {
-      if (structuredAgentSessionReadCoversSend(cursor, send.recordedCursor)) {
-        settled.add(send.clientMessageId)
-      }
-    }
-    if (settled.size === 0) {
-      return
-    }
-    for (const id of settled) {
-      holds.cancel(id)
-    }
-    settleRecordedMobileNativeChatInFlightSends(
-      mobileNativeChatInFlightSendIds(settled),
-      submissions,
-      false,
-      queuedMessageIds
-    )
-    if (sends.some((send) => settled.has(send.clientMessageId))) {
-      forget(settled)
-    }
-  }, [asking, cursor, forget, holds, recorded, sends, submissions, queuedMessageIds])
-
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      const held = holds.keys()
+      const held = new Set([...holds.keys(), ...checked.keys()])
       holds.clear()
       // A send still unconfirmed stays saved; the chat's next open waits on it again.
-      releaseMobileNativeChatInFlightSends(mobileNativeChatInFlightSendIds(new Set(held)))
+      releaseMobileNativeChatInFlightSends(mobileNativeChatInFlightSendIds(held))
     }
-  }, [holds])
+  }, [checked, holds])
 
+  const optimistic = useMemo(
+    () =>
+      savedInFlightVersion && draftScope && sessionId
+        ? retainMobileStructuredSends(draftScope, sessionId, sends, queuedMessageIds)
+        : sends,
+    [savedInFlightVersion, draftScope, sessionId, sends, queuedMessageIds]
+  )
   return {
-    optimistic: sends,
+    optimistic,
     imagePreviewsByMessageId: imagePreviewsBySession[sessionKey] ?? NO_IMAGE_PREVIEWS,
     accept,
     acknowledge,

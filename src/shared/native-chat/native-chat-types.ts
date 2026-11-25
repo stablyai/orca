@@ -320,6 +320,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   pendingSend?: 'active' | 'queued'
   /** Client-derived submission facts; never persisted and independent of transcript placement. */
   deliveryState?: 'pending' | 'unknown'
+  /** Client-only saved copy of a send whose delivery is unconfirmed. */
+  retainedSendId?: string
   queuedMessageId?: string
   /** Unsent rows belong to no turn. Draw at journal position, or after the conversation when unplaced. */
   unsent?: true

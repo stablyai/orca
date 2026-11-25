@@ -13,6 +13,7 @@ import { translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { mobileNativeChatDisplayCopyText } from '../messages/mobile-native-chat-display-copy'
 import { useMobileSlackMirrorContext } from '../../slack-mirror/use-mobile-slack-mirror'
+import { settleMobileNativeChatInFlightSend } from '../../composer/delivery/mobile-native-chat-in-flight-sends'
 
 type Props = {
   message: NativeChatMessage
@@ -34,6 +35,7 @@ export function MobileNativeChatMessageActionsSheet({
   const closeSheet = () => setSheetVisible(false)
   const mirror = useMobileSlackMirrorContext()
   const posted = mirror?.link.mirrorPosts?.[message.id]?.state === 'posted'
+  const retainedSendId = message.retainedSendId
 
   return (
     <>
@@ -66,12 +68,19 @@ export function MobileNativeChatMessageActionsSheet({
               }
             },
             {
-              id: 'selectText',
-              label: t('chat.messageActionsSheet.selectText', 'Select text'),
-              icon: TextSelect,
-              disabled: text.length === 0,
+              id: retainedSendId ? 'removeUnconfirmed' : 'selectText',
+              label: retainedSendId
+                ? t('common.remove', 'Remove')
+                : t('chat.messageActionsSheet.selectText', 'Select text'),
+              icon: retainedSendId ? Trash2 : TextSelect,
+              destructive: Boolean(retainedSendId),
+              disabled: !retainedSendId && !text,
               onPress: () => {
-                selectRequested.current = true
+                if (retainedSendId) {
+                  settleMobileNativeChatInFlightSend(retainedSendId)
+                } else {
+                  selectRequested.current = true
+                }
               }
             },
             ...(mirror && posted

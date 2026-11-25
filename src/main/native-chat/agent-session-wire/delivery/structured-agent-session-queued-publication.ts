@@ -108,6 +108,9 @@ function computePublishedQueuedMessages(
       ...(row.state === 'returned' && row.returnedRejection
         ? { returnedRejection: row.returnedRejection }
         : {}),
+      ...(row.state === 'returned' && row.consumedAs && row.consumedAs !== row.messageId
+        ? { returnedFromClientMessageId: row.consumedAs }
+        : {}),
       ...(steers ? { steers: true as const } : {})
     })
   }
