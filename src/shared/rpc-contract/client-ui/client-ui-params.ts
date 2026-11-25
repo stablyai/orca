@@ -215,7 +215,8 @@ export const UiUpdateFields = z
             antigravity: z.string().optional(),
             cursor: z.string().optional(),
             zcode: z.string().optional(),
-            muse: z.string().optional()
+            muse: z.string().optional(),
+            'command-code': z.string().optional()
           })
           .optional()
       })

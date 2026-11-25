@@ -55,8 +55,12 @@ async function getJson(path: string, apiKey: string, signal?: AbortSignal): Prom
   }
   if (!response.ok) {
     await cancelUnreadResponseBody(response)
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       return { kind: 'failed', failureKind: 'missing-credentials', status: response.status }
+    }
+    if (response.status === 403) {
+      // A 403 can mean the plan lacks API access, not that the key is wrong.
+      return { kind: 'failed', failureKind: 'no-subscription', status: response.status }
     }
     if (response.status === 429) {
       return { kind: 'failed', failureKind: 'rate-limited', status: response.status }
@@ -83,6 +87,9 @@ export async function fetchCommandCodeRateLimits(input: {
   ])
   if (credits.kind === 'failed' && credits.failureKind === 'missing-credentials') {
     return failed('Command Code rejected the saved API key', 'missing-credentials')
+  }
+  if (credits.kind === 'failed' && credits.failureKind === 'no-subscription') {
+    return failed('This Command Code plan does not include API usage access', 'no-subscription')
   }
   if (credits.kind === 'failed' && subscriptions.kind === 'failed') {
     return failed('Command Code usage request failed', credits.failureKind)

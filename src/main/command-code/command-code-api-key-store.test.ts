@@ -13,16 +13,14 @@ vi.mock('../../shared/secure-storage/secret-store', () => ({
 
 describe('Command Code API key store', () => {
   let home = ''
-  const previous = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE }
   beforeEach(() => {
-    // os.homedir() reads HOME on POSIX and USERPROFILE on Windows; both must point at a throwaway directory.
+    // os.homedir() reads HOME on POSIX and USERPROFILE on Windows; both point at a throwaway directory.
     home = mkdtempSync(join(tmpdir(), 'command-code-key-'))
-    process.env.HOME = home
-    process.env.USERPROFILE = home
+    vi.stubEnv('HOME', home)
+    vi.stubEnv('USERPROFILE', home)
   })
   afterEach(() => {
-    process.env.HOME = previous.HOME
-    process.env.USERPROFILE = previous.USERPROFILE
+    vi.unstubAllEnvs()
     rmSync(home, { recursive: true, force: true })
   })
 

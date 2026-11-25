@@ -11,6 +11,7 @@ export const StatusBarItem = z.enum([
   'cursor',
   'zcode',
   'muse',
+  'command-code',
   'ssh',
   'resource-usage',
   'ports',

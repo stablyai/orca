@@ -12,6 +12,20 @@ import type { CommandCodeCredentialsStatus } from '../../../../../../shared/agen
 
 type CredentialStatus = boolean | 'loading' | 'unavailable'
 
+/** Kept out of the component: the React compiler cannot lower try/finally. */
+async function changeCommandCodeKey(
+  clear: boolean,
+  key: string
+): Promise<CommandCodeCredentialsStatus | null> {
+  try {
+    return clear
+      ? await window.api.commandCodeCredentials.clearApiKey()
+      : await window.api.commandCodeCredentials.saveApiKey(key)
+  } catch {
+    return null
+  }
+}
+
 /** Local-only: the key is saved on this device and never leaves main. Switching accounts means replacing the key. */
 export function CommandCodeAccountsSection(): React.JSX.Element {
   const t = useTranslate()
@@ -45,18 +59,15 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
 
   const updateCredential = async (clear: boolean): Promise<void> => {
     setBusy(true)
-    try {
-      const status = clear
-        ? await window.api.commandCodeCredentials.clearApiKey()
-        : await window.api.commandCodeCredentials.saveApiKey(draft.trim())
-      statusReadGeneration.current += 1
-      setCredentialStatus(status.apiKeyConfigured)
-      setDraft('')
-    } catch {
+    const status = await changeCommandCodeKey(clear, draft.trim())
+    setBusy(false)
+    if (!status) {
       toast.error(t('sessionHistory.settings.saveError', 'Could not save. Try again.'))
-    } finally {
-      setBusy(false)
+      return
     }
+    statusReadGeneration.current += 1
+    setCredentialStatus(status.apiKeyConfigured)
+    setDraft('')
   }
 
   const monthlyPercent = usage?.monthly ? Math.round(usage.monthly.usedPercent) : null
@@ -142,6 +153,13 @@ export function CommandCodeAccountsSection(): React.JSX.Element {
                   percent: monthlyPercent
                 }
               )}
+            </p>
+          )}
+          {usage.planType && (
+            <p>
+              {t('auto.components.settings.AccountsPane.commandCode.plan', 'Plan: {{plan}}', {
+                plan: usage.planType
+              })}
             </p>
           )}
           {balance !== null && (

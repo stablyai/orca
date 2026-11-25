@@ -6019,7 +6019,8 @@
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
             "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account.",
             "windowWeeks": "{{value0}}wk",
-            "museUsageMenu": "Muse Usage"
+            "museUsageMenu": "Muse Usage",
+            "commandCodeUsage": "Command Code Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -9052,7 +9053,8 @@
             "checking": "Checking…",
             "unavailable": "Status unavailable",
             "monthly": "Monthly plan: {{percent}}% used",
-            "credits": "Credits remaining: {{credits}}"
+            "credits": "Credits remaining: {{credits}}",
+            "plan": "Plan: {{plan}}"
           }
         },
         "AdvancedPane": {
