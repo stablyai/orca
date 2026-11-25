@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { refreshRemoteAgentOrchestration } from '@/runtime/agent-orchestration/remote-agent-orchestration'
 import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   ORCHESTRATION_SESSION_WORKERS_METHOD,
@@ -167,6 +168,10 @@ export function noteOrchestrationSessionWorkersChanged(
   const feed = feeds.get(`${environmentId ?? 'local'}:${sessionId}`)
   if (feed && feed.listeners.size > 0) {
     void readFeed(feed)
+  }
+  // A worker started or settled on a remote host: its sidebar row nests by that host's lineage.
+  if (environmentId) {
+    refreshRemoteAgentOrchestration(environmentId)
   }
 }
 

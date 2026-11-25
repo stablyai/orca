@@ -32,18 +32,28 @@ export function createAgentStatusOrchestrationActions(
       set((s, changedPaneKeys) => {
         const previous = s.runtimeAgentOrchestrationByPaneKey
         const reconciled: Record<string, AgentStatusOrchestrationContext> = Object.fromEntries([])
-        let runtimeMapChanged = Object.keys(previous).length !== Object.keys(entries).length
+        let runtimeMapChanged = false
+        // Each host replaces only its own contexts: a local graph reply must not drop a remote host's lineage.
+        for (const [key, old] of Object.entries(previous)) {
+          if (!(key in entries) && orchestrationProducer(old) !== producerHost) {
+            reconciled[key] = old
+          } else if (!(key in entries)) {
+            runtimeMapChanged = true
+          }
+        }
         for (const [key, context] of Object.entries(entries)) {
           const old = previous[key]
+          // A re-sent held map passes the very objects stored, which keep the host that produced them.
           const value =
             old &&
-            orchestrationProducer(old) === producerHost &&
-            orchestrationContextsEqual(old, context)
+            (old === context ||
+              (orchestrationProducer(old) === producerHost &&
+                orchestrationContextsEqual(old, context)))
               ? old
               : context
           reconciled[key] = value
-          recordOrchestrationProducer(value, producerHost)
           if (value !== old) {
+            recordOrchestrationProducer(value, producerHost)
             runtimeMapChanged = true
           }
         }

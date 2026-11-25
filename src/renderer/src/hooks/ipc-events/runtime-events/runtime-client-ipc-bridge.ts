@@ -51,6 +51,7 @@ import {
 } from './runtime-environment-subscription-selection'
 import type { WorktreeEventRuntime } from '../workspace-catalog/worktree-event-runtime'
 import { noteOrchestrationSessionWorkersChanged } from '@/lib/orchestration-session-workers'
+import { refreshRemoteAgentOrchestration } from '@/runtime/agent-orchestration/remote-agent-orchestration'
 import { readPublishedSortOrders } from '../../../store/slices/worktrees/listing/worktree-sort-order-patch'
 
 const readSyncState = () =>
@@ -83,6 +84,8 @@ export function registerRuntimeClientIpcBridge(
   const runtimeProjectRefreshScheduler = createRuntimeProjectCatalogRefreshScheduler()
   const requestProjectRefresh = (environmentId: string): void => {
     invalidateRemoteWorktreeLineage(useAppStore.getState, environmentId)
+    // Workers that started while this window was away announced themselves to no one here.
+    refreshRemoteAgentOrchestration(environmentId, { reconnected: true })
     runtimeProjectRefreshScheduler.request(environmentId)
   }
 
