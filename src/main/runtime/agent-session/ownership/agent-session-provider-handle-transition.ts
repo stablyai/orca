@@ -57,9 +57,16 @@ export function providerSwitchHandleLink(
   link: AgentSessionProviderHandleLink
 ): AgentSessionProviderHandleLink {
   const previous = record.providerHandleChain.at(-1)
-  return record.providerSwitch && previous && previous.handle.agent !== link.handle.agent
-    ? { ...link, switchedFrom: previous.linkId }
-    : link
+  if (!record.providerSwitch) {
+    return link
+  }
+  return {
+    ...link,
+    switchedBy: record.providerSwitch.clientMessageId,
+    ...(previous && previous.handle.agent !== link.handle.agent
+      ? { switchedFrom: previous.linkId }
+      : {})
+  }
 }
 
 /** Revise the live head in place, preserving link id/provenance and bounding chain growth.

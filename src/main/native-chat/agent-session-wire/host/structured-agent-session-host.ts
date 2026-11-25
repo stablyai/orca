@@ -284,7 +284,7 @@ export class StructuredAgentSessionHost {
   setOption = this.mutations.setOption
   selectProvider = async (
     params: AgentSessionSelectProviderParams,
-    saveDefault?: () => Promise<void>
+    botDefault?: { botId: string; save: () => Promise<void> }
   ) => {
     await this.conversation(params.sessionId)
     return this.serialize(params.sessionId, async () => {
@@ -300,11 +300,12 @@ export class StructuredAgentSessionHost {
           publish: this.clientDelivery.publishStatusAndSettlement
         },
         session,
-        params
+        params,
+        botDefault?.botId
       )
       if (result.status === 'selected') {
         try {
-          await saveDefault?.()
+          await botDefault?.save()
         } catch (error) {
           await this.deps.store.updateRecord(params.sessionId, {
             kind: 'select-provider',

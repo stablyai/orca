@@ -256,6 +256,7 @@ export type StructuredAgentSessionHostDeps = {
     agent: string,
     permission: AgentChatPermissionChoice
   ) => Promise<AgentSessionAccountHome>
+  botHomeDefault?: (botId: string, sessionId: string) => string | undefined
   /** The tools a chat's agent launched with, against what its next launch would get; absent or a
    *  chat that launched none (not a bot's, or look-around) never refreshes for tools. */
   launchTools?: {

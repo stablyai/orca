@@ -62,7 +62,11 @@ export function continuationContextReader(
       items[part.index] = markers.mark(items[part.index], index)
     })
     const projected = projectStructuredAgentSessionMessages(
-      items,
+      input.inPlace
+        ? items.filter(
+            ({ body }) => body.kind !== 'status' || body.presentation !== 'context-handoff'
+          )
+        : items,
       [],
       context.submissions,
       projectSavedChatContextItems

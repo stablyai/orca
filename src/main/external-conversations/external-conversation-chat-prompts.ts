@@ -219,12 +219,14 @@ export function chatPromptFacts(chats: ConversationChatHost | undefined) {
     switchedAgentForTurn: (sessionId: string) => {
       const chat = currentChat(chats)
       const record = chat?.deps.store.getConversation(sessionId)
-      const opener = chat?.publishedWork(sessionId)?.activeTurnOpener
-      if (
-        !record?.provider ||
-        !record.providerSwitch ||
-        opener?.itemId !== agentJournalSubmissionKey(record.providerSwitch.clientMessageId)
-      ) {
+      const switchedBy =
+        record?.providerSwitch?.clientMessageId ?? record?.providerHandleChain?.at(-1)?.switchedBy
+      const work = chat?.publishedWork(sessionId)
+      const activeTurn = work?.activeTurn?.item.body
+      const opener =
+        (activeTurn ? readAgentJournalTurn(activeTurn)?.userItemId : undefined) ??
+        work?.activeTurnOpener?.itemId
+      if (!record?.provider || !switchedBy || opener !== agentJournalSubmissionKey(switchedBy)) {
         return undefined
       }
       return tuiAgentDisplayName(record.provider) ?? record.provider

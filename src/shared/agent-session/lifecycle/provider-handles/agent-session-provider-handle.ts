@@ -71,6 +71,7 @@ export type AgentSessionProviderHandleLink = {
   observedAt: number
   /** The previous provider's last link when this native handle took over the Orca chat. */
   switchedFrom?: string
+  switchedBy?: string
   /** Journal position at the end of this handle's last active period. */
   seenThrough?: AgentJournalCursor
   accountHome?: AgentSessionAccountHome
@@ -141,6 +142,10 @@ export function isAgentSessionProviderHandleLink(
     Number.isSafeInteger(link.observedAt) &&
     (link.switchedFrom === undefined ||
       (typeof link.switchedFrom === 'string' && LINK_ID_PATTERN.test(link.switchedFrom))) &&
+    (link.switchedBy === undefined ||
+      (typeof link.switchedBy === 'string' &&
+        link.switchedBy.length > 0 &&
+        link.switchedBy.length <= 512)) &&
     (link.seenThrough === undefined ||
       (link.seenThrough !== null &&
         typeof link.seenThrough.epoch === 'string' &&

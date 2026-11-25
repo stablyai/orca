@@ -194,6 +194,15 @@ export class StructuredAgentSessionDeliveryLoop {
     const switching = record?.providerSwitch
     if (record && switching && !isCurrentProviderSwitch(record, oldest?.clientMessageId)) {
       const original = await session.journal.reads.submission(switching.clientMessageId)
+      if (
+        original?.dispatchState === 'pending' &&
+        original.handedOverAt !== undefined &&
+        isCurrentProviderSwitch(record, switching.clientMessageId) &&
+        session.child &&
+        !session.child.close
+      ) {
+        return this.stop(sessionId)
+      }
       await this.deps.settleProviderSwitch?.(
         session,
         switching.clientMessageId,

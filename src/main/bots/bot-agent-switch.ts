@@ -89,7 +89,7 @@ export async function changeBotAgentInPlace(
           }
         : {})
     },
-    save
+    { botId: bot.id, save }
   )
   if (result.status === 'consent-required') {
     throw new Error('Home Chat permissions changed. Review the agent switch again.')

@@ -25,6 +25,7 @@ import { attachParamsForRecord } from '../host/structured-agent-session-conversa
 import { continuationContextReader } from '../recovery/structured-agent-session-continuation-context'
 import { buildAgentSessionContinuationPrompt } from '../../../../shared/agent-session/conversation-context/agent-session-continuation'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isUnsettledQueuedMessage } from '../../agent-session-journal/queued-messages/queued-message-table'
 
@@ -47,11 +48,16 @@ export function providerSwitchSourcePermission(
 export async function selectStructuredChatProvider(
   host: ProviderSelectionHost,
   session: StructuredAgentSessionHostSession,
-  { sessionId, agent, options, consent }: AgentSessionSelectProviderParams
+  { sessionId, agent, options, consent }: AgentSessionSelectProviderParams,
+  botDefault?: string
 ): Promise<AgentSessionSelectProviderResult> {
   const { deps } = host
   const record = deps.store.requireWritableRecord(sessionId)
-  const selection = { agent, ...(options ? { options } : {}) }
+  const selection = {
+    agent,
+    ...(options ? { options } : {}),
+    ...(botDefault ? { botDefault } : {})
+  }
   if (agent !== record.provider) {
     if (
       !deps.resolveProviderSwitchAccount ||
@@ -77,7 +83,6 @@ export async function selectStructuredChatProvider(
         previous?.agent === agent &&
         previousConsent?.from === record.provider &&
         previousConsent.fromPermission === fromPermission &&
-        previousConsent.hostRunId === hostRunId &&
         previousConsent.through.epoch === cursor.epoch
       ) {
         await deps.store.updateRecord(sessionId, {
@@ -98,7 +103,7 @@ export async function selectStructuredChatProvider(
         kind: 'select-provider',
         selection: {
           ...selection,
-          consent: { from: record.provider, fromPermission, through: cursor, hostRunId }
+          consent: { from: record.provider, fromPermission, through: cursor }
         },
         now: host.now()
       })
@@ -123,6 +128,18 @@ export async function prepareStructuredChatProviderSwitch(
   if (!record || !selection || record.providerSwitch) {
     return 'none'
   }
+  if (
+    selection.botDefault &&
+    deps.botHomeDefault?.(selection.botDefault, sessionId) !== selection.agent
+  ) {
+    await deps.store.updateRecord(sessionId, {
+      kind: 'select-provider',
+      selection: null,
+      now: host.now()
+    })
+    host.publish(sessionId)
+    return 'none'
+  }
   const body = await session.journal.reads.itemBody(agentJournalSubmissionKey(next.clientMessageId))
   if (body?.kind !== 'message' || body.command) {
     return 'none'
@@ -145,8 +162,7 @@ export async function prepareStructuredChatProviderSwitch(
     if (
       consent?.from !== record.provider ||
       consent.fromPermission !== fromPermission ||
-      consent.through.epoch !== cursor.epoch ||
-      consent.hostRunId !== hostRunId
+      consent.through.epoch !== cursor.epoch
     ) {
       await deps.store.updateRecord(sessionId, {
         kind: 'select-provider',
@@ -216,8 +232,33 @@ export async function prepareStructuredChatProviderSwitch(
     now: host.now()
   })
   setProviderSwitchSessionParams(session, switched)
+  await recordProviderHandoff(session, switched, switched.lease.runtimeFence, false)
   host.publish(sessionId)
   return 'changed'
+}
+
+export async function recordProviderHandoff(
+  session: StructuredAgentSessionHostSession,
+  record: AgentSessionRecord,
+  fence: number,
+  failed: boolean
+): Promise<void> {
+  const handoff = record.providerSwitch
+  if (!handoff) {
+    return
+  }
+  const from = tuiAgentDisplayName(handoff.from.provider) ?? handoff.from.provider
+  const to = tuiAgentDisplayName(record.provider) ?? record.provider
+  await session.journal.appendItem(
+    { provider: 'orca', clientMessageId: `context-handoff:${handoff.clientMessageId}` },
+    {
+      kind: 'status',
+      presentation: 'context-handoff',
+      text: `Context handoff · ${from} → ${to}`,
+      ...(failed ? { tone: 'error' } : {})
+    },
+    { fence, turnScope: { kind: 'thread' } }
+  )
 }
 
 export function isCurrentProviderSwitch(

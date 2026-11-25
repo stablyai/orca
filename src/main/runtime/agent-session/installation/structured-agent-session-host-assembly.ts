@@ -108,6 +108,7 @@ export async function installOnJournal(
     ...(deps.resolveProviderSwitchAccount
       ? { resolveProviderSwitchAccount: deps.resolveProviderSwitchAccount }
       : {}),
+    ...(deps.botHomeDefault ? { botHomeDefault: deps.botHomeDefault } : {}),
     ...(deps.launchTools ? { launchTools: deps.launchTools } : {}),
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
     ...(catalogOwner.modelCatalog ? { modelCatalog: catalogOwner.modelCatalog } : {})

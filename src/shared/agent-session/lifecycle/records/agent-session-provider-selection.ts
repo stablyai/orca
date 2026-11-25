@@ -11,12 +11,12 @@ import { agentChatPermissionModes } from '../../../agent-launch/permissions/agen
 export type AgentSessionProviderSelection = {
   agent: string
   options?: Record<string, string>
+  botDefault?: string
   /** Older queued messages retain their authorization if the new agent requires broader access. */
   consent?: {
     from: string
     fromPermission: AgentChatPermissionMode
     through: AgentJournalCursor
-    hostRunId: string
   }
 }
 

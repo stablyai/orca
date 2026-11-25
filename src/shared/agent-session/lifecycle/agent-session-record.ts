@@ -380,11 +380,11 @@ function isAgentSessionProviderSelection(value: unknown): value is AgentSessionP
   return (
     isStructuredAgentId(selection.agent) &&
     (selection.options === undefined || isAgentSessionOptions(selection.options)) &&
+    (selection.botDefault === undefined || typeof selection.botDefault === 'string') &&
     (consent === undefined ||
       (consent !== null &&
         isStructuredAgentId(consent.from) &&
         isAgentChatPermissionMode(consent.fromPermission) &&
-        typeof consent.hostRunId === 'string' &&
         isProviderSwitchCursor(consent.through)))
   )
 }

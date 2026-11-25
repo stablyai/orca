@@ -230,9 +230,9 @@ export async function beginSubmissionHandover(
             })
             await rideAlong.taken(ctx.fence)
           }
-          await ctx.settleProviderSwitch?.(
-            outcome?.state === 'accepted' || outcome?.state === 'admitted' ? 'delivered' : 'failed'
-          )
+          if (outcome?.state !== 'admitted') {
+            await ctx.settleProviderSwitch?.(outcome?.state === 'accepted' ? 'delivered' : 'failed')
+          }
         })
       } finally {
         release?.()

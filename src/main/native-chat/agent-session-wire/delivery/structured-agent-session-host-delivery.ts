@@ -44,9 +44,9 @@ import { createStructuredAgentSessionRanRecorder } from '../options/structured-a
 import {
   prepareStructuredChatProviderSwitch,
   readStructuredChatProviderSwitchPrompt,
+  recordProviderHandoff,
   setProviderSwitchSessionParams
 } from './structured-agent-session-provider-switch'
-import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
@@ -158,20 +158,9 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         now: providerSwitchHost.now()
       })
       setProviderSwitchSessionParams(session, record)
-      const from =
-        tuiAgentDisplayName(current.providerSwitch.from.provider) ??
-        current.providerSwitch.from.provider
-      const to = tuiAgentDisplayName(current.provider) ?? current.provider
-      await session.journal.appendItem(
-        { provider: 'orca', clientMessageId: `context-handoff:${clientMessageId}` },
-        {
-          kind: 'status',
-          presentation: 'context-handoff',
-          text: `Context handoff · ${from} → ${to}`,
-          ...(outcome === 'failed' ? { tone: 'error' } : {})
-        },
-        { fence: record.lease.runtimeFence, turnScope: { kind: 'thread' } }
-      )
+      if (outcome === 'failed') {
+        await recordProviderHandoff(session, current, record.lease.runtimeFence, true)
+      }
       publishSwitch(id)
     },
     providerSwitchPrompt: (session, clientMessageId) =>
