@@ -18,22 +18,16 @@
     }
   },
   "agentCliUpdate": {
-    "cardDone_one": "{{count}} CLI is up to date",
-    "cardDone_other": "All {{count}} CLIs are up to date",
-    "cardFailed_one": "{{count}} CLI didn’t update",
-    "cardFailed_other": "{{count}} CLIs didn’t update",
-    "cardHostsTitle_one": "{{count}} CLI update on {{hosts}} hosts",
-    "cardHostsTitle_other": "{{count}} CLI updates on {{hosts}} hosts",
-    "cardNamesMany_one": "{{first}} and {{count}} more",
-    "cardNamesMany_other": "{{first}} and {{count}} more",
-    "cardNamesSome_one": "{{first}}, {{second}} and {{count}} more",
-    "cardNamesSome_other": "{{first}}, {{second}} and {{count}} more",
-    "cardUpdateSome_one": "Update {{count}} CLI",
-    "cardUpdateSome_other": "Update {{count}} CLIs",
     "heading_one": "{{count}} CLI update available",
     "heading_other": "{{count}} CLI updates available",
     "statusCount_one": "{{count}} CLI update",
-    "statusCount_other": "{{count}} CLI updates"
+    "statusCount_other": "{{count}} CLI updates",
+    "toastDone_one": "{{count}} CLI updated",
+    "toastDone_other": "{{count}} CLIs updated",
+    "toastFailedCount_one": "{{count}} update failed",
+    "toastFailedCount_other": "{{count}} updates failed",
+    "toastUpdating_one": "Updating {{current}} of {{count}} CLI",
+    "toastUpdating_other": "Updating {{current}} of {{count}} CLIs"
   },
   "agentLaunch": {
     "opencode": {
