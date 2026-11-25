@@ -68,10 +68,12 @@ export async function discoverDimaModelsOnHost(
     process.platform
   )
   const homeIndex = args.lastIndexOf('--home')
+  const configIndex = args.lastIndexOf('--model-config')
   return discoverDimaModels(spec, {
     ...input.options,
     env,
     productHome: homeIndex !== -1 ? args[homeIndex + 1] : undefined,
+    modelConfig: configIndex !== -1 ? args[configIndex + 1] : undefined,
     startDaemon: (signal) =>
       startDimaForModelListing(
         input.spawnAgent,

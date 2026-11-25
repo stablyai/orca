@@ -1,10 +1,7 @@
 import { createHash } from 'node:crypto'
 import { lstat, realpath } from 'node:fs/promises'
-import { connect } from 'node:net'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { StringDecoder } from 'node:string_decoder'
-import { createIncrementalNdjsonFramer } from '../../../shared/json-stream/main-process-ndjson-framer'
 import {
   dimaCatalogModels,
   dimaCatalogReplyModels,
@@ -15,18 +12,17 @@ import type { AgentModelProbeSpec } from '../../../shared/agent-session/options/
 import { isProviderRecord } from '../../provider-process/provider-json-record'
 import { staticModelDiscoveryResult } from './commit-message-model-discovery-policy'
 import type { DiscoverCommitMessageModelsResult } from '../source-control-text-generation-types'
+import {
+  dimaDaemonProfileError,
+  dimaLaunchProfile,
+  greetDaemon,
+  type DaemonCall,
+  type DaemonReply
+} from './dima-daemon-connection'
 
-// dima's native client accepts up to 16 MiB per JSON frame, including a full provider catalog.
-const DIMA_FRAME_BYTES = 16 * 1024 * 1024
 const PROBE_TIMEOUT_MS = 10_000
 const PAGE_LIMIT = 128
 const MAX_PAGES = 64
-// dima's own client steps down one refused version per new connection.
-const PROTOCOL_VERSIONS = [4, 3]
-
-type DaemonReply = { result?: unknown; error?: unknown }
-type DaemonCall = (method: string, params: Record<string, unknown>) => Promise<DaemonReply>
-type Daemon = { call: DaemonCall; close: () => void }
 
 function envLookup(
   env: NodeJS.ProcessEnv,
@@ -82,91 +78,6 @@ export async function dimaDaemonEndpoint(
     : `\\\\?\\${nativeHome}`
   const key = createHash('sha256').update(`dimcode:${verbatim}`).digest('hex')
   return `\\\\.\\pipe\\dim-rust-${key.slice(0, 32)}`
-}
-
-/** A connection to a daemon that already listens; null when none answers. Never starts one. */
-function openDaemon(endpoint: string, signal: AbortSignal): Promise<Daemon | null> {
-  return new Promise((settle) => {
-    if (signal.aborted) {
-      settle(null)
-      return
-    }
-    const socket = connect(endpoint)
-    const pending = new Map<number, (reply: DaemonReply) => void>()
-    const decoder = new StringDecoder('utf8')
-    let nextId = 0
-    const close = (): void => {
-      socket.destroy()
-    }
-    signal.addEventListener('abort', close, { once: true })
-    const framer = createIncrementalNdjsonFramer(
-      (message) => {
-        if (!isProviderRecord(message) || typeof message.id !== 'number') {
-          return
-        }
-        const answer = pending.get(message.id)
-        pending.delete(message.id)
-        answer?.(message)
-      },
-      close,
-      { maxLineBytes: DIMA_FRAME_BYTES }
-    )
-    socket.on('data', (chunk: Buffer) => {
-      framer.feed(decoder.write(chunk))
-    })
-    socket.on('error', () => settle(null))
-    socket.on('close', () => {
-      signal.removeEventListener('abort', close)
-      settle(null)
-      for (const answer of pending.values()) {
-        answer({ error: 'closed' })
-      }
-      pending.clear()
-    })
-    socket.once('connect', () =>
-      settle({
-        call: (method, params) =>
-          socket.destroyed
-            ? Promise.resolve({ error: 'closed' })
-            : new Promise((answer) => {
-                nextId += 1
-                pending.set(nextId, answer)
-                socket.write(`${JSON.stringify({ jsonrpc: '2.0', id: nextId, method, params })}\n`)
-              }),
-        close
-      })
-    )
-  })
-}
-
-async function greetDaemon(
-  endpoint: string,
-  signal: AbortSignal
-): Promise<(Daemon & { features: string[] }) | null> {
-  for (const protocolVersion of PROTOCOL_VERSIONS) {
-    const daemon = await openDaemon(endpoint, signal)
-    if (!daemon) {
-      return null
-    }
-    const reply = await daemon.call('hello', {
-      protocolVersion,
-      clientKind: 'other',
-      clientName: 'Orca'
-    })
-    const features = isProviderRecord(reply.result) ? reply.result.features : undefined
-    if (Array.isArray(features)) {
-      return {
-        ...daemon,
-        features: features.filter((name): name is string => typeof name === 'string')
-      }
-    }
-    daemon.close()
-    const refusal = isProviderRecord(reply.error) ? reply.error.data : undefined
-    if (!isProviderRecord(refusal) || refusal.appError !== 'protocol_version') {
-      return null
-    }
-  }
-  return null
 }
 
 function result(reply: DaemonReply, method: string): unknown {
@@ -268,6 +179,8 @@ export async function discoverDimaModels(
     cwd?: string
     wslDistro?: string
     productHome?: string
+    /** The --model-config path of the launch the models are for, as its Arguments name it. */
+    modelConfig?: string
     startDaemon?: (signal: AbortSignal) => Promise<boolean>
   }
 ): Promise<DiscoverCommitMessageModelsResult> {
@@ -282,9 +195,16 @@ export async function discoverDimaModels(
   ) {
     return staticModelDiscoveryResult(spec, [], spec.defaultModelId, 'probe')
   }
+  const profile = await dimaLaunchProfile(input.modelConfig, input.cwd).catch(() => null)
+  if (!profile) {
+    return {
+      success: false,
+      error: `${spec.label} can't read the --model-config file in its Arguments, ${input.modelConfig}.`
+    }
+  }
   const connectToDaemon = async (signal: AbortSignal) => {
     const endpoint = await dimaDaemonEndpoint(env, input.cwd, process.platform, input.productHome)
-    return endpoint ? greetDaemon(endpoint, signal) : null
+    return endpoint ? greetDaemon(endpoint, signal, profile) : null
   }
   const deadline = new AbortController()
   const timer = setTimeout(() => deadline.abort(), PROBE_TIMEOUT_MS)
@@ -299,6 +219,15 @@ export async function discoverDimaModels(
         success: false,
         error: `${spec.label} could not reach its model catalog. Check the dima installation and refresh the list.`
       }
+    }
+    // Reused only when it serves this launch's profile; another profile's daemon is left running.
+    if (!daemon.servesProfile) {
+      return { success: false, error: dimaDaemonProfileError(spec.label, profile) }
+    }
+    // A --model-config daemon lists no provider catalog (alpha.25 and .29); a launch runs the
+    // file's default model unless its Arguments name --provider and --model.
+    if (profile.kind === 'configured' && !daemon.features.includes('provider.models.query')) {
+      return staticModelDiscoveryResult(spec, [], spec.defaultModelId, 'probe')
     }
     const { models, partial } = daemon.features.includes('provider.models.query')
       ? { models: await querySelectableModels(daemon.call), partial: false }
