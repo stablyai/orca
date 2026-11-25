@@ -244,22 +244,15 @@
     },
     "paneView": {
       "forward": "進む",
-      "keyboardPlaceholder": "ページに入力…",
       "reload": "リロード",
-      "sendText": "ブラウザにテキストを送信",
       "dialogTitleWithOrigin": "{{origin}} の内容",
       "dialogTitleNoOrigin": "このページの内容",
-      "dialogAnswer": "回答",
       "stop": "停止",
       "reconnect": "再接続"
     },
-    "pointerModifiers": {
-      "clickModifier": "クリック時の修飾キー {{key}}"
-    },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "送信を確認できません。再試行する前にページを確認してください。",
-      "dialogAnswerFailed": "回答をページに送信できませんでした。",
-      "sent": "送信済み"
+      "dialogAnswerFailed": "回答をページに送信できませんでした。"
     },
     "stream": {
       "updateApp": "ここでブラウザのタブをストリーミングするには、Orca アプリを更新してください。",
@@ -268,10 +261,6 @@
       "pageUnavailable": "ブラウザのページはまだ利用できません。",
       "timedOut": "ブラウザのストリーミングがタイムアウトしました。",
       "stopped": "ストリーミングが停止しました"
-    },
-    "viewModeSwitch": {
-      "mobileView": "ウェブサイトのモバイル表示に切り替え",
-      "webView": "ウェブサイトのデスクトップ表示に切り替え"
     },
     "loadFailure": {
       "retry": "再試行",

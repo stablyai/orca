@@ -251,22 +251,15 @@
     },
     "paneView": {
       "forward": "Adelante",
-      "keyboardPlaceholder": "Escribe en la página…",
       "reload": "Recargar",
-      "sendText": "Enviar texto al navegador",
       "dialogTitleWithOrigin": "{{origin}} dice",
       "dialogTitleNoOrigin": "Esta página dice",
-      "dialogAnswer": "Respuesta",
       "stop": "Detener",
       "reconnect": "Reconectar"
     },
-    "pointerModifiers": {
-      "clickModifier": "Modificador {{key}} para clics"
-    },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "Envío sin confirmar — revisa la página antes de reintentarlo",
-      "dialogAnswerFailed": "Esa respuesta no llegó a la página.",
-      "sent": "Enviado"
+      "dialogAnswerFailed": "Esa respuesta no llegó a la página."
     },
     "stream": {
       "updateApp": "Actualiza la app de Orca para transmitir aquí las pestañas del navegador.",
@@ -275,10 +268,6 @@
       "pageUnavailable": "La página del navegador aún no está disponible.",
       "timedOut": "Se agotó el tiempo de espera de la transmisión del navegador.",
       "stopped": "Transmisión detenida"
-    },
-    "viewModeSwitch": {
-      "mobileView": "Mostrar vista móvil del sitio web",
-      "webView": "Mostrar vista de escritorio del sitio web"
     },
     "loadFailure": {
       "retry": "Reintentar",
