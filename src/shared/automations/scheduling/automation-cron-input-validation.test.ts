@@ -6,6 +6,19 @@ import {
 import { isRunnableAutomationSchedule, parseCronExpression } from './automation-schedule-parsing'
 
 const ascending = (values: Set<number>): number[] => [...values].sort((left, right) => left - right)
+const DTSTART = Date.parse('2027-01-01T00:00:00Z')
+
+function runsBetween(schedule: string, from: string, to: string, timezone?: string): string[] {
+  const runs: string[] = []
+  let after = Date.parse(from)
+  for (;;) {
+    after = nextAutomationOccurrenceAfter(schedule, DTSTART, after, timezone)
+    if (after > Date.parse(to)) {
+      return runs
+    }
+    runs.push(new Date(after).toISOString())
+  }
+}
 
 describe('cron oversized steps (#15895)', () => {
   // Input-only validation preserves legacy cadence without mid-tick errors, keeping stored schedules editable.
@@ -28,46 +41,31 @@ describe.skipIf(process.platform === 'win32')('cron occurrence local-time contro
     vi.unstubAllEnvs()
   })
 
-  it('skips the wall-clock hour that local spring-forward removes', () => {
+  it('fires a fixed time local spring-forward skips once, the gap length later', () => {
     vi.stubEnv('TZ', 'America/New_York')
-    // Precondition: the stub took and 2026-03-08 really does lose an hour here.
-    expect(new Date(2026, 2, 8, 12).getTimezoneOffset()).toBe(
-      new Date(2026, 2, 8, 0).getTimezoneOffset() - 60
+    // Precondition: the stub took and 2027-03-14 really does lose an hour here.
+    expect(new Date(2027, 2, 14, 12).getTimezoneOffset()).toBe(
+      new Date(2027, 2, 14, 0).getTimezoneOffset() - 60
     )
 
     expect(
-      nextAutomationOccurrenceAfter(
-        '30 2 * * *',
-        new Date(2026, 0, 1).getTime(),
-        new Date(2026, 2, 8, 0, 0).getTime()
-      )
-    ).toBe(new Date(2026, 2, 9, 2, 30).getTime())
+      runsBetween('30 2 * * *', '2027-03-13T12:00:00-05:00', '2027-03-15T12:00:00-04:00')
+    ).toEqual(['2027-03-14T07:30:00.000Z', '2027-03-15T06:30:00.000Z'])
   })
 
-  it('fires both repeats of the wall-clock hour local fall-back replays', () => {
+  it('fires a fixed time local fall-back repeats once, on its first pass', () => {
     vi.stubEnv('TZ', 'America/New_York')
-    expect(new Date(2026, 10, 1, 12).getTimezoneOffset()).toBe(
-      new Date(2026, 10, 1, 0).getTimezoneOffset() + 60
+    expect(new Date(2027, 10, 7, 12).getTimezoneOffset()).toBe(
+      new Date(2027, 10, 7, 0).getTimezoneOffset() + 60
     )
-
-    const first = nextAutomationOccurrenceAfter(
-      '30 1 * * *',
-      new Date(2026, 0, 1).getTime(),
-      new Date(2026, 10, 1, 0, 0).getTime()
-    )
-    const second = nextAutomationOccurrenceAfter(
-      '30 1 * * *',
-      new Date(2026, 0, 1).getTime(),
-      first
-    )
-
-    expect(new Date(first).getHours()).toBe(1)
-    expect(new Date(second).getHours()).toBe(1)
-    expect(second - first).toBe(60 * 60 * 1000)
 
     expect(
-      nextAutomationOccurrenceAfter('30 1 * * *', new Date(2026, 0, 1).getTime(), second + 5_000)
-    ).toBe(new Date(2026, 10, 2, 1, 30).getTime())
+      runsBetween('30 1 * * *', '2027-11-06T12:00:00-04:00', '2027-11-08T12:00:00-05:00')
+    ).toEqual(['2027-11-07T05:30:00.000Z', '2027-11-08T06:30:00.000Z'])
+    const secondPass = Date.parse('2027-11-07T01:45:00-05:00')
+    expect(latestAutomationOccurrenceAtOrBefore('30 1 * * *', DTSTART, secondPass)).toBe(
+      Date.parse('2027-11-07T01:30:00-04:00')
+    )
   })
 
   it('advances hourly schedules through both passes of the fall-back hour', () => {
@@ -85,5 +83,32 @@ describe.skipIf(process.platform === 'win32')('cron occurrence local-time contro
     expect(
       latestAutomationOccurrenceAtOrBefore('FREQ=HOURLY;BYMINUTE=30', dtstart, secondPass + 5_000)
     ).toBe(secondPass)
+    // An hour wildcard counts elapsed hours, so cron's hourly keeps both passes too.
+    expect(nextAutomationOccurrenceAfter('30 * * * *', dtstart, firstPass)).toBe(secondPass)
+  })
+})
+
+// The automation's own zone takes the Intl path, which runs on every platform.
+describe('cron fixed times across DST in a named zone', () => {
+  const zone = 'America/New_York'
+
+  it('fires a skipped time once and a repeated time once, as the RRULE preset does', () => {
+    const springForward = ['2027-03-13T12:00:00-05:00', '2027-03-15T12:00:00-04:00'] as const
+    const fallBack = ['2027-11-06T12:00:00-04:00', '2027-11-08T12:00:00-05:00'] as const
+
+    expect(runsBetween('30 2 * * *', ...springForward, zone)).toEqual([
+      '2027-03-14T07:30:00.000Z',
+      '2027-03-15T06:30:00.000Z'
+    ])
+    expect(runsBetween('FREQ=DAILY;BYHOUR=2;BYMINUTE=30', ...springForward, zone)).toEqual(
+      runsBetween('30 2 * * *', ...springForward, zone)
+    )
+    expect(runsBetween('30 1 * * *', ...fallBack, zone)).toEqual([
+      '2027-11-07T05:30:00.000Z',
+      '2027-11-08T06:30:00.000Z'
+    ])
+    expect(runsBetween('FREQ=DAILY;BYHOUR=1;BYMINUTE=30', ...fallBack, zone)).toEqual(
+      runsBetween('30 1 * * *', ...fallBack, zone)
+    )
   })
 })

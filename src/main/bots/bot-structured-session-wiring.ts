@@ -1,13 +1,20 @@
 // A host's structured-session wiring for bots: preambles, own tools, the turn context, and look-around turns.
 import type { Bot } from '../../shared/bot-types'
+import { BoundedMap } from '../../shared/collections/bounded-map'
 import type { KnownPairedBotRoster } from './paired-bot-rosters'
 import type { StructuredAgentSessionRuntimeDeps } from '../runtime/agent-session/installation/structured-agent-session-runtime-contract'
 import { botHomeFolder, localBotHomeFilesystem } from './bot-home'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { BotLookAroundStore } from './bot-look-around-store'
-import { botSessionToolServers, currentBotToolsRevision } from './bot-tools-file'
-import { botToolsEpoch, type BotLaunchedTools } from './bot-tools-revision'
+import type { BotTurnNoteRead } from './bot-active-work'
+import {
+  sessionLaunchToolsChanged,
+  sessionLaunchToolsOutdated,
+  sessionMcpLaunchTools,
+  type SessionLaunchedTools
+} from '../mcp-servers/session-mcp-launch'
+import { sessionHostMcpDelivered } from '../mcp-servers/session-host-mcp-delivery'
 import { createBotTurnContext } from './bot-turn-context'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { BotChatJournal } from './bot-turn-rows'
@@ -54,7 +61,7 @@ export function botStructuredSessionWiring(deps: {
   /** What the bot's other chats did lately, as a turn of this chat may hear of it. */
   recentChats?: (botId: string, sessionId: string) => Promise<BotRecentChatsSection | null>
   /** The every-fifth-turn note on questions an owner chat left unanswered; null on other turns. */
-  unansweredQuestionNote?: (sessionId: string) => Promise<string | null>
+  unansweredQuestionNote?: BotTurnNoteRead
   /** A bot's chats on this host, each with whether it takes mail, as `sessionId` asks. */
   botChats?: (bot: Bot, sessionId: string) => Promise<readonly BotChatRow[]>
   /** The bots on these paired servers as last read, without waiting on the network. */
@@ -88,8 +95,9 @@ export function botStructuredSessionWiring(deps: {
   }
   /** The projects each session's launch scanned, so a later link is told apart from them. */
   const launchScans = new Map<string, readonly string[] | null>()
-  /** The tools each chat's running agent launched with; a chat with none here never refreshes. */
-  const launchedTools = new Map<string, BotLaunchedTools>()
+  /** The tools each chat's running agent launched with; a chat with none here never refreshes.
+   *  Every chat that got host servers is here, so the oldest fall out past a bound. */
+  const launchedTools = new BoundedMap<string, SessionLaunchedTools>({ maxEntries: 2_000 })
   /** Chats whose agent loaded the bot's folder and rereads it: a change needs only the names. */
   const liveSkills = new Set<string>()
   const turnContext = createBotTurnContext(
@@ -153,12 +161,12 @@ export function botStructuredSessionWiring(deps: {
     clientName: deps.clientName
   })
   return {
-    resolveSessionInstructions: (record, launchDirectory, linkedSkills) => {
+    resolveSessionInstructions: (record, launchDirectory, linkedSkills, eachStart) => {
       const bot = botOfRecord(record)
       return botSessionInstructions(
         turnContext,
         bot ? [bot] : [],
-        record,
+        { ...record, instructionsEachStart: eachStart },
         launchDirectory,
         linkedSkills
       )
@@ -181,10 +189,10 @@ export function botStructuredSessionWiring(deps: {
         })
       }
     },
+    // Every session: a bot's own tools in its home, and the host's MCP servers where they're on.
     resolveSessionToolServers: async (record, launchDirectory) => {
-      const bot = botOfRecord(record)
-      const { tools, launched } = await botSessionToolServers(
-        bot ? [bot] : [],
+      const { tools, launched } = await sessionMcpLaunchTools(
+        botOfRecord(record),
         record,
         launchDirectory
       )
@@ -200,12 +208,12 @@ export function botStructuredSessionWiring(deps: {
         const launched = launchedTools.get(sessionId)
         return (
           launched !== undefined &&
-          (await currentBotToolsRevision(launched.folder)) !== launched.revision
+          (await sessionLaunchToolsChanged(launched, sessionHostMcpDelivered(sessionId)))
         )
       },
       outdated: (sessionId) => {
         const launched = launchedTools.get(sessionId)
-        return launched !== undefined && botToolsEpoch(launched.folder) !== launched.epoch
+        return launched !== undefined && sessionLaunchToolsOutdated(launched)
       }
     },
     prepareSessionLinkedSkills: async (record) => {

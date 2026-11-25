@@ -110,11 +110,11 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   }
 
   private async reportWorkerStopsAcrossRestart(
-    launch: Promise<{ cutByLastRun: ReadonlySet<string> }>
+    launch: Promise<{ cutByLastRun: ReadonlySet<string>; automatic: boolean }>
   ): Promise<void> {
     try {
       // Continued chats are working again, and replayed hooks have been probed once.
-      const { cutByLastRun } = await launch
+      const { cutByLastRun, automatic } = await launch
       const host = getStructuredAgentSessionHost()
       if (host && !this.dismissalWatched.has(host)) {
         this.dismissalWatched.add(host)
@@ -147,7 +147,8 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         resuming: (dispatchId) => this.terminalWorkerRestartResume.isResumingThisStart(dispatchId),
         chats: host
           ? {
-              cutByLastRun,
+              // With the setting off a cut waits for its person; only a dismissal tells a coordinator.
+              cutByLastRun: automatic ? cutByLastRun : new Set(),
               lineageRoot: (sessionId) =>
                 isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId,
               open: (sessionId) => host.revealSession(sessionId).catch(() => null),

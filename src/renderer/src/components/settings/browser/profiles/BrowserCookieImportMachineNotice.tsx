@@ -10,52 +10,53 @@ import type {
 
 // Name the import machine for remote pages: it chooses the browser inventory and receives permission prompts. Local imports need no notice.
 export function BrowserCookieImportMachineNotice({
-  pageRoute = null
+  pageRoute = null,
+  settingsSshRoute = null
 }: {
   /** Set when a page imports into its own jar; Settings imports follow the Settings host. */
   pageRoute?: BrowserPageCookieImportRoute | null
+  /** Settings' selected host when it is an SSH host. */
+  settingsSshRoute?: BrowserSshPageCookieImportRoute | null
 }): React.JSX.Element | null {
   const t = useTranslate()
   const settingsBrowsersHost = useAppStore((s) => s.detectedBrowsersHost)
   if (pageRoute?.kind === 'ssh') {
     return <SshPageCookieImportNotice route={pageRoute} />
   }
-  // A page always imports this desktop's browsers; only a server's page needs saying so.
-  const detectedBrowsersHost = !pageRoute
-    ? settingsBrowsersHost
-    : pageRoute.kind === 'client-host'
-      ? { machine: 'client' as const, hostLabel: pageRoute.hostLabel }
-      : null
-  if (!detectedBrowsersHost) {
+  // Settings on an SSH host fills that host's jar, the same one its pages' import fills.
+  if (!pageRoute && settingsSshRoute) {
+    return <SshPageCookieImportNotice route={settingsSshRoute} />
+  }
+  // A server's This-device jar: its agents always drive these pages but never get the cookies.
+  if (pageRoute?.kind === 'client-host') {
+    return <RoutedPageCookieImportNotice hostLabel={pageRoute.hostLabel} hostAgentsCanBrowse />
+  }
+  if (pageRoute || !settingsBrowsersHost) {
     return null
   }
-  const clientHosted = detectedBrowsersHost.machine === 'client'
-  const hostLabel = detectedBrowsersHost.hostLabel
+  if (settingsBrowsersHost.machine === 'client') {
+    return (
+      <RoutedPageCookieImportNotice
+        hostLabel={settingsBrowsersHost.hostLabel}
+        hostAgentsCanBrowse
+      />
+    )
+  }
   return (
     <>
       <DropdownMenuLabel>
-        {clientHosted
-          ? t(
-              'auto.components.BrowserCookieImportMachineNotice.clientLabel',
-              'Browsers on this device'
-            )
-          : t(
-              'auto.components.BrowserCookieImportMachineNotice.remoteLabel',
-              'Browsers on {{value0}}',
-              { value0: hostLabel }
-            )}
+        {t(
+          'auto.components.BrowserCookieImportMachineNotice.remoteLabel',
+          'Browsers on {{value0}}',
+          { value0: settingsBrowsersHost.hostLabel }
+        )}
       </DropdownMenuLabel>
       <p className="max-w-60 px-2 pb-1.5 text-[11px] leading-4 text-muted-foreground">
-        {clientHosted
-          ? t(
-              'auto.components.BrowserCookieImportMachineNotice.clientNoteLocalStorage',
-              'Imports read this device’s browsers. Cookies are stored locally.'
-            )
-          : t(
-              'auto.components.BrowserCookieImportMachineNotice.remoteNoteRemoteStorage',
-              'Imports read browsers on {{value0}}. Cookies are stored on that machine, and a permission prompt may appear on its screen.',
-              { value0: hostLabel }
-            )}
+        {t(
+          'auto.components.BrowserCookieImportMachineNotice.remoteNoteRemoteStorage',
+          'Imports read browsers on {{value0}}. Cookies are stored on that machine, and a permission prompt may appear on its screen.',
+          { value0: settingsBrowsersHost.hostLabel }
+        )}
       </p>
     </>
   )
@@ -66,22 +67,40 @@ function SshPageCookieImportNotice({
 }: {
   route: BrowserSshPageCookieImportRoute
 }): React.JSX.Element {
-  const t = useTranslate()
   const hostAgentsCanBrowse = useSshHostAgentsCanBrowse(route.sshTargetId)
+  return (
+    <RoutedPageCookieImportNotice
+      hostLabel={route.hostLabel}
+      hostAgentsCanBrowse={hostAgentsCanBrowse}
+    />
+  )
+}
+
+/** A jar on this desktop that pages of another host use; that host's agents get the sign-ins, not the cookies. */
+function RoutedPageCookieImportNotice({
+  hostLabel,
+  hostAgentsCanBrowse
+}: {
+  hostLabel: string
+  hostAgentsCanBrowse: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <DropdownMenuLabel>
-        {t('browser.cookieImport.sshPage.label', 'Browsers on this device')}
+        {t('browser.cookieImport.routedPage.label', 'Browsers on this device')}
       </DropdownMenuLabel>
       <p className="max-w-60 px-2 pb-1.5 text-[11px] leading-4 text-muted-foreground">
-        {t('browser.cookieImport.sshPage.destination', 'Imports into the browser for {{host}}.', {
-          host: route.hostLabel
-        })}
+        {t(
+          'browser.cookieImport.routedPage.destination',
+          'Imports into the browser for {{host}}.',
+          { host: hostLabel }
+        )}
         {hostAgentsCanBrowse
           ? ` ${t(
-              'browser.cookieImport.sshPage.hostAgents',
+              'browser.cookieImport.routedPage.hostAgents',
               'Agents on {{host}} can use these sign-ins, but can’t read the cookies.',
-              { host: route.hostLabel }
+              { host: hostLabel }
             )}`
           : null}
       </p>

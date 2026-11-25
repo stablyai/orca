@@ -25,7 +25,7 @@ type ToolAdded = NonNullable<NativeChatMessage['toolAdded']>
 
 const COPY = BOT_TOOL_ADDED_CARD_COPY
 const PIECES: Record<keyof typeof COPY, (t: Translate) => string> = {
-  heading: (t) => t('components.native-chat.toolAdded.heading', COPY.heading),
+  added: (t) => t('components.native-chat.toolAdded.added', COPY.added),
   removed: (t) => t('components.native-chat.toolAdded.removed', COPY.removed),
   remove: (t) => t('components.native-chat.toolAdded.remove', COPY.remove)
 }
@@ -62,15 +62,13 @@ export function NativeChatToolAddedCard({
       .catch((error: unknown) => toast.error(botToolErrorMessage(error)))
       .finally(() => setBusy(false))
   }
-  const { state, present } = botToolAddedCardView(
+  const { lead, after, present } = botToolAddedCardView(
     own === null ? null : live !== undefined,
+    botToolSubtitle(tool),
     signIn.line,
     say
   )
   const title = botToolTitle(tool.name)
-  const removed = own !== null && !present
-  const lead = removed ? say('removed') : t('components.native-chat.toolAdded.added', 'Added')
-  const after = removed ? [] : [botToolSubtitle(tool), state].filter(Boolean)
   const actionClass =
     'rounded-sm text-xs font-medium text-chat-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
   return (

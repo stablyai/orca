@@ -31,10 +31,9 @@ import {
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { randomUUID } from 'node:crypto'
-import {
-  inspectTerminalHostSession,
-  type TerminalHostProcessInspection
-} from './terminal-host-process-inspection'
+import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
+import { inspectTerminalHostSession } from './terminal-host-session-inspection'
+import { createForegroundExitWatches } from './foreground-agent-identity-check'
 
 import {
   confirmTerminalHostForegroundProcess,
@@ -45,6 +44,8 @@ import {
   getTerminalHostSnapshot,
   takeTerminalHostPendingOutput
 } from './terminal-host-session-inspection-operations'
+
+import type { ForegroundExitWatches } from '../../pty/process-retirement/foreground-exit-watches'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
 
@@ -64,6 +65,7 @@ export class TerminalHost {
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
   private readonly authorityGeneration = randomUUID()
   private observationEpoch = 0
+  private readonly foregroundExitWatches: ForegroundExitWatches
   private readonly retiredIncarnations = new Map<
     string,
     { incarnationId: string; code: number; expiresAt: number }
@@ -74,6 +76,7 @@ export class TerminalHost {
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
+    this.foregroundExitWatches = createForegroundExitWatches(opts.onSessionForegroundChange)
     this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
   }
 
@@ -170,16 +173,9 @@ export class TerminalHost {
   }
 
   kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
-    const pending = this.sessionTeardown.get(sessionId)
-    if (pending) {
-      return Promise.resolve(
-        opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
-      )
-    }
-    const session = getAliveTerminalHostSession(this.sessions, sessionId)
-    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
-    this.killedTombstones.record(sessionId)
-    return Promise.resolve(killed)
+    return this.sessionTeardown.kill(sessionId, opts.immediate === true, () =>
+      this.killedTombstones.record(sessionId)
+    )
   }
 
   beginFencedTermination(request: PtyFencedTerminationRequest) {
@@ -199,6 +195,7 @@ export class TerminalHost {
     }
     session.dispose()
     this.sessions.delete(sessionId)
+    this.foregroundExitWatches.forget(sessionId)
     this.onSessionReaped?.(sessionId)
   }
 
@@ -250,7 +247,8 @@ export class TerminalHost {
       sessionId,
       options,
       this.authorityGeneration,
-      () => ++this.observationEpoch
+      () => ++this.observationEpoch,
+      this.foregroundExitWatches
     )
   }
 
@@ -324,6 +322,7 @@ export class TerminalHost {
 
   dispose(): Promise<void> {
     this.creationFenced = true
+    this.foregroundExitWatches.dispose()
     if (this.disposePromise) {
       return this.disposePromise
     }

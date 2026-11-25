@@ -100,6 +100,7 @@ The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestra
 below, and message it only to ask, report a blocker, or finish; it needs no progress updates
 unless the task asks.
 Do only this task, yourself: no subagents or helper workers unless the task asks.
+Terminals you open with \`${cli} terminal create\` or \`split\` close with this worker; add --keep-open to one the user keeps.
 
 === CLI COMMANDS ===
 
@@ -155,10 +156,10 @@ export function dispatchPreambleSendOptions(requestId: string): DispatchPreamble
 }
 
 export const TERMINAL_REDISPATCH_PARAGRAPH = `Do not exit the shell. More supervised work arrives here as a fresh preamble
-and TASK block; follow it under its new Dispatch.`
+and TASK block; follow it under its new Dispatch, using that preamble's --task-id and --dispatch-id.`
 
 export const CHAT_REDISPATCH_PARAGRAPH = `More supervised work arrives in this chat as a fresh preamble and TASK
-block; follow it under its new Dispatch.`
+block; follow it under its new Dispatch, using that preamble's --task-id and --dispatch-id.`
 
 function buildPostWorkerDoneInstructions({
   cli,

@@ -55,7 +55,7 @@ function Row({
                 }
               : null
           }
-          onSend={() => {}}
+          onSend={() => null}
           nav={nav}
         />
       )}

@@ -72,7 +72,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     }
   }
 
-  private readonly isAgentUsingPage = (browserPageId: string): boolean =>
+  readonly isAgentUsingPage = (browserPageId: string): boolean =>
     this.browserManager.isAgentUsingPage(browserPageId)
 
   private routedPage(key: string | undefined): string | null {
@@ -132,8 +132,16 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   ): { loading: boolean; canGoBack: boolean; canGoForward: boolean } | null {
     return this.browserManager.getBrowserPageNavigationState(browserPageId)
   }
-  getPageAudioRowFields(browserPageId: string): { audible?: true; audioMuted?: true } {
-    return this.browserManager.getBrowserPageAudioRowFields(browserPageId)
+  /** A server page's sound and agent flags, which its session row carries only when set. */
+  getPageRowFields(browserPageId: string): {
+    audible?: true
+    audioMuted?: true
+    agentDriving?: true
+  } {
+    return {
+      ...this.browserManager.getBrowserPageAudioRowFields(browserPageId),
+      ...(this.isAgentUsingPage(browserPageId) && { agentDriving: true as const })
+    }
   }
   onTabChanged(webContentsId: number, worktreeId?: string): void {
     this.selectForPerson(webContentsId, worktreeId)

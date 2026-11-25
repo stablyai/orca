@@ -1,5 +1,5 @@
 // The panel's Automations: the list with each row's menu, the editor page a row's Edit pushes, and
-// the sheets both open, which the panel draws beside its drawer.
+// the sheets both open, which the panel draws beside its drawer (a Chats row's Delete confirm too).
 import { ScrollView, View } from 'react-native'
 import { useAutomationSheet } from '../automations/AutomationSheets'
 import { BotAutomationEditor } from '../automations/BotAutomationEditor'
@@ -68,7 +68,7 @@ export function useBotPanelAutomations(
       </ScrollView>
     </View>
   )
-  return { tab, page, sheets }
+  return { tab, page, sheets, present }
 }
 
 const styles = themedStyleSheet(() => ({

@@ -1,28 +1,22 @@
-// Who can ask, a page of the bot's Settings, as the desktop's BotWhoCanAskPage: the summary, then each
-// connector's waiting requests, people and Add people, then the advice. Each change that takes access
-// away or gives it asks first.
+// Who can ask, a page of the bot's Settings, as the desktop's BotWhoCanAskPage: the requests waiting,
+// then each connector's people and Add people, then Keep only me. Each change that takes access away or
+// gives it asks first.
 import { useState, type ReactNode } from 'react'
 import { View } from 'react-native'
-import { UserPlus } from 'lucide-react-native'
 import { BOT_MAX_MEMBERS, botMemberSource, type BotMember } from '../../../src/shared/bot-types'
-import { accessRequestPerson, newBotMembers } from '../../../src/shared/bots/bot-access-request'
+import { newBotMembers } from '../../../src/shared/bots/bot-access-request'
 import { readBotMembersFull } from '../../../src/shared/bots/bot-member-capacity'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
-import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { ListGroup, SectionHeader } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { colors } from '../theme/mobile-theme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import {
-  accessRequestGrant,
-  accessRequestLine,
-  type PhoneAccessBot
-} from './bot-access-request-copy'
+import type { PhoneAccessBot } from './bot-access-request-copy'
 import { MobileBotAccessDecisionContent } from './MobileBotAccessDecision'
 import {
   botUpdate,
@@ -32,67 +26,32 @@ import {
 } from './bot-sheet-operations'
 import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
 import { MobileBotWhoCanAskPicker } from './MobileBotWhoCanAskPicker'
+import { MobileBotPairedServers } from './MobileBotPairedServers'
 import type { RouteBot } from './use-route-bot'
 import { useWhoCanAskConnectors } from './use-who-can-ask-connectors'
 import type { WhoCanAskConnector } from './who-can-ask-connectors'
-import { optionStyles } from './mobile-bot-option-styles'
-import { MobileBotTextButton } from './MobileBotTextButton'
+import { MobileAccessFixConfirm, MobileBotWhoCanAskEnd } from './MobileBotWhoCanAsk'
 import {
-  MobileAccessFixConfirm,
-  MobileBotMemberRow,
-  MobileBotWhoCanAsk
-} from './MobileBotWhoCanAsk'
+  MobileWhoCanAskAddRow,
+  MobileWhoCanAskPersonRow,
+  MobileWhoCanAskRequestRow,
+  MobileWhoCanAskReview,
+  WHO_FACE_INSET,
+  whoCanAskName
+} from './MobileWhoCanAskRows'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import { mobileBotAccessCopy, mobileBotAccessNames } from './mobile-bot-access-copy'
 
-function AccessRequestRow(props: {
-  request: ConnectorAccessRequest
-  disabled: boolean
-  onDecline: () => void
-  onReview: () => void
-}) {
-  const t = useMobileTranslation()
-  const person = accessRequestPerson(props.request)
-  return (
-    <ListRow
-      title={person}
-      subtitle={accessRequestLine(props.request, t)}
-      accessory={
-        <View style={optionStyles.rowActions}>
-          <MobileBotTextButton
-            label={mobileBotAccessCopy(t, 'decline')}
-            accessibilityLabel={t('bots.settings.declineName', 'Decline {{name}}', {
-              name: person
-            })}
-            disabled={props.disabled}
-            onPress={props.onDecline}
-          />
-          <MobileBotTextButton
-            label={mobileBotAccessCopy(t, 'review')}
-            accessibilityLabel={t('bots.settings.reviewName', 'Review {{name}}', { name: person })}
-            disabled={props.disabled}
-            onPress={props.onReview}
-          />
-        </View>
-      }
-    />
-  )
-}
-
-/** One connector's list: its waiting requests, its people and Add people. */
+/** One connector's list: its people and Add people. */
 function ConnectorPeople(props: {
   connector: WhoCanAskConnector
-  requests: readonly ConnectorAccessRequest[]
-  access: BotAccessRequests | null
   members: number
-  online: boolean
   locked: boolean
   onRemove: (member: BotMember) => void
-  onReview: (request: ConnectorAccessRequest) => void
   onAdd: () => void
 }) {
   const t = useMobileTranslation()
-  const { connector, access } = props
+  const { connector } = props
   const cap = Math.min(connector.max, BOT_MAX_MEMBERS - props.members + connector.listed.length)
   const capped = connector.search !== null && connector.listed.length >= cap
   const note = connector.search
@@ -108,31 +67,18 @@ function ConnectorPeople(props: {
         title={connector.title}
         icon={<MobileConnectorSourceIcon source={connector.kind} size={14} />}
       />
-      <ListGroup separatorInset={LIST_LEADING_INSET}>
-        {access
-          ? props.requests.map((request) => (
-              <AccessRequestRow
-                key={request.requestId}
-                request={request}
-                disabled={access.deciding || !props.online}
-                onDecline={() => void access.decide(request, 'declined')}
-                onReview={() => props.onReview(request)}
-              />
-            ))
-          : null}
+      <ListGroup separatorInset={WHO_FACE_INSET}>
         {connector.listed.map((member) => (
-          <MobileBotMemberRow
+          <MobileWhoCanAskPersonRow
             key={`${botMemberSource(member)}:${member.workspaceId ?? ''}:${member.id}`}
             member={member}
-            disabled={props.locked}
+            busy={props.locked}
             onRemove={() => props.onRemove(member)}
           />
         ))}
         {/* A list kept only so its people can be removed offers no Add. */}
         {connector.search || connector.notYet ? (
-          <ListRow
-            leading={<UserPlus size={20} color={colors.textPrimary} />}
-            title={t('bots.whoCanAsk.addPeople', 'Add people')}
+          <MobileWhoCanAskAddRow
             disabled={connector.search === null || capped || props.locked}
             onPress={props.onAdd}
           />
@@ -152,7 +98,7 @@ export function MobileBotWhoCanAskPage(props: {
   locked: boolean
   banner: ReactNode
   hostName: string
-  routeBot: Pick<RouteBot, 'applyBot' | 'reads'>
+  routeBot: Pick<RouteBot, 'applyBot' | 'reads' | 'hostKey'>
   onBack: { label: string; onPress: () => void }
   save: (updates: BotUpdateParams['updates']) => Promise<boolean>
   setSaving: (saving: boolean) => void
@@ -170,7 +116,7 @@ export function MobileBotWhoCanAskPage(props: {
     picked: BotMember[]
     confirming: boolean
   } | null>(null)
-  const connectors = useWhoCanAskConnectors(client, bot, props.routeBot.reads, props.hostName, t)
+  const connectors = useWhoCanAskConnectors(client, bot, props.routeBot, props.hostName, t)
   const adding = picking ? connectors.find((entry) => entry.key === picking.key) : undefined
   // Its list went away (an org or workspace removed meanwhile): nothing is left to add to.
   if (picking && !adding) {
@@ -253,11 +199,13 @@ export function MobileBotWhoCanAskPage(props: {
   if (removing) {
     return (
       <ConfirmContent
-        title={t('bots.settings.removeConfirmTitle', 'Remove {{name}}?', { name: removing.name })}
+        title={t('bots.settings.removeConfirmTitle', 'Remove {{name}}?', {
+          name: whoCanAskName(removing)
+        })}
         message={t(
           'bots.settings.removeConfirmMessage',
           '{{name}} can no longer ask {{botName}}.',
-          { name: removing.name, botName: bot.name }
+          { name: whoCanAskName(removing), botName: bot.name }
         )}
         confirmLabel={t('bots.settings.remove', 'Remove')}
         destructive
@@ -303,58 +251,56 @@ export function MobileBotWhoCanAskPage(props: {
   // Any paired phone may grant (D3), so it always asks first, as the desktop does.
   if (granting && access) {
     return (
-      <MobileBotAccessDecisionContent
-        grant={accessRequestGrant(granting)}
+      <MobileWhoCanAskReview
+        request={granting}
         bot={bot}
-        onGrant={() => void access.decide(granting, 'granted')}
+        busy={access.deciding || !props.online}
+        onDecide={(decision) => void access.decide(granting, decision)}
         onClose={() => setGranting(null)}
       />
     )
   }
 
   const requests = access?.requests ?? []
-  // A request no list here takes still waits for an answer.
-  const unlisted = requests.filter(
-    (request) => !connectors.some((connector) => connector.takes(request))
-  )
   return (
     <>
       <SheetHeader title={t('bots.settings.whoCanAsk', 'Who can ask')} onBack={props.onBack} />
       {props.banner}
-      {access && unlisted.length > 0 ? (
-        <SettingsSection title={mobileBotAccessCopy(t, 'heading')}>
-          {unlisted.map((request) => (
-            <AccessRequestRow
+      {access && requests.length > 0 ? (
+        <SettingsSection title={mobileBotAccessCopy(t, 'heading')} separatorInset={WHO_FACE_INSET}>
+          {requests.map((request) => (
+            <MobileWhoCanAskRequestRow
               key={request.requestId}
               request={request}
-              disabled={access.deciding || !props.online}
-              onDecline={() => void access.decide(request, 'declined')}
+              busy={access.deciding || !props.online}
               onReview={() => setGranting(request)}
+              onDecline={() => void access.decide(request, 'declined')}
             />
           ))}
         </SettingsSection>
       ) : null}
-      <MobileBotWhoCanAsk
+      {connectors.map((connector) => (
+        <ConnectorPeople
+          key={connector.key}
+          connector={connector}
+          members={bot.members.length}
+          locked={props.locked}
+          onRemove={setRemoving}
+          onAdd={() => setPicking({ key: connector.key, picked: [], confirming: false })}
+        />
+      ))}
+      <MobileBotPairedServers
+        client={client}
+        bot={bot}
+        locked={props.locked}
+        showToast={props.showToast}
+      />
+      <MobileBotWhoCanAskEnd
         bot={bot}
         disabled={props.locked}
         onKeepOnlyMe={() => setFixing('only-me')}
         onAskForApproval={() => setFixing('ask-for-approval')}
-      >
-        {connectors.map((connector) => (
-          <ConnectorPeople
-            key={connector.key}
-            connector={connector}
-            requests={requests.filter(connector.takes)}
-            access={access}
-            members={bot.members.length}
-            online={props.online}
-            locked={props.locked}
-            onRemove={setRemoving}
-            onReview={setGranting}
-            onAdd={() => setPicking({ key: connector.key, picked: [], confirming: false })}
-          />
-        ))}
-      </MobileBotWhoCanAsk>
+      />
     </>
   )
 }

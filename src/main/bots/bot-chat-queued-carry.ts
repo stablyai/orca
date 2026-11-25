@@ -7,7 +7,7 @@ import {
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../shared/agent-session/requests/agent-session-queued-message-wire'
 
 export type QueuedCarryHost = Pick<StructuredAgentSessionHost, 'conversation' | 'serialize'> & {
-  deps: {
+  deps: Pick<StructuredAgentSessionHost['deps'], 'agents'> & {
     store: Pick<
       StructuredAgentSessionHost['deps']['store'],
       'getConversation' | 'requireWritableRecord'
@@ -22,6 +22,28 @@ const carried = (card: QueuedMessageRow | null): card is QueuedMessageRow =>
   isUnsettledQueuedMessage(card) &&
   !card.body.from?.orchestration &&
   !card.body.connectorClaim
+
+/** A card sends with the choices it was queued with; a Chat on another agent keeps only Plan or
+ *  Build, since the old agent's model and effort names mean nothing there. */
+function carriedOptions(
+  host: QueuedCarryHost,
+  card: QueuedMessageRow,
+  from: string,
+  to: string
+): QueuedMessageRow['options'] {
+  const agent = host.deps.store.getConversation(to)?.provider
+  if (!card.options || !agent) {
+    return undefined
+  }
+  if (agent === host.deps.store.getConversation(from)?.provider) {
+    return card.options
+  }
+  const { interactionMode } = card.options
+  return interactionMode &&
+    host.deps.agents.definition(agent)?.restingOptions.acceptsKey('interactionMode')
+    ? { interactionMode }
+    : undefined
+}
 
 /** Each card moves inside the old Chat's queue lane, so no edit, Send or delete there lands between
  *  reading it and withdrawing it, and a card someone is editing stays. It is queued in the new Chat
@@ -51,9 +73,12 @@ export async function carryQueuedMessages(
           return
         }
         const hold = card.state === 'returned' ? QUEUED_MESSAGE_PAUSED_SEND_FAILED : card.holdReason
+        const options = carriedOptions(host, card, from, to)
+        // No steer: the turn it was meant to join stays in the old Chat, so it runs as its own turn.
         await target.insert({
           messageId,
           body: card.body,
+          ...(options ? { options } : {}),
           ...(hold ? { holdReason: hold } : {}),
           ...(card.unattended !== undefined ? { unattended: card.unattended } : {})
         })

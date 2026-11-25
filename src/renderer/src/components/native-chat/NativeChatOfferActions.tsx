@@ -22,6 +22,9 @@ export type NativeChatOffer = {
   send: (text: string, chosen: readonly string[]) => void
   /** Like `send`, for a further action on a card already answered: replaces its answer. */
   sendAgain: (text: string, chosen: readonly string[]) => void
+  /** Like `send` (`again`: `sendAgain`), told by `tell` instead of a typed message, such as a hidden
+   *  card answer; `tell` resolves false when it was refused. */
+  answer: (tell: () => Promise<boolean>, chosen: readonly string[], again?: boolean) => void
 }
 
 export function useNativeChatOffer(botId: string, cardId: string): NativeChatOffer {
@@ -33,12 +36,12 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
   // the claim back and leaves the card to press again.
   const answerOffer = async (
     update: Parameters<typeof answerBotOffer>[0],
-    text: string,
+    tell: () => Promise<boolean>,
     again = false
   ): Promise<void> => {
     const ops = {
       update: (offerAnswer: BotOfferAnswerUpdate) => updateBot(ref, { offerAnswer }),
-      send: async () => (await view?.send(text)) === true
+      send: tell
     }
     const outcome = await (
       again && update.sent
@@ -55,17 +58,21 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
       )
     }
   }
+  const typed = (text: string) => async (): Promise<boolean> => (await view?.send(text)) === true
   return {
     dismissed: answer?.dismissed === true,
     sent: answer?.sent?.chosen ?? null,
     dismiss: () =>
       void answerOffer(
         { cardId, dismissed: true },
-        t('components.native-chat.offerCard.dismiss', 'Dismiss')
+        typed(t('components.native-chat.offerCard.dismiss', 'Dismiss'))
       ),
-    send: (text, chosen) => void answerOffer({ cardId, sent: { chosen: [...chosen] } }, text),
+    send: (text, chosen) =>
+      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, typed(text)),
     sendAgain: (text, chosen) =>
-      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, text, true)
+      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, typed(text), true),
+    answer: (tell, chosen, again) =>
+      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, tell, again)
   }
 }
 

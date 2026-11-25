@@ -1,4 +1,5 @@
 import { clearGoogleCookiesForRuntimeProfile } from '../../../browser/cookies/browser-google-cookie-clear'
+import { clearCookiesForRuntimeProfile } from '../../../browser/cookies/browser-profile-cookie-clear'
 import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import type {
   BrowserDetectProfilesResult,
@@ -33,7 +34,10 @@ import type { RuntimeBrowserTabClose } from '../tabs/browser-tab-close'
 import type { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import type { BrowserClientPageOpeningHost } from '../client-pages/browser-client-page-opening'
 import { cloneBrowserTabToProfile } from './browser-tab-profile-clone'
-import { closeServerPagesInDeletedProfile } from './deleted-profile-server-pages'
+import {
+  closeServerPagesInDeletedProfile,
+  closeServerPagesOfMissingProfiles
+} from './deleted-profile-server-pages'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 function requireBrowserProfile(profileId: string): BrowserSessionProfile {
@@ -249,6 +253,11 @@ export class RuntimeBrowserProfiles {
     return { deleted, profileId: params.profileId }
   }
 
+  /** Startup: saved server tabs of an already-deleted profile close. */
+  async browserCloseServerPagesOfMissingProfiles(): Promise<void> {
+    await closeServerPagesOfMissingProfiles(this.host, this.close, this.pageGuestSwaps)
+  }
+
   async browserProfileDetectBrowsers(): Promise<BrowserDetectProfilesResult> {
     return {
       // Expose display metadata only; retain paths/keychain identifiers on the server.
@@ -317,6 +326,10 @@ export class RuntimeBrowserProfiles {
   }
 
   async browserProfileClearDefaultCookies(): Promise<BrowserProfileClearDefaultCookiesResult> {
-    return { cleared: await browserSessionRegistry.clearDefaultSessionCookies() }
+    return { cleared: await browserSessionRegistry.clearProfileSessionCookies('default') }
+  }
+
+  async browserProfileClearCookies(params: { profileId: string; executorRuntimeId: string }) {
+    return clearCookiesForRuntimeProfile(params, this.host.getRuntimeId())
   }
 }

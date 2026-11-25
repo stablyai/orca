@@ -30,6 +30,7 @@ import {
 } from './google-account-readiness'
 import { GoogleAddServiceDialog } from './GoogleAddServiceDialog'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { googleAccountApp } from '../../../../../shared/google/google-account-app'
 import { disconnectGoogle, refreshGoogle } from './google-connect-client'
 import {
   googleFixLabel,
@@ -69,7 +70,7 @@ export function GoogleAccountRow({
   const intlLocale = useIntlLocale()
   const confirm = useConfirmationDialog()
   const [adding, setAdding] = useState(false)
-  const client = google.client
+  const app = googleAccountApp(account, google.client)
   const choices = googleAccountChoices(account)
   const connected = account.status === 'connected'
   const problem = connected ? (googleProblems(account)[0] ?? null) : null
@@ -77,8 +78,7 @@ export function GoogleAccountRow({
   const fix = googleReadinessFixer({
     target,
     account,
-    clientId: client?.clientId ?? null,
-    projectId: client?.projectId ?? null,
+    ...app,
     onAllowAgain: (services) => signIn(services, account.email)
   })
   const face = problem ? googleReadinessFace(problem.readiness) : null
@@ -152,6 +152,9 @@ export function GoogleAccountRow({
         ) : (
           <p className="truncate text-xs text-muted-foreground">{servicesLine}</p>
         )}
+        {!connected && account.googleError ? (
+          <p className="text-xs break-words text-muted-foreground">{account.googleError}</p>
+        ) : null}
       </div>
       {!connected ? (
         <Button size="sm" onClick={() => signIn(googleSignInChoices(account), account.email)}>
@@ -203,7 +206,7 @@ export function GoogleAccountRow({
         open={adding}
         onOpenChange={setAdding}
         have={choices}
-        projectId={client?.projectId}
+        projectId={app.projectId ?? undefined}
         account={account.email}
         onSignIn={(picked) => {
           setAdding(false)

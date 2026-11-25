@@ -26,3 +26,16 @@ export const FindInPage = BrowserTarget.extend({
 export const CertificateProceed = BrowserTarget.extend({
   challengeId: requiredString('Missing required challengeId')
 })
+
+// A streamed page's right-click menu: the spelling word or image it acts on.
+export const PageMenuWord = BrowserTarget.extend({
+  word: requiredString('Missing required word')
+})
+
+export const PageMenuImage = BrowserTarget.extend({
+  url: requiredString('Missing required url')
+})
+
+export const ReadImage = PageMenuImage.extend({
+  offset: z.number().int().nonnegative().optional()
+})

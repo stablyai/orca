@@ -9,8 +9,7 @@ import {
 import { NativeChatQueueHeader } from './NativeChatQueueHeader'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
-import { NATIVE_CHAT_ROOT_SELECTOR } from '@/components/native-chat/paste/native-chat-paste-request'
-import { focusNativeChatPromptCard } from '../prompts/use-native-chat-prompt-card-focus'
+import { refocusAfterQueueAction } from './native-chat-queue-refocus'
 import {
   headSteerableQueuedMessageCard,
   queuedMessageCardNeedsAttention
@@ -76,6 +75,15 @@ export function NativeChatQueuedMessageList({
     }
   }
   const editing = controller.editor !== undefined
+  // An editor opened elsewhere (Edit on a waiting agent message in the transcript) must be seen;
+  // once open, the person may still fold the list.
+  const [editSeen, setEditSeen] = useState(editing)
+  if (editing !== editSeen) {
+    setEditSeen(editing)
+    if (editing && !expanded) {
+      setExpanded(true)
+    }
+  }
   const rowCap = useNativeChatQueueRoom(regionRef, unitRef, (cap) => {
     if (!showAll && !editing) {
       focusBeforeCapping(cap)
@@ -92,7 +100,9 @@ export function NativeChatQueuedMessageList({
   const offersMore = !editing && rowCap < NATIVE_CHAT_QUEUE_FULL_ROWS && hiddenCount > 0
   const shownCards = offersMore && !showAll ? cards.slice(0, rowCap) : cards
   const newest = cards.at(-1)
-  const steerableHead = controller.queueCapable ? headSteerableQueuedMessageCard(cards) : null
+  // Mail first in line is what the shortcut sends, so no card advertises it then.
+  const steerableHead =
+    controller.queueCapable && !controller.mailLeads ? headSteerableQueuedMessageCard(cards) : null
   // The first attention card that states a failure: an unconfirmed one has no caption and must not hide a later Retry.
   const attentionCaption = listShown
     ? null
@@ -122,17 +132,8 @@ export function NativeChatQueuedMessageList({
     }
   }, [cards.length, editing, rowCap, userOpen, showAll, expanded])
   // Refocus only if focus stayed on the queue; an active prompt card takes priority over the composer.
-  const refocusAfter = (action: Promise<unknown>): void => {
-    void action.then(() => {
-      const active = document.activeElement
-      if (!active || active === document.body || queueRef.current?.contains(active)) {
-        const root = regionRef.current?.closest(NATIVE_CHAT_ROOT_SELECTOR)
-        if (!root || !focusNativeChatPromptCard(root, null)) {
-          focusComposer?.()
-        }
-      }
-    })
-  }
+  const refocusAfter = (action: Promise<unknown>): void =>
+    refocusAfterQueueAction(action, queueRef.current ?? regionRef.current, focusComposer)
   const editingId = controller.editor?.messageId
   const wasEditing = useRef(editingId)
   useEffect(() => {
@@ -193,7 +194,8 @@ export function NativeChatQueuedMessageList({
     >
       {/* One chat-spacing unit, measured so row caps and the short-pane test scale with the chat's text size. */}
       <span ref={unitRef} aria-hidden className="pointer-events-none absolute h-1 w-0" />
-      {cards.length > 0 ? (
+      {/* A paused queue holding only agent mail, which the transcript draws, still offers Resume. */}
+      {cards.length > 0 || pause ? (
         <div ref={queueRef} className="@container shrink-0 bg-chat-pane px-3 pt-2 sm:px-4">
           <div className="mx-auto w-full max-w-(--chat-content-max-width) rounded-lg border border-border bg-muted/50 text-xs text-muted-foreground shadow-xs">
             <NativeChatQueueHeader
@@ -209,55 +211,63 @@ export function NativeChatQueuedMessageList({
               onClearAll={() => refocusAfter(controller.clear())}
               onResume={() => refocusAfter(controller.resume())}
             />
-            <ul
-              ref={listRef}
-              id={listId}
-              onFocus={() => setListFocused(true)}
-              onBlur={leaveList}
-              // Hidden, not unmounted: an open edit keeps its typing while the list is collapsed.
-              hidden={!expanded}
-              aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
-              className={cn(
-                'scrollbar-sleek overflow-y-auto px-1.5 pb-1.5',
-                editing ? 'max-h-72' : 'max-h-40',
-                // Folded for room unless the person opened it, is editing, or has focus in it.
-                '[[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],[data-list-focus])_&]:hidden'
-              )}
-            >
-              <NativeChatQueuedMessageRows
-                cards={shownCards}
-                allCards={cards}
-                reorder={controller.editor ? undefined : controller.reorder}
-                renderCard={(card, drag) => (
-                  <NativeChatQueuedMessageCard
-                    key={card.messageId}
-                    card={card}
-                    drag={drag}
-                    chatWorktreeId={chatWorktreeId}
-                    agentName={agentName}
-                    statedFailures={statedFailures}
-                    showsSteerShortcut={card === steerableHead}
-                    agentWorking={controller.isWorking}
-                    steerHeld={steerHeld}
-                    pending={controller.pending(card.messageId)}
-                    onSteer={() => refocusAfter(controller.steer(card.messageId))}
-                    onDelete={() => refocusAfter(controller.remove(card.messageId))}
-                    onEdit={
-                      controller.editCapable
-                        ? () => void controller.edit(card.messageId)
-                        : undefined
-                    }
-                    editor={
-                      controller.editor?.messageId === card.messageId
-                        ? controller.editor
-                        : undefined
-                    }
-                    editAttachTo={editAttachTo}
-                    editDisabled={controller.editor !== undefined}
-                  />
+            {cards.length > 0 ? (
+              <ul
+                ref={listRef}
+                id={listId}
+                // On touch, keep a control's hold while a row tap reveals its tools.
+                onFocus={(event) => {
+                  const rowText = event.target instanceof HTMLLIElement
+                  if (!rowText || !window.matchMedia('(hover: none)').matches) {
+                    setListFocused(!rowText)
+                  }
+                }}
+                onBlur={leaveList}
+                // Hidden, not unmounted: an open edit keeps its typing while the list is collapsed.
+                hidden={!expanded}
+                aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
+                className={cn(
+                  'scrollbar-sleek overflow-y-auto px-1.5 pb-1.5',
+                  editing ? 'max-h-72' : 'max-h-40',
+                  // Folded for room unless the person opened it, is editing, or has focus in it.
+                  '[[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],[data-list-focus])_&]:hidden'
                 )}
-              />
-            </ul>
+              >
+                <NativeChatQueuedMessageRows
+                  cards={shownCards}
+                  allCards={cards}
+                  reorder={controller.editor ? undefined : controller.reorder}
+                  renderCard={(card, drag) => (
+                    <NativeChatQueuedMessageCard
+                      key={card.messageId}
+                      card={card}
+                      drag={drag}
+                      chatWorktreeId={chatWorktreeId}
+                      agentName={agentName}
+                      statedFailures={statedFailures}
+                      showsSteerShortcut={card === steerableHead}
+                      agentWorking={controller.isWorking}
+                      steerHeld={steerHeld}
+                      pending={controller.pending(card.messageId)}
+                      onSteer={() => refocusAfter(controller.steer(card.messageId))}
+                      onDelete={() => refocusAfter(controller.remove(card.messageId))}
+                      onEdit={
+                        controller.editCapable
+                          ? () => void controller.edit(card.messageId)
+                          : undefined
+                      }
+                      editor={
+                        controller.editor?.messageId === card.messageId
+                          ? controller.editor
+                          : undefined
+                      }
+                      editAttachTo={editAttachTo}
+                      editDisabled={controller.editor !== undefined}
+                    />
+                  )}
+                />
+              </ul>
+            ) : null}
             {offersMore && expanded ? (
               <button
                 type="button"

@@ -1,10 +1,12 @@
 import { clearMobileAiVaultMemoryCache } from '../agent-history/mobile-ai-vault-session-cache'
 import {
+  pendingSelectionHandle,
   pendingSelectionTabId,
   withoutPendingHandle,
   withoutPendingTabId
 } from './pending-session-selection'
 import { sessionTabClose } from './mobile-session-tab-write-operations'
+import { createClosingTerminalTab } from './closing-terminal-tab-handles'
 import {
   sessionTerminalClose,
   sessionTerminalRename
@@ -52,6 +54,8 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     sessionTabsRef,
     forgetLastSessionTab,
     closedTabTombstonesRef,
+    closingTerminalTabsRef,
+    terminalRowHandlesRef,
     setActiveHandle,
     setActiveSessionTabId,
     activeSessionTabIdRef,
@@ -159,6 +163,11 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     if (!client) {
       return
     }
+    const closingTerminal =
+      tab.type === 'terminal' ? createClosingTerminalTab(tab, terminalRowHandlesRef.current) : null
+    if (closingTerminal) {
+      closingTerminalTabsRef.current.add(closingTerminal)
+    }
     try {
       const reply = await sessionTabClose.request(client, {
         worktree: `id:${worktreeId}`,
@@ -200,10 +209,12 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
-        if (tab.type === 'terminal' && typeof tab.terminal === 'string') {
-          const terminalHandle = tab.terminal
-          unsubscribeTerminal(terminalHandle)
-          terminalRefs.current.delete(terminalHandle)
+        for (const handle of closingTerminal?.handles ?? []) {
+          unsubscribeTerminal(handle)
+          terminalRefs.current.delete(handle)
+          if (pendingSelectionHandle(pendingSelectionRef.current) === handle) {
+            pendingSelectionRef.current = withoutPendingHandle(pendingSelectionRef.current)
+          }
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
@@ -219,7 +230,15 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           pendingSelectionRef.current = withoutPendingTabId(pendingSelectionRef.current)
         }
         // Read active identity live: bulk close can reactivate its anchor while an older close closure still names another tab.
-        if (activeSessionTabIdRef.current === tab.id) {
+        // An empty snapshot published before this reply can leave the ID null or set to the closed terminal's handle.
+        const activeTabId = activeSessionTabIdRef.current
+        const activeHandle = activeHandleRef.current
+        if (
+          activeTabId === tab.id ||
+          ((activeTabId === null || activeTabId === activeHandle) &&
+            activeHandle !== null &&
+            closingTerminal?.handles.has(activeHandle))
+        ) {
           activeSessionTabTypeRef.current = null
           activeSessionTabIdRef.current = null
           setActiveSessionTabId(null)
@@ -229,6 +248,10 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       }
     } catch {
       showCloseFailed()
+    } finally {
+      if (closingTerminal) {
+        closingTerminalTabsRef.current.delete(closingTerminal)
+      }
     }
   }
   return {

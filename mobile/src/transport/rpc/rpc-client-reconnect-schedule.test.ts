@@ -21,7 +21,7 @@ it('gives a dormant Tailscale host a separate retry on app return', () => {
     reconnect.schedule()
     expect(reconnect.canRetryFromHint('network-change', 0)).toBe(false)
     expect(reconnect.canRetryFromHint('app-resume', 0)).toBe(true)
-    reconnect.redialNow('app-resume', true, false)
+    reconnect.redialNow('app-resume', false)
     reconnect.schedule()
 
     expect(reconnect.canRetryFromHint('app-resume', 0)).toBe(false)

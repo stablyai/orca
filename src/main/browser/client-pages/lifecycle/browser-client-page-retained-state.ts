@@ -1,4 +1,7 @@
-import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type {
+  BrowserClientHostedPageInventory,
+  BrowserClientHostCommandEvent
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserClientPageNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
 import type { BrowserClientPageRenderer } from '../renderer/browser-client-page-renderer-contract'
 import type {
@@ -23,6 +26,8 @@ export type BrowserClientPageLifecycleRegistry = Pick<
 export type BrowserClientRetainedPage = {
   generation: number
   inventory: BrowserClientHostedPageInventory
+  /** The createPage that made this guest, without its initial URL; Memory Saver remakes it. */
+  createEvent: BrowserClientHostCommandEvent
   registration: BrowserRoutePageGuestIdentity
   lifecycleClaim: BrowserRouteGuestLifecycleClaim
   renderer: BrowserClientPageRenderer

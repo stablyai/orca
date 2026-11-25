@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../../shared/bots/bot-avatar-color'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import {
   ORCA_APP_RESTART_STARTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
 } from '../../../../../shared/updater/updater-renderer-events'
 import { registerWindowCloseGuard } from '../../../app-shell/shutdown/window-close-request-coordinator'
+import { beginBotPictureOp, noteBotPictureChoice } from '@/components/bots/bot-picture-ops'
 
 export type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'avatarOutfit'>
 
@@ -99,6 +99,8 @@ export function saveBotLook(
   lookSaves.set(key, saves)
   sendOnLeave()
   const release = hold?.()
+  // Open in the picture ledger until the last save lands, so a picture asked for meanwhile waits for it.
+  const op = beginBotPictureOp(key)
   void (async () => {
     while (saves.waiting) {
       const next = saves.waiting
@@ -113,20 +115,11 @@ export function saveBotLook(
       }
     }
     release?.()
+    op.end()
     for (const listener of saves.drained) {
       listener()
     }
   })()
-}
-
-// Whether `change` is what the bot already shows (the default color stands for no color).
-function shows(saved: BotLookUpdate, change: BotLookUpdate): boolean {
-  return (
-    (!('avatarColor' in change) ||
-      (change.avatarColor ?? DEFAULT_BOT_AVATAR_COLOR) ===
-        (saved.avatarColor ?? DEFAULT_BOT_AVATAR_COLOR)) &&
-    (!('avatarOutfit' in change) || (change.avatarOutfit ?? null) === (saved.avatarOutfit ?? null))
-  )
 }
 
 /**
@@ -137,15 +130,14 @@ export function useBotLookSave(
   key: string,
   update: (look: BotLookUpdate) => Promise<unknown>,
   delayMs: number,
-  hold?: BotLookHold,
-  /** The bot's look as saved: a pick of it, with nothing else picked or saving, sends nothing. */
-  saved: BotLookUpdate = {}
+  hold?: BotLookHold
 ): { picked: BotLookUpdate | null; pick: (change: BotLookUpdate) => void; flush: () => void } {
   const [picked, setPicked] = useState<BotLookUpdate | null>(null)
   const timer = useRef<{
     timer: ReturnType<typeof setTimeout>
     save: () => void
     look: BotLookUpdate
+    op: { end: () => void }
   } | null>(null)
   // One listener per editor, however many of its picks join a drain.
   const drained = useRef(() => {
@@ -165,15 +157,16 @@ export function useBotLookSave(
     }
   }, [key])
   const pick = (change: BotLookUpdate): void => {
-    if (!timer.current && !lookSaves.has(key) && shows(saved, change)) {
-      return
-    }
+    // Newer than a picture still being generated, even a pick of the look already saved.
+    noteBotPictureChoice(key)
     const look = { ...timer.current?.look, ...change }
     setPicked((shown) => ({ ...shown, ...change }))
     if (timer.current) {
       clearTimeout(timer.current.timer)
       pausedPicks.delete(timer.current.save)
     }
+    // The pause is open in the ledger too, handed to the save queue's own op once it is sent.
+    const op = timer.current?.op ?? beginBotPictureOp(key)
     const save = (): void => {
       if (timer.current?.save === save) {
         clearTimeout(timer.current.timer)
@@ -181,8 +174,9 @@ export function useBotLookSave(
       }
       pausedPicks.delete(save)
       saveBotLook(key, look, update, open.current ? drained.current : undefined, hold)
+      op.end()
     }
-    timer.current = { timer: setTimeout(save, delayMs), save, look }
+    timer.current = { timer: setTimeout(save, delayMs), save, look, op }
     pausedPicks.add(save)
     sendOnLeave()
   }

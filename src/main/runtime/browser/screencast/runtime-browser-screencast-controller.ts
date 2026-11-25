@@ -40,6 +40,13 @@ export class RuntimeBrowserScreencastController {
     }
   }
 
+  /** Tells the page's viewers who drives it, so they lock input while a phone does. */
+  publishDriver(browserPageId: string, driver: RuntimeTerminalDriverState): void {
+    for (const stream of this.activeByPage.get(browserPageId) ?? []) {
+      stream.emitDriver?.(driver)
+    }
+  }
+
   getRemoteViewerPages(): string[] {
     return Array.from(this.remoteViewerPages)
   }
@@ -155,8 +162,14 @@ export class RuntimeBrowserScreencastController {
       registeredSubscriptionId = screencast.subscriptionId
       options.emit(screencast.ready)
       readyEmitted = true
+      if (params.driverEvents === 1) {
+        const browserPageId = activeBrowserPageId
+        activePageStream.emitDriver = (driver) =>
+          options.emit({ type: 'driver', browserPageId, driver })
+        activePageStream.emitDriver(this.deps.getDriver(browserPageId))
+      }
       screencast.flushPendingFrame()
-      screencast.startPagePrompts()
+      screencast.startViewerEvents()
       await screencast.session.done
       end(true)
       this.deps.cleanupSubscription(screencast.subscriptionId)

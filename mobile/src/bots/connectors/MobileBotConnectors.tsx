@@ -4,38 +4,34 @@
 import { useState, type ReactNode } from 'react'
 import { Plus } from 'lucide-react-native'
 import { botLinearWorkspaces, botSlackApps } from '../../../../src/shared/bot-types'
-import { isBotAppTool } from '../../../../src/shared/bots/bot-connector-entries'
-import { botMcpAppUrl } from '../../../../src/shared/bots/bot-mcp-apps'
-import { COMPOSIO_CURATED_APPS } from '../../../../src/shared/composio/composio-curated-apps'
 import type { BotUpdateParams } from '../../../../src/shared/rpc-contract/bots-params'
 import { ListRow, LIST_LEADING_INSET } from '../../components/list/ListGroup'
-import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { openGitHubLink } from './connector-link'
 import {
   rereadMobileComposio,
   useMobileComposio
 } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
-import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
+import { SettingsSection } from '../../settings/settings-screen-frame'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useHostBotsEntry } from '../host-bot-store'
 import { memberRemoval } from '../bot-sheet-operations'
-import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
 import { useMobileBotWebhookSettings } from '../webhooks/MobileBotWebhooks'
-import { MobileBotAddConnector } from './MobileBotAddConnector'
+import { MobileBotConnectorsAddPage } from './MobileBotConnectorsAddPage'
 import type { ConnectorPage } from './connector-pages'
+import type { SettingsFeature } from '../MobileBotSettingsRoot'
 import { MobileBotConnectorAccountPage } from './MobileBotConnectorAccountPages'
-import { usePhoneGoogleStatus } from './MobileBotGooglePage'
+import { usePhoneGoogleStatus } from './phone-google-accounts'
 import { usePhoneGitHubAccount, usePhoneLinearAccount } from './use-phone-connector-account'
 import { connectorNames, connectorRows } from './connector-entry-rows'
 import { MobileBotSlackPage } from './MobileBotSlackPage'
 import { MobileBotSlackSetup } from './MobileBotSlackSetup'
+import { otherSlackTeams } from '../../../../src/shared/bots/bot-slack-setup-teams'
 import { usePhoneBotSlack } from './use-phone-bot-slack'
 import { MobileBotConnectorToolPages } from './MobileBotConnectorToolPages'
 import { useBotToolsPage } from '../tools/use-bot-tools-page'
@@ -61,20 +57,18 @@ type ConnectorsActions = {
 
 type Page = ConnectorPage
 
-const ICON = 20
-
 /** The Settings row and, while open, the page that replaces Settings (or Webhooks, opened from it). */
 export function useMobileBotConnectorSettings(
   settings: ConnectorsContext,
   banner: ReactNode,
   actions: ConnectorsActions
-): { row: ReactNode; page: ReactNode } {
+): SettingsFeature {
   const t = useMobileTranslation()
   // The page Connectors mounts on, while open.
   const [open, setOpen] = useState<ConnectorPage | null>(actions.initialPage ?? null)
   const webhooks = useMobileBotWebhookSettings(settings, banner)
   if (webhooks.page) {
-    return { row: null, page: webhooks.page }
+    return { rows: [], page: webhooks.page }
   }
   const names = connectorNames(settings.routeBot.bot, webhooks.row !== null, t)
   const row = (
@@ -87,7 +81,8 @@ export function useMobileBotConnectorSettings(
     />
   )
   return {
-    row,
+    // Access's first row, as on the desktop.
+    rows: [{ key: 'connectors', group: 'access', node: row }],
     page: open ? (
       <ConnectorsPage
         {...settings}
@@ -107,7 +102,7 @@ function ConnectorsPage(
 ) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { bot, reads } = props.routeBot
+  const { bot, reads, hostKey } = props.routeBot
   const [page, setPage] = useState<Page>(props.initialPage ?? { kind: 'list' })
   const list = () => setPage({ kind: 'list' })
   useBackClaim(
@@ -121,6 +116,7 @@ function ConnectorsPage(
   const slackApps = botSlackApps(bot)
   const slack = usePhoneBotSlack(
     props.client,
+    hostKey,
     bot.id,
     reads,
     slackApps.length > 0 || page.kind === 'slack-setup'
@@ -128,11 +124,13 @@ function ConnectorsPage(
   const linearPages = page.kind === 'linear' || page.kind === 'linear-setup'
   const linear = usePhoneLinearAccount(
     props.client,
+    hostKey,
     botLinearWorkspaces(bot).length > 0 || linearPages,
     reads
   )
   const github = usePhoneGitHubAccount(
     props.client,
+    hostKey,
     bot.github !== null ||
       page.kind === 'github' ||
       page.kind === 'github-setup' ||
@@ -141,19 +139,16 @@ function ConnectorsPage(
   )
   const google = usePhoneGoogleStatus(
     props.client,
-    bot.google === true || page.kind === 'google' || page.kind === 'google-connect',
+    hostKey,
+    bot.google === true || page.kind.startsWith('google'),
     reads
   )
-  const composio = useMobileComposio(props.client, props.routeBot.hostKey, bot.id)
+  const composio = useMobileComposio(props.client, hostKey, bot.id)
   // Only the apps' URL servers are checked, as the desktop's Connectors does.
-  const tools = useBotToolsPage(props.client, bot.id, 'apps', reads)
-  const hostBots = useHostBotsEntry(props.routeBot.hostKey)?.bots ?? []
+  const tools = useBotToolsPage(props.client, bot.id, 'apps', reads, hostKey)
+  const hostBots = useHostBotsEntry(hostKey)?.bots ?? []
   const githubState = github.view.status === 'ready' ? github.view.value : null
   const githubInstallUrl = githubState?.installUrl ?? null
-  const signIns = (composio.connections?.connections ?? []).filter(
-    // A sign-in still under way finishes in the browser.
-    (connection) => connection.status !== 'pending'
-  )
 
   if (page.kind === 'slack-setup') {
     return (
@@ -161,13 +156,11 @@ function ConnectorsPage(
         client={props.client}
         botId={bot.id}
         botName={bot.name}
-        avatar={mobileBotAvatarSource(bot)}
         teamId={page.teamId}
         inSlack={slackApps.length > 0}
-        // The workspace a later bot reuses: one another bot on this host is in.
-        knownTeam={
-          hostBots.find((other) => other.id !== bot.id && other.slack)?.slack?.teamId ?? null
-        }
+        // The workspaces a later bot reuses: those other bots on this host are in.
+        knownTeams={otherSlackTeams(hostBots, bot)}
+        hostBots={hostBots}
         slack={slack}
         hostName={props.hostName}
         online={props.online}
@@ -220,7 +213,7 @@ function ConnectorsPage(
         client={props.client}
         bot={bot}
         accessBot={props.accessBot}
-        hostKey={props.routeBot.hostKey}
+        hostKey={hostKey}
         hostBots={hostBots}
         access={props.accessRequests}
         hostName={props.hostName}
@@ -238,91 +231,19 @@ function ConnectorsPage(
     )
   }
   if (page.kind === 'add') {
-    // As the desktop's Add to <bot>: only a URL server counts as the app, never a command of its name.
-    const appTools = (tools.tools?.own ?? []).filter(isBotAppTool)
-    const setUpSlack = (teamId: string | undefined) =>
-      setPage({ kind: 'slack-setup', teamId, from: page })
-    const askInChat = props.onAskInChat
     return (
-      <MobileBotAddConnector
-        botName={bot.name}
-        disabled={!props.online}
+      <MobileBotConnectorsAddPage
+        client={props.client}
+        bot={bot}
+        online={props.online}
         banner={props.banner}
-        onBack={list}
-        options={[
-          {
-            id: 'slack',
-            added: slackApps.length > 0,
-            addAnother: () => setUpSlack(undefined),
-            add: () => setUpSlack(undefined),
-            manage: list
-          },
-          {
-            id: 'github',
-            added: bot.github !== null,
-            // Another org: GitHub's install page, where the owner picks it, as the desktop does.
-            ...(githubInstallUrl ? { addAnother: () => openGitHubLink(githubInstallUrl) } : {}),
-            add: () => setPage({ kind: 'github-setup', from: page }),
-            manage: list
-          },
-          {
-            id: 'linear',
-            added: botLinearWorkspaces(bot).length > 0,
-            addAnother: () => setPage({ kind: 'linear-setup', workspaceId: undefined, from: page }),
-            add: () => setPage({ kind: 'linear-setup', workspaceId: undefined, from: page }),
-            manage: list
-          },
-          {
-            id: 'google',
-            added: bot.google === true,
-            add: () => setPage({ kind: 'google-connect', from: page }),
-            manage: list
-          },
-          {
-            id: 'webhooks',
-            added: props.webhooksRow !== null,
-            // As the desktop: the bot sets hooks up with you in chat.
-            ...(askInChat
-              ? { add: () => askInChat(t('bots.webhooks.setUpDraft', 'Set up a webhook that ')) }
-              : {}),
-            manage: list
-          }
-        ]}
-        composio={{
-          curated: COMPOSIO_CURATED_APPS,
-          active: signIns
-            .filter((connection) => connection.status === 'active')
-            .map((connection) => connection.app),
-          catalog: composio.status?.key === 'ok' ? { client: props.client, botId: bot.id } : null,
-          onPick: (app) => {
-            // Signed in already: Manage opens the app's page, as the desktop does.
-            const active = signIns.find(
-              (connection) => connection.app === app.slug && connection.status === 'active'
-            )
-            setPage(
-              active
-                ? { kind: 'composio', app: active.app, label: active.label }
-                : { kind: 'composio-connect', app, from: page }
-            )
-          }
-        }}
-        apps={{
-          added: new Set(appTools.map((tool) => tool.name)),
-          onPick: (app) => {
-            const onBot = appTools.some((tool) => tool.name === app.id)
-            // Its address shows before Add; a blank in it (a site or host) starts at its default.
-            setPage(
-              onBot
-                ? { kind: 'tool', name: app.id, signIn: false }
-                : {
-                    kind: 'add-tool',
-                    preset: { source: botMcpAppUrl(app), name: app.id },
-                    from: page
-                  }
-            )
-          },
-          onAddByUrl: () => setPage({ kind: 'add-tool', from: page })
-        }}
+        page={page}
+        setPage={setPage}
+        tools={tools}
+        composio={composio}
+        githubInstallUrl={githubInstallUrl}
+        hasWebhooks={props.webhooksRow !== null}
+        onAskInChat={props.onAskInChat}
       />
     )
   }
@@ -336,46 +257,27 @@ function ConnectorsPage(
     composio,
     tools: tools.tools ? { own: tools.tools.own, problems: tools.problems } : null,
     webhooksRow: props.webhooksRow,
-    rereadComposio: () => rereadMobileComposio(props.routeBot.hostKey, bot.id),
+    rereadComposio: () => rereadMobileComposio(hostKey, bot.id),
     hostName: props.hostName,
     online: props.online,
     setPage,
     save: props.online ? props.save : null,
     t
   })
-  const openAdd = () => setPage({ kind: 'add' })
   return (
     <>
       <SheetHeader
         title={t('settings.bots.connectors', 'Connectors')}
         onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
-        trailingButtons={
-          <NavBarButton
-            icon={Plus}
-            accessibilityLabel={t('settings.bots.addConnector', 'Add a connector')}
-            onPress={openAdd}
-          />
-        }
       />
       {props.banner}
-      {rows.length > 0 ? (
-        <SettingsSection first separatorInset={LIST_LEADING_INSET}>
-          {rows}
-        </SettingsSection>
-      ) : (
-        <SettingsNote>
-          {t(
-            'bots.connectors.emptyNote',
-            'Let people reach {{name}} in Slack, GitHub and Linear, and let it work in your Google and other apps.',
-            { name: bot.name }
-          )}
-        </SettingsNote>
-      )}
-      <SettingsSection separatorInset={LIST_LEADING_INSET}>
+      <SettingsSection first separatorInset={LIST_LEADING_INSET}>
+        {rows}
         <ListRow
-          leading={<Plus size={ICON} color={colors.textPrimary} />}
+          key="add"
+          leading={<Plus size={18} color={colors.textMuted} />}
           title={t('settings.bots.addConnector', 'Add a connector')}
-          onPress={openAdd}
+          onPress={() => setPage({ kind: 'add' })}
         />
       </SettingsSection>
     </>

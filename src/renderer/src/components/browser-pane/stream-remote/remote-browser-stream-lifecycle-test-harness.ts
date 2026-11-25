@@ -216,11 +216,14 @@ export function createHarness() {
     askPagePrompt: () => new Promise(() => {}),
     openExternalAppLink: async () => false,
     reportPagePromptFailed: () => {},
+    pickFiles: async () => [],
+    stageFilesOnHost: async () => [],
+    reportFilesNotDelivered: () => {},
     getDeviceScaleFactor: () => 1,
     setStatus: (status) => statusLog.push(status),
     clearFrame: () => {},
     handleFrameBytes: () => {},
-    setPointer: () => {}
+    viewerEvents: { onPointer: () => {}, onAgentCursor: () => {}, onDriver: () => {} }
   })
 
   return {

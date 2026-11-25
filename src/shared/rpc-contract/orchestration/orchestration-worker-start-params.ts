@@ -42,7 +42,10 @@ export const WorkerStartParams = z
     /** Only from the paired Orca coordinating this Run: its own ID for the Task this start creates or reopens. */
     adoptTaskId: OptionalString,
     /** Only from the paired Orca coordinating this Run: its own workspace, the parent of a new-child here. */
-    crossStoreParent: CrossStoreParentRefSchema.optional()
+    crossStoreParent: CrossStoreParentRefSchema.optional(),
+    /** Only from the paired Orca coordinating this Run: the start is in a chat lineage there, so it and
+     *  the workers it starts start as chats here too. */
+    chatLineage: z.literal(true).optional()
   })
   .superRefine((params, ctx) => {
     if (!params.task && !params.spec) {

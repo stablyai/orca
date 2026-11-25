@@ -20,10 +20,11 @@ export type StructuredAgentSessionAgentStatus = {
 
 function structuredAgentSessionLeadState(
   status: StructuredAgentSessionProjectedStatus,
-  awaitsAnswer: boolean
+  awaitsAnswer: boolean,
+  asksOnlyQuestions: boolean
 ): 'working' | 'blocked' | 'waiting' | 'done' {
   if (status === 'attention') {
-    return 'blocked'
+    return asksOnlyQuestions ? 'waiting' : 'blocked'
   }
   // Like the hook row for Codex's async question: it waits on the person while the turn runs and after.
   if (awaitsAnswer) {
@@ -35,12 +36,19 @@ function structuredAgentSessionLeadState(
 /** Share hook-equivalent child folding across worktree ps/mobile/sidebar.
  * Use host child records/views; only older summaries without childWork fall back to live background tasks. */
 export function structuredAgentSessionAgentStatus(
-  summary: Pick<AgentSessionStatusSummary, 'turnOutcome' | 'stopping' | 'awaitsAnswer'> & {
+  summary: Pick<
+    AgentSessionStatusSummary,
+    'turnOutcome' | 'stopping' | 'awaitsAnswer' | 'attentionAsksOnlyQuestions'
+  > & {
     status: StructuredAgentSessionProjectedStatus
     childWork?: readonly AgentChildWorkLivenessCandidate[]
   }
 ): StructuredAgentSessionAgentStatus {
-  const leadState = structuredAgentSessionLeadState(summary.status, summary.awaitsAnswer === true)
+  const leadState = structuredAgentSessionLeadState(
+    summary.status,
+    summary.awaitsAnswer === true,
+    summary.attentionAsksOnlyQuestions === true
+  )
   const resolution = foldAgentLeadStatus({
     leadState,
     childWorkLiveness: agentChildWorkLiveness(summary.childWork)

@@ -50,8 +50,14 @@ const MOBILE_BOT_CARDS: NativeChatPhoneBotCardRenderers<
   importDone: (done, { fontScale }) => (
     <MobileBotImportDoneCard done={done} fontScale={fontScale} />
   ),
-  botRequest: (card, { cardId, fallback, fontScale }) => (
-    <MobileBotRequestCard card={card} cardId={cardId} fallback={fallback} fontScale={fontScale} />
+  botRequest: (card, { cardId, timestamp, fallback, fontScale }) => (
+    <MobileBotRequestCard
+      card={card}
+      cardId={cardId}
+      timestamp={timestamp}
+      fallback={fallback}
+      fontScale={fontScale}
+    />
   ),
   googleSetup: (card, { fallback, fontScale }) => (
     <MobileGoogleSetupCard card={card} fallback={fallback} fontScale={fontScale} />

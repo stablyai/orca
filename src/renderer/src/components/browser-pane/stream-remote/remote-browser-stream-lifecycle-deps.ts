@@ -1,7 +1,9 @@
-import type { BrowserScreencastPointer } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { RemoteBrowserPageSessionDeps } from './remote-browser-page-session'
 import type { RemoteBrowserPagePromptDeps } from './remote-browser-page-prompts'
-import type { RemoteBrowserScreencastSubscribe } from './remote-browser-screencast-subscription'
+import type {
+  RemoteBrowserScreencastEvents,
+  RemoteBrowserScreencastSubscribe
+} from './remote-browser-screencast-subscription'
 import type { RemoteBrowserStreamStatus } from './remote-browser-stream-status'
 import type {
   RemoteBrowserPaneIdentity,
@@ -21,5 +23,6 @@ export type RemoteBrowserStreamLifecycleDeps = Omit<RemoteBrowserPageSessionDeps
     setStatus: (status: RemoteBrowserStreamStatus) => void
     clearFrame: () => void
     handleFrameBytes: (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>) => void
-    setPointer: (pointer: BrowserScreencastPointer | null) => void
+    /** What the stream reports beyond frames: the page's cursor, an agent's pointer and its driver. */
+    viewerEvents: Pick<RemoteBrowserScreencastEvents, 'onPointer' | 'onAgentCursor' | 'onDriver'>
   }

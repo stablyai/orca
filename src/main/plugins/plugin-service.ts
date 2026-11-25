@@ -181,7 +181,8 @@ export class PluginService {
       ? await discoverPlugins({
           pluginsDir: getUserPluginsDir(this.options.userDataPath),
           devPluginPaths: devPaths,
-          hostVersion: this.options.hostVersion
+          hostVersion: this.options.hostVersion,
+          requiredPluginKeys: consentLists.requiredPlugins
         })
       : []
     if (this.disposed) {
@@ -233,14 +234,15 @@ export class PluginService {
   /** Enabled, consented and not being removed: what may open frames or hand out its files. */
   findApprovedPlugin(pluginKey: string, allowRefreshPause = false): ValidDiscoveredPlugin | null {
     const plugin = this.findValidPlugin(pluginKey)
-    return plugin && this.canStartPluginWork(plugin, allowRefreshPause) ? plugin : null
+    return plugin && this.isApprovedPlugin(plugin, allowRefreshPause) ? plugin : null
   }
 
   activationState(plugin: ValidDiscoveredPlugin): PluginActivationState {
     return livePluginActivationState(this.options, plugin)
   }
 
-  private canStartPluginWork(plugin: ValidDiscoveredPlugin, allowRefreshPause = false): boolean {
+  /** findApprovedPlugin for a plugin already in hand from getDiscovered, without the key lookup. */
+  isApprovedPlugin(plugin: ValidDiscoveredPlugin, allowRefreshPause = false): boolean {
     return !this.installed.isRemoving(plugin) && this.isRuntimeApproved(plugin, allowRefreshPause)
   }
 
@@ -283,7 +285,7 @@ export class PluginService {
   wantsEvent(event: PluginEventName): boolean {
     return (
       this.panelBridge.hasSubscribers(event) ||
-      pluginWorkersWantEvent(event, this.installed.discovered, (p) => this.canStartPluginWork(p))
+      pluginWorkersWantEvent(event, this.installed.discovered, (p) => this.isApprovedPlugin(p))
     )
   }
 
@@ -298,7 +300,7 @@ export class PluginService {
   readonly eventDelivery: PluginEventDeliveryContext = {
     plugins: () => this.installed.discovered,
     ensureWorker: (plugin) => this.workerController.ensure(plugin),
-    isRuntimeApproved: (plugin) => this.canStartPluginWork(plugin),
+    isRuntimeApproved: (plugin) => this.isApprovedPlugin(plugin),
     grantedCapabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
     logWarning: (pluginKey) => this.installed.captureLog(pluginKey, 'warn')
   }

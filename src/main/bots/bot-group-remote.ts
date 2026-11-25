@@ -151,17 +151,6 @@ export async function resolveNewGroupRemoteMembers(
   return resolveRemoteMembers(groups, localBots, input, undefined, computers)
 }
 
-/** Asking bots on other computers is the owner's own act at this computer's window. */
-export function assertRemotePoster(
-  groups: BotGroupRuntime,
-  group: Pick<BotGroup, 'remoteMembers'>,
-  fromThisWindow: boolean
-): void {
-  if ((group.remoteMembers?.length ?? 0) > 0 && !fromThisWindow) {
-    throw new BotFailureError('groupPostFromHost', { host: groups.runtime.readMachineName() })
-  }
-}
-
 /** The paired computer, refused with the group's own words when its Orca can't take bot questions. */
 async function requireRemoteComputer(groups: BotGroupRuntime, environmentId: string) {
   let name = environmentId
@@ -252,7 +241,7 @@ export async function deliverRemoteAsks(
     for (const ask of asks) {
       sending.delete(ask.requestId)
     }
-    groups.changed()
+    groups.changed(message.groupId)
   }
 }
 

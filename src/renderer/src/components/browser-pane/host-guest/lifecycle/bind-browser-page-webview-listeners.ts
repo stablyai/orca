@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store/index'
 import {
-  issueBrowserGuestNavigation,
   browserGuestPreservesRequestedDocument,
   subscribeBrowserGuestMetadata
 } from '../metadata/browser-guest-metadata-cache'
@@ -17,6 +16,12 @@ import {
 } from '../webview-registry'
 import type { AttachBrowserPageWebviewArgs } from './attach-browser-page-webview'
 import { createBrowserPageWebviewGuestSession } from './browser-page-webview-guest-session'
+import {
+  isBrowserPageAttachWaiting,
+  resumeParkedBrowserPageAttach,
+  settleParkedBrowserPageAttach,
+  startBrowserPageDeferredAttach
+} from './browser-page-deferred-attach'
 import { createBrowserPageWebviewLoadingHandlers } from './browser-page-webview-loading-handlers'
 import { createBrowserPageWebviewNavigationHandlers } from './browser-page-webview-navigation-handlers'
 
@@ -222,21 +227,17 @@ export function bindBrowserPageWebviewListeners({
       normalizeBrowserGuestSrc(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
     webview.dataset.orcaAttachPending = 'true'
-    void window.api.browser
-      .preparePageAttach({
-        browserPageId: browserTabId,
-        partition: webview.getAttribute('partition') ?? '',
-        url: initialUrl
-      })
-      .then((marker) => {
-        if (webviewRef.current === webview && webview.isConnected) {
-          issueBrowserGuestNavigation(webview, () => {
-            webview.src = marker
-          })
-        }
-      })
-      .catch(() => guestRecovery.recoverRenderer())
-  } else if (isPaintableRef.current) {
+    startBrowserPageDeferredAttach({
+      webview,
+      browserTabId,
+      initialUrl,
+      lastKnownWebviewUrlRef,
+      onFailed: () => guestRecovery.recoverRenderer()
+    })
+  } else if (webview.dataset.orcaAttachMarker) {
+    resumeParkedBrowserPageAttach(webview)
+  } else if (isPaintableRef.current && !isBrowserPageAttachWaiting(webview)) {
+    settleParkedBrowserPageAttach(webview)
     if (isBrowserPageRendererRecoveryPending(browserTabId)) {
       guestRecovery.recoverRenderer()
     } else {

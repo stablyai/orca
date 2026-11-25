@@ -12,7 +12,8 @@ import { pathToFileURL } from 'node:url'
 import { agentTokenUsageDailySchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
 import { readUsageWorktreeCatalog } from '../usage/worktree-attribution/usage-worktree-metadata'
-import { isTelemetryEnabled, track } from '../telemetry/client'
+import { isTelemetryEnabled } from '../telemetry/client'
+import { captureAgentTokenUsageDaily } from '../telemetry/agent-token-usage-capture'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
 import { isRendererDocumentNavigation } from '../window/security/renderer-document-navigation'
@@ -61,7 +62,7 @@ export function createBackendDesktopCapabilities(
       return isTelemetryEnabled()
     }
     if (method === 'usage.telemetry.captureDaily') {
-      return track('agent_token_usage_daily', agentTokenUsageDailySchema.parse(params))
+      return captureAgentTokenUsageDaily(agentTokenUsageDailySchema.parse(params))
     }
     throw new Error('This desktop capability is not supported.')
   }

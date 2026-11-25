@@ -1,5 +1,6 @@
 import { automationNextRunLabel } from '../details/automation-when-label'
 import { useBots } from '@/lib/bot-catalog'
+import { automationWebhookUrlCopy } from '@/components/bots/webhooks/automation-webhook-url'
 import { automationTargetLabel } from '../authoring/automation-bot-target-label'
 import { AutomationWontFireMark } from '../details/AutomationWontFireNote'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
@@ -11,7 +12,7 @@ import {
 } from '../hosts/automation-captured-owner'
 import type { RuntimeEnvironmentSshBucket } from '../../../store/slices/ssh/runtime-environment-ssh'
 import React from 'react'
-import { MoreHorizontal, Pause, Pencil, Play, ShieldCheck, Trash2 } from 'lucide-react'
+import { Link, MoreHorizontal, Pause, Pencil, Play, ShieldCheck, Trash2 } from 'lucide-react'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { MenuItem, MenuRunItem, MenuSeparator } from './AutomationListRowContextMenuItems'
 import { pendingAutomationSetupReviewFromSummary } from '../authoring/automation-setup-review'
@@ -41,7 +42,7 @@ import {
   getLocalAutomationLastRunSnapshot
 } from './automation-list-last-run'
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
-import { formatAutomationRelativeTime, formatAutomationDateTime } from '../automation-page-parts'
+import { formatAutomationDateTime, formatAutomationNextRun } from '../automation-page-parts'
 import { getAutomationTargetAvailability } from '../hosts/automation-target-availability'
 import { getAgentLabel } from '../authoring/automation-draft-model'
 import { automationProjectName, type AutomationListRow } from './automation-list-row-identity'
@@ -157,11 +158,12 @@ export function AutomationListLocalRow({
     : formatUiAutomationSchedule(automation.rrule, t, intlLocale)
   const nextRunLabel = automation.enabled
     ? automation.bot
-      ? automationNextRunLabel(automation, relativeNow)
-      : (formatAutomationRelativeTime(automation.nextRunAt, relativeNow, t, intlLocale) ??
-        formatAutomationDateTime(automation.nextRunAt, t, intlLocale))
+      ? automationNextRunLabel(automation, relativeNow, t, intlLocale)
+      : formatAutomationNextRun(automation.nextRunAt, relativeNow, t, intlLocale)
     : t('auto.components.automations.enablement.paused', 'Paused')
-  const nextRunTitle = formatAutomationDateTime(automation.nextRunAt, t, intlLocale)
+  const nextRunTitle = automation.nextRunAt
+    ? formatAutomationDateTime(automation.nextRunAt, t, intlLocale)
+    : undefined
   const isSelected = isSelectedLocal && selectedRowKey === row.key
   const movedToDistro = useAppStore(
     (state) => wslMovedProjectForAutomation(state.wslMovedProjects, automation)?.distro ?? null
@@ -181,6 +183,9 @@ export function AutomationListLocalRow({
   const setupReview = pendingAutomationSetupReviewFromSummary(automation, row.usageSummary)
   const reviewContent = onReviewSetup && allows(row, 'save') ? setupReview?.content : null
   const reviewSetupLabel = t('automations.setupTrust.reviewAction', 'Review setup')
+
+  const copyUrl = automationWebhookUrlCopy(automation, bots)
+  const copyUrlLabel = t('bots.webhooks.copyUrl', 'Copy URL')
 
   const dropdownRunItem = (
     <DropdownMenuItem
@@ -220,6 +225,9 @@ export function AutomationListLocalRow({
         label={t('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
         onSelect={() => onEdit(row)}
       />
+      {copyUrl ? (
+        <MenuItem icon={<Link className="size-3.5" />} label={copyUrlLabel} onSelect={copyUrl} />
+      ) : null}
       <MenuItem
         disabled={!allows(row, 'toggle')}
         icon={automation.enabled ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
@@ -307,15 +315,14 @@ export function AutomationListLocalRow({
               {hostLabel}
             </span>
           ) : null}
-          <span className="min-w-0" title={automation.enabled ? nextRunTitle : undefined}>
-            <AutomationListNextRunCell
-              enabled={automation.enabled}
-              nextRunLabel={nextRunLabel}
-              movedToDistro={movedToDistro}
-              needsMigration={needsMigration?.(row)}
-              setupSkipped={Boolean(setupReview)}
-            />
-          </span>
+          <AutomationListNextRunCell
+            enabled={automation.enabled}
+            nextRunLabel={nextRunLabel}
+            nextRunTitle={nextRunTitle}
+            movedToDistro={movedToDistro}
+            needsMigration={needsMigration?.(row)}
+            setupSkipped={Boolean(setupReview)}
+          />
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -343,6 +350,12 @@ export function AutomationListLocalRow({
                 <Pencil className="size-3.5" />
                 {t('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
               </DropdownMenuItem>
+              {copyUrl ? (
+                <DropdownMenuItem onSelect={copyUrl}>
+                  <Link className="size-3.5" />
+                  {copyUrlLabel}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem disabled={!allows(row, 'toggle')} onSelect={() => onToggle(row)}>
                 {automation.enabled ? (
                   <Pause className="size-3.5" />

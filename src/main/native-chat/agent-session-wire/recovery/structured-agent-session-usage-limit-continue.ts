@@ -50,8 +50,7 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   constructor(private readonly deps: UsageLimitContinueDeps) {
-    const switchReset = (id: string, cut: HostUsageLimitCut) =>
-      this.holds.withSwitchReset(id, cut, deps.now())
+    const switchReset = (id: string, cut: HostUsageLimitCut) => this.holds.withSwitchReset(id, cut)
     this.cold = new UsageLimitColdCuts({ ...deps, logger: deps.host.logger, switchReset })
   }
 
@@ -123,7 +122,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     id: string,
     read: HostUsageLimitCut | null
   ): AgentSessionStatusSummary['usageLimitContinue'] => {
-    const cut = read && this.holds.withSwitchReset(id, read, this.deps.now())
+    const cut = read && this.holds.withSwitchReset(id, read)
     // A cut Orca can never continue shows only the manual actions, whatever the setting.
     if (!cut || !this.holds.schedulable(id, cut, this.deps.now())) {
       return undefined
@@ -141,7 +140,8 @@ export class StructuredAgentSessionUsageLimitContinue {
           ? 'scheduled'
           : 'off'
     // An unknown reset has no time to promise, yet fresh room still releases it: say nothing.
-    if (hold.unknownReset && state === 'scheduled') {
+    // A relaunch's stand-in reset is no reset at all, so it never reads as "can continue now".
+    if (hold.awaitingRoom || (hold.unknownReset && state === 'scheduled')) {
       return undefined
     }
     return {
@@ -206,7 +206,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       // Visibility and workspace sleep can change without a journal or settings commit.
       await this.publishScheduled()
       await this.cold.readUnread(visible)
-      this.holds.beginPass()
+      this.holds.beginPass(this.deps.now())
       const due: { id: string; cut: Cut; at: number }[] = []
       for (const id of visible) {
         if (!this.deps.sessions.has(id) && !this.cold.has(id)) {
@@ -222,7 +222,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         if (read) {
           await this.holds.attribute(id, this.deps.host, read, this.deps.now())
         }
-        const cut = read && this.holds.withSwitchReset(id, read, this.deps.now())
+        const cut = read && this.holds.withSwitchReset(id, read)
         const previous = this.attempts.get(id)
         if (!cut || previous?.identity !== attemptIdentity(cut)) {
           this.attempts.delete(id)
@@ -236,8 +236,8 @@ export class StructuredAgentSessionUsageLimitContinue {
         ) {
           continue
         }
+        this.holds.askForRelaunchRoom(id, cut, this.deps.now())
         if (!this.eligible(id, cut)) {
-          this.holds.askForRelaunchRoom(id, cut)
           continue
         }
         const retryAt = attempt ? attempt.at + 60_000 * 2 ** Math.max(0, attempt.count - 1) : 0
@@ -274,15 +274,15 @@ export class StructuredAgentSessionUsageLimitContinue {
 
   private async send(id: string, cut: Cut): Promise<void> {
     // Earlier sends take time; moved sources resolve again, once per new witness for every chat.
-    if (!this.holds.attributionCurrent(id, this.deps.host)) {
+    if (!this.holds.bindingHolds(id, this.deps.host, this.holds.attributionBinding(id))) {
       await this.holds.attribute(id, this.deps.host, cut, this.deps.now())
     }
-    const record = this.deps.host.store.getRecord(id)
-    if (!record) {
-      return
-    }
     // Still moving: yield without spending an attempt; a later pass resolves on settled sources.
-    if (!this.holds.attributionCurrent(id, this.deps.host)) {
+    const binding = this.holds.attributionBinding(id)
+    if (
+      binding?.runtimeFence === undefined ||
+      !this.holds.bindingHolds(id, this.deps.host, binding)
+    ) {
       await this.deferUnchangedCut(id, cut, this.deps.now())
       return
     }
@@ -291,8 +291,8 @@ export class StructuredAgentSessionUsageLimitContinue {
       this.deps.publish(id)
       return
     }
-    const binding = this.holds.attributionBinding(id)
     const at = this.deps.now()
+    const { runtimeFence, launchFence } = binding
     const attempt: Attempt = {
       identity: attemptIdentity(cut),
       count: (this.attempts.get(id)?.count ?? 0) + 1,
@@ -304,13 +304,15 @@ export class StructuredAgentSessionUsageLimitContinue {
           sessionId: id,
           cut,
           at,
-          expectedRuntimeFence: record.lease.runtimeFence
+          expectedRuntimeFence: runtimeFence
         })),
+        expectedContinuationLaunch: { runtimeFence, launchFence },
         beforeRun: async () => {
-          const current = await this.cold.read(id)
+          const read = await this.cold.read(id)
+          const current = read && this.holds.withSwitchReset(id, read)
           if (
             !current ||
-            identity(current) !== identity(cut) ||
+            attemptIdentity(current) !== attemptIdentity(cut) ||
             !this.eligible(id, current) ||
             !this.holds.bindingHolds(id, this.deps.host, binding) ||
             !this.holds.ready(id, current, this.deps.now())

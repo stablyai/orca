@@ -176,7 +176,9 @@ async function sendChunk(
     {
       // Restarts retain pairing but invalidate runtime capability proof; pin every chunk to its runtime.
       expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId,
-      signal: args.signal
+      signal: args.signal,
+      // An upload is the user's own act: it may wake an idle-stopped WSL host (#46567).
+      wake: true
     }
   )
   if (response.ok !== true) {

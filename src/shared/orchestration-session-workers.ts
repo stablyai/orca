@@ -76,6 +76,14 @@ export function sessionWorkerIsRunning(worker: Pick<OrchestrationSessionWorker, 
   return worker.state === 'working' || worker.state === 'unverifiable'
 }
 
+/** Its start failed before an agent ran, so it has nothing to open. Only a local worker: a paired
+ *  server's worker loses its terminal handle when released, though it ran. */
+export function sessionWorkerNeverStarted(
+  worker: Pick<OrchestrationSessionWorker, 'state' | 'address' | 'host'>
+): boolean {
+  return worker.state === 'failed' && !worker.address && worker.host === 'local'
+}
+
 /** The agent state an open worker draws: its own report (working without one, as from an older host),
  *  resting while its open `ask` or gate waits on its coordinator. A prompt it reports still shows. */
 export function sessionWorkerAgentState(

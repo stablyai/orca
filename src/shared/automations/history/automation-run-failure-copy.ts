@@ -38,6 +38,7 @@ export const AUTOMATION_RUN_FAILURE_COPY = {
   wslDistroStopped:
     'The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.',
   botsOff: 'Bots are turned off in Settings, so Orca skipped this run.',
+  botsOffByTeam: 'Bots are turned off by your team, so Orca skipped this run.',
   botMissing: 'The bot this automation runs as no longer exists.',
   botFolderMissing: "The bot's folder is no longer available.",
   botPaused: '{{bot}} is paused, so Orca skipped this run.'

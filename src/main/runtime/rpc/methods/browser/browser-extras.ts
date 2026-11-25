@@ -24,7 +24,10 @@ import {
   StorageKeyValue,
   Viewport
 } from '../../../../../shared/rpc-contract/browser/browser-params'
-import { MouseClick } from '../../../../../shared/rpc-contract/browser/browser-extras-params'
+import {
+  DropFiles,
+  MouseClick
+} from '../../../../../shared/rpc-contract/browser/browser-extras-params'
 import {
   AudioMuted,
   PageZoom,
@@ -97,6 +100,12 @@ export const BROWSER_EXTRA_METHODS = [
     permission: 'workspace',
     params: MouseClick,
     handler: async (params, { runtime }) => runtime.browserMouseClick(params)
+  }),
+  defineMethod({
+    name: 'browser.dropFiles',
+    permission: 'workspace',
+    params: DropFiles,
+    handler: async (params, { runtime }) => runtime.browserDropFiles(params)
   }),
   defineMethod({
     name: 'browser.mouseUp',

@@ -1,6 +1,9 @@
-// Display-only mirror of main's agent activity; main decides which pages agents drive.
+// Display-only mirror of which pages agents drive: main's for its own pages, a paired host's rows for pages it runs.
 import { useSyncExternalStore } from 'react'
-import type { BrowserAgentCursorEvent } from '../../../../../shared/browser/automation/browser-agent-activity-contract'
+import type {
+  BrowserAgentCursorEvent,
+  BrowserAgentPointerPoint
+} from '../../../../../shared/browser/automation/browser-agent-activity-contract'
 
 /** A mounted page draws the cursor and glow; `show` says whether it will report the arrival. */
 type BrowserAgentCursorSink = {
@@ -57,6 +60,32 @@ export function setBrowserAgentPageActive(
   }
   sinksByPage.get(browserPageId)?.setActive(active)
   notify()
+}
+
+/** Applies a paired host's agent mark for a page it runs; unchanged marks notify nobody. */
+export function mirrorBrowserAgentPageActive(
+  browserPageId: string,
+  active: boolean,
+  worktreeId: string
+): void {
+  if (activePageIds.has(browserPageId) !== active) {
+    setBrowserAgentPageActive(browserPageId, active, worktreeId)
+  }
+}
+
+/** Shows a streamed page's agent pointer; its host never waits on this viewer, so no arrival is reported. */
+export function createStreamedBrowserAgentCursor(
+  getBrowserPageId: () => string
+): (point: BrowserAgentPointerPoint) => void {
+  let sequence = 0
+  return (point) => {
+    showBrowserAgentCursor({
+      ...point,
+      browserPageId: getBrowserPageId(),
+      sequence: ++sequence,
+      awaitsArrival: false
+    })
+  }
 }
 
 /** Answers whether a mounted, visible page took the cursor; false means nobody will see it. */

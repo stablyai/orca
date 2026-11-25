@@ -23,9 +23,13 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
   filled_at INTEGER,
   sent_at INTEGER,
   took_ms INTEGER,
+  turn_started_at INTEGER,
   cut_turn_id TEXT,
   cut_kind TEXT,
   claim_message_id TEXT,
+  quiet_rule TEXT,
+  tools_ran INTEGER,
+  empty_retried INTEGER,
   PRIMARY KEY(account, delivery_id)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_connector_replies_open
@@ -33,13 +37,19 @@ CREATE INDEX IF NOT EXISTS journal_connector_replies_open
 `
 
 // Columns later builds added the same way, with no user_version change: an older build never reads
-// them. cut_turn_id / cut_kind: the cut that owes the row; claim_message_id: the continuation that
-// claimed it.
+// them. turn_started_at: the answering turn's turn-started `at`, which its reply names. cut_turn_id / cut_kind: the cut that owes the row; claim_message_id: the continuation that
+// claimed it. quiet_rule: the quiet-marker rule the row was admitted under. tools_ran: a turn done
+// without an answer ran a tool call that may have changed something. empty_retried: its empty turn
+// was retried once.
 const ADDED_COLUMNS = [
   ['took_ms', 'INTEGER'],
+  ['turn_started_at', 'INTEGER'],
   ['cut_turn_id', 'TEXT'],
   ['cut_kind', 'TEXT'],
-  ['claim_message_id', 'TEXT']
+  ['claim_message_id', 'TEXT'],
+  ['quiet_rule', 'TEXT'],
+  ['tools_ran', 'INTEGER'],
+  ['empty_retried', 'INTEGER']
 ] as const
 
 /** Creates the table, and adds the columns a table an earlier build made lacks. */
@@ -56,4 +66,9 @@ export function ensureJournalConnectorRepliesSchema(db: {
       db.exec(`ALTER TABLE journal_connector_replies ADD COLUMN ${name} ${type}`)
     }
   }
+  // A Stop finds the rows of the messages it took back; an older build ignores these indexes.
+  db.exec(`CREATE INDEX IF NOT EXISTS journal_connector_replies_message
+    ON journal_connector_replies(session_id, epoch, message_id) WHERE outcome IS NULL;
+  CREATE INDEX IF NOT EXISTS journal_connector_replies_claim
+    ON journal_connector_replies(claim_message_id) WHERE claim_message_id IS NOT NULL`)
 }

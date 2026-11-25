@@ -124,10 +124,7 @@ async function scanClaudeAtRest(
   const names = new Set(builtIn.map((command) => command.name))
   const skills = discovered.skills
     // The default ~/.claude/skills beside a relocated account home is for agents that borrow it.
-    .filter(
-      (skill) =>
-        skill.providers.includes('claude') && isNativeChatSkillForAgent('claude', skill, discovered)
-    )
+    .filter((skill) => isNativeChatSkillForAgent('claude', skill, discovered))
     .map((skill): AgentSessionSlashCommand => ({
       name: skill.name,
       kind: 'skill',

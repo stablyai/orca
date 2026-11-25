@@ -25,8 +25,8 @@ export type StructuredAgentSessionSendTurn =
   /** Another send went, or may have gone, into the turn that answered it: their answers can't be told
    *  apart. `turn` is that turn when its row is known. */
   | { kind: 'shared'; turn?: { itemId: string; turn: AgentJournalTurnLifecycle } }
-  /** The agent refused it before any turn: the request failed. */
-  | { kind: 'refused' }
+  /** The agent refused it before any turn: the request failed, for `rejection` when the host said why. */
+  | { kind: 'refused'; rejection?: AgentJournalSubmission['rejection'] }
   /** It will never have a turn of its own: taken back, or its host stopped before the provider answered. */
   | { kind: 'none' }
 
@@ -63,7 +63,7 @@ export function structuredAgentSessionSendTurn(
   switch (submission.dispatchState) {
     case 'rejected':
       if (classifyDispatchRejection(submission).verdict === 'failure') {
-        return { kind: 'refused' }
+        return { kind: 'refused', rejection: submission.rejection }
       }
       // A Stop takes a card's handoff back and the card waits again.
       return submission.queuedMessageId === clientMessageId ? { kind: 'unsent' } : { kind: 'none' }

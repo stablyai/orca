@@ -161,6 +161,8 @@ export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimi
     fetchInactiveClaudeAccounts: refreshInactive,
     fetchInactiveCodexAccounts: refreshInactive,
     refreshGrok: refresh,
+    // Why: the server's snapshot is its own fetch target, never a WSL distro's, so fail closed (#42644).
+    readUsageForRuntimeTarget: async () => null,
     onUpdate: (callback) => {
       listeners.add(callback)
       startStream()

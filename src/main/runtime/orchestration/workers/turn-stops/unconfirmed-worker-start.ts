@@ -7,6 +7,7 @@ import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonic
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { observeWorker } from './worker-presence-report'
 import { START_BLOCKED_FENCE } from './awaiting-worker-start-report'
+import { WORKER_AGENT_STARTING_STAGE } from '../../db/worker-dispatch/worker-awaiting-agent-stage'
 import { SUBMIT_WITHHELD_STAGE, type UnconfirmedStartEvidence } from './unconfirmed-start-evidence'
 import { confirmUnknownWorkerStart } from './worker-working-observation'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
@@ -22,7 +23,9 @@ const BRIEF_HANDED_OVER_STAGES: ReadonlySet<string> = new Set([
   'dispatch_input',
   'turn_observation',
   'turn_start_unobserved',
-  SUBMIT_WITHHELD_STAGE
+  SUBMIT_WITHHELD_STAGE,
+  // Reported only from the restart pass: a live slow start sends no alert.
+  WORKER_AGENT_STARTING_STAGE
 ])
 
 export type UnconfirmedWorkerStart =

@@ -1,15 +1,20 @@
 import { useState } from 'react'
-import { BookOpen, Check, CircleUserRound, Files, Smartphone } from 'lucide-react'
+import { BookOpen, Check, CircleUserRound, Files, Info, Smartphone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useOrcaProfileAuthStatusRefresh } from '@/components/orca-profiles/use-orca-profile-auth-status-refresh'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../orca-profiles/OrcaSignInProgress'
 import { isOrcaCloudConsoleAvailable } from '../../../../../../shared/orca-cloud-console'
+import {
+  getDesktopReportingOrgIds,
+  getOrcaCloudTeamCapabilities
+} from '../../../../../../shared/orca-profiles/orca-cloud-team-policy'
 import { OrcaConsoleRow } from './OrcaConsoleRow'
 
 export function accountStatusCopy(
@@ -102,12 +107,25 @@ export function OrcaAccountHeader({
 
 export function OrcaAccountSettingsPane(): React.JSX.Element {
   const t = useTranslate()
+  const locale = useIntlLocale()
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const signOut = useAppStore((state) => state.signOutCurrentOrcaProfile)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const connected = authStatus?.state === 'connected'
   const canConnect = authStatus?.configured === true
+  const teamCapabilities = getOrcaCloudTeamCapabilities(authStatus)
+  const policy = teamCapabilities?.teamPolicy
+  const reportingOrgIds = getDesktopReportingOrgIds(teamCapabilities)
+  const reportingTeams =
+    authStatus?.organizations
+      ?.filter(({ orgId }) => reportingOrgIds.includes(orgId))
+      .map(({ name }) => name) ?? []
+  const showReporting = reportingOrgIds.length > 0
+  const reportingDetails = t(
+    'auto.components.settings.orcaAccount.reportingDetails',
+    'Device reporting details'
+  )
 
   useOrcaProfileAuthStatusRefresh()
 
@@ -151,6 +169,56 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
         </OrcaAccountHeader>
 
+        {policy && (
+          <div className="flex items-center gap-1 text-settings-detail text-muted-foreground">
+            <p>
+              {t(
+                'auto.components.settings.orcaAccount.managed',
+                'Your team manages some Orca settings.'
+              )}
+            </p>
+            {showReporting && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={reportingDetails}
+                  >
+                    <Info aria-hidden className="size-3.5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  aria-label={reportingDetails}
+                  className="w-80 max-w-[calc(100vw-2rem)]"
+                >
+                  <div className="space-y-2 p-3 text-sm">
+                    <p>
+                      {reportingTeams.length === reportingOrgIds.length
+                        ? t(
+                            'auto.components.settings.orcaAccount.deviceReportNamedViewers',
+                            'Owners and admins at {{teams}} can view reports from this device.',
+                            { teams: new Intl.ListFormat(locale).format(reportingTeams) }
+                          )
+                        : t(
+                            'auto.components.settings.orcaAccount.deviceReportViewers',
+                            'Team owners and admins can view reports from this device.'
+                          )}
+                    </p>
+                    <p>
+                      {t(
+                        'auto.components.settings.orcaAccount.reportingDisclosure',
+                        'The Devices view shows your Orca version, release channel, device name, platform, update status, required plugins Orca couldn’t install, and when the device last reported.'
+                      )}
+                    </p>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
+        )}
         {isOrcaCloudConsoleAvailable(authStatus) ? <OrcaConsoleRow /> : null}
 
         <div className="space-y-4 border-t border-border/60 pt-5">

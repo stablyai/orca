@@ -7,9 +7,9 @@ import { type BotActiveWorkSection, botActiveWorkSection } from './bot-active-wo
 import type { BotItemRecord } from './bot-items-schema'
 
 const FRESH_MS = 15_000
-/** Items in progress read, newest first; the block shows at most 12 rows anyway. */
+/** Items in progress or waiting read, newest first; the block shows at most 12 rows anyway. */
 const WORKING_READ = 12
-/** Waiting items are read whole, a page at a time, so the oldest wait is never the one cut. */
+/** Needs you items are read whole, a page at a time, so the oldest ask is never the one cut. */
 const PAGE = 100
 
 type Listed = Pick<BotItemRecord, 'number' | 'lastActivityAt'>
@@ -17,7 +17,7 @@ type Shown = Parameters<typeof botActiveWorkSection>[0][number]
 
 export type BotActiveWorkReads<R extends Listed = BotItemRecord> = {
   items: (
-    status: 'needs_you' | 'working',
+    status: 'needs_you' | 'working' | 'waiting',
     limit: number,
     cursor?: { at: number; number: number }
   ) => Promise<{ items: R[]; counts: Partial<Record<BotItem['status'], number>> }>
@@ -40,27 +40,29 @@ export function createBotActiveWorkReader() {
       return hit.section
     }
     const section = (async () => {
-      const waiting: R[] = []
+      const needsYou: R[] = []
       let page = await reads.items('needs_you', PAGE)
-      waiting.push(...page.items)
+      needsYou.push(...page.items)
       while (page.items.length === PAGE) {
         const last = page.items.at(-1)!
         page = await reads.items('needs_you', PAGE, {
           at: last.lastActivityAt,
           number: last.number
         })
-        waiting.push(...page.items)
+        needsYou.push(...page.items)
       }
-      const [working, workers] = await Promise.all([
+      const [working, waiting, workers] = await Promise.all([
         reads.items('working', WORKING_READ),
+        reads.items('waiting', WORKING_READ),
         reads.workers()
       ])
-      const items = await reads.views([...waiting, ...working.items])
+      const items = await reads.views([...needsYou, ...working.items, ...waiting.items])
       return botActiveWorkSection(items, workers, {
         // Items the reads left out still count toward "N more".
         unread:
           Math.max(0, (working.counts.working ?? 0) - working.items.length) +
-          Math.max(0, (page.counts.needs_you ?? 0) - waiting.length),
+          Math.max(0, (waiting.counts.waiting ?? 0) - waiting.items.length) +
+          Math.max(0, (page.counts.needs_you ?? 0) - needsYou.length),
         now
       })
     })()

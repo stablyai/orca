@@ -107,7 +107,7 @@ async function settle(
         : item
     )
   })
-  groups.changed()
+  groups.changed(current.groupId)
   return false
 }
 

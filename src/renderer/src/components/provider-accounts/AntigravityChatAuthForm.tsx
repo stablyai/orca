@@ -19,10 +19,6 @@ import {
   type AntigravityChatAuthConfig
 } from '../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
-import {
-  AntigravityGoogleSignInChoice,
-  type AntigravityGoogleSignInState
-} from './AntigravityGoogleSignInChoice'
 import { AntigravityChatApiKeyField } from './AntigravityChatApiKeyField'
 import { AntigravityChatGcpFields } from './AntigravityChatGcpFields'
 import type { AntigravityChatApiKeyStatus } from '../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
@@ -37,9 +33,10 @@ export type AntigravityChatAuthAction = {
   start: () => void
   /** Display name of the method Sign in will use; null when it is not known yet. */
   method: string | null
+  /** The method id picked in the form. */
+  pickedMethod: string
   /** Enterprise needs a project and location before it can be saved or used. */
   incomplete: boolean
-  reauth: boolean
   alert: string | null
   recovering: boolean
 }
@@ -51,9 +48,7 @@ type AuthFormProps = {
   signInError?: string | null
   /** Wraps the method and Enterprise fields, e.g. as one settings row. */
   fieldsRow?: (fields: ReactNode) => ReactNode
-  /** The Google sign-in choice's state from the host's answer; shown only where it is known. */
-  googleSignIn?: AntigravityGoogleSignInState
-  /** After a saved sign-in method, e.g. so the Google sign-in choice reads the new route. */
+  /** After a saved sign-in method, which decides where new chats run. */
   onSaved?: () => void
   children: (action: AntigravityChatAuthAction) => ReactNode
 }
@@ -74,8 +69,9 @@ export function AntigravityChatAuthForm(props: AuthFormProps): React.JSX.Element
           disabled: false,
           start: onSignIn,
           method: null,
+          // A host without the method setting signs in with a Google account only.
+          pickedMethod: 'oauth-personal',
           incomplete: false,
-          reauth: false,
           recovering: false,
           alert: signInError ?? null
         })}
@@ -94,7 +90,6 @@ function AuthForm({
   heading,
   signInError,
   fieldsRow = unwrapped,
-  googleSignIn,
   onSaved,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
@@ -121,19 +116,11 @@ function AuthForm({
       mounted.current = false
     }
   }, [])
-  const [authenticatedMethod, setAuthenticatedMethod] = useState<string | null>(null)
   const [method, setMethod] = useState('oauth-personal')
   const [project, setProject] = useState('')
   const [location, setLocation] = useState('')
   const [pending, setPending] = useState(false)
   const [keyStatus, setKeyStatus] = useState<AntigravityChatApiKeyStatus | null>(null)
-  // A key save can outlive a method switch; sign in only if the key's method is still chosen.
-  const latestStart = useRef<{ start: () => void; method: string } | null>(null)
-  const signInAfterKeySaved = useCallback(() => {
-    if (latestStart.current?.method === 'gemini-api-key') {
-      latestStart.current.start()
-    }
-  }, [])
   const [error, setError] = useState<{
     message: string
     recovery: 'reload' | null
@@ -154,9 +141,6 @@ function AuthForm({
         }
         setLoaded(true)
         if (!edited.current) {
-          if (observation.kind === 'known' && observation.state.auth === 'signedIn') {
-            setAuthenticatedMethod(config?.method ?? null)
-          }
           setMethod(config?.method ?? '')
           setProject(config?.gcpProject ?? '')
           setLocation(config?.gcpLocation ?? '')
@@ -186,7 +170,7 @@ function AuthForm({
         return undefined
       }
     },
-    [environmentId, observation]
+    [environmentId]
   )
   useEffect(() => {
     if (!supported) {
@@ -299,9 +283,6 @@ function AuthForm({
         }
       })
   }
-  useEffect(() => {
-    latestStart.current = { start, method }
-  })
   const commitText = () => {
     if (edited.current && !blocked && valid) {
       void save(draft())
@@ -343,9 +324,6 @@ function AuthForm({
                 </SelectContent>
               </Select>
             </AntigravityChatAuthSettingRow>
-            {method === 'oauth-personal' && googleSignIn && (
-              <AntigravityGoogleSignInChoice owner={owner} {...googleSignIn} disabled={blocked} />
-            )}
             {usesGcp && (
               <AntigravityChatGcpFields
                 id={id}
@@ -371,7 +349,6 @@ function AuthForm({
                 owner={owner}
                 disabled={blocked}
                 onStatus={setKeyStatus}
-                onSaved={signInAfterKeySaved}
               />
             )}
           </div>
@@ -381,8 +358,8 @@ function AuthForm({
         recovering: unavailable,
         disabled: disabled || preparing || (!unavailable && (!loaded || !valid)) || keyMissing,
         start,
-        reauth: authenticatedMethod !== null && authenticatedMethod !== method,
         method: unavailable || !loaded ? null : methodName,
+        pickedMethod: method,
         incomplete: loaded && !unavailable && !valid && usesGcp
       })}
     </>

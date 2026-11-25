@@ -53,3 +53,32 @@ export function fontContributionRows(
     tone: 'default'
   }))
 }
+
+/** Each server with its URL or the command line that starts it, so a review shows what runs. */
+export function mcpServerContributionRows(
+  servers: readonly { name: string; detail: string }[],
+  t: Translate = translate
+): PluginContribution[] {
+  const label = t('auto.components.settings.PluginDetailSections.mcpServer', 'MCP server')
+  return servers.map((server, index) => ({
+    key: `mcpServers:${index}`,
+    kind: 'mcpServers',
+    title: server.name,
+    detail: server.detail ? `${label} · ${server.detail}` : label,
+    tone: 'default'
+  }))
+}
+
+export function vmRecipeContributionRows(
+  titles: readonly string[],
+  t: Translate = translate
+): PluginContribution[] {
+  const detail = t('auto.components.settings.PluginDetailSections.recipe', 'Machine recipe')
+  return titles.map((title, index) => ({
+    key: `vmRecipes:${index}`,
+    kind: 'vmRecipes',
+    title,
+    detail,
+    tone: 'default'
+  }))
+}

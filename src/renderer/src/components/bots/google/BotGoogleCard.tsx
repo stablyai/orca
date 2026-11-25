@@ -1,5 +1,5 @@
 // @protected-copy
-import type React from 'react'
+import React, { useState } from 'react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { GoogleIcon } from '@/components/icons/GoogleIcon'
@@ -9,23 +9,28 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { BotConnectorDetails, BotConnectorRowFrame } from '../BotConnectorRow'
 import type { BotConnectorTitle } from '../bot-connector-titles'
 import { botErrorMessage } from '../bot-presentation'
-import { startGoogleSetupInChat } from './setup-cards/google-setup-run-store'
+import {
+  startGoogleSetupInChat,
+  stopGoogleSetup,
+  useGoogleSetupRun
+} from './setup-cards/google-setup-run-store'
+import { googleSetupRunActive } from '../../../../../shared/google/google-setup-run'
 import { botTarget } from '@/lib/bot-hosts'
 import { googleServiceLabel } from './google-copy'
 import { useBotHostLabel } from '../use-bot-host-label'
-import { setBotGoogle, useGoogleHost } from './google-connect-client'
+import { useGoogleHost } from './google-connect-client'
+import { setBotGoogle } from './set-bot-google'
 import { Button } from '@/components/ui/button'
-import { useAppStore } from '@/store'
 import { googleSignInChoices } from './google-account-readiness'
+import {
+  botGoogleAccess,
+  botMayUseGoogleAccount
+} from '../../../../../shared/google/google-bot-accounts'
+import type { GoogleAccountView } from '../../../../../shared/google/google-connect-types'
+import { STATUS_DOT_CLASSES } from '../bot-connector-row-parts'
+import { GoogleAccountsPopover } from './GoogleAccountsChoice'
 import { GoogleSignInWaiting } from './GoogleSignInWaiting'
 import { useGoogleSignIn } from './use-google-sign-in'
-
-/** Settings › Bots, where each computer lists its Google accounts and default. */
-function openGoogleSettings(): void {
-  const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
-  openSettingsTarget({ pane: 'bots', repoId: null })
-  openSettingsPage()
-}
 
 /**
  * Settings › Bots › Connectors › Google, once Google is added to the bot (Add a connector). It lets
@@ -47,15 +52,21 @@ export function BotGoogleCard({
   const confirm = useConfirmationDialog()
   const host = useBotHostLabel(bot.hostId)
   const signIn = useGoogleSignIn(botTarget(bot), bot)
+  const setupRun = useGoogleSetupRun(bot)
+  const settingUp = googleSetupRunActive(setupRun)
+  const [choosing, setChoosing] = useState(false)
   if (view.status !== 'ready' || bot.google !== true) {
     return null
   }
-  const accounts = view.google.accounts
-  const connected = accounts.length > 0
-  // A host too old to keep a default reports none; the row then lists every account as before.
-  const defaultAccount = view.google.defaultAccount
-  const fallback = accounts.find((account) => account.email === defaultAccount)
-  const others = accounts.filter((account) => account !== fallback).map((entry) => entry.email)
+  // The accounts on this computer the bot may use; a signed-out one stays chosen.
+  const access = botGoogleAccess(bot)
+  const accounts = view.google.accounts.filter((account) =>
+    botMayUseGoogleAccount(access, account.email)
+  )
+  const connected = view.google.accounts.length > 0
+  const signedOut = accounts.find((account) => account.status !== 'connected')
+  const reconnect = (account: GoogleAccountView): void =>
+    void signIn.connect(googleSignInChoices(account), account.email)
   const ready = [
     ...new Set(
       accounts.flatMap((account) =>
@@ -68,6 +79,14 @@ export function BotGoogleCard({
   // Added, but nobody is signed in on this computer: the bot sets Google up in its own chat.
   const setUp = (): void => {
     void startGoogleSetupInChat(bot, 'settings').catch((error: unknown) =>
+      toast.error(botErrorMessage(error))
+    )
+  }
+  const stop = (): void => {
+    if (!setupRun) {
+      return
+    }
+    void stopGoogleSetup(bot, setupRun.id).catch((error: unknown) =>
       toast.error(botErrorMessage(error))
     )
   }
@@ -102,26 +121,58 @@ export function BotGoogleCard({
       defaultOpen={defaultOpen}
       description={
         connected
-          ? (fallback?.email ?? accounts.map((account) => account.email).join(', '))
+          ? accounts.map((account) => account.email).join(', ')
           : host
             ? t('bots.google.bot.signedOutOnHost', 'Not connected on {{host}}', { host })
             : t('bots.google.bot.signedOut', 'Not connected on this computer')
       }
-      status={null}
-      fix={connected ? null : { label: t('bots.google.connect', 'Connect Google'), onClick: setUp }}
+      status={
+        settingUp ? { label: t('bots.google.bot.settingUp', 'Setting up'), tone: 'neutral' } : null
+      }
+      fix={
+        settingUp
+          ? null
+          : !connected
+            ? { label: t('bots.google.connect', 'Connect Google'), onClick: setUp }
+            : signedOut
+              ? {
+                  label: t('bots.google.bot.reconnectAccount', 'Reconnect {{email}}', {
+                    email: signedOut.email
+                  }),
+                  onClick: () => reconnect(signedOut),
+                  // The sign-in's waiting and Cancel show in the row's panel.
+                  opensRow: true
+                }
+              : null
+      }
       actions={{
-        ...(connected && defaultAccount !== undefined
+        ...(connected
           ? {
-              addAccount: {
-                label: t('bots.google.addAccount', 'Add another Google account'),
-                onClick: () => void signIn.connect(googleSignInChoices(fallback))
+              accounts: {
+                label: t('bots.google.bot.chooseAccounts', 'Choose accounts…'),
+                // After the menu has closed, so its focus return can't close the popover.
+                onClick: () => requestAnimationFrame(() => setChoosing(true))
               }
             }
+          : {}),
+        ...(settingUp
+          ? { stop: { label: t('bots.googleSetup.stop', 'Stop setup'), onClick: stop } }
           : {}),
         remove: {
           label: t('bots.google.bot.remove', 'Remove Google…'),
           onSelect: () => void remove()
         }
+      }}
+      menuPopover={{
+        open: choosing,
+        onOpenChange: setChoosing,
+        content: choosing ? (
+          <GoogleAccountsPopover
+            bot={bot}
+            onClose={() => setChoosing(false)}
+            onRemove={() => void remove()}
+          />
+        ) : null
       }}
     >
       {signIn.state.kind === 'waiting' ? (
@@ -133,32 +184,32 @@ export function BotGoogleCard({
       ) : null}
       <BotConnectorDetails
         rows={[
-          ...(fallback
+          ...(accounts.length > 0
             ? [
                 {
-                  label: t('bots.google.bot.account', 'Account'),
-                  value: (
-                    <>
-                      <span className="block truncate">{fallback.email}</span>
-                      <span className="text-muted-foreground">
-                        {host
-                          ? t('bots.google.bot.hostDefault', '{{host}}’s default', { host })
-                          : t('bots.google.bot.computerDefault', 'This computer’s default')}
-                        {' · '}
-                      </span>
-                      <Button variant="link" size="inlineText" onClick={openGoogleSettings}>
-                        {t('bots.google.bot.changeInSettings', 'Change in Settings')}
-                      </Button>
-                    </>
-                  )
-                }
-              ]
-            : []),
-          ...(fallback && others.length > 0
-            ? [
-                {
-                  label: t('bots.google.bot.alsoConnected', 'Also connected'),
-                  value: others.join(', ')
+                  label:
+                    accounts.length > 1
+                      ? t('bots.google.bot.accounts', 'Accounts')
+                      : t('bots.google.bot.account', 'Account'),
+                  value: accounts.map((account) => (
+                    <span key={account.email} className="block">
+                      <span className="block truncate">{account.email}</span>
+                      {account.status !== 'connected' ? (
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span className={STATUS_DOT_CLASSES.attention} aria-hidden />
+                          {t('bots.google.row.signedOut', 'Signed out by Google')}
+                          {' · '}
+                          <Button
+                            variant="link"
+                            size="inlineText"
+                            onClick={() => reconnect(account)}
+                          >
+                            {t('bots.google.reconnect', 'Reconnect')}
+                          </Button>
+                        </span>
+                      ) : null}
+                    </span>
+                  ))
                 }
               ]
             : []),
