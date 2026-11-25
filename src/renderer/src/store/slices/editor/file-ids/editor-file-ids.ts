@@ -5,10 +5,7 @@ import type { DiffSource } from '../../../../../../shared/editor/views/editor-ta
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { areLocalWindowsWslPathAliases } from '../../../../../../shared/file-access/cross-platform-path'
 import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import {
-  isLocalMacDesktopClient,
-  isLocalWindowsDesktopClient
-} from '@/app-shell/chrome/desktop-window-chrome'
+import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 
@@ -58,29 +55,6 @@ export function canReuseLocalWslAlias(
     !existing.externalSshTargetId?.trim() &&
     !file.externalSshTargetId?.trim() &&
     areLocalWindowsWslPathAliases(existing.filePath, file.filePath) &&
-    getConnectionIdForFileFromState(state, file.worktreeId, file.filePath) === null &&
-    getConnectionIdForFileFromState(state, existing.worktreeId, existing.filePath) === null
-  )
-}
-
-const NON_ASCII = /[\u0080-\u{10ffff}]/u
-
-/** One local macOS file under composed (NFC) and decomposed (NFD) spellings: Git and typed links compose names the explorer lists as stored. */
-export function canReuseLocalMacUnicodeAlias(
-  state: AppState,
-  existing: OpenFile,
-  file: Pick<OpenFile, 'filePath' | 'worktreeId' | 'runtimeEnvironmentId' | 'externalSshTargetId'>,
-  runtimeEnvironmentId: string | null | undefined
-): boolean {
-  return (
-    isLocalMacDesktopClient() &&
-    // Preview replacement already avoids a second preview, and the explorer keeps a preview by its listed path.
-    !existing.isPreview &&
-    runtimeOwnerKey(runtimeEnvironmentId) === null &&
-    !existing.externalSshTargetId?.trim() &&
-    !file.externalSshTargetId?.trim() &&
-    NON_ASCII.test(file.filePath) &&
-    existing.filePath.normalize('NFC') === file.filePath.normalize('NFC') &&
     getConnectionIdForFileFromState(state, file.worktreeId, file.filePath) === null &&
     getConnectionIdForFileFromState(state, existing.worktreeId, existing.filePath) === null
   )
