@@ -18,6 +18,7 @@ import { appRailSlotCapacity } from './app-rail-overflow'
 import {
   AppRailCustomizeRows,
   useAppRailCustomizeLabel,
+  useMenuHeldInPlace,
   type AppRailCustomizeRow
 } from './AppRailCustomizeMenu'
 
@@ -59,6 +60,10 @@ export function AppRailMoreMenu({
   const yieldCloseFocusRef = useRef(false)
   const label = t('appRail.more', 'More')
   const customizeLabel = useAppRailCustomizeLabel()
+  const customizeTriggerRef = useRef<HTMLDivElement>(null)
+  const [customizeOpen, setCustomizeOpen] = useState(false)
+  // Toggling a page on while folded adds a row above Customize; keep its submenu put.
+  const customizeHeldInPlace = useMenuHeldInPlace(customizeOpen, customizeTriggerRef, customizeRows)
   const settingsLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')
   const current =
     destinations.find((destination) => destination.current)?.label ??
@@ -114,12 +119,12 @@ export function AppRailMoreMenu({
           </DropdownMenuItem>
         ))}
         {destinations.length > 0 ? <DropdownMenuSeparator /> : null}
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
+        <DropdownMenuSub open={customizeOpen} onOpenChange={setCustomizeOpen}>
+          <DropdownMenuSubTrigger ref={customizeTriggerRef}>
             <SlidersHorizontal className="size-3.5" aria-hidden />
             {customizeLabel}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="p-1">
+          <DropdownMenuSubContent className="p-1" {...customizeHeldInPlace}>
             <AppRailCustomizeRows rows={customizeRows} />
           </DropdownMenuSubContent>
         </DropdownMenuSub>

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import { Check, Ellipsis } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -10,6 +10,32 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from './AppRailButton'
+
+/**
+ * Keep an open menu where it opened while its anchor moves (a toggle adds or removes a slot above "…", or a row above
+ * More's Customize), so the next click lands on the row it aims at. Reopening anchors afresh. `moveKey` changes on
+ * every render that can move the anchor.
+ */
+export function useMenuHeldInPlace(
+  open: boolean,
+  anchorRef: React.RefObject<HTMLElement | null>,
+  moveKey: unknown
+): { alignOffset: number; sticky: 'always' } {
+  const openedTopRef = useRef<number | null>(null)
+  const [alignOffset, setAlignOffset] = useState(0)
+  useLayoutEffect(() => {
+    openedTopRef.current = open ? (anchorRef.current?.getBoundingClientRect().top ?? null) : null
+    setAlignOffset(0)
+  }, [open, anchorRef])
+  useLayoutEffect(() => {
+    const top = anchorRef.current?.getBoundingClientRect().top
+    if (openedTopRef.current !== null && top !== undefined) {
+      setAlignOffset(openedTopRef.current - top)
+    }
+  }, [moveKey, anchorRef])
+  // Radix's default "partial" stickiness would pull the menu back to touch the moved anchor.
+  return { alignOffset, sticky: 'always' }
+}
 
 export type AppRailCustomizeRow = {
   id: string
@@ -64,12 +90,16 @@ export function AppRailCustomizeMenu({
   tabStop: boolean
 }): React.JSX.Element {
   const label = useAppRailCustomizeLabel()
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
+  const heldInPlace = useMenuHeldInPlace(open, triggerRef, rows)
   return (
-    <DropdownMenu modal={false}>
+    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <AppRailButton
+              ref={triggerRef}
               itemId="customize"
               label={label}
               tabStop={tabStop}
@@ -87,7 +117,13 @@ export function AppRailCustomizeMenu({
           {label}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent side="right" align="start" sideOffset={8} className="p-1">
+      <DropdownMenuContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        {...heldInPlace}
+        className="p-1"
+      >
         <AppRailCustomizeRows rows={rows} />
       </DropdownMenuContent>
     </DropdownMenu>

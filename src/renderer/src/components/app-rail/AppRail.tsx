@@ -92,10 +92,13 @@ export function AppRail({
     () =>
       useAppStore.subscribe((state, prev) => {
         if (
+          state.settings !== prev.settings &&
           toolbarRef.current &&
           selectShownRailDestinationsKey(state) !== selectShownRailDestinationsKey(prev)
         ) {
-          transitionOwnerRef.current = railItemOwningFocus(toolbarRef.current)
+          // A second change before the commit must not drop the owner the first one sampled.
+          transitionOwnerRef.current =
+            railItemOwningFocus(toolbarRef.current) ?? transitionOwnerRef.current
         }
       }),
     []
