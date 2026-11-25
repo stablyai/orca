@@ -111,10 +111,14 @@ export class WorkerPlacementCatalogOwner {
       }
       const servers = selected ? [selected] : registered
       const snapshots = await Promise.all(
-        servers.map(async ({ environmentId, name }): Promise<PlacementCatalogSnapshot> => {
+        servers.map(async ({ environmentId, name }) => {
           const initial = await this.registry!.resolve(environmentId, deadline)
           if (this.stopped || !this.registry!.isCurrent(initial, environmentId)) {
-            return { server: { environmentId, name }, status: 'unchecked', reason: 'no_answer' }
+            return {
+              server: { environmentId, name },
+              status: 'unchecked',
+              reason: 'no_answer'
+            } satisfies PlacementCatalogSnapshot
           }
           const server = initial.value
           const pin = remoteServerPin(server)
@@ -157,7 +161,17 @@ export class WorkerPlacementCatalogOwner {
             : ({ server, status: 'unchecked', reason } satisfies PlacementCatalogSnapshot)
         })
       )
-      return snapshots
+      return snapshots.map((snapshot): PlacementCatalogSnapshot => {
+        if (snapshot.status !== 'fresh' && snapshot.status !== 'retained') {
+          return snapshot
+        }
+        const current = this.registry!.current(snapshot.server.environmentId)
+        return !this.stopped &&
+          current &&
+          remoteRunLinkPinMatches(remoteServerPin(snapshot.server), remoteServerPin(current.value))
+          ? snapshot
+          : { server: snapshot.server, status: 'unchecked', reason: 'no_answer' }
+      })
     } finally {
       deadline.close()
     }
@@ -278,7 +292,7 @@ export class WorkerPlacementCatalogOwner {
             }
             let current = await this.registry!.resolve(environment_id, deadline)
             // This pass may have joined a pairing read started before its notification.
-            if (!this.stopped && !this.dirty && current && !this.registry!.isCurrent(current)) {
+            if (!this.stopped && !this.dirty && this.registry!.isStale(current)) {
               current = await this.registry!.resolve(environment_id, deadline)
             }
             if (!this.stopped && this.registry!.isCurrent(current, environment_id)) {

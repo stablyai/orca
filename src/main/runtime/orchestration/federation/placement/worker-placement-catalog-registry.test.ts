@@ -22,6 +22,7 @@ enableInlineEnvironmentStore()
 let root: string
 let db: OrchestrationDb
 let owner: WorkerPlacementCatalogOwner
+let transport: ReturnType<typeof createOrchestrationEnvironmentTransport>
 let environmentId: string
 let notify: () => void
 const pairing = {
@@ -33,7 +34,7 @@ const pairing = {
 
 function open(offline = false): void {
   db = new OrchestrationDb(join(root, 'orchestration.db'))
-  const transport = createOrchestrationEnvironmentTransport()
+  transport = createOrchestrationEnvironmentTransport()
   transport.onCatalogChanged = (listener) => {
     notify = listener
     return () => {}
@@ -176,3 +177,45 @@ it.each(['removed', 're-paired'])(
     expect(rows()).toEqual([])
   }
 )
+
+it('discards an early catalog when its pairing changes before the other results return', async () => {
+  await owner.discover()
+  const slow = addEnvironmentFromPairingCode(root, {
+    name: 'slow',
+    pairingCode: encodePairingOffer({
+      ...pairing,
+      endpoint: 'ws://slow.example/runtime',
+      publicKeyB64: Buffer.alloc(32, 2).toString('base64')
+    }),
+    now: 200
+  })
+  const slowStarted = Promise.withResolvers<void>()
+  const slowReply = Promise.withResolvers<void>()
+  const call = transport.call
+  transport.call = async (...args) => {
+    if (args[0] === slow.id) {
+      slowStarted.resolve()
+      await slowReply.promise
+    }
+    return call(...args)
+  }
+  const discovery = owner.discover()
+  await slowStarted.promise
+  await setImmediate()
+  updateEnvironmentFromPairingCode(root, environmentId, {
+    pairingCode: encodePairingOffer({ ...pairing, deviceToken: 'replacement-token' }),
+    now: 300
+  })
+  notify()
+  slowReply.resolve()
+  const snapshots = await discovery
+  expect(
+    snapshots.find((snapshot) => snapshot.server.environmentId === environmentId)
+  ).toMatchObject({
+    status: 'unchecked',
+    reason: 'no_answer'
+  })
+  expect(snapshots.find((snapshot) => snapshot.server.environmentId === slow.id)).toMatchObject({
+    status: 'fresh'
+  })
+})

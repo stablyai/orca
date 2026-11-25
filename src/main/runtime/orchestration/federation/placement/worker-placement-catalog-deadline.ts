@@ -10,6 +10,7 @@ type RegistryObservation<T> = Awaited<ReturnType<typeof observeEnvironmentStoreR
   registryRevision: number
 }
 export type PairingObservation = RegistryObservation<OrchestrationWorkerServer>
+type PairingResult = RegistryObservation<OrchestrationWorkerServer | undefined>
 type RegistryServers = readonly { environmentId: string; name: string }[]
 type ListResult = RegistryObservation<RegistryServers | undefined> | { error: unknown }
 type SavedIds = RegistryObservation<ReadonlySet<string> | undefined>
@@ -21,14 +22,14 @@ export class CatalogDeadline {
   private expired = false
 
   constructor(milliseconds = Infinity) {
-    this.expiresAt = Date.now() + milliseconds
+    this.expiresAt = performance.now() + milliseconds
     if (Number.isFinite(milliseconds)) {
       this.timer = setTimeout(() => this.close(), milliseconds)
     }
   }
 
   get active(): boolean {
-    return !this.expired && Date.now() < this.expiresAt
+    return !this.expired && performance.now() < this.expiresAt
   }
 
   onExpire(listener: () => void): () => void {
@@ -115,7 +116,7 @@ export class CatalogOwnerRegistry {
   private revision = 0
   private readonly observations = new Map<string, PairingObservation>()
   private readonly lists = new CatalogOwnerReadSlots<ListResult>()
-  private readonly pairings = new CatalogOwnerReadSlots<PairingObservation>()
+  private readonly pairings = new CatalogOwnerReadSlots<PairingResult>()
   private readonly savedIds = new CatalogOwnerReadSlots<SavedIds>()
 
   constructor(private readonly transport: OrchestrationEnvironmentTransport) {}
@@ -134,14 +135,18 @@ export class CatalogOwnerRegistry {
   }
 
   isCurrent(
-    observation: PairingObservation | undefined,
+    observation: PairingResult | undefined,
     environmentId?: string
   ): observation is PairingObservation {
     return (
-      !!observation &&
+      !!observation?.value &&
       this.currentProof(observation) &&
       (environmentId === undefined || environmentId === observation.value.environmentId)
     )
+  }
+
+  isStale(observation: PairingResult | undefined): boolean {
+    return !!observation && !this.currentProof(observation)
   }
 
   current(environmentId: string): PairingObservation | undefined {
@@ -201,14 +206,15 @@ export class CatalogOwnerRegistry {
     }
   }
 
-  resolve(
-    environmentId: string,
-    deadline: CatalogDeadline
-  ): Promise<PairingObservation | undefined> {
+  resolve(environmentId: string, deadline: CatalogDeadline): Promise<PairingResult | undefined> {
     return this.pairings.read(environmentId, deadline, async () => {
-      const observation = await this.observe(
-        async () => await this.transport.resolve(environmentId)
-      )
+      const observation = await this.observe(async () => {
+        try {
+          return await this.transport.resolve(environmentId)
+        } catch {
+          return undefined
+        }
+      })
       if (this.isCurrent(observation, environmentId)) {
         this.observations.set(environmentId, observation)
       } else {

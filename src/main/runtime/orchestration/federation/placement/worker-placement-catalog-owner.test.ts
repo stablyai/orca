@@ -181,6 +181,21 @@ it('deletes removed-pairing retention when a notification arrives during a faile
   expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
 })
 
+it('reconciles a changed pairing after joining a rejected pairing read from before the notification', async () => {
+  await owner.discover()
+  const oldRead = Promise.withResolvers<OrchestrationWorkerServer>()
+  registry.resolve = vi.fn(async () => ({ ...server })).mockReturnValueOnce(oldRead.promise)
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(0)
+  server = { ...server, pairingRevision: 2 }
+  notify!()
+  await vi.advanceTimersByTimeAsync(0)
+  oldRead.reject(new Error('The previous pairing could not be read'))
+  expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+  await vi.advanceTimersByTimeAsync(0)
+  expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+})
+
 it('preserves sleeping-server retention when an empty enumeration straddles pairing restoration', async () => {
   await owner.discover()
   await vi.advanceTimersByTimeAsync(30_001)
@@ -506,7 +521,7 @@ it.each(['preparation', 'dispatch'] as const)(
       finish = resolve
     })
     let preparing = false
-    let allowed: boolean | void = undefined
+    const allowed: Record<string, boolean | void> = {}
     registry.resolve = async () => {
       const captured = { ...server }
       if (preparing && phase === 'preparation') {
@@ -514,11 +529,11 @@ it.each(['preparation', 'dispatch'] as const)(
       }
       return captured
     }
-    registry.call = async (_id, _method, _params, _timeout, _envelope, _revision, options) => {
+    registry.call = async (_id, method, _params, _timeout, _envelope, _revision, options) => {
       preparing = true
       const guard = await options!.prepareGuard!(connection)
       await wait
-      allowed = guard()
+      allowed[method] = guard()
       throw new Error('Invalidated socket proof')
     }
     const discovery = owner.discover('server')
@@ -528,7 +543,7 @@ it.each(['preparation', 'dispatch'] as const)(
     await vi.advanceTimersByTimeAsync(0)
     finish()
     await vi.advanceTimersByTimeAsync(0)
-    expect(allowed).toBe(false)
+    expect(allowed).toEqual({ 'repo.list': false, 'projectHostSetup.list': false })
     expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
     expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
   }
