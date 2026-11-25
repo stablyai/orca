@@ -147,12 +147,16 @@ export async function sessionLaunchToolsChanged(
     return false
   }
   const now = await hostServersFor(host.agent, host.workspace, host.folder)
+  if (!now && isMcpServersFeatureEnabled()) {
+    // The list can't be read now: the next turn compares again, so a change isn't lost.
+    return false
+  }
   // Not knowing what it got, count every server it launched with as its own.
   const got = delivered ?? new Set(Object.keys(host.digests))
   if (now && touchesSession(host.digests, now.launched.digests, got)) {
     return true
   }
-  // Not this session's, the switch went off, or the list can't be read now: nothing to act on.
+  // Not this session's, or the switch went off: nothing to act on.
   host.epoch = epoch
   return false
 }
