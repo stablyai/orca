@@ -9,7 +9,10 @@ const { groupExists, spawnMock, signalMock, forceMock } = vi.hoisted(() => ({
   signalMock: vi.fn(),
   forceMock: vi.fn()
 }))
-vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
+vi.mock(import('node:child_process'), async (original) => ({
+  ...(await original()),
+  spawn: spawnMock
+}))
 vi.mock('@orca/process-host/process-tree-termination', () => ({
   processGroupExists: groupExists,
   signalProcessTree: signalMock,

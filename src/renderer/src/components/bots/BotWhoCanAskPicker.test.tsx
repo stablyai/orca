@@ -29,6 +29,7 @@ function service(
     })),
     errorMessage: (code) => code,
     searchPlaceholder: 'Search by name or username',
+    normalizeQuery: (query) => query.replace(/^@/, ''),
     peopleHeading: 'People on GitHub',
     scopedHeading: 'People in your repositories',
     outsideHeading: 'Elsewhere on GitHub',
@@ -189,6 +190,52 @@ const slackService: BotWhoCanAskService = {
   notYet: '',
   accessRequests: null
 }
+
+describe('GPS-C5-06: a pick kept in view on a service that does not match by name', () => {
+  it.each([
+    ['slack', 'Slack'],
+    ['linear', 'Linear']
+  ] as const)(
+    '%s: an unrelated search shows the pick to untick, the count and no-match',
+    async (kind, connector) => {
+      const people: BotWhoCanAskFound['members'] = [{ id: 'P1', name: 'Dana Ruiz' }]
+      const search = vi.fn(async (query: string) => ({
+        ok: true as const,
+        value: { members: query === '' || query === 'dana' ? people : [], complete: true }
+      }))
+      const picked = vi.fn<(members: BotMember[]) => void>()
+      render(
+        <BotWhoCanAskPicker
+          bot={bot}
+          service={{
+            ...service(() => []),
+            search,
+            kind,
+            connector,
+            stamp: { source: kind },
+            normalizeQuery: undefined,
+            scopedHeading: undefined,
+            outsideHeading: undefined
+          }}
+          owner="You"
+          onPicked={picked}
+        />
+      )
+      fireEvent.click(await screen.findByText('Dana Ruiz'))
+      const box = screen.getByPlaceholderText('Search by name or username')
+      fireEvent.change(box, { target: { value: 'zzz' } })
+      expect(await screen.findByText('No one found for zzz')).toBeTruthy()
+      const selected = screen.getByText('Selected').closest('[cmdk-group]')
+      expect(selected?.textContent).toContain('Dana Ruiz')
+      expect(screen.getByText('1 selected')).toBeTruthy()
+      // Unticked where it stands, the query kept.
+      fireEvent.click(screen.getByText('Dana Ruiz'))
+      expect(screen.queryByText('1 selected')).toBeNull()
+      expect(box).toHaveProperty('value', 'zzz')
+      expect(picked).not.toHaveBeenCalled()
+    }
+  )
+})
 
 describe('the Who can ask picker', () => {
   let container: HTMLDivElement

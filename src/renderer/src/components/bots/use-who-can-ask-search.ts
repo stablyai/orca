@@ -6,45 +6,21 @@ import type {
   BotWhoCanAskSession
 } from './BotWhoCanAskList'
 import type { BotSlackResult } from '../../../../shared/connector-bot-slack-contract'
+import type { WhoCanAskIdentityLedger } from './who-can-ask-identity-ledger'
 
 const SEARCH_DEBOUNCE_MS = 250
 
+/** `failed` keeps the service's error code; its words are drawn at render, so a changed label or
+ *  language never restarts the search. */
 export type WhoCanAskSearch =
   | { status: 'loading' }
   | { status: 'ready'; found: BotWhoCanAskFound }
-  | { status: 'failed'; error: string }
-
-/** Who the answers so far showed someone to be: live names by id, and ids a live answer retired. */
-export type WhoCanAskIdentities = {
-  names: Readonly<Record<string, string>>
-  retired: ReadonlySet<string>
-}
-
-const NO_IDENTITIES: WhoCanAskIdentities = { names: {}, retired: new Set() }
-
-function learned(known: WhoCanAskIdentities, found: BotWhoCanAskFound): WhoCanAskIdentities {
-  const live = found.members.filter(
-    (person) => person.live && known.names[person.id] !== person.name
-  )
-  const retired = (found.retired ?? []).filter((id) => !known.retired.has(id))
-  if (live.length === 0 && retired.length === 0) {
-    return known
-  }
-  return {
-    names: {
-      ...known.names,
-      ...Object.fromEntries(live.map((person) => [person.id, person.name]))
-    },
-    retired: new Set([...known.retired, ...retired])
-  }
-}
+  | { status: 'failed'; code: string }
 
 type Paint = {
   generation: { current: number }
   order: { current: { asked: number; shown: number } }
-  setIdentities: (update: (known: WhoCanAskIdentities) => WhoCanAskIdentities) => void
   setSearch: (search: WhoCanAskSearch) => void
-  errorMessage: (code: string) => string
 }
 
 /** Asks `active` for `query` and paints the answer only if it is still the current query's
@@ -64,37 +40,35 @@ function ask(
     }
     onAnswer?.()
     paint.order.current.shown = asked
-    if (result.ok) {
-      paint.setIdentities((known) => learned(known, result.value))
-      paint.setSearch({ status: 'ready', found: result.value })
-    } else {
-      paint.setSearch({ status: 'failed', error: paint.errorMessage(result.error) })
-    }
+    paint.setSearch(
+      result.ok
+        ? { status: 'ready', found: result.value }
+        : { status: 'failed', code: result.error }
+    )
   })
 }
 
 export function useWhoCanAskSearch(
   service: BotWhoCanAskService,
-  query: string
+  query: string,
+  ledger: WhoCanAskIdentityLedger
 ): {
   search: WhoCanAskSearch
-  identities: WhoCanAskIdentities
   /** A part of the search is being asked again; its Try again does nothing until that answers. */
   retrying: boolean
+  /** Try again: in place when the session can ask only what failed, else a fresh session. */
   retry: () => void
-  retryInPlace: () => void
 } {
   const [search, setSearch] = useState<WhoCanAskSearch>({ status: 'loading' })
-  const [identities, setIdentities] = useState(NO_IDENTITIES)
   const [retrying, setRetrying] = useState(false)
-  // Try again starts a fresh session (and with it a fresh read of what the service lists).
+  // A fresh session, for a service whose session can't retry in place.
   const [session, setSession] = useState(0)
-  const { errorMessage, begin, search: searchOnce } = service
-  // One search session per picker open, kept across keystrokes and across service objects that
-  // differ only in presentation (a GitHub state refresh, a newly linked owner).
+  const { begin, search: searchOnce } = service
+  // One search session per picker open and context, kept across keystrokes and across service
+  // objects that differ only in presentation (a refresh, a label, a language, a linked owner).
   const active = useMemo(
-    (): BotWhoCanAskSession => (session >= 0 && begin ? begin() : { search: searchOnce }),
-    [begin, searchOnce, session]
+    (): BotWhoCanAskSession => (session >= 0 && begin ? begin(ledger) : { search: searchOnce }),
+    [begin, searchOnce, session, ledger]
   )
   // Bumped whenever the query or session changes, or the picker closes: an answer paints only if
   // nothing changed since it was asked for (it never repaints an old query).
@@ -119,36 +93,38 @@ export function useWhoCanAskSearch(
     const stopWatching =
       active.onUpdate?.(() => {
         if (issued && retryOwner.current === null && generation.current === gen) {
-          ask(active, query, { generation, order, setIdentities, setSearch, errorMessage }, gen)
+          ask(active, query, { generation, order, setSearch }, gen)
         }
       }) ?? (() => {})
     const timer = setTimeout(() => {
       issued = true
-      ask(active, query, { generation, order, setIdentities, setSearch, errorMessage }, gen)
+      ask(active, query, { generation, order, setSearch }, gen)
     }, SEARCH_DEBOUNCE_MS)
     return () => {
       generation.current += 1
       clearTimeout(timer)
       stopWatching()
     }
-  }, [active, errorMessage, query])
+  }, [active, query])
 
   return {
     search,
-    identities,
     retrying,
-    retry: () => setSession((count) => count + 1),
-    // Try again for a part that failed: the same query asked once more, in place (no
-    // "Searching…"), so the rows, picks and count stay until its whole answer replaces the rows.
-    retryInPlace: () => {
+    // The same query asked once more, in place (no "Searching…"), so the rows, picks and count
+    // stay until its whole answer replaces them; one action at a time.
+    retry: () => {
+      if (!active.retry) {
+        setSession((count) => count + 1)
+        return
+      }
       if (retryOwner.current !== null) {
         return
       }
       const gen = generation.current
       retryOwner.current = gen
       setRetrying(true)
-      active.retry?.()
-      ask(active, query, { generation, order, setIdentities, setSearch, errorMessage }, gen, () => {
+      active.retry()
+      ask(active, query, { generation, order, setSearch }, gen, () => {
         retryOwner.current = null
         setRetrying(false)
       })

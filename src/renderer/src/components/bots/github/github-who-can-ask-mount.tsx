@@ -1,5 +1,5 @@
-// Test mount for Who can ask › Add on GitHub as the bot page draws it: the production service hook
-// inside the real list (its grant path included). Test files mock the GitHub state, host calls and
+// Test mount for Who can ask › Add on GitHub as GitHub setup's turn-on step draws it (LinkedPeople:
+// the production service hook inside the real list, its grant path included). Test files mock the GitHub state, host calls and
 // grant writer; every login, name and id here is synthetic.
 import React from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
@@ -11,10 +11,9 @@ import type {
   ConnectorGitHubUsersResponse
 } from '../../../../../shared/connector-bot-github-contract'
 import type { BotSlackResult } from '../../../../../shared/connector-bot-slack-contract'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { BotWhoCanAskList } from '../BotWhoCanAskList'
-import { useGitHubWhoCanAsk } from './use-github-who-can-ask'
+import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
+import { LinkedPeople } from './BotGitHubSetupDialog'
 
 export type Users = BotSlackResult<ConnectorGitHubUsersResponse>
 export type People = BotSlackResult<BotGitHubRoster>
@@ -78,19 +77,22 @@ export function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => voi
   return { promise, resolve }
 }
 
-/** The bot page's GitHub Who can ask, with the production service. */
+/** GitHub setup's Who can ask, with the production service, for `listed` on its host. */
 export function HostedWhoCanAsk({ listed = bot }: { listed?: Bot }): React.JSX.Element {
-  const service = useGitHubWhoCanAsk(LOCAL_EXECUTION_HOST_ID, true)
   return (
-    <TooltipProvider>
-      <BotWhoCanAskList bot={listed} service={service} compactCaption="People with access" />
-    </TooltipProvider>
+    <TranslationScopeProvider>
+      <TooltipProvider>
+        <LinkedPeople bot={listed} />
+      </TooltipProvider>
+    </TranslationScopeProvider>
   )
 }
 
-export function mountWhoCanAsk(): void {
-  render(<HostedWhoCanAsk />)
+/** Renders it and opens Add; `rerender` swaps the bot (another executing host). */
+export function mountWhoCanAsk(listed: Bot = bot): { rerender: (next: Bot) => void } {
+  const view = render(<HostedWhoCanAsk listed={listed} />)
   fireEvent.click(screen.getByRole('button', { name: 'Add people' }))
+  return { rerender: (next) => view.rerender(<HostedWhoCanAsk listed={next} />) }
 }
 
 export const searchBox = (): HTMLElement =>
@@ -132,3 +134,21 @@ export function watchSearching(): { stop: () => number } {
     }
   }
 }
+
+export const usersOf = (members: { id: string; name: string }[]): Users => ({
+  ok: true,
+  value: { members, complete: true }
+})
+
+/** Ticks the row whose text is exactly `text`. */
+export function pickRow(text: string): void {
+  const row = screen.getAllByRole('option').find((option) => option.textContent === text)
+  if (!row) {
+    throw new Error(`no row ${text} in ${optionTexts().join(' | ')}`)
+  }
+  fireEvent.click(row)
+}
+
+/** The Add button, by its visible name. */
+export const addButton = (): HTMLElement =>
+  screen.getByRole('button', { name: /^Add (1 person|\d+ people)$/ })

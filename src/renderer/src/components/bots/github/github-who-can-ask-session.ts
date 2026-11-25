@@ -7,6 +7,7 @@ import {
 import type { BotSlackResult } from '../../../../../shared/connector-bot-slack-contract'
 import type { GitHubPeopleScope } from '../../../../../shared/bots/github-people-scope'
 import type { BotWhoCanAskSession } from '../BotWhoCanAskList'
+import { WhoCanAskIdentityLedger } from '../who-can-ask-identity-ledger'
 import { gitHubWhoCanAskAnswer, type GitHubRosterState } from './github-who-can-ask-found'
 
 /** How long one keystroke's answer waits for a roster still loading; it then goes out with what
@@ -51,11 +52,15 @@ type Exact = BotSlackResult<ConnectorGitHubUsersResponse>
  *    settles;
  *  - the last query's exact lookup: it settles on the cloud call's own bounds (shared token mint,
  *    request timeout, one renewal on 401), independently of the roster. With the list read, a
- *    search answers with the list's rows while it is out, and the listener hears when it lands;
- *    a lookup a newer query replaced tells no one. */
+ *    search answers with the list's rows while it is out, and the listener hears when it lands.
+ *    Every lookup, a replaced query's too, goes into the picker's ledger and tells the listener,
+ *    since what it says about a login can hide or rename the current rows. */
 export function gitHubWhoCanAskSession(
   calls: Calls,
-  { scope, ownerLogin, linkedLogins, producer, t }: Context
+  { scope, ownerLogin, linkedLogins, producer, t }: Context,
+  // The picker open's record of every check, kept across its sessions (context changes); every
+  // lookup this session asks goes in, whether or not its query still paints.
+  ledger: WhoCanAskIdentityLedger = new WhoCanAskIdentityLedger()
 ): BotWhoCanAskSession & { readonly waiters: number } {
   let roster: Promise<GitHubRosterState> | null = null
   let settled: GitHubRosterState | null = null
@@ -118,11 +123,12 @@ export function gitHubWhoCanAskSession(
         answer: calls.users({ query: login }),
         settled: null
       }
+      const seq = ledger.issue(login)
       void entry.answer.then((answer) => {
+        ledger.settle(seq, login, answer.ok ? answer.value.members : null)
         entry.settled = answer
-        if (lastExact === entry) {
-          tell()
-        }
+        // Even a replaced query's lookup can change who the current rows are.
+        tell()
       })
       lastExact = entry
     }
@@ -156,7 +162,8 @@ export function gitHubWhoCanAskSession(
           ownerLogin,
           linkedLogins,
           scope,
-          producer
+          producer,
+          identity: (id, login) => ledger.identity(id, login)
         },
         t
       )

@@ -690,8 +690,11 @@ describe('GPS-C1-07: the setup picker’s list qualifiers under a language pack'
     host.calls.users.mockResolvedValue(users([{ id: '50', name: 'jordan' }]))
     mountWhoCanAsk()
     await typeQuery('jordan')
-    expect(optionTexts()).toContain('jordanRepos not checked')
-    expect(screen.getByText(/No repos connected\.\s+Exact usernames only\./)).toBeTruthy()
+    // Nothing is connected, so nothing names repos.
+    expect(optionTexts()).toContain('jordanList not checked')
+    // The pack is live (its unprotected count line shows); the guard stays English.
+    expect(screen.getByText('Synthetic 0/50')).toBeTruthy()
+    expect(screen.getByText(/No repos or orgs connected\.\s+Exact usernames only\./)).toBeTruthy()
     expect(host.calls.people).not.toHaveBeenCalled()
   })
 })

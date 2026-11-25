@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react'
+import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { useBotGitHubRead } from '@/lib/bot-github-state'
@@ -12,6 +13,7 @@ import { botMembersFrom, gitHubMembersOf } from '../../../../../shared/bot-types
 import { gitHubLinkedAccounts } from '../../../../../shared/connector-bot-github-contract'
 import { CONNECTOR_CLIENT_LIMITS } from '../../../../../shared/connectors/connector-cloud-contract'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
+import type { WhoCanAskIdentityLedger } from '../who-can-ask-identity-ledger'
 import { botGitHubErrorMessage } from './bot-github-copy'
 import { gitHubSearchTerm, gitHubWhoCanAskSession } from './github-who-can-ask-session'
 import {
@@ -62,20 +64,26 @@ export function useGitHubWhoCanAsk(
   )
   const withOrganizations = (scope?.owners.length ?? 0) > 0
   // One search session per picker open, rebuilt only when what it reads for changes (host, scope,
-  // linked logins), so a refresh or a change of who is the owner keeps it.
+  // linked logins). Presentation stays out of it: the module translator always speaks the current
+  // language, and the host's display name is used only when an error is drawn, so a language or
+  // label change, a refresh, or a change of who is the owner keeps the session and its Try again.
   const session = useCallback(
-    () =>
-      gitHubWhoCanAskSession(botGitHubCalls(hostId), {
-        scope,
-        ownerLogin: rosterOwner,
-        linkedLogins,
-        // Routing, not a friendly name, decides whose Orca holds the list: this window's own
-        // computer only for a local bot outside a paired web window.
-        producer:
-          hostId === LOCAL_EXECUTION_HOST_ID && !isPairedWebClientWindow() ? 'local' : 'remote',
-        t
-      }),
-    [hostId, scope, rosterOwner, linkedLogins, t]
+    (ledger?: WhoCanAskIdentityLedger) =>
+      gitHubWhoCanAskSession(
+        botGitHubCalls(hostId),
+        {
+          scope,
+          ownerLogin: rosterOwner,
+          linkedLogins,
+          // Routing, not a friendly name, decides whose Orca holds the list: this window's own
+          // computer only for a local bot outside a paired web window.
+          producer:
+            hostId === LOCAL_EXECUTION_HOST_ID && !isPairedWebClientWindow() ? 'local' : 'remote',
+          t: translate
+        },
+        ledger
+      ),
+    [hostId, scope, rosterOwner, linkedLogins]
   )
   const search = useCallback<BotWhoCanAskService['search']>(
     (query) => session().search(query),
@@ -102,6 +110,7 @@ export function useGitHubWhoCanAsk(
       errorMessage,
       searchPlaceholder: t('bots.github.whoCanAsk.searchPeople', 'Search by name or username'),
       normalizeQuery: gitHubSearchTerm,
+      checkingStatus: t('bots.github.whoCanAsk.checkingUsername', 'Checking a username…'),
       peopleHeading: t('bots.github.whoCanAsk.found', 'People on GitHub'),
       scopedHeading: withOrganizations
         ? t('bots.github.whoCanAsk.foundInReposAndOrgs', 'Found in your repos and orgs')

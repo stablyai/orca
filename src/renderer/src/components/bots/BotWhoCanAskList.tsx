@@ -14,6 +14,7 @@ import { BotAccessWarningLine } from './BotAccessWarningLine'
 import type { BotAccessConnector } from '../../../../shared/bots/bot-access-reach'
 import { AttentionDot } from './AttentionDot'
 import { BotWhoCanAskPicker } from './BotWhoCanAskPicker'
+import type { WhoCanAskIdentityLedger } from './who-can-ask-identity-ledger'
 import { OrcaCloudSignInLine } from './orca-cloud-sign-in'
 import { accessRequestPerson } from '../../../../shared/bots/bot-access-request'
 import { requestLine, useBotWhoCanAsk } from './use-bot-who-can-ask'
@@ -32,8 +33,6 @@ export type BotWhoCanAskFound = {
     group?: 'scoped' | 'outside'
     /** Muted in the real-name slot, saying why this person's source is uncertain. */
     tag?: string
-    /** `name` was just confirmed live, so a pick of this id takes it as their current name. */
-    live?: true
   }[]
   complete: boolean
   /** What this search could not cover, shown in place of the generic incomplete line. */
@@ -44,9 +43,6 @@ export type BotWhoCanAskFound = {
   retryable?: boolean
   /** Headings and tags naming where this search actually looked, over the service's defaults. */
   labels?: { scoped?: string; outsideTag?: string }
-  /** Ids a live answer showed are no longer who an earlier list called them: never offered, and
-   *  dropped from the picks. */
-  retired?: string[]
   /** Part of the search is still out, so an empty result isn't final yet. */
   pending?: true
 }
@@ -69,8 +65,11 @@ export type BotWhoCanAskService = {
   /** How many people this connector takes, within the bot's BOT_MAX_MEMBERS overall. */
   max: number
   search: (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
-  /** Called once per picker open for a search that keeps what it read across keystrokes. */
-  begin?: () => BotWhoCanAskSession
+  /** Called once per picker open (and context) for a search that keeps what it read across
+   *  keystrokes; its username checks go into `ledger`, which outlives the session. */
+  begin?: (ledger: WhoCanAskIdentityLedger) => BotWhoCanAskSession
+  /** Shown while a username check that could change who a row or pick is is still out. */
+  checkingStatus?: string
   errorMessage: (code: string) => string
   searchPlaceholder: string
   /** What a search matches people by, from what was typed (GitHub drops a leading @). */

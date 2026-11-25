@@ -120,6 +120,9 @@ export type BotGitHubRoster =
    *  later read runs in this app run of the host; false when the scope held nothing readable, so
    *  no gh ran and nothing was used up. */
   | { status: 'unavailable'; spent: boolean }
+  /** This host reads no list (Windows): the picker searches exact usernames only, and nothing
+   *  was admitted or spent. */
+  | { status: 'exact-only' }
 
 /** People per repository or organization a roster read returns. */
 export const GITHUB_PEOPLE_PER_SOURCE = 100

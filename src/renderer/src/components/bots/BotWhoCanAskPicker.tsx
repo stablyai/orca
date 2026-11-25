@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useId, useState, useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -14,6 +14,9 @@ import { BOT_MAX_MEMBERS, type Bot, type BotMember } from '../../../../shared/bo
 import { BotMemberAvatar, BotOwnerAvatar } from './bot-connector-people'
 import type { BotWhoCanAskFound, BotWhoCanAskService } from './BotWhoCanAskList'
 import { useWhoCanAskSearch } from './use-who-can-ask-search'
+import { WhoCanAskIdentityLedger } from './who-can-ask-identity-ledger'
+import { currentPicks, currentRows, heldPicks } from './who-can-ask-picks'
+import { recomputeOn } from '@/lib/recompute-on'
 
 // How close to a service's cap the picker starts showing it while people are ticked.
 const NEAR_CAP = 5
@@ -85,24 +88,23 @@ export function BotWhoCanAskPicker({
   // A ticked person's real name, part of who they are: Selected shows it beside them, and a
   // search by it still finds them once they scroll off. A row's source tag is never kept.
   const [realNames, setRealNames] = useState<Readonly<Record<string, string>>>({})
-  const { search, identities, retrying, retry, retryInPlace } = useWhoCanAskSearch(service, query)
+  // What username checks said this open, across its sessions; the picks follow it.
+  const [ledger] = useState(() => new WhoCanAskIdentityLedger())
+  // Every read of the ledger below is keyed on its version, so none is served stale.
+  const ledgerVersion = useSyncExternalStore(ledger.subscribe, ledger.version)
+  const { search, retrying, retry } = useWhoCanAskSearch(service, query, ledger)
+  const checkingId = useId()
   const typed = query.trim()
   const needle = (service.normalizeQuery?.(typed) ?? typed).toLowerCase()
   const listed = service.listed(bot.members)
   const added = new Set(listed.map((member) => member.id))
   const isOwner = (id: string): boolean =>
     id === service.ownerId || (service.otherOwnerIds?.includes(id) ?? false)
-  // The picks as they stand now: anyone since listed, linked as the owner, or shown by a live
-  // answer to be someone else is left out of the count, the cap and the grant; a live answer's
-  // login replaces the one they were picked by. Everyone else stays picked.
-  const picked = ticked
-    .filter(
-      (member) => !added.has(member.id) && !isOwner(member.id) && !identities.retired.has(member.id)
-    )
-    .map((member) => {
-      const name = identities.names[member.id]
-      return name && name !== member.name ? { ...member, name } : member
-    })
+  const picked = recomputeOn([ledgerVersion], () =>
+    currentPicks(ticked, (id) => !added.has(id) && !isOwner(id), ledger)
+  )
+  // Add waits for a check that could still show one of these picks to be someone else.
+  const held = recomputeOn([ledgerVersion], () => heldPicks(picked, realNames, ledger))
   const full =
     bot.members.length + picked.length >= BOT_MAX_MEMBERS ||
     added.size + picked.length >= service.max
@@ -118,15 +120,11 @@ export function BotWhoCanAskPicker({
     )
   }
 
-  // A login a live answer confirmed this open outranks a list's older one, wherever the row shows.
-  const found = (search.status === 'ready' ? search.found.members : []).map((person) => {
-    const name = identities.names[person.id]
-    return name && name !== person.name ? { ...person, name } : person
-  })
-  const handles = new Map(found.map((person) => [person.id, person.handle]))
-  const addable = found.filter(
-    (person) => !added.has(person.id) && !isOwner(person.id) && !identities.retired.has(person.id)
+  const found = recomputeOn([ledgerVersion], () =>
+    currentRows(search.status === 'ready' ? search.found.members : [], ledger)
   )
+  const handles = new Map(found.map((person) => [person.id, person.handle]))
+  const addable = found.filter((person) => !added.has(person.id) && !isOwner(person.id))
   const withAccess = listed.filter(
     (member) => matches(member.name || member.id, needle) || found.some((p) => p.id === member.id)
   )
@@ -166,12 +164,16 @@ export function BotWhoCanAskPicker({
       </CommandItem>
     )
   }
-  // Ticked people the current search doesn't show stay on top while they still match it, so a
-  // search never lists someone it doesn't match; the footer keeps counting everyone ticked.
+  // Ticked people the current search doesn't show stay on top. A service that matches people by
+  // login and name (GitHub) keeps only those still matching the search; any other keeps them all,
+  // so each pick can always be unticked.
+  const byName = service.normalizeQuery !== undefined
   const offScreen = picked.filter(
     (member) =>
       !addable.some((person) => person.id === member.id) &&
-      (matches(member.name || member.id, needle) || matches(realNames[member.id] ?? '', needle))
+      (!byName ||
+        matches(member.name || member.id, needle) ||
+        matches(realNames[member.id] ?? '', needle))
   )
   const selectedGroup =
     offScreen.length > 0 ? (
@@ -188,7 +190,7 @@ export function BotWhoCanAskPicker({
         size="xs"
         variant="outline"
         disabled={retrying}
-        onClick={retryInPlace}
+        onClick={retry}
         onKeyDown={(event) => event.stopPropagation()}
       >
         {t('bots.whoCanAsk.retry', 'Try again')}
@@ -200,6 +202,13 @@ export function BotWhoCanAskPicker({
     search.found.pending === true &&
     addable.length === 0 &&
     offScreen.length === 0
+  // Said apart from the rows and the Add button's own name: a check is still out that could change
+  // who a row or a pick is.
+  const checking =
+    held.length > 0 ||
+    (search.status === 'ready' &&
+      search.found.pending === true &&
+      (addable.length > 0 || offScreen.length > 0))
   const noMatch =
     !idle &&
     !pending &&
@@ -207,15 +216,22 @@ export function BotWhoCanAskPicker({
     addable.length === 0 &&
     withAccess.length === 0 &&
     !ownerShown &&
-    // A ticked person still matching the search is a result: "no one found" would contradict it.
-    offScreen.length === 0
+    // A ticked person matched by the search is a result: "no one found" would contradict it. A
+    // service that keeps every pick in view says so regardless.
+    (!byName || offScreen.length === 0)
   // A note on what the search couldn't cover replaces a hint or empty result's usual detail.
   const peopleGroup = idle ? (
     <PickerNote title={idle.title} detail={note ?? idle.detail} action={retryAction} />
   ) : search.status === 'failed' ? (
     <div role="alert" className="flex items-center gap-2 p-3 text-sm">
-      <span className="min-w-0 flex-1 text-destructive">{search.error}</span>
-      <Button size="xs" variant="outline" onClick={retry}>
+      <span className="min-w-0 flex-1 text-destructive">{service.errorMessage(search.code)}</span>
+      <Button
+        size="xs"
+        variant="outline"
+        disabled={retrying}
+        onClick={retry}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
         {t('bots.whoCanAsk.retry', 'Try again')}
       </Button>
     </div>
@@ -334,6 +350,11 @@ export function BotWhoCanAskPicker({
           )}
         </p>
       ) : null}
+      {checking && service.checkingStatus ? (
+        <p id={checkingId} role="status" className="px-3 pb-2 text-xs text-muted-foreground">
+          {service.checkingStatus}
+        </p>
+      ) : null}
       {picked.length > 0 ? (
         <div className="flex items-center justify-between gap-2 border-t border-border p-2 pl-3">
           <span className="text-xs text-muted-foreground">
@@ -341,7 +362,12 @@ export function BotWhoCanAskPicker({
               count: picked.length
             })}
           </span>
-          <Button size="sm" onClick={() => onPicked(picked)}>
+          <Button
+            size="sm"
+            disabled={held.length > 0}
+            aria-describedby={held.length > 0 && service.checkingStatus ? checkingId : undefined}
+            onClick={() => onPicked(picked)}
+          >
             {picked.length === 1
               ? t('bots.whoCanAsk.addOne', 'Add 1 person')
               : t('bots.whoCanAsk.addMany', 'Add {{count}} people', {

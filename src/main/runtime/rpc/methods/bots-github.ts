@@ -6,7 +6,7 @@ import {
   BotGitHubUsers
 } from '../../../../shared/rpc-contract/bots-connector-setup-params'
 import { readGhSignIn } from '../../../bots/bot-local-sign-ins'
-import { gitHubPeopleRosters } from '../../../connector-cloud/github-people-roster'
+import { readGitHubPeopleRoster } from '../../../connector-cloud/github-people-roster'
 import { defineMethod } from '../core'
 import { withHostCloudClient } from './bots-slack'
 
@@ -46,7 +46,7 @@ export const BOT_GITHUB_METHODS = [
     params: BotGitHubPeople,
     handler: async ({ scope, owner }) => ({
       ok: true,
-      value: await gitHubPeopleRosters().read(scope, owner)
+      value: await readGitHubPeopleRoster(scope, owner)
     })
   }),
   defineMethod({

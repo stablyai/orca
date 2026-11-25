@@ -47,8 +47,8 @@ import {
   useGitHubInstallTrip
 } from './github-install-trip'
 
-/** Once linked and installed, the owner picks who may ask the bot on GitHub. */
-function LinkedPeople({ bot }: { bot: Bot }): React.JSX.Element {
+/** Once linked and installed, the owner picks who may ask the bot on GitHub (setup's turn-on step). */
+export function LinkedPeople({ bot }: { bot: Bot }): React.JSX.Element {
   const t = useTranslate()
   return (
     <BotWhoCanAskList

@@ -5,6 +5,7 @@ import type {
 } from '../../../../../shared/connector-bot-github-contract'
 import type { BotSlackResult } from '../../../../../shared/connector-bot-slack-contract'
 import { ROSTER_WAIT_MS, gitHubWhoCanAskSession } from './github-who-can-ask-session'
+import { WhoCanAskIdentityLedger } from '../who-can-ask-identity-ledger'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: echoes the English default like i18next does with no catalog.
 const t = ((_key: string, fallback: string, values?: Record<string, unknown>) =>
@@ -90,15 +91,17 @@ describe('one Add picker open on GitHub', () => {
     expect(told).toHaveBeenCalledTimes(toldBefore + 1)
   })
 
-  it('answers with the read list at once and tells the listener when the lookup lands, not an older one', async () => {
+  it('answers with the read list at once, and tells the listener whenever any lookup lands', async () => {
     const maya = deferred<Users>()
     const lee = deferred<Users>()
     const users = vi.fn(({ query }: { query: string }) =>
       query === 'brennan' ? maya.promise : lee.promise
     )
+    const ledger = new WhoCanAskIdentityLedger()
     const session = gitHubWhoCanAskSession(
       { people: async () => ({ ok: true, value: roster }), users },
-      { scope, ownerLogin: 'owner', producer: 'local', t }
+      { scope, ownerLogin: 'owner', producer: 'local', t },
+      ledger
     )
     await session.search('')
     const told = vi.fn()
@@ -107,13 +110,16 @@ describe('one Add picker open on GitHub', () => {
     expect(names(early)).toEqual(['brennanb2025'])
     expect(early.ok && early.value.pending).toBe(true)
     await session.search('jinwoo')
-    // The replaced lookup lands: nobody is told.
+    expect(ledger.pending()).toEqual(['brennan', 'jinwoo'])
+    // A replaced query's lookup still lands in the ledger and tells the listener.
     maya.resolve(stranger)
     await vi.advanceTimersByTimeAsync(0)
-    expect(told).not.toHaveBeenCalled()
+    expect(told).toHaveBeenCalledOnce()
+    expect(ledger.identity('9', 'brennan')).toEqual({ status: 'current', name: 'brennan' })
     lee.resolve(noOne)
     await vi.advanceTimersByTimeAsync(0)
-    expect(told).toHaveBeenCalledOnce()
+    expect(told).toHaveBeenCalledTimes(2)
+    expect(ledger.pending()).toEqual([])
     const settled = await session.search('jinwoo')
     expect(settled.ok && settled.value.pending).toBeUndefined()
   })
@@ -150,7 +156,7 @@ describe('one Add picker open on GitHub', () => {
     expect(names(await answer)).toEqual(['brennanb2025'])
   })
 
-  it('keeps a failed exact lookup open for a roster still loading, then fails only if both did', async () => {
+  it('keeps a failed exact lookup open for a roster still loading, then names both failures', async () => {
     const failed: Users = { ok: false, error: 'network' }
     const late = deferred<BotSlackResult<BotGitHubRoster>>()
     const session = gitHubWhoCanAskSession(
@@ -173,7 +179,10 @@ describe('one Add picker open on GitHub', () => {
       },
       { scope, ownerLogin: 'owner', producer: 'local', t }
     )
-    expect(await unreadable.search('brennan')).toEqual(failed)
+    // Both failed: the answer says both, and can be asked again.
+    const both = await unreadable.search('brennan')
+    expect(both.ok && both.value.retryable).toBe(true)
+    expect(both.ok && both.value.empty?.detail).toMatch(/\nUsername check failed\.$/)
   })
 
   it('asks a failed exact lookup again only when told to retry', async () => {

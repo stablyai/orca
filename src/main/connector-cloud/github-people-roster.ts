@@ -13,6 +13,8 @@
 // started. Nothing here bounds other gh callers, or processes left from an earlier app run. The
 // exact-username lookup stays live; restarting the app (this host's Orca) reads the list again.
 //
+// Windows hosts admit no read at all (readGitHubPeopleRoster): exact usernames only, as before.
+//
 // Scale: one logical read per host per app run. Each picker open asks for it once (one RPC per
 // session); each keystroke filters locally and runs only the cloud's exact-username lookup.
 //
@@ -116,4 +118,18 @@ let shared: GitHubPeopleRosters | null = null
 export function gitHubPeopleRosters(): GitHubPeopleRosters {
   shared ??= new GitHubPeopleRosters()
   return shared
+}
+
+/** The Add picker's list on this host. A Windows host reads none: it answers exact-only before
+ *  the latch, the query, the runner, gh or WSL are reached, and the picker uses the cloud's
+ *  exact-username lookup alone. Everywhere else, the one shared read above. */
+export function readGitHubPeopleRoster(
+  scope: GitHubPeopleScope,
+  owner: string | null,
+  platform: NodeJS.Platform = process.platform
+): Promise<BotGitHubRoster> {
+  if (platform === 'win32') {
+    return Promise.resolve({ status: 'exact-only' })
+  }
+  return gitHubPeopleRosters().read(scope, owner)
 }
