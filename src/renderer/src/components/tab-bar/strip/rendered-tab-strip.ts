@@ -24,7 +24,7 @@ export function resolveRenderedTabStrip({
   stripSortableIds,
   clientHostedBrowserRows
 }: {
-  itemProjection: TabBarItemProjection
+  itemProjection: Pick<TabBarItemProjection, 'orderedItems' | 'dropIndicatorByVisibleId'>
   pinnedSortableIds: string[]
   stripSortableIds: string[]
   clientHostedBrowserRows: readonly ClientHostedBrowserRow[]

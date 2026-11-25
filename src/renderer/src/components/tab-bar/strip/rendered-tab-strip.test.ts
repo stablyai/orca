@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { TabBarItem } from '../model/tab-bar-item-model'
-import type { TabBarItemProjection } from '../model/use-tab-bar-item-projection'
 import type { DropIndicator } from './drop-indicator'
 import {
   newTabButtonHideClassName,
@@ -8,14 +7,32 @@ import {
   stripSizeClassName
 } from './rendered-tab-strip'
 
+function item(id: string): TabBarItem {
+  return {
+    type: 'agent-session',
+    id,
+    unifiedTabId: id,
+    isPinned: false,
+    data: {
+      id,
+      entityId: id,
+      groupId: 'group',
+      worktreeId: 'folder:bot-home',
+      contentType: 'agent-session',
+      label: id,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+  }
+}
+
 function projection(
   ids: string[],
   indicators: [string, DropIndicator][] = []
-): TabBarItemProjection {
-  return {
-    orderedItems: ids.map((id) => ({ id }) as TabBarItem),
-    dropIndicatorByVisibleId: new Map(indicators)
-  } as TabBarItemProjection
+): Parameters<typeof resolveRenderedTabStrip>[0]['itemProjection'] {
+  return { orderedItems: ids.map(item), dropIndicatorByVisibleId: new Map(indicators) }
 }
 
 function strip(ids: string[], pinned: string[]): ReturnType<typeof resolveRenderedTabStrip> {
