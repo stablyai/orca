@@ -30,6 +30,8 @@ export function createDesktopOrcaAccountService(
       onBeforeSignOut: () => {
         state.core.relayHost?.signOutStarted()
         mainProcessConnectorCloud()?.signOutStarted()
+        // Sharing hides now, not once the logout request returns.
+        refreshSharedBotHosts()
       },
       onAfterSignOut: () => {
         mainProcessConnectorCloud()?.signOutFinished()

@@ -1,17 +1,22 @@
 import { Users } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import {
+  useSharedBotHostOf,
+  useTeamSharingOffered
+} from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import type { Bot } from '../../../../../shared/bot-types'
 
 /** "Shared by <owner>" on an agent shared with this account, "Shared with <people>" on one it shares. */
 export function useBotShareLine(bot: Bot): string | null {
   const t = useTranslate()
   const sharedHost = useSharedBotHostOf(bot.hostId)
+  const offered = useTeamSharingOffered()
   if (sharedHost) {
     return t('bots.share.sharedBy', 'Shared by {{name}}', { name: sharedHost.ownerName })
   }
-  const people = (bot.shares ?? []).map((share) =>
+  // The owner's list stays kept, but shows only where the cloud takes shares, as Share… does.
+  const people = (offered ? (bot.shares ?? []) : []).map((share) =>
     share.kind === 'account' ? (share.name ?? share.email) : share.email
   )
   return people.length > 0

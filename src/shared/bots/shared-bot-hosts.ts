@@ -33,6 +33,13 @@ export type SharedBotHostView = {
   held: SharedBotHeldView[]
 }
 
+/** What main publishes: the shared agents, and whether this account's Orca Cloud takes shares
+ *  (its shares route answers); null until it first answers either way. */
+export type SharedBotHostsState = {
+  hosts: SharedBotHostView[]
+  sharing: boolean | null
+}
+
 // A new chat started while the host is away: its id until the host starts it from the first held message.
 const NEW_CHAT_PREFIX = 'shared-new-'
 

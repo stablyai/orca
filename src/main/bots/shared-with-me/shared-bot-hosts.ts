@@ -2,7 +2,7 @@
 // the window as hosts of their own. A message to a host that is away is held in Orca Cloud.
 import {
   SHARED_BOT_HOST_ERRORS,
-  type SharedBotHostView
+  type SharedBotHostsState
 } from '../../../shared/bots/shared-bot-hosts'
 import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/client/relay-client-platform'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
@@ -22,7 +22,7 @@ import {
   sharedBotOffline
 } from './shared-bot-held-sends'
 import { nextPairingStep, pinnedSharedBotOffer, type MineShare } from './shared-bot-pairing'
-import type { SharedBotsCloud } from './shared-bots-cloud'
+import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
 import type { SharedBotHomes } from './shared-bot-home'
 
 // New shares and invites resolve within this; pairing and held messages are read sooner.
@@ -32,8 +32,10 @@ const BUSY_POLL_MS = 30 * 1000
 export type SharedBotHostsDeps = {
   userDataPath: string
   cloud: () => SharedBotsCloud | null
+  /** The signed-in Orca account the cloud is read as; null signed out. */
+  account: () => string | null
   platform: RelayClientPlatform
-  publish: (views: SharedBotHostView[]) => void
+  publish: (state: SharedBotHostsState) => void
   homes: SharedBotHomes
   now?: () => number
 }
@@ -49,6 +51,7 @@ export class SharedBotHosts {
   private timer: ReturnType<typeof setTimeout> | null = null
   private readonly now: () => number
   private loaded: Promise<void> | null = null
+  private readonly sharing = new CloudSharesSupport(() => this.deps.account())
 
   constructor(private readonly deps: SharedBotHostsDeps) {
     this.store = new SharedBotHostStore(deps.userDataPath)
@@ -89,7 +92,11 @@ export class SharedBotHosts {
     return this.store.flushed()
   }
 
-  views(): SharedBotHostView[] {
+  state(): SharedBotHostsState {
+    return { hosts: this.views(), sharing: this.sharing.value }
+  }
+
+  views(): SharedBotHostsState['hosts'] {
     return this.store.list().flatMap((entry) =>
       this.shares === null || this.shares.has(entry.shareId)
         ? [
@@ -112,6 +119,8 @@ export class SharedBotHosts {
   /** Reads the account's shares, follows each one's pairing, and schedules the next read. One read
    *  at a time: one asked for meanwhile runs once after it, so no older answer lands last. */
   refresh(): Promise<void> {
+    // A sign-out or switch hides sharing now, not after a read still out for the last account.
+    this.sharing.forgetIfSwitched(() => this.publish())
     if (this.refreshing) {
       this.refreshAgain = true
       return this.refreshing
@@ -138,7 +147,7 @@ export class SharedBotHosts {
     }
     const cloud = this.deps.cloud()
     const read = this.held.beginRead()
-    const answer = cloud ? await cloud.mine() : null
+    const answer = await this.sharing.read(cloud, () => this.publish())
     // Signed out: the account's shares, keys and links go with it.
     const shares = answer?.ok ? answer.value.shares : answer?.error === 'signed_out' ? [] : null
     const gone = shares ? this.applyMine(shares, read) : []
@@ -321,6 +330,6 @@ export class SharedBotHosts {
   }
 
   private publish(): void {
-    this.deps.publish(this.views())
+    this.deps.publish(this.state())
   }
 }
