@@ -151,7 +151,15 @@ export class ProjectGroupPersistenceOperations {
           this.state.projectGroups ?? []
         )
         if (rootProjectOrder === undefined) {
+          // Unranked top-level groups sort by tabOrder alone, so last means past every other group.
           delete group.rootProjectOrder
+          let maxOrder = -1
+          for (const other of this.state.projectGroups ?? []) {
+            if (other !== group) {
+              maxOrder = Math.max(maxOrder, other.tabOrder)
+            }
+          }
+          group.tabOrder = maxOrder + 1
         } else {
           group.rootProjectOrder = rootProjectOrder
         }

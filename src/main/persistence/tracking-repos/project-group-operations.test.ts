@@ -3,10 +3,10 @@ import type { PersistedState } from '../../../shared/orca-profiles/persisted-sta
 import { createProjectGroup } from '../../../shared/project/groups/project-groups'
 import { ProjectGroupPersistenceOperations } from './project-group-operations'
 
-function groupTree() {
+function groupTree(rootRank: { rootProjectOrder?: number } = { rootProjectOrder: 1000 }) {
   const make = (name: string, parentGroupId: string | null, tabOrder: number) =>
     createProjectGroup({ name, parentGroupId, createdFrom: 'manual', tabOrder })
-  const root = { ...make('root', null, 0), rootProjectOrder: 1000 }
+  const root = { ...make('root', null, 5), ...rootRank }
   const child = make('child', root.id, 1)
   const grandchild = make('grandchild', child.id, 2)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: group parent moves read only repos and projectGroups.
@@ -34,5 +34,13 @@ describe('setProjectGroupParents', () => {
 
     operations.setProjectGroupParents([{ groupId: grandchild.id, parentGroupId: null }])
     expect(grandchild).toMatchObject({ parentGroupId: null, rootProjectOrder: 2000 })
+  })
+
+  it('places a group moved to an unranked top level past every other group', () => {
+    const { operations, grandchild } = groupTree({})
+
+    operations.setProjectGroupParents([{ groupId: grandchild.id, parentGroupId: null }])
+    expect(grandchild).toMatchObject({ parentGroupId: null, tabOrder: 6 })
+    expect(grandchild.rootProjectOrder).toBeUndefined()
   })
 })

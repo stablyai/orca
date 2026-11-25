@@ -113,7 +113,7 @@ orca group create --name Clients --json
 orca group create --name Acme --parent name:Clients --color "#22c55e" --json
 orca group set --group name:Acme --name "Acme Corp" --order 0 --json
 orca group set --group id:<groupId> --parent none --json
-orca group rm --group name:Acme --json
+orca group rm --group "name:Acme Corp" --json
 orca repo set --repo id:<repoId> --group name:Clients --json
 orca repo set --repo id:<repoId> --group none --json
 orca repo set --repo id:<repoId> --display-name "Acme Web" --badge-color "#22c55e" --icon rocket --json
