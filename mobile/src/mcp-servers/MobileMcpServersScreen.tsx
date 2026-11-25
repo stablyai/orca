@@ -80,11 +80,11 @@ export function MobileMcpServersScreen() {
   const servers = data.list?.servers ?? []
   const found = servers.find((server) => server.id === openedId) ?? null
   // A removed server's page keeps its last read while it slides away.
-  const lastOpened = useRef<PhoneMcpServer | null>(null)
-  if (found) {
-    lastOpened.current = found
+  const [lastOpened, setLastOpened] = useState<PhoneMcpServer | null>(null)
+  if (found && found !== lastOpened) {
+    setLastOpened(found)
   }
-  const opened = openedId === null ? null : (found ?? lastOpened.current)
+  const opened = openedId === null ? null : (found ?? lastOpened)
   const workspaceNames = useMemo(
     () => new Map(data.workspaces.map((workspace) => [workspace.key, workspace.name])),
     [data.workspaces]
