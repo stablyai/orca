@@ -135,14 +135,26 @@ describe('Claude compaction rows on transcript catch-up', () => {
     // Older builds saved /compact under the command's own key and no automatic row at all.
     const savedTurn = await catchUp(
       [prompt('u1', null, 1), boundary('b1', 'u1', 2)],
-      [savedRow(promptKey('u1'), { kind: 'message', role: 'user', text: 'Synthetic turn u1' })]
+      [
+        savedRow(promptKey('u1'), {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Synthetic turn u1' }]
+        })
+      ]
     )
     expect(savedTurn.compactions).toEqual([])
 
     // A recovered divider would otherwise land below the later reply already on screen.
     const beforeSaved = await catchUp(
       [prompt('u1', null, 1), boundary('b1', 'u1', 2), prompt('u2', 'b1', 3)],
-      [savedRow(promptKey('u2'), { kind: 'message', role: 'user', text: 'Synthetic turn u2' })]
+      [
+        savedRow(promptKey('u2'), {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Synthetic turn u2' }]
+        })
+      ]
     )
     expect(beforeSaved.keys).not.toContain(liveKey)
 
