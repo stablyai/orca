@@ -21,11 +21,6 @@ import {
 } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
-import type { JournalTurnsBehind } from './journal-status-state'
-import {
-  readAgentJournalTurn,
-  readAgentJournalTurnOutcome
-} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { compareJournalStatusPositions, type JournalStatusItem } from './journal-status-items'
 
 export type JournalRequestStatus = {
@@ -35,11 +30,7 @@ export type JournalRequestStatus = {
   lastAssistantMessage?: string
   /** The newest answer is a bot's quiet marker. */
   quietAnswer?: true
-  turnsBehind?: JournalTurnsBehind
 }
-
-/** Bounds the scan; a full window still reports that more turns may be merged. */
-const TURNS_BEHIND_WINDOW = 8
 
 function* newestCandidates(
   ...populations: Iterable<JournalStatusItem>[]
@@ -145,61 +136,13 @@ export function readJournalSqlRequestStatus(
     }
   }
   const lastAssistantMessage = normalizeOptionalField(assistant, AGENT_STATUS_MAX_FIELD_LENGTH)
-  const turnsBehind =
-    quietAnswer && latestRequest?.kind === 'turn'
-      ? readTurnsBehind(state, floor, latestRequest.id, commands, bodyOf)
-      : undefined
   return {
     hasRequest: true,
     latestPrompt: normalizePromptField(prompt ? latestStructuredAgentSessionPrompt([prompt]) : ''),
     latestRequest,
     ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
-    ...(quietAnswer ? { quietAnswer: true as const } : {}),
-    ...(turnsBehind ? { turnsBehind } : {})
+    ...(quietAnswer ? { quietAnswer: true as const } : {})
   }
-}
-
-/** Read from rows, not observed states, so a turn that ended unseen still counts. */
-function readTurnsBehind(
-  state: JournalSqlStatusContext,
-  floor: number,
-  latestTurnId: string,
-  commands: ReturnType<typeof commandTurnsByBody>,
-  bodyOf: Parameters<typeof latestStructuredAgentSessionAssistantMessage>[1]
-): JournalTurnsBehind {
-  const turns: JournalTurnsBehind['turns'][number][] = []
-  const seen = new Set([latestTurnId])
-  for (const { item, position } of state.select({ kind: 'turns', root: true, floor })) {
-    const turn = readAgentJournalTurn(item.body)
-    if (!turn || seen.has(turn.turnId)) {
-      continue
-    }
-    seen.add(turn.turnId)
-    if (turn.state === 'running') {
-      continue
-    }
-    if (turns.length === TURNS_BEHIND_WINDOW) {
-      return { turns, more: true }
-    }
-    const prose = state
-      .select({ kind: 'assistant-prose', floor, turnItemId: item.itemId })
-      [Symbol.iterator]()
-      .next().value?.item
-    const said =
-      prose && !isStructuredAgentSessionCommandRow(prose, commands)
-        ? latestStructuredAgentSessionAssistantMessage([prose], bodyOf)
-        : ''
-    turns.push({
-      id: turn.turnId,
-      sequence: position.sequence,
-      answered:
-        turn.state === 'completed' &&
-        readAgentJournalTurnOutcome(turn) !== null &&
-        said.trim() !== '' &&
-        !isQuietBotResult(said)
-    })
-  }
-  return { turns, more: false }
 }
 
 /** Why the settled latest request failed: a refused send's rejection, else the newest failure status

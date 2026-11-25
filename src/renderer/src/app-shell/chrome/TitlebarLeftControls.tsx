@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { ArrowLeft, ArrowRight, MoreHorizontal } from 'lucide-react'
 import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import logo from '../../../../../resources/logo.svg'
@@ -18,12 +18,71 @@ import {
 } from '@/store/slices/ui/workspace-navigation-history'
 import { useShortcutLabel } from '../../lib/keyboard/useShortcutLabel'
 import { useAppStore } from '../../store/index'
+import { showWorkspaceListThen } from '../../components/app-rail/app-rail-navigation'
+import { selectAppRailVisible } from '../../components/app-rail/app-rail-layout'
 import { hasCustomTitleBar, hasMacTrafficLights } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import {
   registerTitlebarSidebarToggle,
   unregisterTitlebarSidebarToggle
 } from './titlebar-sidebar-toggle-ref'
+
+type TitlebarControlRole = 'menu' | 'toggle' | 'back' | 'forward'
+type TitlebarControls = Record<TitlebarControlRole, HTMLButtonElement | null>
+const TITLEBAR_CONTROL_ROLES: readonly TitlebarControlRole[] = ['menu', 'toggle', 'back', 'forward']
+
+// Every mounted instance's buttons. The column header and the page titlebar row can briefly both hold one during a view
+// switch, and the old one can unmount after the new one mounted, so focus is restored against whichever is live.
+const liveTitlebarControls = new Set<TitlebarControls>()
+
+function isFocusableControl(control: HTMLButtonElement | null): control is HTMLButtonElement {
+  return control !== null && control.isConnected && !control.disabled
+}
+
+function restoreTitlebarFocus(role: TitlebarControlRole): void {
+  const active = document.activeElement
+  // Anything focused since the control left (the user, a page, a dialog) wins.
+  if (active !== null && active !== document.body) {
+    return
+  }
+  for (const pick of [role, 'toggle'] as const) {
+    for (const controls of liveTitlebarControls) {
+      const control = controls[pick]
+      if (isFocusableControl(control)) {
+        control.focus({ preventScroll: true })
+        return
+      }
+    }
+  }
+}
+
+/**
+ * With the rail on, these controls move between the column header and the page titlebar row as views switch, which
+ * remounts them. Keep a keyboard user's focus on the same control (or the toggle, when that control is missing or
+ * disabled in the new view, e.g. Forward at the end of history) instead of dropping it to the body.
+ */
+function useTitlebarControlFocusHandoff(controlsRef: React.RefObject<TitlebarControls>): void {
+  useLayoutEffect(() => {
+    // One object per instance; the buttons' refs fill it in before this runs and are cleared only after cleanup.
+    const controls = controlsRef.current
+    liveTitlebarControls.add(controls)
+    return () => {
+      liveTitlebarControls.delete(controls)
+      if (!selectAppRailVisible(useAppStore.getState())) {
+        return
+      }
+      // Why: a removed subtree's layout cleanups run before its nodes leave the DOM, so focus is still readable.
+      const active = document.activeElement
+      const role = TITLEBAR_CONTROL_ROLES.find(
+        (candidate) => controls[candidate] !== null && controls[candidate] === active
+      )
+      if (role) {
+        // After this commit (and any follow-up commit that mounts the moved controls) has painted.
+        requestAnimationFrame(() => restoreTitlebarFocus(role))
+      }
+    }
+  }, [controlsRef])
+}
 
 /** Reuse left chrome across full-width and sidebar-width headers so controls/popovers stay consistent. */
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
@@ -37,7 +96,23 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
   // Owned reference for focus fallbacks (the app rail), instead of a shared CSS-class query.
   const registeredToggleRef = useRef<HTMLButtonElement | null>(null)
+  const controlsRef = useRef<TitlebarControls>({
+    menu: null,
+    toggle: null,
+    back: null,
+    forward: null
+  })
+  const menuButtonRef = useCallback((node: HTMLButtonElement | null) => {
+    controlsRef.current.menu = node
+  }, [])
+  const backButtonRef = useCallback((node: HTMLButtonElement | null) => {
+    controlsRef.current.back = node
+  }, [])
+  const forwardButtonRef = useCallback((node: HTMLButtonElement | null) => {
+    controlsRef.current.forward = node
+  }, [])
   const sidebarToggleRef = useCallback((node: HTMLButtonElement | null) => {
+    controlsRef.current.toggle = node
     if (node) {
       registeredToggleRef.current = node
       registerTitlebarSidebarToggle(node)
@@ -46,6 +121,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
       registeredToggleRef.current = null
     }
   }, [])
+  useTitlebarControlFocusHandoff(controlsRef)
 
   return (
     // Measure the whole row for tab-strip spacing. w-max prevents the collapsed w-0 wrapper shrinking Windows text to one glyph.
@@ -66,6 +142,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
               <TooltipTrigger asChild>
                 <button
                   className="titlebar-icon-button"
+                  ref={menuButtonRef}
                   aria-label={t('auto.App.8b0b8eb54f', 'Application menu')}
                   onClick={() => window.api.ui.popupMenu()}
                   {...keepPaneFocusPressProps}
@@ -105,7 +182,11 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
               <button
                 ref={sidebarToggleRef}
                 className="sidebar-toggle"
-                onClick={toggleSidebar}
+                onClick={() => {
+                  if (!showWorkspaceListThen(useAppStore)) {
+                    toggleSidebar()
+                  }
+                }}
                 {...keepPaneFocusPressProps}
                 aria-label={t('auto.App.e4b9e7dff7', 'Toggle sidebar')}
               >
@@ -130,6 +211,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
                 className="sidebar-toggle sidebar-toggle-compact"
                 onClick={() => useAppStore.getState().goBackWorktree()}
                 disabled={!canGoBackWorktree}
+                ref={backButtonRef}
                 aria-label={t('auto.App.064bd07810', 'Go back')}
               >
                 <ArrowLeft size={12} />
@@ -147,6 +229,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
                 className="sidebar-toggle sidebar-toggle-compact"
                 onClick={() => useAppStore.getState().goForwardWorktree()}
                 disabled={!canGoForwardWorktree}
+                ref={forwardButtonRef}
                 aria-label={t('auto.App.cf9099fe98', 'Go forward')}
               >
                 <ArrowRight size={12} />

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { cp, mkdir, rm } from 'node:fs/promises'
+import { cp, mkdir, realpath, rm } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
 import {
   PLUGIN_MANIFEST_FILENAME,
@@ -204,7 +204,8 @@ export async function installStagedPluginTree(input: {
       await rm(stagedVersionDir, { recursive: true, force: true })
       await mkdir(pluginDir, { recursive: true })
       // Rehash the copy before publication because the source may change during copying.
-      const stagingRoot = resolve(input.stagingDir)
+      // Why: verbatimSymlinks copies a linked root as a link (EPERM on Windows, symlinked install on POSIX).
+      const stagingRoot = await realpath(input.stagingDir).catch(() => resolve(input.stagingDir))
       await cp(stagingRoot, stagedVersionDir, {
         recursive: true,
         verbatimSymlinks: true,

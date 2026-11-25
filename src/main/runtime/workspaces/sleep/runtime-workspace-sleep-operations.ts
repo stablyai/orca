@@ -1,3 +1,4 @@
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../../session-tabs/chat/structured-session-tab-restoration'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
@@ -6,6 +7,7 @@ import type {
   WorkspaceSleepRequest
 } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
+import type { WorkspaceChatStopAdmission } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-workspace-sleep'
 import type { RecipeVmOpening, RecipeVmState } from './recipe-vm-operations'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
@@ -71,9 +73,13 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     return this.workspaceSleepCoordinator
   }
 
-  /** Sleeps workspaces on their own hosts, each through its lifecycle queue; the window follows. */
-  sleepWorkspaces(request: WorkspaceSleepRequest): Promise<WorkspaceSleepOutcome[]> {
-    return this.workspaceSleep.sleep(request)
+  /** Sleeps workspaces on their own hosts, each through its lifecycle queue; the window follows.
+   *  `admit` gets the last word on each of this host's chats, in its session lane. */
+  sleepWorkspaces(
+    request: WorkspaceSleepRequest,
+    admit?: WorkspaceChatStopAdmission
+  ): Promise<WorkspaceSleepOutcome[]> {
+    return this.workspaceSleep.sleep(request, admit)
   }
 
   /** The window or a phone opened the workspace: a sleep still running leaves its VM up. */
@@ -89,6 +95,14 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     return Object.values(session?.sleepingAgentSessionsByPaneKey ?? {}).filter(
       (record) => record.worktreeId === worktreeId
     )
+  }
+
+  /** The tabs the window last saved for one of this host's workspaces, desktop-only ones included. */
+  savedTabsForWorktree(worktreeId: string): readonly Tab[] {
+    const session = this.store?.getWorkspaceSession?.(
+      this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+    )
+    return session?.unifiedTabs?.[worktreeId] ?? []
   }
 
   /** `worktree.sleep` from a phone or the CLI: this host's own workspace, its chats included. */

@@ -2,7 +2,7 @@ import { forgetBotToolsEpoch } from '../../../bots/bot-tools-revision'
 import { join } from 'node:path'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { BotOwnTool, BotToolServer } from '../../../../shared/bot-tools'
-import type { Bot } from '../../../../shared/bot-types'
+import type { Bot, BotAgent } from '../../../../shared/bot-types'
 import {
   BotToolAdd,
   BotToolUpdate,
@@ -15,6 +15,7 @@ import { botHomeFolder } from '../../../bots/bot-home'
 import { forgetBotToolCredentials } from '../../../bots/bot-tool-credentials'
 import { revokeBotToolSignIns } from '../../../bots/tool-oauth/bot-tool-oauth-revoke'
 import { botOwnTool, readBotToolServers } from '../../../bots/bot-tools-file'
+import { isMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
 import {
   addSortedBotTool,
   BOT_TOOL_SIGN_IN_NEEDS_UPDATE,
@@ -31,6 +32,7 @@ import {
   hasBotToolsCli,
   listBotTools,
   updateBotTool,
+  type BotToolsFolder,
   type BotToolsHome
 } from '../../../bots/bot-tools-host'
 import { forgetBotTools, removeBotTool } from '../../../bots/bot-tools-removal'
@@ -60,15 +62,24 @@ const botToolSignInFolder = (botId: string): string =>
 /** The bot's tools on this host, with the agent CLI and account its next turn runs for Claude Code and Codex. */
 export async function botToolsHome(runtime: OrcaRuntimeService, bot: Bot): Promise<BotToolsHome> {
   const agent = bot.agent
-  const folder = {
+  return toolsHomeFor(runtime, agent, {
     botId: bot.id,
     folder: botHomeFolder(bot),
     signInFolder: botToolSignInFolder(bot.id),
+    hostMcpServers: bot.hostMcpServers === true,
     otherBotFolders: runtime.bots
       .list()
       .filter((other) => other.id !== bot.id && other.agent === agent)
       .map((other) => botHomeFolder(other))
-  }
+  })
+}
+
+/** A tools folder with the agent CLI and account a new chat runs for Claude Code and Codex. */
+export async function toolsHomeFor(
+  runtime: OrcaRuntimeService,
+  agent: BotAgent,
+  folder: BotToolsFolder
+): Promise<BotToolsHome> {
   if (agent !== 'claude' && agent !== 'codex') {
     return { ...folder, agent }
   }
@@ -145,7 +156,10 @@ export const BOT_TOOLS_METHODS = [
     params: BotToolsList,
     handler: async (params, context) => {
       const bot = targetBot(params, context)
-      return await listBotTools(await botToolsHome(context.runtime, bot))
+      const tools = await listBotTools(await botToolsHome(context.runtime, bot))
+      return isMcpServersFeatureEnabled()
+        ? { ...tools, hostMcpServers: bot.hostMcpServers === true }
+        : tools
     }
   }),
   defineMethod({

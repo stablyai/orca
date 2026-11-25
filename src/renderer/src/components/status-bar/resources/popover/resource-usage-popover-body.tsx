@@ -18,6 +18,9 @@ import {
   ROW_TRAILING_GUTTER_CLS
 } from './resource-usage-metrics'
 import type { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
+import { SharedAgentProcessesRow } from './resource-usage-chat-row'
+import { HostNoticeRow } from './resource-usage-host-notice-row'
+import type { RuntimeHostResourceNotice } from '../../host-connections/runtime-host-resources'
 
 export function renderResourceUsagePopoverBody(
   {
@@ -34,6 +37,8 @@ export function renderResourceUsagePopoverBody(
     toggleWorktree,
     navigateToWorktree,
     navigateToTab,
+    openChat,
+    sharedAgentUsage,
     deleteWorktree,
     handleKillSession,
     appCollapsed,
@@ -54,15 +59,19 @@ export function renderResourceUsagePopoverBody(
     toggleWorktree: (worktreeId: string) => void
     navigateToWorktree: (worktreeId: string) => void
     navigateToTab: (tabId: string, paneKey: string | null) => void
+    openChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
+    sharedAgentUsage: { cpu: number; memory: number } | null
     deleteWorktree: (worktreeId: string) => void
     handleKillSession: (session: UnifiedSessionRow) => void
     appCollapsed: boolean
     setAppCollapsed: Dispatch<SetStateAction<boolean>>
     daemonUnreachable: boolean
-    runtimeHostNotices: readonly string[]
+    runtimeHostNotices: readonly RuntimeHostResourceNotice[]
   },
   t: Translate = translate
 ): React.JSX.Element {
+  const listsNothing =
+    unifiedRepos.length === 0 && sharedAgentUsage === null && runtimeHostNotices.length === 0
   return (
     <div
       ref={setPopoverBodyNode}
@@ -120,14 +129,6 @@ export function renderResourceUsagePopoverBody(
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
-        {runtimeHostNotices.map((notice) => (
-          <div
-            key={notice}
-            className="border-b border-border/50 px-3 py-1.5 text-[11px] text-muted-foreground"
-          >
-            {notice}
-          </div>
-        ))}
         {unifiedRepos.length > 0 && (
           <ResourceTree
             repos={unifiedRepos}
@@ -141,10 +142,15 @@ export function renderResourceUsagePopoverBody(
             navigateToTab={navigateToTab}
             onDelete={deleteWorktree}
             onKillSession={handleKillSession}
+            onOpenChat={openChat}
           />
         )}
+        {runtimeHostNotices.map((notice) => (
+          <HostNoticeRow key={notice.environmentId} notice={notice} />
+        ))}
+        {sharedAgentUsage && <SharedAgentProcessesRow usage={sharedAgentUsage} />}
 
-        {unifiedRepos.length === 0 && resourceSnapshot && (
+        {listsNothing && resourceSnapshot && (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             {t(
               'auto.components.status.bar.ResourceUsageStatusSegment.27a74f91f0',

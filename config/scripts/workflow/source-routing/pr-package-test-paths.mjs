@@ -82,11 +82,12 @@ const SHARED_PACKAGE_PREFIXES = [
   'resources/onboarding/',
   'resources/plugins/',
   'resources/skills/',
-  // Packaged CLI startup, skills resolution, and Electron entry/native loading.
-  'src/cli/index.ts',
-  'src/cli/arguments/',
-  'src/cli/runtime/',
-  'src/cli/skills/',
+  // The packaged CLI ships tsc output beside node_modules, so any CLI module's imports can break it (#48778).
+  'src/cli/',
+  // `orca mcp connect`'s bundled bridge; its imports are checked only in the packaged app.
+  'src/main/mcp-servers/agent-files/mcp-connect-bridge',
+  'src/main/mcp-servers/agent-files/mcp-no-tools-server',
+  // Packaged CLI launch and Electron entry/native loading.
   'src/main/cli/',
   'src/main/index.ts',
   'src/main/node-runtime/',
@@ -202,7 +203,8 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/cli/wsl/wsl-cli-powershell-boundary.test.ts',
   'src/main/orca-profiles/profile-index-store.test.ts',
   'src/shared/secure-storage/secure-path-windows-acl.win32.test.ts',
-  'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts'
+  'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts',
+  'src/main/browser/network/tunnels/remote-browser-socks-client-owner.test.ts'
 ]
 
 const WINDOWS_BOUNDARY_PREFIXES = [
@@ -232,6 +234,7 @@ const WINDOWS_BOUNDARY_PREFIXES = [
   'native/windows-security/',
   ...NATIVE_RUNTIME_PREFIXES,
   'src/packages/process-host/',
+  'src/main/browser/network/tunnels/remote-browser-socks-client-owner',
   'src/main/cli/wsl/',
   'src/main/codex/hooks/',
   'src/main/orca-profiles/',

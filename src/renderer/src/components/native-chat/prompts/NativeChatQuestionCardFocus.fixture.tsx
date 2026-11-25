@@ -18,7 +18,7 @@ const dispatchOptions = [
   }
 ]
 
-function FocusedQuestion({ steps = 1 }: { steps?: number }) {
+function FocusedQuestion({ steps = 1, requiredStep }: { steps?: number; requiredStep?: number }) {
   return (
     // The pane's key scope, so arrow and number keys work as they do in chat.
     <div
@@ -35,7 +35,8 @@ function FocusedQuestion({ steps = 1 }: { steps?: number }) {
                 : 'Where should the report go?',
             header: i === 0 ? 'Investigate' : 'Report',
             multiSelect: false,
-            options: dispatchOptions
+            options: dispatchOptions,
+            ...(i === requiredStep ? { required: true as const } : {})
           }))
         }}
         onAnswer={() => {}}
@@ -54,6 +55,12 @@ const focusOn =
     find(frame)?.focus({ focusVisible: true })
     await new Promise(requestAnimationFrame)
   }
+
+// The header's → arrow, with a frame for the step to render.
+const nextQuestion = async (frame: HTMLElement): Promise<void> => {
+  frame.querySelector<HTMLButtonElement>('button[aria-label="Next question"]')?.click()
+  await new Promise(requestAnimationFrame)
+}
 
 // Keyboard focus on Skip: the same outline the options take.
 export const keyboardFocus = defineFixture({
@@ -88,8 +95,7 @@ export const skippedLastStep = defineFixture({
   render: () => <FocusedQuestion steps={2} />,
   interact: async (frame) => {
     frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
-    frame.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[1]?.click()
-    await new Promise(requestAnimationFrame)
+    await nextQuestion(frame)
   }
 })
 
@@ -120,5 +126,41 @@ export const pickedFocus = defineFixture({
     row?.focus({ focusVisible: true })
     row?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     await new Promise(requestAnimationFrame)
+  }
+})
+
+// Answered the first step; the required last step keeps Submit idle until it is answered.
+export const requiredLastStep = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion steps={2} requiredStep={1} />,
+  interact: async (frame) => {
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
+    await nextQuestion(frame)
+  }
+})
+
+// Skipped the required first step and pressed Submit on the last: the card returns to the first.
+export const requiredSkippedStep = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion steps={2} requiredStep={0} />,
+  interact: async (frame) => {
+    await nextQuestion(frame)
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    await new Promise(requestAnimationFrame)
+  }
+})
+
+// Answered step 1, then passed the required step 2 by the header arrow: the last step says Next, since its
+// press returns there instead of sending.
+export const requiredPassedStep = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion steps={3} requiredStep={1} />,
+  interact: async (frame) => {
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
+    await new Promise(requestAnimationFrame)
+    // The arrow cancels the pick's auto-advance, so two presses reach the last step.
+    await nextQuestion(frame)
+    await nextQuestion(frame)
   }
 })

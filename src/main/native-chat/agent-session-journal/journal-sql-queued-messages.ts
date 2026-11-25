@@ -3,7 +3,6 @@ import type {
   JournalSqlQueueRead,
   JournalSqlQueueReadResult
 } from './journal-sql-queue-read'
-export { readJournalSqlQueue } from './journal-sql-queue-read'
 export type {
   JournalSqlQueueFacts,
   JournalSqlQueueRead,
@@ -38,6 +37,7 @@ import type {
 import { journalMailSenderKey } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import { SqlQueuedMessageEditLeases } from './journal-sql-edit-leases'
+import type { JournalReturnedCard } from './journal-domain-queue-reads'
 export type JournalSqlQueuePort = {
   read: <K extends JournalSqlQueueRead['kind']>(
     operation: Extract<JournalSqlQueueRead, { kind: K }>
@@ -53,7 +53,8 @@ export type JournalSqlQueueWrite =
         messageId: string
         body: AgentJournalMessageItem
         requireAttachments?: true
-        holdReason?: QueuedMessageHoldReason
+        /** A card moved from another chat keeps whatever hold it had there. */
+        holdReason?: string
         options?: AgentSessionExecutionOptions
         deliveryMode?: 'queue' | 'steer'
         unattended?: boolean
@@ -111,6 +112,16 @@ export class SqlJournalQueuedMessages {
 
   async failureHolds(): Promise<boolean> {
     return (await this.read({ kind: 'failure-holds' }, 'failure-holds')).held
+  }
+
+  /** Whether an editor holds this card now, as the drain's own selection reads it. */
+  async editHeld(messageId: string): Promise<boolean> {
+    return (await this.read({ kind: 'edit-held', messageId, now: this.now() }, 'edit-held')).held
+  }
+
+  /** The cards failed sends returned, in queue order. */
+  async returned(): Promise<JournalReturnedCard[]> {
+    return (await this.read({ kind: 'returned', now: this.now() }, 'returned')).cards
   }
 
   async list(): Promise<QueuedMessageRow[]> {

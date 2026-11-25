@@ -18,7 +18,6 @@ const CODEX_ACCOUNT_HOOKS: OrcaUninstallPath = {
 const AGENTS: [string, string[]][] = [
   ['claude', ['~/.claude/settings.json']],
   ['codex', []],
-  ['gemini', ['~/.gemini/settings.json']],
   ['antigravity', ['~/.gemini/config/hooks.json']],
   ['cursor', ['~/.cursor/hooks.json']],
   ['copilot', ['~/.copilot/hooks/orca.json']],

@@ -6,7 +6,10 @@ import type { GitFileStatus } from '../../../../../../shared/git/status/git-stat
 import { FileExplorerRow } from './FileExplorerRow'
 import { InlineInputRow, type InlineInput } from '../mutations/file-explorer-inline-input-row'
 import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
-import { shouldShowIgnoredDecoration } from '../../../../../../shared/git/status/git-path-decoration'
+import {
+  getPathDecoration,
+  shouldShowIgnoredDecoration
+} from '../../../../../../shared/git/status/git-path-decoration'
 import type { DirCache, FileExplorerOperationOwner, TreeNode } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
@@ -195,8 +198,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         // Paths are already normalized at construction; avoid two redundant regexes per row render.
         const normalizedRelativePath = n.relativePath
         const nodeStatus = n.isDirectory
-          ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
-          : (statusByRelativePath.get(normalizedRelativePath) ?? null)
+          ? getPathDecoration(folderStatusByRelativePath, normalizedRelativePath)
+          : getPathDecoration(statusByRelativePath, normalizedRelativePath)
         const isIgnored = shouldShowIgnoredDecoration(
           nodeStatus,
           ignoredByRelativePath,

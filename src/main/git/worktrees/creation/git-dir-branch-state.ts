@@ -1,0 +1,294 @@
+import { constants as bufferConstants } from 'node:buffer'
+import { constants } from 'node:fs'
+import { StringDecoder } from 'node:string_decoder'
+import { lstat, open, readdir, readlink, realpath, stat } from 'node:fs/promises'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import { join } from 'node:path'
+import { normalizeHead, trimGitSpace } from './git-ref-text'
+import { forEachBounded } from './bounded-reads'
+import { checkedIo, throwIfCheckExpired } from './file-check-deadline'
+
+/** A HEAD whose branch the files cannot tell: reftable leaves this placeholder, and odd symlinks map to it. */
+export const UNRESOLVED_HEAD = 'ref: refs/heads/.invalid'
+
+export type GitDirState = {
+  /** Each git dir's HEAD file, keyed by git dir. */
+  heads: ReadonlyMap<string, string>
+  /** Branches a rebase (head-name, --update-refs) or bisect reserves: Git's own in-use rule. */
+  reserved: ReadonlySet<string>
+  /** HEADs were read without following symlinks, so a symlinked HEAD already names its ref. */
+  linksRead: boolean
+}
+
+// Reads files only: this runs inside an admitted command, where running Git could wait on its own slot.
+/** `stop` ends an abandoned sweep early; it then rejects, so a partial sweep is never read as complete. */
+export async function readGitDirState(
+  commonDir: string,
+  stop: () => boolean = () => false
+): Promise<GitDirState> {
+  throwIfStopped(stop)
+  // Fail closed: an unreadable common dir must not look like "nothing in use".
+  if (!(await checkedIo(() => stat(commonDir))).isDirectory()) {
+    throw new Error(`${commonDir} is not a Git directory`)
+  }
+  throwIfStopped(stop)
+  const gitDirs = [commonDir]
+  try {
+    const linked: string[] = []
+    const entries = await checkedIo(() =>
+      readdir(join(commonDir, 'worktrees'), { withFileTypes: true })
+    )
+    throwIfStopped(stop)
+    for (const entry of entries) {
+      const gitDir = join(commonDir, 'worktrees', entry.name)
+      if (entry.isDirectory()) {
+        gitDirs.push(gitDir)
+      } else if (entry.isSymbolicLink()) {
+        linked.push(gitDir)
+      }
+    }
+    // Git follows a symlinked registration, so it counts too.
+    await forEachBounded(
+      linked,
+      async (gitDir) => {
+        if (await isDirectory(gitDir)) {
+          gitDirs.push(gitDir)
+        }
+      },
+      stop
+    )
+  } catch (error) {
+    rethrowUnlessMissing(error)
+  }
+  const heads = new Map<string, string>()
+  const reserved = new Set<string>()
+  // Bounded: thousands of worktrees must not flood the main process's file system pool.
+  await forEachBounded(
+    gitDirs,
+    async (gitDir) => {
+      // Settle every read before failing, so none is left behind.
+      const reads = await Promise.allSettled([
+        NO_FOLLOW === undefined
+          ? readOptional(join(gitDir, 'HEAD'))
+          : readRefFile(join(gitDir, 'HEAD')),
+        readOptional(join(gitDir, 'rebase-merge', 'head-name')),
+        readOptional(join(gitDir, 'rebase-apply', 'head-name')),
+        readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
+        readOptional(join(gitDir, 'BISECT_START'))
+      ])
+      const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = reads.map((read) => {
+        if (read.status === 'rejected') {
+          throw read.reason
+        }
+        return read.value
+      })
+      heads.set(gitDir, normalizeHead(head))
+      for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
+        text.split('\n')
+      )) {
+        if (line.startsWith('refs/heads/')) {
+          reserved.add(trimGitSpace(line))
+        }
+      }
+      const bisected = trimGitSpace(bisectStart)
+      if (bisected) {
+        reserved.add(bisected.startsWith('refs/') ? bisected : `refs/heads/${bisected}`)
+      }
+    },
+    stop
+  )
+  throwIfStopped(stop)
+  return { heads, reserved, linksRead: NO_FOLLOW !== undefined }
+}
+
+export function throwIfStopped(stop: () => boolean): void {
+  if (stop()) {
+    throw new Error('Branch check abandoned')
+  }
+}
+
+// Git treats a symlinked HEAD or ref as a symref to the ref it links to (core.preferSymlinkRefs), and reads any other link's target content.
+export async function readRefLink(path: string): Promise<string | undefined> {
+  let target: string
+  try {
+    target = await checkedIo(() => readlink(path))
+  } catch (error) {
+    throwIfCheckExpired()
+    const code = errorCode(error)
+    if (code === 'EINVAL' || code === 'UNKNOWN') {
+      return undefined
+    }
+    rethrowUnlessMissing(error)
+    return undefined
+  }
+  // Windows reports a link's target with backslashes; Git for Windows reads it with forward slashes.
+  const ref = process.platform === 'win32' ? target.replaceAll('\\', '/') : target
+  return ref.startsWith('refs/') ? `ref: ${ref}` : readRefContent(path)
+}
+
+// Refs are a short line; anything larger, or not a regular file, is left to Git's listing.
+const MAX_REF_BYTES = 4096
+
+/** A ref's content; '' for a directory (`refs/heads/feature/` beside an unborn `feature` holds no ref). */
+async function readSmallRef(path: string, extraFlags = 0): Promise<string> {
+  const text = await readBoundedFile(path, MAX_REF_BYTES, extraFlags)
+  return text === null ? '' : text === undefined ? UNRESOLVED_HEAD : normalizeHead(text)
+}
+
+const READ_CHUNK_BYTES = 512 * 1024
+const MIN_GROWTH_CHUNK_BYTES = 4096
+const { MAX_STRING_LENGTH } = bufferConstants
+
+/** A regular file's content, opened without blocking on a FIFO; null for a directory, undefined when not regular or over `maxBytes`. */
+async function readBoundedFile(
+  path: string,
+  maxBytes?: number,
+  extraFlags = 0
+): Promise<string | null | undefined> {
+  throwIfCheckExpired()
+  const handle = await open(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) | extraFlags)
+  try {
+    throwIfCheckExpired()
+    const info = await handle.stat()
+    throwIfCheckExpired()
+    if (info.isDirectory()) {
+      return null
+    }
+    if (!info.isFile() || (maxBytes !== undefined && info.size > maxBytes)) {
+      return undefined
+    }
+    // Chunked from this descriptor, sized to the stat and growing if the file did; a file past the limit is refused.
+    const limit = maxBytes ?? MAX_STRING_LENGTH
+    const decoder = new StringDecoder('utf8')
+    let text = ''
+    let total = 0
+    let chunkSize = Math.min(info.size + 1, READ_CHUNK_BYTES)
+    for (;;) {
+      const chunk = Buffer.allocUnsafe(chunkSize)
+      const { bytesRead } = await handle.read(chunk, 0, chunkSize, null)
+      throwIfCheckExpired()
+      total += bytesRead
+      if (total > limit) {
+        return undefined
+      }
+      text += decoder.write(chunk.subarray(0, bytesRead))
+      // A short read of a regular file is its end.
+      if (bytesRead < chunkSize) {
+        return text + decoder.end()
+      }
+      chunkSize = Math.min(Math.max(chunkSize * 2, MIN_GROWTH_CHUNK_BYTES), READ_CHUNK_BYTES)
+    }
+  } finally {
+    await handle.close()
+    // A check that expired while closing must not act on the content.
+    throwIfCheckExpired()
+  }
+}
+
+async function readRefContent(path: string): Promise<string> {
+  try {
+    return await readSmallRef(path)
+  } catch (error) {
+    rethrowUnlessMissing(error)
+    return ''
+  }
+}
+
+/** A linked git dir whose HEAD the files cannot tell, such as a reftable placeholder. */
+export function hasLinkedPlaceholderHead(state: GitDirState, commonDir: string): boolean {
+  for (const [gitDir, head] of state.heads) {
+    if (gitDir !== commonDir && head === UNRESOLVED_HEAD) {
+      return true
+    }
+  }
+  return false
+}
+
+/** A metadata file's content, '' when missing; throws for anything but a regular file (of at most `maxBytes`). */
+export async function readOptional(path: string, maxBytes?: number): Promise<string> {
+  let text: string | null | undefined
+  try {
+    text = await readBoundedFile(path, maxBytes)
+  } catch (error) {
+    rethrowUnlessMissing(error)
+    return ''
+  }
+  if (typeof text !== 'string') {
+    throw new Error(`Not a readable regular file: ${path}`)
+  }
+  return text
+}
+
+export function errorCode(error: unknown): unknown {
+  return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
+}
+
+/** Every error path reading files goes through here, so a late error from an expired check stops too. */
+export function rethrowUnlessMissing(error: unknown): void {
+  throwIfCheckExpired()
+  const code = errorCode(error)
+  if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+    throw error
+  }
+}
+
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await checkedIo(() => stat(path))).isDirectory()
+  } catch (error) {
+    rethrowUnlessMissing(error)
+    return false
+  }
+}
+
+/** Same file system entry after resolving symlinks; false when either is missing. */
+export async function isSamePath(left: string, right: string): Promise<boolean> {
+  // Both settle before answering, so no lookup outlives the check that started it.
+  const [a, b] = await Promise.allSettled([realpath(left), realpath(right)])
+  throwIfCheckExpired()
+  return (
+    a.status === 'fulfilled' &&
+    b.status === 'fulfilled' &&
+    normalizeRuntimePathForComparison(a.value) === normalizeRuntimePathForComparison(b.value)
+  )
+}
+
+// One no-follow read per ref where the platform has O_NOFOLLOW (not Windows).
+const NO_FOLLOW = constants.O_NOFOLLOW
+
+/** A ref file's content, or `ref: <target>` for a symlinked one; '' when missing or a directory. */
+export async function readRefFile(path: string): Promise<string> {
+  if (NO_FOLLOW === undefined) {
+    return readRefFileByLstat(path)
+  }
+  try {
+    return await readSmallRef(path, NO_FOLLOW)
+  } catch (error) {
+    throwIfCheckExpired()
+    const code = errorCode(error)
+    if (code === 'ELOOP' || code === 'EMLINK') {
+      return (await readRefLink(path)) ?? UNRESOLVED_HEAD
+    }
+    if (code === 'EISDIR') {
+      return ''
+    }
+    rethrowUnlessMissing(error)
+    return ''
+  }
+}
+
+async function readRefFileByLstat(path: string): Promise<string> {
+  try {
+    const entry = await checkedIo(() => lstat(path))
+    if (entry.isSymbolicLink()) {
+      return (await readRefLink(path)) ?? UNRESOLVED_HEAD
+    }
+    if (entry.isDirectory()) {
+      return ''
+    }
+  } catch (error) {
+    rethrowUnlessMissing(error)
+    return ''
+  }
+  return readRefContent(path)
+}

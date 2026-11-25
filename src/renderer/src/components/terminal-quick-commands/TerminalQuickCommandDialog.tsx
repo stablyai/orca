@@ -28,6 +28,7 @@ import {
 } from '@/lib/keyboard/screen-submit-shortcut'
 import { isSelectAllShortcut } from '@/lib/text-input/focus/editable-target'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
+import type { RepoMarkRepo } from '@/components/repo/RepoMark'
 import { TerminalQuickCommandAdvancedSection } from './TerminalQuickCommandAdvancedSection'
 import { TerminalQuickCommandContentSection } from './TerminalQuickCommandContentSection'
 import { TerminalQuickCommandDialogFooter } from './TerminalQuickCommandDialogFooter'
@@ -44,7 +45,7 @@ type TerminalQuickCommandDialogProps = {
   open: boolean
   mode: TerminalQuickCommandDialogMode
   command: TerminalQuickCommand
-  repos?: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  repos?: readonly (RepoMarkRepo & Pick<Repo, 'path'>)[]
   /** Settings has no ambient workspace to imply scope from, so it opens the
    *  Advanced section up front. In-workspace entry points leave it collapsed. */
   defaultAdvancedOpen?: boolean
@@ -53,9 +54,11 @@ type TerminalQuickCommandDialogProps = {
   onOpenChange: (open: boolean) => void
   /** Resolves whether the save landed; the dialog closes only then, so a refusal keeps the text. */
   onSave: (command: TerminalQuickCommand) => Promise<boolean> | boolean
+  /** Lets an opener whose trigger may be gone (a closed menu's row) choose where focus lands on close. */
+  onCloseAutoFocus?: (event: Event) => void
 }
 
-const EMPTY_REPOS: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[] = []
+const EMPTY_REPOS: (RepoMarkRepo & Pick<Repo, 'path'>)[] = []
 
 export function createTerminalQuickCommandDraft(
   scope: TerminalQuickCommandScope = { type: 'global' }
@@ -77,7 +80,8 @@ export function TerminalQuickCommandDialog({
   defaultAdvancedOpen = false,
   agentPromptMaxLength = null,
   onOpenChange,
-  onSave
+  onSave,
+  onCloseAutoFocus
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
   const t = useTranslate()
   const fallbackAgent: TuiAgent =
@@ -214,6 +218,7 @@ export function TerminalQuickCommandDialog({
       <DialogContent
         className="flex max-h-[min(90vh,52rem)] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
         showCloseButton={false}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle className="text-sm">

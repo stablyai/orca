@@ -1,9 +1,11 @@
 import { Suspense, type JSX } from 'react'
 import type { TopLevelView } from '../../../../shared/ui-chrome/ui-chrome-types'
+import { AgentCliUpdateCard } from '../../components/agent-cli-update/AgentCliUpdateCard'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { CodexSharedSettingsNoticeCard } from '../../components/terminal-pane/provider-notices/codex-settings/CodexSharedSettingsNoticeCard'
 import { NotificationCardStack } from '../../components/notifications/NotificationCardStack'
 import { StarNagCard } from '../../components/star-nag/StarNagCard'
+import { WorkspaceCleanupRunCard } from '../../components/workspace-cleanup/removal/run/WorkspaceCleanupRunCard'
 import { OverlayBoundary } from './app-root-surface-boundaries'
 
 const ChatUiHereCornerCard = lazy(() =>
@@ -43,6 +45,9 @@ export function AppNotificationCards({
           </OverlayBoundary>
         </Suspense>
       ) : null}
+      <OverlayBoundary boundaryId="overlay.agent-cli-update-card" resetKey={activeView}>
+        <AgentCliUpdateCard />
+      </OverlayBoundary>
       {shouldMountUpdateCard ? (
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.update-card" resetKey={activeView}>
@@ -55,6 +60,9 @@ export function AppNotificationCards({
           <UnexpectedSignoutCard />
         </OverlayBoundary>
       </Suspense>
+      <OverlayBoundary boundaryId="overlay.workspace-cleanup-run" resetKey={activeView}>
+        <WorkspaceCleanupRunCard />
+      </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
         <StarNagCard />
       </OverlayBoundary>

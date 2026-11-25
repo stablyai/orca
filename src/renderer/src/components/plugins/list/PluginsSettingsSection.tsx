@@ -14,6 +14,7 @@ import { PluginRemoveDialog } from '../dialogs/PluginRemoveDialog'
 import { PluginRollbackDialog } from '../dialogs/PluginRollbackDialog'
 import { PluginsHeaderActions } from './PluginSettingsMenu'
 import { PluginSettingsOverview } from './PluginSettingsOverview'
+import { RequiredPluginWarnings } from './RequiredPluginWarnings'
 import { PluginsAlphaNotice } from './PluginsAlphaNotice'
 import { PluginsSectionDescription } from './PluginsSectionDescription'
 import { getPluginsSectionPresentation } from '../../settings/plugins/plugins-search'
@@ -270,11 +271,13 @@ export function PluginsSettingsSection({
     }
   }
 
-  // Why: re-enabling resets the supervisor's restart budget, which is what "Restart" means here.
+  // Required plugins reset the supervisor without writing a disabled preference.
   const restart = async (pluginKey: string): Promise<void> => {
     setBusyPluginKeys((current) => new Set(current).add(pluginKey))
     try {
-      applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: false }))
+      if (!plugins.some((plugin) => plugin.pluginKey === pluginKey && plugin.requiredByTeam)) {
+        applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: false }))
+      }
       applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: true }))
     } catch (cause) {
       if (mountedRef.current) {
@@ -351,7 +354,12 @@ export function PluginsSettingsSection({
         />
       }
     >
-      {featureEnabled && page.openKey !== null ? null : <PluginsAlphaNotice />}
+      {featureEnabled && page.openKey !== null ? null : (
+        <>
+          <PluginsAlphaNotice />
+          <RequiredPluginWarnings />
+        </>
+      )}
       <PluginSettingsOverview
         featureEnabled={featureEnabled}
         settingsError={settingsError}

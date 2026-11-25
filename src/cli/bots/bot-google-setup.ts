@@ -129,7 +129,8 @@ export const BOT_GOOGLE_SETUP_HANDLERS: Record<string, CommandHandler> = {
       action: 'start',
       ...defined({
         mode: getOptionalStringFlag(context.flags, 'mode'),
-        browserPageId: getOptionalStringFlag(context.flags, 'page')
+        browserPageId: getOptionalStringFlag(context.flags, 'page'),
+        newApp: context.flags.has('new-app') ? true : undefined
       })
     })(context),
   'bot google-setup step': (context) =>

@@ -34,7 +34,8 @@ function closeQuietly(channel: ClientChannel | undefined): void {
 export function probeTcpForwarding(
   connection: Pick<SshConnection, 'getClient'>,
   port: number,
-  timeoutMs = TCP_FORWARDING_PROBE_TIMEOUT_MS
+  timeoutMs = TCP_FORWARDING_PROBE_TIMEOUT_MS,
+  host = '127.0.0.1'
 ): Promise<TcpForwardingVerdict> {
   const client = connection.getClient()
   if (!client) {
@@ -48,7 +49,7 @@ export function probeTcpForwarding(
       resolve(verdict)
     }
     try {
-      client.forwardOut('127.0.0.1', 0, '127.0.0.1', port, (error, channel) => {
+      client.forwardOut('127.0.0.1', 0, host, port, (error, channel) => {
         if (!error) {
           closeQuietly(channel)
           settle('allowed')

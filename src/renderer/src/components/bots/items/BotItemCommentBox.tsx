@@ -30,6 +30,7 @@ import type { NativeChatComposerInput } from '../../native-chat/composer/editor/
 import { useNativeChatComposerHandle } from '../../native-chat/composer/editor/use-native-chat-composer-handle'
 import { useNativeChatDraftEvents } from '../../native-chat/composer/editor/use-native-chat-draft-events'
 import type { NativeChatComposerHandle } from '../../native-chat/composer/native-chat-composer-types'
+import { composerQuoteTarget } from '../../native-chat/selection-quotes/NativeChatSelectionQuote'
 import { NativeChatImageAttachmentPreview } from '../../native-chat/attachments/chips/NativeChatImageAttachmentPreview'
 import { useNativeChatComposerAttachments } from '../../native-chat/attachments/chips/use-native-chat-composer-attachments'
 import { useNativeChatFileDrops } from '../../native-chat/attachments/intake/use-native-chat-file-drops'
@@ -46,7 +47,7 @@ import {
 import { imageReferencesToPromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
-import { botRefKey } from '@/lib/bot-hosts'
+import { botItemCommentDraftScope } from './bot-item-comment-draft'
 import { useKeepFloatingTerminalTriggerClear } from '../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
 import { BOT_ITEM_TOOL_ROW_TOUCH_FIT } from './BotItemStepper'
 import {
@@ -63,14 +64,14 @@ import {
   type BotItemCommentAttachTarget
 } from './use-bot-item-comment-attachments'
 
-export type BotItemCommentBoxHandle = {
+export type BotItemCommentBoxHandle = ReturnType<typeof composerQuoteTarget> & {
   focus: () => void
   /** Focus the box with the caret after its text, as when coming back to a draft. */
   focusEnd: () => void
   /** Focus the box and type `text` at its caret. */
   type: (text: string) => void
   /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
-   *  of its own, with "Replying to" hidden. */
+   *  of its own, with "Replying to" hidden; else as the answer, naming the question. */
   fill: (text: string, plain?: boolean) => void
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
@@ -97,6 +98,7 @@ function BotItemCommentField({
   nav,
   question,
   onShowQuestion,
+  describedBy,
   ref
 }: {
   bot: Bot
@@ -114,10 +116,12 @@ function BotItemCommentField({
   onShowQuestion?: (eventId: string) => void
   /** The item pane's previous / next arrows, between the attach and mic buttons. */
   nav?: React.ReactNode
+  /** The Activity entry this comment would answer, read with the box once Reply led there. */
+  describedBy?: string
   ref?: Ref<BotItemCommentBoxHandle>
 }): React.JSX.Element {
   const t = useTranslate()
-  const scopeKey = `bot-item-comment:${botRefKey(bot)}:${item.uid}`
+  const scopeKey = botItemCommentDraftScope(bot, item.uid)
   const ime = useImeEnterGestureOwnership()
   const { draft, setDraft, flushDraftAppends } = useNativeChatDraft(scopeKey, ime.isComposing)
   const [caret, setCaret] = useState(draft.length)
@@ -127,7 +131,7 @@ function BotItemCommentField({
   const composer = useRef<NativeChatComposerHandle | null>(null)
   useKeepFloatingTerminalTriggerClear(box)
   const dictation = useNativeChatDictation(input, false)
-  const access = useBotItemCommentAttachments(bot, item, attachTo)
+  const { session, blocked } = useBotItemCommentAttachments(bot, item, attachTo)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
   const { picker, mentions, commentSkills } = useBotItemCommentPickers({
     bot,
@@ -162,15 +166,14 @@ function BotItemCommentField({
     draftScopeKey: scopeKey,
     targetPtyId: null,
     terminalTabId: scopeKey,
-    structuredWorktreeId: access.session ? attachTo?.worktreeId : undefined,
-    structuredSession: access.session ?? undefined,
-    disabled: !access.session || hidden,
+    structuredWorktreeId: session ? attachTo?.worktreeId : undefined,
+    structuredSession: session ?? undefined,
+    disabled: !session || hidden,
     attachResolvedPaths: attachments.attachResolvedPaths,
     pendingChips: attachments.pendingChips,
     setNotice
   })
-  const { blocked } = access
-  const ownerOfSession = fileDrops.resolveAttachmentOwner
+  const { resolveAttachmentOwner: ownerOfSession } = fileDrops
   // Pastes say why nothing attaches where the item's chat can't take files.
   const resolveAttachmentOwner = useCallback(
     (): NativeChatAttachmentOwner =>
@@ -185,7 +188,7 @@ function BotItemCommentField({
     setDraft,
     setCaret,
     setActiveSuggestion,
-    targetKey: JSON.stringify([scopeKey, access.session?.sessionId]),
+    targetKey: JSON.stringify([scopeKey, session?.sessionId]),
     disabled: false,
     resolveAttachmentOwner,
     attachResolvedPaths: attachments.attachResolvedPaths,
@@ -232,15 +235,15 @@ function BotItemCommentField({
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
     focusEnd: caretToEnd,
+    ...composerQuoteTarget(composer),
     type: (typed) => void composer.current?.insertTypedText(typed),
     answer: () => {
       reply.show()
       composer.current?.focus({ caretAtEnd: true, glow: true })
     },
     fill: (text, plain) => {
-      if (plain) {
-        reply.hide()
-      }
+      const mark = plain ? reply.hide : reply.show
+      mark()
       setDraft(`${text} `)
       if (input.current) {
         input.current.value = `${text} `
@@ -314,11 +317,7 @@ function BotItemCommentField({
       keyDown(event)
     }
   })
-  const settle = (): void => {
-    if (input.current) {
-      events.onImeSettled(input.current)
-    }
-  }
+  const settle = () => input.current && events.onImeSettled(input.current)
   const editorCompositionStart = useLatestHandler(() => ime.setComposing(true))
   const editorCompositionEnd = useLatestHandler(() => {
     ime.setComposing(false)
@@ -388,7 +387,7 @@ function BotItemCommentField({
           </div>
         ) : null}
         <div className={cn('flex flex-wrap items-end gap-0.5', nav && BOT_ITEM_TOOL_ROW_TOUCH_FIT)}>
-          {access.session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
+          {session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
           <div ref={field} className={cn('min-w-0 flex-1', stacked && 'order-first basis-full')}>
             <NativeChatPromptEditor
               key={scopeKey}
@@ -399,6 +398,7 @@ function BotItemCommentField({
               initialValue={draft}
               disabled={false}
               aria-label={t('bots.items.comment.label', 'Comment')}
+              aria-describedby={describedBy}
               aria-expanded={mentions.autocomplete.mode !== 'none'}
               aria-controls={mentions.autocomplete.mode !== 'none' ? picker.listboxId : undefined}
               placeholder={reply.placeholder}

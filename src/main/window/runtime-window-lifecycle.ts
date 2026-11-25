@@ -55,6 +55,8 @@ export function registerRuntimeWindowLifecycle(
     botsChanged: (scope) => send('bots:changed', scope),
     orchestrationSessionWorkersChanged: (sessionId) =>
       send('runtime:orchestrationSessionWorkersChanged', { sessionId }),
+    peerMailReturned: () => send('runtime:peerMailReturned'),
+    mcpServersChanged: () => send('runtime:mcpServersChanged'),
     workspaceCleanupRunFinished: (run) => send('workspaceCleanup:runFinished', run),
     activateWorktree: (
       repoId,
@@ -164,6 +166,7 @@ export function registerRuntimeWindowLifecycle(
       requestAgentLaunchTabPublishFromRenderer(mainWindow, request),
     agentLaunchPaneVerdict: (event) => send('ui:agentLaunchPaneVerdict', event),
     rememberLaunchRecipe: (recipe) => send('ui:launchRecipe', recipe),
+    restartOffersChanged: () => send('agentStatus:restartOffersChanged', {}),
     resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
       send('agentStatus:legacyWorkerTerminalRecovery', {
         paneKey,

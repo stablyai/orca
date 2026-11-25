@@ -8,6 +8,12 @@ import { wslHostNotConnectedMessage } from './wsl-host-add-admission'
 import { wslHostStoppedMessage } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
 import { admitConnectToPendingHost } from './wsl-host-removal'
 import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
+import {
+  isWslHostIdleStopped,
+  pendingWslHostWake,
+  wakeWslHostAfterIdleStop
+} from './wsl-host-idle-stop'
+import { RUNTIME_IDLE_STOPPED_MESSAGE } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-stop-signal'
 
 export type WslHostRuntimeCallPort = {
   record: WslHostDeploymentRecord | null
@@ -25,6 +31,10 @@ export type WslHostRuntimeCallPort = {
   publishReady: (record: WslHostDeploymentRecord, connection: WslOrcadConnection) => void
   /** The same call again, once the distro is confirmed running. */
   retry: () => Promise<void>
+  /** The user asked for this call (a gesture, a focus, Start): only it wakes an idle-stopped host. */
+  wake?: boolean
+  /** A poll: refused while idle-stopped, never waiting on a wake. */
+  background?: boolean
 }
 
 /**
@@ -38,6 +48,9 @@ export async function ensureWslHostForRuntimeCall(
   const { record, connector, deps, parked } = port
   if (!record || !connector) {
     return
+  }
+  if (isWslHostIdleStopped(environmentId)) {
+    return wakeIdleStoppedHost(record, port)
   }
   const generation = port.readyGeneration()
   const reachability = await connector.reachability(record.distro, environmentId)
@@ -66,6 +79,27 @@ export async function ensureWslHostForRuntimeCall(
     throw settlingConnectFailure(record.distro)
   }
   await connector.connect(record.distro, { noBoot: true }).catch(rethrowRetryable(record.distro))
+}
+
+/** Orca stopped this host idle (#46567): only a user's call wakes it, booting the distro if needed. */
+async function wakeIdleStoppedHost(
+  record: WslHostDeploymentRecord,
+  port: WslHostRuntimeCallPort
+): Promise<void> {
+  const { environmentId, distro } = record
+  if (!port.wake) {
+    const pending = port.background ? null : pendingWslHostWake(environmentId)
+    if (!pending) {
+      throw wslHostRuntimeCallGuard(RUNTIME_IDLE_STOPPED_MESSAGE, 'idle')
+    }
+    return pending
+  }
+  assertWslHostRunAllowed(port.deps, port.removing, environmentId)
+  await admitConnectToPendingHost(port.deps.userDataPath(), record, false)
+  port.parked.delete(environmentId)
+  await wakeWslHostAfterIdleStop(environmentId, async () => {
+    await port.connector?.connect(distro).catch(rethrowRetryable(distro))
+  })
 }
 
 // verify-7: a keystroke met the stop before liveness did; parked silently, the pane died unexplained.
