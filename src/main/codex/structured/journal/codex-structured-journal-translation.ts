@@ -111,6 +111,7 @@ function createCodexTranslation(
       running.map((item) => items.seedRunning(threadId, turnId, item)),
     seedRunningOutput: (threadId, itemId, output) =>
       items.streams.seedText(threadId, itemId, output),
+    seedKeptTurns: (threadId, turns) => turnBoundaries.seedKept(threadId, turns),
     restoreThread: (threadId, thread) => {
       if (threadId === (deps.primaryThreadId?.() ?? null)) {
         readActivity = createCodexProviderActivityReader()

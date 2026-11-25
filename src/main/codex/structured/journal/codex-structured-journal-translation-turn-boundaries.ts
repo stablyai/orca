@@ -7,7 +7,8 @@ import {
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   CODEX_JOURNAL_ADMITTED,
-  type CodexJournalTranslationAdmission
+  type CodexJournalTranslationAdmission,
+  type CodexKeptTurnState
 } from './codex-structured-journal-contracts'
 import type { CodexJournalItems } from './codex-structured-journal-items'
 import { settleCodexJournalTurn } from './codex-structured-journal-settlement'
@@ -56,6 +57,8 @@ type TurnTerminal = {
 
 export class CodexJournalTurnBoundaries {
   private readonly recentTurns = new CodexJournalRecentTurns()
+  /** Turns a kept agent had finished at reattach (`thread\0turn`): their replayed start is old news. */
+  private readonly keptFinished = new Set<string>()
 
   constructor(
     private readonly deps: {
@@ -74,9 +77,20 @@ export class CodexJournalTurnBoundaries {
     }
   ) {}
 
+  /** The agent's own view at reattach; the replay that follows only fills in content. */
+  seedKept(threadId: string, turns: readonly CodexKeptTurnState[]): void {
+    for (const turn of turns) {
+      if (!turn.running) {
+        this.keptFinished.add(`${threadId}\u0000${turn.id}`)
+      } else if (!this.deps.activeTurns.has(threadId, turn.id)) {
+        this.deps.activeTurns.remember(threadId, turn.id)
+      }
+    }
+  }
+
   start(event: TurnBoundaryEvent): CodexJournalTranslationAdmission {
     const turnId = readCodexTurnId(event.params)
-    if (!turnId) {
+    if (!turnId || this.keptFinished.has(`${event.threadId}\u0000${turnId}`)) {
       return CODEX_JOURNAL_ADMITTED
     }
     const startedAt = this.receiptTime(event)
@@ -251,6 +265,7 @@ export class CodexJournalTurnBoundaries {
   }
 
   clear(): void {
+    this.keptFinished.clear()
     this.deps.activeTurns.clear()
     this.recentTurns.clear()
     this.deps.commands.clear()

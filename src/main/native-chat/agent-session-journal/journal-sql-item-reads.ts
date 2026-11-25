@@ -35,7 +35,6 @@ import { readJournalDomainRestartCut, type JournalRestartCut } from './journal-s
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { ClaudeJournalSnapshot } from '../../claude/subagents/claude-subagent-journaled-identities'
 import { readJournalDomainClaudeIdentities } from './journal-sql-claude-identities'
-import { readJournalDomainRunningSubagents } from './journal-sql-running-subagents'
 import type {
   JournalSqlLifecycleRead,
   JournalSqlLifecycleReadResult
@@ -57,7 +56,6 @@ export type JournalSqlItemRead =
   | { kind: 'context-usage' }
   | { kind: 'thread-goal-source' }
   | { kind: 'claude-snapshot' }
-  | { kind: 'running-subagents' }
   | { kind: 'named-turn'; turnId: string }
   | { kind: 'message-options'; clientMessageId: string }
   | JournalContinuationRead
@@ -74,7 +72,6 @@ export type JournalSqlItemReadResult =
   | { kind: 'context-usage'; usage: AgentSessionContextUsage }
   | { kind: 'thread-goal-source'; source: JournalThreadGoalSource }
   | { kind: 'claude-snapshot'; snapshot: ClaudeJournalSnapshot }
-  | { kind: 'running-subagents'; running: ReturnType<typeof readJournalDomainRunningSubagents> }
   | { kind: 'named-turn'; turn: JournalNamedTurn }
   | { kind: 'message-options'; options: JournalMessageOptions }
   | JournalContinuationReadResult
@@ -230,8 +227,6 @@ export function readJournalDomainItems(
       }
     case 'thread-goal-source':
       return { kind: 'thread-goal-source', source: readThreadGoal(db, prefix) }
-    case 'running-subagents':
-      return { kind: 'running-subagents', running: readJournalDomainRunningSubagents(db, prefix) }
   }
 }
 

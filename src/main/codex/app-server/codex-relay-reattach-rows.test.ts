@@ -14,9 +14,10 @@ import { createCodexJournalTranslator } from '../structured/journal/codex-struct
 import {
   restateKeptCodexBackgroundWork,
   seedCarriedKeptCodexCommands,
-  seedKeptCodexCommandOutput,
-  seedKeptCodexTurnOrdinals
+  seedKeptCodexCommandOutput
 } from '../structured/threads/codex-kept-turn-ordinals'
+import { readKeptCodexSnapshot } from '../structured/threads/codex-kept-snapshot'
+import { readRecord } from './codex-item-field-readers'
 import { CodexBackgroundTaskTracker } from '../structured/background-work/codex-background-task-tracker'
 import { CodexTurnOrdinals } from '../structured/journal/codex-turn-ordinals'
 import {
@@ -391,65 +392,69 @@ describe('codex rows across a reattach', () => {
     expect(row).not.toContain('line-one\\nline-one')
   })
 
-  it("numbers a kept chat's and its subagents' running turns as the live run did", async () => {
-    const turns: Record<string, unknown> = {
+  it("rebuilds a kept chat from the agent's own state: finished turns stay finished, children stay reachable", async () => {
+    const latest: Record<string, unknown> = {
       main: {
-        id: 'turn-1',
-        status: 'inProgress',
+        id: 'turn-2',
+        status: 'completed',
         items: [
-          { type: 'userMessage', id: 'u1' },
-          { type: 'commandExecution', id: 'c1' },
-          { type: 'agentMessage', id: 'm1' },
-          { type: 'collabAgentToolCall', id: 'x', tool: 'spawnAgent', receiverThreadIds: ['sub'] }
+          { type: 'userMessage', id: 'u2' },
+          { type: 'agentMessage', id: 'm2' }
         ]
       },
-      sub: { id: 'turn-s', status: 'inProgress', items: [{ type: 'agentMessage', id: 's1' }] },
       // Spawned in an earlier parent turn: only the daemon's carried turns name it.
-      older: { id: 'turn-o', status: 'completed', items: [{ type: 'agentMessage', id: 'o1' }] }
+      child: { id: 'turn-c', status: 'inProgress', items: [{ type: 'agentMessage', id: 'c1' }] }
     }
-    const ordinals = new CodexTurnOrdinals()
-    await seedKeptCodexTurnOrdinals({
-      connection: {
-        request: async (_method, params) => ({ data: [turns[String(params?.threadId)]] })
-      },
-      translator: {
-        seedTurnOrdinals: (threadId, turnId, ids) =>
-          ids.forEach((id) => ordinals.ordinalFor(threadId, turnId, id)),
-        seedRunningItems: () => []
-      },
-      threadId: 'main',
-      carriedThreadIds: ['older'],
-      timeoutMs: 1_000
-    })
-    // A replayed message keeps its number; the next new one follows, never taking an earlier row.
-    expect(ordinals.ordinalFor('main', 'turn-1', 'm1')).toBe(1)
-    expect(ordinals.ordinalFor('main', 'turn-1', 'm2')).toBe(2)
-    expect(ordinals.ordinalFor('sub', 'turn-s', 's2')).toBe(1)
-    expect(ordinals.ordinalFor('older', 'turn-o', 'o2')).toBe(1)
-  })
-
-  it('registers a subagent spawned before the reattach, so Stop still reaches its running turn', () => {
-    const tracker = new CodexBackgroundTaskTracker('main')
-    const spawn = {
-      threadId: 'main',
-      turnId: 'turn-1',
-      item: {
-        type: 'collabAgentToolCall',
-        id: 'x',
-        tool: 'spawnAgent',
-        status: 'completed',
-        receiverThreadIds: ['sub']
+    const request = async (method: string, params?: unknown) => {
+      const threadId = String(readRecord(params).threadId)
+      if (method === 'thread/read') {
+        const spawn = { parent_thread_id: 'main' }
+        return { thread: { id: threadId, source: { subAgent: { thread_spawn: spawn } } } }
       }
+      return { data: [latest[threadId]] }
     }
-    restateKeptCodexBackgroundWork(
-      tracker,
-      [{ threadId: 'sub', turnId: 'turn-s', status: 'inProgress', items: [] }],
-      [],
-      [],
-      [spawn]
-    )
-    expect(tracker.subagentStopTargets(['sub']).turns).toEqual([
-      { threadId: 'sub', turnId: 'turn-s' }
+    const rows = new Map<string, string>()
+    const translator = createCodexJournalTranslator({
+      sessionId: 's',
+      primaryThreadId: () => 'main',
+      sink: {
+        appendItem: (identity, body) =>
+          rows.set(agentJournalItemKey(identity), JSON.stringify(body)),
+        appendTombstone: (identity) => rows.delete(agentJournalItemKey(identity)),
+        publish: () => {}
+      }
+    })
+    const { turns, spawns } = await readKeptCodexSnapshot({
+      connection: { request },
+      translator,
+      threadId: 'main',
+      carriedThreadIds: ['child'],
+      timeoutMs: 1_000,
+      onError: () => {}
+    })
+    const tracker = new CodexBackgroundTaskTracker('main')
+    restateKeptCodexBackgroundWork(tracker, turns, [], [], spawns)
+    // The replay re-sends the finished turn from its start: it must not reopen it.
+    const send = (threadId: string, method: string, params: Record<string, unknown>) =>
+      translator.handle({
+        type: 'notification',
+        sessionId: 's',
+        threadId,
+        method,
+        params: { threadId, ...params }
+      })
+    send('main', 'turn/started', { turn: { id: 'turn-2', status: 'inProgress' } })
+    send('main', 'item/completed', {
+      turnId: 'turn-2',
+      item: { type: 'agentMessage', id: 'm2', text: 'done' }
+    })
+    translator.flush()
+    expect([...rows.values()].some((body) => body.includes('"state":"running"'))).toBe(false)
+    // Its message keeps the row the live run gave it.
+    expect(rows.has('codex:main:turn-2:1')).toBe(true)
+    // The child is registered under its parent, so Stop interrupts its running turn.
+    expect(tracker.subagentStopTargets(['child']).turns).toEqual([
+      { threadId: 'child', turnId: 'turn-c' }
     ])
   })
 

@@ -1,158 +1,23 @@
-import { JOURNAL_RUNNING_SUBAGENTS_MAX } from '../../../native-chat/agent-session-journal/journal-running-subagents'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
-import { readCodexTurnStatus } from '../../app-server/codex-structured-thread-facts'
-import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { jsonObject } from '../../../../shared/json-stream/json-value-property'
-import {
-  codexNonMessageIdentity,
-  isCodexMessageItemType,
-  readCodexThreadItem,
-  type CodexThreadItem
-} from '../items/codex-thread-item-identity'
+import { codexNonMessageIdentity, type CodexThreadItem } from '../items/codex-thread-item-identity'
 import type { CodexBackgroundTaskTracker } from '../background-work/codex-background-task-tracker'
-import {
-  CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE,
-  readReceiverThreadIds
-} from '../items/codex-collab-agent-tool-call'
-
-/** The chat's own thread and every running child the journal can name. */
-const MAX_SEEDED_THREADS = 1 + JOURNAL_RUNNING_SUBAGENTS_MAX
-
-async function latestTurn(
-  connection: Pick<CodexAppServerConnection, 'request'>,
-  threadId: string,
-  timeoutMs: number
-): Promise<Record<string, unknown> | null> {
-  const page = readRecord(
-    await connection.request(
-      'thread/turns/list',
-      { threadId, sortDirection: 'desc', limit: 1, itemsView: 'full' },
-      { timeoutMs }
-    )
-  )
-  return Array.isArray(page.data) ? readRecord(page.data[0]) : null
-}
-
-/**
- * A reattached agent's latest turns replay or go on, but this app's message ordinals start empty,
- * so a turn's next message would take an earlier one's row. Each latest turn (the chat's and its
- * subagents') is numbered from Codex's own history first, as the live run numbered it.
- */
-export async function seedKeptCodexTurnOrdinals(input: {
-  connection: Pick<CodexAppServerConnection, 'request'>
-  translator: Pick<CodexJournalTranslator, 'seedTurnOrdinals' | 'seedRunningItems'>
-  threadId: string
-  /** Threads the daemon saw a turn of open or end (a subagent spawned in an earlier turn too). */
-  carriedThreadIds?: readonly string[]
-  timeoutMs: number
-  onError?: (threadId: string, error: unknown) => void
-}): Promise<KeptCodexTurn[]> {
-  const queue = [input.threadId, ...(input.carriedThreadIds ?? [])]
-  const seen = new Set<string>()
-  const fetched: KeptCodexTurn[] = []
-  for (
-    let threadId = queue.shift();
-    threadId !== undefined && seen.size < MAX_SEEDED_THREADS;
-    threadId = queue.shift()
-  ) {
-    if (seen.has(threadId)) {
-      continue
-    }
-    seen.add(threadId)
-    // Unnumbered, the chat's replay would take its saved messages' rows, so its open fails instead.
-    const turn = await latestTurn(input.connection, threadId, input.timeoutMs).catch(
-      (error: unknown) => {
-        if (threadId === input.threadId) {
-          throw error
-        }
-        input.onError?.(threadId, error)
-        return null
-      }
-    )
-    if (!turn || typeof turn.id !== 'string') {
-      continue
-    }
-    const items = (Array.isArray(turn.items) ? turn.items : []).flatMap(
-      (value) => readCodexThreadItem(value) ?? []
-    )
-    const status = readCodexTurnStatus(turn)
-    const kept: KeptCodexTurn = { threadId, turnId: turn.id, status, items }
-    fetched.push(kept)
-    // A command still running (a background one outlives its turn) streams on after the reattach.
-    const running = items.filter(
-      (item) => item.type === 'commandExecution' && item.status === 'inProgress'
-    )
-    const identities = input.translator.seedRunningItems(threadId, turn.id, running)
-    kept.running = running.map((item, i) => ({
-      itemId: item.id,
-      identity: identities[i]!
-    }))
-    // A subagent spawned in a finished turn can still be running, so every spawn is followed.
-    for (const item of items) {
-      if (item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE) {
-        queue.push(...readReceiverThreadIds(item))
-      }
-    }
-    // A turn that finished while detached still replays its last messages, numbered as live.
-    input.translator.seedTurnOrdinals(
-      threadId,
-      turn.id,
-      items.filter((item) => isCodexMessageItemType(item.type)).map((item) => item.id)
-    )
-  }
-  return fetched
-}
+import { CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE } from '../items/codex-collab-agent-tool-call'
 
 /** A subagent spawn as the tracker observes it. */
 export type KeptCodexSpawn = { threadId: string; turnId: string; item: CodexThreadItem }
 
-/**
- * Children the journal saved a still-open turn for, announced as their spawns: the spawn itself was
- * acked before the restart, so without this they'd never register and Stop would miss them.
- */
-export async function keptCodexSubagentSpawns(
-  primaryThreadId: string,
-  journal: {
-    reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'runningSubagents'>
-  } | null
-): Promise<KeptCodexSpawn[]> {
-  // A chat with no history journal has none to name; past the cap the oldest go unnamed.
-  const read = await journal?.reads.runningSubagents()
-  if (read?.more) {
-    console.warn('[codex] a reattach names only the most recently active running subagents')
-  }
-  const running = read?.subagents ?? []
-  return running.map(({ agentId, parentAgentId }) => ({
-    threadId: parentAgentId ?? primaryThreadId,
-    turnId: '',
-    item: {
-      type: CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE,
-      id: `journal-subagent:${agentId}`,
-      tool: 'spawnAgent',
-      status: 'completed',
-      receiverThreadIds: [agentId]
-    }
-  }))
-}
-
-/**
- * Threads beside the chat's own whose latest turn may replay: those the daemon carried a turn of
- * (open or ended), then every child the journal saved a running turn for (found after a crash too).
- */
+/** Threads beside the chat's own whose turns the daemon carried (open or ended), after a crash too. */
 export function keptCodexThreadIds(
-  relay: Pick<NonNullable<CodexAppServerConnection['relay']>, 'openWork' | 'endedWork'> | undefined,
-  spawns: readonly KeptCodexSpawn[]
+  relay: Pick<NonNullable<CodexAppServerConnection['relay']>, 'openWork' | 'endedWork'> | undefined
 ): string[] {
-  return [
-    ...[...(relay?.openWork()?.turn ?? []), ...(relay?.endedWork()?.turn ?? [])].flatMap(
-      ([threadId]) => threadId ?? []
-    ),
-    ...spawns.flatMap(({ item }) => readReceiverThreadIds(item))
-  ]
+  return [...(relay?.openWork()?.turn ?? []), ...(relay?.endedWork()?.turn ?? [])].flatMap(
+    ([threadId]) => threadId ?? []
+  )
 }
 
 /** Each thread's latest turn as Codex reported it at reattach. */
