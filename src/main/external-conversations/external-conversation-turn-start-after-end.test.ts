@@ -37,7 +37,9 @@ function endedTurn(
   begin: (
     chats: ChatTurns,
     show: (next: Row) => void,
-    hostRuns: (next: string, waits?: boolean) => void
+    hostRuns: (next: string, waits?: boolean) => void,
+    end: () => void,
+    put: (next: Row) => void
   ) => void = told
 ) {
   const events: ConversationEvent[] = []
@@ -71,20 +73,30 @@ function endedTurn(
     chats.observe(paneKey)
   }
   const starts = () => events.flatMap((event) => (event.kind === 'turn-started' ? [event.at] : []))
-  begin(chats, show, (next, waits = false) => {
-    opener = next
-    waiting = waits
-  })
+  // The host's turn end; its answer is still being read.
+  const end = () =>
+    chats.news({
+      kind: 'turn-ended',
+      sessionId,
+      outcome: 'success',
+      readTurn: () => new Promise<EndedChatTurn>(() => {}),
+      at: ENDED
+    })
+  begin(
+    chats,
+    show,
+    (next, waits = false) => {
+      opener = next
+      waiting = waits
+    },
+    end,
+    (next) => {
+      row = next
+    }
+  )
   waiting = false
-  chats.news({
-    kind: 'turn-ended',
-    sessionId,
-    outcome: 'success',
-    // The answer is still being read.
-    readTurn: () => new Promise<EndedChatTurn>(() => {}),
-    at: ENDED
-  })
-  return { chats, show, starts }
+  end()
+  return { chats, show, starts, end }
 }
 
 describe('a chat turn’s status row after the turn ended', () => {
@@ -174,5 +186,50 @@ describe('a chat turn’s status row after the turn ended', () => {
       } as unknown as AgentStatusIpcPayload)
     ).toBe(true)
     expect(chats.turnOf(paneKey)).toBe(ENDED - 1_000)
+  })
+
+  it('tells the host’s next turn after a turn the conversation took over mid-run', () => {
+    const { show, starts } = endedTurn((chats, show, hostRuns, _end, put) => {
+      // A new watch takes over the running turn from its row.
+      put({ state: 'working', stateStartedAt: HANDED_OVER })
+      chats.adopt(paneKey)
+      // The host ends it and begins the next before the end is heard.
+      hostRuns('send-b')
+      show({ state: 'working', stateStartedAt: ENDED + 100 })
+    })
+    show({ state: 'working', stateStartedAt: ENDED + 100 })
+    expect(starts()).toEqual([ENDED + 100])
+  })
+
+  it('stays in step after a watch gap in which a turn ended unheard', () => {
+    const { show, starts } = endedTurn((chats, show, hostRuns) => {
+      told(chats, show)
+      // The watch goes; the turn's end is not heard. The next turn runs once a watch is back.
+      chats.clear()
+      hostRuns('send-c')
+      show({ state: 'working', stateStartedAt: ENDED - 3_000 })
+    })
+    expect(starts()).toEqual([SENT, ENDED - 3_000])
+    // That turn ended: its own row read again is no new turn.
+    show({ state: 'working', stateStartedAt: ENDED - 3_000 })
+    expect(starts()).toEqual([SENT, ENDED - 3_000])
+  })
+
+  it('stays in step when a turn told before the last end is told again', () => {
+    const { show, starts, end } = endedTurn((chats, show, hostRuns) => {
+      told(chats, show)
+      hostRuns('send-b', true)
+      show({ state: 'working', stateStartedAt: ENDED - 1_000 })
+    })
+    // The end heard was the turn before; the follow-up is told again from its row, then ends.
+    show({ state: 'working', stateStartedAt: ENDED - 1_000 })
+    end()
+    show({ state: 'working', stateStartedAt: ENDED - 1_000 })
+    // The turn after it ends too: its own row read again is no new turn either.
+    show({ state: 'done', stateStartedAt: ENDED })
+    show({ state: 'working', stateStartedAt: ENDED + 5_000 })
+    end()
+    show({ state: 'working', stateStartedAt: ENDED + 5_000 })
+    expect(starts()).toEqual([SENT, ENDED - 1_000, ENDED - 1_000, ENDED + 5_000])
   })
 })

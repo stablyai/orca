@@ -21,6 +21,10 @@ export class TurnDates {
   /** A new turn begins on this date: the ended turn's dates no longer matter. */
   started(paneKey: string, at: number, opener?: string | null): void {
     const before = this.open.get(paneKey)
+    // The open turn told again under its own date: still that turn.
+    if (before?.includes(at)) {
+      return
+    }
     if (before) {
       this.replaced.set(paneKey, before)
     }
@@ -88,6 +92,13 @@ export class TurnDates {
     this.replaced.delete(paneKey)
     this.openers.delete(paneKey)
     this.ended.delete(paneKey)
+  }
+
+  /** A watch went: no open turn is followed across the gap, but ended turns stay ended. */
+  gap(): void {
+    this.open.clear()
+    this.openers.clear()
+    this.replaced.clear()
   }
 
   clear(): void {
