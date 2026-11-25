@@ -2,7 +2,7 @@
 // server (its HTTP address, through Orca's relay when Orca holds the sign-in, or its command). A
 // server that's off for the session answers as one with no tools and stays up, so the agent never
 // shows it failing. Each message is forwarded as it arrives: the agent's stdio may cross WSL interop.
-import type { McpServerConnection } from '../../shared/mcp-servers/mcp-servers'
+import type { McpServerConnection } from '../../../shared/mcp-servers/mcp-servers'
 import {
   StreamableHTTPClientTransport,
   StreamableHTTPError
@@ -11,7 +11,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, type JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js'
 import { spawnProcess } from '@orca/process-host'
-import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
+import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 
 type Connect = () => Promise<McpServerConnection>
 type HttpConnection = Extract<McpServerConnection, { url: string }>
