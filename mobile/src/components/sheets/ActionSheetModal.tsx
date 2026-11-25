@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react'
-import { ActivityIndicator, View, Text } from 'react-native'
+import { ActivityIndicator, Pressable, View, Text } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -37,6 +37,8 @@ type Props = {
   /** Puts destructive actions in their own group below the rest. */
   groupDestructive?: boolean
   actions: ActionSheetAction[]
+  /** A centred Cancel row in its own group, for a question that must offer a way out. */
+  cancelLabel?: string
   onClose: () => void
   /** Runs once the sheet has slid away, after any closeBeforePress action. */
   onAfterClose?: () => void
@@ -61,6 +63,7 @@ type ContentProps = {
   /** Drawn between the header and the actions. */
   children?: ReactNode
   actions: ActionSheetAction[]
+  cancelLabel?: string
   onClose?: () => void
 }
 
@@ -72,6 +75,7 @@ export function ActionSheetContent({
   groupDestructive = false,
   children,
   actions,
+  cancelLabel,
   onClose
 }: ContentProps) {
   useMobileColorScheme()
@@ -167,6 +171,17 @@ export function ActionSheetContent({
           })}
         </ListGroup>
       ))}
+      {cancelLabel && onClose ? (
+        <ListGroup style={groups.length > 0 ? styles.laterGroup : undefined}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onClose}
+            style={({ pressed }) => [styles.cancelRow, pressed && styles.cancelPressed]}
+          >
+            <Text style={styles.cancelLabel}>{cancelLabel}</Text>
+          </Pressable>
+        </ListGroup>
+      ) : null}
     </>
   )
 }
@@ -179,6 +194,7 @@ export function ActionSheetModal({
   headerIcon,
   groupDestructive,
   actions,
+  cancelLabel,
   onClose,
   onAfterClose
 }: Props) {
@@ -214,6 +230,7 @@ export function ActionSheetModal({
         headerIcon={headerIcon}
         groupDestructive={groupDestructive}
         actions={sequencedActions}
+        cancelLabel={cancelLabel}
         onClose={onClose}
       />
     </BottomDrawer>
@@ -252,5 +269,9 @@ const styles = themedStyleSheet(() => ({
   subjectText: { flex: 1, minWidth: 0, gap: 2 },
   subjectTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
   subjectMessage: { fontSize: 13, color: colors.textSecondary },
-  laterGroup: { marginTop: spacing.md }
+  laterGroup: { marginTop: spacing.md },
+  // A ListRow's 48 pt and 15 pt title, centred: the row answers the sheet rather than naming a thing.
+  cancelRow: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  cancelPressed: { backgroundColor: colors.translucentFill },
+  cancelLabel: { fontSize: 15, color: colors.textPrimary }
 }))

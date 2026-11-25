@@ -101,16 +101,5 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
   markdownEditor: {
     flex: 1,
     position: 'relative'
-  },
-  markdownState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.md
-  },
-  markdownError: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
   }
 }))

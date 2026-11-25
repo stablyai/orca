@@ -81,10 +81,7 @@ function startDocumentOrGiveTheHostBack(host: HTMLElement, hooks: RichMarkdownWe
       // Use page modal: both shells lack prompt delegate and return null, so Link/Image otherwise do nothing.
       promptForUrl: hooks.promptForUrl,
 
-      loadImageSource: hooks.loadImageSource,
-
-      // Omit inset source: document and screen read same visualViewport formula, and reporting twice double-lifts screen bar.
-      keyboardInsetSource: () => null
+      loadImageSource: hooks.loadImageSource
     })
   } catch (error) {
     host.innerHTML = ''
