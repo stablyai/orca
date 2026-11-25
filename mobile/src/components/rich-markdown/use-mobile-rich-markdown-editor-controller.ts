@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { normalizeMobileRichMarkdownKeyboardInset } from './mobile-rich-markdown-editor-keyboard-inset'
 import type {
   MobileRichMarkdownCommand,
   MobileRichMarkdownEditorMessage,
@@ -36,7 +35,7 @@ export function useMobileRichMarkdownEditorController({
   content,
   editable,
   onChange,
-  onKeyboardInsetChange,
+  onFormatStateChange,
   onOpenLink,
   transport
 }: MobileRichMarkdownEditorProps & { transport: MobileRichMarkdownEditorTransport }) {
@@ -65,11 +64,6 @@ export function useMobileRichMarkdownEditorController({
     }
   }, [editable, transport])
 
-  // Clear the inset on unmount so the Save/Discard bar settles after the tab closes.
-  useEffect(() => {
-    return () => onKeyboardInsetChange?.(0)
-  }, [onKeyboardInsetChange])
-
   const handleMessage = useCallback(
     (message: Partial<MobileRichMarkdownEditorMessage>) => {
       if (message.type === 'ready') {
@@ -94,14 +88,11 @@ export function useMobileRichMarkdownEditorController({
         }
         return
       }
-      if (message.type === 'keyboardInset' && typeof message.bottom === 'number') {
-        const bottom = normalizeMobileRichMarkdownKeyboardInset(message.bottom)
-        if (bottom !== null) {
-          onKeyboardInsetChange?.(bottom)
-        }
+      if (message.type === 'formatState' && Array.isArray(message.active)) {
+        onFormatStateChange?.({ focused: message.focused === true, active: message.active })
       }
     },
-    [applyContent, content, editable, onChange, onKeyboardInsetChange, onOpenLink, transport]
+    [applyContent, content, editable, onChange, onFormatStateChange, onOpenLink, transport]
   )
 
   const runCommand = useCallback(

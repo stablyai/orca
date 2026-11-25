@@ -19,13 +19,19 @@ export type MobileRichMarkdownEditorMessage =
   | { type: 'ready' }
   | { type: 'change'; markdown: string; generation: number }
   | { type: 'openLink'; url: string }
-  | { type: 'keyboardInset'; bottom: number }
+  | { type: 'formatState'; focused: boolean; active: MobileRichMarkdownCommand[] }
+
+/** Whether the editor has focus, and the toolbar commands whose style is under the caret. */
+export type MobileRichMarkdownFormatState = {
+  focused: boolean
+  active: readonly MobileRichMarkdownCommand[]
+}
 
 export type MobileRichMarkdownEditorProps = {
   content: string
   editable: boolean
   onChange: (content: string) => void
-  onKeyboardInsetChange?: (bottom: number) => void
+  onFormatStateChange?: (state: MobileRichMarkdownFormatState) => void
   onOpenLink: (url: string) => void
 }
 

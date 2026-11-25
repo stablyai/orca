@@ -196,17 +196,18 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     }
   }, [discardMarkdownTarget, draftScope, readMarkdownTab])
 
+  // Resolves true only when this save landed and nothing newer replaced it, so Leave can trust it.
   const saveMarkdownTab = useCallback(
-    async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
+    async (tab: Extract<MobileSessionTab, { type: 'markdown' }>): Promise<boolean> => {
       if (!client) {
-        return
+        return false
       }
       const current = markdownDocs.get(tab.id)
       if (current?.status !== 'ready' || current.saving || !current.editable) {
-        return
+        return false
       }
       if (markdownSaveInFlightRef.current.has(tab.id)) {
-        return
+        return false
       }
       markdownSaveInFlightRef.current.add(tab.id)
       const saveSeq = (markdownSaveSeqRef.current.get(tab.id) ?? 0) + 1
@@ -232,7 +233,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
         })
         const result = markdownTabSave.interpret(response)
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
-          return
+          return false
         }
         setMarkdownDocs((prev) => {
           const existing = prev.get(tab.id)
@@ -253,6 +254,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
         dropDocumentEditDraft(markdownTabDraftKey(draftScope, tab.id))
         triggerSuccess()
         showToast(translate('session.useMarkdownActions.saved', 'Saved'))
+        return true
       } catch (error) {
         triggerError()
         const message =
@@ -260,7 +262,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
             ? error.message
             : translate('session.useMarkdownActions.saveFailed', 'Save failed')
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
-          return
+          return false
         }
         setMarkdownDocs((prev) => {
           const existing = prev.get(tab.id)
@@ -274,12 +276,14 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
             saveError: message || translate('session.useMarkdownActions.saveFailed', 'Save failed')
           })
         })
+        return false
       } finally {
         markdownSaveInFlightRef.current.delete(tab.id)
       }
     },
     [client, draftScope, markdownDocs, showToast, worktreeId]
   )
+
   return {
     updateMarkdownLocalContent,
     copyMarkdownText,
