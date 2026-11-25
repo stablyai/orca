@@ -163,3 +163,20 @@ it('drops a failure once its task is completed, and re-reads when it is', async 
     unsubscribe()
   }
 })
+
+it('re-reads when a task completes whose failed dispatch was already settled', async () => {
+  const done = task()
+  const failed = dispatch(done)
+  settle(failed, 'failed', HOUR)
+  db.db.prepare("UPDATE dispatch_contexts SET status = 'failed' WHERE id = ?").run(failed)
+  const emit = vi.fn<(snapshot: ReturnType<typeof readWorkerDock>) => void>()
+  const unsubscribe = subscribeWorkerDock(db, party, emit, undefined, true, true)
+  try {
+    expect(emit.mock.lastCall?.[0].identities.map((row) => row.dispatchId)).toEqual([failed])
+    db.updateTaskStatus(done, 'completed', 'finished by a new task')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(emit.mock.lastCall?.[0].identities).toEqual([])
+  } finally {
+    unsubscribe()
+  }
+})
