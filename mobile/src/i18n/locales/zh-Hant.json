@@ -1213,7 +1213,7 @@
       "pairingInvalid": "配對已失效，請重新與電腦配對",
       "rePairDetail": "重新與電腦配對",
       "reconnecting": "正在重新連線…",
-      "relayAccessExpired": "{{host}} 的 Relay 存取權已到期",
+      "relayAccessRefused": "Relay 拒絕了對 {{host}} 的存取",
       "relayConnectFailed": "無法透過 Relay 連線",
       "relayUnreachable": "無法連上 Relay",
       "signInDetail": "在電腦上登入 Orca 即可重新連線",

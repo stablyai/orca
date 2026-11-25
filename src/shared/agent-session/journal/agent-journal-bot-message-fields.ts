@@ -11,6 +11,9 @@ export type AgentJournalConnectorDelivery = {
   carried?: string[]
 }
 
+/** A returned queued message a connector message carries, as Retry addresses it. */
+export type AgentJournalCarriedCard = { messageId: string; fingerprint: string }
+
 /** A continuation's claim on the requests a cut owed (Phase 1): the cut it continues (a turn's or a
  *  send's id) and the deliveries that cut answered, as their own stamps. Which rows it holds is
  *  what its admission committed (journal_connector_replies.claim_message_id), never this list. */
@@ -48,6 +51,13 @@ export type AgentJournalBotMessageFields = {
    *  answer or a truthful outcome through the reply outbox. Kept across a queued edit. Host-written,
    *  never sent to the agent. */
   connectorDelivery?: AgentJournalConnectorDelivery
+  /** Queued messages of the same conversation that failed to start and this message carries into its
+   *  turn, by the content they had when read: its admission settles them, or refuses if any changed.
+   *  Host-written, never sent to the agent. */
+  carriedCards?: AgentJournalCarriedCard[]
+  /** Who asked each message carried in, its own carried ones included; null for one Orca can't
+   *  name. The turn acts for the least trusted of them. Host-written, never sent to the agent. */
+  carriedAskers?: (ConnectorMessageAsker | null)[]
   /** On a continuation Orca sends after a cut: the requests it answers in the cut's place.
    *  Host-written, never sent to the agent. */
   connectorClaim?: AgentJournalConnectorClaim

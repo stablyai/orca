@@ -24,6 +24,7 @@ import {
   stripRetiredGlobalSettings
 } from '../../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../../applying-settings/onboarding-normalization'
+import { normalizeDefaultTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeMachineName } from '../../../../shared/remote-runtime/host-metadata/machine-name'
 import { normalizeWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { replaceRetiredSpeechModelId } from '../../../speech/model-catalog'
@@ -95,6 +96,7 @@ export function normalizeLoadedGlobalSettings(
       stripRetiredGlobalSettings(parsed.settings),
       defaults.settings
     ),
+    defaultTuiAgent: normalizeDefaultTuiAgent(parsed.settings?.defaultTuiAgent),
     agentDefaultSurface: normalizeAgentDefaultSurface(parsed.settings?.agentDefaultSurface),
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       parsed.settings?.nativeChatAppearance

@@ -8,11 +8,10 @@ import {
   titleHasAgentName
 } from './agent-name-token-match'
 import { containsAgentSpinnerGlyph } from './agent-title-glyphs'
-import { isCursorAgentTitle, isGeminiTerminalTitle } from './agent-title-core'
+import { isCursorAgentTitle } from './agent-title-core'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
 import { isDeepSeekBuildTerminalTitle } from './providers/dsb-terminal-title'
 
-export { isGeminiTerminalTitle } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './providers/opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
@@ -110,7 +109,7 @@ function computeAgentLabel(title: string): string | null {
   if (piBrand) {
     return piBrand
   }
-  // Why before Gemini: see isDshTerminalTitle — the two share the `✦` glyph.
+  // Why before Qoder/DSB: see isDshTerminalTitle — they share the `✦` glyph.
   if (isDshTerminalTitle(title)) {
     return 'DeepSeek Harness'
   }
@@ -120,9 +119,6 @@ function computeAgentLabel(title: string): string | null {
   // Why: the DSB matcher distinguishes native prefixes from glyphs inside task text.
   if (isDeepSeekBuildTerminalTitle(title)) {
     return 'DeepSeek Build'
-  }
-  if (isGeminiTerminalTitle(title)) {
-    return 'Gemini CLI'
   }
   // Pi-compatible synthetic identities must win over generic braille heuristics.
   const piCompatibleSyntheticAgentLabel = getPiCompatibleSyntheticAgentLabel(title)
@@ -198,7 +194,6 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   'Qoder CLI': 'qoder',
   'Qoder CLI CN': 'qoder-cn',
   'Qoder CLI China': 'qoder-cn',
-  'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',
   Grok: 'grok',
   Devin: 'devin',

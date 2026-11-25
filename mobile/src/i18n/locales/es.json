@@ -1259,7 +1259,7 @@
       "pairingInvalid": "Emparejamiento no válido — vuelve a emparejar tu escritorio",
       "rePairDetail": "Vuelve a emparejar tu escritorio.",
       "reconnecting": "Reconectando…",
-      "relayAccessExpired": "El acceso a {{host}} por Relay ha caducado",
+      "relayAccessRefused": "Relay rechazó el acceso a {{host}}",
       "relayConnectFailed": "No se puede conectar a través de Relay",
       "relayUnreachable": "No se puede acceder a Relay",
       "signInDetail": "Inicia sesión en Orca en tu escritorio para volver a conectarte.",

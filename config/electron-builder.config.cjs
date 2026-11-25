@@ -362,7 +362,6 @@ module.exports = {
     'out/main/copilot/**',
     'out/main/cursor/**',
     'out/main/droid/**',
-    'out/main/gemini/**',
     'out/main/gitlab/projects/project-ref-parser.js',
     'out/main/grok/**',
     'out/main/hermes/**',

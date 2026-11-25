@@ -23,6 +23,7 @@ import {
 } from './worker-dock-provider-failures'
 import { workerDockCurrentRowsSql, workerDockEligibleSql } from '../db/worker-dock-eligibility'
 import { readWorkerDockActivity, workerDockActivityRevision } from './worker-dock-activity'
+import { workerDockStoppingIds } from './worker-dock-owner-stop'
 
 const stateSql = `CASE f.state
   WHEN 'ready' THEN 'unavailable' WHEN 'succeeded' THEN CASE WHEN f.result_lost_at IS NOT NULL THEN 'unavailable' ELSE 'saving' END
@@ -97,6 +98,7 @@ export function readWorkerDock(
             .all(source, now - WORKER_DOCK_UNKNOWN_MS)
             .map((row) => String(row.dispatch_id))
         : []
+    const stopping = workerDockStoppingIds(db)
     const identities: WorkerDockSnapshot['identities'] = db.db
       .prepare(`SELECT ${identitySql} AS id, f.dispatch_id AS dispatchId,
       ${stateSql} AS state, f.changed_at AS changedAt, f.settlement, (f.model IS NOT NULL AND length(trim(f.model)) > 0) AS hasModel,
@@ -108,7 +110,11 @@ export function readWorkerDock(
           : [source])
       )
       .flatMap((row) => {
-        const identity = Metadata.parse(row)
+        const parsed = Metadata.parse(row)
+        const identity =
+          row.lifecycleState === 'stopped' && stopping?.has(parsed.dispatchId)
+            ? { ...parsed, state: 'stopping' as const }
+            : parsed
         const ready = row.lifecycleState === 'ready'
         const live = ready ? activity?.get(identity.dispatchId) : undefined
         if (current) {

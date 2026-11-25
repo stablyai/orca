@@ -13,6 +13,8 @@ export const CONNECTOR_PATHS = {
   actions: '/v1/connector/actions',
   // DELETE `${slackGrants}/<team id>` forgets one.
   slackGrants: '/v1/connector/slack/grants',
+  // `${bots}/<bot id>/shares/<share id>`: PUT `…/offer` answers a teammate's accept; PUT and DELETE
+  // `…/devices/<device id>` install and remove a teammate's phone's share credential (share-messages.ts).
   // `${bots}/<bot id>/slack`: GET its Slack state, DELETE its install. POST `…/slack/apps` creates
   // or resumes its Slack app and answers the link that installs it. GET `…/slack/members?q=` lists
   // the installed app's workspace's full members whose names match, for the bot's Who can ask.
@@ -31,9 +33,19 @@ export const CONNECTOR_PATHS = {
   // `…/link` unlinks; PUT `…/default-bot` sets the bot the user's requests go to; GET
   // `…/users?q=<username>` finds a GitHub user by exact login, for a bot's Who can ask.
   github: '/v1/connector/github',
+  // POST `${slack}/connect` and `…/connect/redeem`: Sign in with Slack links the person there
+  // (connect-messages.ts).
+  slack: '/v1/connector/slack',
   // GET lists the account's pending access requests; POST `…/redeem` opens one from its link; POST
   // `…/<request id>/decision` closes one.
-  accessRequests: '/v1/connector/access-requests'
+  accessRequests: '/v1/connector/access-requests',
+  // GET lists the account's linked people in Slack, GitHub and Linear (ConnectorLinksResponseSchema);
+  // DELETE `${links}/<source>/<workspace id>/<user id>` unlinks one of its own: 204, or 404 not_linked.
+  links: '/v1/connector/links',
+  // A teammate's Orca, for bots shared with its account (share-messages.ts): GET `${shares}/mine`; POST
+  // `…/<share id>/accept` (202 queued); POST and GET `…/<share id>/messages` hold a message and read held states.
+  // The messages routes also take a phone's `Bearer <share credential>` in place of a connector token.
+  shares: '/v1/shares'
 } as const
 
 export const CONNECTOR_ERROR_CODES = [
@@ -54,9 +66,36 @@ export const CONNECTOR_ERROR_CODES = [
   // Slack refused to create or configure the app; the message says why.
   'slack_refused',
   // The bot has no Slack install to read its workspace through.
-  'not_installed'
+  'not_installed',
+  // A links DELETE named no link of the caller's.
+  'not_linked'
 ] as const
 export type ConnectorErrorCode = (typeof CONNECTOR_ERROR_CODES)[number]
 
 // Codes stay open so an older machine reads a newer one as a plain failure.
 export const ConnectorErrorResponseSchema = z.object({ error: z.string().min(1) })
+
+// Sources a person links to their Orca account; a source a newer cloud adds is skipped, not refused.
+export const CONNECTOR_LINK_SOURCES = ['slack', 'github', 'linear'] as const
+export type ConnectorLinkSource = (typeof CONNECTOR_LINK_SOURCES)[number]
+
+export const ConnectorLinkSchema = z.object({
+  source: z.enum(CONNECTOR_LINK_SOURCES),
+  workspaceId: z.string().min(1),
+  // '' for GitHub, whose people are not in a workspace.
+  workspaceName: z.string(),
+  userId: z.string().min(1),
+  // The GitHub login, or the person's display name in Slack or Linear.
+  name: z.string(),
+  linkedAt: z.number().int().nonnegative()
+})
+
+// Several per source, oldest first in each.
+export const ConnectorLinksResponseSchema = z.object({
+  links: z
+    .array(z.unknown())
+    .transform((links) => links.flatMap((link) => ConnectorLinkSchema.safeParse(link).data ?? []))
+})
+
+export type ConnectorLink = z.infer<typeof ConnectorLinkSchema>
+export type ConnectorLinksResponse = z.infer<typeof ConnectorLinksResponseSchema>
