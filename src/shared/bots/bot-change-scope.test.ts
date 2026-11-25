@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import {
   addBotChange,
+  botChangeConcerns,
   botChangeNotice,
   botGroupRoomConcerned,
   pendingBotChanges,
@@ -48,4 +49,19 @@ it('re-reads only the rooms a window named, and every room once a change names n
 it('keeps the rooms a notice names when a window reads a notice the bridge already read', () => {
   const bridged = structuredClone(readBotChangeScope({ kinds: ['groups'], groupIds: ['room-a'] }))
   expect(rooms(readBotChangeScope(bridged))).toEqual(['room-a'])
+})
+
+it('keeps a saved-post notice local to transcript readers unless the room catalog changed too', () => {
+  const saved = {
+    kinds: ['groups'],
+    groupIds: ['room-a'],
+    groupPosts: { 'room-a': ['post-id'] },
+    roomPostsOnly: true
+  } satisfies BotChangeScope
+  const transcript = notice(saved)
+  expect(rooms(transcript)).toEqual(['room-a'])
+  expect(transcript?.groupPosts).toEqual({ 'room-a': ['post-id'] })
+  expect(botChangeConcerns(transcript, { kinds: ['groups'], roomPosts: true })).toBe(true)
+  expect(botChangeConcerns(transcript, { kinds: ['groups'] })).toBe(false)
+  expect(botChangeConcerns(notice(saved, { kinds: ['groups'] }), { kinds: ['groups'] })).toBe(true)
 })

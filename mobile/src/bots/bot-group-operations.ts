@@ -4,6 +4,7 @@ import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/j
 import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { BotGroupTurnDetailCursorSchema } from '../../../src/shared/bots/bot-group-read-schema'
 
 export const groupList = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -25,6 +26,7 @@ export const groupRead = bindDeferredRpcOperation(
       z.object({
         group: BotGroupSchema,
         messages: z.array(BotGroupMessageSchema),
+        updatedPosts: z.array(BotGroupMessageSchema).optional(),
         hasEarlier: z.boolean()
       })
     )
@@ -41,7 +43,7 @@ export const groupTurnRows = bindDeferredRpcOperation(
       'turn-rows',
       z.object({
         items: z.array(z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem)),
-        beforeSequence: z.number().int().positive().optional()
+        before: BotGroupTurnDetailCursorSchema.optional()
       })
     )
   })

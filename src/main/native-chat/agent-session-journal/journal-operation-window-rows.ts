@@ -4,7 +4,6 @@ import type { JournalOperationWindowAnchors } from './journal-domain-operation-w
 import { JOURNAL_READER_REPLY_BYTE_LIMIT } from './journal-sql-reader-reply-limit'
 import { shortenedJsonSql } from './journal-stored-json-bounds'
 import { JournalWindowNotIndexed } from './journal-operation-window-sends'
-import { ROOM_TURN_ANCHOR_SQL } from './database/journal-submission-window-indexes'
 
 // A Diff call's patch, and so the files it edited, is its output: that one is kept. The stored
 // marker goes too, or decoding would read the saved output back in.
@@ -23,21 +22,6 @@ const CUT_ROW_BYTES = 64 * 1024
 const CUTTABLE = `kind IN ('tool-call','diff')`
 /** The most rows an indexed-only window, or its look back for the turn ahead, may cover. */
 export const INDEXED_ONLY_ROW_CAP = 4096
-
-export function readOperationWindowTurnAnchors(
-  scope: JournalSqlScope,
-  start: number,
-  end: number | null
-): AgentJournalRenderItem[] {
-  return scope.db
-    .prepare(`SELECT CASE WHEN kind='turn' THEN payload_json
-      ELSE json_set(payload_json,'$.body',json('{"kind":"message","role":"user","blocks":[]}')) END AS placement
-      FROM journal_items INDEXED BY journal_items_room_turn_anchor
-      WHERE session_id=? AND epoch=? AND ${ROOM_TURN_ANCHOR_SQL} AND sequence>=? AND sequence<?
-      ORDER BY sequence,sequence_index,ordinal`)
-    .all(...scope.prefix, start, end ?? Number.MAX_SAFE_INTEGER)
-    .map((row) => scope.decode<AgentJournalRenderItem>(scope.examined(row).placement))
-}
 
 /**
  * The window's rows from `start`, sized in SQL before any is decoded, as the read projects them:

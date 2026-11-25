@@ -20,12 +20,9 @@ import { admitBotGroupMessageAttachments, botGroupMessageSummary } from './bot-g
 import { requireStructuredHost, type BotRunFields } from './bot-chat-session'
 import { requireGroupBots } from './bot-group-membership'
 import type { BotGroupRuntime } from './bot-group-runtime'
-import { settleDeadGroupMailTurns } from './bot-group-dead-mail-turns'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import { botGroupTurnBody } from './bot-group-turn-body'
 import { deliverRemoteAsks } from './bot-group-remote'
-import { collectRemoteAnswers, presentPageAnswers } from './bot-group-remote-answers'
-import { presentBotGroupPage } from './bot-group-page-replies'
 import { remoteAsksFor } from './bot-group-remote-question'
 
 export type SendBotGroupMessageOptions = {
@@ -290,23 +287,4 @@ export function resumePendingGroupDeliveries(groups: BotGroupRuntime): void {
   }
 }
 
-/** One room's latest page; its `group` carries that room's member sessions. */
-export function readBotGroup(
-  groups: BotGroupRuntime,
-  groupId: string,
-  beforeSequence?: number,
-  threadId?: string,
-  knownReplyKeys?: readonly string[]
-) {
-  const group = groups.store.room(groupId, threadId)
-  const stored = groups.store.roomMessages(groupId, threadId, 41, beforeSequence)
-  const messages = collectRemoteAnswers(groups, stored.slice(-40))
-  settleDeadGroupMailTurns(groups, messages)
-  const page = presentBotGroupPage(group, presentPageAnswers(messages), knownReplyKeys)
-  return {
-    group,
-    // An ended turn draws from its saved reply and end, so the room needs none of its chat's rows.
-    messages: page,
-    hasEarlier: stored.length > page.length
-  }
-}
+export { readBotGroup } from './bot-group-room-page'

@@ -65,7 +65,7 @@ it('recovers the page with zero repeated reply bodies and one changed body at bo
       const delta = load([...held.keys()])
       expect([...botGroupReplyBodies(delta).values()]).toEqual(['Updated answer.'])
       expect(restoreBotGroupReplies(delta, held)).toEqual(load([]))
-      expect(load().messages.at(-1)?.turns[0].reply).toBe('Updated answer.')
+      expect(load().messages.at(-1)?.turns[0].reply).toBeUndefined()
     } finally {
       db.close()
     }

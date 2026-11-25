@@ -145,10 +145,10 @@ export function botPhaseChangeScopes(
   const sessionId = tabId ? structuredAgentSessionIdOfTab(tabId) : null
   // A member's turn end tells its room once its reply is saved (noteBotGroupMemberReply), so the
   // room reads the turn as ended; telling it here too would send a second notice.
-  const turnEnded = change.kind === 'moved' && (change.to === 'done' || change.to === 'rest')
+  const turnEnded = change.kind === 'moved' && change.to === 'done'
   const groupId = sessionId && !turnEnded ? facts.groupRoomOf(sessionId) : null
   if (groupId) {
-    scopes.push({ kinds: ['groups'], groupIds: [groupId] })
+    scopes.push({ kinds: ['groups'], groupIds: [groupId], roomPostsOnly: true })
   }
   return scopes
 }

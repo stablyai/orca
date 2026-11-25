@@ -4,11 +4,28 @@ export type BotGroupTranscript = {
   group: BotGroup
   messages: BotGroupMessage[]
   hasEarlier: boolean
+  updatedPosts?: BotGroupMessage[]
+}
+
+/** Pending posts already on screen can settle while the reader is disconnected. */
+export function pendingBotGroupPosts(page: BotGroupTranscript | null, groupId: string): string[] {
+  if (page?.group.id !== groupId) {
+    return []
+  }
+  return page.messages
+    .flatMap((post) =>
+      post.turns.some(
+        (turn) => !turn.revoked && !turn.error && turn.end === undefined && turn.reply === undefined
+      )
+        ? [post.id]
+        : []
+    )
+    .slice(-40)
 }
 
 export function botGroupReplyBodies(page: BotGroupTranscript): ReadonlyMap<string, string> {
   const replies = new Map<string, string>()
-  for (const message of page.messages) {
+  for (const message of [...(page.updatedPosts ?? []), ...page.messages]) {
     for (const turn of message.turns) {
       if (turn.replyKey && typeof turn.reply === 'string') {
         replies.set(turn.replyKey, turn.reply)
@@ -22,9 +39,8 @@ export function restoreBotGroupReplies(
   page: BotGroupTranscript,
   replies: ReadonlyMap<string, string>
 ): BotGroupTranscript {
-  return {
-    ...page,
-    messages: page.messages.map((message) => ({
+  const restore = (messages: BotGroupMessage[]) =>
+    messages.map((message) => ({
       ...message,
       turns: message.turns.map((turn) => {
         const reply =
@@ -32,6 +48,10 @@ export function restoreBotGroupReplies(
         return reply === undefined ? turn : { ...turn, reply }
       })
     }))
+  return {
+    ...page,
+    messages: restore(page.messages),
+    ...(page.updatedPosts ? { updatedPosts: restore(page.updatedPosts) } : {})
   }
 }
 
@@ -89,13 +109,22 @@ export function reduceBotGroupTranscript(
   }
   switch (action.kind) {
     case 'recent': {
-      const { page } = action
+      const { updatedPosts, ...page } = action.page
       // Older pages stay only while they still join the new page and no member left, since leaving rewrites their turns.
       const joins =
         page.messages.length === 0 ||
         current.messages.some((message) => message.id === page.messages[0].id)
       return accepted === 'same' && joins
-        ? { ...current, group, messages: upsert(current.messages, page.messages) }
+        ? {
+            ...current,
+            group,
+            messages: upsert(current.messages, [
+              ...(updatedPosts?.filter(({ id }) =>
+                current.messages.some((post) => post.id === id)
+              ) ?? []),
+              ...page.messages
+            ])
+          }
         : page
     }
     case 'earlier':

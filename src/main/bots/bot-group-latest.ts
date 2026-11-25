@@ -9,8 +9,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { requireStructuredHost } from './bot-chat-session'
 import { type BotGroupRuntime, runtimeBotGroups } from './bot-group-runtime'
 import { handOffGroupMentions } from './bot-group-mention-handoffs'
-import { botGroupTurnEnd } from './bot-group-turn-end'
-import { botGroupSavedReplyFence } from '../../shared/bots/bot-group-reply-preview'
+import { botGroupTurnEnd, settledGroupRoomReply } from './bot-group-turn-end'
 
 /** A member's turn `turnId` ended: its reply and how it ended are saved on its post and, if it
  *  finished with a reply, that reply is the room's newest post unless a post saved after the turn
@@ -28,8 +27,21 @@ export async function noteBotGroupMemberReply(
   let saved: Awaited<ReturnType<typeof saveEndedTurn>> = null
   try {
     saved = await saveEndedTurn(runtime, groups, owner.group.id, sessionId, turnId)
-  } finally {
-    groups.changed(owner.group.id)
+  } catch (error) {
+    runtime.notifyBotsChanged({
+      kinds: ['groups'],
+      groupIds: [owner.group.id],
+      roomPostsOnly: true
+    })
+    throw error
+  }
+  if (saved) {
+    runtime.notifyBotsChanged({
+      kinds: ['groups'],
+      groupIds: [owner.group.id],
+      groupPosts: { [owner.group.id]: [saved.message.id] },
+      ...(saved.sidebarChanged ? {} : { roomPostsOnly: true })
+    })
   }
   if (saved?.finished) {
     const { message, turn, finished } = saved
@@ -76,18 +88,19 @@ async function saveEndedTurn(
         ? {
             ...candidate,
             ...settled,
+            endedAt: settled.endedAt ?? endedAt,
             reply: finished?.text ?? null,
-            replyFence: finished ? botGroupSavedReplyFence(finished.full) : undefined
+            roomReply: settledGroupRoomReply(items)
           }
         : candidate
     )
   })
-  if (finished) {
+  const sidebarChanged =
+    finished !== null &&
     groups.store.setLatest(
       groupId,
       { authorName: turn.botName, text: finished.text, at: finished.completedAt ?? endedAt },
       { after, reply }
     )
-  }
-  return { message, turn, finished }
+  return { message, turn, finished, sidebarChanged }
 }

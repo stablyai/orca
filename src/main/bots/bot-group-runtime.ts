@@ -146,6 +146,7 @@ export class BotGroupRuntime {
   readonly queues = new Map<string, Promise<void>>()
   /** Operations whose native admission is in flight. */
   readonly deliveries = new Set<string>()
+  readonly turnDetailReads = new Map<string, ReturnType<typeof readBotGroupTurnRows>>()
   /** Mail turns being checked for a dead attempt, last found open, or whose chat answers for them now. */
   readonly mailTurnChecks = new Map<
     string,
@@ -181,8 +182,9 @@ export class BotGroupRuntime {
     groupId: string,
     beforeSequence?: number,
     threadId?: string,
-    knownReplyKeys?: readonly string[]
-  ) => readBotGroup(this, groupId, beforeSequence, threadId, knownReplyKeys)
+    knownReplyKeys?: readonly string[],
+    updatedPostIds?: readonly string[]
+  ) => readBotGroup(this, groupId, beforeSequence, threadId, knownReplyKeys, updatedPostIds)
   turnRows = (input: Parameters<typeof readBotGroupTurnRows>[1], signal?: AbortSignal) =>
     readBotGroupTurnRows(this, input, signal)
   stop = (groupId: string, botId?: string, threadId?: string) =>

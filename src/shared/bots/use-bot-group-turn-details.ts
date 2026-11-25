@@ -1,45 +1,39 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
+import type { BotGroupTurnDetailCursor } from './bot-group-read-schema'
 
-export type BotGroupTurnDetailPage = { items: AgentJournalRenderItem[]; beforeSequence?: number }
+export type BotGroupTurnDetailPage = {
+  items: AgentJournalRenderItem[]
+  before?: BotGroupTurnDetailCursor
+}
 
 export function useBotGroupTurnDetails(
-  read: (before: number | undefined, signal: AbortSignal) => Promise<BotGroupTurnDetailPage>,
+  read: (
+    before: BotGroupTurnDetailCursor | undefined,
+    signal: AbortSignal
+  ) => Promise<BotGroupTurnDetailPage>,
   readOnOpen: boolean,
   visible = true
 ) {
   const [expanded, setExpanded] = useState(false)
-  const [page, setPage] = useState<BotGroupTurnDetailPage | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState<(BotGroupTurnDetailPage & { earlier: boolean }) | null>(null)
+  const [request, setRequest] = useState<AbortController | null>(null)
   const pending = useRef<AbortController | null>(null)
   useEffect(() => () => pending.current?.abort(), [read, visible])
 
-  const load = (before?: number) => {
+  const load = (before?: BotGroupTurnDetailCursor) => {
     if (!visible || (pending.current && !pending.current.signal.aborted)) {
       return
     }
     const request = new AbortController()
     pending.current = request
-    setLoading(true)
+    setRequest(request)
     void read(before, request.signal)
       .then((next) => {
         if (request.signal.aborted) {
           return
         }
-        setPage((previous) => {
-          if (before === undefined || !previous) {
-            return next
-          }
-          const items = new Map(
-            [...next.items, ...previous.items].map((item) => [item.itemId, item])
-          )
-          return {
-            ...next,
-            items: [...items.values()].sort(
-              (a, b) => a.sequence - b.sequence || (a.sequenceIndex ?? 0) - (b.sequenceIndex ?? 0)
-            )
-          }
-        })
+        setPage({ ...next, earlier: before !== undefined })
       })
       .catch(() => {
         // Closing and reopening the disclosure retries a failed first read.
@@ -47,7 +41,7 @@ export function useBotGroupTurnDetails(
       .finally(() => {
         if (!request.signal.aborted) {
           pending.current = null
-          setLoading(false)
+          setRequest(null)
         }
       })
   }
@@ -57,7 +51,7 @@ export function useBotGroupTurnDetails(
     if (expanded) {
       pending.current?.abort()
       pending.current = null
-      setLoading(false)
+      setRequest(null)
       setPage(null)
     } else if (readOnOpen) {
       load()
@@ -68,7 +62,8 @@ export function useBotGroupTurnDetails(
     expanded,
     toggle,
     items: page?.items,
-    loadEarlier: page?.beforeSequence === undefined ? undefined : () => load(page.beforeSequence),
-    loading
+    back: page?.earlier ? () => load() : undefined,
+    loadEarlier: page?.before === undefined ? undefined : () => load(page.before),
+    loading: visible && request !== null && !request.signal.aborted
   }
 }

@@ -2,8 +2,6 @@ import { afterEach, expect, it } from 'vitest'
 import {
   BOT_GROUP_PAGE_REPLY_MAX,
   botGroupPageReply,
-  botGroupSavedReplyFence,
-  BOT_GROUP_SAVED_REPLY_MAX,
   withBotGroupTurnAnswer
 } from '../../shared/bots/bot-group-reply-preview'
 import type { BotGroupTurn } from '../../shared/bots/bot-group'
@@ -63,7 +61,7 @@ it("sends each ended turn's saved reply and end, cut per turn, and never stores 
     ]
   })
 
-  const [message] = readBotGroup(groups, 'group-1').messages
+  const [message] = readBotGroup(groups, 'group-1', undefined, undefined, []).messages
   const [finished, stopped, running] = message.turns
   expect(finished.reply).toBe(botGroupPageReply(long))
   expect(finished.reply!.length).toBeLessThan(BOT_GROUP_PAGE_REPLY_MAX + 10)
@@ -76,6 +74,20 @@ it("sends each ended turn's saved reply and end, cut per turn, and never stores 
   ])
   expect(withBotGroupTurnAnswer([], running)).toEqual([])
   expect(store.message('message-1')!.turns[0].reply).toBe(long)
+
+  for (let index = 0; index < 40; index++) {
+    store.append({
+      id: `newer-${index}`,
+      groupId: 'group-1',
+      author: { kind: 'owner' },
+      text: 'A newer post',
+      createdAt: index + 3,
+      turns: []
+    })
+  }
+  const refreshed = readBotGroup(groups, 'group-1', undefined, undefined, [], ['message-1'])
+  expect(refreshed.messages.some(({ id }) => id === 'message-1')).toBe(false)
+  expect(refreshed.updatedPosts?.[0].turns[0].reply).toBe(finished.reply)
 })
 
 it('cuts a long reply on a whole line and reopens a code block the cut began inside', () => {
@@ -90,7 +102,7 @@ it('cuts a long reply on a whole line and reopens a code block the cut began ins
   const unclosed = botGroupPageReply(`${'prose line\n'.repeat(500)}Run this:\n\`\`\`sh\nls -la`)
   expect(unclosed.startsWith('…\n\nprose line\n')).toBe(true)
   // One line longer than the cap is cut mid-line rather than to nothing.
-  expect(botGroupPageReply(`${'a'.repeat(5_000)}\n`)).toBe(`…\n\n${'a'.repeat(3_999)}\n`)
+  expect(botGroupPageReply(`${'a'.repeat(5_000)}\n`)).toBe(`…\n\n${'a'.repeat(3_975)}\n`)
   // A longer fence holds shorter ones; the block stays open until its own fence closes it.
   const nested = botGroupPageReply(`\`\`\`\`md\n\`\`\`\n${'inner\n'.repeat(1_000)}Done.`)
   expect(nested.startsWith('…\n\n````text\ninner\n')).toBe(true)
@@ -99,8 +111,7 @@ it('cuts a long reply on a whole line and reopens a code block the cut began ins
 
 it('keeps a closing fence and the following prose when the opening is outside the saved tail', () => {
   const full = `\x60\x60\x60ts\n${'code line\n'.repeat(2_000)}\x60\x60\x60\n\nDone with **bold** prose.`
-  const raw = full.slice(-BOT_GROUP_SAVED_REPLY_MAX)
-  expect(botGroupPageReply(raw, botGroupSavedReplyFence(full))).toMatch(
+  expect(botGroupPageReply(full)).toMatch(
     /^…\n\n```text\ncode line[\s\S]+\n```\n\nDone with \*\*bold\*\* prose\.$/
   )
 })

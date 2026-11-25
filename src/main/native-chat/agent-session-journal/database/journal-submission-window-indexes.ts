@@ -7,7 +7,6 @@ export const SEND_QUEUED_CARD_SQL = `(CASE WHEN json_valid(payload_json) THEN js
 export const SEND_PLACE_ROW_SQL = `hidden=0 AND (kind IS NULL OR kind NOT IN ('tool-call','diff'))`
 /** The turn row a send was answered in, as the operation window reads it. */
 export const SEND_ANSWERED_TURN_SQL = `(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json,'$.answeredInTurn.turnItemId') END)`
-export const ROOM_TURN_ANCHOR_SQL = `hidden=0 AND (kind='turn' OR (kind='message' AND message_role='user') OR turn_scope_kind='unknown')`
 
 // No user_version change: older builds never name these indexes, and SQLite keeps them current on
 // every write. They let a window through one turn find its sends without visiting every send.
@@ -19,15 +18,7 @@ CREATE INDEX IF NOT EXISTS journal_submission_answered_turn
 CREATE INDEX IF NOT EXISTS journal_submission_provider_item
   ON journal_submission_attempts(session_id, epoch, provider_item_id) WHERE current=1;
 CREATE INDEX IF NOT EXISTS journal_items_send_place
-  ON journal_items(session_id, epoch, sequence, item_id) WHERE ${SEND_PLACE_ROW_SQL};
-CREATE INDEX IF NOT EXISTS journal_items_room_turn_anchor
-  ON journal_items(session_id, epoch, sequence, sequence_index, ordinal) WHERE ${ROOM_TURN_ANCHOR_SQL};
-CREATE INDEX IF NOT EXISTS journal_items_turn_detail
-  ON journal_items(session_id, epoch, turn_item_id, sequence, sequence_index, ordinal)
-  WHERE hidden=0 AND turn_item_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS journal_items_turn_detail_answer
-  ON journal_items(session_id, epoch, turn_item_id, sequence, sequence_index, ordinal)
-  WHERE hidden=0 AND turn_item_id IS NOT NULL AND root=1 AND message_role='assistant' AND assistant_prose=1;`
+  ON journal_items(session_id, epoch, sequence, item_id) WHERE ${SEND_PLACE_ROW_SQL};`
 
 export function ensureJournalSubmissionWindowIndexes(db: Database.Database): void {
   db.exec(JOURNAL_SUBMISSION_WINDOW_INDEXES)

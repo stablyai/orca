@@ -7,28 +7,28 @@ import {
   type BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
+import { botGroupTurnEnd, settledGroupRoomReply } from './bot-group-turn-end'
 
 // Full reads and deltas share a page boundary. Leave room for the transport envelope.
 const PAGE_ENVELOPE_BYTES = 64 * 1024
 const CUT = '…'
 
-type ReplyPreview = { source: string; fence?: string; reply: string; key: string; bytes: number }
+type ReplyPreview = { source: string; reply: string; key: string; bytes: number }
 const replyPreviews = new BoundedMap<string, ReplyPreview>({
   maxEntries: 4_096,
-  maxBytes: 64 * 1024 * 1024,
+  maxBytes: 24 * 1024 * 1024,
   sizeOf: ({ source, reply }) => (source.length + reply.length) * 2 + 128
 })
 
 function preview(turn: BotGroupTurn, source: string): ReplyPreview {
   const cached = replyPreviews.get(turn.operationId)
-  if (cached?.source === source && cached.fence === turn.replyFence) {
+  if (cached?.source === source) {
     return cached
   }
-  const reply = botGroupPageReply(source, turn.replyFence)
+  const reply = botGroupPageReply(source)
   const serialized = JSON.stringify(reply)
   const next = {
     source,
-    fence: turn.replyFence,
     reply,
     key: createHash('sha256').update(serialized).digest('base64url'),
     bytes: Buffer.byteLength(serialized) + ',"reply":'.length
@@ -39,28 +39,63 @@ function preview(turn: BotGroupTurn, source: string): ReplyPreview {
 
 type PagePost = {
   post: BotGroupMessage
-  previews: ReadonlyMap<string, ReplyPreview>
+  previews: ReadonlyMap<string, Pick<ReplyPreview, 'reply' | 'key' | 'bytes'>>
   bytes: number
 }
 
 const pagePosts = new WeakMap<BotGroupMessage, PagePost>()
+const previewBytesByKey = new BoundedMap<string, number>({ maxEntries: 4_096 })
+
+/** Cache room previews independently of the larger reply text used by delivery and quoting. */
+export function projectBotGroupRoomPost(message: BotGroupMessage): BotGroupMessage {
+  const largeFrozenPost =
+    message.turns.some((turn) => turn.frozenItems !== undefined) &&
+    Buffer.byteLength(JSON.stringify(message)) > REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
+  return {
+    ...message,
+    turns: message.turns.map(({ turnItemId: _turnItemId, roomReply, ...record }, index) => {
+      const { frozenItems } = record
+      const moveFrozen = largeFrozenPost && frozenItems !== undefined
+      const turn = moveFrozen
+        ? {
+            ...record,
+            ...botGroupTurnEnd(frozenItems),
+            frozenHistory: true as const,
+            frozenItems: undefined,
+            workerDispatchIds: undefined
+          }
+        : record
+      const source =
+        roomReply ?? (moveFrozen ? settledGroupRoomReply(frozenItems) : undefined) ?? turn.reply
+      if (typeof source !== 'string') {
+        return turn
+      }
+      const saved = preview(message.turns[index], source)
+      previewBytesByKey.set(saved.key, saved.bytes)
+      return { ...turn, reply: saved.reply, replyKey: saved.key }
+    })
+  }
+}
 
 function projectPost(message: BotGroupMessage): PagePost {
   const cached = pagePosts.get(message)
   if (cached) {
     return cached
   }
-  const previews = new Map<string, ReplyPreview>()
-  const turns = message.turns.map(
-    ({ turnItemId: _turnItemId, replyFence: _replyFence, ...turn }, index) => {
-      if (typeof turn.reply !== 'string') {
-        return turn
-      }
-      const saved = preview(message.turns[index], turn.reply)
-      previews.set(turn.operationId, saved)
-      return { ...turn, reply: undefined, replyKey: saved.key }
+  const previews = new Map<string, Pick<ReplyPreview, 'reply' | 'key' | 'bytes'>>()
+  const turns = message.turns.map((turn) => {
+    if (typeof turn.reply !== 'string' || !turn.replyKey) {
+      return turn
     }
-  )
+    previews.set(turn.operationId, {
+      reply: turn.reply,
+      key: turn.replyKey,
+      bytes:
+        previewBytesByKey.get(turn.replyKey) ??
+        Buffer.byteLength(JSON.stringify(turn.reply)) + ',"reply":'.length
+    })
+    return { ...turn, reply: undefined }
+  })
   const post = { ...message, turns }
   const bytes = Buffer.byteLength(JSON.stringify(post)) + 1
   const projected = { post, previews, bytes }

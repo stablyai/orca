@@ -188,8 +188,21 @@ export class BotGroupStore {
     return this.posts.roomMessages(groupId, threadId, limit, beforeSequence)
   }
 
+  roomPageMessages(
+    groupId: string,
+    threadId: string | undefined,
+    limit: number,
+    beforeSequence?: number
+  ): BotGroupMessage[] {
+    return this.posts.roomMessages(groupId, threadId, limit, beforeSequence, true)
+  }
+
   message(id: string): BotGroupMessage | null {
     return this.posts.message(id)
+  }
+
+  roomPageMessage(id: string): BotGroupMessage | null {
+    return this.posts.roomPost(id)
   }
 
   /** The post that asked this remote question. */
@@ -200,11 +213,11 @@ export class BotGroupStore {
     return row ? this.message(String(row.message_id)) : null
   }
 
-  operationMessage(operationId: string): BotGroupMessage | null {
+  operationMessage(operationId: string, includeWorkers = true): BotGroupMessage | null {
     const row = this.db
       .prepare('SELECT message_id FROM bot_group_operations WHERE operation_id = ?')
       .get(operationId)
-    return row ? this.message(String(row.message_id)) : null
+    return row ? this.posts.message(String(row.message_id), includeWorkers) : null
   }
 
   /** Stores a post with each turn's pending context, owed until native admission. */

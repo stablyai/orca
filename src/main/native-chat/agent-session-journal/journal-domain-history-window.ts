@@ -33,7 +33,7 @@ export const JOURNAL_DOMAIN_HISTORY_ITEM_BYTES = `CASE WHEN item.wire_version=${
 export function selectJournalDomainHistoryWindow(
   db: Database.Database,
   where: string,
-  prefix: readonly string[],
+  prefix: readonly [string, string],
   end: number,
   limit: number,
   sources: readonly JournalDomainHistoryHeader[] = []
@@ -56,7 +56,7 @@ export function selectJournalDomainHistoryWindow(
 function selectJournalDomainHistoryHeaders(
   db: Database.Database,
   where: string,
-  prefix: readonly string[],
+  prefix: readonly [string, string],
   end: number,
   limit: number
 ): JournalDomainHistoryHeader[] {

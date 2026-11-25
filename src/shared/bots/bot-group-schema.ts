@@ -123,10 +123,12 @@ const BotGroupTurnSchema = z.object({
   endedAt: z.number().nonnegative().optional().catch(undefined),
   turnItemId: z.string().optional(),
   hadWork: z.literal(true).optional(),
-  /** The saved text begins inside this fenced block. The raw reply is still used for quoting. */
-  replyFence: z.string().optional(),
+  /** The visible answer at settlement. The whole reply tail is still used for quoting. */
+  roomReply: z.string().max(4_000).optional().catch(undefined),
   /** A room read may omit a preview the reader already holds under this key. */
   replyKey: z.string().optional(),
+  /** A frozen transcript that the room can open in bounded pages. */
+  frozenHistory: z.literal(true).optional(),
   /** Its answer to another member's request: sent as mail, so its own chat shows only the call. */
   answer: z.string().optional(),
   /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */

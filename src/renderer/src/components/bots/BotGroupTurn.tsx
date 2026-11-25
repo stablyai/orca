@@ -1,3 +1,4 @@
+import type { BotGroupTurnDetailCursor } from '../../../../shared/bots/bot-group-read-schema'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
@@ -94,7 +95,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   const readTurn = session?.groupTurnItems
   const ended = turn.end !== undefined || turn.reply !== undefined
   const loadDetails = useCallback(
-    (beforeSequence: number | undefined, signal: AbortSignal) =>
+    (before: BotGroupTurnDetailCursor | undefined, signal: AbortSignal) =>
       callBotRpc<BotGroupTurnDetailPage>(
         { hostId },
         'bots.groups.turnRows',
@@ -102,23 +103,30 @@ export const BotGroupTurn = memo(function BotGroupTurn({
           groupId,
           threadId,
           operationId: turn.operationId,
-          beforeSequence
+          before
         },
         { signal }
       ),
     [hostId, groupId, threadId, turn.operationId]
   )
-  const details = useBotGroupTurnDetails(loadDetails, ended && !turn.frozenItems, isVisible)
+  const details = useBotGroupTurnDetails(
+    loadDetails,
+    turn.frozenHistory || (ended && !turn.frozenItems),
+    isVisible
+  )
   const { expanded, toggle: toggleExpanded } = details
   const items = useMemo(
     () =>
       turn.frozenItems ??
-      details.items ??
-      (ended ? noItems : (readTurn?.(turn.operationId, turn.workerDispatchIds) ?? noItems)),
-    [turn.frozenItems, details.items, ended, readTurn, turn.operationId, turn.workerDispatchIds]
+      (details.items?.length
+        ? details.items
+        : (readTurn?.(turn.operationId, turn.workerDispatchIds) ?? noItems)),
+    [turn.frozenItems, details.items, readTurn, turn.operationId, turn.workerDispatchIds]
   )
   const canonical = items.find((item) => item.body.kind === 'turn')
   const lifecycle = canonical?.body.kind === 'turn' ? canonical.body : null
+  const replyAheadOfJournal = ended && lifecycle?.state === 'running'
+  const savedOutcome = ended && (turn.end !== undefined || !lifecycle || replyAheadOfJournal)
   const submission = submissions.find(
     (item) => item.clientMessageId === turn.operationId || item.queuedMessageId === turn.operationId
   )
@@ -129,7 +137,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     (!ended && submission?.dispatchState === 'rejected' ? submission.reason : null)
   const status = useMemo<NativeChatTurnStatus>(
     () =>
-      ended
+      savedOutcome
         ? {
             thinking: false,
             startedAt: null,
@@ -153,7 +161,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
                 : null,
             verdict: lifecycle?.outcome
           },
-    [lifecycle, ended, turn.workedMs, turn.end]
+    [lifecycle, savedOutcome, turn.workedMs, turn.end]
   )
   const projection = useMemo(() => desktopStructuredTranscript.transcript(items), [items])
   const project = useMemo(() => createNativeChatMessageListProjection(), [])
@@ -170,9 +178,17 @@ export const BotGroupTurn = memo(function BotGroupTurn({
           answer: turn.answer,
           reply: turn.reply,
           endedAt: turn.endedAt
-        }
+        },
+        replyAheadOfJournal
       ),
-    [projected.conversation, turn.operationId, turn.answer, turn.reply, turn.endedAt]
+    [
+      projected.conversation,
+      turn.operationId,
+      turn.answer,
+      turn.reply,
+      turn.endedAt,
+      replyAheadOfJournal
+    ]
   )
   const noReply =
     ended && !turn.reply && !turn.hadWork && !turn.revoked && botGroupTurnShowsNothing(messages)
@@ -283,7 +299,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
             : t('bots.groups.starting', 'Starting…')
       : rejection
         ? t('bots.groups.notStarted', 'Not started')
-        : ended && turn.workedMs === undefined
+        : savedOutcome && turn.workedMs === undefined
           ? t('components.agentChildRow.ended', 'Ended')
           : undefined
   return (
@@ -307,7 +323,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
             pendingLabel={pendingLabel}
             workedSeconds={membershipEnded || waiting || rejection ? 0 : status.workedSeconds}
             expanded={expanded}
-            onToggleExpanded={lifecycle || ended ? toggleExpanded : undefined}
+            onToggleExpanded={lifecycle || ended || turn.frozenHistory ? toggleExpanded : undefined}
             actions={
               <>
                 {!turn.revoked && !rejection && (working || waiting) ? (
@@ -342,6 +358,11 @@ export const BotGroupTurn = memo(function BotGroupTurn({
           ) : null}
           {scope.bar}
           {scope.lead}
+          {expanded && details.back ? (
+            <Button variant="ghost" size="sm" onClick={details.back} disabled={details.loading}>
+              {t('common.back', 'Back')}
+            </Button>
+          ) : null}
           {expanded && details.loadEarlier ? (
             <Button
               variant="ghost"

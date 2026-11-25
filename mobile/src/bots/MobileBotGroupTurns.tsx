@@ -1,3 +1,4 @@
+import type { BotGroupTurnDetailCursor } from '../../../src/shared/bots/bot-group-read-schema'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { memo, useCallback, useEffect, useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -55,7 +56,10 @@ export const MobileBotGroupReader = memo(function Reader({
   visible,
   connected
 }: {
-  turn: Pick<BotGroupTurn, 'sessionId' | 'agent'> & { operationIds: readonly string[] }
+  turn: Pick<BotGroupTurn, 'sessionId' | 'agent'> & {
+    operationIds: readonly string[]
+    pendingOperationIds: readonly string[]
+  }
   client: RpcClient
   support: StructuredAgentSessionHostSupport
   visible: boolean
@@ -87,7 +91,7 @@ export const MobileBotGroupReader = memo(function Reader({
       hasMore &&
       !loadingEarlier &&
       // Page only for a turn the session admitted; queued or refused ones have no older rows to find.
-      turn.operationIds.some(
+      turn.pendingOperationIds.some(
         (id) => groupTurnItems(id).length === 0 && botGroupOperationAdmitted(session.journal, id)
       )
     ) {
@@ -100,7 +104,7 @@ export const MobileBotGroupReader = memo(function Reader({
     hasMore,
     loadingEarlier,
     loadEarlier,
-    turn.operationIds,
+    turn.pendingOperationIds,
     groupTurnItems,
     session.journal
   ])
@@ -138,27 +142,34 @@ export function MobileBotGroupTurn({
   const ended = turn.end !== undefined || turn.reply !== undefined
   const readTurn = session?.groupTurnItems
   const loadDetails = useCallback(
-    async (beforeSequence: number | undefined, signal: AbortSignal) =>
+    async (before: BotGroupTurnDetailCursor | undefined, signal: AbortSignal) =>
       groupTurnRows.interpret(
         await groupTurnRows.request(
           client,
-          { groupId, threadId, operationId: turn.operationId, beforeSequence },
+          { groupId, threadId, operationId: turn.operationId, before },
           { signal }
         )
       ),
     [client, groupId, threadId, turn.operationId]
   )
-  const details = useBotGroupTurnDetails(loadDetails, ended && !turn.frozenItems, visible)
+  const details = useBotGroupTurnDetails(
+    loadDetails,
+    turn.frozenHistory || (ended && !turn.frozenItems),
+    visible
+  )
   const { expanded, toggle: toggleExpanded } = details
   const items = useMemo(
     () =>
       turn.frozenItems ??
-      details.items ??
-      (ended ? noItems : (readTurn?.(turn.operationId, turn.workerDispatchIds) ?? noItems)),
-    [turn.frozenItems, details.items, ended, readTurn, turn.operationId, turn.workerDispatchIds]
+      (details.items?.length
+        ? details.items
+        : (readTurn?.(turn.operationId, turn.workerDispatchIds) ?? noItems)),
+    [turn.frozenItems, details.items, readTurn, turn.operationId, turn.workerDispatchIds]
   )
   const lifecycle = items.find((item) => item.body.kind === 'turn')?.body
   const clock = lifecycle?.kind === 'turn' ? lifecycle : null
+  const replyAheadOfJournal = ended && clock?.state === 'running'
+  const savedOutcome = ended && (turn.end !== undefined || !clock || replyAheadOfJournal)
   const queued = session?.queued.holds(turn.operationId)
   const working = !ended && clock?.state === 'running' && !turn.revoked
   const waiting = !clock && !ended
@@ -172,9 +183,10 @@ export function MobileBotGroupTurn({
           answer: turn.answer,
           reply: turn.reply,
           endedAt: turn.endedAt
-        }
+        },
+        replyAheadOfJournal
       ),
-    [items, turn.operationId, turn.answer, turn.reply, turn.endedAt]
+    [items, turn.operationId, turn.answer, turn.reply, turn.endedAt, replyAheadOfJournal]
   )
   const noReply =
     ended && !turn.reply && !turn.hadWork && !turn.revoked && botGroupTurnShowsNothing(rawMessages)
@@ -253,16 +265,16 @@ export function MobileBotGroupTurn({
                         : turn.error
                           ? t('bots.groups.notStarted', 'Not started')
                           : t('bots.groups.starting', 'Starting…')
-                      : ended && turn.workedMs === undefined
+                      : savedOutcome && turn.workedMs === undefined
                         ? t('session.agentChildRow.ended', 'Ended')
                         : undefined
                 }
                 startedAt={clock?.startedAt ?? null}
                 workedSeconds={
-                  working ? null : ((ended ? turn.workedMs : clock?.durationMs) ?? 0) / 1000
+                  working ? null : ((savedOutcome ? turn.workedMs : clock?.durationMs) ?? 0) / 1000
                 }
                 verdict={
-                  ended
+                  savedOutcome
                     ? turn.end === 'stopped'
                       ? 'cancellation'
                       : turn.end === 'failed'
@@ -272,7 +284,9 @@ export function MobileBotGroupTurn({
                 }
                 expanded={expanded}
                 onToggleExpanded={
-                  (ended && !turn.frozenItems) || fold.foldableTurnKeys.has(turn.operationId)
+                  turn.frozenHistory ||
+                  (ended && !turn.frozenItems) ||
+                  fold.foldableTurnKeys.has(turn.operationId)
                     ? toggleExpanded
                     : undefined
                 }
@@ -312,6 +326,15 @@ export function MobileBotGroupTurn({
                   <Text style={[styles.notice, styles.turnNotice]}>
                     {t('bots.groups.loadEarlierMessages', 'Load earlier messages')}
                   </Text>
+                </Pressable>
+              ) : null}
+              {expanded && details.back ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={details.back}
+                  disabled={details.loading}
+                >
+                  <Text style={[styles.notice, styles.turnNotice]}>{t('common.back', 'Back')}</Text>
                 </Pressable>
               ) : null}
               {shown.map((message) => (

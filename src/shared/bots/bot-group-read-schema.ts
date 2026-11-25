@@ -6,9 +6,21 @@ export const BotGroupRead = Room.extend({
   knownReplyKeys: z
     .array(z.string().length(43))
     .max(40 * 32)
-    .optional()
+    .optional(),
+  updatedPostIds: z.array(z.string().min(1)).max(40).optional()
 })
+export const BotGroupTurnDetailCursorSchema = z.object({
+  journal: z
+    .tuple([
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative()
+    ])
+    .optional(),
+  worker: z.number().int().positive().optional()
+})
+export type BotGroupTurnDetailCursor = z.infer<typeof BotGroupTurnDetailCursorSchema>
 export const BotGroupTurnRows = Room.extend({
   operationId: z.string().min(1),
-  beforeSequence: z.number().int().positive().optional()
+  before: BotGroupTurnDetailCursorSchema.optional()
 })

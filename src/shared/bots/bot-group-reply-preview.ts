@@ -55,35 +55,53 @@ export function botGroupOpenFence(text: string, previous: string | null = null):
   return open
 }
 
-export function botGroupSavedReplyFence(full: string): string | undefined {
-  const start = full.length - BOT_GROUP_SAVED_REPLY_MAX
-  if (start <= 0) {
-    return undefined
-  }
-  const beforeLine = full.lastIndexOf('\n', start - 1) + 1
-  return botGroupOpenFence(full.slice(0, beforeLine)) ?? undefined
+const CUT_PREFIX = '…\n\n'
+
+function tailFromLine(reply: string, budget: number): string {
+  const start = Math.max(0, reply.length - budget)
+  const tail = reply.slice(start)
+  const newline = tail.indexOf('\n')
+  const wholeLines =
+    newline !== -1 && start > 0 && reply[start - 1] !== '\n' ? tail.slice(newline + 1) : tail
+  return wholeLines.trim() ? wholeLines : tail
 }
 
-/** `reply`'s last `max` characters from a whole line (mid-line only when one line is longer), after
- *  "…"; a code block the cut began inside is reopened as plain text, so the rest still reads as code. */
-function botGroupReplyTail(reply: string, max: number, savedFence?: string): string {
-  if (reply.length <= max && !savedFence) {
+/** Keep a whole-line tail and restore the fence state at the cut. */
+export function botGroupPageReply(reply: string): string {
+  if (reply.length <= BOT_GROUP_PAGE_REPLY_MAX) {
     return reply
   }
-  const start = Math.max(0, reply.length - max)
-  const end = reply.slice(start)
-  const newline = end.indexOf('\n')
-  const fromLine =
-    newline !== -1 && start > 0 && reply[start - 1] !== '\n' ? end.slice(newline + 1) : end
-  const rest = fromLine.trim() ? fromLine : end
+  // Normal fences need at most 16 characters of delimiter. Longer delimiters are represented as
+  // indented code so a delimiter cannot itself overrun the preview.
+  const rest = tailFromLine(reply, BOT_GROUP_PAGE_REPLY_MAX - CUT_PREFIX.length - 21)
   const prefix = reply.slice(0, reply.length - rest.length)
-  const open = botGroupOpenFence(prefix.slice(0, prefix.lastIndexOf('\n') + 1), savedFence ?? null)
-  return `…\n\n${open ? `${open}text\n` : ''}${rest}`
-}
-
-/** A saved reply as a room page carries it. */
-export function botGroupPageReply(reply: string, savedFence?: string): string {
-  return botGroupReplyTail(reply, BOT_GROUP_PAGE_REPLY_MAX, savedFence)
+  const fence = botGroupOpenFence(prefix.slice(0, prefix.lastIndexOf('\n') + 1))
+  if (!fence) {
+    return CUT_PREFIX + rest
+  }
+  if (fence.length <= 16) {
+    return `${CUT_PREFIX}${fence}text\n${rest}`
+  }
+  const lines = rest.split('\n')
+  const closing = lines.findIndex((line) => {
+    const match = FENCE.exec(line)
+    return (
+      !!match && match[1][0] === fence[0] && match[1].length >= fence.length && !match[2].trim()
+    )
+  })
+  const code = closing === -1 ? lines : lines.slice(0, closing)
+  const prose = closing === -1 ? '' : lines.slice(closing + 1).join('\n')
+  let budget = BOT_GROUP_PAGE_REPLY_MAX - CUT_PREFIX.length - prose.length - 2
+  const kept: string[] = []
+  for (const line of code.toReversed()) {
+    if (budget <= 5) {
+      break
+    }
+    const text = `    ${line.slice(-(budget - 5))}`
+    kept.push(text)
+    budget -= text.length + 1
+  }
+  return CUT_PREFIX + kept.toReversed().join('\n') + (prose ? `\n\n${prose}` : '')
 }
 
 /** An ended turn's rows hold neither words nor work (a tool call, a subagent): it ended without a
@@ -99,7 +117,8 @@ export function botGroupTurnShowsNothing(messages: readonly NativeChatMessage[])
  *  its words draws its saved reply instead. */
 export function withBotGroupTurnAnswer(
   messages: NativeChatMessage[],
-  turn: Pick<BotGroupTurn, 'operationId' | 'answer' | 'reply' | 'endedAt'>
+  turn: Pick<BotGroupTurn, 'operationId' | 'answer' | 'reply' | 'endedAt'>,
+  replyAheadOfJournal = false
 ): NativeChatMessage[] {
   const words = messages
     .flatMap((message) =>
@@ -108,11 +127,12 @@ export function withBotGroupTurnAnswer(
         : []
     )
     .join('\n')
-  const answer = words.trim()
-    ? turn.answer
-    : turn.answer
-      ? (botGroupTurnReplyText(turn.reply, turn.answer) ?? undefined)
-      : turn.reply
+  const answer =
+    words.trim() && !replyAheadOfJournal
+      ? turn.answer
+      : turn.answer
+        ? (botGroupTurnReplyText(turn.reply, turn.answer) ?? undefined)
+        : turn.reply
   return answer?.trim() && !holdsAnswer(words, answer)
     ? [
         ...messages,

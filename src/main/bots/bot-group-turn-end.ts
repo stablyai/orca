@@ -1,6 +1,7 @@
 // How a member's ended turn is saved on its room post, so the room draws it without its chat rows.
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { BotGroupTurn } from '../../shared/bots/bot-group'
+import { botGroupPageReply } from '../../shared/bots/bot-group-reply-preview'
 
 /** The ended turn among `items`, worded as its header words it: a Stop or a replacement stopped it,
  *  a provider fault failed it; null while it runs or when its turn row is not among them. */
@@ -25,9 +26,10 @@ export function botGroupTurnEnd(
         body.kind === 'agent-start' ||
         body.kind === 'agent-handoff' ||
         body.kind === 'bot-item-note' ||
+        body.kind === 'status' ||
         (body.kind === 'message' &&
           body.role === 'assistant' &&
-          body.blocks.some((block) => block.type !== 'text'))
+          body.blocks.some((block) => block.type !== 'text' || block.text.trim()))
     )
       ? true
       : undefined,
@@ -39,4 +41,21 @@ export function botGroupTurnEnd(
           : 'finished',
     ...(workedMs === undefined ? {} : { workedMs: Math.max(0, workedMs) })
   }
+}
+
+export function settledGroupRoomReply(
+  items: readonly AgentJournalRenderItem[]
+): string | undefined {
+  for (let index = items.length - 1; index >= 0; index--) {
+    const { body } = items[index]
+    if (body.kind === 'message' && body.role === 'assistant') {
+      const text = body.blocks
+        .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        .join('\n')
+      if (text.trim()) {
+        return botGroupPageReply(text)
+      }
+    }
+  }
+  return undefined
 }

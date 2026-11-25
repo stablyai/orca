@@ -302,14 +302,14 @@ it('opens a bounded room detail page from a long turn with a newer turn already 
       expect(first.items.map(({ itemId }) => itemId)).toEqual(
         expect.arrayContaining([turnItemId, answerId])
       )
-      expect(first.beforeSequence).toBeGreaterThan(0)
+      expect(first.before?.[0]).toBeGreaterThan(0)
       const earlier = readJournalDomainRoomTurnPage(scope, {
         operationId: 'room-operation',
         turnItemId,
-        beforeSequence: first.beforeSequence
+        before: first.before
       })
-      expect(earlier.items).toHaveLength(128)
-      expect(earlier.items.at(-1)!.sequence).toBeLessThan(first.beforeSequence!)
+      expect(earlier.items).toHaveLength(130)
+      expect(earlier.items.at(-1)!.sequence).toBeLessThan(first.before![0])
     } finally {
       db.close()
     }
