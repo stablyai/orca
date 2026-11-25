@@ -209,10 +209,12 @@ export const terminalSameKeyRetry = defineFixture({
         throw new Error('Legitimate first scan hold lost its details')
       }
     }
-    frame.querySelector<HTMLButtonElement>('button:not([hidden])')?.click()
     await until(() => frame.textContent?.includes('Loading sessions') === true)
-    if (frame.textContent?.includes('50,000') || frame.querySelector('[role="listitem"]')) {
+    if (frame.textContent?.includes('50,000') || frame.querySelector('[role="list"]')) {
       throw new Error('Old scan details survived terminal retry')
+    }
+    if (frame.querySelector('[data-slot="collapsible-trigger"]')) {
+      throw new Error('Neutral wait offers an empty disclosure')
     }
   }
 })

@@ -210,6 +210,8 @@ const NO_PROGRESS: AiVaultScanProgress = {
   agents: [],
   read: { done: 0, total: 0 }
 }
+const STRIP_ROW_CLASS =
+  'flex h-8 w-full items-center gap-1.5 pl-3 pr-2 text-left text-2xs text-muted-foreground tabular-nums'
 
 /** One line under the search box naming what this computer's scan is doing; opens to one row per agent. */
 export function AiVaultScanProgressStrip({
@@ -259,16 +261,28 @@ export function AiVaultScanProgressStrip({
   const progress: AiVaultScanProgress = held
     ? { ...reported, stage: 'finding' }
     : neutral
-      ? { ...reported, stage: 'finding', agents: [] }
+      ? NO_PROGRESS
       : reported
   const active = reportedActive || held || neutral
   const finished = progress.stage === 'finished'
   const timed = active && !neutral
   const now = useNow(timed ? 1_000 : 30_000, timed || finished)
+  const status = (
+    <>
+      <StripMark progress={progress} active={active} />
+      <StripText progress={progress} active={active} />
+    </>
+  )
+  if (neutral) {
+    return (
+      <div className="shrink-0 border-b border-sidebar-border">
+        <div className={STRIP_ROW_CLASS}>{status}</div>
+      </div>
+    )
+  }
   const elapsedAt = timed ? now : progress.settledAt
-  const time = neutral
-    ? null
-    : finished && progress.settledAt !== null
+  const time =
+    finished && progress.settledAt !== null
       ? formatTimeAgo(progress.settledAt, t)
       : elapsedAt !== null
         ? formatElapsed(elapsedAt - progress.startedAt)
@@ -279,10 +293,12 @@ export function AiVaultScanProgressStrip({
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="flex h-8 w-full cursor-pointer items-center gap-1.5 pl-3 pr-2 text-left text-2xs text-muted-foreground tabular-nums outline-none hover:bg-sidebar-accent/50 focus-visible:ring-[2px] focus-visible:ring-sidebar-ring/30"
+            className={cn(
+              STRIP_ROW_CLASS,
+              'cursor-pointer outline-none hover:bg-sidebar-accent/50 focus-visible:ring-[2px] focus-visible:ring-sidebar-ring/30'
+            )}
           >
-            <StripMark progress={progress} active={active} />
-            <StripText progress={progress} active={active} />
+            {status}
             <span className="ml-auto shrink-0">{time}</span>
             <ChevronDown
               className={cn('size-3 shrink-0 transition-transform', open && 'rotate-180')}
@@ -291,7 +307,7 @@ export function AiVaultScanProgressStrip({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div role="list" className="py-1">
-            {(neutral ? [] : agents).map((agent) => (
+            {agents.map((agent) => (
               <AgentRow
                 key={agent.agent}
                 agent={agent}
