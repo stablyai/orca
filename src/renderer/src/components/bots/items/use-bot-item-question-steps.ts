@@ -104,7 +104,7 @@ export function useBotItemQuestionSteps(
   ) => void
   /** The box's next draft answers no line: recovered answers of an earlier ask, a comment of its own. */
   answerNone: () => void
-  /** Type your answer, or a quick reply's edit: the box answers the question offered, its words too. */
+  /** Type your answer, or a quick reply's edit, on a one-question ask: the box answers it, its words too. */
   answerWaiting: () => void
   /** What the comment box replies to: the line named when its draft started (shared with the phone). */
   waitingLine: BotItemWaitingLine | null
@@ -249,8 +249,9 @@ export function useBotItemQuestionSteps(
     }
   )
   const answerNone = useLatestHandler(() => target.none())
+  // Several questions: the line's own edit or Type your answer already bound its line (`steps.bind`).
   const answerWaiting = useLatestHandler(() => {
-    if (open[0]) {
+    if (!waiting && open[0]) {
       target.bind(open[0].id)
     }
   })

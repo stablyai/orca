@@ -197,3 +197,29 @@ describe.each([
     }
   )
 })
+
+it("keeps a later line a desktop step's Type your answer bound", () => {
+  const posted: Posted[] = []
+  const hook = renderHook(() =>
+    useBotItemQuestionSteps(
+      bot,
+      { ...needsYou(PAIR), uid: 'second-line' },
+      [PAIR],
+      (_t, _p, questionId, plain) => void posted.push({ questionId, plain }),
+      []
+    )
+  )
+  // The card's Type your answer on line 2: the step binds it, then the box's shared handler runs.
+  act(() => {
+    hook.result.current.steps!.bind(1)
+    hook.result.current.answerWaiting()
+  })
+  act(() =>
+    updateNativeChatComposerDraft(
+      botItemCommentDraftScope(bot, 'second-line'),
+      { text: 'words' },
+      'immediate'
+    )
+  )
+  expect(hook.result.current.waitingLine?.id).toBe(`${PAIR.id}:1`)
+})
