@@ -1,6 +1,6 @@
 // Usage: node config/scripts/runtime-verification/app-rail/check-rail-menus-close-focus-and-scroll.mjs [--out dir]
 //          [--only focus|scroll]
-// Tears down the fixture server and browser it starts (see rail-proof-session.mjs); a preexisting server is reused.
+// Starts and tears down an invocation-owned fixture server and Chromium (see rail-proof-session.mjs).
 // Focus (RC-C1-03): keyboard-open the rail's "…" and More on a stable-capacity Workspaces rail, close them, and check
 //   where focus lands: a trusted click on a hit-tested blank point, root Escape, and More with Customize open all
 //   return focus to the exact trigger node; a click into an outside input, and an outside control that takes focus
@@ -20,8 +20,11 @@ const argValue = (flag) => {
 const out = path.resolve(argValue('--out') ?? '.cache/app-rail-menus')
 const only = argValue('--only')
 const SOURCES = [
+  'src/components/app-rail/AppRail.fixture.tsx',
+  'src/components/app-rail/AppRail.tsx',
   'src/components/app-rail/AppRailCustomizeMenu.tsx',
-  'src/components/app-rail/AppRailMoreMenu.tsx'
+  'src/components/app-rail/AppRailMoreMenu.tsx',
+  'src/components/ui/dropdown-menu.tsx'
 ]
 const ROW_NAMES = ['Tasks', 'Automations', 'Artifacts', 'Skills', 'Orca Mobile']
 
@@ -309,6 +312,10 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
     )
     assert.equal(hit, name, `the point hits ${name}`)
     const checked = await row.getAttribute('aria-checked')
+    assert.ok(
+      checked === 'true' || checked === 'false',
+      `${name} starts with a boolean checked state`
+    )
     const flipped = checked === 'true' ? 'false' : 'true'
     const rowNode = await row.elementHandle()
     const menuNode = await menu.elementHandle()
@@ -346,6 +353,7 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
       })
       assert.equal(state.row, name, `keyboard reaches ${name}`)
       assert.ok(state.inView, `${name} is scrolled into view`)
+      assert.ok(state.checked === 'true' || state.checked === 'false')
       // Space twice: each row toggles both ways and the shown set ends where it started, so a folded rail stays
       // folded. Radix treats a Space within a second of the last typed key as type-ahead, so the second one waits.
       const flipped = state.checked === 'true' ? 'false' : 'true'

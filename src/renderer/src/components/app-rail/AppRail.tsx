@@ -79,7 +79,9 @@ export function AppRail({
   }, [])
   // Focus ownership sampled at the moment a fold/unfold is about to commit; only that transition may recover it.
   const transitionOwnerRef = useRef<AppRailItemId | null>(null)
+  const pendingChecklistWrite = useRef<object | null>(null)
   const capacity = useAppRailSlotCapacity(toolbar, () => {
+    pendingChecklistWrite.current = null
     transitionOwnerRef.current = toolbarRef.current ? railItemOwningFocus(toolbarRef.current) : null
   })
   // Customize can change the shown set with its menu open; sample focus before that commits, as for a fold.
@@ -91,6 +93,7 @@ export function AppRail({
           toolbarRef.current &&
           selectShownRailDestinationsKey(state) !== selectShownRailDestinationsKey(prev)
         ) {
+          pendingChecklistWrite.current = null
           // A second change before the commit must not drop the owner the first one sampled.
           transitionOwnerRef.current =
             railItemOwningFocus(toolbarRef.current) ?? transitionOwnerRef.current
@@ -134,7 +137,10 @@ export function AppRail({
     capacity: number
     more: boolean
   } | null>(null)
-  const releaseChecklistCarry = useCallback(() => setChecklistCarry(null), [])
+  const releaseChecklistCarry = useCallback(() => {
+    pendingChecklistWrite.current = null
+    setChecklistCarry(null)
+  }, [])
   const tabStopItem =
     lastFocusedItem && renderedItems.includes(lastFocusedItem)
       ? lastFocusedItem
@@ -254,12 +260,20 @@ export function AppRail({
         nextMore === partition.more
           ? null
           : { id, byPointer, shownKey: nextShown.join(','), capacity, more: nextMore }
-      setChecklistCarry(carry)
-      void setRailDestinationShown(id, shown).then(() => {
-        // A write that didn't land leaves nothing to carry, even if the same change arrives later from elsewhere.
-        if (carry && selectShownRailDestinationsKey(useAppStore.getState()) !== carry.shownKey) {
-          setChecklistCarry((current) => (current === carry ? null : current))
+      pendingChecklistWrite.current = carry
+      void setRailDestinationShown(id, shown, (settings) => {
+        // The acknowledgement runs immediately before the settings are published.
+        if (carry && pendingChecklistWrite.current === carry) {
+          pendingChecklistWrite.current = null
+          if (selectShownRailDestinationsKey({ settings }) === carry.shownKey) {
+            setChecklistCarry(carry)
+          }
         }
+      }).catch((error: unknown) => {
+        if (pendingChecklistWrite.current === carry) {
+          pendingChecklistWrite.current = null
+        }
+        console.error('Failed to update settings:', error)
       })
     }
   }))

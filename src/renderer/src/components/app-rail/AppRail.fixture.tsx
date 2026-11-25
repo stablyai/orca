@@ -97,5 +97,9 @@ export const fullRail = defineFixture({
   width: 420,
   store: { activeView: 'terminal', sidebarBody: 'workspaces' },
   setup: () => echoSettingsWrites(ONLY_TASKS),
-  render: () => <RailFrame height={FULL_RAIL_PX} />
+  render: () => (
+    <React.StrictMode>
+      <RailFrame height={FULL_RAIL_PX} />
+    </React.StrictMode>
+  )
 })

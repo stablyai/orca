@@ -32,10 +32,10 @@ async function resize(slots: number): Promise<void> {
 
 function start(
   shown: Partial<GlobalSettings>,
-  write: (updates: Partial<GlobalSettings>) => Promise<void> = async (updates) => {
-    await Promise.resolve()
-    applySettings(updates)
-  }
+  write: (updates: Partial<GlobalSettings>) => Promise<GlobalSettings> = async (updates) => ({
+    ...useAppStore.getState().settings!,
+    ...updates
+  })
 ): void {
   useAppStore.setState({
     settings: {
@@ -47,10 +47,9 @@ function start(
       showSkillsButton: false,
       showMobileButton: false,
       ...shown
-    },
-    // By default the write lands a tick later, as it does through the settings bridge.
-    updateSettings: write
+    }
   })
+  vi.stubGlobal('api', { settings: { set: write } })
   render(
     <StrictMode>
       <TooltipProvider>
@@ -256,8 +255,10 @@ it('does not reopen on a toggle that kept the rail in place once a resize later 
   expect(checklistOpen()).toBe(false)
 })
 
-it('does not reopen for a toggle whose write did not land, even when the same change arrives later', async () => {
-  start({}, async () => {})
+it('does not reopen for a rejected write, even when the same change arrives later', async () => {
+  start({}, async () => {
+    throw new Error('test rejected write')
+  })
   await openCustomize()
   await toggle('Automations', 'click')
   expect(railItem('customize')).not.toBeNull()
@@ -276,10 +277,9 @@ it('does not reopen when the checklist is dismissed before its write lands', asy
   start(
     {},
     (updates) =>
-      new Promise<void>((resolve) => {
+      new Promise<GlobalSettings>((resolve) => {
         land = () => {
-          applySettings(updates)
-          resolve()
+          resolve({ ...useAppStore.getState().settings!, ...updates })
         }
       })
   )

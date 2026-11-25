@@ -1,4 +1,4 @@
-// Usage: node config/scripts/runtime-verification/app-rail/check-rail-checklist-swap.mjs [--out dir] [--only c1-01|c1-02]
+// Usage: node config/scripts/runtime-verification/app-rail/check-rail-checklist-swap.mjs [--out dir] [--only c1-01|c1-02|carry]
 // Runs against the `fullRail` fixture: Workspaces active, four slots, only Tasks shown, so one more page folds the rail.
 // RC-C1-01: a Customize toggle that swaps "…" and More (both ways) keeps the checklist open on the toggled row, and a
 //   second, different row changes without reopening: trusted mouse input along a real path, and Space on the row.
@@ -17,9 +17,11 @@ const argValue = (flag) => {
 const out = path.resolve(argValue('--out') ?? '.cache/app-rail-checklist-swap')
 const only = argValue('--only')
 const SOURCES = [
+  'src/components/app-rail/AppRail.fixture.tsx',
   'src/components/app-rail/AppRail.tsx',
   'src/components/app-rail/AppRailCustomizeMenu.tsx',
-  'src/components/app-rail/AppRailMoreMenu.tsx'
+  'src/components/app-rail/AppRailMoreMenu.tsx',
+  'src/components/app-rail/app-rail-destinations.ts'
 ]
 
 await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) => {
@@ -183,7 +185,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
     const ROOT = 'dropdown-menu-content'
     const SUB = 'dropdown-menu-sub-content'
 
-    if (only !== 'c1-02') {
+    if (!only || only === 'c1-01') {
       for (const theme of ['light', 'dark']) {
         for (const input of ['mouse', 'keyboard']) {
           const label = `RC-C1-01 ${theme} ${input}`
@@ -195,7 +197,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
             assert.equal(
               await railItems(),
               TALL,
-              `${label}: starts with "…" on a full five-slot rail`
+              `${label}: starts with "…" on a full four-slot rail`
             )
             const trigger = page.locator('[data-app-rail-item="customize"]')
             if (input === 'mouse') {
@@ -227,6 +229,25 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
             await page.screenshot({
               path: path.join(out, `c1-01-${theme}-${input}-1-folded.png`)
             })
+
+            if (input === 'keyboard') {
+              await page.keyboard.press('ArrowDown')
+              const artifacts = page.getByRole('menuitemcheckbox', {
+                name: 'Artifacts',
+                exact: true
+              })
+              await artifacts.and(page.locator(':focus')).waitFor()
+              await page.evaluate(async () => {
+                const { useAppStore } = await import('/src/store/index.ts')
+                useAppStore.setState({ activeView: 'settings' })
+              })
+              await page.locator('[data-app-rail-item="account"][aria-current="page"]').waitFor()
+              assert.ok(
+                await artifacts.evaluate((node) => node === document.activeElement),
+                `${label}: a rail render leaves keyboard focus on Artifacts`
+              )
+              results.push(`${label}: a rail render leaves keyboard focus on Artifacts`)
+            }
 
             if (input === 'mouse') {
               // The pointer that clicked the row now rests over More's own rows; crossing More's row for the folded
@@ -278,12 +299,110 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
             await page.screenshot({
               path: path.join(out, `c1-01-${theme}-${input}-3-folded.png`)
             })
+            if (input === 'keyboard') {
+              const sibling = page
+                .locator('[data-slot="dropdown-menu-content"]')
+                .getByRole('menuitem', { name: 'Artifacts', exact: true })
+              const box = await sibling.boundingBox()
+              assert.ok(box, `${label}: More shows its Artifacts row`)
+              await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+              await page.locator('[data-slot="dropdown-menu-sub-content"]').waitFor({
+                state: 'hidden',
+                timeout: 3000
+              })
+              assert.equal(await sibling.evaluate((node) => node === document.activeElement), true)
+              results.push(
+                `${label}: pointer entering the More row takes focus and closes Customize`
+              )
+            }
           })
         }
       }
     }
 
-    if (only !== 'c1-01') {
+    if (!only || only === 'carry') {
+      const setup = async (fiveSlots = false) => {
+        await renderFixture(page, url, 'fullRail', 'light', { width: 800, height: 600 })
+        if (fiveSlots) {
+          await page.locator('[role="toolbar"]').evaluate((toolbar) => {
+            toolbar.closest('nav').parentElement.style.height = '202px'
+          })
+          await paint(page)
+          await paint(page)
+        }
+        await page.locator('[data-app-rail-item="customize"]').focus()
+        await page.keyboard.press('Enter')
+        await page.getByRole('menuitemcheckbox', { name: 'Automations', exact: true }).waitFor()
+        await paint(page)
+      }
+      const waitForClosedMore = async () => {
+        await page.locator('[data-app-rail-item="more"]').waitFor()
+        await paint(page)
+        assert.equal(
+          await page.getByRole('menuitemcheckbox').count(),
+          0,
+          'the swapped menu stays closed'
+        )
+      }
+      await flow('carry: toggle in place, navigate to Artifacts, then resize', async () => {
+        await setup(true)
+        const rootMenu = page.locator('[data-slot="dropdown-menu-content"]')
+        const openedTop = (await rootMenu.boundingBox()).y
+        await pressSpaceOn('Automations')
+        await page.locator('[data-app-rail-item="automations"]').waitFor()
+        assert.equal(await railItems(), 'workspaces,tasks,automations,customize,account')
+        await paint(page)
+        assert.equal((await rootMenu.boundingBox()).y, openedTop, 'the open menu held its position')
+        await page.keyboard.press('ArrowDown')
+        await page
+          .getByRole('menuitemcheckbox', { name: 'Artifacts', exact: true })
+          .and(page.locator(':focus'))
+          .waitFor()
+        await page.locator('[role="toolbar"]').evaluate((toolbar) => {
+          toolbar.closest('nav').parentElement.style.height = '164px'
+        })
+        await waitForClosedMore()
+      })
+      await flow('carry: rejected write, then matching external publication', async () => {
+        await setup()
+        await page.evaluate(() => {
+          window.api.settings.set = async () => {
+            throw new Error('fixture intentionally rejected the write')
+          }
+        })
+        const rejected = page.waitForEvent('console', {
+          predicate: (message) =>
+            message.text().includes('fixture intentionally rejected the write')
+        })
+        await pressSpaceOn('Automations')
+        await rejected
+        await page.evaluate(async () => {
+          const { useAppStore } = await import('/src/store/index.ts')
+          useAppStore.setState((state) => ({
+            settings: { ...state.settings, showAutomationsButton: true }
+          }))
+        })
+        await waitForClosedMore()
+      })
+      await flow('carry: dismiss while write is pending, then acknowledge', async () => {
+        await setup()
+        await page.evaluate(() => {
+          const original = window.api.settings.set
+          window.api.settings.set = (updates) =>
+            new Promise((resolve) => {
+              window.__landChecklistWrite = async () => resolve(await original(updates))
+            })
+        })
+        await pressSpaceOn('Automations')
+        await page.waitForFunction(() => typeof window.__landChecklistWrite === 'function')
+        await page.keyboard.press('Escape')
+        await page.locator('[role="menu"]').waitFor({ state: 'hidden' })
+        await page.evaluate(() => window.__landChecklistWrite())
+        await waitForClosedMore()
+      })
+    }
+
+    if (!only || only === 'c1-02') {
       for (const variant of ['rail focus', 'outside input']) {
         const label = `RC-C1-02 ${variant}`
         await flow(label, async () => {
@@ -397,6 +516,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
               const input = document.createElement('input')
               input.setAttribute('aria-label', 'outside probe')
               document.querySelector('.w-\\[220px\\]')?.append(input)
+              window.__outsideInput = input
               input.focus()
             })
           }
@@ -436,7 +556,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
             const active = document.activeElement
             return {
               moreOwnsFocus: active === window.__moreNode,
-              inputKeepsFocus: active?.getAttribute('aria-label') === 'outside probe',
+              inputKeepsFocus: active === window.__outsideInput && active.isConnected,
               active:
                 active === document.body
                   ? 'body'
