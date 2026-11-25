@@ -6,6 +6,7 @@ import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-sessio
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import { remoteHoldOnTask } from '../runtime/orchestration/db/remote-owned/remote-placements'
 
 type JournalHost = Pick<StructuredAgentSessionHost, 'journalReads'>
 
@@ -59,6 +60,10 @@ export async function ownsOpenItem(
   )
 }
 
+/** A Run it coordinates has a worker still going, as a new start of the Task would find one: its
+ *  Dispatch here is pending or out, or a paired server holds the Task, which keeps no Dispatch here.
+ *  A Dispatch that settled revoked its worker's right to report, so its process, if still up, is
+ *  idle at its prompt, and a word from it reaches whichever chat coordinates the Run then. */
 export function coordinatesLiveRun(db: OrchestrationDb, sessionId: string): boolean {
   if (!isOrcaSessionId(sessionId)) {
     return false
@@ -74,5 +79,10 @@ export function coordinatesLiveRun(db: OrchestrationDb, sessionId: string): bool
   const live = db.db.prepare(
     `SELECT 1 FROM dispatch_contexts WHERE run_id = ? AND status IN ('pending', 'dispatched') LIMIT 1`
   )
-  return runs.some((run) => live.get(run.id) !== undefined)
+  const placed = db.db.prepare('SELECT task_id FROM remote_placements WHERE run_id = ?')
+  return runs.some(
+    (run) =>
+      live.get(run.id) !== undefined ||
+      placed.all(run.id).some((row) => remoteHoldOnTask(db, String(row.task_id))?.liveWorker)
+  )
 }

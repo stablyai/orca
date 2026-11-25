@@ -16,7 +16,11 @@ import { resolveItem } from '../../bots-items-write-support'
 import { botChatTakingMail } from '../../bots-chats'
 import { refuse } from './bot-recipient'
 import { mayReachBot, sendToBot } from './bot-request-send'
-import { itemMailFilesBody, withItemMailFiles } from './bot-item-mail-files'
+import {
+  claimItemMailFilesForHome,
+  itemMailFilesBody,
+  withItemMailFiles
+} from './bot-item-mail-files'
 
 /** `--chat new`: the receiving bot starts a new chat for a handoff or question. */
 export const BOT_NEW_CHAT = 'new'
@@ -50,12 +54,14 @@ export async function routeBotMail(
     assertNewChatAddress(to, mail.params.type)
   } else if (chat) {
     to = await botChatAddress(context.runtime, to, chat)
-    // The item's chat may close while its files are read; its mail goes to the Home Chat then.
+    // The item's chat may close while its files are read; its mail, files claimed again, goes to
+    // the Home Chat then.
     if (
       input.params.item !== undefined &&
       !(await itemChatTakingMail(context.runtime, mail.to, chat))
     ) {
       to = mail.to
+      await claimItemMailFilesForHome(context.runtime, input, mail)
     }
   }
   // Checked first so other mail keeps sending without a pause before it is stored.

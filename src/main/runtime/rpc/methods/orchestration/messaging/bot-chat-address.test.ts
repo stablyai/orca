@@ -7,11 +7,16 @@ import {
 } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
-const taking = vi.hoisted(() => ({
-  chats: new Set<string>(),
-  /** Runs while the item's files are read, as a close of its chat meanwhile would. */
-  duringFiles: () => {}
-}))
+const taking = vi.hoisted(() => {
+  const claimedForHome: unknown[] = []
+  return {
+    chats: new Set<string>(),
+    /** Runs while the item's files are read, as a close of its chat meanwhile would. */
+    duringFiles: () => {},
+    /** Mail whose files were claimed again for the Home Chat. */
+    claimedForHome
+  }
+})
 vi.mock('../../bots-chats', () => ({
   botChatTakingMail: async (_runtime: unknown, _bot: unknown, id: string) =>
     taking.chats.has(id) ? { title: null, sessionId: id } : null
@@ -29,7 +34,10 @@ vi.mock('./bot-item-mail-files', () => ({
     taking.duringFiles()
     return mail
   },
-  itemMailFilesBody: () => ''
+  itemMailFilesBody: () => '',
+  claimItemMailFilesForHome: async (_runtime: unknown, sent: unknown) => {
+    taking.claimedForHome.push(sent)
+  }
 }))
 vi.mock('../../../../../bots/bot-session-tabs', () => ({ botOfSession: () => ({ id: 'bot-1' }) }))
 
@@ -61,6 +69,8 @@ describe('--item mail', () => {
     }
     await expect(route(open)).resolves.toEqual({ to: formatOrcaSessionAddress(open) })
     await expect(route(randomUUID())).resolves.toEqual({ to: 'bot:Nightly' })
+    // Its files were admitted for the chat it went to, so neither is claimed again.
+    expect(taking.claimedForHome).toEqual([])
   })
 
   it('goes to the Home Chat when the chat closes while the files are read', async () => {
@@ -68,5 +78,7 @@ describe('--item mail', () => {
     taking.chats.add(closing)
     taking.duringFiles = () => taking.chats.delete(closing)
     await expect(route(closing)).resolves.toEqual({ to: 'bot:Nightly' })
+    // Its files were admitted for the item's chat, so they are claimed for the Home Chat too.
+    expect(taking.claimedForHome).toEqual([{ to: 'bot:Nightly', params: { item: '11' } }])
   })
 })

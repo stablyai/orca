@@ -1,5 +1,5 @@
 // Closes the chats a bot's automation runs opened once each run ended and nothing waits on it, when
-// the bot's `closeEndedRuns` is on: when it turns on, 10 minutes after each run, and once after a start.
+// the bot's `closeEndedRuns` is on; bot-run-chat-checks says when it looks.
 import type { Bot } from '../../shared/bot-types'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
 import { BOT_ITEM_STATUSES } from '../../shared/bots/bot-items'
@@ -29,9 +29,8 @@ import {
 import { readBotChats } from '../runtime/rpc/methods/bots-chats'
 import { chatIsIdle, chatPaneKey } from '../external-conversations/external-conversation-chat'
 import { requireStructuredHost } from './bot-chat-session'
-import { runtimeRunChatClose, type ClosedRunChat } from './bot-run-chat-close-step'
+import { runChatClosesOwed, runtimeRunChatClose } from './bot-run-chat-close-step'
 import { chatRunId, coordinatesLiveRun, ownsOpenItem, personSpoke } from './bot-run-chat-facts'
-import { botOfSession } from './bot-session-tabs'
 
 type RunChatRead = BotRunChatPreviewRow & {
   /** The session running it now; a /clear moves it on from the row's root. */
@@ -127,12 +126,20 @@ async function readRunChat(
   }
 }
 
+type RunChatsRead = {
+  open: BotChatRow[]
+  runChats: RunChatRead[]
+  /** Chats whose read failed: neither judged nor counted as no run's. */
+  unreadable: number
+  itemsCut: boolean
+}
+
 /** The bot's open chats, and the verdict on each a run opened (all, or just `only`). */
 async function readRunChats(
   runtime: OrcaRuntimeService,
   bot: Bot,
   only?: string
-): Promise<{ context: Context; open: BotChatRow[]; runChats: RunChatRead[] }> {
+): Promise<RunChatsRead> {
   const context = await readContext(runtime, bot)
   const open = await readBotChats(runtime, bot, null)
   const rows = open.filter(
@@ -150,6 +157,7 @@ async function readRunChats(
     limit: 1000
   })
   const runChats: RunChatRead[] = []
+  let unreadable = 0
   for (const row of rows) {
     const items = owned.items
       .filter((item) => item.chatId === row.id)
@@ -157,13 +165,15 @@ async function readRunChats(
     // One unreadable chat stays open; the rest are still judged.
     const read = await readRunChat(context, row, items).catch((error: unknown) => {
       console.warn('[bots] could not read a run chat', error)
+      unreadable += 1
       return null
     })
     if (read) {
       runChats.push(read)
     }
   }
-  return { context, open, runChats }
+  const listed = Object.values(owned.counts).reduce((sum, count) => sum + (count ?? 0), 0)
+  return { open, runChats, unreadable, itemsCut: listed > owned.items.length }
 }
 
 /** `orca bot run-chats`: what a check would close now; reads only. */
@@ -171,7 +181,7 @@ export async function previewRunChats(
   runtime: OrcaRuntimeService,
   bot: Bot
 ): Promise<BotRunChatsPreview> {
-  const { open, runChats } = await readRunChats(runtime, bot)
+  const { open, runChats, unreadable, itemsCut } = await readRunChats(runtime, bot)
   const row = ({ chatId, title, lastActivityAt, items }: RunChatRead): BotRunChatPreviewRow => ({
     chatId,
     title,
@@ -183,26 +193,31 @@ export async function previewRunChats(
     bot: bot.name,
     on: bot.closeEndedRuns === true,
     open: open.length,
-    notRunChats: open.length - runChats.length,
+    notRunChats: open.length - runChats.length - unreadable,
+    unreadable,
     close: runChats.filter((chat) => chat.keep.length === 0).map(row),
     keep: runChats
       .filter((chat) => chat.keep.length > 0)
       .map((chat) => ({ ...row(chat), keep: chat.keep })),
-    itemMailTo: home ? { chatId: home.id, title: home.title } : null
+    itemMailTo: home ? { chatId: home.id, title: home.title } : null,
+    itemsCut
   }
 }
 
-/** A close whose moves to the Home Chat failed is finished here, before the open chats are judged. */
+/** A close whose moves to the Home Chat failed is finished here, before the open chats are judged,
+ *  setting on or off: the chat was closed while it was on. */
 async function settleClosedRunChats(
   runtime: OrcaRuntimeService,
   bot: Bot,
   settle: ReturnType<typeof runtimeRunChatClose>['settle']
 ): Promise<void> {
-  const closed: ClosedRunChat[] = (await readBotChats(runtime, bot, null, true))
-    .filter((row) => row.closed && row.reason === 'ended' && !row.home)
-    .map((row) => ({ chatId: row.id, sessionId: liveSessionOf(row.id) }))
-  const host = await requireStructuredHost(runtime)
-  await settle(bot.id, closed, async (chatId) => (await chatRunId(host, chatId)) !== null)
+  if (!runChatClosesOwed(runtime, bot.id)) {
+    return
+  }
+  const rows = (await readBotChats(runtime, bot, null, true)).filter((row) => !row.home)
+  const sessions = (closed: boolean) =>
+    new Set(rows.filter((row) => row.closed === closed).map((row) => liveSessionOf(row.id)))
+  await settle(bot.id, { closed: sessions(true), open: sessions(false) })
 }
 
 export type RunChatCloseResult = {
@@ -212,6 +227,9 @@ export type RunChatCloseResult = {
 }
 
 const closing = new Set<string>()
+/** Bots a look came for while one ran: each is looked at again once that ends, since the running
+ *  look read its chats before whatever brought the new one. */
+const lookAgain = new Set<string>()
 
 /** Closes the bot's ended run chats (all, or just `only`) when its setting is on; each is judged
  *  again under the bot's lock, so mail that came meanwhile keeps it. */
@@ -220,7 +238,8 @@ export async function closeEndedRunChats(
   bot: Bot,
   only?: string
 ): Promise<RunChatCloseResult | null> {
-  if (bot.closeEndedRuns !== true || closing.has(bot.id)) {
+  if (closing.has(bot.id)) {
+    lookAgain.add(bot.id)
     return null
   }
   closing.add(bot.id)
@@ -231,6 +250,9 @@ export async function closeEndedRunChats(
     await settleClosedRunChats(runtime, bot, closer.settle).catch((error: unknown) =>
       console.warn('[bots] could not move what a closed run chat left', error)
     )
+    if (bot.closeEndedRuns !== true) {
+      return null
+    }
     const { runChats } = await readRunChats(runtime, bot, only)
     const kept: RunChatCloseResult['kept'] = {}
     const keep = (reasons: readonly RunChatKeepReason[]) =>
@@ -258,6 +280,8 @@ export async function closeEndedRunChats(
         })
       if (outcome === 'closed') {
         tried.push(chat.chatId)
+      } else if (outcome === 'tab-open') {
+        keep(['tab-open'])
       } else if (outcome === 'failed') {
         failed += 1
       }
@@ -277,47 +301,11 @@ export async function closeEndedRunChats(
     return { closed, failed, kept }
   } finally {
     closing.delete(bot.id)
-  }
-}
-
-function checkRunChats(runtime: OrcaRuntimeService, bot: Bot): void {
-  void closeEndedRunChats(runtime, bot).catch((error: unknown) =>
-    console.warn('[bots] run chat check failed', error)
-  )
-}
-
-const closingBots = (runtime: OrcaRuntimeService) =>
-  runtime.bots.list().filter((bot) => bot.closeEndedRuns === true)
-
-/** After a take-and-new run ended, once its chat has been quiet long enough: a look at all the
- *  bot's run chats, so one an earlier look kept (its tab was open, mail unread) is judged again. */
-export function scheduleRunChatCheck(runtime: OrcaRuntimeService, sessionId: string): void {
-  const timer = setTimeout(() => {
-    const bot = botOfSession(runtime.bots, sessionId)
-    if (bot?.closeEndedRuns === true) {
-      checkRunChats(runtime, bot)
+    const now = lookAgain.delete(bot.id) && runtime.bots.list().find((next) => next.id === bot.id)
+    if (now) {
+      void closeEndedRunChats(runtime, now).catch((error: unknown) =>
+        console.warn('[bots] run chat check failed', error)
+      )
     }
-  }, RUN_CHAT_QUIET_MS + 30_000)
-  timer.unref?.()
-}
-
-/** No timer runs while nothing happens: a bot's run chats are looked at when its setting turns on
- *  (closing what piled up), after each of its runs (above), and once a quiet window after start,
- *  for the looks a restart dropped. */
-export function bindRunChatChecks(runtime: OrcaRuntimeService): () => void {
-  let on = new Set(closingBots(runtime).map((bot) => bot.id))
-  const stopListening = runtime.onBotsWritten(() => {
-    const now = closingBots(runtime)
-    now.filter((bot) => !on.has(bot.id)).forEach((bot) => checkRunChats(runtime, bot))
-    on = new Set(now.map((bot) => bot.id))
-  })
-  const afterStart = setTimeout(
-    () => closingBots(runtime).forEach((bot) => checkRunChats(runtime, bot)),
-    RUN_CHAT_QUIET_MS
-  )
-  afterStart.unref?.()
-  return () => {
-    stopListening()
-    clearTimeout(afterStart)
   }
 }

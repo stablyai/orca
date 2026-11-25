@@ -9,12 +9,14 @@ describe('orca bot run-chats', () => {
       on: false,
       open: 5,
       notRunChats: 2,
+      unreadable: 0,
       close: [{ ...chat, items: [{ number: 11, status: 'done' }] }],
       keep: [
         { ...chat, chatId: 'c2', keep: ['thread', 'recent'] },
         { ...chat, chatId: 'c3', keep: ['thread'] }
       ],
-      itemMailTo: { chatId: 'home', title: 'Home title' }
+      itemMailTo: { chatId: 'home', title: 'Home title' },
+      itemsCut: false
     })
     expect(text).toBe(
       [
@@ -27,5 +29,26 @@ describe('orca bot run-chats', () => {
       ].join('\n')
     )
     expect(text).not.toMatch(/Customer|Home title/)
+  })
+
+  it('says how many chats it could not read and when the items listed are cut', () => {
+    const text = formatRunChats({
+      bot: 'Nightly',
+      on: true,
+      open: 4,
+      notRunChats: 1,
+      unreadable: 2,
+      close: [{ chatId: 'c1', title: null, lastActivityAt: 0, items: [] }],
+      keep: [],
+      itemMailTo: null,
+      itemsCut: true
+    })
+    expect(text.split('\n')).toEqual([
+      'Nightly: closing ended run chats is on.',
+      'Open chats: 4 (1 opened by a run, 1 not, 2 could not be read and stay open).',
+      'Would close now: 1.',
+      'Would keep: 0.',
+      'Items listed are one page; a chat can own more than it shows.'
+    ])
   })
 })

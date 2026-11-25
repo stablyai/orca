@@ -4,7 +4,10 @@
 import { isAgentInlineImagePath } from '../../../../../../shared/native-chat/input/composer/agent-inline-image-types'
 import { formatNativeChatFileReference } from '../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { parseBotAddress, botOfAddress } from '../../../../../../shared/bot-roster'
-import { admitBotItemCommentAttachments } from '../../../../../bots/bot-item-comment-attachments'
+import {
+  admitBotItemCommentAttachments,
+  claimBotItemCommentAttachments
+} from '../../../../../bots/bot-item-comment-attachments'
 import { BotItemError } from '../../../../../bots/bot-item-error'
 import {
   getAgentSessionAttachmentClaimer,
@@ -66,11 +69,39 @@ export async function withItemMailFiles<T extends ItemMail>(
       images: images.map(({ path }) => path)
     }
   } catch (error) {
-    if (error instanceof BotItemError) {
-      throw new OrchestrationError('invalid_argument', `${error.message} Nothing was sent.`)
-    }
-    throw error
+    throw nothingSent(error)
   }
+}
+
+/** The item's chat stopped taking mail after the files were claimed for it, so the mail goes to the
+ *  Home Chat: they are claimed for that chat too, or its sweep could drop what the mail names. */
+export async function claimItemMailFilesForHome(
+  runtime: OrcaRuntimeService,
+  sent: ItemMail,
+  admitted: ItemMail
+): Promise<void> {
+  const name = parseBotAddress(sent.to)
+  const bot = name === null ? undefined : botOfAddress(runtime.bots.list(), name)
+  if (!bot || ((sent.params.files ?? []).length === 0 && (sent.attachments ?? []).length === 0)) {
+    return
+  }
+  await claimBotItemCommentAttachments(
+    {
+      store: getAgentSessionAttachmentStore(),
+      claim: getAgentSessionAttachmentClaimer(),
+      chat: () => botHomeChatTakingMail(runtime, bot)
+    },
+    admitted.params.body ?? '',
+    (admitted.images ?? []).map((path) => ({ path }))
+  ).catch((error: unknown) => {
+    throw nothingSent(error)
+  })
+}
+
+function nothingSent(error: unknown): unknown {
+  return error instanceof BotItemError
+    ? new OrchestrationError('invalid_argument', `${error.message} Nothing was sent.`)
+    : error
 }
 
 /** The mail's body with its images named as `@path` too, for mail that carries no image blocks. */

@@ -21,7 +21,7 @@ import { botChatGone } from '../runtime/integrations/automations/runtime-automat
 import { isBotGroupMemberSession } from '../../shared/bots/bot-group'
 import { sendBotGroupAutomationRun } from './bot-group-automation-run'
 import { runtimeBotGroups } from './bot-group-runtime'
-import { scheduleRunChatCheck } from './bot-run-chat-closer'
+import { scheduleRunChatCheck } from './bot-run-chat-checks'
 
 export type BotAutomationSessionDependencies = {
   chats: Pick<ReturnType<typeof botChatSessions>, 'sendToChat' | 'sendToSession'>

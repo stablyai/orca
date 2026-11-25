@@ -83,6 +83,17 @@ export async function admitBotItemCommentAttachments(
     : commentText.trim()
       ? `${commentText.trimEnd()}\n\n${references}`
       : references
+  await claimBotItemCommentAttachments(deps, text, images)
+  return { text, images }
+}
+
+/** Claims each upload an admitted comment names for `deps.chat`'s session; naming none, touches
+ *  nothing. Mail admitted for an item's chat that goes on to the Home Chat is claimed again here. */
+export async function claimBotItemCommentAttachments(
+  deps: Pick<BotItemCommentAttachmentDeps, 'store' | 'claim' | 'chat'>,
+  text: string,
+  images: readonly Pick<BotItemCommentImage, 'path'>[]
+): Promise<void> {
   const body: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
@@ -91,8 +102,8 @@ export async function admitBotItemCommentAttachments(
       ...images.map(({ path }) => ({ type: 'image-ref' as const, path }))
     ]
   }
-  if (agentSessionAttachmentReferences(store.rootDir, body).size === 0) {
-    return { text, images }
+  if (!deps.store || agentSessionAttachmentReferences(deps.store.rootDir, body).size === 0) {
+    return
   }
   const chat = await deps.chat()
   if (!chat) {
@@ -106,7 +117,6 @@ export async function admitBotItemCommentAttachments(
     retry: botFailure('commentAttachFailed'),
     refused
   })
-  return { text, images }
 }
 
 function refused(failure: BotFailure): BotItemError {

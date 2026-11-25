@@ -18,7 +18,8 @@ export const RUN_CHAT_KEEP_REASONS = [
   'automation-target',
   /** It answers a Slack, GitHub or Linear conversation. */
   'thread',
-  /** A Run it coordinates has a worker still going. */
+  /** A Run it coordinates has a worker still going: its Dispatch is pending or out, or a paired
+   *  server holds its Task. */
   'live-run',
   /** Someone has its tab open. */
   'tab-open',
@@ -55,10 +56,15 @@ export type BotRunChatsPreview = {
   open: number
   /** Open chats no run opened: the Home Chat, threads, chats a person started. */
   notRunChats: number
+  /** Open chats that could not be read; they stay open, and the next check reads them again. */
+  unreadable: number
   close: BotRunChatPreviewRow[]
   keep: (BotRunChatPreviewRow & { keep: RunChatKeepReason[] })[]
   /** Item mail of a closed chat reaches the Home Chat. */
   itemMailTo: { chatId: string; title: string | null } | null
+  /** The chats own more items than one page lists, so a row's `items` can miss some. Whether a
+   *  chat owns an open item, which keeps it, is counted apart and never cut. */
+  itemsCut: boolean
 }
 
 export type BotRunChatPreviewRow = {
