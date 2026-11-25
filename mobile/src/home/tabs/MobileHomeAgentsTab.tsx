@@ -75,7 +75,7 @@ export function MobileHomeAgentsTab(props: {
   const unreadRows = listed.filter((row) => row.unread === true)
   const clearableRows = listed.filter((row) => row.clearable)
   const clearFinished = () => props.handlers.onClear(clearableRows)
-  // The Done heading's Clear acts on Done alone; a failed agent under Needs you stays.
+  // The Done heading's Clear acts on Done alone; a failed agent under Failed stays.
   const clearSection = (section: AgentListSection) => {
     const rows = agentListRowsIn([section]).filter((row) => row.clearable)
     return rows.length > 0 ? () => props.handlers.onClear(rows) : undefined

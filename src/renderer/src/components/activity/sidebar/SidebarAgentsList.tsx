@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { SidebarActivityBadge } from './sidebar-activity-badge'
 import { activityThreadStatusId } from '@/components/activity/threads/activity-thread-presentation'
+import { agentListStatusNeedsYou } from '../../../../../shared/agent-status/presentation/agent-list-status'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
@@ -64,7 +65,7 @@ export default function SidebarAgentsList({
       continue
     }
     const status = activityThreadStatusId(thread)
-    if (status === 'waiting' || status === 'blocked') {
+    if (agentListStatusNeedsYou(status)) {
       counts.attention += 1
     } else if (status === 'working' || status === 'monitoring') {
       counts.working += 1
