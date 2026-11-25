@@ -109,6 +109,9 @@ export async function entryById(folder: string, id: string): Promise<HostEntry> 
 
 /** The servers as the write stored them: credential ids and sign-ins are the file's, not the input's. */
 export async function storedViews(folder: string, ids: readonly string[]): Promise<McpServer[]> {
+  if (ids.length === 0) {
+    return []
+  }
   const wanted = new Set(ids)
   const byId = new Map(
     (await readHostEntries(folder)).entries.flatMap((entry) =>

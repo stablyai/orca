@@ -205,19 +205,31 @@ export function botToolCredentialFingerprints(
   folder: string,
   ids: ReadonlySet<string>
 ): () => Map<string, unknown> {
-  const sealed = readSealed(folder)
+  if (ids.size === 0) {
+    return () => new Map()
+  }
+  // Let go of once the answer is made, so no opened entry outlives it.
+  let sealed: Stored | undefined = readSealed(folder)
   let fingerprints: Map<string, unknown> | undefined
-  return () =>
-    (fingerprints ??= new Map(
-      [...ids].sort().map((id) => {
-        const slot = sealed[id]
-        const entry = slot?.entry
-        return [
-          id,
-          entry?.kind === 'oauth' ? [entry.kind, entry.url, entry.grant] : (slot?.envelope ?? null)
-        ]
-      })
-    ))
+  return () => {
+    if (!fingerprints) {
+      const store = sealed!
+      fingerprints = new Map(
+        [...ids].sort().map((id) => {
+          const slot = store[id]
+          const entry = slot?.entry
+          return [
+            id,
+            entry?.kind === 'oauth'
+              ? [entry.kind, entry.url, entry.grant]
+              : (slot?.envelope ?? null)
+          ]
+        })
+      )
+      sealed = undefined
+    }
+    return fingerprints
+  }
 }
 
 /** Header names only, for an editor that shows which values are saved. */
