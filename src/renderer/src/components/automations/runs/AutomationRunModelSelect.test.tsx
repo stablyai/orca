@@ -6,7 +6,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { AutomationRunModelSelect } from './AutomationRunModelPicker'
 import type { AutomationRunModelOption } from './automation-run-model-fix'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 const OPTIONS = [
   { id: 'model-beta', label: 'Model Beta' },
@@ -58,6 +61,8 @@ it('picks by a typed letter on an idle closed trigger without opening it', () =>
 })
 
 it('ignores typing and open keys while a pick is saving, keeps it pending, and lets Tab through', async () => {
+  // Radix resets its typeahead search after 1 s; fake timers let the test step past it.
+  vi.useFakeTimers()
   const onPick = vi.fn()
   render(<Harness onPick={onPick} />)
   const trigger = screen.getByRole('combobox')
@@ -66,8 +71,10 @@ it('ignores typing and open keys while a pick is saving, keeps it pending, and l
   expect(onPick).toHaveBeenCalledTimes(1)
   expect(trigger.getAttribute('aria-disabled')).toBe('true')
 
-  // Wait out the typeahead window so the next letters start a new search.
-  await act(() => new Promise((resolve) => setTimeout(resolve, 1100)))
+  // Step past the typeahead window so the next letters start a new search.
+  act(() => {
+    vi.advanceTimersByTime(1100)
+  })
   type(trigger, 'Model D')
   expect(fireEvent.keyDown(trigger, { key: 'Enter' })).toBe(false)
   expect(fireEvent.keyDown(trigger, { key: 'ArrowDown' })).toBe(false)
