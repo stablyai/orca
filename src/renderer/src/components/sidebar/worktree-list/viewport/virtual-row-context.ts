@@ -19,8 +19,10 @@ import type { WorktreeVirtualRowContext } from '../rows/virtual-row-dispatch'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 
 import type { ProjectHeaderHostContext } from '../rows/project-header-host-context'
+import type { ProjectGroupColor } from './project-group-colors'
 
 type BuildArgs = {
+  projectGroupColors?: readonly (ProjectGroupColor | null)[]
   props: VirtualizedWorktreeViewportProps
   projectGroups: readonly ProjectGroup[]
   dragUnitsByRow: ReadonlyMap<number, { identity: string }>
@@ -56,6 +58,7 @@ type BuildArgs = {
 export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtualRowContext {
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
   return {
+    projectGroupColors: args.projectGroupColors,
     dragUnitsByRow: args.dragUnitsByRow,
     hiddenDragRanges: args.hiddenDragRanges,
     projection: args.projection,
