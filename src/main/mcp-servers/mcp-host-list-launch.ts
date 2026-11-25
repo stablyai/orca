@@ -181,9 +181,10 @@ export type McpLaunchEntry = { id: string | null; server: BotToolServer }
 export async function mcpServerEntriesForLaunch(
   agent: string,
   workspace: LaunchWorkspace,
-  folder = mcpHostListFolder()
+  folder = mcpHostListFolder(),
+  read: McpHostListRead = readBotToolsSnapshot
 ): Promise<{ entries: McpLaunchEntry[]; sharedProcesses: ReadonlyMap<string, string> }> {
-  const { all, on } = await launchEntries(agent, workspace, folder)
+  const { all, on } = await launchEntries(agent, workspace, folder, read)
   const seen = new Set<string>()
   const entries = on.map(({ server, extras }) => {
     const given =
