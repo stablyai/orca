@@ -193,8 +193,15 @@ function launchProcessSpecOnWorker(
       return
     }
     if (process.platform !== 'win32') {
+      onWorkerLost?.()
+      const exitReported = child.exitCode !== null || child.signalCode !== null
       if (ownedGroup) {
-        onWorkerLost?.()
+        // An exited root not being stopped ended as a normal close would: its group may hold daemons it meant to leave, and its reaped id may be reused.
+        if (child.ownedGroupTerminated || (exitReported && !child.ownedGroupStopping)) {
+          onTerminated()
+          ownedGroup.resolveAbandoned(true)
+          return
+        }
         // Wait for the real group kill before resolving stop() so runProcess never verifies prematurely or misses deferredError.
         void forceTerminateProcessTree(launched)
           .catch(() => false)
@@ -206,8 +213,15 @@ function launchProcessSpecOnWorker(
           })
         return
       }
-      onWorkerLost?.()
-      // Worker death closes stdio pipes (EOF/SIGPIPE); avoid SIGKILLing a pid the dead worker may already have reaped.
+      // No worker is left to deliver a timeout or abort kill, and a child that ignores closed pipes would outlive both.
+      // The worker reports an exit in the turn it reaps, so an unreported exit means the pid is still this child's.
+      if (!exitReported) {
+        try {
+          process.kill(child.pid, 'SIGKILL')
+        } catch {
+          /* already gone */
+        }
+      }
       if (lifetimeEndsOnLoss) {
         onTerminated()
       }

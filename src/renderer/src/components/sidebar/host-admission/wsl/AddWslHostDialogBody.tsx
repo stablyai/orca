@@ -7,11 +7,14 @@ import { wslHostAddRefusalMessage, wslHostStatusDetailMessage } from './wsl-host
 import { addWslHostDistro } from './add-wsl-host-distro'
 
 export function AddWslHostDialogBody({
+  initialDistro,
   adding,
   onAddingChange,
   onAdded,
   onCancel
 }: {
+  /** A distro already picked elsewhere (Add host › WSL distro). */
+  initialDistro?: string
   adding: boolean
   onAddingChange: (adding: boolean) => void
   onAdded: () => void
@@ -21,7 +24,7 @@ export function AddWslHostDialogBody({
   // Missing server files prevent adding any distro, so avoid listing through wsl.exe.
   const list = useWslDistroList(!serverFilesMissing)
   const distros = list.distros
-  const [chosenDistro, setChosenDistro] = useState('')
+  const [chosenDistro, setChosenDistro] = useState(initialDistro ?? '')
   const [error, setError] = useState<string | null>(null)
   const [addingDistro, setAddingDistro] = useState<string | null>(null)
   const [wait, setWait] = useState<string | null>(null)

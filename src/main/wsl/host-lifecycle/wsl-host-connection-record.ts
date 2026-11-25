@@ -122,6 +122,7 @@ export function wslHostAddProgress(
   const coded = status.installLockWait ? wslHostInstallLockWaitText(status.installLockWait) : null
   return {
     distro,
+    ...(status.addStage ? { stage: status.addStage } : {}),
     detail: coded?.text ?? null,
     ...(coded ? { detailCode: coded.code } : {}),
     ...(coded?.params ? { detailParams: coded.params } : {})

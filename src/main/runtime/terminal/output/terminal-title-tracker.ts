@@ -116,7 +116,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
             !this.ptyForegroundAgent.hasDelayedSnapshot(ptyId) &&
             (titleStatus === 'working' || titleStatus === 'permission')
           ) {
-            // Normalized Pi/Gemini/Grok frames still renew the replicated status lease.
+            // Normalized Pi/Grok frames still renew the replicated status lease.
             this.mobileSessionTabsAgentStatusHeartbeat.scheduleDecorativeHeartbeat(ptyId)
           }
           // Why: an identity-only cursor title records nothing, but the tracker

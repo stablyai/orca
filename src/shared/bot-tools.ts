@@ -170,6 +170,8 @@ export type BotTools = {
   own: BotOwnTool[]
   /** Read from Claude Code's or Codex's config; another agent's own config isn't read, so none. */
   inherited: BotInheritedTool[]
+  /** Whether its sessions also take the host's MCP server list; absent while the host's switch is off. */
+  hostMcpServers?: boolean
 }
 
 export const botToolDetail = (server: BotToolServer): string =>

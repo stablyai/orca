@@ -38,6 +38,7 @@ vi.mock(
 function createInProcessWorkerHost(): {
   host: WorkerThreadChildProcessHost
   close: () => void
+  loseWorker: () => void
 } {
   const { port1, port2 } = new MessageChannel()
   serveWorkerThreadChildProcesses(port2)
@@ -61,6 +62,7 @@ function createInProcessWorkerHost(): {
   const host = new WorkerThreadChildProcessHost(() => transport)
   return {
     host,
+    loseWorker: () => emitter.emit('exit', 1),
     close: () => {
       port1.close()
       port2.close()
@@ -214,6 +216,73 @@ describe.skipIf(process.platform === 'win32')('launchPlainProcessSpecOnPosixWork
 
     expect(result).toMatchObject({ code: 0, stderr: '1111', outputTruncated: true })
     expect(observed.join('')).toBe('11112222DONE')
+  })
+
+  it('kills a running child whose worker was lost, so it cannot outlive its timeout', async () => {
+    const setup = createInProcessWorkerHost()
+    closeHost = setup.close
+    workerMock.host = setup.host
+    workerMock.readyNow = true
+    expect(await setup.host.whenReady()).toBe(true)
+
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
+    let pid = 0
+    const run = runProcess({
+      program: process.execPath,
+      // Never reads stdin, so closed pipes alone would not end it.
+      args: ['-e', 'process.stderr.write(String(process.pid)); setInterval(() => {}, 1000)'],
+      onStderr: (chunk) => {
+        pid = Number(chunk.toString())
+        setup.loseWorker()
+      },
+      timeoutMs: 30_000
+    })
+
+    await expect(run).rejects.toMatchObject({ code: 'ERR_ORCA_WORKER_CHILD_ABANDONED' })
+    expect(pid).toBeGreaterThan(1)
+    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 5_000 })
+  })
+
+  it('leaves the group of an already-exited barrier root alone when its worker is lost', async () => {
+    const setup = createInProcessWorkerHost()
+    closeHost = setup.close
+    workerMock.host = setup.host
+    workerMock.readyNow = true
+    expect(await setup.host.whenReady()).toBe(true)
+
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
+    let pids: number[] = []
+    const run = runProcess({
+      program: process.execPath,
+      // The root exits at once; the helper it leaves behind keeps the output pipes open, so no close follows.
+      args: [
+        '-e',
+        'const helper = require("node:child_process").spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "inherit" }); process.stderr.write(process.pid + " " + helper.pid); process.exit(0)'
+      ],
+      terminationBarrier: true,
+      onStderr: (chunk) => {
+        pids = chunk.toString().split(' ').map(Number)
+      },
+      timeoutMs: 30_000
+    })
+    const settled = run.then(
+      () => 'resolved',
+      (error: NodeJS.ErrnoException) => error.code
+    )
+    await vi.waitFor(() => expect(pids).toHaveLength(2), { timeout: 5_000 })
+    const [rootPid, helperPid] = pids
+    try {
+      // Reaped means the exit was posted; give that message a few turns to cross.
+      await vi.waitFor(() => expect(() => process.kill(rootPid, 0)).toThrow(), { timeout: 5_000 })
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      setup.loseWorker()
+
+      expect(await settled).toBe('ERR_ORCA_WORKER_CHILD_ABANDONED')
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(() => process.kill(helperPid, 0)).not.toThrow()
+    } finally {
+      process.kill(helperPid, 'SIGKILL')
+    }
   })
 
   it('gives spec.launch precedence over the default launcher even when it returns null', async () => {

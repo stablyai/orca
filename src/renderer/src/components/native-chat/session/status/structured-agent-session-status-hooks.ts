@@ -124,6 +124,19 @@ export function useStructuredAgentSessionHostProgram(
   )
 }
 
+/** Whether the host says this chat runs on its program's own login; an older host never does. */
+export function useStructuredAgentSessionOwnLogin(
+  sessionId: string,
+  target: RuntimeClientTarget
+): boolean {
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
+  return useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.ownLogin === true,
+    () => false
+  )
+}
+
 /** Whether the host says a person's Stop is still ending the work; an older host never does. */
 export function useStructuredAgentSessionHostStopping(
   sessionId: string,
