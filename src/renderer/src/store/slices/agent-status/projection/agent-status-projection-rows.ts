@@ -1,5 +1,5 @@
 import type { AppState } from '../../../types'
-import { orchestrationForStatusRows } from '@/runtime/agent-orchestration/visible-agent-orchestration'
+import { orchestrationForStatusRows } from '@/runtime/agent-orchestration/remote-row-orchestration'
 import {
   parseAgentStatusPaneIdentity,
   resolveAgentStatusWorktreeId,

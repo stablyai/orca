@@ -2,7 +2,7 @@ import type { AppState } from '../../../types'
 import {
   orchestrationForStatusRows,
   remoteRowContextsFor
-} from '@/runtime/agent-orchestration/visible-agent-orchestration'
+} from '@/runtime/agent-orchestration/remote-row-orchestration'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusChange } from '../contracts/agent-status-contract'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
@@ -25,8 +25,7 @@ const SEAM_AGENT_PRESENTATION_FIELDS = [
   'terminalLayoutsByTabId'
 ] as const
 
-/** Row keys whose applied remote context appeared, changed or left: a re-keyed chat, the first
- *  host context arriving and the last leaving all show up here, as the raw host maps cannot say. */
+/** Row keys whose applied remote context changed, including re-keyed chats and a first or last host. */
 function changedRemoteRowKeys(
   before: AgentStatusProjectionState['remoteRows'],
   after: AgentStatusProjectionState['remoteRows']

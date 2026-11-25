@@ -1,7 +1,9 @@
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
-import { aliasKey, type RowIdentities } from './orchestration-row-identities'
+import type { AppState } from '@/store/types'
+import { aliasKey, rowIdentities, type RowIdentities } from './orchestration-row-identities'
+import { terminalProvenance } from './terminal-provenance'
 
 type Contexts = Record<string, AgentStatusOrchestrationContext>
 type TerminalHosts = {
@@ -10,6 +12,9 @@ type TerminalHosts = {
 }
 
 export const EMPTY_REMOTE_ROWS: Contexts = Object.freeze({})
+type RemoteRowState = Parameters<typeof rowIdentities>[0] &
+  Parameters<typeof terminalProvenance>[0] &
+  Partial<Pick<AppState, 'runtimeAgentOrchestrationByPaneKey' | 'remoteAgentOrchestrationByHost'>>
 
 let cache: { inputs: unknown[]; contexts: Contexts } | undefined
 
@@ -29,8 +34,12 @@ function rowOnHost(
   return terminalHost === host ? key : undefined
 }
 
-/** Remote hosts' contexts for the rows each host runs here, by row key. A context for a pane no
- *  window row of that host shows is dropped, so it can never re-parent this computer's rows. */
+function withoutParent(context: AgentStatusOrchestrationContext): AgentStatusOrchestrationContext {
+  const { parentPaneKey: _dropped, ...rest } = context
+  return rest
+}
+
+/** Remote contexts for rows their host runs here, by row key; others drop, never touching local rows. */
 export function remoteRowContexts(
   byHost: Record<string, Contexts> | undefined,
   rows: RowIdentities,
@@ -52,11 +61,14 @@ export function remoteRowContexts(
         continue
       }
       const parentKey = context.parentPaneKey
-      // A parent the host names keeps its own key unless this window shows that host's chat under another.
-      const parent = parentKey
-        ? (rows.aliases.get(aliasKey(host, parentKey)) ?? parentKey)
-        : undefined
-      const next = parent === parentKey ? context : { ...context, parentPaneKey: parent }
+      // A host's parent must be a row that same host runs here; otherwise the link is dropped.
+      const parent = parentKey ? rowOnHost(host, parentKey, rows, terminals) : undefined
+      const next =
+        parent === parentKey
+          ? context
+          : parent
+            ? { ...context, parentPaneKey: parent }
+            : withoutParent(context)
       const kept = previous?.[row]
       contexts[row] =
         next !== context && kept && orchestrationContextsEqual(kept, next) ? kept : next
@@ -69,4 +81,33 @@ export function remoteRowContexts(
     keys.every((key) => previous[key] === contexts[key])
   cache = { inputs, contexts: unchanged ? previous : contexts }
   return cache.contexts
+}
+
+let statusRowsCache: { local: Contexts; remote: Contexts; merged: Contexts } | undefined
+
+/** Status rows read this computer's map unchanged, with only remote-run rows taking their host's context. */
+export function orchestrationForStatusRows(state: RemoteRowState): Contexts {
+  const local = state.runtimeAgentOrchestrationByPaneKey ?? EMPTY_REMOTE_ROWS
+  const remote = remoteRowContextsFor(state)
+  if (remote === EMPTY_REMOTE_ROWS) {
+    return local
+  }
+  if (statusRowsCache?.local !== local || statusRowsCache.remote !== remote) {
+    statusRowsCache = { local, remote, merged: { ...local, ...remote } }
+  }
+  return statusRowsCache.merged
+}
+
+/** The remote contexts applied to rows, by row key; identity holds while no applied context changed. */
+export function remoteRowContextsFor(state: RemoteRowState): Contexts {
+  const byHost = state.remoteAgentOrchestrationByHost
+  // A purely local window builds no row identities or terminal hosts for this.
+  if (!byHost || Object.keys(byHost).length === 0) {
+    return EMPTY_REMOTE_ROWS
+  }
+  return remoteRowContexts(
+    state.remoteAgentOrchestrationByHost,
+    rowIdentities(state),
+    terminalProvenance(state)
+  )
 }

@@ -3,7 +3,10 @@ import { useAppStore } from '@/store'
 import { makeStructuredChatTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { buildAgentRowLineageTree } from '@/components/dashboard/rows/agent-row-lineage-model'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
+import {
+  connectedRuntimeStatus,
+  publicRuntimeEnvironment
+} from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -11,9 +14,9 @@ import {
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   canonicalOrchestrationForRow,
-  orchestrationForStatusRows,
   selectVisibleAgentOrchestration
 } from './visible-agent-orchestration'
+import { orchestrationForStatusRows } from './remote-row-orchestration'
 import {
   noteRemoteAgentOrchestrationChanged,
   parseRemoteAgentOrchestration,
@@ -150,13 +153,17 @@ describe('remote host worker lineage', () => {
       })
     )
     callRuntimeRpc.mockResolvedValue({ contexts: {} })
+    const store = useAppStore.getState()
+    store.setRuntimeEnvironmentStatus('wake-host', connectedRuntimeStatus('runtime-1', 0))
     refreshRemoteAgentOrchestration('wake-host')
     await settle()
+    // Losing the host bumps its generation too, but an unreachable host is not asked.
+    store.clearRuntimeEnvironmentStatus('wake-host')
+    await settle()
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
     // The wake's refresh ran first and skipped; the new runtime id publishes afterwards.
     refreshRemoteAgentOrchestration('wake-host')
-    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
-    advanceRuntimeEnvironmentConnectionGeneration('wake-host')
-    useAppStore.setState({})
+    store.setRuntimeEnvironmentStatus('wake-host', connectedRuntimeStatus('runtime-2', 0))
     await settle()
     expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
   })

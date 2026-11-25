@@ -11,6 +11,7 @@ import {
   AGENT_ACTIVITY_ORCHESTRATION_METHOD
 } from '../../../../shared/rpc-contract/agent-activity/agent-activity-params'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 
 type HostRead = {
   reading: boolean
@@ -159,8 +160,7 @@ async function readHost(environmentId: string, read: HostRead, attempt: number):
 
 let stopWatchingUnsupportedHosts: (() => void) | null = null
 
-/** Re-ask a host without the method the moment its connection changes, whichever of the wake's
- *  refresh and its new runtime id lands first; unwatched once no such host remains. */
+/** Re-ask a method-less host once it reconnects, whichever lands first; unwatched when none remain. */
 function watchUnsupportedHosts(): void {
   if (stopWatchingUnsupportedHosts) {
     return
@@ -171,7 +171,16 @@ function watchUnsupportedHosts(): void {
       if (read.unsupportedAt === null) {
         continue
       }
-      if (read.unsupportedAt === getRuntimeEnvironmentConnectionGeneration(environmentId)) {
+      if (hostRemoved(environmentId)) {
+        clearRetry(read)
+        reads.delete(environmentId)
+        continue
+      }
+      // A disconnect also bumps the generation; only a host that is reachable again is re-asked.
+      if (
+        read.unsupportedAt === getRuntimeEnvironmentConnectionGeneration(environmentId) ||
+        !readRuntimeStatuses().get(environmentId)?.status
+      ) {
         waiting = true
         continue
       }

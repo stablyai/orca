@@ -15,6 +15,7 @@ const WORKER = makePaneKey(WORKER_TAB, LEAF)
 const COORDINATOR = makePaneKey('tab-coordinator', LEAF)
 
 const listed = () => useAppStore.getState().agentStatusByPaneKey.projection.list(WORKTREE)
+const worker = () => listed().find((row) => row.paneKey === WORKER)
 
 beforeEach(() => {
   useAppStore.setState({
@@ -22,9 +23,15 @@ beforeEach(() => {
     remoteAgentOrchestrationByHost: {},
     unifiedTabsByWorktree: {},
     tabsByWorktree: {
-      [WORKTREE]: [makeTab({ id: WORKER_TAB, worktreeId: WORKTREE, title: '✳ Claude Code' })]
+      [WORKTREE]: [
+        makeTab({ id: WORKER_TAB, worktreeId: WORKTREE, title: '✳ Claude Code' }),
+        makeTab({ id: 'tab-coordinator', worktreeId: WORKTREE })
+      ]
     },
-    ptyIdsByTabId: { [WORKER_TAB]: [toRemoteRuntimePtyId('pty-1', ENVIRONMENT)] },
+    ptyIdsByTabId: {
+      [WORKER_TAB]: [toRemoteRuntimePtyId('pty-1', ENVIRONMENT)],
+      'tab-coordinator': [toRemoteRuntimePtyId('pty-2', ENVIRONMENT)]
+    },
     terminalLayoutsByTabId: {
       [WORKER_TAB]: {
         root: { type: 'leaf', leafId: LEAF },
@@ -37,7 +44,7 @@ beforeEach(() => {
 
 it('nests a title-only terminal worker on a remote host by that host’s lineage', () => {
   expect(listed().map((row) => row.paneKey)).toEqual([WORKER])
-  expect(listed()[0]?.entry.orchestration).toBeUndefined()
+  expect(worker()?.entry.orchestration).toBeUndefined()
   useAppStore
     .getState()
     .setRuntimeAgentOrchestrationByPaneKey(
@@ -59,7 +66,7 @@ it('ignores another host’s context for a pane this window runs elsewhere', () 
       toRuntimeExecutionHostId('other-host')
     )
   expect(listed().map((row) => row.paneKey)).toEqual([WORKER])
-  expect(listed()[0]?.entry.orchestration).toBeUndefined()
+  expect(worker()?.entry.orchestration).toBeUndefined()
 })
 
 it('drops the remote row’s lineage when its host’s last context leaves', () => {
@@ -68,9 +75,9 @@ it('drops the remote row’s lineage when its host’s last context leaves', () 
     { [WORKER]: { taskId: 'task-w', dispatchId: 'dispatch-w', parentPaneKey: COORDINATOR } },
     HOST
   )
-  expect(listed()[0]?.entry.orchestration?.parentPaneKey).toBe(COORDINATOR)
+  expect(worker()?.entry.orchestration?.parentPaneKey).toBe(COORDINATOR)
   store.setRuntimeAgentOrchestrationByPaneKey({}, HOST)
-  expect(listed()[0]?.entry.orchestration).toBeUndefined()
+  expect(worker()?.entry.orchestration).toBeUndefined()
 })
 
 it('keeps a local terminal’s own lineage when a remote host reports the same pane key', () => {
@@ -101,4 +108,32 @@ it('keeps a local terminal’s own lineage when a remote host reports the same p
   const row = listed().find((candidate) => candidate.paneKey === LOCAL_WORKER)
   expect(row?.entry.orchestration?.dispatchId).toBe('dispatch-l')
   expect(row?.entry.orchestration?.parentPaneKey).toBe(LOCAL_COORDINATOR)
+})
+
+it('drops a remote worker’s parent link when that parent is a local row, however its key is spelled', () => {
+  const LOCAL_PARENT_TAB = 'tab-local-parent'
+  useAppStore.setState({
+    tabsByWorktree: {
+      [WORKTREE]: [
+        makeTab({ id: WORKER_TAB, worktreeId: WORKTREE, title: '✳ Claude Code' }),
+        makeTab({ id: LOCAL_PARENT_TAB, worktreeId: WORKTREE })
+      ]
+    },
+    ptyIdsByTabId: {
+      [WORKER_TAB]: [toRemoteRuntimePtyId('pty-1', ENVIRONMENT)],
+      [LOCAL_PARENT_TAB]: ['pty-local']
+    }
+  })
+  useAppStore.getState().setRuntimeAgentOrchestrationByPaneKey(
+    {
+      [WORKER]: {
+        taskId: 'task-w',
+        dispatchId: 'dispatch-w',
+        parentPaneKey: makePaneKey(LOCAL_PARENT_TAB, LEAF)
+      }
+    },
+    HOST
+  )
+  expect(worker()?.entry.orchestration?.dispatchId).toBe('dispatch-w')
+  expect(worker()?.entry.orchestration?.parentPaneKey).toBeUndefined()
 })
