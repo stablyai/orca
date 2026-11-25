@@ -2,6 +2,8 @@ import { OrcaRuntimeWithResumeAgentSessionInWorkspace } from './resume-agent-ses
 import { retireReplacedPaneBinding } from '../../../ipc/pty/pane/pane-owner-replacement'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { heldLaunchConfig } from '../../terminal/launch/launch-evidence'
+import { getPinnedClaudeAccountIdForPty } from '../../../claude-accounts/claude-pinned-pty-registry'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeSleepResumeRecorder } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -29,8 +31,8 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
   protected abstract readonly sleepResumeRecords: WorktreeSleepResumeRecorder
 
   /** Restarts a pane's agent conversation in a new terminal in the same tab and leaf; the spawn
-   *  applies whatever account is selected now. Refusals other than `stop_failed` and
-   *  `create_failed` stop nothing. `stillCurrent` confirms, last before the stop, that the pane still
+   *  keeps a pinned Claude account, else applies whatever account is selected now. Refusals other
+   *  than `stop_failed` and `create_failed` stop nothing. `stillCurrent` confirms, last before the stop, that the pane still
    *  runs `session` and should move. */
   async restartAgentPaneInPlace(
     ptyId: string,
@@ -61,12 +63,18 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     let held: AgentSessionResumeClaim | null = null
     let dispatched = false
     try {
+      const claudeAccountId =
+        session.agent === 'claude'
+          ? (heldLaunchConfig(pty, session.agent)?.claudeAccountId ??
+            getPinnedClaudeAccountIdForPty(ptyId))
+          : undefined
       // Resolved before the stop, so nothing after it can leave the pane without its agent.
       const resume = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
         .then((workspace) =>
           this.resolveMobileSessionResumeCommand(workspace, {
             ...session,
-            launchConfig: pty.launchConfig ?? undefined
+            launchConfig: pty.launchConfig ?? undefined,
+            ...(claudeAccountId ? { claudeAccountId } : {})
           })
         )
         .catch(() => null)
