@@ -1349,6 +1349,11 @@
     },
     "artifacts": {
       "teamDisabled": "你的团队已关闭产物分享"
+    },
+    "navigation": {
+      "accounts": {
+        "description": "可以选择为 Claude、Codex、Antigravity、OpenCode Go、MiniMax 和 Grok 配置账户切换和用量。"
+      }
     }
   },
   "menu": {
@@ -24839,7 +24844,22 @@
       "terminalTitle": "终端中的 agy",
       "terminalDescription": "使用 agy 自己保存的账户。切换会应用于新的 agy 会话",
       "addAccountHelp": "要添加账户，请在 agy 中运行 /logout 并重新登录，然后在这里点击“保存”",
-      "apiKeyGet": "获取 API 密钥"
+      "apiKeyGet": "获取 API 密钥",
+      "addAccount": "添加账户",
+      "addAccountInApp": "登录另一个 Google 账户。两个账户都会保存在这里，可随时切换。",
+      "chatCancelSignIn": "取消登录",
+      "chatCopied": "已复制",
+      "chatCopySignInLink": "复制登录链接",
+      "chatFinishInBrowser": "请在浏览器中完成，然后粘贴代码。",
+      "chatOtherWindow": "正在另一个窗口中登录。",
+      "chatPageDidntOpen": "页面没有打开？",
+      "chatPasteCode": "粘贴代码",
+      "chatPasteCodeLabel": "登录后 Google 显示的代码，或那个页面的地址",
+      "description": "聊天和终端中的 agy 共用 agy 的 Google 账户。聊天也可以改用 Gemini API 密钥或 gcloud 登录。",
+      "descriptionWindows": "聊天和终端中的 agy 共用 agy 的 Google 账户。切换只影响这台主机的默认 agy 凭据。聊天也可以改用 Gemini API 密钥或 gcloud 登录。",
+      "agentPlatform": "Google Agent Platform",
+      "locationGlobal": "global",
+      "signInGoogle": "使用 Google 登录"
     },
     "claude": {
       "added": "已添加账户，选择它即可将其用于您下次启动的 Claude",
@@ -24949,6 +24969,12 @@
       "cancel": "取消",
       "save": "保存",
       "unsupportedHost": "请更新 {{host}} 上的 Orca 以在那里更改此设置"
+    },
+    "selection": {
+      "claudeRemoteWslDefaultUnavailable": "暂时还不能把这台主机的 WSL 账户切回系统默认。",
+      "claudeWslLanesNotReset": "暂时还不能从这里重置 WSL 的 Claude 账户。",
+      "codexSystemDefaultIncludingWsl": "使用你当前 {{value0}} 的 Codex 登录（包括 WSL）。",
+      "systemDefaultIncludingWsl": "{{value0}} · 包括 WSL"
     }
   },
   "osDocumentOpen": {
