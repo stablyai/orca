@@ -12,6 +12,7 @@ const TRANSPILED: PluginSourceTranspiled = { ok: true, code: 'x', mappings: '', 
 
 function setup(answerAfterMs = 0) {
   const worker = inProcessWorker(async (request: PluginSourceTranspileRequest) => {
+    // ast-grep-ignore: test-no-real-time-wait -- every test here runs on fake timers
     await new Promise((resolve) => setTimeout(resolve, answerAfterMs))
     const response: PluginSourceTranspileResponse = { id: request.id, result: TRANSPILED }
     return response
