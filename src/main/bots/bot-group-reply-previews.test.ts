@@ -1,5 +1,10 @@
 import { expect, it } from 'vitest'
-import type { BotGroup, BotGroupMessage, BotGroupTurn } from '../../shared/bots/bot-group'
+import {
+  botGroupCompletedReply,
+  type BotGroup,
+  type BotGroupMessage,
+  type BotGroupTurn
+} from '../../shared/bots/bot-group'
 import Database from '../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { recoverBotGroupReplies } from './bot-group-completed-replies'
@@ -151,8 +156,18 @@ it('chooses a legacy reply by journal completion time even when the parent post 
       { ...origin, itemId: 'legacy-turn', sequence: 1, body },
       {
         ...origin,
-        itemId: 'legacy-reply',
+        itemId: 'legacy-whitespace',
         sequence: 2,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: ' ' }]
+        }
+      },
+      {
+        ...origin,
+        itemId: 'legacy-reply',
+        sequence: 3,
         body: {
           kind: 'message',
           role: 'assistant',
@@ -160,9 +175,16 @@ it('chooses a legacy reply by journal completion time even when the parent post 
         }
       }
     ]
-    const listed = await store.listing(true, (messages) =>
-      recoverBotGroupReplies(messages, { turnItems: async () => new Map([['slow', items]]) })
-    )
+    let journal = items
+    const list = () =>
+      store.listing(true, (messages, cache) =>
+        recoverBotGroupReplies(
+          messages,
+          { turnItems: async () => new Map([['slow', journal]]) },
+          cache
+        )
+      )
+    const listed = await list()
     expect(listed[0].replyPreviews).toEqual([
       {
         at: 40,
@@ -174,6 +196,19 @@ it('chooses a legacy reply by journal completion time even when the parent post 
         replyMessageId: 'legacy-reply'
       }
     ])
+    expect(botGroupCompletedReply(items)).toMatchObject({
+      full: ' \nThe review is complete.',
+      messageId: 'legacy-reply'
+    })
+    journal = []
+    store.append({
+      ...common,
+      id: 'third',
+      createdAt: 35,
+      turns: [{ ...turn, operationId: 'later-post', reply: 'Still reviewing.', replyAt: 38 }]
+    })
+    expect((await list())[0].replyPreviews).toEqual(listed[0].replyPreviews)
+    expect(store.message(post.id)?.turns[0].replyAt).toBeUndefined()
   } finally {
     db.close()
   }

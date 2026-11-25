@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react'
 import { Users } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
+import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { selectActiveBotGroupRoomId } from '@/lib/bot-group-catalog'
@@ -184,28 +185,31 @@ export function BotSidebarGroupReplies({
   return (
     <>
       {previews.map(({ group, reply }) => (
-        <button
+        <div
           key={group.id}
-          type="button"
-          data-bot-sidebar-group-reply={group.id}
-          aria-label={t('bots.groups.openReply', 'Open reply in {{name}}: {{reply}}', {
-            name: group.name,
-            reply: reply.text
-          })}
-          aria-current={activeRoom === group.id ? 'true' : undefined}
-          className={cn(
-            'flex h-6 min-w-0 cursor-pointer items-center gap-1.5 rounded-md pr-0.5 pl-1 text-left text-xs text-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
-            activeRoom === group.id && 'bg-sidebar-accent'
-          )}
-          onClick={() => void revealBotGroupReply(group, reply, onOpen)}
+          className={cn('rounded-md', activeRoom === group.id && 'bg-sidebar-accent')}
         >
-          <Users aria-hidden className="size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">
-            <span className="text-foreground">{group.name}</span>
-            {' · '}
-            {reply.text}
-          </span>
-        </button>
+          <Button
+            type="button"
+            variant="ghost-inset"
+            size="xs"
+            data-bot-sidebar-group-reply={group.id}
+            aria-label={t('bots.groups.openReply', 'Open reply in {{name}}: {{reply}}', {
+              name: group.name,
+              reply: reply.text
+            })}
+            aria-current={activeRoom === group.id ? 'true' : undefined}
+            className="w-full min-w-0 justify-start text-left"
+            onClick={() => void revealBotGroupReply(group, reply, onOpen)}
+          >
+            <Users aria-hidden className="size-3.5 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate font-normal text-muted-foreground">
+              <span className="text-foreground">{group.name}</span>
+              {' · '}
+              {reply.text}
+            </span>
+          </Button>
+        </div>
       ))}
     </>
   )

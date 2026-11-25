@@ -1,4 +1,5 @@
 import { botGroupCompletedReply } from '../../shared/bots/bot-group-completed-reply'
+import { BoundedMap } from '../../shared/collections/bounded-map'
 import {
   BotGroupLatestSchema,
   BotGroupMessageSchema,
@@ -23,11 +24,25 @@ export const BOT_GROUP_LISTING_SQL = `
   ORDER BY sequence DESC`
 
 type Preview = NonNullable<BotGroup['replyPreviews']>[number]
+export type RecoveredGroupReply = Omit<
+  NonNullable<ReturnType<typeof botGroupCompletedReply>>,
+  'full'
+>
 export type RecoveredGroupReplies = { messages: BotGroupMessage[]; complete: boolean }
-export type RecoverGroupReplies = (messages: BotGroupMessage[]) => Promise<RecoveredGroupReplies>
+export type RecoverGroupReplies = (
+  messages: BotGroupMessage[],
+  cache: BoundedMap<string, RecoveredGroupReply>
+) => Promise<RecoveredGroupReplies>
 
 export class BotGroupListing {
   private readonly previews = new Map<string, Preview[]>()
+  // A later reply invalidates the group summary, not the completed journal rows it came from.
+  private readonly recoveredReplies = new BoundedMap<string, RecoveredGroupReply>({
+    maxEntries: 8_192,
+    maxBytes: 8 * 1024 * 1024,
+    sizeOf: (reply, operationId) =>
+      2 * (reply.text.length + reply.messageId.length + operationId.length) + 8
+  })
   private generation = 0
 
   missingPreviews(groups: readonly BotGroup[]): string[] {
@@ -79,7 +94,7 @@ export class BotGroupListing {
     let complete = true
     if (recover && messages.length > 0) {
       try {
-        const result = await recover(messages)
+        const result = await recover(messages, this.recoveredReplies)
         recovered = result.messages
         complete = result.complete
       } catch (error) {

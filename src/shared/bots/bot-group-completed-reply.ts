@@ -14,24 +14,27 @@ export function botGroupCompletedReply(
     return null
   }
   const completedAt = turn.body.completedAt
-  const replies = items.flatMap((item) => {
-    if (item.body.kind !== 'message' || item.body.role !== 'assistant') {
-      return []
-    }
-    const text = item.body.blocks
-      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
-      .join('\n')
-    return text.trim() ? [{ text, messageId: item.itemId }] : []
-  })
-  const full = replies.map(({ text }) => text).join('\n')
+  const blocks = items.flatMap((item) =>
+    item.body.kind === 'message' && item.body.role === 'assistant'
+      ? item.body.blocks.flatMap((block) =>
+          block.type === 'text' ? [{ text: block.text, messageId: item.itemId }] : []
+        )
+      : []
+  )
+  const full = blocks.map(({ text }) => text).join('\n')
+  if (!full) {
+    return null
+  }
   const text = full.slice(-16_000)
-  let offset = full.length - text.length
-  const first = replies.find((reply) => {
-    if (offset < reply.text.length) {
-      return true
-    }
-    offset -= reply.text.length + 1
-    return false
-  })
+  // The snippet drops leading whitespace, but existing consumers keep the reply verbatim.
+  let offset = full.length - text.length + Math.max(0, text.search(/\S/))
+  const first =
+    blocks.find((block) => {
+      if (offset < block.text.length) {
+        return true
+      }
+      offset -= block.text.length + 1
+      return false
+    }) ?? blocks[0]
   return first ? { text, full, completedAt, messageId: first.messageId } : null
 }

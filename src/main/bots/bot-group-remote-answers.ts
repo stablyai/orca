@@ -68,6 +68,7 @@ export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGro
  * room's own conversation with that computer counts; the other computer threads its answer and its
  * "won't answer" notice on the question's id, and the answer carries the bot's answer marker. An
  * answer replaces a notice, never the reverse. Each post is merged as it is stored now.
+ * Legacy preview recovery returns metadata without settling the post or mail.
  */
 export function collectRemoteAnswers(
   groups: BotGroupRuntime,
@@ -93,9 +94,9 @@ export function collectRemoteAnswers(
   )
   const updated = new Map<string, BotGroupMessage>()
   const read: string[] = []
-  groups.store.transaction(() => {
-    for (const { id } of open) {
-      const current = groups.store.message(id)
+  const collect = (): void => {
+    for (const message of open) {
+      const current = recoverSaved ? message : groups.store.message(message.id)
       if (!current?.remoteAsks) {
         continue
       }
@@ -112,7 +113,9 @@ export function collectRemoteAnswers(
           address,
           ask.requestId
         ) as MessageRow[]
-        read.push(...rows.filter((row) => row.read === 0).map((row) => row.id))
+        if (!recoverSaved) {
+          read.push(...rows.filter((row) => row.read === 0).map((row) => row.id))
+        }
         const answer = rows.find((row) => isBotAnswer(row, ask.requestId))
         if (answer) {
           changed = true
@@ -138,11 +141,18 @@ export function collectRemoteAnswers(
       })
       if (changed) {
         const next = { ...current, remoteAsks }
-        groups.store.update(next)
-        updated.set(id, next)
+        if (!recoverSaved) {
+          groups.store.update(next)
+        }
+        updated.set(current.id, next)
       }
     }
-  })
+  }
+  if (recoverSaved) {
+    collect()
+  } else {
+    groups.store.transaction(collect)
+  }
   if (read.length > 0) {
     db.markAsRead(read, { kind: 'orca' })
   }

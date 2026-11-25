@@ -8,29 +8,40 @@ import {
   type BotGroupTurn
 } from '../../shared/bots/bot-group'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { BoundedMap } from '../../shared/collections/bounded-map'
 import { botChatReads, type BotChatReads } from './bot-chat-reads'
 import type { BotGroupRuntime } from './bot-group-runtime'
-import type { RecoveredGroupReplies } from './bot-group-listing'
+import type { RecoveredGroupReplies, RecoveredGroupReply } from './bot-group-listing'
 
 /** Recover metadata from the same operation windows room history reads, including pre-preview turns. */
 export async function recoverBotGroupReplies(
   messages: readonly BotGroupMessage[],
-  reads: Pick<BotChatReads, 'turnItems'>
+  reads: Pick<BotChatReads, 'turnItems'>,
+  cache: BoundedMap<string, RecoveredGroupReply>
 ): Promise<RecoveredGroupReplies> {
+  const recovered = new Map<string, RecoveredGroupReply>()
   const missing = Map.groupBy(
     messages.flatMap(({ turns }) =>
-      turns.filter(
-        (turn) =>
-          !turn.frozenItems &&
-          !turn.error &&
-          !turn.revoked &&
-          turn.replyAt === undefined &&
-          turn.reply !== null
-      )
+      turns.filter((turn) => {
+        if (
+          turn.frozenItems ||
+          turn.error ||
+          turn.revoked ||
+          turn.replyAt !== undefined ||
+          turn.reply === null
+        ) {
+          return false
+        }
+        const cached = cache.get(turn.operationId)
+        if (cached) {
+          recovered.set(turn.operationId, cached)
+          return false
+        }
+        return true
+      })
     ),
     ({ sessionId }) => sessionId
   )
-  const recovered = new Map<string, NonNullable<ReturnType<typeof botGroupCompletedReply>>>()
   let complete = true
   for (const [sessionId, turns] of missing) {
     for (let index = 0; index < turns.length; index += 64) {
@@ -44,7 +55,12 @@ export async function recoverBotGroupReplies(
       for (const [operationId, items] of window ?? []) {
         const reply = botGroupCompletedReply(items)
         if (reply) {
-          recovered.set(operationId, reply)
+          const { text, completedAt, messageId } = reply
+          const result = { text, completedAt, messageId }
+          recovered.set(operationId, result)
+          if (completedAt !== undefined) {
+            cache.set(operationId, result)
+          }
         }
       }
     }

@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { BotGroup, BotGroupMessage } from '../../shared/bots/bot-group'
 import { botGroupRoomMailAddress } from '../../shared/bots/bot-group-room-mail'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { remoteRoomMailArrived, settleStoredRoomMail } from './bot-group-remote-answers'
+import {
+  collectRemoteAnswers,
+  remoteRoomMailArrived,
+  settleStoredRoomMail
+} from './bot-group-remote-answers'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import { BotGroupStore } from './bot-group-store'
 
@@ -165,6 +169,28 @@ describe('a remote answer arriving', () => {
         receivedSequence: message!.sequence
       }
     ])
+  })
+
+  it('recovers legacy reply metadata for the list without settling mail', async () => {
+    const { groups, arrive, posted, unread, reply } = room()
+    const { message } = arrive('q-1', 'Green on main.')
+    const post = groups.store.message(posted.id)!
+    const answer = { kind: 'answer', text: 'Green on main.' } as const
+    groups.store.update({
+      ...post,
+      remoteAsks: post.remoteAsks?.map((ask) => ({ ...ask, reply: answer }))
+    })
+
+    const [listed] = await groups.store.listing(true, async (posts) => ({
+      messages: collectRemoteAnswers(groups, posts, true),
+      complete: true
+    }))
+
+    expect(listed.replyPreviews).toMatchObject([
+      { text: answer.text, replyMessageId: message!.id, at: Date.parse(message!.created_at) }
+    ])
+    expect(unread().map(({ id }) => id)).toEqual([message!.id])
+    expect(reply(post.id)).toEqual(answer)
   })
 
   it('indexes questions asked before the index existed, past damaged posts', () => {

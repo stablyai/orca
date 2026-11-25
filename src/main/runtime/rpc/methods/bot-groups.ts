@@ -51,10 +51,11 @@ export const BOT_GROUP_METHODS = [
       }
       const groups = runtimeBotGroups(runtime)
       return {
-        groups: await groups.store.listing(includeReplyPreviews, (messages) =>
+        groups: await groups.store.listing(includeReplyPreviews, (messages, cache) =>
           recoverBotGroupReplies(
             collectRemoteAnswers(groups, messages, true),
-            botChatReads(runtime)
+            botChatReads(runtime),
+            cache
           )
         )
       }

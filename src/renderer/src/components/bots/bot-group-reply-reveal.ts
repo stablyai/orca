@@ -30,7 +30,9 @@ function findMailReply(
       ask.environmentId === reply.environmentId &&
       ask.botId === reply.botId &&
       ask.reply?.kind === 'answer' &&
-      (!reply.replyMessageId || ask.reply.messageId === reply.replyMessageId)
+      (!reply.replyMessageId ||
+        !ask.reply.messageId ||
+        ask.reply.messageId === reply.replyMessageId)
   )
 }
 
