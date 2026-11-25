@@ -1,5 +1,6 @@
-import { lstatSync, readlinkSync, realpathSync } from 'node:fs'
-import { lstat, readlink, realpath } from 'node:fs/promises'
+import { lstatSync, readlinkSync, realpath as realpathCallback, realpathSync } from 'node:fs'
+import { lstat, readlink } from 'node:fs/promises'
+import { promisify } from 'node:util'
 import { basename, dirname, join, resolve } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import {
@@ -33,6 +34,9 @@ export function resolvePromotionWriteTarget(systemTomlPath: string): { path: str
   }
   return step.value
 }
+
+// The JS realpath, like realpathSync: the native one fails on some Windows volumes the sync path resolves.
+const realpath = promisify(realpathCallback)
 
 /** The same resolution off the main thread's critical path, for checks that need not block a pass. */
 export async function resolvePromotionWriteTargetAsync(
