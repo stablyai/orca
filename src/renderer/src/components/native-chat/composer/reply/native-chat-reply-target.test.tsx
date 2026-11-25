@@ -21,8 +21,6 @@ import {
   resetNativeChatReplySourcesForTests
 } from './native-chat-reply-sources'
 import { setNativeChatComposerDraftOwnerResolver } from '../../drafts/native-chat-composer-draft-memory'
-import { nativeChatReplyDisplayText } from './NativeChatReplyQuoteChip'
-import { translate } from '@/i18n/i18n'
 import {
   NATIVE_CHAT_REPLY_EXCERPT_MAX,
   nativeChatReplyExcerpt,
@@ -429,15 +427,6 @@ describe('reply quotes', () => {
     expect(excerpt.endsWith('…')).toBe(true)
     const message = { id: 'm-long', role: 'assistant' as const, blocks: [text(long)] }
     expect(nativeChatReplyOriginalId([message], { author: 'agent', excerpt })).toBe('m-long')
-  })
-
-  it('shows the whole quote when a queued card is expanded', () => {
-    const sent = withNativeChatReplyContext(
-      'Why?',
-      { author: 'agent', excerpt: 'First line.\nSecond line.' },
-      'Claude'
-    )
-    expect(nativeChatReplyDisplayText(sent, translate, true)).toContain('Second line.')
   })
 })
 

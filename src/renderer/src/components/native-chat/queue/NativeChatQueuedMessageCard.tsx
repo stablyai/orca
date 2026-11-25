@@ -1,8 +1,9 @@
 import { QueuedMessageImageCount } from '@/components/native-chat/queue/NativeChatQueuedMessageImageCount'
 import {
-  nativeChatReplyDisplayText,
+  NativeChatReplyQuoteChip,
   nativeChatReplySummaryOmits
 } from '../composer/reply/NativeChatReplyQuoteChip'
+import { nativeChatReplyQuoteOf } from '../composer/reply/native-chat-reply-quote'
 import type { QueuedMessageDragPresentation } from '@/components/native-chat/queue/NativeChatQueuedMessageRows'
 import { useId, useState } from 'react'
 import {
@@ -47,10 +48,7 @@ import {
 } from '@/components/native-chat/queue/editing/NativeChatQueuedMessageComposer'
 import type { QueuedMessageInlineEditor } from '@/components/native-chat/queue/editing/native-chat-queued-edit-session'
 import { nativeChatImageLabelCopy } from '@/components/native-chat/media/images/native-chat-image-label'
-import {
-  NATIVE_CHAT_UNKERNED_CSS,
-  nativeChatTextHasUnkernedRun
-} from '@/components/native-chat/composer/editor/native-chat-unkerned-runs'
+import { QueuedMessageFullText } from '@/components/native-chat/queue/NativeChatQueuedMessageFullText'
 
 /** The visible caption under the text; the default waiting hold needs none. */
 export function queuedMessageCardCaption(
@@ -163,9 +161,10 @@ export function NativeChatQueuedMessageCard({
   const t = useTranslate()
   const caption = queuedMessageCardCaption(card, agentName, statedFailures, t)
   const cardText = queuedMessageCardLine(card, nativeChatImageLabelCopy(t))
-  const line = nativeChatReplyDisplayText(cardText, t)
-  // Expanded, the whole quote shows, so the user can check what the agent will read.
-  const fullText = nativeChatReplyDisplayText(cardText, t, true)
+  // A reply's card leads with the user's own words; its quote sits under them, muted, and opens
+  // in full so the user can check what the agent will read.
+  const replyQuote = nativeChatReplyQuoteOf(cardText)
+  const line = replyQuote ? replyQuote.rest.trim() : cardText
   const returned = card.state === 'returned'
   const attention = queuedMessageCardNeedsAttention(card)
   const failed = attention && caption !== null
@@ -175,6 +174,7 @@ export function NativeChatQueuedMessageCard({
   // Allow inspecting clipped text before acting; another agent may have authored the card.
   const [expanded, setExpanded] = useState(false)
   const [clipped, measureLine] = useNativeChatClippedLine(false)
+  const [quoteClipped, measureQuote] = useNativeChatClippedLine(false)
   const textId = useId()
   const sender = card.from ? (
     <NativeChatAgentMessageSenders from={card.from} chatWorktreeId={chatWorktreeId} queued />
@@ -255,9 +255,20 @@ export function NativeChatQueuedMessageCard({
         >
           {sender}
           {expanded ? null : (
-            <p ref={measureLine} className="truncate text-sm text-foreground" title={line}>
-              {line}
-            </p>
+            <>
+              {line ? (
+                <p ref={measureLine} className="truncate text-sm text-foreground" title={line}>
+                  {line}
+                </p>
+              ) : null}
+              {replyQuote ? (
+                <NativeChatReplyQuoteChip
+                  quote={replyQuote}
+                  className="mb-0"
+                  measureExcerpt={measureQuote}
+                />
+              ) : null}
+            </>
           )}
           {caption ? (
             <p
@@ -310,7 +321,9 @@ export function NativeChatQueuedMessageCard({
           {card.images ? (
             <QueuedMessageImageCount images={card.images} className="h-6 rounded-md px-[5px]" />
           ) : null}
-          {expanded || clipped || nativeChatReplySummaryOmits(cardText) ? (
+          {expanded ||
+          clipped ||
+          (replyQuote && (quoteClipped || nativeChatReplySummaryOmits(replyQuote))) ? (
             <QueuedMessageExpandToggle
               expanded={expanded}
               controls={expanded ? textId : undefined}
@@ -356,15 +369,7 @@ export function NativeChatQueuedMessageCard({
           ) : null}
         </div>
       </div>
-      {expanded ? (
-        <p
-          id={textId}
-          className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words pl-5.5 text-sm text-foreground"
-          style={nativeChatTextHasUnkernedRun(fullText) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
-        >
-          {fullText}
-        </p>
-      ) : null}
+      {expanded ? <QueuedMessageFullText id={textId} text={line} quote={replyQuote} /> : null}
     </li>
   )
 }
