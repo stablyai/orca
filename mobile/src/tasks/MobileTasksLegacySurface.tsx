@@ -27,7 +27,7 @@ import { renderMobileTasksChrome } from './screen/mobile-tasks-screen-chrome'
 import { renderMobileTasksListSurface } from './task-list/mobile-tasks-list-surface'
 import {
   mobileTasksSearchVisible,
-  renderMobileTasksSearchControl
+  MobileTasksSearchControl
 } from './screen/mobile-tasks-search-control'
 import { renderMobileTasksFilterSheet } from './screen/mobile-tasks-filter-sheet'
 import {
@@ -204,7 +204,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
       {renderMobileTasksListSurface(model, colorScheme, bottomBarHeight)}
 
-      {renderMobileTasksSearchControl(model, setSearchBarHeight)}
+      <MobileTasksSearchControl model={model} onCoveredHeightChange={setSearchBarHeight} />
 
       {/* iOS refuses stacked sibling native modals; layer Tasks sheets in one Modal by zIndex. */}
       <BottomDrawerModalHost>

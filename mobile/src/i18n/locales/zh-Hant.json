@@ -3898,7 +3898,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "在專案檢視中搜尋…",
-      "providerPlaceholder": "搜尋 {{provider}} 任務…"
+      "providerPlaceholder": "搜尋 {{provider}} 任務…",
+      "jiraCompactPlaceholder": "關鍵字或 JQL"
     },
     "smartSourceModes": {
       "allStates": "全部",
@@ -4461,14 +4462,19 @@
       "pairAction": "配對電腦",
       "openFailed": "無法開啟此連結",
       "ambiguous": "此 bot 位於 {{names}}。請在你想用的電腦上透過 Orca 開啟聊天。",
-      "computer": "你的電腦",
+      "ambiguousUnnamed": "此 bot 位於多台電腦上。請在你想用的電腦上透過 Orca 開啟聊天。",
       "updateNeeded": "請更新 {{names}} 上的 Orca 以開啟此連結。",
+      "updateNeededUnnamed": "請更新你電腦上的 Orca 以開啟此連結。",
       "unreachable": "無法連線至 {{names}}。請確認其中一台電腦正在執行 Orca，然後重試。",
+      "unreachableUnnamed": "無法連線至你的電腦。請確認該電腦正在執行 Orca，然後重試。",
       "missing": "你配對的電腦上都沒有此 bot。",
       "offline": "{{name}} 已離線。請在它重新上線後再次開啟連結。",
+      "offlineUnnamed": "你的電腦已離線。請在它重新上線後再次開啟連結。",
       "chatOpenFailed": "{{name}} 無法開啟此聊天。請重試此連結。",
+      "chatOpenFailedUnnamed": "你的電腦無法開啟此聊天。請重試此連結。",
       "unreachableSingle": "無法連線至 {{name}}。請確認該電腦正在執行 Orca，然後重試。",
-      "workspaceDeleted": "此聊天的工作區已在 {{name}} 上被刪除。"
+      "workspaceUnavailable": "此聊天的工作區在 {{name}} 上已無法使用。",
+      "workspaceUnavailableUnnamed": "此聊天的工作區在你的電腦上已無法使用。"
     },
     "settings": {
       "remove": "移除",

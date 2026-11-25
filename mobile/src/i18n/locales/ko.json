@@ -4079,7 +4079,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "프로젝트 보기 검색…",
-      "providerPlaceholder": "{{provider}} 작업 검색…"
+      "providerPlaceholder": "{{provider}} 작업 검색…",
+      "jiraCompactPlaceholder": "키워드 또는 JQL"
     },
     "smartSourceModes": {
       "allStates": "모두",
@@ -4642,14 +4643,19 @@
       "pairAction": "컴퓨터 페어링",
       "openFailed": "이 링크를 열 수 없습니다",
       "ambiguous": "이 bot은 {{names}}에 있습니다. 원하는 컴퓨터의 Orca에서 채팅을 여세요.",
-      "computer": "사용자의 컴퓨터",
+      "ambiguousUnnamed": "이 bot은 여러 컴퓨터에 있습니다. 원하는 컴퓨터의 Orca에서 채팅을 여세요.",
       "updateNeeded": "이 링크를 열려면 {{names}}에서 Orca를 업데이트하세요.",
+      "updateNeededUnnamed": "이 링크를 열려면 사용자의 컴퓨터에서 Orca를 업데이트하세요.",
       "unreachable": "{{names}}에 연결할 수 없습니다. 컴퓨터 중 하나에서 Orca가 실행 중인지 확인한 다음 다시 시도하세요.",
+      "unreachableUnnamed": "사용자의 컴퓨터에 연결할 수 없습니다. 해당 컴퓨터에서 Orca가 실행 중인지 확인한 다음 다시 시도하세요.",
       "missing": "페어링된 컴퓨터에 이 bot이 없습니다.",
       "offline": "{{name}}이(가) 오프라인입니다. 다시 연결되면 링크를 다시 여세요.",
+      "offlineUnnamed": "사용자의 컴퓨터가 오프라인입니다. 다시 연결되면 링크를 다시 여세요.",
       "chatOpenFailed": "{{name}}에서 이 채팅을 열 수 없습니다. 링크를 다시 시도하세요.",
+      "chatOpenFailedUnnamed": "사용자의 컴퓨터에서 이 채팅을 열 수 없습니다. 링크를 다시 시도하세요.",
       "unreachableSingle": "{{name}}에 연결할 수 없습니다. 해당 컴퓨터에서 Orca가 실행 중인지 확인한 다음 다시 시도하세요.",
-      "workspaceDeleted": "이 채팅의 작업 공간이 {{name}}에서 삭제되었습니다."
+      "workspaceUnavailable": "이 채팅의 작업 공간을 {{name}}에서 더 이상 사용할 수 없습니다.",
+      "workspaceUnavailableUnnamed": "이 채팅의 작업 공간을 사용자의 컴퓨터에서 더 이상 사용할 수 없습니다."
     },
     "settings": {
       "remove": "제거",

@@ -51,9 +51,7 @@ export function BotSessionLinkResolver({
   const open = useEffectEvent(openSession)
   const nameOf = useEffectEvent(
     (computer: BotLinkComputerAnswer) =>
-      computer.serverLabel ??
-      hosts.find((host) => host.id === computer.pairedHostId)?.name ??
-      t('bots.link.computer', 'your computer')
+      computer.serverLabel ?? hosts.find((host) => host.id === computer.pairedHostId)?.name
   )
   const unavailable = useEffectEvent((message: string) => {
     Alert.alert(t('bots.link.openFailed', 'Couldn’t open this link'), message)
@@ -74,7 +72,7 @@ export function BotSessionLinkResolver({
           return
         }
         if (failed) {
-          unavailable(botLinkOpenFailureLine(t, t('bots.link.computer', 'your computer')))
+          unavailable(botLinkOpenFailureLine(t, undefined))
           return
         }
         if (hosts.length === 0) {
@@ -154,14 +152,10 @@ export function BotSessionLinkResolver({
             })
           }
         } else if (found.kind === 'update-needed') {
-          unavailable(
-            botLinkUpdateNeededLine(t, [
-              found.servingHost
-                ? (hosts.find((host) => host.id === found.home.computer.pairedHostId)?.name ??
-                  t('bots.link.computer', 'your computer'))
-                : nameOf(found.home.computer)
-            ])
-          )
+          const name = found.servingHost
+            ? hosts.find((host) => host.id === found.home.computer.pairedHostId)?.name
+            : nameOf(found.home.computer)
+          unavailable(botLinkUpdateNeededLine(t, name === undefined ? [] : [name]))
         } else if (found.kind === 'failed') {
           unavailable(botLinkOpenFailureLine(t, nameOf(found.home.computer)))
         } else if (found.kind === 'open') {
@@ -214,26 +208,25 @@ export function BotSessionLinkResolver({
             }))
           )
           if (unresolved.kind === 'pick') {
+            const names = unresolved.matches.flatMap(({ hostId }) => {
+              const computer = computers.get(hostId)
+              return (computer && nameOf(computer)) ?? []
+            })
             unavailable(
-              botLinkAmbiguousLine(
-                t,
-                unresolved.matches.flatMap(({ hostId }) => {
-                  const computer = computers.get(hostId)
-                  return computer ? [nameOf(computer)] : []
-                })
-              )
+              botLinkAmbiguousLine(t, names.length === unresolved.matches.length ? names : [])
             )
           } else if (unresolved.kind === 'update-needed' || unresolved.kind === 'unreachable') {
-            const named = unresolved.hostIds
+            const matchingComputers = unresolved.hostIds
               .map((id) => computers.get(id))
               .filter((computer) => computer !== undefined)
-            const only = named.length === 1 ? named[0] : undefined
+            const only = matchingComputers.length === 1 ? matchingComputers[0] : undefined
+            const names = matchingComputers.flatMap((computer) => nameOf(computer) ?? [])
             unavailable(
               unresolved.kind === 'update-needed'
-                ? botLinkUpdateNeededLine(t, named.map(nameOf))
+                ? botLinkUpdateNeededLine(t, names)
                 : only && readClients(only.pairedHostId)?.getState() !== 'connected'
                   ? botLinkOfflineLine(t, nameOf(only))
-                  : botLinkUnreachableLine(t, named.map(nameOf))
+                  : botLinkUnreachableLine(t, names)
             )
           } else {
             const known =
@@ -243,7 +236,7 @@ export function BotSessionLinkResolver({
         }
       } catch {
         if (live && !attempt.signal.aborted) {
-          const name = openingOn ? nameOf(openingOn) : t('bots.link.computer', 'your computer')
+          const name = openingOn && nameOf(openingOn)
           unavailable(
             openingOn && readClients(openingOn.pairedHostId)?.getState() !== 'connected'
               ? botLinkOfflineLine(t, name)

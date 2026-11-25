@@ -4006,7 +4006,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Buscar en la vista del proyecto…",
-      "providerPlaceholder": "Buscar tareas de {{provider}}…"
+      "providerPlaceholder": "Buscar tareas de {{provider}}…",
+      "jiraCompactPlaceholder": "Palabras clave o JQL"
     },
     "smartSourceModes": {
       "allStates": "Todo",
@@ -4573,14 +4574,19 @@
       "pairAction": "Vincular un ordenador",
       "openFailed": "No se pudo abrir este enlace",
       "ambiguous": "Este bot está en {{names}}. Abre el chat en Orca en el ordenador que quieras.",
-      "computer": "tu ordenador",
+      "ambiguousUnnamed": "Este bot está en más de un ordenador. Abre el chat en Orca en el ordenador que quieras.",
       "updateNeeded": "Actualiza Orca en {{names}} para abrir este enlace.",
+      "updateNeededUnnamed": "Actualiza Orca en tu ordenador para abrir este enlace.",
       "unreachable": "No se pudo conectar con {{names}}. Asegúrate de que Orca esté abierto en uno de ellos e inténtalo de nuevo.",
+      "unreachableUnnamed": "No se pudo conectar con tu ordenador. Asegúrate de que Orca esté abierto allí e inténtalo de nuevo.",
       "missing": "Ninguno de tus ordenadores vinculados tiene este bot.",
       "offline": "{{name}} está desconectado. Vuelve a abrir el enlace cuando se conecte.",
+      "offlineUnnamed": "Tu ordenador está desconectado. Vuelve a abrir el enlace cuando se conecte.",
       "chatOpenFailed": "{{name}} no pudo abrir este chat. Vuelve a intentar el enlace.",
+      "chatOpenFailedUnnamed": "Tu ordenador no pudo abrir este chat. Vuelve a intentar el enlace.",
       "unreachableSingle": "No se pudo conectar con {{name}}. Asegúrate de que Orca esté abierto allí e inténtalo de nuevo.",
-      "workspaceDeleted": "El espacio de trabajo de este chat se eliminó en {{name}}."
+      "workspaceUnavailable": "El espacio de trabajo de este chat ya no está disponible en {{name}}.",
+      "workspaceUnavailableUnnamed": "El espacio de trabajo de este chat ya no está disponible en tu ordenador."
     },
     "settings": {
       "remove": "Eliminar",

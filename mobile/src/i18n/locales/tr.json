@@ -5242,7 +5242,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Proje görünümünde ara…",
-      "providerPlaceholder": "{{provider}} görevlerinde ara…"
+      "providerPlaceholder": "{{provider}} görevlerinde ara…",
+      "jiraCompactPlaceholder": "Anahtar sözcük veya JQL"
     },
     "smartSourceModes": {
       "allStates": "Tümü",
@@ -6594,14 +6595,19 @@
       "pairAction": "Bilgisayar eşleyin",
       "openFailed": "Bu bağlantı açılamadı",
       "ambiguous": "Bu bot {{names}} üzerinde. İstediğiniz bilgisayarda Orca’yı açıp sohbete gidin.",
-      "computer": "bilgisayarınız",
+      "ambiguousUnnamed": "Bu bot birden fazla bilgisayarda. İstediğiniz bilgisayarda Orca’yı açıp sohbete gidin.",
       "updateNeeded": "Bu bağlantıyı açmak için {{names}} üzerinde Orca’yı güncelleyin.",
+      "updateNeededUnnamed": "Bu bağlantıyı açmak için bilgisayarınızda Orca’yı güncelleyin.",
       "unreachable": "{{names}} ile bağlantı kurulamadı. Birinde Orca’nın çalıştığından emin olun ve yeniden deneyin.",
+      "unreachableUnnamed": "Bilgisayarınızla bağlantı kurulamadı. Orada Orca’nın çalıştığından emin olun ve yeniden deneyin.",
       "missing": "Eşlenmiş bilgisayarlarınızda bu bot yok.",
       "offline": "{{name}} çevrimdışı. Yeniden bağlandığında bağlantıyı tekrar açın.",
+      "offlineUnnamed": "Bilgisayarınız çevrimdışı. Yeniden bağlandığında bağlantıyı tekrar açın.",
       "chatOpenFailed": "{{name}} bu sohbeti açamadı. Bağlantıyı yeniden deneyin.",
+      "chatOpenFailedUnnamed": "Bilgisayarınız bu sohbeti açamadı. Bağlantıyı yeniden deneyin.",
       "unreachableSingle": "{{name}} ile bağlantı kurulamadı. Orada Orca’nın çalıştığından emin olun ve yeniden deneyin.",
-      "workspaceDeleted": "Bu sohbetin çalışma alanı {{name}} üzerinde silindi.",
+      "workspaceUnavailable": "Bu sohbetin çalışma alanı artık {{name}} üzerinde kullanılamıyor.",
+      "workspaceUnavailableUnnamed": "Bu sohbetin çalışma alanı artık bilgisayarınızda kullanılamıyor.",
       "updateOrca": "Orca’yı güncelle",
       "openRequestFailed": "İstek açılamadı",
       "botNotFound": "Bot bulunamadı",

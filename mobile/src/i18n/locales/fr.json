@@ -4006,7 +4006,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Rechercher dans la vue du projet…",
-      "providerPlaceholder": "Rechercher des tâches {{provider}}…"
+      "providerPlaceholder": "Rechercher des tâches {{provider}}…",
+      "jiraCompactPlaceholder": "Mots-clés ou JQL"
     },
     "smartSourceModes": {
       "allStates": "Toutes",
@@ -4573,14 +4574,19 @@
       "pairAction": "Jumeler un ordinateur",
       "openFailed": "Impossible d’ouvrir ce lien",
       "ambiguous": "Ce bot se trouve sur {{names}}. Ouvrez la conversation dans Orca sur l’ordinateur de votre choix.",
-      "computer": "votre ordinateur",
+      "ambiguousUnnamed": "Ce bot se trouve sur plusieurs ordinateurs. Ouvrez la conversation dans Orca sur l’ordinateur de votre choix.",
       "updateNeeded": "Mettez Orca à jour sur {{names}} pour ouvrir ce lien.",
+      "updateNeededUnnamed": "Mettez Orca à jour sur votre ordinateur pour ouvrir ce lien.",
       "unreachable": "Impossible de joindre {{names}}. Vérifiez qu’Orca est ouvert sur l’un d’eux, puis réessayez.",
+      "unreachableUnnamed": "Impossible de joindre votre ordinateur. Vérifiez qu’Orca y est ouvert, puis réessayez.",
       "missing": "Aucun de vos ordinateurs jumelés ne possède ce bot.",
       "offline": "{{name}} est hors ligne. Rouvrez le lien quand cet ordinateur sera de nouveau connecté.",
+      "offlineUnnamed": "Votre ordinateur est hors ligne. Rouvrez le lien quand il sera de nouveau connecté.",
       "chatOpenFailed": "{{name}} n’a pas pu ouvrir cette conversation. Réessayez le lien.",
+      "chatOpenFailedUnnamed": "Votre ordinateur n’a pas pu ouvrir cette conversation. Réessayez le lien.",
       "unreachableSingle": "Impossible de joindre {{name}}. Vérifiez qu’Orca y est ouvert, puis réessayez.",
-      "workspaceDeleted": "L’espace de travail de cette conversation a été supprimé sur {{name}}."
+      "workspaceUnavailable": "L’espace de travail de cette conversation n’est plus disponible sur {{name}}.",
+      "workspaceUnavailableUnnamed": "L’espace de travail de cette conversation n’est plus disponible sur votre ordinateur."
     },
     "settings": {
       "remove": "Supprimer",

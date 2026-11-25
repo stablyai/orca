@@ -297,9 +297,10 @@ export function MobileWebShellScreen({
         updateNeeded: () =>
           Alert.alert(
             t('bots.link.openFailed', 'Couldn’t open this link'),
-            botLinkUpdateNeededLine(t, [
-              snapshot?.host.name ?? t('bots.link.computer', 'your computer')
-            ])
+            botLinkUpdateNeededLine(
+              t,
+              snapshot?.host.name === undefined ? [] : [snapshot.host.name]
+            )
           ),
         documentFailed: () => reportShellFailure('document-load-failed')
       })

@@ -4518,7 +4518,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Buscar na visualização do projeto…",
-      "providerPlaceholder": "Buscar tarefas do {{provider}}…"
+      "providerPlaceholder": "Buscar tarefas do {{provider}}…",
+      "jiraCompactPlaceholder": "Palavras-chave ou JQL"
     },
     "smartSourceModes": {
       "allStates": "Todos",
@@ -5147,14 +5148,19 @@
       "pairAction": "Emparelhar um computador",
       "openFailed": "Não foi possível abrir este link",
       "ambiguous": "Este bot está em {{names}}. Abra a conversa no Orca no computador que você quiser.",
-      "computer": "seu computador",
+      "ambiguousUnnamed": "Este bot está em mais de um computador. Abra a conversa no Orca no computador que você quiser.",
       "updateNeeded": "Atualize o Orca em {{names}} para abrir este link.",
+      "updateNeededUnnamed": "Atualize o Orca no seu computador para abrir este link.",
       "unreachable": "Não foi possível conectar a {{names}}. Verifique se o Orca está aberto em um deles e tente novamente.",
+      "unreachableUnnamed": "Não foi possível conectar ao seu computador. Verifique se o Orca está aberto nele e tente novamente.",
       "missing": "Nenhum dos seus computadores emparelhados tem este bot.",
       "offline": "{{name}} está offline. Abra o link novamente quando ele se conectar.",
+      "offlineUnnamed": "Seu computador está offline. Abra o link novamente quando ele se conectar.",
       "chatOpenFailed": "{{name}} não conseguiu abrir esta conversa. Tente o link novamente.",
+      "chatOpenFailedUnnamed": "Seu computador não conseguiu abrir esta conversa. Tente o link novamente.",
       "unreachableSingle": "Não foi possível conectar a {{name}}. Verifique se o Orca está aberto nele e tente novamente.",
-      "workspaceDeleted": "O espaço de trabalho desta conversa foi excluído em {{name}}."
+      "workspaceUnavailable": "O espaço de trabalho desta conversa não está mais disponível em {{name}}.",
+      "workspaceUnavailableUnnamed": "O espaço de trabalho desta conversa não está mais disponível no seu computador."
     },
     "settings": {
       "remove": "Remover",

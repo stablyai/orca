@@ -3904,7 +3904,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Projektansicht durchsuchen…",
-      "providerPlaceholder": "{{provider}}-Aufgaben suchen…"
+      "providerPlaceholder": "{{provider}}-Aufgaben suchen…",
+      "jiraCompactPlaceholder": "Suchbegriffe oder JQL"
     },
     "smartSourceModes": {
       "allStates": "Alle",
@@ -4467,14 +4468,19 @@
       "pairAction": "Computer koppeln",
       "openFailed": "Link konnte nicht geöffnet werden",
       "ambiguous": "Dieser Bot ist auf {{names}}. Öffne den Chat in Orca auf dem gewünschten Computer.",
-      "computer": "deinem Computer",
+      "ambiguousUnnamed": "Dieser Bot ist auf mehreren Computern. Öffne den Chat in Orca auf dem gewünschten Computer.",
       "updateNeeded": "Aktualisiere Orca auf {{names}}, um diesen Link zu öffnen.",
+      "updateNeededUnnamed": "Aktualisiere Orca auf deinem Computer, um diesen Link zu öffnen.",
       "unreachable": "{{names}} sind nicht erreichbar. Starte Orca auf einem davon und versuche es erneut.",
+      "unreachableUnnamed": "Dein Computer ist nicht erreichbar. Starte Orca dort und versuche es erneut.",
       "missing": "Keiner deiner gekoppelten Computer hat diesen Bot.",
       "offline": "{{name}} ist offline. Öffne den Link erneut, sobald der Computer wieder online ist.",
+      "offlineUnnamed": "Dein Computer ist offline. Öffne den Link erneut, sobald er wieder online ist.",
       "chatOpenFailed": "{{name}} konnte diesen Chat nicht öffnen. Versuche es erneut.",
+      "chatOpenFailedUnnamed": "Dein Computer konnte diesen Chat nicht öffnen. Versuche es erneut.",
       "unreachableSingle": "{{name}} ist nicht erreichbar. Starte Orca dort und versuche es erneut.",
-      "workspaceDeleted": "Der Arbeitsbereich dieses Chats wurde auf {{name}} gelöscht."
+      "workspaceUnavailable": "Der Arbeitsbereich dieses Chats ist auf {{name}} nicht mehr verfügbar.",
+      "workspaceUnavailableUnnamed": "Der Arbeitsbereich dieses Chats ist auf deinem Computer nicht mehr verfügbar."
     },
     "settings": {
       "remove": "Entfernen",

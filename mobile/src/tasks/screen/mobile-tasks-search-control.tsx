@@ -2,7 +2,8 @@ import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tas
 import { Plus } from 'lucide-react-native'
 import { getTaskPresetQuery } from '../../../../src/shared/work-items/task-preset-query'
 import { scopeGitHubTaskSearch } from '../../../../src/shared/work-items/task-github-search'
-import { translate } from '../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { BottomSearchBar } from '../../components/nav-bar/BottomSearchBar'
 
 /** GitLab todos and unconnected sources have nothing to search. */
@@ -16,10 +17,15 @@ export function mobileTasksSearchVisible(model: ConnectionPresentationModel): bo
 }
 
 // Search sits at the bottom with New task beside it; the list pads by the height it covers.
-export function renderMobileTasksSearchControl(
-  model: ConnectionPresentationModel,
+export function MobileTasksSearchControl({
+  model,
+  onCoveredHeightChange
+}: {
+  model: ConnectionPresentationModel
   onCoveredHeightChange: (height: number) => void
-) {
+}) {
+  const t = useMobileTranslation()
+  const { isWideLayout } = useResponsiveLayout()
   const {
     appliedGithubProjectSearch,
     applyGitHubProjectSearch,
@@ -42,22 +48,27 @@ export function renderMobileTasksSearchControl(
   if (!mobileTasksSearchVisible(model)) {
     return null
   }
+  const jiraSearchLabel =
+    provider === 'jira'
+      ? t('auto.components.TaskPage.99c2755218', 'Search issues or enter JQL, e.g. project = ABC')
+      : undefined
+  const jiraPlaceholder =
+    jiraSearchLabel !== undefined && !isWideLayout
+      ? t('tasks.searchControl.jiraCompactPlaceholder', 'Keywords or JQL')
+      : jiraSearchLabel
   return (
     <BottomSearchBar
       value={isGithubProjectSearch ? githubProjectSearch : query}
       onChangeText={isGithubProjectSearch ? setGithubProjectSearch : setQuery}
       placeholder={
         isGithubProjectSearch
-          ? translate('tasks.searchControl.projectPlaceholder', 'Search project view...')
-          : provider === 'jira'
-            ? translate(
-                'auto.components.TaskPage.99c2755218',
-                'Search issues or enter JQL, e.g. project = ABC'
-              )
-            : translate('tasks.searchControl.providerPlaceholder', 'Search {{provider}} tasks...', {
-                provider: providerLabel
-              })
+          ? t('tasks.searchControl.projectPlaceholder', 'Search project view...')
+          : (jiraPlaceholder ??
+            t('tasks.searchControl.providerPlaceholder', 'Search {{provider}} tasks...', {
+              provider: providerLabel
+            }))
       }
+      accessibilityLabel={jiraSearchLabel}
       bottomInset={insets.bottom}
       onCoveredHeightChange={onCoveredHeightChange}
       // Preset text is not a search; Project’s explicit empty filter must not leave Clear visible forever.
@@ -105,8 +116,8 @@ export function renderMobileTasksSearchControl(
               icon: Plus,
               accessibilityLabel:
                 provider === 'github'
-                  ? translate('tasks.screenChrome.newGitHubIssue', 'New GitHub issue')
-                  : translate('tasks.screenChrome.newLinearIssue', 'New Linear issue'),
+                  ? t('tasks.screenChrome.newGitHubIssue', 'New GitHub issue')
+                  : t('tasks.screenChrome.newLinearIssue', 'New Linear issue'),
               disabled: !taskUiReady,
               onPress: () => setShowCreateTask(true)
             }

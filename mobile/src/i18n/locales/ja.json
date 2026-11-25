@@ -3901,7 +3901,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "プロジェクトビューを検索…",
-      "providerPlaceholder": "{{provider}} のタスクを検索…"
+      "providerPlaceholder": "{{provider}} のタスクを検索…",
+      "jiraCompactPlaceholder": "キーワードまたは JQL"
     },
     "smartSourceModes": {
       "allStates": "全て",
@@ -4541,14 +4542,19 @@
       "pairAction": "コンピュータをペアリング",
       "openFailed": "このリンクを開けませんでした",
       "ambiguous": "この bot は{{names}}にあります。使用するコンピュータのOrcaでチャットを開いてください。",
-      "computer": "お使いのコンピュータ",
+      "ambiguousUnnamed": "この bot は複数のコンピュータにあります。使用するコンピュータのOrcaでチャットを開いてください。",
       "updateNeeded": "このリンクを開くには、{{names}}のOrcaを更新してください。",
+      "updateNeededUnnamed": "このリンクを開くには、お使いのコンピュータのOrcaを更新してください。",
       "unreachable": "{{names}}に接続できませんでした。いずれかでOrcaが起動していることを確認し、もう一度お試しください。",
+      "unreachableUnnamed": "お使いのコンピュータに接続できませんでした。そのコンピュータでOrcaが起動していることを確認し、もう一度お試しください。",
       "missing": "ペアリング済みのコンピュータにこの bot がありません。",
       "offline": "{{name}}はオフラインです。オンラインに戻ったらリンクを開き直してください。",
+      "offlineUnnamed": "お使いのコンピュータはオフラインです。オンラインに戻ったらリンクを開き直してください。",
       "chatOpenFailed": "{{name}}でこのチャットを開けませんでした。リンクをもう一度お試しください。",
+      "chatOpenFailedUnnamed": "お使いのコンピュータでこのチャットを開けませんでした。リンクをもう一度お試しください。",
       "unreachableSingle": "{{name}}に接続できませんでした。そのコンピュータでOrcaが起動していることを確認し、もう一度お試しください。",
-      "workspaceDeleted": "このチャットのワークスペースは{{name}}で削除されました。"
+      "workspaceUnavailable": "このチャットのワークスペースは{{name}}で利用できなくなりました。",
+      "workspaceUnavailableUnnamed": "このチャットのワークスペースはお使いのコンピュータで利用できなくなりました。"
     },
     "settings": {
       "remove": "削除",

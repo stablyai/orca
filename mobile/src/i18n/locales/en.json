@@ -5296,7 +5296,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Search project view...",
-      "providerPlaceholder": "Search {{provider}} tasks..."
+      "providerPlaceholder": "Search {{provider}} tasks...",
+      "jiraCompactPlaceholder": "Keywords or JQL"
     },
     "workspaceCreateDrawer": {
       "title": "Create Workspace",
@@ -5529,14 +5530,19 @@
       "pairAction": "Pair a computer",
       "openFailed": "Couldn’t open this link",
       "ambiguous": "This bot is on {{names}}. Open the chat in Orca on the one you want.",
-      "computer": "your computer",
+      "ambiguousUnnamed": "This bot is on more than one computer. Open the chat in Orca on the one you want.",
       "updateNeeded": "Update Orca on {{names}} to open this link.",
+      "updateNeededUnnamed": "Update Orca on your computer to open this link.",
       "unreachable": "Couldn’t reach {{names}}. Make sure Orca is running on one, then try again.",
+      "unreachableUnnamed": "Couldn’t reach your computer. Make sure Orca is running there, then try again.",
       "missing": "None of your paired computers has this bot.",
       "offline": "{{name}} is offline. Open the link again when it’s back online.",
+      "offlineUnnamed": "Your computer is offline. Open the link again when it’s back online.",
       "chatOpenFailed": "{{name}} couldn’t open this chat. Try the link again.",
+      "chatOpenFailedUnnamed": "Your computer couldn’t open this chat. Try the link again.",
       "unreachableSingle": "Couldn’t reach {{name}}. Make sure Orca is running there, then try again.",
-      "workspaceDeleted": "This chat’s workspace was deleted on {{name}}."
+      "workspaceUnavailable": "This chat’s workspace is no longer available on {{name}}.",
+      "workspaceUnavailableUnnamed": "This chat’s workspace is no longer available on your computer."
     },
     "activity": {
       "loading": "Loading activity…",

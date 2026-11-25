@@ -7,22 +7,28 @@ import type { AccessRequestRedemption } from '../../../src/shared/bots/bot-link-
 export const BOT_LINK_UPDATE_NOTICE = 'bots-update'
 
 function joinHostNames(
-  t: Translate,
   hostNames: readonly string[],
   type: 'conjunction' | 'disjunction' = 'conjunction'
 ): string {
-  return hostNames.length > 0
-    ? new Intl.ListFormat(getUiIntlLocale(), { type }).format([...hostNames])
-    : t('bots.link.computer', 'your computer')
+  return new Intl.ListFormat(getUiIntlLocale(), { type }).format([...hostNames])
 }
 
 export function botLinkUpdateNeededLine(t: Translate, hostNames: readonly string[]): string {
+  if (hostNames.length === 0) {
+    return t('bots.link.updateNeededUnnamed', 'Update Orca on your computer to open this link.')
+  }
   return t('bots.link.updateNeeded', 'Update Orca on {{names}} to open this link.', {
-    names: joinHostNames(t, hostNames)
+    names: joinHostNames(hostNames)
   })
 }
 
 export function botLinkUnreachableLine(t: Translate, hostNames: readonly string[]): string {
+  if (hostNames.length === 0) {
+    return t(
+      'bots.link.unreachableUnnamed',
+      'Couldn’t reach your computer. Make sure Orca is running there, then try again.'
+    )
+  }
   if (hostNames.length === 1) {
     return t(
       'bots.link.unreachableSingle',
@@ -34,16 +40,22 @@ export function botLinkUnreachableLine(t: Translate, hostNames: readonly string[
     'bots.link.unreachable',
     'Couldn’t reach {{names}}. Make sure Orca is running on one, then try again.',
     {
-      names: joinHostNames(t, hostNames, getUiIntlLocale() === 'en' ? 'disjunction' : 'conjunction')
+      names: joinHostNames(hostNames, getUiIntlLocale() === 'en' ? 'disjunction' : 'conjunction')
     }
   )
 }
 
 export function botLinkAmbiguousLine(t: Translate, hostNames: readonly string[]): string {
+  if (hostNames.length === 0) {
+    return t(
+      'bots.link.ambiguousUnnamed',
+      'This bot is on more than one computer. Open the chat in Orca on the one you want.'
+    )
+  }
   return t(
     'bots.link.ambiguous',
     'This bot is on {{names}}. Open the chat in Orca on the one you want.',
-    { names: joinHostNames(t, hostNames) }
+    { names: joinHostNames(hostNames) }
   )
 }
 
@@ -51,7 +63,13 @@ export function botLinkMissingLine(t: Translate): string {
   return t('bots.link.missing', 'None of your paired computers has this bot.')
 }
 
-export function botLinkOfflineLine(t: Translate, name: string): string {
+export function botLinkOfflineLine(t: Translate, name: string | undefined): string {
+  if (name === undefined) {
+    return t(
+      'bots.link.offlineUnnamed',
+      'Your computer is offline. Open the link again when it’s back online.'
+    )
+  }
   return t('bots.link.offline', '{{name}} is offline. Open the link again when it’s back online.', {
     name
   })
@@ -59,13 +77,26 @@ export function botLinkOfflineLine(t: Translate, name: string): string {
 
 export function botLinkOpenFailureLine(
   t: Translate,
-  name: string,
+  name: string | undefined,
   failure?: StructuredSessionOpenFailure
 ): string {
   if (failure?.reason === 'workspace-missing') {
-    return t('bots.link.workspaceDeleted', 'This chat’s workspace was deleted on {{name}}.', {
-      name
-    })
+    return name === undefined
+      ? t(
+          'bots.link.workspaceUnavailableUnnamed',
+          'This chat’s workspace is no longer available on your computer.'
+        )
+      : t(
+          'bots.link.workspaceUnavailable',
+          'This chat’s workspace is no longer available on {{name}}.',
+          { name }
+        )
+  }
+  if (name === undefined) {
+    return t(
+      'bots.link.chatOpenFailedUnnamed',
+      'Your computer couldn’t open this chat. Try the link again.'
+    )
   }
   return t('bots.link.chatOpenFailed', '{{name}} couldn’t open this chat. Try the link again.', {
     name
