@@ -1,6 +1,9 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { botThreadPaneHoverIsFocusing, cancelPendingBotThreadOpen } from './bot-thread-open-lifecycle'
+import {
+  botThreadPaneHoverIsFocusing,
+  cancelPendingBotThreadOpen
+} from './bot-thread-open-lifecycle'
 
 export type BotThreadNavigate = <T>(action: () => T) => T
 
