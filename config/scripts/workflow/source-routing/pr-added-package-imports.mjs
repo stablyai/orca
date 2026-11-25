@@ -32,22 +32,33 @@ export function addsPackageImport(diff, isTestFile) {
   return false
 }
 
-/** Reads only the changed files' blobs, so it stays cheap in the router's blob:none checkout. */
-export function readPackagedSourceDiff(diffBase) {
-  return execFileSync(
-    'git',
-    [
-      'diff',
-      '-U0',
-      '--no-renames',
-      '--no-color',
-      '--src-prefix=a/',
-      '--dst-prefix=b/',
-      diffBase,
-      'HEAD',
-      '--',
-      ...PACKAGED_SOURCE_ROOTS
-    ],
-    { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }
-  )
+/**
+ * Whether the PR adds a package import, reading only the changed files' blobs so the router's
+ * blob:none checkout stays cheap. A diff it can't read counts as one: packaging runs.
+ */
+export function prAddsPackageImport(diffBase, isTestFile) {
+  try {
+    const diff = execFileSync(
+      'git',
+      [
+        'diff',
+        '-U0',
+        '--no-renames',
+        '--no-color',
+        '--src-prefix=a/',
+        '--dst-prefix=b/',
+        diffBase,
+        'HEAD',
+        '--',
+        ...PACKAGED_SOURCE_ROOTS
+      ],
+      { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }
+    )
+    return addsPackageImport(diff, isTestFile)
+  } catch (error) {
+    process.stderr.write(
+      `pr-added-package-imports: couldn't read the diff, running packaging: ${error}\n`
+    )
+    return true
+  }
 }

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { XTERM_PREFIXES } from './pr-xterm-patch-prefixes.mjs'
-import { addsPackageImport, readPackagedSourceDiff } from './pr-added-package-imports.mjs'
+import { prAddsPackageImport } from './pr-added-package-imports.mjs'
 import {
   isCloudTestRunnerInput,
   isWindowsBoundaryPath,
@@ -521,8 +521,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const diffBase = diffBaseIndex === -1 ? null : process.argv[diffBaseIndex + 1]
   const classification = classifyPrJobs(input.split(/\r?\n/).filter(Boolean), {
     allowDaemonInitTestSupport: process.argv.includes('--daemon-init-test-support'),
-    addedPackageImport:
-      diffBase !== null && addsPackageImport(readPackagedSourceDiff(diffBase), isTestFile)
+    addedPackageImport: diffBase !== null && prAddsPackageImport(diffBase, isTestFile)
   })
   for (const [name, value] of Object.entries(classification)) {
     process.stdout.write(`${name}=${value ? 'true' : 'false'}\n`)
