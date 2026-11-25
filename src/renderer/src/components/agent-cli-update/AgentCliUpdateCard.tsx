@@ -133,12 +133,6 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
     startable.forEach(runAgentCliUpdateRow)
   }
   const retryFailed = (): void => {
-    // A retry during the exit fade keeps the card, so its progress stays visible.
-    if (exitTimer.current !== null) {
-      window.clearTimeout(exitTimer.current)
-      exitTimer.current = null
-      setExiting(false)
-    }
     targets.forEach((target, index) => {
       const row = rowFor(target, rows)
       if (phases[index] === 'failed' && row) {
@@ -161,7 +155,9 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
   }
 
   return (
+    // Inert while fading out: an action started then would be undone when the close finishes.
     <div
+      inert={exiting}
       className={
         prefersReducedMotion
           ? undefined
