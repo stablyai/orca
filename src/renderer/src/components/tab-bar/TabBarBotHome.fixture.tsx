@@ -97,7 +97,6 @@ function BotHomeTabsFixture({
       activeTabType="agent-session"
       worktreeId={WORKSPACE_ID}
       groupId={GROUP_ID}
-      isGroupFocused
       expandedPaneByTabId={{}}
       showAgentLaunchItems={false}
       onActivate={setActiveTabId}
