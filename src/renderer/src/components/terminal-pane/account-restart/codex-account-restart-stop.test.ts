@@ -13,7 +13,8 @@ const { store } = vi.hoisted((): { store: StoreState } => ({
   store: {
     clearCodexRestartNotice: vi.fn(),
     reopenCodexRestartPrompt: vi.fn(),
-    codexRestartNoticeByPtyId: {}
+    codexRestartNoticeByPtyId: {},
+    ptyIdsByTabId: {}
   }
 }))
 const { listeners } = vi.hoisted((): { listeners: Set<() => void> } => ({ listeners: new Set() }))
@@ -24,6 +25,15 @@ vi.mock('@/store/index', () => ({
       listeners.add(listener)
       return () => listeners.delete(listener)
     }
+  }
+}))
+const { sleep } = vi.hoisted(() => ({
+  sleep: { pane: vi.fn(), undo: vi.fn() }
+}))
+vi.mock('./codex-account-restart-sleep', () => ({
+  sleepPaneForAccountRestart: (...args: unknown[]) => {
+    sleep.pane(...args)
+    return sleep.undo
   }
 }))
 const notifyStore = (): void => {
@@ -76,6 +86,23 @@ describe('renderer account restart stop', () => {
   afterEach(() => {
     _testing.reset()
     vi.unstubAllGlobals()
+  })
+
+  it('sleeps the pane before sending the stop, and keeps that sleep only for a stop that ran', async () => {
+    sleep.pane.mockClear()
+    sleep.undo.mockClear()
+    const { replies, stop } = heldReplies()
+    const stopped = stopCodexPaneForAccountRestart(pane)
+    // The wake reads this record after the exit retires the pane's live agent row.
+    expect(sleep.pane).toHaveBeenCalledWith(pane)
+    expect(sleep.pane.mock.invocationCallOrder[0]).toBeLessThan(stop.mock.invocationCallOrder[0]!)
+    replies[0]({ outcome: 'stopped', opIds: ['op-1'] })
+    await stopped
+    expect(sleep.undo).toHaveBeenLastCalledWith(true)
+    const refused = stopCodexPaneForAccountRestart(pane)
+    replies[1]({ outcome: 'not-started', reason: 'refused', opIds: ['op-2'] })
+    await refused
+    expect(sleep.undo).toHaveBeenLastCalledWith(false)
   })
 
   it('applies one joined reply to the current notice once', async () => {
