@@ -17,6 +17,7 @@ import type { SharedBotRequestView } from '../../../../../shared/bots/shared-bot
 import type { AgentCardService } from '../../../../../shared/bots/agent-card-contract'
 import { agentCardAvatar, agentCardServices } from '../../../../../shared/bots/shared-agent-card'
 import { GitHubIcon } from '../../icons/GitHubIcon'
+import { GoogleIcon } from '../../icons/GoogleIcon'
 import { LinearIcon } from '../../icons/LinearIcon'
 import { SlackIcon } from '../../icons/SlackIcon'
 import { BotAvatar } from '../BotAvatar'
@@ -26,7 +27,8 @@ import { useSharedBotRequestAnswer } from './use-shared-bot-request-answer'
 const SERVICES: Record<AgentCardService, { name: string; Icon: typeof GitHubIcon }> = {
   github: { name: 'GitHub', Icon: GitHubIcon },
   slack: { name: 'Slack', Icon: SlackIcon },
-  linear: { name: 'Linear', Icon: LinearIcon }
+  linear: { name: 'Linear', Icon: LinearIcon },
+  google: { name: 'Google', Icon: GoogleIcon }
 }
 
 /** The request's agent as its card draws it: its mascot, else its initial. */

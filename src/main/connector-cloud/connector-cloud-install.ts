@@ -1,4 +1,5 @@
 import { ConnectorBotPurposes } from './connector-bot-purposes'
+import type { ConnectorBotGoogle } from './connector-bot-google'
 import { CONNECTOR_CLOUD_MENTIONED_FEATURE } from '../../shared/connector-cloud-features'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
@@ -53,6 +54,7 @@ export type ConnectorCloudHost = {
     WebhookHostService,
     'receive' | 'notice' | 'helloAnswered' | 'pausing' | 'onConfirmed'
   >
+  google: ConnectorBotGoogle
 }
 
 /** The connector acts as this host's own signed-in Orca account; null without Orca Cloud auth config. */
@@ -63,7 +65,8 @@ export function createConnectorCloud({
   kind,
   isFenced,
   gitHubInstallations,
-  webhooks
+  webhooks,
+  google
 }: ConnectorCloudHost): ConnectorCloud | null {
   const auth = getOrcaCloudAuthConfig()
   if (!auth.configured) {
@@ -139,12 +142,14 @@ export function createConnectorCloud({
           // Asks the cloud only for an account with a bot on GitHub.
           (store.getBots?.() ?? []).some((bot) => bot.github) ? gitHubInstallations.ids() : [],
           runtime.getConnectorCloud()?.cloudFeatures() ?? null,
-          (botId) => purposes.of(botId)
+          (botId) => purposes.of(botId),
+          (botId) => google.works(botId)
         ),
       beforeFirstHello: async () => {
         await Promise.all([
           runtime.machineNameReady(),
           purposes.refresh(),
+          google.refresh(),
           (store.getBots?.() ?? []).some((bot) => bot.github)
             ? gitHubInstallations.firstAnswer(FIRST_GITHUB_ANSWER_WAIT_MS)
             : undefined
@@ -217,7 +222,8 @@ export function createConnectorCloud({
           connectorTriggers(store.listAutomations(), (hookId) => webhooks.pausing(hookId))
         ),
       onHelloInputsChanged: (listener) => {
-        runtime.onBotsWritten(listener)
+        // One hello per write, once Google's read has what it changed.
+        runtime.onBotsWritten(() => void google.botsWritten(listener))
         runtime.onBotShareHostKeyReady(listener)
         runtime.onClientEvent(
           (event) => {
@@ -230,6 +236,7 @@ export function createConnectorCloud({
         store.onSettingsChanged?.(() => listener())
         gitHubInstallations.onChange(listener)
         purposes.onChange(listener)
+        google.onChange(listener)
         webhooks.onConfirmed(listener)
       }
     }
