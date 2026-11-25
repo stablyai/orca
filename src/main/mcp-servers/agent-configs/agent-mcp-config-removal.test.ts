@@ -28,6 +28,7 @@ const CLAUDE_JSON = `{
   },
   "projects": {
     "/work/orca": { "mcpServers": { "db": { "command": "pg-mcp", "args": [] } }, "disabledMcpServers": ["db"] },
+    "/work/docs": { "mcpServers": { "db": { "command": "pg-mcp", "args": [] } } },
     "/elsewhere": { "mcpServers": { "lost": { "command": "lost-mcp" } } },
     "/orca-data/bot-tool-sign-in/b1": { "mcpServers": { "bot": { "type": "http", "url": "https://bot.dev/mcp" } } }
   }
@@ -131,12 +132,16 @@ describe('agent MCP config discovery and move', () => {
     const host: AgentMcpImportHost = {
       context: context(),
       userDataPath: join(home, 'orca-data'),
-      workspaceFor: (path) => (path === '/work/orca' ? { key: 'repo-1', name: 'orca' } : null),
+      workspaceFor: (path) =>
+        ({
+          '/work/orca': { key: 'repo-1', name: 'orca' },
+          '/work/docs': { key: 'repo-2', name: 'docs' }
+        })[path] ?? null,
       isOrcaProject: (path) => path.startsWith('/orca-data/')
     }
     const rows = await listAgentMcpServers(host)
     const row = (name: string) => rows.find((found) => found.name === name)!
-    expect([row('db').projectNames, row('db').movable]).toEqual([['orca'], true])
+    expect([row('db').projectNames, row('db').movable]).toEqual([['orca', 'docs'], true])
     expect([row('lost').projectNames, row('lost').movable]).toEqual([['elsewhere'], false])
     expect(row('github')).toMatchObject({
       agents: ['claude', 'codex'],
@@ -156,7 +161,8 @@ describe('agent MCP config discovery and move', () => {
       ],
       [
         { name: 'db', command: 'pg-mcp', args: [] },
-        { workspaces: { later: false, on: ['repo-1'], off: [] }, agentsOff: ['claude'] }
+        // Switched off in orca, on in docs: only docs gets it.
+        { workspaces: { later: false, on: ['repo-2'], off: [] }, agentsOff: [] }
       ],
       [
         { name: 'grk', command: 'grk', args: ['a'] },
@@ -166,10 +172,15 @@ describe('agent MCP config discovery and move', () => {
     // The last server out of a TOML file takes its emptied table with it.
     expect(read('.grok/config.toml')).toBe('theme = "dark"\n')
     expect(read('.claude.json')).toBe(
-      CLAUDE_JSON.replace(`\n    "github": { "type": "http", "url": "${GITHUB}" },`, '').replace(
-        `\n    "/work/orca": { "mcpServers": { "db": { "command": "pg-mcp", "args": [] } }, "disabledMcpServers": ["db"] },`,
-        `\n    "/work/orca": { "mcpServers": { }, "disabledMcpServers": ["db"] },`
-      )
+      CLAUDE_JSON.replace(`\n    "github": { "type": "http", "url": "${GITHUB}" },`, '')
+        .replace(
+          `\n    "/work/orca": { "mcpServers": { "db": { "command": "pg-mcp", "args": [] } }, "disabledMcpServers": ["db"] },`,
+          `\n    "/work/orca": { "mcpServers": { }, "disabledMcpServers": ["db"] },`
+        )
+        .replace(
+          `\n    "/work/docs": { "mcpServers": { "db": { "command": "pg-mcp", "args": [] } } },`,
+          `\n    "/work/docs": { "mcpServers": { } },`
+        )
     )
     expect(read('.codex/config.toml')).toBe(
       `# keep me\nmodel = "o3"\n\n# about linear\n[mcp_servers.linear]\nurl = "https://mcp.linear.app/mcp"\n`

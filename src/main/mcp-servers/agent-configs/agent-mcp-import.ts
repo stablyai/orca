@@ -3,6 +3,7 @@
 // removal never loses the server.
 import { homedir } from 'node:os'
 import { basename } from 'node:path'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 import { botToolDetail, type BotToolServer } from '../../../shared/bot-tools'
 import { agentMcpServerMergeKey } from '../../../shared/mcp/agent-mcp-config-entry'
 import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
@@ -97,14 +98,24 @@ function importRow(found: DiscoveredAgentMcpServer, workspaceFor: WorkspaceForPa
   // One unscoped copy means every workspace already gets it.
   const limited = projectPaths.every((path) => path !== undefined)
   const mapped = limited
-    ? projectPaths.map((path) => ({ path: path!, workspace: workspaceFor(path!) }))
+    ? found.sources.map((source) => ({
+        path: source.projectPath!,
+        disabled: source.disabled,
+        workspace: workspaceFor(source.projectPath!)
+      }))
     : []
-  const keys = [...new Set(mapped.flatMap(({ workspace }) => (workspace ? [workspace.key] : [])))]
+  const keysOf = (copies: typeof mapped): string[] => [
+    ...new Set(copies.flatMap(({ workspace }) => (workspace ? [workspace.key] : [])))
+  ]
   const agents = [...new Set(found.sources.map((source) => source.agent))]
+  // A project-limited copy is on only where its own copy was on; all off keeps its reach, off.
+  const enabledKeys = keysOf(mapped.filter(({ disabled }) => !disabled))
   return {
     found,
     scope: {
-      workspaces: limited ? { later: false, on: keys, off: [] } : null,
+      workspaces: limited
+        ? { later: false, on: enabledKeys.length > 0 ? enabledKeys : keysOf(mapped), off: [] }
+        : null,
       agentsOff: agents.filter((agent) =>
         found.sources.every((source) => source.agent !== agent || source.disabled)
       )
@@ -135,6 +146,13 @@ export async function listAgentMcpServers(host: AgentMcpImportHost): Promise<Age
   return (await importRows(host)).map(({ row }) => row)
 }
 
+const importQueue = new Map<string, Promise<void>>()
+
+// A second Move of the same row (a double tap, another client) re-reads after the first finished,
+// so it finds the server gone instead of adding it twice.
+const oneImportAtATime = <T>(run: () => Promise<T>): Promise<T> =>
+  runKeyedSerializedOperation(importQueue, 'import', run)
+
 async function movableRow(host: AgentMcpImportHost, key: string): Promise<ImportRow> {
   const found = (await importRows(host)).find(({ row }) => row.key === key)
   if (!found) {
@@ -152,8 +170,10 @@ export async function copyAgentMcpServer<T>(
   key: string,
   add: AddImportedMcpServer<T>
 ): Promise<T> {
-  const { found, scope } = await movableRow(host, key)
-  return add(found.server, scope)
+  return oneImportAtATime(async () => {
+    const { found, scope } = await movableRow(host, key)
+    return add(found.server, scope)
+  })
 }
 
 // Orca's managed Claude accounts copy ~/.claude.json's servers forward and never drop one.
@@ -179,24 +199,26 @@ export async function moveAgentMcpServer<T>(
   key: string,
   add: AddImportedMcpServer<T>
 ): Promise<T> {
-  const { found, scope } = await movableRow(host, key)
-  const added = await add(found.server, scope)
-  const configName = found.sources[0]!.keyPath.at(-1)!
-  const mergeKey = agentMcpServerMergeKey(configName, found.server)
-  await removeAgentMcpServerEntries(found.sources, mergeKey)
-  try {
-    // A profile entry the user changed in that account is theirs to keep.
-    await removeAgentMcpServerEntries(await claudeProfileCopies(host, found.sources), mergeKey, {
-      differing: 'skip'
-    })
-  } catch (error) {
-    // The move itself is done; an account profile that keeps its copy only shadows it there.
-    console.warn(
-      '[mcp-servers] Couldn’t remove a moved server from a Claude account profile:',
-      error
-    )
-  }
-  return added
+  return oneImportAtATime(async () => {
+    const { found, scope } = await movableRow(host, key)
+    const added = await add(found.server, scope)
+    const configName = found.sources[0]!.keyPath.at(-1)!
+    const mergeKey = agentMcpServerMergeKey(configName, found.server)
+    await removeAgentMcpServerEntries(found.sources, mergeKey)
+    try {
+      // A profile entry the user changed in that account is theirs to keep.
+      await removeAgentMcpServerEntries(await claudeProfileCopies(host, found.sources), mergeKey, {
+        differing: 'skip'
+      })
+    } catch (error) {
+      // The move itself is done; an account profile that keeps its copy only shadows it there.
+      console.warn(
+        '[mcp-servers] Couldn’t remove a moved server from a Claude account profile:',
+        error
+      )
+    }
+    return added
+  })
 }
 
 export type HostWorkspaceFolders = {
