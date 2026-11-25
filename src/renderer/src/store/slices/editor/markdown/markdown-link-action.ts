@@ -82,8 +82,8 @@ export function createMarkdownLinkAction(
         openMarkdownExternalUrl(target.url, {
           state: initialState,
           worktreeId: ctx.worktreeId,
-          sourceOwner,
-          destination: 'orca'
+          sourceOwner
+          // destination omitted: respect the user's link routing setting
         })
         return
       }

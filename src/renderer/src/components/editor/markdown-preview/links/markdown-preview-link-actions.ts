@@ -135,8 +135,8 @@ export async function handleMarkdownPreviewLinkClick({
     openMarkdownExternalUrl(target.toString(), {
       state: useAppStore.getState(),
       worktreeId: sourceRoutingWorktreeId,
-      sourceOwner,
-      destination: 'orca'
+      sourceOwner
+      // destination omitted: respect the user's link routing setting
     })
     return
   }

@@ -127,8 +127,8 @@ export function handleRichMarkdownEditorClick({
       openMarkdownExternalUrl(classified.url, {
         state: useAppStore.getState(),
         worktreeId,
-        sourceOwner,
-        destination: 'orca'
+        sourceOwner
+        // destination omitted: respect the user's link routing setting
       })
       return true
     }

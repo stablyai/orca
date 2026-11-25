@@ -17,7 +17,7 @@ export function openMarkdownExternalUrl(
     state: AppState
     worktreeId: string | null
     sourceOwner: HttpLinkSourceOwner
-    destination: 'orca' | 'system'
+    destination?: 'orca' | 'system'
   }
 ): void {
   if (sourceOwner.kind === 'unknown') {
@@ -28,6 +28,17 @@ export function openMarkdownExternalUrl(
       worktreeId,
       sourceOwner,
       forceSystemBrowser: true
+    })
+    return
+  }
+  // When destination is not specified, respect the user's link routing setting.
+  // The default behavior of openOwnedHttpLink will use the managed browser if
+  // available, otherwise fall back to system browser.
+  if (!destination) {
+    openOwnedHttpLink(url, {
+      allowRemoteInApp: true,
+      worktreeId,
+      sourceOwner
     })
     return
   }
