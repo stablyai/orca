@@ -30009,7 +30009,6 @@
         "cancel": "İptal",
         "cancelRunning": "Oluşturmayı iptal et",
         "edit": "Açıklamayı düzenle",
-        "realPerson": "Avatarlar gerçek kişileri gösteremez. Bunun yerine bir karakter tarif edin.",
         "signedOut": "{{agent}} oturumu açık değil. Oturum açıp yeniden deneyin.",
         "usageLimit": "{{agent}} kullanım sınırına ulaştı. Daha sonra yeniden deneyin.",
         "noImage": "{{agent}} bir görsel oluşturmadı. Açıklamanızı farklı sözcüklerle yazmayı deneyin.",
