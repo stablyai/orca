@@ -22,38 +22,51 @@ import type { EnvironmentDoctorCommandResult, EnvironmentDoctorDeps } from './en
 const SETUP_TIMEOUT_MS = 30 * 60_000
 const SETUP_OUTPUT_BYTES = 256 * 1024
 
+const baseEnv = (): NodeJS.ProcessEnv => buildLocalPreflightEnv() ?? process.env
+
 /** Real host I/O for the doctor; it runs on the machine that owns the checkout. */
+export const runHostDoctorCommand: EnvironmentDoctorDeps['run'] = async (
+  program,
+  args,
+  options
+) => {
+  // Git probes also force the C locale: folder detection reads Git's English "not a git repository".
+  const env = options.guardGitPrompts
+    ? { ...gitCredentialPromptGuardEnv(baseEnv()), LC_ALL: 'C', LANGUAGE: 'C' }
+    : options.env
+      ? { ...baseEnv(), ...options.env }
+      : baseEnv()
+  // Windows npm shims are .cmd files that a bare name cannot spawn.
+  const resolved =
+    process.platform === 'win32'
+      ? ((await resolveCommandOnLocalPath(program, { env })) ?? program)
+      : program
+  return toResult(
+    await runProcess(
+      { program: resolved, args, cwd: options.cwd, env, timeoutMs: options.timeoutMs },
+      'tail'
+    )
+  )
+}
+
 export function createHostEnvironmentDoctorDeps(
   options: {
+    agentSettings?: EnvironmentDoctorDeps['agentSettings']
     /** Long-lived servers re-read the login shell so a retry sees tools installed since startup. */
     refreshShellPath?: boolean
   } = {}
 ): EnvironmentDoctorDeps {
-  const baseEnv = (): NodeJS.ProcessEnv => buildLocalPreflightEnv() ?? process.env
-  const run: EnvironmentDoctorDeps['run'] = async (program, args, options) => {
-    // Git probes also force the C locale: folder detection reads Git's English "not a git repository".
-    const env = options.guardGitPrompts
-      ? { ...gitCredentialPromptGuardEnv(baseEnv()), LC_ALL: 'C', LANGUAGE: 'C' }
-      : baseEnv()
-    // Windows npm shims are .cmd files that a bare name cannot spawn.
-    const resolved =
-      process.platform === 'win32'
-        ? ((await resolveCommandOnLocalPath(program, { env })) ?? program)
-        : program
-    return toResult(
-      await runProcess(
-        { program: resolved, args, cwd: options.cwd, env, timeoutMs: options.timeoutMs },
-        'tail'
-      )
-    )
-  }
   return {
     platform: process.platform,
+    agentSettings: options.agentSettings,
     // Agent detection's login-shell PATH, applied before any probe so all checks agree.
     prepare: () => hydrateShellPathForAgentDetection(undefined, options.refreshShellPath === true),
-    run,
+    run: runHostDoctorCommand,
     findCommands: (commands) => findCommandsOnLocalPath(commands, { env: baseEnv() }),
-    detectAgents: () => detectInstalledAgents(),
+    detectAgents: () =>
+      detectInstalledAgents(undefined, {
+        agentCmdOverrides: options.agentSettings?.agentCmdOverrides
+      }),
     readFile: (path) => readFile(path, 'utf8').catch(() => null),
     exists: (path) =>
       access(path).then(

@@ -433,7 +433,15 @@
       "undetectedCommandHint": "Si la CLI de {{agent}} está instalada fuera de PATH, introduce la ruta completa a su ejecutable en este host.",
       "agentActions": "Acciones de {{agent}}",
       "defaultAutoBadge": "Predet. · Auto",
-      "newAgentsTitle": "Agentes nuevos"
+      "newAgentsTitle": "Agentes nuevos",
+      "doubaoSignIn": {
+        "check": "Comprobar inicio de sesión",
+        "checking": "Comprobando el inicio de sesión…",
+        "verified": "Sesión iniciada en este equipo",
+        "signedOut": "Inicia sesión en este equipo",
+        "unverified": "No se pudo verificar el inicio de sesión en este equipo",
+        "copy": "Copiar comando de inicio de sesión"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "enlace simbólico",
@@ -24473,6 +24481,9 @@
     "argumentsHint": "Solo se aplica a los inicios de CLI.",
     "launchChat": "Iniciar chat",
     "launchTerminal": "Iniciar terminal",
+    "resumeById": "Reanudar una sesión por ID",
+    "doubaoSessionId": "ID de sesión que Doubao muestra al salir",
+    "resumeTerminal": "Reanudar",
     "setByArguments": "Definido por tus argumentos",
     "searchModels": "Buscar modelos",
     "noModels": "Ningún modelo coincide con tu búsqueda.",

@@ -67,7 +67,17 @@ If an agent's CLI is installed outside `PATH`, expand its row in **Settings → 
 | Trae               | Auto-setup via `traecli` (TRAE CN CLI)                                                                                     | [Trae](https://www.trae.ai/)                                                                      |
 | Doubao (豆包)      | Terminal workers via `doubao`. Install with `npm install -g @bytedance/doubao-cli` and sign in with `doubao login`.        | [Doubao CLI](https://www.npmjs.com/package/@bytedance/doubao-cli)                                 |
 
-To configure a Doubao worker, open **Settings → Agents → Doubao** for the host that will run it, or search Settings for **豆包**. Expand the row to set its command, arguments, environment, and permissions. If the executable path contains spaces, quote it for the terminal shell, for example `& "C:\My Tools\doubao.cmd"` in PowerShell.
+To configure a Doubao worker, open **Settings → Agents → Doubao** for the host that will run it, or search Settings for **豆包**. Expand the row to set its command, arguments, environment, and permissions. Use **Check sign-in** to verify the account on that host. If the executable path contains spaces, quote it for the terminal shell, for example `& "C:\My Tools\doubao.cmd"` in PowerShell.
+
+In **New tab**, open the configuration arrow beside Doubao to choose a model and its thinking level. The choices come from `doubao model list --json` in that workspace. A coordinator can also select them for a single task:
+
+```sh
+orca orchestration worker-start --agent doubao --worktree current --model <model-id> --effort <level> --spec "Review the changes in this workspace"
+```
+
+If the worker is waiting, use `orca orchestration worker-show --dispatch <dispatch-id>` to see whether Doubao needs sign-in, an update decision, or permission for a tool. Respond in the worker terminal.
+
+To reopen a conversation, open the original workspace and choose **New tab → Doubao → Resume a session by ID** in its configuration menu. Enter the session ID printed by Doubao. A coordinator can use `orca agent resume --agent doubao --session-id <id> --worktree current` on the same host.
 
 Environment entries apply to the Doubao CLI process. On Windows with Doubao CLI 2.37.1, the shell tools inside a conversation can have a different environment.
 

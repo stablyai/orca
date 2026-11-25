@@ -3,6 +3,20 @@ import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-
 
 export const AGENT_LAUNCH_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['agent', 'resume'],
+    summary: 'Reopen a Doubao CLI session in its original workspace',
+    usage:
+      'orca agent resume --agent doubao --session-id <provider-id> --worktree <selector> [--focus] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'session-id', 'worktree', 'focus'],
+    notes: [
+      'Use the original workspace on its execution host. Doubao prints the session ID in its resume command on exit and returns session_id in JSON print output.',
+      'Repeating the command for a running session reuses the terminal.'
+    ],
+    examples: [
+      'orca agent resume --agent doubao --session-id 12345678901234567 --worktree current --json'
+    ]
+  },
+  {
     path: ['agent', 'launch'],
     summary: 'Start an agent in an existing workspace, as a chat or a terminal',
     usage:

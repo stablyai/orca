@@ -1021,7 +1021,15 @@
       "undetectedCommandHint": "Wenn die {{agent}}-CLI außerhalb von PATH installiert ist, gib den vollständigen Pfad zu ihrer ausführbaren Datei auf diesem Host ein.",
       "agentActions": "Aktionen für {{agent}}",
       "defaultAutoBadge": "Standard · Auto",
-      "newAgentsTitle": "Neue Agenten"
+      "newAgentsTitle": "Neue Agenten",
+      "doubaoSignIn": {
+        "check": "Anmeldung prüfen",
+        "checking": "Anmeldung wird geprüft…",
+        "verified": "Auf diesem Host angemeldet",
+        "signedOut": "Auf diesem Host anmelden",
+        "unverified": "Anmeldung auf diesem Host konnte nicht geprüft werden",
+        "copy": "Anmeldebefehl kopieren"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "Symbolischer Link",
@@ -25202,6 +25210,9 @@
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
     "launchTerminal": "Terminal starten",
+    "resumeById": "Sitzung per ID fortsetzen",
+    "doubaoSessionId": "Sitzungs-ID, die Doubao beim Beenden anzeigt",
+    "resumeTerminal": "Fortsetzen",
     "select": "Agent auswählen",
     "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
     "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien",

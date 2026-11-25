@@ -56,6 +56,15 @@ export function registerFilesystemGitModelDiscoveryHandlers(
       if (!localEnv.ok) {
         return { success: false, error: localEnv.error }
       }
+      if (agentId === 'doubao') {
+        localDiscoveryOptions = {
+          ...localDiscoveryOptions,
+          agentEnv: {
+            ...store.getSettings().agentDefaultEnv?.doubao,
+            DOUBAO_CLI_NO_UPDATE_CHECK: '1'
+          }
+        }
+      }
       return localDiscoveryOptions
         ? discoverCommitMessageModelsLocal(
             agentId as TuiAgent,

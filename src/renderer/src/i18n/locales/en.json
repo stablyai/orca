@@ -1252,7 +1252,15 @@
       "hideAgentDetails": "Hide {{agent}} details",
       "defaultAutoBadge": "Default · Auto",
       "newAgentsTitle": "New agents",
-      "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice."
+      "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice.",
+      "doubaoSignIn": {
+        "check": "Check sign-in",
+        "checking": "Checking sign-in…",
+        "verified": "Signed in on this host",
+        "signedOut": "Sign in on this host",
+        "unverified": "Could not verify sign-in on this host",
+        "copy": "Copy sign-in command"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -26965,6 +26973,9 @@
     "argumentsHint": "Applies only to CLI launches.",
     "launchChat": "Launch chat",
     "launchTerminal": "Launch terminal",
+    "resumeById": "Resume a session by ID",
+    "doubaoSessionId": "Session ID shown by Doubao on exit",
+    "resumeTerminal": "Resume",
     "sameAsTextDefault": "Same as default · {{value0}}",
     "effortDefault": "Default",
     "setByArguments": "Set by your Arguments",

@@ -61,6 +61,7 @@ import { AgentLaunchDefaultsGroup } from '@/components/settings/agents/launch/Ag
 import { AgentDetectionCatalog } from '@/components/settings/agents/launch/AgentDetectionCatalog'
 import type { AgentCatalogRowProps } from '@/components/settings/agents/launch/AgentCatalogRow'
 import { HostAgentEnvironmentEditor } from '@/components/settings/agents/launch/HostAgentEnvironmentEditor'
+import { doubaoSignInCheckForTarget } from './DoubaoSignInCheck'
 import { buildCodexSessionSourceHomeControl } from '@/components/agent/launch-settings/codex-session-source-home-control'
 import { buildAgentOpensAs } from '@/lib/agent-session/launch/native-chat-provider-choice'
 import {
@@ -231,6 +232,10 @@ export function AgentLaunchSettingsCatalog({
     agent: (typeof catalog)[number],
     isDetected: boolean
   ): AgentCatalogRowProps => ({
+    cliSignIn:
+      isDetected && agent.id === 'doubao'
+        ? doubaoSignInCheckForTarget(detectionTarget, settings.agentCmdOverrides.doubao)
+        : undefined,
     cliUpdate: isDetected ? (
       <AgentCliUpdateButton detectionTarget={detectionTarget} agent={agent.id} />
     ) : undefined,

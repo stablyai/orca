@@ -1,5 +1,8 @@
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
+export const DOUBAO_SIGN_IN_FOOTER = '请使用豆包移动端扫码并在手机上确认；按 ctrl+c 可取消'
+const DOUBAO_QR_ROW_RE = /^[ \t]*[█▀▄][█▀▄ \t]{5,}\r?$/m
+
 // Match rows by their first ·, before provisional startup mistakes it for a chat footer.
 // Codex 0.157+ cell-diff painting corrupts heading text; fixed key/update rows survive.
 const CODEX_UPDATE_ROW_RE = /available\s*\u00B7\s*\d+\.\d+|enter\s*continue\s*\u00B7\s*esc\s*skip/g
@@ -41,6 +44,12 @@ export function findStartupDialogBlockedSignals(
   normalized: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number }[] {
   const candidates: { reason: RuntimeTerminalWaitBlockedReason; index: number }[] = []
+  if (normalized.trimEnd().endsWith(DOUBAO_SIGN_IN_FOOTER)) {
+    const index = normalized.lastIndexOf(DOUBAO_SIGN_IN_FOOTER)
+    if (DOUBAO_QR_ROW_RE.test(normalized.slice(0, index))) {
+      candidates.push({ reason: 'agent-sign-in-prompt', index })
+    }
+  }
   const updateIndex = findDialogIndex(
     normalized,
     'update available',

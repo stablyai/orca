@@ -1252,7 +1252,15 @@
       "hideAgentDetails": "{{agent}} ayrıntılarını gizle",
       "defaultAutoBadge": "Varsayılan · Otomatik",
       "newAgentsTitle": "Yeni ajanlar",
-      "defaultSurfaceServerDescription": "{{host}} cihazının CLI veya orkestrasyon işçileri üzerinden kendi başlattığı ajanlar için varsayılan ayar. Bu bilgisayardan açtığınız ajanlar, Bu bilgisayar seçeneğindeki ayarı kullanır."
+      "defaultSurfaceServerDescription": "{{host}} cihazının CLI veya orkestrasyon işçileri üzerinden kendi başlattığı ajanlar için varsayılan ayar. Bu bilgisayardan açtığınız ajanlar, Bu bilgisayar seçeneğindeki ayarı kullanır.",
+      "doubaoSignIn": {
+        "check": "Oturumu denetle",
+        "checking": "Oturum denetleniyor…",
+        "verified": "Bu makinede oturum açık",
+        "signedOut": "Bu makinede oturum açın",
+        "unverified": "Bu makinedeki oturum doğrulanamadı",
+        "copy": "Oturum açma komutunu kopyala"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "sembolik bağlantı",
@@ -30644,6 +30652,9 @@
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
     "launchChat": "Sohbet başlat",
     "launchTerminal": "Terminal başlat",
+    "resumeById": "Oturumu kimlikle sürdür",
+    "doubaoSessionId": "Doubao kapanırken gösterilen oturum kimliği",
+    "resumeTerminal": "Sürdür",
     "select": "Aracı seç",
     "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
     "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @",

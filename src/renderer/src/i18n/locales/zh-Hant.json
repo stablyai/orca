@@ -984,7 +984,15 @@
       "undetectedCommandHint": "如果 {{agent}} CLI 安裝在 PATH 之外，請輸入其在此主機上的可執行檔完整路徑。",
       "agentActions": "{{agent}} 操作",
       "defaultAutoBadge": "預設 · 自動",
-      "newAgentsTitle": "新代理程式"
+      "newAgentsTitle": "新代理程式",
+      "doubaoSignIn": {
+        "check": "檢查登入狀態",
+        "checking": "正在檢查登入狀態…",
+        "verified": "已在此主機登入",
+        "signedOut": "請在此主機登入",
+        "unverified": "無法驗證此主機的登入狀態",
+        "copy": "複製登入指令"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符號連結",
@@ -24863,6 +24871,9 @@
     "argumentsHint": "僅適用於 CLI 啟動。",
     "launchChat": "啟動聊天",
     "launchTerminal": "啟動終端機",
+    "resumeById": "依 ID 恢復工作階段",
+    "doubaoSessionId": "豆包結束時顯示的工作階段 ID",
+    "resumeTerminal": "恢復",
     "select": "選擇代理程式",
     "promptPlaceholder": "新增提示詞（選填）：/ 選擇技能，@ 選擇檔案",
     "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案",

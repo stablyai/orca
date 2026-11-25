@@ -1,3 +1,4 @@
+import { doubaoCatalogModel } from '../../../agent-session/options/catalog-providers/agent-session-option-catalog-doubao'
 import { createClaudeCatalogOptions } from '../../../agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
 import {
   getAgentSessionOptionCatalog,
@@ -35,6 +36,9 @@ export function catalogModelsFromModelDiscovery(
   ) {
     return null
   }
+  if (agent === 'doubao') {
+    return result.models.map(doubaoCatalogModel)
+  }
   return result.models.map((model) => ({
     id: model.id,
     label: model.label,
@@ -58,7 +62,7 @@ export function mergeDiscoveredCatalogModels(
   catalog: AgentSessionOptionCatalog,
   discovered: readonly CatalogModel[]
 ): CatalogModel[] {
-  if (agent === 'claude') {
+  if (agent === 'claude' || agent === 'doubao') {
     return [...discovered]
   }
   return catalog.discoveredModelsAreAuthoritative

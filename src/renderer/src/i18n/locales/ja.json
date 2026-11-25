@@ -542,7 +542,15 @@
       "undetectedCommandHint": "{{agent}} CLI が PATH 以外にインストールされている場合、このホスト上の実行ファイルのフルパスを入力してください。",
       "agentActions": "{{agent}} の操作",
       "defaultAutoBadge": "デフォルト · 自動",
-      "newAgentsTitle": "新しい Agent"
+      "newAgentsTitle": "新しい Agent",
+      "doubaoSignIn": {
+        "check": "ログイン状態を確認",
+        "checking": "ログイン状態を確認中…",
+        "verified": "このホストにログイン済みです",
+        "signedOut": "このホストでログインしてください",
+        "unverified": "このホストのログイン状態を確認できませんでした",
+        "copy": "ログインコマンドをコピー"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "シンボリックリンク",
@@ -25112,6 +25120,9 @@
     "argumentsHint": "CLI での起動にのみ適用されます。",
     "launchChat": "チャットを起動",
     "launchTerminal": "ターミナルを起動",
+    "resumeById": "ID でセッションを再開",
+    "doubaoSessionId": "Doubao の終了時に表示されるセッション ID",
+    "resumeTerminal": "再開",
     "setByArguments": "引数で設定",
     "searchModels": "モデルを検索",
     "noModels": "検索に一致するモデルがありません。",

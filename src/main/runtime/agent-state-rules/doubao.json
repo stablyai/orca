@@ -2,7 +2,39 @@
   "id": "doubao",
   "engineVersion": 1,
   "profile": { "screenSource": "trusted" },
-  "anchors": [],
+  "anchors": [
+    {
+      "id": "tool_approval",
+      "why": "Only the selectable three-choice menu and its navigation footer own input. After a decision Doubao prints the choice again as Handled.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "allow once" },
+        "withinLastLines": 10,
+        "after": {
+          "regex": "^allow once\\s+❯?\\s*reject\\s+❯?\\s*reject and stop\\s+↑↓ navigate \\| enter / shortcut confirm \\| esc stop\\s*$"
+        },
+        "lines": {
+          "atLeast": 1,
+          "includingLast": false,
+          "test": { "regex": "^\\s*❯ +(?:allow once|reject(?: and stop)?)\\s*$" }
+        }
+      },
+      "answer": { "state": "blocked", "reason": "agent-approval-prompt" }
+    },
+    {
+      "id": "cli_update",
+      "why": "The npm launcher waits for Y/N before starting the terminal agent.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "检测到豆包 cli 有可用的新版本：" },
+        "withinLastLines": 4,
+        "after": {
+          "regex": "^检测到豆包 cli 有可用的新版本：[^\\n]+\\s+是否现在更新？\\[y/n\\]\\s*$"
+        }
+      },
+      "answer": { "state": "blocked", "reason": "agent-update-prompt" }
+    }
+  ],
   "rules": [
     {
       "id": "composer_ready",

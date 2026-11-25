@@ -16,6 +16,7 @@ export type PreambleParams = {
   devMode?: boolean
   // Packaged WSL uses orca-ide; other hosts retain their existing launcher.
   cliCommand?: OrchestrationCliCommand
+  cliLauncher?: string | null
   // Supply actual preflight drift only; spurious warnings train workers to ignore stale-base evidence.
   baseDrift?: {
     base: string
@@ -94,7 +95,7 @@ export function buildDispatchPreamble(params: PreambleParams): string {
 
   // Use one-line recipes across POSIX/PowerShell/cmd; fence comments and use plain reasons to avoid misleading Chat rendering (STA-8200).
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-${dispatchIdentityLines(params)}
+${dispatchIdentityLines(params)}${params.cliLauncher ? `\nUse this host's launcher for the Orca commands below: \`${params.cliLauncher}\`.` : ''}
 
 The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestration\` commands
 below, and message it only to ask, report a blocker, or finish; it needs no progress updates

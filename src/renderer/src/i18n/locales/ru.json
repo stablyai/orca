@@ -1081,7 +1081,15 @@
       "undetectedCommandHint": "Если CLI {{agent}} установлен вне PATH, укажите полный путь к исполняемому файлу на этом хосте.",
       "agentActions": "Действия агента {{agent}}",
       "defaultAutoBadge": "По умолчанию · Авто",
-      "newAgentsTitle": "Новые агенты"
+      "newAgentsTitle": "Новые агенты",
+      "doubaoSignIn": {
+        "check": "Проверить вход",
+        "checking": "Проверяем вход…",
+        "verified": "Вход на этом хосте выполнен",
+        "signedOut": "Войдите на этом хосте",
+        "unverified": "Не удалось проверить вход на этом хосте",
+        "copy": "Скопировать команду входа"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "символическая ссылка",
@@ -26013,6 +26021,9 @@
     "argumentsHint": "Применяется только при запуске через CLI.",
     "launchChat": "Запустить чат",
     "launchTerminal": "Запустить терминал",
+    "resumeById": "Продолжить сеанс по ID",
+    "doubaoSessionId": "ID сеанса, показанный при выходе из Doubao",
+    "resumeTerminal": "Продолжить",
     "select": "Выбрать агента",
     "promptPlaceholder": "Добавить запрос (необязательно): / — навыки, @ — файлы",
     "promptPlaceholderFilesOnly": "Добавить запрос (необязательно): @ — файлы",

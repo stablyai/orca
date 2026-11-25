@@ -80,7 +80,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     ptyId: string,
     paneAgent: TerminalAgent | null = this.getPaneAgentForTuiIdle(ptyId)
   ): TerminalInteractiveWaitEvidence | Promise<TerminalInteractiveWaitEvidence | undefined> {
-    if (paneAgent !== 'claude' || !this.headlessTerminals.has(ptyId)) {
+    if ((paneAgent !== 'claude' && paneAgent !== 'doubao') || !this.headlessTerminals.has(ptyId)) {
       return this.buildTerminalInteractiveWaitEvidence(handle, ptyId, 'not-read')
     }
     return this.readCurrentTerminalWaitScreen(ptyId).then((screen) =>
@@ -96,7 +96,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     screen: RuntimeVisibleTerminalState | null | 'not-read'
   ): TerminalInteractiveWaitEvidence {
     const observed = screen !== null && screen !== 'not-read'
-    // Why the rendered screen: Claude parks the cursor inside its dialog, and the line tail drops rows below it.
+    // The cursor can sit above the approval choices; only the grid retains the live footer below it.
     const { terminal, lifecycle } = this.getTerminalWaitPermissionInputs(
       handle,
       ptyId,

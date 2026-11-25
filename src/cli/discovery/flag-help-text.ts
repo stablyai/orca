@@ -131,6 +131,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'reuse-session':
     '--reuse-session        Reuse the previous live session for existing-workspace runs',
   'fresh-session': '--fresh-session        Disable session reuse for future runs',
+  'session-id': '--session-id <id>      Provider session ID to reopen',
   'extra-agent-args':
     '--extra-agent-args=<args> Extra agent arguments for fresh runs; empty clears',
   'workspace-mode': '--workspace-mode <mode> existing or new-per-run',

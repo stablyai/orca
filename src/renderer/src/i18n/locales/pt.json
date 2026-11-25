@@ -2017,7 +2017,15 @@
       "newAgentsTitle": "Novos agentes",
       "permissionMixed": "Misto",
       "choiceChipTooltip": "Adicionado por {{choice}}. Remova-o para usar o padrão.",
-      "choiceChipRemove": "Remover {{flag}}"
+      "choiceChipRemove": "Remover {{flag}}",
+      "doubaoSignIn": {
+        "check": "Verificar login",
+        "checking": "Verificando login…",
+        "verified": "Sessão iniciada neste host",
+        "signedOut": "Faça login neste host",
+        "unverified": "Não foi possível verificar o login neste host",
+        "copy": "Copiar comando de login"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "link simbólico",
@@ -25012,6 +25020,9 @@
     "argumentsHint": "Aplica-se apenas às inicializações pela CLI.",
     "launchChat": "Iniciar chat",
     "launchTerminal": "Iniciar terminal",
+    "resumeById": "Retomar uma sessão pelo ID",
+    "doubaoSessionId": "ID da sessão exibido ao sair do Doubao",
+    "resumeTerminal": "Retomar",
     "setByArguments": "Definido pelos seus argumentos",
     "searchModels": "Pesquisar modelos",
     "noModels": "Nenhum modelo corresponde à pesquisa.",

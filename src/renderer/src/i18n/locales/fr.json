@@ -743,7 +743,15 @@
       "undetectedCommandHint": "Si la CLI {{agent}} est installée hors de PATH, saisissez le chemin complet de son exécutable sur cet hôte.",
       "agentActions": "Actions de {{agent}}",
       "defaultAutoBadge": "Par défaut · Auto",
-      "newAgentsTitle": "Nouveaux agents"
+      "newAgentsTitle": "Nouveaux agents",
+      "doubaoSignIn": {
+        "check": "Vérifier la connexion",
+        "checking": "Vérification de la connexion…",
+        "verified": "Compte connecté sur cet hôte",
+        "signedOut": "Connectez-vous sur cet hôte",
+        "unverified": "Impossible de vérifier la connexion sur cet hôte",
+        "copy": "Copier la commande de connexion"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "lien symbolique",
@@ -24494,6 +24502,9 @@
     "argumentsHint": "S’applique uniquement aux lancements CLI.",
     "launchChat": "Lancer le chat",
     "launchTerminal": "Lancer le terminal",
+    "resumeById": "Reprendre une session par ID",
+    "doubaoSessionId": "ID de session affiché à la fermeture de Doubao",
+    "resumeTerminal": "Reprendre",
     "setByArguments": "Défini par vos arguments",
     "searchModels": "Rechercher des modèles",
     "noModels": "Aucun modèle ne correspond à votre recherche.",

@@ -576,7 +576,15 @@
       "agentActions": "{{agent}} 操作",
       "defaultAutoBadge": "默认 · 自动",
       "newAgentsTitle": "新智能体",
-      "defaultSurfaceServerDescription": "{{host}} 自行启动的智能体（例如通过其 CLI 或编排工作者启动）所用的默认设置。你从这台电脑打开的智能体遵循“这台电脑”的选择"
+      "defaultSurfaceServerDescription": "{{host}} 自行启动的智能体（例如通过其 CLI 或编排工作者启动）所用的默认设置。你从这台电脑打开的智能体遵循“这台电脑”的选择",
+      "doubaoSignIn": {
+        "check": "检查登录状态",
+        "checking": "正在检查登录状态…",
+        "verified": "已在此主机登录",
+        "signedOut": "请在此主机登录",
+        "unverified": "无法验证此主机的登录状态",
+        "copy": "复制登录命令"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符号链接",
@@ -26257,6 +26265,9 @@
     "argumentsHint": "仅适用于 CLI 启动。",
     "launchChat": "启动聊天",
     "launchTerminal": "启动终端",
+    "resumeById": "按 ID 恢复会话",
+    "doubaoSessionId": "豆包退出时显示的会话 ID",
+    "resumeTerminal": "恢复",
     "setByArguments": "由参数设置",
     "searchModels": "搜索模型",
     "noModels": "没有与搜索匹配的模型。",

@@ -2,6 +2,7 @@ import {
   getCommitMessageAgentSpec,
   type CommitMessageAgentSpec
 } from '../../../source-control/ai/generation/commit-message-agent-spec'
+import { DOUBAO_MODEL_LIST_ARGS, parseDoubaoModelList } from './doubao-model-list-probe'
 import { GROK_MODEL_LIST_ARGS, parseGrokModelList } from './grok-model-list-probe'
 import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from './omp-model-list-probe'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
@@ -14,6 +15,15 @@ export type AgentModelProbeSpec = Omit<
 
 /** Agents that support model discovery but are not commit-message agents. */
 const MODEL_DISCOVERY_ONLY_SPECS: Partial<Record<TuiAgent, AgentModelProbeSpec>> = {
+  doubao: {
+    id: 'doubao',
+    label: 'Doubao',
+    binary: 'doubao',
+    modelSource: 'dynamic',
+    modelDiscovery: { binary: 'doubao', args: DOUBAO_MODEL_LIST_ARGS, parse: parseDoubaoModelList },
+    models: [],
+    defaultModelId: ''
+  },
   grok: {
     id: 'grok',
     label: 'Grok',

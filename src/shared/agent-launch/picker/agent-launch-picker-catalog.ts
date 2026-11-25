@@ -64,7 +64,7 @@ export function agentPickerEntryOptions(
       ? listedModelDescribing(rows, undefined, model)
       : rows.find((row) => row.isDefault)
     : rows.find((row) => row.id === model || (model === undefined && row.isDefault))
-  if (composer && !live && model) {
+  if (!live && ((composer && model) || entry.agent === 'doubao')) {
     return []
   }
   if (entry.catalog.origin === 'unknown' || !live) {
@@ -189,6 +189,10 @@ export function agentPickerModelFromCatalogModel(model: CatalogModel): AgentPick
     label: model.label,
     description: model.description,
     isDefault: model.isDefault === true,
+    ...(model.declaredDefaultEffort ? { defaultEffort: model.declaredDefaultEffort } : {}),
+    ...(model.declaredDefaultEffort !== undefined
+      ? { declaredDefaultEffort: model.declaredDefaultEffort }
+      : {}),
     efforts: model.options.flatMap((option) =>
       option.id === 'effort' && option.kind.type === 'select' ? option.kind.choices : []
     )

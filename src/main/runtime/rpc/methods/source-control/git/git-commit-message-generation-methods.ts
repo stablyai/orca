@@ -1,4 +1,5 @@
 import { defineMethod } from '../../../core'
+import { discoverDoubaoLaunchModels } from '../../../../terminal/launch/doubao-launch-model-discovery'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
@@ -79,8 +80,15 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
     name: 'git.discoverCommitMessageModels',
     permission: 'workspace',
     params: GitDiscoverCommitMessageModels,
-    handler: async (params, { runtime }) =>
-      runtime.discoverRuntimeCommitMessageModels(
+    handler: async (params, { runtime }) => {
+      if (params.agentId === 'doubao') {
+        return discoverDoubaoLaunchModels(
+          runtime,
+          { worktree: params.worktree },
+          params.agentCmdOverrides?.doubao
+        )
+      }
+      return runtime.discoverRuntimeCommitMessageModels(
         params.worktree,
         params.agentId,
         params.agentCmdOverrides !== undefined
@@ -89,6 +97,7 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
             }
           : {}
       )
+    }
   }),
   defineMethod({
     name: 'git.cancelGenerateCommitMessage',

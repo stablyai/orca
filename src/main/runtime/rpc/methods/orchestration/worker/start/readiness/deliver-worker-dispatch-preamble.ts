@@ -11,6 +11,7 @@ import {
   resolveDispatchAssigneeParty
 } from '../../../../../../orchestration/addressing/orchestration-party'
 import { buildDispatchPreamble } from '../../../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import { getWindowsWorkerCliLauncher } from '../../../../../../../cli/launchers/orca-cli-child-path'
 import { sendAgentTurn } from '../../../../../../orchestration/turn-delivery/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../../../../../terminal/wait/launched-agent-write-guard'
 import { sendStructuredWorkerPreamble } from '../../../structured-workers/orchestration-structured-worker-session'
@@ -71,6 +72,12 @@ export async function deliverWorkerDispatchPreamble(args: {
           : terminalHandle,
     devMode: args.devMode,
     cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
+    cliLauncher:
+      args.launchedAgent === 'doubao' &&
+      process.platform === 'win32' &&
+      runtime.getOrchestrationDispatchAuthority(terminalHandle)?.hostScope.kind === 'local'
+        ? getWindowsWorkerCliLauncher()
+        : undefined,
     unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
   })
   if (chat) {

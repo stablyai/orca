@@ -78,6 +78,7 @@ export type AgentCatalogRowProps = {
   reserveOpensAsSlot?: boolean
   /** The downloaded chat program's install and sign-in, shown in the row's details. */
   chatRuntime?: React.ReactNode
+  cliSignIn?: React.ReactNode
   /** Update for the user's own CLI, shown while a newer release is out. */
   cliUpdate?: React.ReactNode
   launchChoiceEditor?: (permissionControlRef: React.Ref<HTMLDivElement>) => React.ReactNode
@@ -117,6 +118,7 @@ export function AgentCatalogRow({
   opensAs,
   reserveOpensAsSlot = false,
   chatRuntime,
+  cliSignIn,
   cliUpdate,
   expanded: cmdOpen,
   onExpandedChange: setCmdOpen
@@ -295,6 +297,7 @@ export function AgentCatalogRow({
       {cmdOpen && (
         <div id={panelId} ref={panelRef} className="mt-3 space-y-3 pl-10">
           {chatRuntime}
+          {cliSignIn}
           {!launchChoiceEditor && permissionChoice && (
             <div ref={permissionRef}>
               <AgentPermissionMenu agentId={agentId} label={label} permission={permissionChoice} />

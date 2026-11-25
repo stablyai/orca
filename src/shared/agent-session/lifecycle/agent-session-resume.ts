@@ -21,6 +21,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'opencode2',
   'pi',
   'mimo-code',
+  'doubao',
   'droid',
   'grok',
   'devin',
