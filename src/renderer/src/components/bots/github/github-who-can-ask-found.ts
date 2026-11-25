@@ -4,8 +4,6 @@
 import type { Translate } from '@/i18n/use-translate'
 import {
   BOT_GITHUB_OFF,
-  GITHUB_PEOPLE_PER_SOURCE,
-  GITHUB_PERSONAL_REPOSITORIES,
   type BotGitHubRoster,
   type ConnectorGitHubUsersResponse
 } from '../../../../../shared/connector-bot-github-contract'
@@ -13,6 +11,7 @@ import type { BotSlackResult } from '../../../../../shared/connector-bot-slack-c
 import { rankGitHubPeople } from '../../../../../shared/bots/github-people-rank'
 import type { GitHubPeopleScope } from '../../../../../shared/bots/github-people-scope'
 import { supersededGitHubPeople } from './github-who-can-ask-identities'
+import { cutLine, orgSearchCopy } from './github-who-can-ask-copy'
 import type { BotWhoCanAskFound } from '../BotWhoCanAskList'
 
 /** People listed at once; typing narrows the rest. */
@@ -54,32 +53,6 @@ function readTime(readAt: number, now: number): string {
   return new Date(now).toDateString() === read.toDateString()
     ? read.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
     : read.toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
-
-/** Why the roster holds only part of its sources' people, by the kind of read that stopped at its
- *  fixed size; typing can't bring those back, so this never advises typing. */
-function cutLine(
-  cut: { people: boolean; members: boolean; repositories: boolean },
-  t: Translate
-): string | null {
-  const kinds = [cut.people, cut.members, cut.repositories].filter(Boolean).length
-  if (kinds > 1) {
-    // Kinds differ (a repo's people, an org's members, a person's repos): say it neutrally.
-    return t('bots.github.whoCanAsk.partlyRead', 'Some lists were only partly read.')
-  }
-  return cut.people
-    ? t('bots.github.whoCanAsk.firstPerRepo', 'Showing the first {{count}} people per repo.', {
-        count: GITHUB_PEOPLE_PER_SOURCE
-      })
-    : cut.members
-      ? t('bots.github.whoCanAsk.firstPerOrg', 'Showing the first {{count}} members per org.', {
-          count: GITHUB_PEOPLE_PER_SOURCE
-        })
-      : cut.repositories
-        ? t('bots.github.whoCanAsk.recentRepos', 'Only your {{count}} latest repos were read.', {
-            count: GITHUB_PERSONAL_REPOSITORIES
-          })
-        : null
 }
 
 /** One search as the picker draws it. Every line says only what was actually read: an empty list
@@ -134,6 +107,7 @@ export function gitHubWhoCanAskAnswer(
       : read?.from.organizations
         ? 'orgs'
         : 'repos'
+  const orgOnly = place === 'orgs'
 
   // The live lookup is current: a listed person whose login it now gives to someone else is a
   // stale identity (they renamed, another took the name), so the list's entry for them leaves.
@@ -240,7 +214,9 @@ export function gitHubWhoCanAskAnswer(
   const cutNote = read && !historical ? cutLine(read.cut, t) : null
   const unread =
     read && !read.complete && !historical
-      ? t('bots.github.whoCanAsk.notRead', 'Some repos or members couldn’t be read.')
+      ? orgOnly
+        ? t('bots.github.whoCanAsk.orgMembersUnread', 'Some people couldn’t be loaded.')
+        : t('bots.github.whoCanAsk.notRead', 'Some repos or members couldn’t be read.')
       : null
   const narrow =
     ranked.length > shown.length
@@ -252,26 +228,8 @@ export function gitHubWhoCanAskAnswer(
     !(linkedLogins ?? [ownerLogin]).some(
       (login) => login.toLowerCase() === searchedAs.toLowerCase()
     )
-      ? t('bots.github.whoCanAsk.searchedAs', 'People list read as @{{login}}.', {
-          login: searchedAs
-        })
+      ? searchedAs
       : null
-  // Org-only results keep the date in the footer so the body can show just one source note.
-  const orgOnly = place === 'orgs'
-  const refreshOrg =
-    orgOnly && shouldRefresh
-      ? remote
-        ? t('bots.github.whoCanAsk.refreshListRemote', 'Restart the bot’s Orca to refresh.')
-        : t('bots.github.whoCanAsk.refreshList', 'Restart Orca to refresh the people list.')
-      : null
-  const noteAfterTag = exactFailed ?? reader ?? refreshOrg ?? narrow ?? undefined
-  const note = orgOnly
-    ? (exactFailed ?? omitted ?? cutNote ?? unread ?? noteAfterTag)
-    : roster.status === 'unreached' && exactFailed
-      ? t('bots.github.whoCanAsk.listAndUsernameFailed', 'People list and username check failed.')
-      : [rosterLine, exactOnly, dated, omitted, cutNote, unread, narrow, exactFailed, reader]
-          .filter(Boolean)
-          .join('\n') || undefined
 
   const exactSearched = exact?.ok === true
   // An absence refers to the dated list in the note, never to the repos or orgs as they are now.
@@ -284,10 +242,43 @@ export function gitHubWhoCanAskAnswer(
             'Searched your people list and exact usernames.'
           )
         : t('bots.github.whoCanAsk.searchedList', 'Searched your people list.')
-  const orgEmpty =
-    omitted && exactSearched
-      ? t('bots.github.whoCanAsk.skippedSourcesExact', 'Partial list. Exact usernames checked.')
-      : (exactFailed ?? omitted ?? cutNote ?? unread ?? refreshOrg ?? searchedLine)
+  const limitation = omitted ?? cutNote ?? unread
+  const org = orgOnly
+    ? orgSearchCopy(
+        {
+          reader,
+          refresh: Boolean(shouldRefresh),
+          remote,
+          failure: exactFailed,
+          limitation,
+          omitted: Boolean(omitted),
+          exactSearched,
+          searchedLine,
+          narrow
+        },
+        t
+      )
+    : null
+  const note = org
+    ? org.note
+    : roster.status === 'unreached' && exactFailed
+      ? t('bots.github.whoCanAsk.listAndUsernameFailed', 'People list and username check failed.')
+      : [
+          rosterLine,
+          exactOnly,
+          dated,
+          omitted,
+          cutNote,
+          unread,
+          narrow,
+          exactFailed,
+          reader &&
+            t('bots.github.whoCanAsk.searchedAs', 'People list read as @{{login}}.', {
+              login: reader
+            })
+        ]
+          .filter(Boolean)
+          .join('\n') || undefined
   // A roster still on its way: nothing definitive yet, whatever the exact lookup said.
   const empty =
     roster.status === 'loading'
@@ -312,7 +303,7 @@ export function gitHubWhoCanAskAnswer(
           }
         : {
             title: t('bots.github.whoCanAsk.noPerson', 'No one found for “{{query}}”', { query }),
-            detail: orgOnly ? (orgEmpty ?? '') : [searchedLine, note].filter(Boolean).join('\n')
+            detail: org?.empty ?? [searchedLine, note].filter(Boolean).join('\n')
           }
 
   return {
@@ -333,10 +324,8 @@ export function gitHubWhoCanAskAnswer(
         outsideTag: t('bots.github.whoCanAsk.notInList', 'Not in your people list')
       },
       ...(note ? { note } : {}),
-      ...(orgOnly && (omitted || cutNote || unread)
-        ? { noteWithTag: { tag: uncheckedTag, note: noteAfterTag } }
-        : {}),
-      ...(orgOnly && (members.length > 0 || query.trim() !== '' || omitted || cutNote || unread)
+      ...(org && limitation ? { noteWithTag: { tag: uncheckedTag, note: org.noteAfterTag } } : {}),
+      ...(orgOnly
         ? { snapshot: t('bots.github.whoCanAsk.snapshotDate', 'List from {{time}}', { time }) }
         : {}),
       empty,

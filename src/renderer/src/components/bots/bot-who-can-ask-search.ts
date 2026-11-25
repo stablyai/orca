@@ -1,6 +1,6 @@
 // The Add picker's search: one session per open, kept across keystrokes, with in-place retry and
 // what live lookups confirmed about people's identities.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type {
   BotWhoCanAskFound,
   BotWhoCanAskService,
@@ -8,11 +8,7 @@ import type {
 } from './BotWhoCanAskList'
 import type { BotSlackResult } from '../../../../shared/connector-bot-slack-contract'
 
-import {
-  learnIdentities,
-  NO_IDENTITIES,
-  type Identities
-} from './github/github-who-can-ask-identities'
+import { NO_IDENTITIES, type Identities } from './github/github-who-can-ask-identities'
 
 const SEARCH_DEBOUNCE_MS = 250
 
@@ -39,6 +35,7 @@ export function useMemberSearch(
   identities: Identities
   checkingIdentities: boolean
   isCheckingIdentities: () => boolean
+  session: BotWhoCanAskSession
 } {
   const [search, setSearch] = useState<Search>({ status: 'loading', announce: false })
   const [identities, setIdentities] = useState<Identities>(NO_IDENTITIES)
@@ -59,7 +56,7 @@ export function useMemberSearch(
   const [retrying, setRetrying] = useState(false)
   const [checkingIdentities, setCheckingIdentities] = useState(false)
   const isCheckingIdentities = (): boolean => active.isCheckingIdentities?.() ?? false
-  useEffect(() => {
+  useLayoutEffect(() => {
     generation.current += 1
     const mine = generation.current
     let current = true
@@ -76,20 +73,19 @@ export function useMemberSearch(
     // A retry asked for the previous query no longer speaks for this one.
     setRetrying(false)
     setCheckingIdentities(active.isCheckingIdentities?.() ?? false)
+    setIdentities(active.readIdentities?.() ?? NO_IDENTITIES)
     // When more of the search lands (a list still loading, a username check an early answer went
     // out without), ask again for this same query in place: the rows stay up until the fuller
     // answer replaces them. One listener per query, dropped when the query changes or the picker
     // closes; before this query's first search has gone out, that search will see the arrival.
     let issued = false
     const stopWatching =
-      active.onUpdate?.((refresh, confirmed) => {
+      active.onUpdate?.((refresh) => {
         if (!current) {
           return
         }
         setCheckingIdentities(active.isCheckingIdentities?.() ?? false)
-        if (confirmed) {
-          setIdentities((known) => learnIdentities(known, confirmed))
-        }
+        setIdentities(active.readIdentities?.() ?? NO_IDENTITIES)
         // A held in-place retry owns this query's next answer; it waits for the whole of it.
         if (issued && refresh && retryAsked.current !== mine) {
           void active.search(query.trim()).then(show)
@@ -138,6 +134,7 @@ export function useMemberSearch(
     retrying,
     identities,
     checkingIdentities,
-    isCheckingIdentities
+    isCheckingIdentities,
+    session: active
   }
 }

@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -14,6 +15,8 @@ import { BOT_MAX_MEMBERS, type Bot, type BotMember } from '../../../../shared/bo
 import { BotMemberAvatar, BotOwnerAvatar } from './bot-connector-people'
 import type { BotWhoCanAskFound, BotWhoCanAskService } from './BotWhoCanAskList'
 import { useMemberSearch } from './bot-who-can-ask-search'
+import { confirmedDraftMembers, useMemberDraft } from './bot-who-can-ask-draft'
+import { gitHubCheckingUsername, gitHubSnapshotCount } from './github/github-who-can-ask-copy'
 
 // How close to a service's cap the picker starts showing it while people are ticked.
 const NEAR_CAP = 5
@@ -87,11 +90,6 @@ export function BotWhoCanAskPicker({
 }): React.JSX.Element {
   const t = useTranslate()
   const [query, setQuery] = useState('')
-  const [picked, setPicked] = useState<BotMember[]>([])
-  // A ticked person's real name, so a search by it still shows them once they scroll off. Only
-  // the name: a status tag (a dated list's "not in it", "still loading") held only for the answer
-  // that drew it, so a remembered one would outlive what it described.
-  const [pickedNames, setPickedNames] = useState<Readonly<Record<string, string>>>({})
   const {
     search,
     retry,
@@ -99,8 +97,14 @@ export function BotWhoCanAskPicker({
     retrying,
     identities,
     checkingIdentities,
-    isCheckingIdentities
+    isCheckingIdentities,
+    session
   } = useMemberSearch(service, query)
+  const {
+    members: picked,
+    names: pickedNames,
+    toggle
+  } = useMemberDraft(service.kind === 'github' ? session : undefined)
   const inputRef = useRef<HTMLInputElement>(null)
   const retryRef = useRef<HTMLButtonElement>(null)
   const restoreRetryFocus = useRef(false)
@@ -134,28 +138,12 @@ export function BotWhoCanAskPicker({
   // whose listed name a live lookup gave to someone else is no longer something to add: it leaves
   // the picks, the count and what Add saves. A live lookup's current name replaces the draft's,
   // so Selected, the confirmation and what is saved name them as they are now.
-  const picks = picked
-    .filter(
-      (member) =>
-        !isOwner(member.id) && !added.has(member.id) && !identities.superseded.has(member.id)
-    )
-    .map((member) => {
-      const now = identities.names[member.id]
-      return now && now !== member.name ? { ...member, name: now } : member
-    })
+  const picks = confirmedDraftMembers(picked, identities).filter(
+    (member) => !isOwner(member.id) && !added.has(member.id)
+  )
   const full =
     bot.members.length + picks.length >= BOT_MAX_MEMBERS || added.size + picks.length >= service.max
   const isPicked = (id: string): boolean => picks.some((entry) => entry.id === id)
-  const toggle = (member: BotMember, realName?: string): void => {
-    if (realName && pickedNames[member.id] !== realName) {
-      setPickedNames((current) => ({ ...current, [member.id]: realName }))
-    }
-    setPicked((current) =>
-      current.some((entry) => entry.id === member.id)
-        ? current.filter((entry) => entry.id !== member.id)
-        : [...current, member]
-    )
-  }
 
   const found =
     search.status === 'ready'
@@ -196,7 +184,8 @@ export function BotWhoCanAskPicker({
       : answer?.note
   const labels = answer?.labels
   const snapshot = answer?.snapshot
-  const snapshotSuffix = snapshot ? ` · ${snapshot}` : ''
+  const footerCount = (count: string): string =>
+    snapshot ? gitHubSnapshotCount(count, snapshot, t) : count
   const searching =
     search.status === 'loading' && search.announce
       ? t('bots.whoCanAsk.searching', 'Searching…')
@@ -264,7 +253,7 @@ export function BotWhoCanAskPicker({
     withAccess.length === 0 &&
     !ownerShown &&
     // A ticked person still matching the search is a result: "no one found" would contradict it.
-    offScreen.length === 0
+    (service.kind !== 'github' || offScreen.length === 0)
   // A note on what the search couldn't cover replaces a hint or empty result's usual detail.
   const peopleGroup = idle ? (
     <PickerNote title={idle.title} detail={note ?? idle.detail} action={retryAction} />
@@ -377,11 +366,12 @@ export function BotWhoCanAskPicker({
       </CommandList>
       {picks.length === 0 ? (
         <p className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
-          {t('bots.whoCanAsk.addedCount', '{{count}} of {{max}} added', {
-            count: added.size,
-            max: service.max
-          })}
-          {snapshotSuffix}
+          {footerCount(
+            t('bots.whoCanAsk.addedCount', '{{count}} of {{max}} added', {
+              count: added.size,
+              max: service.max
+            })
+          )}
         </p>
       ) : added.size + picks.length >= service.max - NEAR_CAP ? (
         // While picking, the footer counts the picks; the cap shows only once it is close.
@@ -408,14 +398,14 @@ export function BotWhoCanAskPicker({
       {picks.length > 0 ? (
         <div className="flex items-center justify-between gap-2 border-t border-border p-2 pl-3">
           <span className="text-xs text-muted-foreground">
-            {snapshot && checkingIdentities
-              ? picks.length
-              : t('bots.whoCanAsk.selected', '{{count}} selected', { count: picks.length })}
-            {snapshotSuffix}
+            {footerCount(
+              t('bots.whoCanAsk.selected', '{{count}} selected', { count: picks.length })
+            )}
           </span>
           <Button
             size="sm"
             disabled={checkingIdentities}
+            aria-label={checkingIdentities ? gitHubCheckingUsername(t) : undefined}
             onKeyDown={keepButtonEnter}
             onClick={() => {
               if (!isCheckingIdentities()) {
@@ -423,11 +413,12 @@ export function BotWhoCanAskPicker({
               }
             }}
           >
-            {checkingIdentities
-              ? t('bots.github.whoCanAsk.checkingUsername', 'Checking username…')
-              : picks.length === 1
-                ? t('bots.whoCanAsk.addOne', 'Add 1 person')
-                : t('bots.whoCanAsk.addMany', 'Add {{count}} people', { count: picks.length })}
+            {checkingIdentities ? (
+              <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />
+            ) : null}
+            {picks.length === 1
+              ? t('bots.whoCanAsk.addOne', 'Add 1 person')
+              : t('bots.whoCanAsk.addMany', 'Add {{count}} people', { count: picks.length })}
           </Button>
         </div>
       ) : null}

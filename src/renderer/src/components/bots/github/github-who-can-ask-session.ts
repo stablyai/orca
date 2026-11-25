@@ -9,7 +9,11 @@ import type { GitHubPeopleScope } from '../../../../../shared/bots/github-people
 import type { BotWhoCanAskIdentityUpdate, BotWhoCanAskSession } from '../BotWhoCanAskList'
 import { gitHubWhoCanAskAnswer, type GitHubRosterState } from './github-who-can-ask-found'
 
-import { supersededGitHubPeople } from './github-who-can-ask-identities'
+import {
+  learnIdentities,
+  NO_IDENTITIES,
+  supersededGitHubPeople
+} from './github-who-can-ask-identities'
 
 /** How long one keystroke's answer waits for a roster still loading; it then goes out with what
  *  it has, and the session tells its listener when the roster lands. Logical only. */
@@ -66,7 +70,11 @@ export function gitHubWhoCanAskSession(
   let roster: Promise<GitHubRosterState> | null = null
   let settled: GitHubRosterState | null = null
   // At most one listener, the picker's current query's; cleared when it leaves.
-  let listener: ((refresh: boolean, identities?: BotWhoCanAskIdentityUpdate) => void) | null = null
+  let listener: ((refresh: boolean) => void) | null = null
+  let identities = NO_IDENTITIES
+  const updateIdentities = (update: BotWhoCanAskIdentityUpdate): void => {
+    identities = learnIdentities(identities, update)
+  }
   // Searches waiting (up to ROSTER_WAIT_MS) for a roster still loading; each removes itself.
   const waiting = new Set<(state: GitHubRosterState | null) => void>()
   const settledWithin = (ms: number): Promise<GitHubRosterState | null> =>
@@ -84,6 +92,8 @@ export function gitHubWhoCanAskSession(
   let lastExact: ExactLookup | null = null
   // Lookups for previous queries can still correct picks in this session.
   let pendingIdentities = 0
+  // A lookup can finish before gh has returned the snapshot it contradicts.
+  const observedLogins = new Map<string, ConnectorGitHubUsersResponse['members'][number]>()
   // Set by an asked-for retry: the next search waits for the whole list answer (the picker keeps
   // its rows on screen meanwhile) rather than going out at ROSTER_WAIT_MS.
   let patient = false
@@ -105,6 +115,12 @@ export function gitHubWhoCanAskSession(
       // Each waiter removes itself as it runs; a Set allows that during iteration.
       for (const done of waiting) {
         done(state)
+      }
+      if (state.status === 'read' && observedLogins.size > 0) {
+        updateIdentities({
+          current: [],
+          superseded: supersededGitHubPeople(state.people, [...observedLogins.values()])
+        })
       }
       listener?.(true)
       return state
@@ -132,14 +148,20 @@ export function gitHubWhoCanAskSession(
         pendingIdentities -= 1
         const refresh = entry.refresh && lastExact === entry
         const current = answer.ok ? answer.value.members : []
-        if (settled?.status === 'read' && current.length > 0) {
-          listener?.(refresh, {
-            current,
-            superseded: supersededGitHubPeople(settled.people, current)
-          })
-        } else {
-          listener?.(refresh)
+        if (current.length > 0) {
+          const superseded =
+            settled?.status === 'read' ? supersededGitHubPeople(settled.people, current) : []
+          for (const member of current) {
+            const login = member.name.toLowerCase()
+            const previous = observedLogins.get(login)
+            if (previous && previous.id !== member.id) {
+              superseded.push(previous)
+            }
+            observedLogins.set(login, member)
+          }
+          updateIdentities({ current, superseded })
         }
+        listener?.(refresh)
       })
     }
     return lastExact
@@ -152,7 +174,8 @@ export function gitHubWhoCanAskSession(
     get waiters() {
       return waiting.size
     },
-    isCheckingIdentities: () => pendingIdentities !== 0,
+    isCheckingIdentities: () => settled?.status === 'read' && pendingIdentities !== 0,
+    readIdentities: () => identities,
     search: async (query) => {
       const loading = load()
       const exact = exactFor(query.trim().replace(/^@/, ''))

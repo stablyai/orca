@@ -122,9 +122,31 @@ describe('one Add picker open on GitHub', () => {
     const result = await session.search('jinwoo-h')
     expect(names(result)).toEqual(['jinwoo-h'])
     expect(result.ok && result.value.members[0]?.id).toBe('77')
-    expect(updated).toHaveBeenCalledWith(true, {
-      current: [{ id: '77', name: 'jinwoo-h' }],
-      superseded: [{ id: '5', name: 'jinwoo-h' }]
+    expect(updated).toHaveBeenCalledWith(true)
+    expect(session.readIdentities?.()).toEqual({
+      names: { '77': 'jinwoo-h' },
+      superseded: new Set(['5'])
+    })
+  })
+
+  it('reconciles a login checked before the roster arrives', async () => {
+    const held = deferred<BotSlackResult<BotGitHubRoster>>()
+    const users = vi.fn(async (): Promise<Users> => ({
+      ok: true,
+      value: { members: [{ id: '77', name: 'jinwoo-h' }], complete: true }
+    }))
+    const session = gitHubWhoCanAskSession(
+      { people: () => held.promise, users },
+      { scope, ownerLogin: 'owner', producer: 'local', t }
+    )
+    const first = session.search('jinwoo-h')
+    await vi.advanceTimersByTimeAsync(ROSTER_WAIT_MS)
+    await first
+    held.resolve({ ok: true, value: roster })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(session.readIdentities?.()).toEqual({
+      names: { '77': 'jinwoo-h' },
+      superseded: new Set(['5'])
     })
   })
 

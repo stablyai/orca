@@ -17,6 +17,7 @@ import { BotWhoCanAskPicker } from './BotWhoCanAskPicker'
 import { OrcaCloudSignInLine } from './orca-cloud-sign-in'
 import { accessRequestPerson } from '../../../../shared/bots/bot-access-request'
 import { requestLine, useBotWhoCanAsk } from './use-bot-who-can-ask'
+import type { Identities } from './github/github-who-can-ask-identities'
 
 /** complete is false when the service's people are too many to read whole. */
 export type BotWhoCanAskFound = {
@@ -59,10 +60,9 @@ export type BotWhoCanAskIdentityUpdate = {
 /** One picker open's search. `onUpdate` keeps one listener and returns its unsubscribe. */
 export type BotWhoCanAskSession = {
   search: (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
-  onUpdate?: (
-    listener: (refresh: boolean, identities?: BotWhoCanAskIdentityUpdate) => void
-  ) => () => void
+  onUpdate?: (listener: (refresh: boolean) => void) => () => void
   isCheckingIdentities?: () => boolean
+  readIdentities?: () => Identities
   /** Forget what failed in the last search (only when the owner asks), so asking again retries. */
   retry?: () => void
 }
