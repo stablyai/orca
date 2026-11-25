@@ -42,6 +42,9 @@ export type ProviderRelayAckFloor = {
   wake?: (ack: () => void) => void
   /** Every ack names what a replay would split (`cutKeys`), not only a cut's. */
   namesEveryAck?: boolean
+  /** The chat opens without its agent, so a held replay is never acked: at the daemon's cap the
+   *  agent waits instead of unsaved lines being let go. */
+  keepsHeldReplay?: boolean
 }
 
 type OutputOptions = {
@@ -327,7 +330,8 @@ export class RelayedProviderOutput {
       // Only what the chat's reader took: a paused reader's lines are replayed after a crash.
       // Held for an opening chat, lines are received but not taken; the open waits on the agent,
       // which the daemon pauses at its cap until an ack, so its ask is answered by keeping them.
-      const heldFrom = force ? firstHeldSeq(this.held, this.releasedTo, this.releasedThrough) : null
+      const held = force && !this.options.ackFloor?.keepsHeldReplay
+      const heldFrom = held ? firstHeldSeq(this.held, this.releasedTo, this.releasedThrough) : null
       const target = Math.max(
         this.consumption.upTo(this.pushedSeq),
         heldFrom === null ? 0 : this.deliveredSeq
@@ -344,24 +348,24 @@ export class RelayedProviderOutput {
       // A hand-off owes the daemon the save point a named item's replay starts after.
       const names = this.options.ackFloor?.namesEveryAck === true
       const unsaved = names && this.savedSeq < Math.min(target, this.askedThrough)
-      if (
-        (target <= this.ackedSeq && keepFrom === this.keptFrom && !this.pendingCut && !unsaved) ||
-        this.stopped
-      ) {
+      const idle = target <= this.ackedSeq && keepFrom === this.keptFrom && !this.pendingCut
+      if ((idle && !unsaved) || this.stopped) {
         return
       }
       // Wait one turn so records just parsed reach the journal before its barrier is taken.
       await new Promise((resolve) => setImmediate(resolve))
       try {
         const owed = force || unsaved || this.ackedSeq < this.askedThrough
+        // Only lines taken before the barrier: a release during it hands on lines it doesn't cover.
+        const taken = this.consumption.upTo(this.pushedSeq)
         const durable = (await this.options.durable?.(owed)) !== false
         // Unsaved text is only in a kept item, a replay rewrites whole, unless the floor lets go of
         // open items (it names them): then only a held barrier lets the cursor move.
         if (!durable && (keepFrom === null || names)) {
           return
         }
-        const taken = this.consumption.upTo(this.pushedSeq)
-        this.savedSeq = durable ? Math.max(this.savedSeq, Math.min(target, taken)) : this.savedSeq
+        // Only a forced barrier saves deferrable streamed text too.
+        this.savedSeq = Math.max(this.savedSeq, durable && owed ? Math.min(target, taken) : 0)
         // Giving up an open kept span: the next attach must know its replay starts inside an item.
         this.pendingCut ||= this.options.ackFloor?.tookCut?.() === true
         const cut = this.pendingCut || (force && keepFrom === null && this.keptFrom !== null)

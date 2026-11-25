@@ -32,6 +32,8 @@ export type ProviderRelayItemContinuation = {
   awaits?(key: string): boolean
   /** The key, as JSON, of the open work this line ends, if any. */
   settles?(line: string): string | null
+  /** A moved item may still resume though no open work was carried (an agent-started turn). */
+  mayResume?(): boolean
 }
 
 /** With no work open, a moved item this many lines quiet has ended. */
@@ -81,7 +83,8 @@ export class RelayedProviderContinuation {
       return false
     }
     // With no work open, a moved item that stops streaming has ended (it reports no end itself).
-    const quiet = this.open === null && this.sinceMoved >= MOVED_QUIET_LINES
+    const quiet =
+      this.open === null && this.sinceMoved >= MOVED_QUIET_LINES && !this.hook.mayResume?.()
     const settled = (this.moved.size === this.whole.size || quiet) && this.awaited.size === 0
     // Past what a cut names, an unnamed item may resume later, until its open work ends.
     const unnamed = this.open !== null && this.cutKeys?.has(RELAY_CUT_KEYS_OVERFLOW) === true
