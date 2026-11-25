@@ -9,6 +9,7 @@ import { automationOwnerForHostId } from '../automations/hosts/automation-host-o
 import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { translate } from '@/i18n/i18n'
 import { revealWorkerPane } from '@/lib/open-orchestration-worker'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Automation } from '../../../../shared/automations/automation-definition'
@@ -35,7 +36,12 @@ export function botAutomationRunAction(
       void actOnBotAutomationRow(owner, async (current) => {
         const target = automationOwnerForHostId(bot.hostId, useAppStore.getState())
         if (!target || JSON.stringify(target) !== JSON.stringify(current)) {
-          throw new Error('This computer changed. Refresh this automation before opening it.')
+          throw new Error(
+            translate(
+              'bots.automationPanel.refreshBeforeOpen',
+              'This computer changed. Refresh this automation before opening it.'
+            )
+          )
         }
         open()
       }).catch((error: unknown) => toast.error(botErrorMessage(error)))
