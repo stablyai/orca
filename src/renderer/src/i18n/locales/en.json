@@ -2619,7 +2619,8 @@
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
           "qoder_cn_label": "Qoder CLI China",
-          "jcode_label": "Jcode"
+          "jcode_label": "Jcode",
+          "mcode_label": "MiniMax Code"
         },
         "skill": {
           "cli": {
@@ -21574,8 +21575,9 @@
         "availableAfterSessionStarts": "Available after the session starts.",
         "optionUpdateFailed": "Could not update option",
         "optionValue": {
-          "none": "None",
           "off": "Off",
+          "on": "On",
+          "none": "None",
           "ultracode": "Ultracode",
           "fast": "Fast",
           "minimal": "Minimal",

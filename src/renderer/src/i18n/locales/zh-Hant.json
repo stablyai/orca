@@ -1624,7 +1624,8 @@
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
           "qoder_cn_label": "Qoder CLI China",
-          "jcode_label": "Jcode"
+          "jcode_label": "Jcode",
+          "mcode_label": "MiniMax Code"
         },
         "skill": {
           "cli": {
@@ -19512,6 +19513,7 @@
         "optionValue": {
           "none": "無",
           "off": "關閉",
+          "on": "開啟",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",

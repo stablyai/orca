@@ -9,7 +9,7 @@ type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
 /** Native choices never establish an unobserved model's capability or configured default. */
 export function acpModelMenuModels(input: {
-  dialect: Pick<AcpDialect, 'modelEfforts' | 'familyEfforts'>
+  dialect: Pick<AcpDialect, 'modelEfforts' | 'familyEfforts' | 'unlistedMenuModelEfforts'>
   modelOption: SelectOption | null
   effortOption: SelectOption | null
   state: SessionModelState | null
@@ -25,12 +25,23 @@ export function acpModelMenuModels(input: {
     : []
   return acpListedModels(modelOption, state).map((model) => {
     const info = state?.availableModels.find((entry) => entry.modelId === model.id)
+    // Opt-in only: a model the state never listed still gets efforts a dialect knows from its id.
+    const synthesized =
+      info || dialect.unlistedMenuModelEfforts !== true
+        ? undefined
+        : dialect.modelEfforts?.({
+            modelId: model.id,
+            name: model.label,
+            ...(model.description ? { description: model.description } : {})
+          })
     // The running model's live menu outranks variants advertised for its family.
     const advertised = info
       ? dialect.modelEfforts?.(info)
-      : model.id === currentModel
-        ? undefined
-        : dialect.familyEfforts?.(model.id, state?.availableModels ?? [])
+      : synthesized?.efforts.length
+        ? synthesized
+        : model.id === currentModel
+          ? undefined
+          : dialect.familyEfforts?.(model.id, state?.availableModels ?? [])
     // A current-session menu supplies no negative evidence about an unobserved model.
     const sessionMenu =
       model.id === currentModel

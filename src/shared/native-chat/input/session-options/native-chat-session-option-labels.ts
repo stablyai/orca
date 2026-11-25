@@ -27,6 +27,7 @@ export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   mediumShort: 'Med',
   xhighShort: 'XHigh',
   fast: 'Fast',
+  on: 'On',
   toggleOption: 'Toggle {{value0}}',
   chooseInAgentPicker: 'Choose in agent picker…',
   setWhenSessionStarts: 'Set when the session starts.',
@@ -51,6 +52,7 @@ export const sayNativeChatSessionOptionEnglish: NativeChatSessionOptionSay = (id
 const LEVEL_IDS = {
   none: 'none',
   off: 'off',
+  on: 'on',
   minimal: 'minimal',
   low: 'low',
   medium: 'medium',

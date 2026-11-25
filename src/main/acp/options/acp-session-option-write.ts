@@ -1,6 +1,7 @@
 import { abortSignalReason } from '../../../shared/concurrency/abort-signal-reason'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
-import type { AcpOptionWrite, AcpStructuredOptions } from './acp-structured-options'
+import type { AcpOptionWrite } from './acp-option-write'
+import type { AcpStructuredOptions } from './acp-structured-options'
 
 export type AcpOptionWriteBound = {
   agent: string

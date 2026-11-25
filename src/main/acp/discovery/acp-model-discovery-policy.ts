@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { agentModelCatalogInputStamp } from '../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 
@@ -5,13 +7,17 @@ import type { InitializeResponse } from '../generated/acp-protocol.generated'
 export type AcpModelDiscovery =
   | {
       kind: 'initialize'
+      /** `home` is the resolved account home path the launch will pin (null when the agent locates accounts another way). */
       read(
         initialized: InitializeResponse,
         connection: {
           requestSessionFreeExtension(method: string, params: unknown): Promise<unknown>
-        }
+        },
+        home: string | null
       ): Promise<AgentSessionModelOption[]>
       listingNamesConfiguredModel: boolean
+      /** Catalog inputs under the pinned home, named relative to it; stamped so edits expire cached lists. */
+      homeConfigFiles?: readonly string[]
     }
   | {
       kind: 'command'
@@ -78,4 +84,42 @@ export function acpModelListingForRelease(
   return discovery.otherReleasesListInSession
     ? { kind: 'session', listingNamesConfiguredModel: discovery.listingNamesConfiguredModel }
     : null
+}
+
+/** Serialized stamp inputs covering every discovery-relevant launch directory and home config file. */
+export async function acpModelCatalogStampInput(
+  discovery: AcpModelDiscovery,
+  launch: {
+    command: string
+    prefixArgs: readonly string[]
+    cwd: string
+    workspace: string
+    env: NodeJS.ProcessEnv
+    home: string | null
+  }
+): Promise<string> {
+  const { home } = launch
+  const configFiles =
+    discovery.kind === 'initialize' && home && discovery.homeConfigFiles
+      ? discovery.homeConfigFiles.map((name) => join(home, name))
+      : undefined
+  const directories = [
+    ...new Set([
+      launch.cwd,
+      ...(discovery.kind === 'command' && launch.workspace ? [launch.workspace] : [])
+    ])
+  ]
+  return JSON.stringify(
+    await Promise.all(
+      directories.map((directory) =>
+        agentModelCatalogInputStamp({
+          command: launch.command,
+          prefixArgs: launch.prefixArgs,
+          cwd: directory,
+          env: launch.env,
+          configFiles
+        })
+      )
+    )
+  )
 }

@@ -1386,7 +1386,8 @@
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
           "qoder_cn_label": "Qoder CLI China",
-          "jcode_label": "Jcode"
+          "jcode_label": "Jcode",
+          "mcode_label": "MiniMax Code"
         },
         "skill": {
           "cli": {
@@ -19671,6 +19672,7 @@
         "optionValue": {
           "none": "Aucun",
           "off": "Désactivé",
+          "on": "Activé",
           "fast": "Rapide",
           "minimal": "Minimal",
           "low": "Basse",

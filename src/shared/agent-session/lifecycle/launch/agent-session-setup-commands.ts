@@ -126,7 +126,9 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     loginCommand: [],
     systemLoginCommand: ['agy'],
     loginEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
-  }
+  },
+  // Why the TUI: bare `mcode login` heads straight to the cn OAuth flow; the TUI's /login picks the account region.
+  { agent: 'mcode', loginCommand: ['mcode'], slashCommand: '/login' }
 ] as const
 
 export function agentSessionSetupFor(agent: string | undefined) {

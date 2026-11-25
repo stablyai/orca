@@ -2859,7 +2859,8 @@
           "zcode_label": "ZCode",
           "codebuddy_label": "CodeBuddy",
           "qoder_cn_label": "Qoder CLI China",
-          "jcode_label": "Jcode"
+          "jcode_label": "Jcode",
+          "mcode_label": "MiniMax Code"
         },
         "skill": {
           "cli": {
@@ -21019,6 +21020,7 @@
         "optionValue": {
           "none": "Nenhum",
           "off": "Desativado",
+          "on": "Ativado",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Baixo",

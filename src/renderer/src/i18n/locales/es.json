@@ -1072,6 +1072,7 @@
           "zcode_label": "ZCode",
           "codebuddy_label": "CodeBuddy",
           "jcode_label": "Jcode",
+          "mcode_label": "MiniMax Code",
           "freebuff_label": "Freebuff",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
@@ -19331,6 +19332,7 @@
         "optionValue": {
           "none": "Ninguno",
           "off": "Desactivado",
+          "on": "Activado",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Bajo",
