@@ -10,6 +10,7 @@ import type {
   WorkerThreadChildEvent,
   WorkerThreadChildRequest
 } from './worker-thread-child-process-protocol'
+import { spawnWorkerThreadProviderOwner } from './worker-thread-provider-owner-server'
 
 // Worker-thread half; must stay electron-free (plain-Node entry guard).
 const OUTPUT_HIGH_WATER_BYTES = 256 * 1024
@@ -156,6 +157,10 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
   }
 
   const handle = (request: WorkerThreadChildRequest): void => {
+    if (request.type === 'spawn-provider-owner') {
+      void spawnWorkerThreadProviderOwner(port, request.id, request.spec)
+      return
+    }
     if (request.type === 'spawn') {
       const entry: QueuedLaunch = { request, early: [] }
       queued.set(request.id, entry)
