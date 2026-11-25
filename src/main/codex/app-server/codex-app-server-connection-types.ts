@@ -52,6 +52,8 @@ export type CodexAppServerConnection = {
     openWork: () => Record<string, string[][]> | undefined
     /** Handed to the daemon at quit: the agent runs on, so its session ends without final rows. */
     handedOff: () => boolean
+    /** Reattach only: gives the agent back to the daemon, unread output kept, for a later open. */
+    keep?: () => Promise<void>
   }
 }
 import type { ProviderProcessCloseResult } from '../../provider-process/provider-process-close'

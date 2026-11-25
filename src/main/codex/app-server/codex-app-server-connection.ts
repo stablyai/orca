@@ -282,7 +282,7 @@ async function connectCodexAppServer(
     pauseReading: recordReader.pause,
     resumeReading: recordReader.resume,
     close,
-    ...(relayed ? { relay: codexConnectionRelay(relayed.child, reattached) } : {})
+    ...(relayed ? { relay: codexConnectionRelay(relayed.child, reattached, relayed.keep) } : {})
   }
 
   let handshaking = false

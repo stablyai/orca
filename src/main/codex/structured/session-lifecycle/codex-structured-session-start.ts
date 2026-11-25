@@ -170,6 +170,7 @@ export async function openCodexStructuredSession(
           openKeptCodexState({
             connection,
             translator,
+            chatKey: sessionId,
             threadId: opened.threadId,
             journal: input.events?.journalHistory?.() ?? null,
             timeoutMs: deps.requestTimeoutMs ?? DEFAULT_CODEX_REQUEST_TIMEOUT_MS,

@@ -14,6 +14,7 @@ export {
 import {
   dropListedProviderRelay,
   forgetKeptProviderRelay,
+  rememberKeptProviderRelay,
   keptProviderRelayAttachable,
   providerRelayAgentOpensEnded,
   noteProviderRelayReattachedFromLastRun,
@@ -68,6 +69,8 @@ export type RelayedProviderProcess = {
   child: RelayedProviderChild
   /** True when this chat's agent kept running from before this app started. */
   reattached: boolean
+  /** Reattach only: gives the agent back to the daemon, unread output kept, for a later open. */
+  keep?: () => Promise<void>
 }
 
 /** Quit waits at most this for detaches before disconnecting; a closing stream detaches anyway. */
@@ -199,7 +202,12 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
       noteProviderRelayReattachedFromLastRun(launch.chatKey)
       carriedFor.get(child)?.take(child.attachResult?.openWork)
       track(launch.chatKey, child, launch.markers)
-      return { managed: relayedManagedProcess(child), child, reattached: true }
+      const keep = async (): Promise<void> => {
+        await child.detach(policyFor(launch.markers))
+        // Listed again, so the next open reattaches it rather than starting a second agent.
+        rememberKeptProviderRelay(launch.chatKey, relay)
+      }
+      return { managed: relayedManagedProcess(child), child, reattached: true, keep }
     }
   }
   const verdict =

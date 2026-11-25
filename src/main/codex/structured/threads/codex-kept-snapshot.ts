@@ -15,12 +15,14 @@ import {
   type KeptCodexSpawn,
   type KeptCodexTurn
 } from './codex-kept-turn-ordinals'
+import { KeptProviderRelayUnreachableError } from '../../../provider-relay/provider-relay-kept-rebind'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
 /** The chat's own thread and the children a reattach follows; past it the rest are logged. */
 const MAX_SNAPSHOT_THREADS = 65
 /** Recent turns read for their state: a replay rarely spans more of one thread's turns. */
 const SNAPSHOT_TURNS = 16
+const PRIMARY_RETRY_MS = 500
 
 type Connection = Pick<CodexAppServerConnection, 'request'>
 
@@ -65,7 +67,14 @@ async function readKeptThread(input: {
       input.onError(threadId, error)
       return fallback
     })
-  const latest = turnPage(connection, threadId, 1, 'full', timeoutMs)
+  // The chat's own latest turn numbers its replayed rows, so it is asked twice before giving up.
+  const latest = input.primary
+    ? turnPage(connection, threadId, 1, 'full', timeoutMs).catch(async (error: unknown) => {
+        input.onError(threadId, error)
+        await new Promise((resolve) => setTimeout(resolve, PRIMARY_RETRY_MS))
+        return turnPage(connection, threadId, 1, 'full', timeoutMs)
+      })
+    : turnPage(connection, threadId, 1, 'full', timeoutMs)
   const [[turn], recent, parentThreadId] = await Promise.all([
     input.primary ? latest : soft(latest, []),
     soft(turnPage(connection, threadId, SNAPSHOT_TURNS, 'summary', timeoutMs), []),
@@ -212,10 +221,16 @@ function seedTurn(
   )
 }
 
-/** A kept agent's snapshot, plus its running commands' saved output, before its replay is let go. */
+/**
+ * A kept agent's snapshot, plus its running commands' saved output, before its replay is let go.
+ * When the chat's own thread can't be read, the agent goes back to the daemon with its unread
+ * output and the open fails retryably: a later send reattaches it. Unnumbered, the replay would
+ * overwrite saved rows; ending the agent would lose its work.
+ */
 export async function openKeptCodexState(input: {
   connection: Pick<CodexAppServerConnection, 'request' | 'relay'>
   translator: CodexJournalTranslator
+  chatKey: string
   threadId: string
   journal: { reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'itemBody'> } | null
   timeoutMs: number
@@ -225,6 +240,10 @@ export async function openKeptCodexState(input: {
   const snapshot = await readKeptCodexSnapshot({
     ...input,
     carriedThreadIds: keptCodexThreadIds(connection.relay)
+  }).catch(async (error: unknown) => {
+    input.onError(input.threadId, error)
+    await connection.relay?.keep?.()
+    throw new KeptProviderRelayUnreachableError(input.chatKey)
   })
   await seedKeptCodexCommandOutput(translator, journal, snapshot.turns)
   await seedCarriedKeptCodexCommands(

@@ -200,6 +200,10 @@ export function liveKeptProviderRelayChats(): ReadonlySet<string> {
   return live
 }
 
+export function rememberKeptProviderRelay(chatKey: string, relay: KeptProviderRelay): void {
+  listed.set(chatKey, relay)
+}
+
 export function forgetKeptProviderRelay(chatKey: string, relay: KeptProviderRelay): void {
   if (listed.get(chatKey) === relay) {
     listed.delete(chatKey)

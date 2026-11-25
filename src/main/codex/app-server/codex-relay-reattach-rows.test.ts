@@ -16,7 +16,11 @@ import {
   seedCarriedKeptCodexCommands,
   seedKeptCodexCommandOutput
 } from '../structured/threads/codex-kept-turn-ordinals'
-import { readKeptCodexSnapshot } from '../structured/threads/codex-kept-snapshot'
+import {
+  openKeptCodexState,
+  readKeptCodexSnapshot
+} from '../structured/threads/codex-kept-snapshot'
+import { KeptProviderRelayUnreachableError } from '../../provider-relay/provider-relay-kept-rebind'
 import { readRecord } from './codex-item-field-readers'
 import { CodexBackgroundTaskTracker } from '../structured/background-work/codex-background-task-tracker'
 import { CodexTurnOrdinals } from '../structured/journal/codex-turn-ordinals'
@@ -456,6 +460,41 @@ describe('codex rows across a reattach', () => {
     expect(tracker.subagentStopTargets(['child']).turns).toEqual([
       { threadId: 'child', turnId: 'turn-c' }
     ])
+  })
+
+  it("gives a kept agent back to the daemon, never ending it, when the chat's own state can't be read", async () => {
+    let asked = 0
+    const kept: string[] = []
+    const opening = openKeptCodexState({
+      connection: {
+        request: async () => {
+          asked += 1
+          throw new Error('timed out')
+        },
+        relay: {
+          reattached: true,
+          releaseOutput: () => {},
+          endedWork: () => undefined,
+          openWork: () => undefined,
+          handedOff: () => kept.length > 0,
+          keep: async () => {
+            kept.push('kept')
+          }
+        }
+      },
+      translator: createCodexJournalTranslator({
+        sink: { appendItem: () => {}, appendTombstone: () => {}, publish: () => {} }
+      }),
+      chatKey: 'chat',
+      threadId: 'main',
+      journal: null,
+      timeoutMs: 1_000,
+      onError: () => {}
+    })
+    await expect(opening).rejects.toBeInstanceOf(KeptProviderRelayUnreachableError)
+    // Asked again once before giving up; the agent is kept, not closed.
+    expect(asked).toBeGreaterThanOrEqual(2)
+    expect(kept).toEqual(['kept'])
   })
 
   it('restates a command that ended while no app was attached, so its replayed end settles it', () => {
