@@ -205,7 +205,7 @@ export function BotItemBody({
   // The header and comment box paint first; the Activity, the costly part, renders right after.
   const activityMounted = useDeferredValue(true, false)
   const activityShown = view.eventsRead && activityMounted
-  const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest, revealRow } =
+  const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest, revealRow, leaveEnd } =
     useBotTranscriptFollow({
       itemCount: view.events.length + pending.shown.length,
       isWorking: false,
@@ -325,7 +325,12 @@ export function BotItemBody({
                     />
                     <div ref={contentRef} className="flex flex-col gap-4 px-3.5 pt-2">
                       {item.description ? (
-                        <BotItemClampedText text={item.description} clampClassName="max-h-[57px]" />
+                        <BotItemClampedText
+                          text={item.description}
+                          clampClassName="max-h-[57px]"
+                          // Opening the description above the Activity must not follow it to the end.
+                          onToggle={leaveEnd}
+                        />
                       ) : null}
                       {item.status === 'canceled' || item.status === 'done' ? (
                         <BotItemCloseNote item={item} />
