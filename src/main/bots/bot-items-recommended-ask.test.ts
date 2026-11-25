@@ -123,6 +123,26 @@ const pairs: [keyof typeof RECOMMENDED_ASKS, Choice, Choice][] = [
     'twinFlagged',
     { words: RECOMMENDED_ASK_ANSWERS.twinFlaggedPlain, picks: ['Go'] },
     { words: RECOMMENDED_ASK_ANSWERS.twinFlaggedMarked, picks: ['Go (Recommended)'] }
+  ],
+  [
+    'bracketAttached',
+    { words: RECOMMENDED_ASK_ANSWERS.bracketAttachedClean, picks: ['Go'] },
+    { words: RECOMMENDED_ASK_ANSWERS.bracketAttachedLiteral, picks: ['Go(Recommended)'] }
+  ],
+  [
+    'commaWait',
+    { words: RECOMMENDED_ASK_ANSWERS.commaWaitLiteral, picks: ['A, (Recommended)'] },
+    { words: RECOMMENDED_ASK_ANSWERS.commaWaitFlag, picks: ['Wait'] }
+  ],
+  [
+    'subsets',
+    { words: RECOMMENDED_ASK_ANSWERS.subsetsFirst, picks: ['A, B (Recommended)', 'C'] },
+    { words: RECOMMENDED_ASK_ANSWERS.subsetsSecond, picks: ['A', 'B, C'] }
+  ],
+  [
+    'subsetsReordered',
+    { words: RECOMMENDED_ASK_ANSWERS.subsetsReorderedFirst, picks: ['B, C', 'A'] },
+    { words: RECOMMENDED_ASK_ANSWERS.subsetsReorderedSecond, picks: ['C', 'A, B (Recommended)'] }
   ]
 ]
 it.each(pairs)('keeps the %s choices apart from the post to the owner mail', (name, ...choices) => {
@@ -144,4 +164,21 @@ it('posts a label kept for its attached mark as written', () => {
     'Go(Recommended) [recommended]'
   ])
   fenced(mail, RECOMMENDED_ASK_ANSWERS.attached)
+})
+
+it('keeps the folded several-question answers apart, the pair read back as its picks', () => {
+  const pair = asked(RECOMMENDED_ASKS.severalFolded.written)
+  const two = pair.answer(RECOMMENDED_ASK_ANSWERS.severalFoldedPair)
+  const one = asked(RECOMMENDED_ASKS.severalFolded.written).answer(
+    RECOMMENDED_ASK_ANSWERS.severalFoldedOne
+  )
+  expect(two.reply.data.text).not.toBe(one.reply.data.text)
+  const picks = (data: Record<string, unknown>) =>
+    botItemPickedReplies(pair.shape, data).map((line) => line.map((at) => at.label))
+  expect(picks(two.reply.data)).toEqual([['Audit', 'Notify'], ['Yes']])
+  // The spaced label's folded words are not read as the two picks (the decoder's own limit with
+  // folded spacing is as before this change).
+  expect(picks(one.reply.data)[0]).not.toEqual(['Audit', 'Notify'])
+  fenced(two.mail, RECOMMENDED_ASK_ANSWERS.severalFoldedPair)
+  fenced(one.mail, RECOMMENDED_ASK_ANSWERS.severalFoldedOne)
 })

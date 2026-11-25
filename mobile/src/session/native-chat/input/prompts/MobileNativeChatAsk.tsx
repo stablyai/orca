@@ -340,6 +340,7 @@ export function MobileNativeChatAsk({
             key={`${optIndex}:${opt.label}`}
             label={opt.label}
             recommended={opt.recommended}
+            literal={opt.literal}
             description={opt.description}
             preview={opt.preview}
             onPreview={() => {

@@ -4,6 +4,9 @@ export type AskOption = {
   preview?: string
   /** The asker's own pick, marked Recommended. */
   recommended?: true
+  /** Shown as written: only `recommended` marks it, not a "(Recommended)" in its label. An item's ask
+   *  stores its recommendation in the flag, so words left in a label are the label's own. */
+  literal?: true
 }
 export type AskQuestion = {
   question: string

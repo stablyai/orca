@@ -32,13 +32,19 @@ const provenance = {
 }
 await mkdir(out, { recursive: true })
 const browser = await chromium.launch({ headless: true })
-const page = await browser.newPage({ viewport: { width: 900, height: 700 } })
 // A loaded machine can take minutes for a cold page; CHECK_TIMEOUT_MS raises the wait.
-page.setDefaultTimeout(Number(process.env.CHECK_TIMEOUT_MS ?? 60_000))
-const cdp = await page.context().newCDPSession(page)
+const timeout = Number(process.env.CHECK_TIMEOUT_MS ?? 60_000)
+let page = null
+let cdp = null
 const results = []
 
+/** Each fixture in a tab of its own: one tab reloaded many times can run out of memory on a loaded
+ *  machine. */
 async function open(name) {
+  await page?.close()
+  page = await browser.newPage({ viewport: { width: 900, height: 700 } })
+  page.setDefaultTimeout(timeout)
+  cdp = await page.context().newCDPSession(page)
   await page.goto(`${url}/fixtures.html?id=bots/items/BotItemRecommendedAsk:${name}&theme=light`)
   await page.waitForFunction(() => document.documentElement.dataset.fixtureState === 'ready')
 }
@@ -182,6 +188,23 @@ try {
     marksStay: true
   })
 
+  await quickReplies('bracketAttached', {
+    labels: ['Go', 'Go(Recommended)'],
+    recommended: 'Go',
+    click: 'Go(Recommended)',
+    tabFrom: 'Go',
+    key: 'Go(Recommended)',
+    marksStay: true
+  })
+  await quickReplies('commaWait', {
+    labels: ['A, (Recommended)', 'Wait'],
+    recommended: 'Wait',
+    click: 'A, (Recommended)',
+    tabFrom: 'A, (Recommended)',
+    key: 'Wait',
+    marksStay: true
+  })
+
   // Several questions: the stepped card, picked by click and by keyboard, then sent.
   await open('several')
   const read = await choices()
@@ -223,7 +246,7 @@ try {
     path.join(out, 'results.json'),
     JSON.stringify({ ...provenance, failed: String(error), results }, null, 2)
   )
-  await page.screenshot({ path: path.join(out, 'failure.png'), timeout: 10_000 }).catch(() => {})
+  await page?.screenshot({ path: path.join(out, 'failure.png'), timeout: 10_000 }).catch(() => {})
 } finally {
   await browser.close()
 }

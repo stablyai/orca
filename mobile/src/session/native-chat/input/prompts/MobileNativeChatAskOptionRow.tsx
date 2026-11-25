@@ -12,6 +12,7 @@ export function MobileNativeChatAskOptionRow({
   label,
   description,
   recommended,
+  literal,
   preview,
   onPreview,
   selected,
@@ -22,6 +23,8 @@ export function MobileNativeChatAskOptionRow({
   label: string
   description?: string
   recommended?: boolean
+  /** Shown as written, with the pill only from `recommended`. */
+  literal?: boolean
   /** Read-only inspection is separate from choosing the option. */
   preview?: string
   onPreview?: () => void
@@ -33,8 +36,11 @@ export function MobileNativeChatAskOptionRow({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const hasPreview = Boolean(preview && onPreview)
-  // Agents mark their pick inline ("Tabs (Recommended)"); the answer keeps the full label.
-  const shown = nativeChatQuestionOptionLabel(label)
+  // Agents mark their pick inline ("Tabs (Recommended)"); the answer keeps the full label. A literal
+  // label (an item's ask, whose flag is its mark) shows as written.
+  const shown = literal
+    ? { shown: label, recommended: false }
+    : nativeChatQuestionOptionLabel(label)
   const row = (
     <Pressable
       accessibilityRole={multi ? 'checkbox' : 'radio'}

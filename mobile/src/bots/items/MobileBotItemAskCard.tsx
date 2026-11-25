@@ -59,6 +59,8 @@ function askPrompt({ shape, open }: OpenAsk): AskPrompt {
         multiSelect: decision.multi === true,
         options: decision.replies.map((reply) => ({
           label: reply.label,
+          // The stored flag is the one mark: words left in a label are its own.
+          literal: true as const,
           ...(reply.detail ? { description: reply.detail } : {}),
           ...(reply.recommended ? { recommended: true as const } : {})
         }))

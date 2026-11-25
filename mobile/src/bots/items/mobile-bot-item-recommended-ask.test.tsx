@@ -14,6 +14,7 @@ import { makeTestBotItem } from '../../../../src/shared/bots/bot-item.test-fixtu
 import type { BotItemEvent } from '../../../../src/shared/bots/bot-items'
 import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../src/shared/native-chat/input/questions/native-chat-question-auto-advance'
 import { MobileNativeChatAskOptionRow } from '../../session/native-chat/input/prompts/MobileNativeChatAskOptionRow'
+import { MobileNativeChatAsk } from '../../session/native-chat/input/prompts/MobileNativeChatAsk'
 import { botItemOpenAsk, useMobileBotItemAskSlot } from './MobileBotItemAskCard'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -147,10 +148,11 @@ it('shows a cleaned recommendation once and posts its label as stored', async ()
   expect(sent).toEqual([{ text: RECOMMENDED_ASK_ANSWERS.written, askId: 'e2', skipped: [] }])
 })
 
-it('reads a twin that kept its words with its own one pill, apart from the plain twin', async () => {
+it('reads a twin that kept its words as written, with no pill when nothing is flagged', async () => {
   vi.useFakeTimers()
   const sent = mount(RECOMMENDED_ASKS.twin.stored)
-  expect(shown()).toEqual(['Go', 'Go  Recommended'])
+  // No flag: no pill, and each row reads as stored.
+  expect(shown()).toEqual(['Go', 'Go (Recommended)'])
   await press('Go (Recommended)')
   expect(sent.map((entry) => entry.text)).toEqual([RECOMMENDED_ASK_ANSWERS.twin])
 })
@@ -202,21 +204,34 @@ async function posts(ask: BotItemAsk, taps: string[], multi: boolean): Promise<s
   return sent[0]?.text
 }
 
-it('posts one option and two picks that join into it as different words, in either order', async () => {
+it('posts one option and two picks that join into it as different words', async () => {
   vi.useFakeTimers()
-  const { delimited, delimitedReordered } = RECOMMENDED_ASKS
-  // Taps in reverse; the card joins picks in display order.
-  expect([
-    await posts(delimited.stored, ['Audit, (Recommended)'], true),
-    await posts(delimited.stored, ['(Recommended)', 'Audit [recommended]'], true),
-    await posts(delimitedReordered.stored, ['Audit, (Recommended)'], true),
-    await posts(delimitedReordered.stored, ['Audit [recommended]', '(Recommended)'], true)
-  ]).toEqual([
-    RECOMMENDED_ASK_ANSWERS.delimitedOne,
-    RECOMMENDED_ASK_ANSWERS.delimitedPair,
-    RECOMMENDED_ASK_ANSWERS.delimitedReorderedOne,
-    RECOMMENDED_ASK_ANSWERS.delimitedReorderedPair
+  const { delimited } = RECOMMENDED_ASKS
+  mount(delimited.stored)
+  expect(shown()).toEqual([
+    'Audit, (Recommended)',
+    'Audit,',
+    'Audit [recommended]  Recommended',
+    '(Recommended)'
   ])
+  // Taps in reverse; the card joins picks in display order.
+  expect(await posts(delimited.stored, ['Audit, (Recommended)'], true)).toBe(
+    RECOMMENDED_ASK_ANSWERS.delimitedOne
+  )
+  expect(await posts(delimited.stored, ['(Recommended)', 'Audit [recommended]'], true)).toBe(
+    RECOMMENDED_ASK_ANSWERS.delimitedPair
+  )
+})
+
+it('posts the same two choices apart with the options reordered', async () => {
+  vi.useFakeTimers()
+  const { delimitedReordered } = RECOMMENDED_ASKS
+  expect(await posts(delimitedReordered.stored, ['Audit, (Recommended)'], true)).toBe(
+    RECOMMENDED_ASK_ANSWERS.delimitedReorderedOne
+  )
+  expect(
+    await posts(delimitedReordered.stored, ['Audit [recommended]', '(Recommended)'], true)
+  ).toBe(RECOMMENDED_ASK_ANSWERS.delimitedReorderedPair)
 })
 
 it('shows a label kept for its attached mark as written, with the flag pill only on the flag', async () => {
@@ -228,14 +243,109 @@ it('shows a label kept for its attached mark as written, with the flag pill only
   ).toBe(RECOMMENDED_ASK_ANSWERS.attached)
 })
 
-it('posts each twin as stored when the flag is on the plain one', async () => {
+it('marks only the flagged twin, the kept twin reading as written', async () => {
   vi.useFakeTimers()
   const { twinFlagged } = RECOMMENDED_ASKS
   mount(twinFlagged.stored)
-  // As before this change, the phone's own reading of the kept label adds its pill there too.
-  expect(shown()).toEqual(['Go  Recommended', 'Go  Recommended'])
-  expect([
-    await posts(twinFlagged.stored, ['Go'], false),
-    await posts(twinFlagged.stored, ['Go (Recommended)'], false)
-  ]).toEqual([RECOMMENDED_ASK_ANSWERS.twinFlaggedPlain, RECOMMENDED_ASK_ANSWERS.twinFlaggedMarked])
+  expect(shown()).toEqual(['Go  Recommended', 'Go (Recommended)'])
+  expect(await posts(twinFlagged.stored, ['Go'], false)).toBe(
+    RECOMMENDED_ASK_ANSWERS.twinFlaggedPlain
+  )
+  expect(await posts(twinFlagged.stored, ['Go (Recommended)'], false)).toBe(
+    RECOMMENDED_ASK_ANSWERS.twinFlaggedMarked
+  )
+})
+
+it('reads an attached literal beside its cleaned twin as written, the pill only on the flag', async () => {
+  vi.useFakeTimers()
+  const { bracketAttached } = RECOMMENDED_ASKS
+  mount(bracketAttached.stored)
+  expect(shown()).toEqual(['Go  Recommended', 'Go(Recommended)'])
+  expect(await posts(bracketAttached.stored, ['Go'], false)).toBe(
+    RECOMMENDED_ASK_ANSWERS.bracketAttachedClean
+  )
+  expect(await posts(bracketAttached.stored, ['Go(Recommended)'], false)).toBe(
+    RECOMMENDED_ASK_ANSWERS.bracketAttachedLiteral
+  )
+})
+
+it('marks only the flagged option beside a label kept for its ", "', async () => {
+  vi.useFakeTimers()
+  const { commaWait } = RECOMMENDED_ASKS
+  mount(commaWait.stored)
+  expect(shown()).toEqual(['A, (Recommended)', 'Wait  Recommended'])
+  expect(await posts(commaWait.stored, ['A, (Recommended)'], true)).toBe(
+    RECOMMENDED_ASK_ANSWERS.commaWaitLiteral
+  )
+  expect(await posts(commaWait.stored, ['Wait'], true)).toBe(RECOMMENDED_ASK_ANSWERS.commaWaitFlag)
+})
+
+it('posts two sets of picks that would join alike as different words', async () => {
+  vi.useFakeTimers()
+  const { subsets } = RECOMMENDED_ASKS
+  mount(subsets.stored)
+  expect(shown()).toEqual(['A, B (Recommended)', 'C', 'A', 'B, C'])
+  expect(await posts(subsets.stored, ['C', 'A, B (Recommended)'], true)).toBe(
+    RECOMMENDED_ASK_ANSWERS.subsetsFirst
+  )
+  expect(await posts(subsets.stored, ['B, C', 'A'], true)).toBe(
+    RECOMMENDED_ASK_ANSWERS.subsetsSecond
+  )
+})
+
+it('posts the same two sets apart with the options reordered', async () => {
+  vi.useFakeTimers()
+  const { subsetsReordered } = RECOMMENDED_ASKS
+  expect(await posts(subsetsReordered.stored, ['A', 'B, C'], true)).toBe(
+    RECOMMENDED_ASK_ANSWERS.subsetsReorderedFirst
+  )
+  expect(await posts(subsetsReordered.stored, ['A, B (Recommended)', 'C'], true)).toBe(
+    RECOMMENDED_ASK_ANSWERS.subsetsReorderedSecond
+  )
+})
+
+it('steps a spaced label and the two picks it reads like into different answer lines', async () => {
+  vi.useFakeTimers()
+  const { severalFolded } = RECOMMENDED_ASKS
+  const step = async (taps: string[]) => {
+    if (tree) {
+      act(() => tree!.unmount())
+      tree = null
+      await queries?.end()
+    }
+    const sent = mount(severalFolded.stored)
+    for (const label of taps) {
+      await press(label)
+    }
+    await act(async () => footer('Next').props.onPress())
+    await press('Yes')
+    return sent.map((entry) => entry.text)
+  }
+  expect(await step(['Notify', 'Audit'])).toEqual([RECOMMENDED_ASK_ANSWERS.severalFoldedPair])
+  expect(await step(['Audit,  Notify (Recommended)'])).toEqual([
+    RECOMMENDED_ASK_ANSWERS.severalFoldedOne
+  ])
+})
+
+it("still reads an agent prompt's inline mark as its pill: only an item's ask shows labels as written", () => {
+  queries = documentQueryClient()
+  act(() => {
+    tree = create(
+      queries!.wrap(
+        createElement(MobileNativeChatAsk, {
+          prompt: {
+            questions: [
+              {
+                question: 'Indent with?',
+                multiSelect: false,
+                options: [{ label: 'Tabs (Recommended)' }, { label: 'Spaces' }]
+              }
+            ]
+          },
+          onAnswer: async () => true
+        })
+      )
+    )
+  })
+  expect(shown()).toEqual(['Tabs  Recommended', 'Spaces'])
 })

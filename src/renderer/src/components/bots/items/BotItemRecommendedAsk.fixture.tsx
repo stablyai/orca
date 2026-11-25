@@ -92,3 +92,11 @@ export const twinFlagged = defineFixture({
   width: 360,
   render: () => <WaitingAsk ask={RECOMMENDED_ASKS.twinFlagged.stored} />
 })
+export const bracketAttached = defineFixture({
+  width: 360,
+  render: () => <WaitingAsk ask={RECOMMENDED_ASKS.bracketAttached.stored} />
+})
+export const commaWait = defineFixture({
+  width: 360,
+  render: () => <WaitingAsk ask={RECOMMENDED_ASKS.commaWait.stored} />
+})
