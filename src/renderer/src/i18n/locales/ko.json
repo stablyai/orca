@@ -15684,8 +15684,6 @@
           "noRemote": "로컬 git 저장소 · 원격 없음",
           "openUpstream": "브라우저에서 {{value0}} 열기",
           "forkOf": "{{value0}}의 포크",
-          "openSettingsPage": "설정 페이지 열기",
-          "done": "완료",
           "resetDone": "아이콘과 색상이 재설정됨",
           "undo": "실행 취소",
           "styleLetters": "글자",
