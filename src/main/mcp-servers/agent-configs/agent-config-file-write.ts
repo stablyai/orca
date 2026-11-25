@@ -1,5 +1,9 @@
 // Publishing an edited agent config (or deleting one) without blocking the thread: only while the
 // file still holds the bytes the edit was made from, after copying those bytes to a rolling `.bak`.
+// The agent or an editor can save at any moment, so the file is taken aside before its last check and
+// the edit goes in only where no newer save took the name: a save that lands meanwhile is kept.
+// (atomic-file-publication's guarded write is synchronous and repairs folder ACLs, which suits
+// Orca's own folders, not the user's home.)
 import { createHash, randomUUID } from 'node:crypto'
 import {
   chmod,
@@ -14,23 +18,13 @@ import {
   symlink,
   writeFile
 } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
 import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
-import { isHardLinkUnsupported } from '../../filesystem/hard-link-unsupported-error'
 import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
+import { isHardLinkUnsupported } from '../../filesystem/hard-link-unsupported-error'
 import { isReplaceableReadOnlyBackup } from '../../filesystem/rolling-file-backup'
-
-/** The file's text (BOM kept), or null when it is definitely absent. */
-export async function readAgentConfigText(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, 'utf8')
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return null
-    }
-    throw error
-  }
-}
 
 async function lstatIfPresent(path: string) {
   try {
@@ -43,6 +37,121 @@ async function lstatIfPresent(path: string) {
   }
 }
 
+const MAX_LINK_HOPS = 8
+
+/** The file `path` names after its dotfile symlinks, even while that file is held aside. */
+async function publishedPath(path: string): Promise<string> {
+  let current = path
+  for (let hop = 0; ; hop++) {
+    if (!(await lstatIfPresent(current))?.isSymbolicLink()) {
+      return current
+    }
+    if (hop === MAX_LINK_HOPS) {
+      throw Object.assign(new Error(`Too many symbolic links: ${path}`), { code: 'ELOOP' })
+    }
+    // A relative link is read from its folder's real place, which may itself be a link.
+    current = resolve(await realpath(dirname(current)), await readlink(current))
+  }
+}
+
+/** Where a config waits while its edit is published; only Orca writes this name. */
+const heldPathOf = (target: string): string => `${target}.orca-publishing`
+
+/** Moves `source` over the rolling `.bak`, never through a symlinked one. */
+async function replaceBackup(source: string, backup: string): Promise<void> {
+  const previous = await lstatIfPresent(backup)
+  if (previous?.isSymbolicLink()) {
+    throw new Error(`Refusing to overwrite symlinked backup: ${backup}`)
+  }
+  if (process.platform === 'win32') {
+    // copyFile keeps a read-only attribute, and Windows refuses to rename over a read-only file.
+    await chmod(source, 0o666)
+    if (isReplaceableReadOnlyBackup(previous)) {
+      await chmod(backup, 0o666)
+    }
+  }
+  await renameFileWithWindowsRetryAsync(source, backup)
+}
+
+/**
+ * Refuses a drive with no hard links (FAT/exFAT, \\wsl$): nothing there publishes without
+ * possibly replacing a newer save, so the config is never taken aside on it.
+ */
+async function assertHardLinks(target: string): Promise<void> {
+  const probe = `${target}.${randomUUID()}.link-probe`
+  try {
+    await link(target, probe)
+  } catch (error) {
+    if (isHardLinkUnsupported(error)) {
+      throw Object.assign(new Error(`Orca can't edit ${target} safely on this drive`), {
+        code: errnoCodeOrUnknown(error)
+      })
+    }
+    throw error
+  } finally {
+    await rm(probe, { force: true }).catch(() => {})
+  }
+}
+
+// One read or publish of a config at a time in this process, so none sees it while it's held.
+const configQueues = new Map<string, Promise<void>>()
+const oneAtATime = <T>(target: string, run: () => Promise<T>): Promise<T> =>
+  runKeyedSerializedOperation(configQueues, target, run)
+
+/** The file's text (BOM kept), or null when it is definitely absent. */
+export async function readAgentConfigText(path: string): Promise<string | null> {
+  const target = await publishedPath(path)
+  return oneAtATime(target, async () => {
+    // Orca quit while publishing an edit: the config goes back before anyone reads it.
+    if (await lstatIfPresent(heldPathOf(target))) {
+      await restoreHeldAgentConfig(heldPathOf(target), target)
+    }
+    try {
+      return await readFile(path, 'utf8')
+    } catch (error) {
+      if (isDefinitiveAbsence(error)) {
+        return null
+      }
+      throw error
+    }
+  })
+}
+
+/**
+ * Runs `publish` with the config at `target` held aside, once its bytes are still `computedFrom`;
+ * false when they aren't (put back) or when a newer file took the name meanwhile (it stays).
+ */
+function withConfigHeld(
+  target: string,
+  computedFrom: string,
+  publish: () => Promise<boolean>
+): Promise<boolean> {
+  const held = heldPathOf(target)
+  return oneAtATime(target, async () => {
+    try {
+      await assertHardLinks(target)
+      await renameFileWithWindowsRetryAsync(target, held)
+    } catch (error) {
+      if (isDefinitiveAbsence(error)) {
+        return false
+      }
+      throw error
+    }
+    let published = false
+    try {
+      if ((await readFile(held)).equals(Buffer.from(computedFrom))) {
+        published = await publish()
+      }
+      return published
+    } finally {
+      // Published (or deleted on purpose): the held bytes are the `.bak` already. Else they go back.
+      await (published
+        ? rm(held, { force: true }).catch(() => {})
+        : restoreHeldAgentConfig(held, target))
+    }
+  })
+}
+
 /**
  * Replaces `path` (a dotfile symlink's target) with `contents`; false, writing nothing, when the
  * file no longer holds `computedFrom`, so the caller redoes its edit on the newer save.
@@ -52,51 +161,34 @@ export async function writeAgentConfigIfUnchanged(
   contents: string,
   computedFrom: string
 ): Promise<boolean> {
-  const link = await lstatIfPresent(path)
-  const target = link?.isSymbolicLink() ? await realpath(path) : path
-  const unchanged = async (): Promise<boolean> =>
-    (await readAgentConfigText(target)) === computedFrom
+  const target = await publishedPath(path)
   const mode = (await stat(target)).mode & 0o777
   const temp = `${target}.${randomUUID()}.tmp`
-  const backup = `${target}.bak`
-  const backupTemp = `${backup}.${randomUUID()}.tmp`
+  const backupTemp = `${target}.bak.${randomUUID()}.tmp`
   try {
     // Agent configs can hold tokens: the new file keeps the old one's permissions.
     await writeFile(temp, contents, { mode, flag: 'wx' })
     if (process.platform !== 'win32') {
       await chmod(temp, mode)
     }
-    const previousBackup = await lstatIfPresent(backup)
-    if (previousBackup?.isSymbolicLink()) {
-      // copyFile follows a destination link and could overwrite an unrelated file.
-      throw new Error(`Refusing to overwrite symlinked backup: ${backup}`)
-    }
     await copyFile(target, backupTemp)
     // A save that lands while the copy is made keeps the previous backup and refuses the edit.
-    if (!(await unchanged())) {
+    if ((await readAgentConfigText(target)) !== computedFrom) {
       return false
     }
-    if (process.platform === 'win32') {
-      // copyFile keeps a read-only attribute, and Windows refuses to rename over a read-only file.
-      await chmod(backupTemp, 0o666)
-      if (isReplaceableReadOnlyBackup(previousBackup)) {
-        await chmod(backup, 0o666)
-      }
-    }
-    await renameFileWithWindowsRetryAsync(backupTemp, backup)
-    if (!(await unchanged())) {
-      return false
-    }
-    return await renameFileWithWindowsRetryAsync(temp, target)
+    await replaceBackup(backupTemp, `${target}.bak`)
+    return await withConfigHeld(target, computedFrom, () => linkWithoutReplacing(temp, target))
   } finally {
-    await Promise.all([rm(temp, { force: true }), rm(backupTemp, { force: true })])
+    // Best effort: a Windows scanner holding the published file's second name must not fail it.
+    await Promise.all([temp, backupTemp].map((file) => rm(file, { force: true }).catch(() => {})))
   }
 }
 
 export type AgentConfigRemoval = {
   /** Where this Orca holds the file while comparing it; two Orcas never share one. */
   held: string
-  /** Written instead on a filesystem without hard links, where a held file can't go back safely. */
+  /** The emptied text, which needs no write; on a drive without hard links (where a held file
+   *  can't go back safely) any other text is refused like every edit there. */
   emptyText: string
 }
 

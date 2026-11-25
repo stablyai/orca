@@ -1,7 +1,6 @@
 // Read-only: the MCP servers each agent loads from its own config, and the "In your agents" list
 // that merges them across agents by name and URL or command.
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
 import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { parse as parseToml } from 'smol-toml'
 import {
@@ -11,7 +10,6 @@ import {
   type AgentMcpConfigEntry
 } from '../../../shared/mcp/agent-mcp-config-entry'
 import type { BotToolServer } from '../../../shared/bot-tools'
-import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import {
   MCP_CONFIG_AGENTS,
   agentMcpConfigLocations,
@@ -22,6 +20,7 @@ import {
   type AgentMcpServerBlock,
   type McpConfigAgent
 } from './agent-mcp-config-locations'
+import { readAgentConfigText } from './agent-config-file-write'
 
 export type AgentMcpConfigSource = AgentMcpConfigLocation & {
   /** The key path of the entry itself in the file. */
@@ -121,11 +120,10 @@ function serversInBlocks(
 
 async function readLocationText(location: AgentMcpConfigLocation): Promise<string | null> {
   try {
-    return await readFile(location.path, 'utf8')
+    // Through the publisher's reader: a config Orca holds aside is waited for or put back.
+    return await readAgentConfigText(location.path)
   } catch (error) {
-    if (!isDefinitiveAbsence(error)) {
-      console.warn(`[mcp-servers] Couldn't read ${location.path}:`, error)
-    }
+    console.warn(`[mcp-servers] Couldn't read ${location.path}:`, error)
     return null
   }
 }
