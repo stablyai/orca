@@ -46,6 +46,12 @@ export function SelectionAddToChatPopover({
   const readLatestQuotable = useEffectEvent(readQuotable)
   const settleSelection = useEffectEvent((root: HTMLElement) => onSelectionSettled?.(root))
 
+  // Why: a Copy write resolves after later renders; it must see the offer showing now.
+  const currentRequestRef = useRef<QuoteRequest | null>(null)
+  useEffect(() => {
+    currentRequestRef.current = request
+  }, [request])
+
   useEffect(() => () => window.clearTimeout(copiedTimerRef.current), [])
 
   useEffect(() => {
@@ -180,9 +186,17 @@ export function SelectionAddToChatPopover({
                   // Why: the write is async; a newer offer (another anchor) must not be touched.
                   const stillOffered = (current: QuoteRequest | null): current is QuoteRequest =>
                     current?.anchor === request.anchor
+                  let failed = false
                   try {
                     await window.api.ui.writeClipboardText(text)
                   } catch {
+                    failed = true
+                  }
+                  // A newer offer owns the popover and its close timer now.
+                  if (!stillOffered(currentRequestRef.current)) {
+                    return
+                  }
+                  if (failed) {
                     setRequest((current) => (stillOffered(current) ? null : current))
                     return
                   }
