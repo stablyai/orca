@@ -11,6 +11,10 @@ import {
   unlinkSync
 } from 'node:fs'
 import { homedir } from 'node:os'
+import {
+  agentHomeDirIn,
+  defaultAgentHomeDir
+} from '../../../../shared/app-profiles/app-profile-homes'
 import { dirname, join } from 'node:path'
 import {
   clearCopiedResourceMarker,
@@ -39,7 +43,7 @@ const CODEX_SYSTEM_RESOURCE_ENTRIES = [
 ] as const
 
 export function getSystemCodexHomePath(): string {
-  return join(homedir(), '.codex')
+  return defaultAgentHomeDir('CODEX_HOME', '.codex')
 }
 
 /** Path only; use when a read-only caller must not materialize the mirror. */
@@ -62,7 +66,7 @@ export function getLocalCodexTrustConfigFiles(
     join(getOrcaManagedCodexHomePath(), 'config.toml'),
     // Managed accounts launch on their own CODEX_HOME, the only config that launch reads (#27235).
     ...(launchCodexHome ? [join(launchCodexHome, 'config.toml')] : []),
-    join(agentHome, '.codex', 'config.toml')
+    join(agentHomeDirIn(agentHome, 'CODEX_HOME', '.codex'), 'config.toml')
   ]
   return [...new Set(files)]
 }

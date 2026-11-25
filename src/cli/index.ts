@@ -23,6 +23,8 @@ import { cliErrorExitCode } from './output/cli-exit-code'
 import { printHelp } from './discovery/help'
 import type { RuntimeClient } from './runtime/client'
 import { COMMAND_SPECS } from './specs'
+import { selectAppProfile } from './app-profiles/app-profile-selection'
+import { runProfilesCreate } from './app-profiles/app-profile-create'
 import { resolveOrchestrationCliExecutable } from './orchestration/recovery/orchestration-recovery-command'
 import { refuseConflictingSessionCallerFlags } from './orchestration/identity/session-caller-flags'
 import { adoptSessionToolCaller, tradeSessionToolToken } from './runtime/session-tool-caller'
@@ -54,6 +56,21 @@ export async function main(
   cwd = resolveInvocationCwd(),
   configureExecutable?: (commandPath: readonly string[]) => void
 ): Promise<void> {
+  // `--profile <id>` before the command selects an app profile, before any parse or check.
+  // `orca profiles create` is a hidden local command.
+  // Recovery commands repeat these args, so a retry selects the same profile.
+  const invokedArgv = argv
+  try {
+    argv = selectAppProfile(argv)
+    if (argv[0] === 'profiles' && argv[1] === 'create') {
+      runProfilesCreate(argv.slice(2))
+      return
+    }
+  } catch (error) {
+    reportCliError(error, false)
+    process.exitCode = 1
+    return
+  }
   // Why: version audits use the bundled launcher; Electron intercepts direct binary version flags.
   if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
     const version = readOrcaCliVersion()
@@ -198,7 +215,7 @@ export async function main(
           remotePairingCode,
           remoteEnvironment,
           resolveOrchestrationCliExecutable(),
-          argv
+          invokedArgv
         )
         return client
       },

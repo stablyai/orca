@@ -1,3 +1,4 @@
+import { agentHomeDirIn } from '../../../shared/app-profiles/app-profile-homes'
 import { basename, isAbsolute, join, relative, sep, type posix } from 'node:path'
 import { stablePathId } from './skill-discovery-classification'
 import type { SkillScanRoot } from './skill-discovery-sources'
@@ -29,11 +30,16 @@ export function getClaudePluginMetadataPaths(
   cwd: string,
   pathApi: SkillDiscoveryPathApi = defaultPathApi
 ): { installedPlugins: string; settings: string[] } {
+  // On this host, an app profile's Claude folder replaces the one in the user's home.
+  const claudeHome =
+    pathApi === defaultPathApi
+      ? agentHomeDirIn(homeDir, 'CLAUDE_CONFIG_DIR', '.claude')
+      : pathApi.join(homeDir, '.claude')
   return {
-    installedPlugins: pathApi.join(homeDir, '.claude', 'plugins', 'installed_plugins.json'),
+    installedPlugins: pathApi.join(claudeHome, 'plugins', 'installed_plugins.json'),
     // Claude merges user, project, then project-local settings in this order.
     settings: [
-      pathApi.join(homeDir, '.claude', 'settings.json'),
+      pathApi.join(claudeHome, 'settings.json'),
       pathApi.join(cwd, '.claude', 'settings.json'),
       pathApi.join(cwd, '.claude', 'settings.local.json')
     ]

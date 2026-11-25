@@ -723,6 +723,11 @@ module.exports = {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
         to: 'Orca Computer Use.app'
       },
+      // The app profile variant of the notification helper. It does not run from here.
+      {
+        from: 'native/notification-status-macos/.build/release/profile-template/orca-notification-status',
+        to: 'profile-template/orca-notification-status'
+      },
       featureWallResources
     ],
     // macOS 26 UNUserNotificationCenter aborts helpers launched from Resources; execute from Contents/MacOS (#7929).

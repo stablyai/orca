@@ -1,6 +1,6 @@
 import { claudeProfileHistoryDirs } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { defaultAgentHomeDir } from '../../../shared/app-profiles/app-profile-homes'
 import { realpath } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../../shared/file-access/absolute-dir-override'
 import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
@@ -23,7 +23,7 @@ export type SessionHomeAgent = keyof typeof AGENT_SESSION_HOME_SEGMENTS
 
 /** Prefer the live config home while retaining default-home history from before the override. */
 export function claudeProjectsHostDirs(): string[] {
-  const defaultHome = join(homedir(), '.claude')
+  const defaultHome = defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude')
   return uniqueDirs([
     join(resolveAbsoluteDirOverride(process.env.CLAUDE_CONFIG_DIR, defaultHome), 'projects'),
     join(defaultHome, 'projects')
@@ -32,7 +32,7 @@ export function claudeProjectsHostDirs(): string[] {
 
 export function codexHomeSessionsDir(): string {
   return join(
-    resolveAbsoluteDirOverride(process.env.CODEX_HOME, join(homedir(), '.codex')),
+    resolveAbsoluteDirOverride(process.env.CODEX_HOME, defaultAgentHomeDir('CODEX_HOME', '.codex')),
     'sessions'
   )
 }

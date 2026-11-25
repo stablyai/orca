@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { defaultAgentHomeDir } from '../../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import type { CodexSystemDefaultIdentity } from '../../../shared/agent-accounts/managed-account-types'
@@ -107,7 +107,10 @@ export class CodexAccountIdentity {
     const usesProviderAuth = provider !== null && PROVIDERS_WITHOUT_OPENAI_AUTH.has(provider)
     let contents: string
     try {
-      contents = readFileSync(join(homedir(), '.codex', 'auth.json'), 'utf-8')
+      contents = readFileSync(
+        join(defaultAgentHomeDir('CODEX_HOME', '.codex'), 'auth.json'),
+        'utf-8'
+      )
     } catch (error) {
       const code = (error as NodeJS.ErrnoException | null)?.code
       if (code === 'ENOENT' || code === 'ENOTDIR') {

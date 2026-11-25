@@ -1,3 +1,4 @@
+import { defaultAgentHomeDir } from '../../../../shared/app-profiles/app-profile-homes'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -19,7 +20,7 @@ export function withoutInheritedClaudeConfigDir(
 }
 
 export function defaultClaudeConfigDir(env: NodeJS.ProcessEnv = process.env): string {
-  return env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
+  return env.CLAUDE_CONFIG_DIR?.trim() || defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude')
 }
 
 function samePath(a: string, b: string, platform: NodeJS.Platform): boolean {
@@ -37,7 +38,9 @@ export function claudeConfigDirEnvPatch(
   const env = options.env ?? process.env
   const platform = options.platform ?? process.platform
   const resolved = accountHome.trim()
-  if (!resolved || samePath(resolved, defaultClaudeConfigDir(env), platform)) {
+  // The folder the CLI uses with this env. Without the variable it is ~/.claude, also in a profile.
+  const cliDefault = env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
+  if (!resolved || samePath(resolved, cliDefault, platform)) {
     return {}
   }
   return { CLAUDE_CONFIG_DIR: resolved }

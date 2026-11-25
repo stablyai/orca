@@ -6,6 +6,7 @@ import { cloneMacTree } from '../../../filesystem/macos-tree-clone'
 import { rm } from '../../../filesystem/asar-transparent-fs'
 import { ensurePrivateDir } from '../../endpoint/publication/daemon-private-file-modes'
 import { inspectMacProcessCodeIdentity } from './daemon-mac-code-identity'
+import { getAppProfile } from '../../../app-profiles/app-profile'
 
 /** Plain Node helper packaged by config/scripts/macos/terminal-host-bundle/macos-terminal-host-bundle.cjs. */
 export const MAC_TERMINAL_HOST_BUNDLE = 'Orca Agents.app'
@@ -62,8 +63,10 @@ async function readCodesignField(
     maxOutputBytes: 64 * 1024,
     signal
   })
+  // codesign marks an implicit requirement (an ad-hoc signature) with `# `.
   const line = `${result.stderr}\n${result.stdout}`
     .split(/\r?\n/)
+    .map((candidate) => candidate.replace(/^# /, ''))
     .find((candidate) => candidate.startsWith(prefix))
   if (result.code !== 0 || result.timedOut || result.outputTruncated || !line) {
     throw new Error(`Could not read ${prefix.trim()} from codesign`)
@@ -81,7 +84,18 @@ export async function materializeMacDaemonBundle(
     throw new Error('Could not resolve the running macOS app bundle')
   }
   const appBundle = await realpath(appBundleForMainExecutable(running.executablePath))
-  const source = join(appBundle, 'Contents', 'Helpers', MAC_TERMINAL_HOST_BUNDLE)
+  // A profile app has no host of its own: it uses the default app's release host. Its app.asar
+  // link points into the default app. A real path, so that the copy is not a link back into it.
+  const profile = getAppProfile() !== null
+  const hostApp = profile
+    ? resolve(
+        await realpath(join(appBundle, 'Contents', 'Resources', 'app.asar')),
+        '..',
+        '..',
+        '..'
+      )
+    : appBundle
+  const source = join(hostApp, 'Contents', 'Helpers', MAC_TERMINAL_HOST_BUNDLE)
   const cdhash = await readCodesignField(['-dvvv', source], 'CDHash=', signal)
   if (!/^[0-9a-f]{40,64}$/.test(cdhash)) {
     throw new Error('The macOS terminal host has an unexpected CDHash')
@@ -100,8 +114,9 @@ export async function materializeMacDaemonBundle(
     await mkdir(dirname(stagedBundle))
     await cloneMacTree(source, stagedBundle, signal)
     // Matching the running app’s designated requirement preserves its privacy grants.
+    // An ad-hoc profile app has no such requirement, so its copy must match the host itself.
     const requirement = await readCodesignField(
-      ['--display', '-r-', appBundle],
+      ['--display', '-r-', profile ? source : appBundle],
       'designated => ',
       signal
     )

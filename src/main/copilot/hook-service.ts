@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { defaultAgentHomeDir } from '../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type {
@@ -31,7 +31,7 @@ import { installCopilotHooksRemote } from './copilot-remote-hook-install'
 
 function getCopilotHome(): string {
   const fromEnv = process.env.COPILOT_HOME?.trim()
-  return fromEnv ? fromEnv : join(homedir(), '.copilot')
+  return fromEnv ? fromEnv : defaultAgentHomeDir('COPILOT_HOME', '.copilot')
 }
 
 function getConfigPath(): string {

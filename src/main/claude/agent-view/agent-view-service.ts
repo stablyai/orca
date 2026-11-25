@@ -1,4 +1,5 @@
-import { homedir } from 'node:os'
+import { isAppProfileRuntime } from '../../app-profiles/app-profile'
+import { defaultAgentHomeDir } from '../../../shared/app-profiles/app-profile-homes'
 import { join, resolve } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
@@ -52,7 +53,8 @@ export class ClaudeAgentViewService {
   private writesConfig = false
   private pluginRoot?: string
   private readonly configs = new Set<string>()
-  private defaultConfig = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
+  private defaultConfig =
+    process.env.CLAUDE_CONFIG_DIR || defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude')
 
   constructor(
     private readonly userDataPath: string,
@@ -66,6 +68,10 @@ export class ClaudeAgentViewService {
   ) {}
 
   reconcile(settings: NavigationSettings): Promise<void> {
+    // A profile installs no managed hooks, the agent view too.
+    if (isAppProfileRuntime()) {
+      return Promise.resolve()
+    }
     const enabled =
       settings.claudeSubagentNavigationEnabled !== false &&
       isAgentStatusHooksEnabledForAgent(settings, 'claude')
@@ -87,7 +93,9 @@ export class ClaudeAgentViewService {
       }
       const cachedEnv = enabled ? undefined : await this.deps.loginEnv({ cachedOnly: true })
       this.defaultConfig =
-        env.CLAUDE_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
+        env.CLAUDE_CONFIG_DIR ||
+        process.env.CLAUDE_CONFIG_DIR ||
+        defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude')
       for (const dir of [
         this.defaultConfig,
         cachedEnv?.CLAUDE_CONFIG_DIR,

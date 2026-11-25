@@ -6,6 +6,7 @@ import {
   HOST_ENTRY_FILE_NAMES
 } from './inherited-orca-identity-banner'
 import { MAIN_BUILD_ENTRY_POINTS } from './main-build-entry-points'
+import { createAppProfileHomesBanner } from './app-profile-homes-banner'
 
 // postBanner lands after minification and Rolldown shifts index.js.map past it, keeping crash traces on the right line.
 export function createMainEntryPostBanner(
@@ -22,5 +23,11 @@ export function createMainEntryPostBanner(
     throw new Error('Main startup must stay in index.js so __dirname resolves app assets')
   }
   // Source guards run after Rollup’s require prelude, too late to handle missing bootstrap dependencies.
-  return identityDrop + createBootstrapFatalExitBanner() + startupDiagnosticsBanner(chunk.fileName)
+  // An app profile's home folders, set before any module reads a path.
+  return (
+    identityDrop +
+    createAppProfileHomesBanner() +
+    createBootstrapFatalExitBanner() +
+    startupDiagnosticsBanner(chunk.fileName)
+  )
 }

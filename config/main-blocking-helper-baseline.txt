@@ -73,6 +73,8 @@
 1 src/main/antigravity/native-file-credentials.ts
 12 src/main/antigravity/native-windows-credentials.ts
 1 src/main/antigravity/native-wsl-credentials.ts
+2 src/main/app-profiles/app-profile-startup.ts # app profiles: once at the start of main, before userData is set: one Info.plist read, one marker read and a marker write when it is missing
+2 src/main/app-profiles/app-profile.ts # app profiles: the Info.plist and marker reads of resolveRunningAppProfile, called once at the start of main
 6 src/main/artifacts/artifact-cloud-auth-context.ts
 7 src/main/artifacts/artifact-cloud-service.ts
 2 src/main/artifacts/artifact-create-intent-store.ts # sign-out clear (bestEffortFsyncDirectorySync) plus writeArtifactFileWhileCurrent, whose only sync step is the fenced renameSync; was 8
@@ -899,6 +901,7 @@
 4 src/main/orcad/host-lifecycle/managed-stop/orcad-managed-stop-request.ts
 3 src/main/orcad/host-lifecycle/managed-stop/orcad-stop-request-listener.ts
 5 src/main/orcad/host-lifecycle/orcad-lifecycle.ts
+1 src/main/orcad/host-runtime/orcad-app-profile-env.ts # app profiles: one marker read when orcad loads, before any module reads a path
 3 src/main/orcad/host-runtime/orcad-entry.ts
 5 src/main/orcad/host-runtime/orcad-host-adapters.ts
 2 src/main/orcad/host-runtime/orcad-runtime-rpc.ts
@@ -1367,7 +1370,7 @@
 1 src/main/startup/main-process-ipc-bootstrap.ts
 2 src/main/startup/main-process-observers.ts
 1 src/main/startup/main-process-preflight-failure.ts
-25 src/main/startup/main-process-preflight.ts
+26 src/main/startup/main-process-preflight.ts # +1 app profiles: configureAppProfileStartup, once before userData is set
 15 src/main/startup/main-process-ready-foundation.ts
 3 src/main/startup/main-process-ready-runtime.ts
 4 src/main/startup/main-process-ready.ts

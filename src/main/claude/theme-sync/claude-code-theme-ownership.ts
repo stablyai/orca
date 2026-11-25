@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { orcaHomeDir } from '../../../shared/app-profiles/app-profile-homes'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
@@ -23,7 +24,7 @@ type OwnershipByConfigDir = Map<string, ClaudeThemeOwnership>
 
 // Why under ~/.orca, not userData: every Orca build on this machine must agree on what it replaced.
 function ownershipPath(): string {
-  return join(homedir(), '.orca', 'claude-theme-sync.json')
+  return join(orcaHomeDir(), 'claude-theme-sync.json')
 }
 
 /** Every config dir Orca took over, keyed by path; null when the record exists but cannot be read. */

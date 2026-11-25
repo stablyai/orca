@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { defaultAgentHomeDir } from '../../../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 import {
   createAuthFilesystemOperation,
@@ -60,7 +60,7 @@ async function readBackendAuth(authPath: string, signal: AbortSignal): Promise<s
 }
 
 function getCodexHomePath(codexHomePath?: string | null): string {
-  return codexHomePath ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
+  return codexHomePath ?? process.env.CODEX_HOME ?? defaultAgentHomeDir('CODEX_HOME', '.codex')
 }
 
 export type CodexBackendTokens = { accessToken: string; accountId: string | null }

@@ -1,5 +1,5 @@
 import { access } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { defaultAgentHomeDir } from '../../../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
@@ -51,7 +51,8 @@ export async function probeCodexAuthPresence(
   codexHomePath?: string | null,
   options: CodexAuthPresenceOptions = {}
 ): Promise<CodexAuthPresence> {
-  const home = codexHomePath ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
+  const home =
+    codexHomePath ?? process.env.CODEX_HOME ?? defaultAgentHomeDir('CODEX_HOME', '.codex')
   const authPath = join(home, 'auth.json')
   const timeoutSignal = AbortSignal.timeout(options.timeoutMs ?? AUTH_PRESENCE_TIMEOUT_MS)
   const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal

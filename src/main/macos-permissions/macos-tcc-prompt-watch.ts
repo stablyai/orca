@@ -17,6 +17,14 @@ const ORCA_RESPONSIBLE_IDENTIFIERS = new Set([
   'com.stablyai.orca.local.helper'
 ])
 
+// An app profile has the bundle id `com.stablyai.orca.profile.<id>`.
+function isOrcaResponsibleIdentifier(identifier: string): boolean {
+  return (
+    ORCA_RESPONSIBLE_IDENTIFIERS.has(identifier) ||
+    identifier.startsWith('com.stablyai.orca.profile.')
+  )
+}
+
 const WATCHED_SERVICES = new Set([
   'kTCCServiceSystemPolicyAppData',
   'kTCCServiceSystemPolicyAllFiles',
@@ -58,8 +66,7 @@ export function parseTccPromptEvent(line: string): TccPromptEvent | null {
 
 export function isOrcaAttributedPrompt(event: TccPromptEvent): boolean {
   return (
-    ORCA_RESPONSIBLE_IDENTIFIERS.has(event.responsibleIdentifier) &&
-    WATCHED_SERVICES.has(event.service)
+    isOrcaResponsibleIdentifier(event.responsibleIdentifier) && WATCHED_SERVICES.has(event.service)
   )
 }
 

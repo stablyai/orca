@@ -65,6 +65,7 @@ import {
   logSingleInstanceLockFailure
 } from './profile-startup/single-instance-lock'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/app-lifecycle/launch/single-instance-exit-code'
+import { configureAppProfileStartup } from '../app-profiles/app-profile-startup'
 import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
 import { installMainProcessTreeKillGate } from '../pty/process-retirement/own-chromium-tree-kill-guard'
@@ -151,10 +152,6 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   if (state.isServeMode) {
     reserveServeStdoutForReadiness()
   }
-  state.devInstanceIdentity = getDevInstanceIdentity(isDev)
-  state.devAgentHookEndpointNamespace = state.devInstanceIdentity.isDev
-    ? state.devInstanceIdentity.appUserModelId
-    : undefined
   state.desktopActivationGate = createServeDesktopActivationGate({
     // Hold activation until the startup window exists; early second-instance activation otherwise opens a duplicate and aborts launch.
     initialState: 'initializing',
@@ -194,6 +191,11 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Register before spawning so CLI/relay-shared tree killing can reach main's gate and breadcrumbs.
   installMainProcessTreeKillGate()
   configureDevUserDataPath(isDev)
+  // The identity needs the app profile, which is known only after its start.
+  state.devInstanceIdentity = getDevInstanceIdentity(isDev, configureAppProfileStartup(isDev))
+  state.devAgentHookEndpointNamespace = state.devInstanceIdentity.isDev
+    ? state.devInstanceIdentity.appUserModelId
+    : undefined
   configureOrcaUserDataPathEnv()
   // #16761: install the lazy environment accessor immediately after userData selection or early resolves can throw/memoize the wrong profile.
   setAppEnvironment(new ElectronAppEnvironment())

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import { orcaHomeDir } from '../../../shared/app-profiles/app-profile-homes'
 import { lstat, mkdir, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -24,7 +25,7 @@ export function hostTerminalPolicyPath(home: string, machine: string | null): st
     .update(`${process.platform}:${machine}`)
     .digest('hex')
     .slice(0, 16)
-  return join(home, '.orca', 'host-settings', key, 'terminals.json')
+  return join(orcaHomeDir(home), 'host-settings', key, 'terminals.json')
 }
 
 async function readSavedMaximum(path: string): Promise<number | null> {

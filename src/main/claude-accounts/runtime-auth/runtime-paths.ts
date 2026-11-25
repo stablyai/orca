@@ -1,5 +1,8 @@
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
+import {
+  defaultAgentHomeDir,
+  defaultClaudeJsonPath
+} from '../../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 import type { ClaudeEnvPatch } from './environment'
 
@@ -13,7 +16,7 @@ export class ClaudeRuntimePathResolver {
   getRuntimePaths(): ClaudeRuntimePaths {
     const inheritedConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || null
     // Resolve without creating directories: usage polling runs even when Claude is disabled.
-    const configDir = inheritedConfigDir || join(homedir(), '.claude')
+    const configDir = inheritedConfigDir || defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude')
 
     return {
       configDir,
@@ -27,6 +30,6 @@ export class ClaudeRuntimePathResolver {
     if (inheritedConfigDir || existsSync(colocatedConfigPath)) {
       return colocatedConfigPath
     }
-    return join(homedir(), '.claude.json')
+    return defaultClaudeJsonPath()
   }
 }

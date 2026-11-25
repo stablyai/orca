@@ -78,7 +78,8 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     id: 'codebuddy',
     displayName: 'CodeBuddy',
     globalSegments: ['.codebuddy', 'skills'],
-    workspaceSegments: ['.codebuddy', 'skills']
+    workspaceSegments: ['.codebuddy', 'skills'],
+    homeEnv: 'CODEBUDDY_CONFIG_DIR'
   },
   {
     id: 'kiro',

@@ -10,6 +10,7 @@ import type {
 import type { ReleaseChannel } from '../../../shared/updater/release-channel'
 import type { PrimaryEventSuppression, UpdateCheckVariant } from './updater-types'
 import type { TeamUpdateApproval, TeamUpdatePolicy } from '../releases/updater-release-policy'
+import { getAppProfile } from '../../app-profiles/app-profile'
 
 export const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 export const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -60,6 +61,10 @@ export class ReleaseFeedPreflightError extends Error {
 }
 
 export abstract class UpdaterState {
+  /** A profile app runs the default app's code through its links, so it has no updater. */
+  protected inAppProfile(): boolean {
+    return getAppProfile() !== null
+  }
   protected getMainWindow: () => BrowserWindow | null = () => null
   protected currentStatus: UpdateStatus = { state: 'idle' }
   protected userInitiatedCheck = false
