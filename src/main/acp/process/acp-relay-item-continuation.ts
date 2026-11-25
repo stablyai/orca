@@ -50,8 +50,7 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
       overflow: boolean,
       savedThrough: number,
       openChildren: readonly string[]
-    ) => void,
-    private readonly prompting: () => boolean = () => false
+    ) => void
   ) {}
 
   /** The messages this attach's cut split, as the client named them; null: unnamed, so guessed. */
@@ -62,12 +61,13 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     children: new Set()
   }
 
-  /** A turn running across the attach (the agent's own, or a prompt's) until one ends or a send. */
+  /** The turn running across the attach (the agent's own, or an adopted prompt's) until it ends or
+   *  a prompt is sent: a later prompt's messages are new, so none it streams was moved. */
   private agentTurnOpen = true
 
-  /** A moved message may still resume: while a prompt runs or the turn running at attach goes on. */
+  /** A moved message may still resume: while the turn running at attach goes on. */
   mayResume(): boolean {
-    return this.agentTurnOpen || this.prompting()
+    return this.agentTurnOpen
   }
 
   /** The turn running at attach ended: its messages resume no more. */

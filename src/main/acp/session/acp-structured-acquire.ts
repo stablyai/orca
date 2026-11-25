@@ -103,7 +103,7 @@ export async function acquireAcpStructuredSession(input: {
   const launchPermission = await keptAcpLaunchPermission(spec, relayed, launch, acquire)
   // Cancellation owns no connection yet: the relayed agent goes as a tracked one would.
   if (relayed && input.abandoned()) {
-    await relayed.abandon()
+    await relayed.managed.close().catch(() => undefined)
   }
   const fullAccess = launchPermission.permission === 'full-access'
   const connection = connect(processLaunch, {

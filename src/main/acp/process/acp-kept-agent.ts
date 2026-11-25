@@ -3,9 +3,7 @@ import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { acpLaunchNote } from './acp-kept-launch-permission'
 import type { ProviderRelayKeepSpec } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import {
-  detachProviderRelayForQuit,
   launchRelayedProviderProcess,
-  providerRelayQuitting,
   type ProviderRelayLaunch,
   type RelayedProviderProcess
 } from '../../provider-relay/app-provider-relays'
@@ -207,12 +205,8 @@ export function restorableAcpSession(
   )
 }
 
-/** A relayed ACP agent with the prompt turns its ack floor reads; `abandon`: given up before any
- *  connection owns it (see `abandonRelayedAcpAgent`). */
-export type AcpRelayedProcess = RelayedProviderProcess & {
-  turns: AcpRelayTurns
-  abandon: () => Promise<void>
-}
+/** A relayed ACP agent with the prompt turns its ack floor reads. */
+export type AcpRelayedProcess = RelayedProviderProcess & { turns: AcpRelayTurns }
 
 /**
  * Starts a chat's agent under the terminal daemon, or reattaches the one it kept running, so it
@@ -248,7 +242,8 @@ export async function launchRelayedAcpAgent(
     chatKey: input.acquire.identity.sessionId,
     markers: { ...acpRelayWorkMarkers(spec.agent), ackFloor, continuation },
     keep: { ...acpRelayKeep(spec.dialect), note: acpLaunchNote(launch.fullAccess) },
-    passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor)
+    passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor),
+    handsOffOnQuit: true
   }
   const relayed = await launchRelayedProviderProcess(processLaunch, relay).catch(refuse)
   floor = relayed?.child.attachResult?.maxClientRequestId ?? 0
@@ -281,23 +276,9 @@ export async function launchRelayedAcpAgent(
   if (relayed?.reattached) {
     await launch.release?.().catch(() => undefined)
   }
-  // The chat closed meanwhile: its agent ends here, before any connection owns it.
-  const abandon = () => abandonRelayedAcpAgent(relayed!, input.acquire.identity.sessionId)
+  // The chat closed meanwhile: its agent ends here (during quit, a kept one goes back instead).
   if (relayed && input.abandoned()) {
-    void abandon()
+    void relayed.managed.close().catch(() => undefined)
   }
-  return relayed && { ...relayed, turns, abandon }
-}
-
-/** A launch given up before any connection owns its agent. One kept from the last run goes back
- *  to the daemon during quit, its unread output still spooled; any other ends. */
-async function abandonRelayedAcpAgent(
-  relayed: RelayedProviderProcess,
-  chatKey: string
-): Promise<void> {
-  if (relayed.reattached && providerRelayQuitting()) {
-    await detachProviderRelayForQuit(chatKey, null).catch(() => false)
-    return
-  }
-  await relayed.managed.close().catch(() => undefined)
+  return relayed && { ...relayed, turns }
 }

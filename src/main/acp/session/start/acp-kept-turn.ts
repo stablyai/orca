@@ -132,6 +132,7 @@ export async function carryOnKeptAcpAgent<Opened>(
     .then(
       (childStops) => {
         child.childStops = childStops
+        child.lane?.restateChildStops()
       },
       () => undefined
     )

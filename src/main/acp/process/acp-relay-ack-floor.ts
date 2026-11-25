@@ -77,7 +77,7 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
   /** Messages of agent-started turns the app ended: a late chunk of one is dropped, as live. */
   private endedByTurn = new Set<string>()
   private wakeAck: (() => void) | null = null
-  /** The latest answer line read: a prompt's answer ends its turn only after later lines were. */
+  /** The latest prompt answer read: its turn ends only after later lines were read. */
   private answeredAt: number | null = null
   /** An earlier cut named fewer than it split: this attach's cuts say so too. */
   private carriedOverflow = false
@@ -100,7 +100,9 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
     const update = acpSessionUpdateFields(line)
     const kind = update?.sessionUpdate
     if (!update || !kind) {
-      this.answeredAt = !update && jsonRpcAnswerId(line) !== null ? seq : this.answeredAt
+      // A prompt's answer, the only one that says why its turn stopped.
+      const prompted = !update && line.includes('"stopReason"') && jsonRpcAnswerId(line) !== null
+      this.answeredAt = prompted ? seq : this.answeredAt
       return
     }
     const session = update.sessionId
@@ -321,7 +323,7 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
       for (const [id, item] of open) {
         if (
           !item.child &&
-          !next('seq' in item && typeof item.seq === 'number' ? item.seq : undefined)
+          !next('seq' in item && typeof item.seq === 'number' ? item.seq : item.last)
         ) {
           open.delete(id)
           this.retire(id, item)
