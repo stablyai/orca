@@ -5266,5 +5266,8 @@
     "cardSlot": {
       "working": "作業中"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "組織の Claude 設定によりブロックされています"
   }
 }

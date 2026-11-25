@@ -5789,5 +5789,8 @@
     "cardSlot": {
       "working": "작업 중"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "조직의 Claude 설정에 의해 차단됨"
   }
 }
