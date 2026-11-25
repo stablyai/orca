@@ -64,7 +64,7 @@ function writeStreamPrefix(buffer: Buffer, chunks: string[], delta: string): num
       return end
     }
     if (i === chunks.length) {
-      return end + buffer.write(carry + delta, end, buffer.length - end, 'utf8')
+      return carry ? writePairedDelta(buffer, end, carry, delta) : end + writeAt(buffer, end, delta)
     }
     let piece = carry + chunks[i]
     carry = ''
@@ -80,4 +80,17 @@ function writeStreamPrefix(buffer: Buffer, chunks: string[], delta: string): num
     }
   }
   return end
+}
+
+function writeAt(buffer: Buffer, end: number, text: string): number {
+  return buffer.write(text, end, buffer.length - end, 'utf8')
+}
+
+/** Writes the carried high surrogate with only the delta's first unit, so the delta isn't copied. */
+function writePairedDelta(buffer: Buffer, end: number, carry: string, delta: string): number {
+  const pair = carry + delta.slice(0, 1)
+  const written = writeAt(buffer, end, pair)
+  return written < Buffer.byteLength(pair, 'utf8')
+    ? end + written
+    : end + written + writeAt(buffer, end + written, delta.slice(1))
 }
