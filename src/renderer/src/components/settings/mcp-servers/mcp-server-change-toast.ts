@@ -1,5 +1,5 @@
-// After a change to a host's servers: what changed, that it applies to new sessions, and a restart
-// for the host's running terminal sessions that still have the old list.
+// After a change to a host's servers, or after a host starts: a restart for the host's running
+// terminal sessions that still have the old list.
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -19,23 +19,65 @@ export async function showMcpServerChangeToast(
   const description = translate('settings.mcpServers.toast.newSessions', 'Applies to new sessions')
   // A host that can't count them yet (or any failure to) offers no restart.
   const stale = await readStaleMcpSessions(target).catch(() => ({ count: 0, restartable: 0 }))
-  const restartable = stale.restartable
-  toast(title, {
-    id: TOAST_ID,
-    description,
-    ...(restartable > 0
-      ? {
-          action: {
-            label: translate('settings.mcpServers.toast.restart', 'Restart {{count}} sessions', {
-              count: restartable
-            }),
-            onClick: () => {
-              void restartStaleMcpSessions(target).catch((error: unknown) =>
-                toast.error(botToolErrorMessage(error))
-              )
-            }
+  toast(title, { id: TOAST_ID, description, ...restartAction(target, stale.restartable) })
+}
+
+/**
+ * After a host starts: its agent terminals still on an older list. Those that outlived its restart
+ * lost every server that goes through its relay with the old run. Nothing when there are none.
+ */
+export async function showMcpStaleTerminalsToast(
+  target: RuntimeClientTarget,
+  hostName: string | null
+): Promise<void> {
+  const stale = await readStaleMcpSessions(target).catch(() => null)
+  if (!stale || stale.count === 0) {
+    return
+  }
+  const count = stale.count
+  const title =
+    hostName === null
+      ? translate(
+          'settings.mcpServers.toast.staleTerminals',
+          '{{count}} agent terminals use an older MCP setup',
+          { count, defaultValue_one: '{{count}} agent terminal uses an older MCP setup' }
+        )
+      : translate(
+          'settings.mcpServers.toast.staleTerminalsOnHost',
+          '{{count}} agent terminals on {{host}} use an older MCP setup',
+          {
+            count,
+            host: hostName,
+            defaultValue_one: '{{count}} agent terminal on {{host}} uses an older MCP setup'
           }
-        }
-      : {})
+        )
+  toast(title, {
+    id: `mcp-stale-terminals:${target.kind === 'local' ? 'local' : target.environmentId}`,
+    description: translate(
+      'settings.mcpServers.toast.staleTerminalsRestart',
+      'Restart them to get Orca’s MCP servers back.'
+    ),
+    // Their tools stay broken until they restart, so the offer waits to be seen.
+    duration: Infinity,
+    closeButton: true,
+    ...restartAction(target, stale.restartable)
   })
+}
+
+function restartAction(target: RuntimeClientTarget, restartable: number) {
+  if (restartable === 0) {
+    return {}
+  }
+  return {
+    action: {
+      label: translate('settings.mcpServers.toast.restart', 'Restart {{count}} sessions', {
+        count: restartable
+      }),
+      onClick: () => {
+        void restartStaleMcpSessions(target).catch((error: unknown) =>
+          toast.error(botToolErrorMessage(error))
+        )
+      }
+    }
+  }
 }
