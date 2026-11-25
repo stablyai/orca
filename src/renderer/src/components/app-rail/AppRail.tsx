@@ -125,7 +125,10 @@ export function AppRail({
   const [lastFocusedItem, setLastFocusedItem] = useState<AppRailItemId | null>(null)
   // The row last toggled in the open Customize checklist. A toggle can swap "…" and More (one more page folds the rail,
   // one fewer unfolds it); the form that mounts in the swap reopens the checklist on this row so editing carries on.
-  const [checklistRow, setChecklistRow] = useState<AppRailDestinationId | null>(null)
+  const [checklistRow, setChecklistRow] = useState<{
+    id: AppRailDestinationId
+    byPointer: boolean
+  } | null>(null)
   const tabStopItem =
     lastFocusedItem && renderedItems.includes(lastFocusedItem)
       ? lastFocusedItem
@@ -235,13 +238,14 @@ export function AppRail({
     label: destinationLabel(id),
     icon: destinationIcon(id, 14, undefined, 'size-3.5'),
     shown: shownDestinationSet.has(id),
-    onToggle: () => {
-      setChecklistRow(id)
+    onToggle: (byPointer) => {
+      setChecklistRow({ id, byPointer })
       setRailDestinationShown(id, !shownDestinationSet.has(id))
     }
   }))
   const checklist: AppRailChecklistCarry = {
-    reopenOn: checklistRow,
+    reopenOn: checklistRow?.id ?? null,
+    reopenedUnderPointer: checklistRow?.byPointer ?? false,
     onChecklistClose: () => setChecklistRow(null)
   }
   const openSettings = (): void => useAppStore.getState().openSettingsPage()

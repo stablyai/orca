@@ -1,7 +1,7 @@
 // Shared setup for the app-rail runtime proofs: a fixture server, a driver browser, and teardown of whatever this
 // invocation started. A fixture server that was already running (shared with fixtures-shot or the fixtures MCP) is
 // reused and left running; one this invocation started is stopped before it exits, on success, on an assertion
-// failure, on a driver-launch failure, and on SIGINT/SIGTERM.
+// failure, on a driver-launch failure, and on SIGINT/SIGTERM/SIGHUP.
 //
 // Env:
 //   ORCA_RAIL_PROOF_BROWSER  executable for the driver browser (default: Playwright's headless shell). A path that
@@ -135,10 +135,14 @@ export async function runRailProof(name, body) {
   }
   const onSignal = (signal) => {
     log(`received ${signal}; tearing down`)
-    void teardown().finally(() => process.exit(130))
+    // The conventional 128 + signal number.
+    const code = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }[signal] ?? 1
+    void teardown().finally(() => process.exit(code))
   }
-  process.once('SIGINT', onSignal)
-  process.once('SIGTERM', onSignal)
+  const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP']
+  for (const signal of SIGNALS) {
+    process.once(signal, onSignal)
+  }
 
   log(`${name}: node pid ${process.pid}, playwright-core ${PLAYWRIGHT_VERSION}`)
   try {
@@ -156,7 +160,14 @@ export async function runRailProof(name, body) {
       `fixture server pid ${state.pid} (children [${children.join(', ')}]) at ${url} (${started ? 'started by this run; will stop it' : 'preexisting; left running'})`
     )
     const executablePath = process.env.ORCA_RAIL_PROOF_BROWSER || undefined
-    owned.driver = await chromium.launchServer({ headless: true, executablePath })
+    // Why: Playwright's own signal handlers exit the process before this run's async teardown can stop the server.
+    owned.driver = await chromium.launchServer({
+      headless: true,
+      executablePath,
+      handleSIGINT: false,
+      handleSIGTERM: false,
+      handleSIGHUP: false
+    })
     owned.browser = await chromium.connect(owned.driver.wsEndpoint())
     log(
       `driver browser pid ${owned.driver.process()?.pid}, ${executablePath ?? 'playwright chromium-headless-shell'} ${owned.browser.version()}`
@@ -176,8 +187,9 @@ export async function runRailProof(name, body) {
     process.exitCode = 1
   } finally {
     await teardown()
-    process.off('SIGINT', onSignal)
-    process.off('SIGTERM', onSignal)
+    for (const signal of SIGNALS) {
+      process.off(signal, onSignal)
+    }
     log(`exit status ${process.exitCode}`)
   }
 }

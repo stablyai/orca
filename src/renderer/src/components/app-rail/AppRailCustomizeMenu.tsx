@@ -55,7 +55,8 @@ export type AppRailCustomizeRow = {
   label: string
   icon: React.ReactNode
   shown: boolean
-  onToggle: () => void
+  /** `byPointer`: toggled with the mouse (or pen/touch) rather than the keyboard. */
+  onToggle: (byPointer: boolean) => void
 }
 
 export function useAppRailCustomizeLabel(): string {
@@ -83,6 +84,8 @@ export function AppRailCustomizeRows({
       node.focus({ preventScroll: true })
     }
   }, [])
+  // Whether the toggle came from the pointer: Radix selects on the click that follows a pointerdown or a Space/Enter.
+  const byPointerRef = useRef(false)
   return (
     <>
       {rows.map((row) => (
@@ -91,9 +94,15 @@ export function AppRailCustomizeRows({
           ref={row.id === focusRow ? focusPendingRow : undefined}
           role="menuitemcheckbox"
           aria-checked={row.shown}
+          onPointerDown={() => {
+            byPointerRef.current = true
+          }}
+          onKeyDown={() => {
+            byPointerRef.current = false
+          }}
           onSelect={(event) => {
             event.preventDefault()
-            row.onToggle()
+            row.onToggle(byPointerRef.current)
           }}
         >
           {row.icon}
@@ -115,6 +124,8 @@ export function AppRailCustomizeRows({
  */
 export type AppRailChecklistCarry = {
   reopenOn: string | null
+  /** The toggle was a pointer click, so the pointer rests where the old checklist was. */
+  reopenedUnderPointer: boolean
   onChecklistClose: () => void
 }
 

@@ -69,10 +69,11 @@ export function AppRailMoreMenu({
       setCustomizeOpen(true)
     }
   }, [])
-  // Why: the reopened checklist is a submenu, so the pointer that just toggled a row now rests over More's own rows.
+  // Why: the reopened checklist is a submenu, so a pointer that just clicked a row now rests over More's own rows.
   // Radix closes a submenu as soon as the pointer moves over or off a sibling row, so until the pointer reaches the
-  // checklist those rows ignore it; hovering them would otherwise close the checklist on the way to it.
-  const holdChecklistRef = useRef(checklist.reopenOn !== null)
+  // checklist those rows ignore it; hovering them would otherwise close the checklist on the way to it. A keyboard
+  // toggle leaves the pointer wherever it was, so More's rows keep their usual hover then.
+  const holdChecklistRef = useRef(checklist.reopenOn !== null && checklist.reopenedUnderPointer)
   const holdChecklist = (event: React.PointerEvent): void => {
     if (holdChecklistRef.current) {
       event.preventDefault()
@@ -120,12 +121,6 @@ export function AppRailMoreMenu({
         align="start"
         sideOffset={8}
         className="w-52"
-        // The reopened checklist's row takes focus as it mounts; More's own opening focus must not take it back.
-        onOpenAutoFocus={(event) => {
-          if (focusRow !== null) {
-            event.preventDefault()
-          }
-        }}
         onCloseAutoFocus={(event) => {
           if (yieldCloseFocusRef.current) {
             yieldCloseFocusRef.current = false

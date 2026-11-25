@@ -228,6 +228,31 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
               path: path.join(out, `c1-01-${theme}-${input}-1-folded.png`)
             })
 
+            if (input === 'mouse') {
+              // The pointer that clicked the row now rests over More's own rows; crossing More's row for the folded
+              // page must not close the checklist before the pointer reaches it.
+              const sibling = await page
+                .locator('[data-slot="dropdown-menu-content"] [role=menuitem]', {
+                  hasText: 'Automations'
+                })
+                .boundingBox()
+              assert.ok(sibling, `${label}: More shows its row for the folded page`)
+              await page.mouse.move(sibling.x + sibling.width / 2, sibling.y + sibling.height / 2, {
+                steps: 6
+              })
+              await page.waitForTimeout(300)
+              await paint(page)
+              const stillOpen = await page.locator('[role=menuitemcheckbox]').count()
+              results.push(
+                `${label} hover More's Automations row after the fold: ${stillOpen} checklist rows`
+              )
+              assert.equal(
+                stillOpen,
+                5,
+                `${label}: hovering a More row keeps the reopened checklist`
+              )
+            }
+
             // A second, different row from the reopened checklist. Fold → tall: Tasks leaves, More becomes "…".
             await watchFrames()
             await act('Tasks')

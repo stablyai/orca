@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
@@ -10,7 +11,7 @@ import { APP_RAIL_SLOT_PX } from './app-rail-overflow'
 
 // Invariant: a Customize toggle that swaps the rail's "…" and More (one page more folds the rail, one fewer unfolds it)
 // leaves the checklist open in the new form with focus on the toggled row, so another page can change without
-// reopening anything.
+// reopening anything. Rendered in StrictMode: the replacement's submenu must survive StrictMode's extra effect pass.
 
 const initial = useAppStore.getState()
 // Workspaces, two pages, "…" and the account button is one slot too many: a second page folds the rail.
@@ -36,7 +37,13 @@ function start(shown: Partial<GlobalSettings>): void {
       )
     }
   })
-  render(<AppRail listVisible />, { wrapper: TooltipProvider })
+  render(
+    <StrictMode>
+      <TooltipProvider>
+        <AppRail listVisible />
+      </TooltipProvider>
+    </StrictMode>
+  )
 }
 
 function railItem(id: string): HTMLElement | null {
@@ -56,6 +63,7 @@ async function settle(): Promise<void> {
 async function toggle(name: string, via: 'click' | 'space'): Promise<void> {
   const target = row(name)
   if (via === 'click') {
+    fireEvent.pointerDown(target, { pointerType: 'mouse', button: 0 })
     fireEvent.click(target)
   } else {
     // Arrow keys from the row that has focus, as a keyboard user would; focus must follow them.
@@ -146,4 +154,45 @@ it('lets the checklist close for good once it is dismissed', async () => {
   await settle()
   expect(railItem('customize')).not.toBeNull()
   expect(screen.queryByRole('menuitemcheckbox')).toBeNull()
+})
+
+function hover(element: HTMLElement): void {
+  fireEvent.pointerMove(element, { pointerType: 'mouse' })
+  fireEvent.pointerLeave(element, { pointerType: 'mouse' })
+}
+
+function checklistOpen(): boolean {
+  return screen.queryAllByRole('menuitemcheckbox').length > 0
+}
+
+it('keeps a checklist reopened under the pointer open while the pointer crosses More to reach it', async () => {
+  start({})
+  fireEvent.pointerDown(railItem('customize')!, { button: 0, ctrlKey: false })
+  await settle()
+  await toggle('Automations', 'click')
+  expect(railItem('more')).not.toBeNull()
+  // More's own row for the folded page sits where the clicked row was.
+  const sibling = screen.getByRole('menuitem', { name: 'Automations' })
+
+  hover(sibling)
+  await settle()
+  expect(checklistOpen()).toBe(true)
+
+  // Once the pointer has reached the checklist, More's rows hover as usual again.
+  fireEvent.pointerMove(row('Tasks'), { pointerType: 'mouse' })
+  hover(sibling)
+  await settle()
+  expect(checklistOpen()).toBe(false)
+})
+
+it('leaves More hovering as usual when a keyboard toggle reopens the checklist', async () => {
+  start({})
+  fireEvent.pointerDown(railItem('customize')!, { button: 0, ctrlKey: false })
+  await settle()
+  await toggle('Automations', 'space')
+  expectChecklistOn('Automations', true)
+
+  hover(screen.getByRole('menuitem', { name: 'Automations' }))
+  await settle()
+  expect(checklistOpen()).toBe(false)
 })
