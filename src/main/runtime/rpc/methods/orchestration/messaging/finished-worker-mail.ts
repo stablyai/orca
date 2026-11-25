@@ -95,12 +95,13 @@ function refuseStaleWorkerDone(
   finished: DispatchContextRow
 ): void {
   const open = db.getActiveDispatchForIdentity(sender.address, sender.paneKey ?? undefined)
-  if (!open || open.id === finished.id) {
+  // A pending Dispatch's preamble has not reached the worker, so it cannot be the one meant.
+  if (!open || open.id === finished.id || open.status !== 'dispatched') {
     return
   }
   throw new OrchestrationError(
     'dispatch_inactive',
-    `Dispatch ${finished.id} (task ${finished.task_id}) is already ${finished.status}. Your open Dispatch is ${open.id} (task ${open.task_id}). Nothing was sent. Resend with your Orca CLI's \`orchestration send --from ${sender.address} --type worker_done --subject "<short status>" --body "<summary>" --task-id ${open.task_id} --dispatch-id ${open.id} --outcome <succeeded|failed>\`.`,
+    `Dispatch ${finished.id} (task ${finished.task_id}) is already ${finished.status}. Your open Dispatch is ${open.id} (task ${open.task_id}). Nothing was sent. If this report is for task ${open.task_id}, resend with your Orca CLI's \`orchestration send --from ${sender.address} --type worker_done --subject "<short status>" --body "<summary>" --task-id ${open.task_id} --dispatch-id ${open.id} --outcome <succeeded|failed>\`. If it is about task ${finished.task_id}, send it with \`--type status\` instead.`,
     { effectsApplied: false, taskId: open.task_id, dispatchId: open.id }
   )
 }
