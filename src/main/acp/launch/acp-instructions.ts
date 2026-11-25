@@ -189,6 +189,12 @@ export const deliverCodeBuddyInstructions: AcpInstructionsDelivery = async ({ te
   return {}
 }
 
+// DSH reads the folder's AGENTS.local.md at session creation and keeps it with the session.
+export const deliverDshInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'AGENTS.local.md', 'DeepSeek Harness', text)
+  return {}
+}
+
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
 // Only an instructions file applies at once: an AGENTS.md there counts as nested and loads on demand.
 export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
