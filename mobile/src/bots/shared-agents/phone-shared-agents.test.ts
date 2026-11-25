@@ -213,8 +213,8 @@ describe('a page’s call to a shared agent', () => {
       const agents = new PhoneSharedAgents(() => 1_000)
       const desktop = computer()
       const held = cloud(1)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
       const page = routeSharedAgentCalls(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
         desktop.client as unknown as RpcClient,
         'computer-1',
         agents
