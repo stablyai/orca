@@ -32,13 +32,17 @@ function hostTarget(host: string): RuntimeClientTarget {
   return host === LOCAL_HOST ? { kind: 'local' } : { kind: 'environment', environmentId: host }
 }
 
+type HostReport = { worktreeIds: string[]; signature: string }
+const NO_REPORT: HostReport = { worktreeIds: [], signature: '' }
+
 function unsavedWorktreeIdsByHost(
   state: UnsavedReportState,
   hasLocalRuntime: boolean
-): Map<string, string[]> {
+): Map<string, HostReport> {
   const byHost = new Map<string, Set<string>>()
   for (const file of state.openFiles) {
-    if (!file.isDirty && state.editorDrafts[file.id] === undefined) {
+    // An empty id names no workspace, and the host would reject the whole list for it.
+    if ((!file.isDirty && state.editorDrafts[file.id] === undefined) || !file.worktreeId) {
       continue
     }
     // Restored tabs may lack the owner stamp; resolve it from the workspace like file operations do.
@@ -56,7 +60,12 @@ function unsavedWorktreeIdsByHost(
       byHost.set(host, ids)
     }
   }
-  return new Map([...byHost].map(([host, ids]) => [host, [...ids].sort()]))
+  const reports = new Map<string, HostReport>()
+  for (const [host, ids] of byHost) {
+    const worktreeIds = [...ids].sort()
+    reports.set(host, { worktreeIds, signature: worktreeIds.join('\n') })
+  }
+  return reports
 }
 
 // The report reads only which files have drafts; typing replaces the map but keeps its keys, so it keeps the token.
@@ -135,8 +144,8 @@ export function installUnsavedEditorHostReport(): () => void {
   let disposed = false
   // Checked against the store at every read, so no send depends on store-listener order.
   let reportInputs: readonly unknown[] | null = null
-  let reports = new Map<string, string[]>()
-  const currentReports = (): ReadonlyMap<string, string[]> => {
+  let reports = new Map<string, HostReport>()
+  const currentReports = (): ReadonlyMap<string, HostReport> => {
     const state = useAppStore.getState()
     const inputs = readReportInputs.map((read) => read(state))
     if (reportInputs?.every((value, index) => value === inputs[index]) !== true) {
@@ -146,11 +155,11 @@ export function installUnsavedEditorHostReport(): () => void {
     return reports
   }
 
-  const send = (host: string, worktreeIds: string[]): void => {
-    sent.set(host, worktreeIds.join('\n'))
+  const send = (host: string, report: HostReport): void => {
+    sent.set(host, report.signature)
     inFlight.add(host)
     callRuntimeRpc(hostTarget(host), 'workspaceCleanup.reportUnsavedEditors', {
-      worktreeIds,
+      worktreeIds: report.worktreeIds,
       reporterId
     })
       .catch((error: unknown) => {
@@ -177,16 +186,12 @@ export function installUnsavedEditorHostReport(): () => void {
   const syncHosts = (hosts: Iterable<string>): void => {
     const current = currentReports()
     for (const host of hosts) {
-      const worktreeIds = current.get(host) ?? []
-      if (
-        inFlight.has(host) ||
-        unsupported.has(host) ||
-        sent.get(host) === worktreeIds.join('\n')
-      ) {
+      const report = current.get(host) ?? NO_REPORT
+      if (inFlight.has(host) || unsupported.has(host) || sent.get(host) === report.signature) {
         continue
       }
       watch(host)
-      send(host, worktreeIds)
+      send(host, report)
     }
   }
   const sync = (): void => syncHosts(new Set([...sent.keys(), ...currentReports().keys()]))
