@@ -60,7 +60,6 @@
       },
       "providers": {
         "title": "Proveedores",
-        "antigravityAccount": "Cuenta",
         "searchAgents": "agentes",
         "searchTerminal": "Terminal",
         "searchCli": "CLI"
@@ -22310,22 +22309,16 @@
       "cancel": "Cancelar"
     },
     "antigravity": {
-      "chatSignIn": "Iniciar sesión",
-      "chatChangeAccount": "Cambiar de cuenta",
-      "chatRetry": "Reintentar inicio de sesión",
       "chatCancel": "Cancelar",
       "chatCopyLink": "Copiar enlace de inicio de sesión",
       "chatCopyFailed": "No se pudo copiar el enlace.",
       "chatStarting": "Iniciando sesión…",
-      "chatWaiting": "Termina de iniciar sesión en tu navegador.",
       "chatOpenFailed": "Copia el enlace y ábrelo en tu navegador.",
       "chatVerifying": "Finalizando el inicio de sesión…",
-      "chatPasteHelp": "Si la última página después de iniciar sesión no carga, copia su dirección completa desde el navegador y pégala aquí.",
       "chatContinue": "Continuar",
       "chatCancelled": "Inicio de sesión cancelado.",
       "chatExpired": "El inicio de sesión caducó. Inténtalo de nuevo.",
       "chatFailed": "No se pudo iniciar sesión. Inténtalo de nuevo.",
-      "chatOtherClient": "Hay un inicio de sesión en curso en otro cliente.",
       "chatReadFailed": "No se pudo comprobar el inicio de sesión en {{host}}.",
       "retry": "Reintentar",
       "remove": "Eliminar",
@@ -22356,8 +22349,6 @@
       "enterpriseOption": "La licencia de tu organización",
       "apiKeyGet": "Obtener clave API",
       "location": "Ubicación",
-      "enterpriseFieldsShort": "Introduce un proyecto y una ubicación.",
-      "chatUseMethod": "Vuelve a iniciar sesión para usar {{method}}",
       "loadFailed": "No se pudieron cargar las cuentas de agy",
       "loading": "Cargando cuentas…",
       "notSignedIn": "Sin sesión iniciada",
@@ -22368,8 +22359,7 @@
       "noEmailNotSaved": "agy no indicó ningún correo electrónico · sin guardar",
       "saveShort": "Guardar",
       "readAt": "Consultado {{time}}",
-      "active": "Activa",
-      "chatDescriptionKeyOnAgy": "Los chats nuevos se ejecutan en agy con el inicio de sesión de abajo, separado de agy en el terminal."
+      "active": "Activa"
     },
     "claude": {
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",

@@ -268,19 +268,14 @@ export type GlobalSettings = GlobalSettingsBase & {
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
   browserClientHostedRemoteEnabled?: boolean
-  /** Main-side kill switch for Orca's copy of agy. Off, it runs no chat and isn't updated: new
-   *  chats use the user's own signed-in agy or Orca's server, and chats already on agy run the
-   *  user's own agy (same history) or, where there is none, refuse as agy not found. Absent means on. */
+  /** Main-side kill switch for Orca's copy of agy. Off, it runs no chat and isn't updated: chats
+   *  run the user's own agy or, where there is none, refuse as agy not found. Absent means on. */
   antigravityManagedAgyEnabled?: boolean
-  /** Kill switch for Orca updating its installed Antigravity ACP server by itself when a newer Orca
-   *  pins a newer release. Off, the older server keeps running until Update in Settings, and an
-   *  automatic download in flight stops. Host-owned: each host (desktop, SSH, WSL) reads its own
-   *  value; there is no UI. Separate from antigravityManagedAgyEnabled: with that off, chats run on
-   *  this server. Absent means on. */
+  /** No longer read: Orca's Antigravity ACP server is retired. Kept so older clients' updates of
+   *  this host-owned key are still accepted. */
   antigravityServerAutoUpdateEnabled?: boolean
-  /** How chats on the Google account method sign in: agy's own login, or Orca's built-in sign-in
-   *  on Google's ACP server. Absent or 'auto': the server where Orca's sign-in is already in use,
-   *  else agy. */
+  /** No longer read: Google-account chats always use agy's own login. Kept so older clients'
+   *  updates of this host-owned key are still accepted. */
   antigravityGoogleSignIn?: 'auto' | 'agy' | 'orca'
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
   browserProfileScope?: BrowserProfileScope

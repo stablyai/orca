@@ -671,8 +671,7 @@
         "title": "Anbieter",
         "searchAgents": "Agenten",
         "searchCli": "CLI",
-        "searchTerminal": "Terminal",
-        "antigravityAccount": "Konto"
+        "searchTerminal": "Terminal"
       },
       "permissionsDescriptionOwnAgents": "Neue Chats verwenden die jeweilige Agentenberechtigung unter Einstellungen → Agenten.",
       "launch": {
@@ -22761,22 +22760,16 @@
       "description": "Die Agenten dort verwenden die Standardkonten der Distribution für Claude und Codex, bis Orca in WSL aktualisiert wird."
     },
     "antigravity": {
-      "chatSignIn": "Anmelden",
-      "chatChangeAccount": "Konto wechseln",
-      "chatRetry": "Anmeldung erneut versuchen",
       "chatCancel": "Abbrechen",
       "chatCopyLink": "Anmeldelink kopieren",
       "chatCopyFailed": "Der Link konnte nicht kopiert werden.",
       "chatStarting": "Anmeldung wird gestartet…",
-      "chatWaiting": "Anmeldung im Browser abschließen.",
       "chatOpenFailed": "Den Link kopieren und im Browser öffnen.",
       "chatVerifying": "Anmeldung wird abgeschlossen…",
-      "chatPasteHelp": "Falls die letzte Seite nach der Anmeldung nicht geladen wird, ihre vollständige Adresse aus dem Browser kopieren und hier einfügen.",
       "chatContinue": "Fortfahren",
       "chatCancelled": "Anmeldung abgebrochen.",
       "chatExpired": "Zeitüberschreitung bei der Anmeldung. Erneut versuchen.",
       "chatFailed": "Anmeldung fehlgeschlagen. Erneut versuchen.",
-      "chatOtherClient": "In einem anderen Client läuft bereits eine Anmeldung.",
       "chatReadFailed": "Die Anmeldung auf {{host}} konnte nicht überprüft werden.",
       "retry": "Erneut versuchen",
       "changed": "Das native Konto hat sich geändert. Vor dem Start von agy erneut ein gespeichertes Konto auswählen.",
@@ -22807,8 +22800,6 @@
       "enterpriseOption": "Lizenz deiner Organisation",
       "apiKeyGet": "API-Schlüssel abrufen",
       "location": "Standort",
-      "enterpriseFieldsShort": "Projekt und Standort eingeben.",
-      "chatUseMethod": "Erneut anmelden, um {{method}} zu verwenden",
       "loadFailed": "Die agy-Konten konnten nicht geladen werden",
       "loading": "Konten werden geladen…",
       "notSignedIn": "Nicht angemeldet",
@@ -22819,8 +22810,7 @@
       "noEmailNotSaved": "agy hat keine E-Mail-Adresse gemeldet · nicht gespeichert",
       "saveShort": "Speichern",
       "readAt": "Ausgelesen {{time}}",
-      "active": "Aktiv",
-      "chatDescriptionKeyOnAgy": "Neue Chats laufen auf agy mit der unten stehenden Anmeldung, getrennt von agy im Terminal."
+      "active": "Aktiv"
     },
     "claude": {
       "added": "Konto hinzugefügt. Das Konto auswählen, um es beim nächsten Start von Claude zu verwenden.",

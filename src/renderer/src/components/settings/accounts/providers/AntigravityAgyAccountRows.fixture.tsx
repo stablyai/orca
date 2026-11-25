@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import type { AntigravityAccountState } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
-import { AntigravityTerminalAccountRows } from './AntigravityTerminalAccountRows'
+import { AntigravityAgyAccountRows } from './AntigravityAgyAccountRows'
 
 const saved = {
   id: 'saved',
@@ -15,7 +15,7 @@ const saved = {
 function rows(state: AntigravityAccountState): React.JSX.Element {
   return (
     <div className="bg-background px-5">
-      <AntigravityTerminalAccountRows
+      <AntigravityAgyAccountRows
         state={state}
         usage={null}
         error={null}
