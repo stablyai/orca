@@ -168,6 +168,7 @@ function read(
     case 'context-usage':
     case 'thread-goal-source':
     case 'claude-snapshot':
+    case 'running-subagents':
     case 'named-turn':
     case 'message-options':
     case 'continuation-context':

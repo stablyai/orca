@@ -1,3 +1,4 @@
+import { JOURNAL_RUNNING_SUBAGENTS_MAX } from '../../../native-chat/agent-session-journal/journal-sql-running-subagents'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import { readCodexTurnStatus } from '../../app-server/codex-structured-thread-facts'
 import { readRecord } from '../../app-server/codex-item-field-readers'
@@ -18,8 +19,8 @@ import {
   readReceiverThreadIds
 } from '../items/codex-collab-agent-tool-call'
 
-/** A chat with more subagents than this is past what one reattach looks up. */
-const MAX_SEEDED_THREADS = 16
+/** The chat's own thread and every running child the journal can name. */
+const MAX_SEEDED_THREADS = 1 + JOURNAL_RUNNING_SUBAGENTS_MAX
 
 async function latestTurn(
   connection: Pick<CodexAppServerConnection, 'request'>,
@@ -106,26 +107,35 @@ export async function seedKeptCodexTurnOrdinals(input: {
   return fetched
 }
 
-/** A subagent spawn (or other collab call) in a kept thread's history, from any of its turns. */
+/** A subagent spawn as the tracker observes it. */
 export type KeptCodexSpawn = { threadId: string; turnId: string; item: CodexThreadItem }
 
-/** The thread's collab calls across every turn it returned: a subagent spawned turns ago may still run. */
-export function keptCodexSpawns(threadId: string, turns: readonly unknown[]): KeptCodexSpawn[] {
-  return turns.flatMap((value) => {
-    const turn = readRecord(value)
-    const items = typeof turn.id === 'string' && Array.isArray(turn.items) ? turn.items : []
-    return items.flatMap((entry) => {
-      const item = readCodexThreadItem(entry)
-      return item?.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE
-        ? [{ threadId, turnId: String(turn.id), item }]
-        : []
-    })
-  })
+/**
+ * Children the journal saved a still-open turn for, announced as their spawns: the spawn itself was
+ * acked before the restart, so without this they'd never register and Stop would miss them.
+ */
+export async function keptCodexSubagentSpawns(
+  primaryThreadId: string,
+  journal: { reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'runningSubagents'> } | null
+): Promise<KeptCodexSpawn[]> {
+  // A read that fails fails the open; a chat with no history journal has none to name.
+  const running = (await journal?.reads.runningSubagents()) ?? []
+  return running.map(({ agentId, parentAgentId }) => ({
+    threadId: parentAgentId ?? primaryThreadId,
+    turnId: '',
+    item: {
+      type: CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE,
+      id: `journal-subagent:${agentId}`,
+      tool: 'spawnAgent',
+      status: 'completed',
+      receiverThreadIds: [agentId]
+    }
+  }))
 }
 
 /**
  * Threads beside the chat's own whose latest turn may replay: those the daemon carried a turn of
- * (open or ended), then every spawn's subagent, newest first, found even when nothing was carried.
+ * (open or ended), then every child the journal saved a running turn for (found after a crash too).
  */
 export function keptCodexThreadIds(
   relay: Pick<NonNullable<CodexAppServerConnection['relay']>, 'openWork' | 'endedWork'> | undefined,
@@ -135,7 +145,7 @@ export function keptCodexThreadIds(
     ...[...(relay?.openWork()?.turn ?? []), ...(relay?.endedWork()?.turn ?? [])].flatMap(
       ([threadId]) => threadId ?? []
     ),
-    ...spawns.toReversed().flatMap(({ item }) => readReceiverThreadIds(item))
+    ...spawns.flatMap(({ item }) => readReceiverThreadIds(item))
   ]
 }
 

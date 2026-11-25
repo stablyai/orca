@@ -1,6 +1,6 @@
 import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../../app-server/codex-app-server-connection'
 import {
-  keptCodexSpawns,
+  keptCodexSubagentSpawns,
   keptCodexThreadIds,
   restateKeptCodexBackgroundWork,
   seedCarriedKeptCodexCommands,
@@ -171,7 +171,9 @@ export async function openCodexStructuredSession(
     current()
   }
   let keptTurns: readonly KeptCodexTurn[] = []
-  const keptSpawns = keptRunning ? keptCodexSpawns(opened.threadId, returnedTurns) : []
+  const keptSpawns = keptRunning
+    ? await keptCodexSubagentSpawns(opened.threadId, input.events?.journalHistory?.() ?? null)
+    : []
   if (keptRunning && translator) {
     keptTurns = await waitForPromiseWithSignal(
       seedKeptCodexTurnOrdinals({

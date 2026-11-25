@@ -279,6 +279,7 @@ export function journalSqlReads(
     runningTurn: async () => (await read({ kind: 'running-turn' })).running,
     threadGoalSource: async () => (await read({ kind: 'thread-goal-source' })).source,
     claudeSnapshot: async () => (await read({ kind: 'claude-snapshot' })).snapshot,
+    runningSubagents: async () => (await read({ kind: 'running-subagents' })).subagents,
     contextUsage: async () => (await read({ kind: 'context-usage' })).usage,
     visitItems: async (filter, visit) => {
       let afterOrdinal = -1
