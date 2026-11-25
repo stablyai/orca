@@ -1,8 +1,8 @@
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
-import { filterEnabledMobileTuiAgents } from '../../agents/mobile-tui-agents'
+import { filterEnabledMobileTuiAgents, mobileTuiAgentLabel } from '../../agents/mobile-tui-agents'
 import { isTuiAgent as isMobileTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
 import { TUI_AGENT_AUTO_PICK_ORDER as MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from '../../../../src/shared/agent-launch/catalog/tui-agent-selection'
-import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
+import type { Translate } from '../../i18n/mobile-i18n'
 
 export type MobileNewTabAgentSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null
@@ -37,7 +37,8 @@ export function orderMobileNewTabAgents(
 
 export function buildMobileNewTabAgentOptions(
   settings: MobileNewTabAgentSettings | null | undefined,
-  detectedAgentIds: Iterable<unknown> | null
+  detectedAgentIds: Iterable<unknown> | null,
+  t?: Translate
 ): MobileNewTabAgentOption[] {
   if (!detectedAgentIds) {
     return []
@@ -48,6 +49,6 @@ export function buildMobileNewTabAgentOptions(
     settings?.disabledTuiAgents
   ).map((agent) => ({
     agent,
-    label: MOBILE_TUI_AGENT_LABELS[agent]
+    label: mobileTuiAgentLabel(agent, t)
   }))
 }

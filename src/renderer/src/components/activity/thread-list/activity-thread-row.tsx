@@ -99,7 +99,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
     activityThreadRowCopy(thread, t)
   const { showProject, showWorkspace } = activityThreadRowIdentity(thread, groupBy)
   const showMarkdownStatus = statusKind === 'message'
-  const agentLabel = formatAgentTypeLabel(thread.agentType)
+  const agentLabel = formatAgentTypeLabel(thread.agentType, t)
 
   return (
     <ActivityThreadHoverCard

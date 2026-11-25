@@ -76,7 +76,7 @@ export function getCompactAgentSecondary(
   if (agent.rowSource === 'subagent' && agent.entry.prompt?.trim() === agent.agentType.trim()) {
     return ''
   }
-  return formatAgentTypeLabel(agent.agentType)
+  return formatAgentTypeLabel(agent.agentType, t ?? translate)
 }
 
 /** When the row's short age counts from: when it finished, else when it started. */
@@ -277,7 +277,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             unread={isUnvisited}
           />
           {!hideIcon && (
-            <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
+            <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType, t)}>
               <AgentTypeIcon agentType={agent.agentType} size={13} />
             </span>
           )}

@@ -345,7 +345,7 @@ function AgentTargetMenuItem({
 }: AgentTargetMenuItemProps & { name: string }): React.JSX.Element {
   const t = useTranslate()
   const tabTitle = target.tabTitle.trim()
-  const typeLabel = formatAgentTypeLabel(target.agentType ?? agent?.agentType)
+  const typeLabel = formatAgentTypeLabel(target.agentType ?? agent?.agentType, t)
   // Use the sidebar’s display state so failed/stopped agents agree across surfaces.
   const state = agent ? agentRowDisplayDotState(agent) : 'idle'
   const timeAgo = agent ? formatAgentRelativeTime(agent, now, t) : null

@@ -16,7 +16,7 @@ import type { AgentDotState } from '../worktree/agent-lineage/agent-row-display'
 import type { BotAutomationView } from '../../../src/shared/bots/bot-activity-schema'
 
 export function botAgentLabel(agent: AgentType): string {
-  return agent === 'claude' ? 'Claude Code' : formatAgentTypeLabel(agent)
+  return agent === 'claude' ? 'Claude Code' : formatAgentTypeLabel(agent, translate)
 }
 
 // The desktop's event words; an event a newer host sends falls back to its service's line.

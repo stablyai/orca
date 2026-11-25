@@ -129,6 +129,7 @@ export function MobileDiffReviewRangeSheet({
 
 // The workspace's terminals, listed once per sheet: Send reuses them, and names the button after the one agent.
 function useAgentTerminals(controller: ReturnType<typeof useMobileDiffReviewController>) {
+  const t = useMobileTranslation()
   const [terminals, setTerminals] = useState<readonly MobileReviewTerminalTab[] | null>(null)
   const loadTerminals = controller.loadTerminals
   useEffect(() => {
@@ -148,6 +149,6 @@ function useAgentTerminals(controller: ReturnType<typeof useMobileDiffReviewCont
   const agents = terminals?.filter((terminal) => terminal.agent !== undefined) ?? []
   const [only] = agents
   const agentName =
-    agents.length === 1 && only?.agent ? (tuiAgentDisplayName(only.agent) ?? only.title) : null
+    agents.length === 1 && only?.agent ? (tuiAgentDisplayName(only.agent, t) ?? only.title) : null
   return { agentName, terminals }
 }

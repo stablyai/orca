@@ -10,7 +10,7 @@ import {
 } from '../../../../../../shared/source-control/ai/recipes/source-control-action-options'
 import { sourceControlActionSelectedPreferences } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { translate } from '@/i18n/i18n'
-import { AGENT_CATALOG } from '@/lib/agent-catalog/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/agent-permission-choice-label'
 import { sourceControlActionRouteHint } from '../../../agent/launch-settings/agent-choice-route-hint'
 
@@ -47,10 +47,7 @@ export function describeSourceControlActionModel(
     {
       value0: [
         ...labels,
-        agentPermissionChoiceLabel(
-          permissionMode,
-          AGENT_CATALOG.find((entry) => entry.id === agent)?.label ?? agent
-        ),
+        agentPermissionChoiceLabel(permissionMode, getAgentLabel(agent)),
         sourceControlActionRouteHint(sourceControlActionPermissionModeRoute(agent, permissionMode))
       ]
         .filter(Boolean)

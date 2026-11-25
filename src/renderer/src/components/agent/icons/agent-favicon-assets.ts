@@ -4,6 +4,7 @@ import grokUrl from '../../../../../shared/agent-icons/grok.png?url'
 import mimoCodeUrl from '../../../../../shared/agent-icons/mimo-code.png?url'
 import anteUrl from '../../../../../shared/agent-icons/ante.png?url'
 import traeUrl from '../../../../../shared/agent-icons/trae.png?url'
+import doubaoUrl from '../../../../../shared/agent-icons/doubao.png?url'
 import primeAgentUrl from '../../../../../shared/agent-icons/prime-agent.png?url'
 import antigravityUrl from '../../../../../shared/agent-icons/antigravity.png?url'
 import gooseUrl from '../../../../../shared/agent-icons/goose.png?url'
@@ -37,6 +38,7 @@ export const AGENT_FAVICON_ASSETS: Partial<Record<TuiAgent, string>> = {
   'mimo-code': mimoCodeUrl,
   ante: anteUrl,
   trae: traeUrl,
+  doubao: doubaoUrl,
   'prime-agent': primeAgentUrl,
   qoder: qoderUrl,
   'qoder-cn': qoderUrl,

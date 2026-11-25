@@ -6203,6 +6203,11 @@
       }
     },
     "lib": {
+      "agent": {
+        "catalog": {
+          "doubao_label": "Doubao"
+        }
+      },
       "rateLimits": {
         "errors": {
           "opencodeInvalidWorkspaceId": "Неверный формат ID рабочего пространства",

@@ -8,7 +8,7 @@ import {
 import '../../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import '../../../../src/shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-capabilities'
-import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
+import { mobileTuiAgentLabel } from '../../agents/mobile-tui-agents'
 
 // Reuse the pure desktop command logic; renderer-only labels and native truncation stay here.
 
@@ -60,7 +60,7 @@ export function buildMobileQuickCommandLaunch(
 }
 
 export function getQuickCommandAgentLabel(agent: TuiAgent): string {
-  return MOBILE_TUI_AGENT_LABELS[agent] ?? agent
+  return mobileTuiAgentLabel(agent)
 }
 
 export function getQuickCommandPreview(command: TerminalQuickCommand): string {

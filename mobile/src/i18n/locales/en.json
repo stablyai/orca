@@ -8377,6 +8377,11 @@
       }
     },
     "lib": {
+      "agent": {
+        "catalog": {
+          "doubao_label": "Doubao"
+        }
+      },
       "rateLimits": {
         "errors": {
           "opencodeInvalidWorkspaceId": "Invalid workspace ID format",

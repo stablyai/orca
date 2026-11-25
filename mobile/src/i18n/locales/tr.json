@@ -5908,6 +5908,11 @@
       }
     },
     "lib": {
+      "agent": {
+        "catalog": {
+          "doubao_label": "Doubao"
+        }
+      },
       "rateLimits": {
         "errors": {
           "opencodeInvalidWorkspaceId": "Çalışma alanı kimliğinin biçimi geçersiz",

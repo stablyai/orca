@@ -67,8 +67,8 @@ export function MobileHomeAgentsTab(props: {
   const hostFilter = hosts.some((host) => host.id === pickedHost) ? pickedHost : null
   const { now } = data.agentList
   const list = useMemo(
-    () => buildAgentList(data.agentList, { view, hostFilter, query }),
-    [data.agentList, view, hostFilter, query]
+    () => buildAgentList(data.agentList, { view, hostFilter, query }, t),
+    [data.agentList, view, hostFilter, query, t]
   )
   const nameDesktops = hosts.length > 1 && hostFilter === null
   const listed = useMemo(() => agentListRowsIn(list.sections), [list.sections])

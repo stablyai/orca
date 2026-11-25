@@ -2,6 +2,7 @@ import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-a
 import { translate } from '../../i18n/mobile-i18n'
 import {
   filterEnabledMobileTuiAgents,
+  mobileTuiAgentLabel,
   isMobileTuiAgentEnabled
 } from '../../agents/mobile-tui-agents'
 import {
@@ -9,7 +10,6 @@ import {
   resolveQuickWorkspaceAgentSelection
 } from '../../../../src/shared/agent-launch/catalog/quick-workspace-agent-selection'
 import { isTuiAgent as isMobileTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
-import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 
 export type WorkspaceAgentChoice = TuiAgent | 'blank'
 
@@ -32,7 +32,7 @@ type ResolveWorkspaceAgentSelectionArgs = WorkspaceAgentSelectionState & {
 export function workspaceAgentLabel(agent: WorkspaceAgentChoice): string {
   return agent === 'blank'
     ? translate('tasks.workspaceAgentSelection.blankTerminal', 'Blank Terminal')
-    : MOBILE_TUI_AGENT_LABELS[agent]
+    : mobileTuiAgentLabel(agent)
 }
 
 export function normalizeWorkspaceAgent(value: unknown): WorkspaceAgentChoice | null {

@@ -1,15 +1,11 @@
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
-import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
+import { translate, type Translate } from '../i18n/mobile-i18n'
+import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { TUI_AGENT_FAVICON_DOMAINS } from '../../../src/shared/agent-launch/catalog/tui-agent-favicon-domains'
 import {
   filterEnabledTuiAgents,
   isTuiAgentEnabled
 } from '../../../src/shared/agent-launch/catalog/tui-agent-selection'
-
-// Reuse the shared registry; Metro cannot load renderer ?url icons, so the phone draws favicons.
-
-const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = TUI_AGENT_DISPLAY_NAMES
 
 // Desktop draws these agents with built-in icons; the phone has only favicons for them.
 export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
@@ -24,8 +20,8 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
 }
 
 /** A newer host's agent reads by its id until this build knows its name. */
-export function mobileTuiAgentLabel(agent: string): string {
-  return isTuiAgent(agent) ? MOBILE_TUI_AGENT_LABELS[agent] : agent
+export function mobileTuiAgentLabel(agent: string, t: Translate = translate): string {
+  return tuiAgentDisplayName(agent, t) ?? agent
 }
 
 function asDisabledList(disabled: unknown): Iterable<unknown> | null {

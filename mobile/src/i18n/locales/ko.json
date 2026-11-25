@@ -4507,6 +4507,13 @@
     "wontFire": "실행되지 않음: {{connectors}} 커넥터가 필요합니다"
   },
   "auto": {
+    "lib": {
+      "agent": {
+        "catalog": {
+          "doubao_label": "Doubao"
+        }
+      }
+    },
     "components": {
       "automations": {
         "automation": {

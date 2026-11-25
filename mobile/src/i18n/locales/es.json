@@ -4438,6 +4438,13 @@
     "wontFire": "No se ejecutará: necesita el conector de {{connectors}}"
   },
   "auto": {
+    "lib": {
+      "agent": {
+        "catalog": {
+          "doubao_label": "Doubao"
+        }
+      }
+    },
     "components": {
       "automations": {
         "automation": {

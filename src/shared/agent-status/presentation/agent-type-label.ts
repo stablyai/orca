@@ -1,4 +1,8 @@
 import type { AgentType } from '../contracts/agent-status-types'
+import {
+  localizeAgentDisplayName,
+  type AgentNameTranslator
+} from '../../agent-launch/catalog/tui-agent-display-names'
 
 // Share agent names across desktop and mobile.
 const WELL_KNOWN_LABELS: Record<string, string> = {
@@ -39,10 +43,13 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   kiro: 'Kiro'
 }
 
-export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
+export function formatAgentTypeLabel(
+  agentType: AgentType | null | undefined,
+  t?: AgentNameTranslator
+): string {
   if (!agentType || agentType === 'unknown') {
     return 'Agent'
   }
   // Capitalize well-known names nicely; pass through custom names as-is
-  return WELL_KNOWN_LABELS[agentType] ?? agentType
+  return localizeAgentDisplayName(agentType, WELL_KNOWN_LABELS[agentType] ?? agentType, t)
 }

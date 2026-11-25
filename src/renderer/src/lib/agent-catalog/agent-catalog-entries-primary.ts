@@ -84,7 +84,7 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       id: 'doubao',
       label: translate('auto.lib.agent.catalog.doubao_label', 'Doubao'),
       cmd: 'doubao',
-      searchAliases: ['豆包', 'ByteDance'],
+      searchAliases: ['豆包', '豆包 CLI', 'Doubao CLI', 'ByteDance', '字节跳动', '字節跳動'],
       homepageUrl: 'https://www.npmjs.com/package/@bytedance/doubao-cli'
     },
     {

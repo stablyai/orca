@@ -4326,6 +4326,13 @@
     "wontFire": "不會執行：需要 {{connectors}} 連接器"
   },
   "auto": {
+    "lib": {
+      "agent": {
+        "catalog": {
+          "doubao_label": "豆包"
+        }
+      }
+    },
     "components": {
       "automations": {
         "automation": {

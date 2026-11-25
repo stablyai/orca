@@ -5012,6 +5012,13 @@
     "wontFire": "Não vai executar: precisa do conector {{connectors}}"
   },
   "auto": {
+    "lib": {
+      "agent": {
+        "catalog": {
+          "doubao_label": "Doubao"
+        }
+      }
+    },
     "components": {
       "automations": {
         "automation": {

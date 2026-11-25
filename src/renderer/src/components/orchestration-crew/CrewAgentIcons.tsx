@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { AgentStateDot, type AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
@@ -95,8 +96,10 @@ export function useCrewRowLooks(
   )
 }
 
-function agentLabel(agentType: string, hostLabel: string | undefined): string {
-  const label = isTuiAgent(agentType) ? getAgentLabel(agentType) : formatAgentTypeLabel(agentType)
+function agentLabel(agentType: string, hostLabel: string | undefined, t: Translate): string {
+  const label = isTuiAgent(agentType)
+    ? getAgentLabel(agentType)
+    : formatAgentTypeLabel(agentType, t)
   return hostLabel ? `${label} · ${hostLabel}` : label
 }
 
@@ -108,21 +111,18 @@ export function CrewAgentIcons({
   look: CrewRowLook
   hostLabel?: string
 }): React.JSX.Element {
+  const label = agentLabel(look.agentType, hostLabel, useTranslate())
   return (
     <span className="inline-flex shrink-0 items-center gap-1">
       <AgentStateDot state={look.dotState} size="sm" />
       <Tooltip>
         <TooltipTrigger asChild>
-          <span
-            role="img"
-            aria-label={agentLabel(look.agentType, hostLabel)}
-            className="inline-flex shrink-0"
-          >
+          <span role="img" aria-label={label} className="inline-flex shrink-0">
             <AgentTypeIcon agentType={look.agentType} size={13} className="size-[13px]" />
           </span>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
-          {agentLabel(look.agentType, hostLabel)}
+          {label}
         </TooltipContent>
       </Tooltip>
     </span>

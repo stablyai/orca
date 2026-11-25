@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import {
@@ -27,6 +28,7 @@ export function WorktreeCardLineAgents({
 }: {
   worktreeId: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const agent = useWorktreeLineAgent(worktreeId)
   if (!agent) {
     return null
@@ -36,7 +38,7 @@ export function WorktreeCardLineAgents({
   return (
     <span
       role="img"
-      aria-label={agent.agentTypes.map((type) => formatAgentTypeLabel(type)).join(', ')}
+      aria-label={agent.agentTypes.map((type) => formatAgentTypeLabel(type, t)).join(', ')}
       className="relative shrink-0"
       style={{ width: (logos.length - 1) * step + size, height: size }}
       data-worktree-card-line-agent=""

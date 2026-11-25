@@ -22,10 +22,13 @@ export type AgentCatalogEntry = {
 }
 
 export const getAgentCatalog = createLocalizedCatalog(buildAgentCatalogEntries)
+export const getAgentLabels = createLocalizedCatalog(
+  () => new Map<TerminalAgent, string>(getAgentCatalog().map(({ id, label }) => [id, label]))
+)
 
 // Why: tests and a few legacy call sites still import a catalog snapshot.
 export const AGENT_CATALOG: AgentCatalogEntry[] = getAgentCatalog()
 
 export function getAgentLabel(agent: TerminalAgent): string {
-  return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? formatAgentTypeLabel(agent)
+  return getAgentLabels().get(agent) ?? formatAgentTypeLabel(agent)
 }

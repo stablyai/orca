@@ -5754,6 +5754,11 @@
       }
     },
     "lib": {
+      "agent": {
+        "catalog": {
+          "doubao_label": "豆包"
+        }
+      },
       "rateLimits": {
         "errors": {
           "sessionCookieNotConfigured": "未配置会话 Cookie",

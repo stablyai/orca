@@ -45,7 +45,7 @@ export function getActivityThreadGroup(
   if (groupBy === 'worktree') {
     return { key: `worktree:${thread.worktree.id}`, label: thread.worktree.displayName }
   }
-  return { key: `agent:${thread.agentType}`, label: formatAgentTypeLabel(thread.agentType) }
+  return { key: `agent:${thread.agentType}`, label: formatAgentTypeLabel(thread.agentType, t) }
 }
 
 export function buildActivityThreadGroups(
@@ -85,7 +85,7 @@ function buildThreadSearchText(thread: AgentPaneThread): string {
   const latestEventText = latest
     ? `${agentTitle(latest)} ${agentSummary(latest)} ${agentMeta(latest)}`
     : ''
-  return `${thread.paneTitle} ${getActivityThreadWorkspaceTitle(thread.worktree)} ${thread.worktree.branch ?? ''} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
+  return `${thread.paneTitle} ${getActivityThreadWorkspaceTitle(thread.worktree)} ${thread.worktree.branch ?? ''} ${thread.repo?.displayName ?? ''} ${thread.agentType} ${formatAgentTypeLabel(thread.agentType, translate)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
 }
 
 // Thread identity changes with its data, so cache lowercase search text across keystrokes; WeakMap releases dropped threads.

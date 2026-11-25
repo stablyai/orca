@@ -22,7 +22,7 @@ const GROUP_KEYS: Record<string, string> = {
 export function translateShortcutActionTitle(actionId: string, fallback: string): string {
   if (actionId.startsWith('tab.newAgent.')) {
     const agent = actionId.slice('tab.newAgent.'.length)
-    const agentName = tuiAgentDisplayName(agent) ?? agent
+    const agentName = tuiAgentDisplayName(agent, translate) ?? agent
     return translate('settings.shortcuts.actions.tab.newAgentNamed', 'New {{agent}} tab', {
       agent: agentName
     })

@@ -190,7 +190,7 @@ function buildTitleDerivedAgentRow(args: {
     label &&
     (agentType === 'unknown' || TITLE_AGENT_LABEL_TO_TYPE[label] === agentType)
       ? label
-      : formatAgentTypeLabel(agentType)
+      : formatAgentTypeLabel(agentType, translate)
   const rowState = titleStatusToRowState(status)
   const secondary =
     status === 'permission'

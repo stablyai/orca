@@ -128,7 +128,7 @@ export function ActivityThreadHoverCardSummary({
             <AgentTypeIcon agentType={thread.agentType} size={14} />
           </span>
           <span className="truncate text-[12px] font-semibold text-foreground">
-            {formatAgentTypeLabel(thread.agentType)}
+            {formatAgentTypeLabel(thread.agentType, t)}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">

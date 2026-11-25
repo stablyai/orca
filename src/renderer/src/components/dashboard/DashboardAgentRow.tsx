@@ -209,12 +209,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           'auto.components.dashboard.DashboardAgentRow.dispatchedAgents',
           '{{agentType}} - dispatched {{count}} agents',
           {
-            agentType: formatAgentTypeLabel(agent.agentType),
+            agentType: formatAgentTypeLabel(agent.agentType, t),
             count: lineageChildCount,
             defaultValue_one: '{{agentType}} - dispatched {{count}} agent'
           }
         )
-      : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
+      : [formatAgentTypeLabel(agent.agentType, t), model].filter(Boolean).join(' · ')
   // Surface failed main-agent outcomes even while subagents continue running.
   const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
   const dotStatusLabel = agentStateProgressLabel(

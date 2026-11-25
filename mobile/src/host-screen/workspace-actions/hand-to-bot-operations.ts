@@ -89,7 +89,7 @@ export function handToBotOwner<B extends Pick<ListedBot, 'folderWorkspaceId'>>(
 
 /** The workspace's agents, as its card names them; they keep running and work for the bot. */
 export function handToBotAgents(row: Worktree): string[] {
-  return (row.agents ?? []).map((agent) => formatAgentTypeLabel(agent.agentType))
+  return (row.agents ?? []).map((agent) => formatAgentTypeLabel(agent.agentType, translate))
 }
 
 /** Why a hand-over didn't happen, and where that left the workspace, in the desktop's words. */

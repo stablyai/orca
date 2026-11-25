@@ -1,4 +1,5 @@
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
+import { translate, type Translate } from '../i18n/mobile-i18n'
 import { agentListEntryMatches } from './agent-list-row-text'
 import {
   agentStatusGroup,
@@ -89,7 +90,8 @@ const STATUS_SECTIONS: readonly Exclude<AgentStatusGroup, 'idle'>[] = [
 
 export function buildAgentList(
   input: AgentListInput,
-  options: Readonly<{ view: AgentListView; hostFilter: string | null; query: string }>
+  options: Readonly<{ view: AgentListView; hostFilter: string | null; query: string }>,
+  t: Translate = translate
 ): { sections: AgentListSection[]; anyLive: boolean } {
   const { view } = options
   const hosts = input.hosts
@@ -111,7 +113,7 @@ export function buildAgentList(
     if (query) {
       // A match is shown on its own; its coordinator may not match.
       return everyRow(host.roots)
-        .filter((row) => agentListEntryMatches(row.entry, query))
+        .filter((row) => agentListEntryMatches(row.entry, query, t))
         .map(asTopLevel)
         .filter(shown)
     }
@@ -224,8 +226,11 @@ export function buildAgentList(
             hostId: row.hostId
           }))
         : groupRows(rows, (row) => {
-            const label = formatAgentTypeLabel(row.entry.agent.agentType)
-            return { key: label, title: label }
+            const agentType = row.entry.agent.agentType
+            return {
+              key: formatAgentTypeLabel(agentType),
+              title: formatAgentTypeLabel(agentType, t)
+            }
           })
   const kind = view.groupBy
   const sections = drafts

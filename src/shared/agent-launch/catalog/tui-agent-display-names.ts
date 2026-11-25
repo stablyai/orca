@@ -52,7 +52,19 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
 /** Derive the exhaustive list here so shared modules need no renderer import. */
 export const ALL_TUI_AGENTS = Object.keys(TUI_AGENT_DISPLAY_NAMES) as readonly TuiAgent[]
 
+export type AgentNameTranslator = (key: string, fallback: string) => string
+
+export function localizeAgentDisplayName(
+  agent: string,
+  fallback: string,
+  t?: AgentNameTranslator
+): string {
+  return agent === 'doubao' && t ? t('auto.lib.agent.catalog.doubao_label', 'Doubao') : fallback
+}
+
 /** The display name of `agent`, or null when it names no TUI agent. */
-export function tuiAgentDisplayName(agent: string): string | null {
-  return Object.entries(TUI_AGENT_DISPLAY_NAMES).find(([id]) => id === agent)?.[1] ?? null
+export function tuiAgentDisplayName(agent: string, t?: AgentNameTranslator): string | null {
+  return Object.hasOwn(TUI_AGENT_DISPLAY_NAMES, agent)
+    ? localizeAgentDisplayName(agent, TUI_AGENT_DISPLAY_NAMES[agent as TuiAgent], t)
+    : null
 }

@@ -132,7 +132,7 @@ export function CompactAgentSummaryButton({
           group.identities.flatMap((identity) =>
             Array.from({ length: identity.count }, () =>
               t('sidebar.agentSummary.agentIdentityState', '{{agent}} {{status}}', {
-                agent: formatAgentTypeLabel(identity.agentType),
+                agent: formatAgentTypeLabel(identity.agentType, t),
                 status: formatSummaryStateLabel(group.state, t)
               })
             )
