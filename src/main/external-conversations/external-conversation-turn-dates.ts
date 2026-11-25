@@ -119,6 +119,17 @@ export class TurnDates {
     this.openers.clear()
   }
 
+  /** Keeps only these chats' dates: a chat closed or unlinked while nothing watched has none. */
+  retain(paneKeys: ReadonlySet<string>): void {
+    for (const map of [this.open, this.openers, this.ended, this.replaced]) {
+      for (const paneKey of map.keys()) {
+        if (!paneKeys.has(paneKey)) {
+          map.delete(paneKey)
+        }
+      }
+    }
+  }
+
   clear(): void {
     this.open.clear()
     this.replaced.clear()

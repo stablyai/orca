@@ -203,6 +203,8 @@ export class ConversationEvents {
       }
     }
     this.listeners.add(listener)
+    // Chats closed or unlinked while nothing watched leave no turn dates behind.
+    this.chats.dates.retain(new Set([...allLinks(this.deps.store)].map(({ link }) => link.paneKey)))
     // Subscribe before reading the snapshot to avoid losing intervening changes.
     const snapshot = this.snapshot()
     this.answered.saw(snapshot)
@@ -229,6 +231,7 @@ export class ConversationEvents {
   /** A link dropped because its chat is gone. */
   unlinked({ workspace, link }: LinkedConversation): void {
     this.shown.forgetConversation(link)
+    this.chats.dates.forget(link.paneKey)
     this.emit({ kind: 'unlinked', ...conversationPane(link, workspace.worktreeId) })
   }
 

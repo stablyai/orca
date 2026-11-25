@@ -3,6 +3,7 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { chatPaneKey } from './external-conversation-chat'
 import { ChatTurns } from './external-conversation-chat-turns'
+import { TurnDates } from './external-conversation-turn-dates'
 import type { EndedChatTurn } from './external-conversation-ended-turn'
 import type { ConversationEvent } from './external-conversation-events'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -261,7 +262,7 @@ describe('a chat turn’s status row after the turn ended', () => {
   })
 
   it('stays in step when a waiting delivery joins the running turn', () => {
-    const { show, starts } = endedTurn((chats, show, hostRuns) => {
+    const { show, starts } = endedTurn((_chats, show, hostRuns) => {
       show({ state: 'working', stateStartedAt: SENT })
       // A follow-up waits and joins the same turn: the host still runs the first send's turn.
       hostRuns('send-a', true)
@@ -271,4 +272,15 @@ describe('a chat turn’s status row after the turn ended', () => {
     show({ state: 'working', stateStartedAt: HANDED_OVER })
     expect(starts()).toEqual([SENT, HANDED_OVER])
   })
+})
+
+it('keeps turn dates only for chats still linked when a watch starts', () => {
+  const dates = new TurnDates()
+  for (const paneKey of ['kept', 'gone']) {
+    dates.started(paneKey, 1, 'send')
+    dates.endedTurn(paneKey)
+  }
+  dates.retain(new Set(['kept']))
+  expect(dates.isEnded('kept', 1)).toBe(true)
+  expect(dates.isEnded('gone', 1)).toBe(false)
 })
