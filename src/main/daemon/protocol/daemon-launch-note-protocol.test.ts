@@ -6,7 +6,7 @@ it('keeps the recorded Claude account across a main restart', () => {
     parseDaemonLaunchNoteChange({
       arm: { launchToken: 't-1', launchConfig: { agentArgs: '', agentEnv: {}, claudeAccountId } }
     })
-  const note = (extra: object): unknown => ({
+  const note = (extra: { claudeAccountId?: string }): unknown => ({
     arm: { launchToken: 't-1', launchConfig: { agentArgs: '', agentEnv: {}, ...extra } }
   })
 
