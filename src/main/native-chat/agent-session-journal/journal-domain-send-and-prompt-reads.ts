@@ -5,16 +5,24 @@ import type {
 import { readJournalDomainSourceItems } from './journal-domain-source-items'
 import type { JournalSqlScope } from './journal-sql-scope'
 import { JOURNAL_ENDED_TURN_COUNTS } from './database/journal-ended-turn-counts'
+import { JOURNAL_PERSON_PROMPT_ROWS } from './database/journal-async-question-index'
 
-/** The oldest or newest root prompt (a user message that is not a command). */
+/** The oldest or newest root prompt (a user message that is not a command), or the newest a person
+ *  typed here: no other agent's mail (`from`) and none of Orca's own messages (`origin`). */
 export function readJournalDomainPromptItem(
   scope: JournalSqlScope,
-  end: 'first' | 'last'
+  end: 'first' | 'last' | 'last-person'
 ): AgentJournalRenderItem | null {
   const order = end === 'first' ? 'ASC' : 'DESC'
+  const rows =
+    end === 'last-person'
+      ? `${JOURNAL_PERSON_PROMPT_ROWS} AND (CASE WHEN json_valid(payload_json) THEN json_extract(payload_json,'$.body.origin') END) IS NULL`
+      : 'prompt=1'
+  // A journal opened read-only lacks the person-prompt index, so SQLite picks one here.
+  const indexed = end === 'last-person' ? '' : 'INDEXED BY journal_items_status_prompt'
   const row = scope.db
-    .prepare(`SELECT payload_json FROM journal_items INDEXED BY journal_items_status_prompt
-    WHERE session_id=? AND epoch=? AND hidden=0 AND prompt=1
+    .prepare(`SELECT payload_json FROM journal_items ${indexed}
+    WHERE session_id=? AND epoch=? AND hidden=0 AND ${rows}
     ORDER BY sequence ${order},sequence_index ${order},ordinal ${order} LIMIT 1`)
     .get(...scope.prefix)
   return row ? scope.decode<AgentJournalRenderItem>(scope.examined(row).payload_json) : null

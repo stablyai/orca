@@ -47,7 +47,7 @@ export type JournalConsumerRead =
   | { kind: 'automation-result-notes' }
   | { kind: 'operation-window'; anchors: JournalOperationWindowAnchors }
   | { kind: 'turn-attribution'; turnId: string; through: number }
-  | { kind: 'prompt-item'; end: 'first' | 'last' }
+  | { kind: 'prompt-item'; end: 'first' | 'last' | 'last-person' }
   | { kind: 'latest-task-list' }
   | { kind: 'run-mentions'; runId: string }
   | { kind: 'turn-ran-since'; openedAt: number | null }

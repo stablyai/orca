@@ -16,6 +16,7 @@ import {
   type RunChatKeepReason
 } from '../../shared/bots/bot-run-chat-close'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import type * as ChatSessions from './bot-chat-session'
 import type * as CloseStep from './bot-run-chat-close-step'
 
@@ -32,13 +33,16 @@ vi.mock('../runtime/rpc/methods/bots-chats', () => ({
 
 const world = vi.hoisted(() => {
   const closeCalls: string[] = []
+  const noBot = (): Bot | null => null
   return {
-    journals: new Map<string, { first: unknown; last: unknown }>(),
+    journals: new Map<string, { first: unknown; 'last-person': unknown }>(),
     working: new Set<string>(),
     tabs: new Set<string>(),
     closeCalls,
     /** Runs before the recheck under the lock, as mail arriving meanwhile would. */
-    beforeRecheck: () => {}
+    beforeRecheck: () => {},
+    /** The bot a session's chat is in, as the per-run timer finds it. */
+    sessionBot: noBot()
   }
 })
 vi.mock('../external-conversations/external-conversation-chat', () => ({
@@ -49,18 +53,18 @@ vi.mock('../runtime/orchestration/addressing/session-lineage/structured-session-
   readAgentSessionRecordStore: () => null,
   lineageLiveSession: () => null
 }))
-vi.mock('./bot-session-tabs', () => ({ botOfSession: () => null }))
+vi.mock('./bot-session-tabs', () => ({ botOfSession: () => world.sessionBot }))
 vi.mock('./bot-chat-session', () => ({
   requireStructuredHost: async () => ({
     journalReads: async (id: string) => ({
-      promptItem: async (end: 'first' | 'last') => world.journals.get(id)?.[end] ?? null
+      promptItem: async (end: 'first' | 'last-person') => world.journals.get(id)?.[end] ?? null
     }),
     getSessionTabId: (id: string) => (world.tabs.has(id) ? 'tab' : null)
   })
 }))
 vi.mock('./bot-run-chat-close-step', () => ({
-  runtimeRunChatClose:
-    () => async (_botId: string, sessionId: string, ended: () => Promise<boolean>) => {
+  runtimeRunChatClose: () => ({
+    close: async (_botId: string, sessionId: string, ended: () => Promise<boolean>) => {
       world.beforeRecheck()
       if (!(await ended())) {
         return 'kept'
@@ -68,14 +72,16 @@ vi.mock('./bot-run-chat-close-step', () => ({
       world.closeCalls.push(sessionId)
       chats.rows = chats.rows.filter((row) => row.id !== sessionId)
       return 'closed'
-    }
+    },
+    settle: async () => {}
+  })
 }))
 
-const { bindRunChatChecks, closeEndedRunChats, previewRunChats } =
+const { bindRunChatChecks, closeEndedRunChats, previewRunChats, scheduleRunChatCheck } =
   await import('./bot-run-chat-closer')
 // The real lock and close order; the closer above reads mocked ones.
 const { botChatSessions } = await vi.importActual<ChatSessionModule>('./bot-chat-session')
-const { closeRunChatUnderLock } = await vi.importActual<CloseStepModule>(
+const { closeRunChatUnderLock, settleClosedRunChats } = await vi.importActual<CloseStepModule>(
   './bot-run-chat-close-step'
 )
 
@@ -160,10 +166,13 @@ function setup(bot: Partial<Bot> = {}) {
     }),
     botItems: {
       store: () => ({
-        list: async ({ chatIds }: { chatIds: string[] }) => ({
-          items: fixture.items.filter((item) => chatIds.includes(item.chatId)),
-          counts: {}
-        })
+        // A page of `limit` rows, and exact counts per status, as the store gives them.
+        list: async ({ chatIds, limit }: { chatIds: string[]; limit: number }) => {
+          const owned = fixture.items.filter((item) => chatIds.includes(item.chatId))
+          const counts: Record<string, number> = {}
+          owned.forEach((item) => (counts[item.status] = (counts[item.status] ?? 0) + 1))
+          return { items: owned.slice(0, limit), counts }
+        }
       })
     }
   } as unknown as OrcaRuntimeService
@@ -180,7 +189,7 @@ function mailAddress(id: string): string {
 /** A run chat whose run ended long ago, with nothing else on it. */
 function runChat(): string {
   const id = randomUUID()
-  world.journals.set(id, { first: runMessage(`run-${id}`), last: runMessage(`run-${id}`) })
+  world.journals.set(id, { first: runMessage(`run-${id}`), 'last-person': null })
   chats.rows.push(row(id))
   return id
 }
@@ -194,6 +203,7 @@ beforeEach(() => {
   world.tabs.clear()
   world.closeCalls = []
   world.beforeRecheck = () => {}
+  world.sessionBot = null
 })
 
 afterEach(() => {
@@ -223,7 +233,10 @@ describe('closing ended run chats', () => {
     const { bot, runtime } = setup()
     const ended = runChat()
     const person = randomUUID()
-    world.journals.set(person, { first: { itemId: 'p', body: { kind: 'message' } }, last: null })
+    world.journals.set(person, {
+      first: { itemId: 'p', body: { kind: 'message' } },
+      'last-person': null
+    })
     chats.rows.push(row(person))
 
     const preview = await previewRunChats(runtime, bot)
@@ -248,7 +261,7 @@ describe('closing ended run chats', () => {
       'live-run': (id) => fixture.liveRuns.add(id),
       'tab-open': (id) => world.tabs.add(id),
       'person-spoke': (id) =>
-        (world.journals.get(id)!.last = { itemId: 'typed', body: { kind: 'message' } })
+        (world.journals.get(id)!['last-person'] = { itemId: 'typed', body: { kind: 'message' } })
     }
     const kept = new Map<string, RunChatKeepReason>()
     for (const reason of RUN_CHAT_KEEP_REASONS) {
@@ -267,6 +280,18 @@ describe('closing ended run chats', () => {
       expect.objectContaining({ chatId: doneItem, items: [{ number: 11, status: 'done' }] })
     ])
     expect(preview.itemMailTo).toEqual({ chatId: 'home-chat', title: 'a chat' })
+  })
+
+  it('keeps a chat owning an open item past the page of items the preview lists', async () => {
+    const { fixture, bot, runtime } = setup()
+    const id = runChat()
+    for (let number = 1; number <= 1000; number++) {
+      fixture.items.push({ chatId: id, number, status: 'done' })
+    }
+    fixture.items.push({ chatId: id, number: 1001, status: 'waiting' })
+    const preview = await previewRunChats(runtime, bot)
+    expect(preview.close).toEqual([])
+    expect(preview.keep.map((chat) => chat.keep)).toEqual([['open-item']])
   })
 
   it('does nothing while the setting is off', async () => {
@@ -320,51 +345,92 @@ describe('when a bot looks at its run chats', () => {
     await vi.waitFor(() => expect(world.closeCalls).toEqual([piledUp, later]))
     stop()
   })
+
+  it("looks once its run's chat has been quiet for the window, and not while the setting is off", async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(NOW)
+    const { bot, runtime } = setup()
+    world.sessionBot = bot
+    const id = runChat()
+    scheduleRunChatCheck(runtime, id)
+    await vi.advanceTimersByTimeAsync(RUN_CHAT_QUIET_MS)
+    expect(world.closeCalls).toEqual([])
+    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.waitFor(() => expect(world.closeCalls).toEqual([id]))
+
+    bot.closeEndedRuns = false
+    const off = runChat()
+    scheduleRunChatCheck(runtime, off)
+    await vi.advanceTimersByTimeAsync(RUN_CHAT_QUIET_MS + 30_000)
+    expect(world.closeCalls).toEqual([id])
+  })
 })
 
 describe('closing one run chat under the bot lock', () => {
   function sessions(closed: { stopped: boolean }) {
     const calls: string[] = []
+    const fail = { home: false, carry: false, handOver: false }
     const host = {
       deps: {
         store: {
           getConversation: (id: string) =>
-            id === 'home-chat' ? { provider: 'codex', sessionId: 'home-chat' } : null
+            id === 'home-chat' && !fail.home ? { provider: 'codex', sessionId: 'home-chat' } : null
         }
       }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the chat lock reads only these fields of the bot.
-    const bot = { id: 'bot-1', agent: 'codex', chatSessionId: 'home-chat' } as Bot
+    const bot = {
+      id: 'bot-1',
+      agent: 'codex',
+      chatSessionId: 'home-chat',
+      closeEndedRuns: true
+    } as Bot
     const chats = botChatSessions({
       bots: { list: () => [bot], setChatSession: async () => bot },
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: opening Home Chat reads only the store's conversation.
       host: async () => host as never,
-      createChat: async () => {},
+      createChat: async () => {
+        throw new Error('no Home Chat')
+      },
       showTab: async () => {},
       closeChat: async () => ({ stopped: true }),
       dropUnreadMail: async () => {}
     })
+    const steps: CloseStep.RunChatCloseSteps = {
+      close: async (id) => {
+        calls.push(`close ${id}`)
+        return closed
+      },
+      carry: async (_host, from, to) => {
+        if (fail.carry) {
+          throw new Error('carry failed')
+        }
+        calls.push(`carry ${from} -> ${to}`)
+      },
+      handOver: (from, to) => {
+        if (fail.handOver) {
+          throw new Error('hand over failed')
+        }
+        calls.push(`hand over ${from} -> ${to}`)
+      },
+      dropUnreadMail: async (_bot, from) => {
+        calls.push(`drop ${from}`)
+      }
+    }
     const close = (sessionId: string, ended: boolean) =>
-      closeRunChatUnderLock(
-        chats,
-        {
-          close: async (id) => {
-            calls.push(`close ${id}`)
-            return closed
-          },
-          carry: async (_host, from, to) => {
-            calls.push(`carry ${from} -> ${to}`)
-          },
-          handOver: (from, to) => calls.push(`hand over ${from} -> ${to}`),
-          dropUnreadMail: async (_bot, from) => {
-            calls.push(`drop ${from}`)
-          }
-        },
-        'bot-1',
-        sessionId,
-        async () => ended
-      )
-    return { calls, close }
+      closeRunChatUnderLock(chats, steps, 'bot-1', sessionId, async () => ended)
+    /** The next look at the bot's closed run chats; `coordinating` are those a Run is bound to. */
+    const settle = (closedChats: string[], coordinating: string[] = []) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the look reads only the Runs that name a chat.
+      const db = {
+        db: { prepare: () => ({ all: () => coordinating.map((id) => ({ id })) }) },
+        runsBoundToCoordinator: ({ orcaSessionId }: { orcaSessionId: string }) =>
+          coordinating.includes(orcaSessionId) ? [{ id: 'run-1' }] : []
+      } as unknown as OrchestrationDb
+      const closedRows = closedChats.map((id) => ({ chatId: id, sessionId: id }))
+      return settleClosedRunChats(chats, steps, db, 'bot-1', closedRows, async () => true)
+    }
+    return { calls, close, settle, fail, bot }
   }
 
   it('closes, then moves what was queued and coordinated there to the Home Chat', async () => {
@@ -378,14 +444,51 @@ describe('closing one run chat under the bot lock', () => {
     ])
   })
 
-  it('leaves the chat and its mail alone when the recheck keeps it or the close is refused', async () => {
+  it('leaves the chat and its mail alone when the recheck keeps it, the setting went off, or the close is refused', async () => {
     const kept = sessions({ stopped: true })
     await expect(kept.close('run-chat', false)).resolves.toBe('kept')
     await expect(kept.close('home-chat', true)).resolves.toBe('kept')
+    kept.bot.closeEndedRuns = false
+    await expect(kept.close('run-chat', true)).resolves.toBe('kept')
     expect(kept.calls).toEqual([])
 
     const refused = sessions({ stopped: false })
     await expect(refused.close('run-chat', true)).resolves.toBe('failed')
     expect(refused.calls).toEqual(['close run-chat'])
+  })
+
+  it('leaves the run chat open when the Home Chat cannot open', async () => {
+    const { calls, close, fail } = sessions({ stopped: true })
+    fail.home = true
+    await expect(close('run-chat', true)).rejects.toThrow('no Home Chat')
+    expect(calls).toEqual([])
+  })
+
+  it('moves what a failed move left on a closed run chat on a later look', async () => {
+    const { calls, close, settle, fail } = sessions({ stopped: true })
+    const carried = randomUUID()
+    fail.carry = true
+    await expect(close(carried, true)).resolves.toBe('closed')
+    // The Runs still moved, and the cards wait for the next look.
+    expect(calls).toEqual([
+      `close ${carried}`,
+      `hand over ${carried} -> home-chat`,
+      `drop ${carried}`
+    ])
+    fail.carry = false
+    calls.length = 0
+    await settle([carried, randomUUID()])
+    expect(calls).toEqual([`carry ${carried} -> home-chat`, `hand over ${carried} -> home-chat`])
+    calls.length = 0
+    await settle([carried])
+    expect(calls).toEqual([])
+
+    // A Run still bound to a closed run chat is found from the Runs, as after a restart.
+    const coordinating = randomUUID()
+    await settle([coordinating], [coordinating])
+    expect(calls).toEqual([
+      `carry ${coordinating} -> home-chat`,
+      `hand over ${coordinating} -> home-chat`
+    ])
   })
 })

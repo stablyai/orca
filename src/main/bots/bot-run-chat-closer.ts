@@ -2,11 +2,9 @@
 // the bot's `closeEndedRuns` is on: when it turns on, 10 minutes after each run, and once after a start.
 import type { Bot } from '../../shared/bot-types'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
-import { BOT_ITEM_STATUSES, isOpenBotItemStatus } from '../../shared/bots/bot-items'
+import { BOT_ITEM_STATUSES } from '../../shared/bots/bot-items'
 import { isBotGroupMemberSession } from '../../shared/bots/bot-group'
-import { readAutomationRunMessage } from '../../shared/automations/automation-run-message'
 import type { AutomationRunStatus } from '../../shared/automations/history/automation-run'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
@@ -31,7 +29,8 @@ import {
 import { readBotChats } from '../runtime/rpc/methods/bots-chats'
 import { chatIsIdle, chatPaneKey } from '../external-conversations/external-conversation-chat'
 import { requireStructuredHost } from './bot-chat-session'
-import { runtimeRunChatClose } from './bot-run-chat-close-step'
+import { runtimeRunChatClose, type ClosedRunChat } from './bot-run-chat-close-step'
+import { chatRunId, coordinatesLiveRun, ownsOpenItem, personSpoke } from './bot-run-chat-facts'
 import { botOfSession } from './bot-session-tabs'
 
 type RunChatRead = BotRunChatPreviewRow & {
@@ -47,54 +46,6 @@ type Context = {
   db: OrchestrationDb
   runStatus: Map<string, AutomationRunStatus>
   targeted: Set<string>
-}
-
-// A chat's first message never changes, so each journal is opened once to tell a run's chat.
-const runOfChat = new Map<string, string | null>()
-
-async function chatRunId(host: StructuredAgentSessionHost, chatId: string) {
-  if (runOfChat.has(chatId)) {
-    return { runId: runOfChat.get(chatId) ?? null, first: null }
-  }
-  const first = await (await host.journalReads(chatId)).promptItem('first')
-  const body = first?.body
-  const runId =
-    body?.kind === 'message' && body.origin === 'automation-run'
-      ? (readAutomationRunMessage(body.automationRun)?.runId ?? null)
-      : null
-  // A chat whose first message is still being written is told on the next look.
-  if (first) {
-    runOfChat.set(chatId, runId)
-  }
-  return { runId, first }
-}
-
-function personSpoke(first: AgentJournalRenderItem | null, last: AgentJournalRenderItem | null) {
-  return (
-    last !== null &&
-    last.itemId !== first?.itemId &&
-    last.body.kind === 'message' &&
-    !last.body.from &&
-    !last.body.origin
-  )
-}
-
-function coordinatesLiveRun(db: OrchestrationDb, sessionId: string): boolean {
-  if (!isOrcaSessionId(sessionId)) {
-    return false
-  }
-  const runs = db.runsBoundToCoordinator({
-    orcaSessionId: sessionId,
-    paneKey: null,
-    terminalHandle: null
-  })
-  if (runs.length === 0) {
-    return false
-  }
-  const live = db.db.prepare(
-    `SELECT 1 FROM dispatch_contexts WHERE run_id = ? AND status IN ('pending', 'dispatched') LIMIT 1`
-  )
-  return runs.some((run) => live.get(run.id) !== undefined)
 }
 
 async function readContext(runtime: OrcaRuntimeService, bot: Bot): Promise<Context> {
@@ -115,6 +66,12 @@ async function readContext(runtime: OrcaRuntimeService, bot: Bot): Promise<Conte
   }
 }
 
+/** The session running a chat now; a /clear moves it on from the row's root. */
+function liveSessionOf(chatId: string): string {
+  const store = readAgentSessionRecordStore()
+  return (store && lineageLiveSession(store, chatId)?.sessionId) ?? chatId
+}
+
 /** One open chat's verdict; null when no run opened it. */
 async function readRunChat(
   context: Context,
@@ -123,13 +80,11 @@ async function readRunChat(
   now = Date.now()
 ): Promise<RunChatRead | null> {
   const { host, db } = context
-  const { runId, first } = await chatRunId(host, row.id)
+  const runId = await chatRunId(host, row.id)
   if (runId === null) {
     return null
   }
-  const store = readAgentSessionRecordStore()
-  const sessionId = (store && lineageLiveSession(store, row.id)?.sessionId) ?? row.id
-  const reads = await host.journalReads(row.id)
+  const sessionId = liveSessionOf(row.id)
   const facts: RunChatFacts = {
     'run-not-ended': !runChatRunEnded(context.runStatus.get(runId)),
     recent: now - row.lastActivityAt < RUN_CHAT_QUIET_MS,
@@ -137,17 +92,14 @@ async function readRunChat(
     'unread-mail':
       isOrcaSessionId(sessionId) &&
       db.getUnreadMessages(formatOrcaSessionAddress(sessionId)).length > 0,
-    'open-item': items.some((item) => isOpenBotItemStatus(item.status)),
+    'open-item': await ownsOpenItem(context.runtime, context.bot.id, row.id),
     'automation-target': context.targeted.has(row.id) || context.targeted.has(sessionId),
     thread: Boolean(
       context.runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))?.key
     ),
     'live-run': coordinatesLiveRun(db, sessionId),
     'tab-open': host.getSessionTabId(sessionId) !== null,
-    'person-spoke': personSpoke(
-      first ?? (await reads.promptItem('first')),
-      await reads.promptItem('last')
-    )
+    'person-spoke': await personSpoke(host, row.id)
   }
   return {
     chatId: row.id,
@@ -174,6 +126,7 @@ async function readRunChats(
       !isBotGroupMemberSession(row.id) &&
       (only === undefined || row.id === only)
   )
+  // What the preview lists; whether a chat owns an open item is counted per chat.
   const owned = await runtime.botItems.store().list({
     botId: bot.id,
     statuses: BOT_ITEM_STATUSES,
@@ -223,6 +176,19 @@ export async function previewRunChats(
   }
 }
 
+/** A close whose moves to the Home Chat failed is finished here, before the open chats are judged. */
+async function settleClosedRunChats(
+  runtime: OrcaRuntimeService,
+  bot: Bot,
+  settle: ReturnType<typeof runtimeRunChatClose>['settle']
+): Promise<void> {
+  const closed: ClosedRunChat[] = (await readBotChats(runtime, bot, null, true))
+    .filter((row) => row.closed && row.reason === 'ended' && !row.home)
+    .map((row) => ({ chatId: row.id, sessionId: liveSessionOf(row.id) }))
+  const host = await requireStructuredHost(runtime)
+  await settle(bot.id, closed, async (chatId) => (await chatRunId(host, chatId)) !== null)
+}
+
 export type RunChatCloseResult = {
   closed: number
   failed: number
@@ -245,29 +211,34 @@ export async function closeEndedRunChats(
   try {
     // A closed host would skip the close, leaving the chat taking mail.
     await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+    const closer = runtimeRunChatClose(runtime)
+    await settleClosedRunChats(runtime, bot, closer.settle).catch((error: unknown) =>
+      console.warn('[bots] could not move what a closed run chat left', error)
+    )
     const { runChats } = await readRunChats(runtime, bot, only)
     const kept: RunChatCloseResult['kept'] = {}
     const keep = (reasons: readonly RunChatKeepReason[]) =>
       reasons.forEach((reason) => (kept[reason] = (kept[reason] ?? 0) + 1))
     const tried: string[] = []
     let failed = 0
-    const closeRunChat = runtimeRunChatClose(runtime)
     for (const chat of runChats) {
       if (chat.keep.length > 0) {
         keep(chat.keep)
         continue
       }
-      const outcome = await closeRunChat(bot.id, chat.sessionId, async () => {
-        const again = await readRunChats(runtime, bot, chat.chatId)
-        const verdict = again.runChats[0]
-        if (verdict) {
-          keep(verdict.keep)
-        }
-        return verdict !== undefined && verdict.keep.length === 0
-      }).catch((error: unknown) => {
-        console.warn('[bots] could not close an ended run chat', error)
-        return 'failed' as const
-      })
+      const outcome = await closer
+        .close(bot.id, chat.sessionId, async () => {
+          const again = await readRunChats(runtime, bot, chat.chatId)
+          const verdict = again.runChats[0]
+          if (verdict) {
+            keep(verdict.keep)
+          }
+          return verdict !== undefined && verdict.keep.length === 0
+        })
+        .catch((error: unknown) => {
+          console.warn('[bots] could not close an ended run chat', error)
+          return 'failed' as const
+        })
       if (outcome === 'closed') {
         tried.push(chat.chatId)
       } else if (outcome === 'failed') {

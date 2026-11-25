@@ -62,7 +62,7 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   operationWindow(anchors: JournalOperationWindowAnchors): Promise<JournalOperationWindow>
   /** Whom a turn acts for, by index over the turn's own rows (never the chat's send history). */
   turnAttribution(turnId: string, through: number): Promise<JournalTurnAttribution>
-  promptItem(end: 'first' | 'last'): Promise<AgentJournalRenderItem | null>
+  promptItem(end: 'first' | 'last' | 'last-person'): Promise<AgentJournalRenderItem | null>
   /** The plan last written in the turn of the chat's newest tool call, or null. */
   latestTaskList(): Promise<NativeChatTaskList | null>
   runMentions(
