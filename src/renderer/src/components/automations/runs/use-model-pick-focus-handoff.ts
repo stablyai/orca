@@ -1,41 +1,44 @@
 // Moves focus from the model picker to the confirmation that replaces it, only while the user
-// stayed with the picker.
+// was with the picker when the pick finished.
 import { useCallback, useEffect, useRef } from 'react'
 
 const PICKER_SELECTOR = '[data-automation-model-picker]'
 
+function insidePicker(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(PICKER_SELECTOR) !== null
+}
+
 export function useModelPickFocusHandoff(): {
   /** Call when a pick is sent from the picker. */
   arm: () => void
-  /** Ref for the confirmation; it takes focus once if still armed and focus is nowhere else. */
+  /** Ref for the confirmation; it takes focus once if the user was last with the picker. */
   takeFocus: (node: HTMLElement | null) => void
 } {
-  const armed = useRef(false)
+  const pending = useRef(false)
+  // Why: decided by where the user last moved, before the picker unmounts and drops focus to the
+  // page; a click on other content also leaves focus on the page, and that must not be stolen.
+  const withPicker = useRef(false)
   useEffect(() => {
-    // Why: once the user moves focus or clicks outside the picker, where they went is theirs.
-    const release = (event: Event): void => {
-      if (!(event.target instanceof Element && event.target.closest(PICKER_SELECTOR))) {
-        armed.current = false
-      }
+    const track = (event: Event): void => {
+      withPicker.current = insidePicker(event.target)
     }
-    document.addEventListener('focusin', release, true)
-    document.addEventListener('pointerdown', release, true)
+    document.addEventListener('focusin', track, true)
+    document.addEventListener('pointerdown', track, true)
     return () => {
-      document.removeEventListener('focusin', release, true)
-      document.removeEventListener('pointerdown', release, true)
+      document.removeEventListener('focusin', track, true)
+      document.removeEventListener('pointerdown', track, true)
     }
   }, [])
   const arm = useCallback(() => {
-    armed.current = true
+    pending.current = true
+    withPicker.current = true
   }, [])
   const takeFocus = useCallback((node: HTMLElement | null) => {
-    if (!node || !armed.current) {
+    if (!node || !pending.current) {
       return
     }
-    armed.current = false
-    const active = node.ownerDocument.activeElement
-    // The picker unmounts as the confirmation mounts, which leaves focus on the page.
-    if (!active || active === node.ownerDocument.body) {
+    pending.current = false
+    if (withPicker.current) {
       node.focus()
     }
   }, [])

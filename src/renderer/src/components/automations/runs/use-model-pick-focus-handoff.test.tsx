@@ -53,6 +53,15 @@ it('leaves focus where the user moved it before the confirmation', () => {
   expect(document.activeElement).toBe(rerun)
 })
 
+it('moves focus to the confirmation when the user tabbed away and came back to the picker', () => {
+  const picker = pickThenWait()
+  const rerun = screen.getByRole('button', { name: 'Rerun' })
+  act(() => rerun.focus())
+  act(() => picker.focus())
+  act(() => confirm())
+  expect(document.activeElement).toBe(screen.getByRole('status'))
+})
+
 it('does not take focus after the user clicked other content', () => {
   const picker = pickThenWait()
   fireEvent.pointerDown(screen.getByText('Output'))
