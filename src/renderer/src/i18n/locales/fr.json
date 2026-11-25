@@ -952,6 +952,11 @@
       "keywordDelay": "délai",
       "keywordCooldown": "attente",
       "keywordSecurity": "sécurité"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "Bloqué par les paramètres Claude de votre organisation"
+      }
     }
   },
   "menu": {
@@ -22225,7 +22230,10 @@
     },
     "toastFallbacks": {
       "worktreeCreateFailed": "Impossible de créer l’arbre de travail.",
-      "missingBaseBranchHelp": "Créez un premier commit (par exemple sur main), ou sélectionnez une branche existante dans « Créer à partir de », puis réessayez."
+      "missingBaseBranchHelp": "Créez un premier commit (par exemple sur main), ou sélectionnez une branche existante dans « Créer à partir de », puis réessayez.",
+      "baseBranchLookupFailedTitle": "Impossible de déterminer la branche de base",
+      "baseBranchLookupFailedMessage": "Git a échoué ou a expiré lors de la recherche de la branche de base par défaut de ce dépôt.",
+      "baseBranchLookupFailedHelp": "Réessayez, ou sélectionnez une branche de base dans « Créer à partir de »."
     },
     "crash": {
       "report": {
@@ -25776,10 +25784,7 @@
         "lastItem": "Dernier élément",
         "previous": "Élément précédent",
         "next": "Élément suivant",
-        "linkCount": "{{count}} liens",
-        "reply": "Répondre",
-        "replyAbove": "Répondre, plus haut",
-        "replyBelow": "Répondre, plus bas"
+        "subWhere": "Élément {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "a lié {{links}}",
@@ -25817,7 +25822,9 @@
         "notSentYet": "pas encore envoyée",
         "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez.",
         "replacedByNewer": "Remplacée par une question plus récente",
-        "skipped": "Ignorées"
+        "skipped": "Ignorées",
+        "heldImagesLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} images. Envoyez d’abord les réponses gardées jusqu’ici, ou retirez-en quelques-unes.",
+        "heldSkillsLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} skills. Envoyez d’abord les réponses gardées jusqu’ici, ou retirez-en quelques-uns."
       },
       "readMoreClosedFailed": "Impossible de lire plus d’éléments fermés"
     },

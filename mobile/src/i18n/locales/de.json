@@ -4627,7 +4627,9 @@
       "ask": {
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
         "replacedByNewer": "Durch eine neuere Frage ersetzt",
-        "skipped": "Übersprungen"
+        "skipped": "Übersprungen",
+        "heldImagesLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Fotos aufnimmt. Entferne einige und versuche es erneut.",
+        "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Entferne einige und versuche es erneut."
       }
     },
     "needs": {
@@ -5190,5 +5192,8 @@
     "cardSlot": {
       "working": "In Arbeit"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Durch die Claude-Einstellungen deiner Organisation blockiert"
   }
 }

@@ -4736,7 +4736,9 @@
       "ask": {
         "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde.",
         "replacedByNewer": "Sustituida por una pregunta más reciente",
-        "skipped": "Omitidas"
+        "skipped": "Omitidas",
+        "heldImagesLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} fotos. Quita algunas e inténtalo de nuevo.",
+        "heldSkillsLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} habilidades. Quita algunas e inténtalo de nuevo."
       }
     },
     "needs": {
@@ -5302,5 +5304,8 @@
     "cardSlot": {
       "working": "Trabajando"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Bloqueado por la configuración de Claude de tu organización"
   }
 }

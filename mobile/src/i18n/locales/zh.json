@@ -6779,7 +6779,9 @@
         "replaced": "智能体提出了新问题。请先阅读，再回复",
         "replacedByNewer": "已由较新的问题取代",
         "skipped": "已跳过",
-        "notNow": "暂不"
+        "notNow": "暂不",
+        "heldImagesLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 张照片。请移除一些后重试。",
+        "heldSkillsLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 个技能。请移除一些后重试。"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看“活动”，再决定是否重新发送",
@@ -8324,5 +8326,8 @@
     "cardSlot": {
       "working": "工作中"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "已被你所在组织的 Claude 设置阻止"
   }
 }

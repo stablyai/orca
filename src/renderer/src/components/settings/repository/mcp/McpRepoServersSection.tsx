@@ -82,7 +82,12 @@ export function McpRepoServersSection({
   )
 
   const setOn = (server: McpServerView, on: boolean): void => {
-    void setMcpServerWorkspaces(target, server.id, withMcpWorkspace(server.workspaces, repo.id, on))
+    void setMcpServerWorkspaces(
+      target,
+      server.id,
+      withMcpWorkspace(server.workspaces, repo.id, on),
+      server.workspaces
+    )
       .then(() =>
         showMcpServerChangeToast(
           target,

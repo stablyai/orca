@@ -1755,7 +1755,7 @@
         "importInvalid": "{{count}} linhas ilegíveis",
         "importUndecryptable": "{{count}} protegido pelo navegador; exporte um CSV dele",
         "imported": "{{count}} senhas importadas",
-        "deleteAllConfirmDescription": "Cada senha salva no perfil {{profile}} é excluída permanentemente. Isso não pode ser desfeito.",
+        "deleteAllConfirmDescription": "Todas as senhas salvas, notas e sites marcados para nunca salvar no perfil {{profile}} serão excluídos permanentemente. Isso não pode ser desfeito.",
         "deletedAll": "Dados de senha excluídos",
         "form": {
           "invalidSite": "Insira um endereço de site, como exemplo.com.",
@@ -2255,6 +2255,11 @@
     },
     "artifacts": {
       "teamDisabled": "O compartilhamento de Artefatos foi desativado pela sua equipe."
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "Bloqueado pelas configurações do Claude da sua organização"
+      }
     }
   },
   "auto": {
@@ -23760,7 +23765,10 @@
     },
     "toastFallbacks": {
       "worktreeCreateFailed": "Não foi possível criar a árvore de trabalho.",
-      "missingBaseBranchHelp": "Crie um commit inicial (por exemplo, em main) ou selecione uma ramificação existente em Criar a partir de e tente novamente."
+      "missingBaseBranchHelp": "Crie um commit inicial (por exemplo, em main) ou selecione uma ramificação existente em Criar a partir de e tente novamente.",
+      "baseBranchLookupFailedTitle": "Não foi possível consultar a ramificação base",
+      "baseBranchLookupFailedMessage": "O Git falhou ou expirou ao consultar a ramificação base padrão deste repositório.",
+      "baseBranchLookupFailedHelp": "Tente novamente ou selecione uma ramificação base em Criar a partir de."
     },
     "crash": {
       "report": {
@@ -26255,10 +26263,7 @@
         "lastItem": "Último item",
         "previous": "Item anterior",
         "next": "Próximo item",
-        "linkCount": "{{count}} links",
-        "reply": "Responder",
-        "replyAbove": "Responder, acima",
-        "replyBelow": "Responder, abaixo"
+        "subWhere": "Item {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "vinculou {{links}}",
@@ -26268,7 +26273,9 @@
         "notSentYet": "ainda não enviado",
         "replaced": "O agente fez uma nova pergunta. Leia e responda.",
         "replacedByNewer": "Substituída por uma pergunta mais recente",
-        "skipped": "Ignoradas"
+        "skipped": "Ignoradas",
+        "heldImagesLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} imagens. Envie primeiro as respostas guardadas até agora ou remova algumas.",
+        "heldSkillsLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} habilidades. Envie primeiro as respostas guardadas até agora ou remova algumas."
       },
       "chat": {
         "moreItems": "+{{count}} a mais"
