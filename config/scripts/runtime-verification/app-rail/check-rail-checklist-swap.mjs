@@ -56,7 +56,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
   const watchFrames = () =>
     page.evaluate(() => {
       const watch = { frames: 0, withoutChecklist: 0, stop: false }
-      Reflect.set(window, '__checklistWatch', watch)
+      window.__checklistWatch = watch
       const tick = () => {
         if (watch.stop) {
           return
@@ -71,7 +71,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
     })
   const stopWatch = () =>
     page.evaluate(() => {
-      const watch = Reflect.get(window, '__checklistWatch')
+      const watch = window.__checklistWatch
       watch.stop = true
       return {
         frames: watch.frames,
@@ -160,7 +160,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
       results.push(`PASS ${label}`)
     } catch (error) {
       results.push(
-        `FAIL ${label}: ${error instanceof Error ? error.message.split('\n')[0] : error}`
+        `FAIL ${label}: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`
       )
       failures.push(label)
     }
@@ -289,7 +289,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
               phase: 'idle',
               nextId: 1_000_000
             }
-            Reflect.set(window, '__frameHold', hold)
+            window.__frameHold = hold
             window.requestAnimationFrame = (callback) => {
               const id = hold.nextId++
               hold.held.set(id, callback)
@@ -306,7 +306,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
                 realCancel(id)
               }
             }
-            Reflect.set(window, '__releaseFrames', () => {
+            window.__releaseFrames = () => {
               window.requestAnimationFrame = realRequest
               window.cancelAnimationFrame = realCancel
               for (const [id, callback] of hold.held) {
@@ -314,12 +314,12 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
                 hold.ran.push(id)
                 callback(performance.now())
               }
-            })
+            }
           })
           const commit = (phase, updates) =>
             page.evaluate(
               async ({ phase, updates }) => {
-                Reflect.get(window, '__frameHold').phase = phase
+                window.__frameHold.phase = phase
                 const { useAppStore } = await import('/src/store/index.ts')
                 await useAppStore.getState().updateSettings(updates)
               },
@@ -327,7 +327,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
             )
           const holdState = () =>
             page.evaluate(() => {
-              const hold = Reflect.get(window, '__frameHold')
+              const hold = window.__frameHold
               return {
                 recovery: hold.recovery,
                 canceled: hold.canceled,
@@ -351,9 +351,9 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
             null,
             { polling: 50 }
           )
-          await page.evaluate(() =>
-            Reflect.set(window, '__moreNode', document.querySelector('[data-app-rail-item="more"]'))
-          )
+          await page.evaluate(() => {
+            window.__moreNode = document.querySelector('[data-app-rail-item="more"]')
+          })
           const afterFirst = await holdState()
           const first = afterFirst.recovery.find((frame) => frame.phase === 'automations')
           assert.ok(
@@ -378,15 +378,11 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
 
           // Commit 2, before the first recovery frame runs: Artifacts folds into the same More.
           await commit('artifacts', { showArtifactsButton: true })
-          await page.waitForFunction(
-            (id) => Reflect.get(window, '__frameHold').canceled.includes(id),
-            first.id,
-            { polling: 50 }
-          )
+          await page.waitForFunction((id) => window.__frameHold.canceled.includes(id), first.id, {
+            polling: 50
+          })
           const witness = await page.evaluate(() => ({
-            sameMore:
-              document.querySelector('[data-app-rail-item="more"]') ===
-              Reflect.get(window, '__moreNode'),
+            sameMore: document.querySelector('[data-app-rail-item="more"]') === window.__moreNode,
             rail: Array.from(document.querySelectorAll('[data-app-rail-item]'), (element) =>
               element.getAttribute('data-app-rail-item')
             ).join(',')
@@ -408,13 +404,13 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
           )
           assert.ok(!afterSecond.ran.includes(first.id), `${label}: the first frame never ran`)
 
-          await page.evaluate(() => Reflect.get(window, '__releaseFrames')())
+          await page.evaluate(() => window.__releaseFrames())
           await paint(page)
           await paint(page)
           const owner = await page.evaluate(() => {
             const active = document.activeElement
             return {
-              moreOwnsFocus: active === Reflect.get(window, '__moreNode'),
+              moreOwnsFocus: active === window.__moreNode,
               inputKeepsFocus: active?.getAttribute('aria-label') === 'outside probe',
               active:
                 active === document.body

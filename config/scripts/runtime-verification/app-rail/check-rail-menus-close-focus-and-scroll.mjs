@@ -38,7 +38,9 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
       const detail = await run()
       results.push(`PASS ${name}${detail ? `: ${detail}` : ''}`)
     } catch (error) {
-      results.push(`FAIL ${name}: ${error instanceof Error ? error.message.split('\n')[0] : error}`)
+      results.push(
+        `FAIL ${name}: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`
+      )
       failures.push(name)
     }
   }
@@ -60,8 +62,7 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
         `${active.tagName}[${active.getAttribute('role')}]`
       )
     })
-  const triggerHasFocus = () =>
-    page.evaluate(() => document.activeElement === Reflect.get(window, '__trigger'))
+  const triggerHasFocus = () => page.evaluate(() => document.activeElement === window.__trigger)
   const menusGone = () =>
     page.waitForFunction(() => document.querySelector('[role=menu]') === null, null, {
       polling: 50
@@ -89,11 +90,9 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
   }
 
   async function keyboardOpen(item) {
-    await page.evaluate(
-      (id) =>
-        Reflect.set(window, '__trigger', document.querySelector(`[data-app-rail-item="${id}"]`)),
-      item
-    )
+    await page.evaluate((id) => {
+      window.__trigger = document.querySelector(`[data-app-rail-item="${id}"]`)
+    }, item)
     await page.locator(`[data-app-rail-item="${item}"]`).focus()
     await page.keyboard.press('Enter')
     await page.locator('[role=menu]').first().waitFor()
@@ -210,7 +209,7 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
             await page.evaluate(() => {
               const realRequest = window.requestAnimationFrame.bind(window)
               const probe = { requested: false, ran: false, focusWhenRun: null }
-              Reflect.set(window, '__recoveryProbe', probe)
+              window.__recoveryProbe = probe
               window.requestAnimationFrame = (callback) => {
                 const source = String(callback)
                 if (
@@ -234,7 +233,7 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
             const point = await blankPoint()
             await page.mouse.click(point.x, point.y)
             await settleFocus()
-            const probe = await page.evaluate(() => Reflect.get(window, '__recoveryProbe'))
+            const probe = await page.evaluate(() => window.__recoveryProbe)
             assert.ok(
               probe.requested && probe.ran,
               `the recovery frame ran: ${JSON.stringify(probe)}`
@@ -411,9 +410,9 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
       return page.locator('[data-slot="dropdown-menu-sub-content"]')
     }
     for (const theme of ['light', 'dark']) {
-      for (const [label, open] of [
-        ['"…" menu in a 120px window', openCustomizeMenu],
-        ['More > Customize in a 130px window', openMoreSubmenu]
+      for (const { label, open } of [
+        { label: '"…" menu in a 120px window', open: openCustomizeMenu },
+        { label: 'More > Customize in a 130px window', open: openMoreSubmenu }
       ]) {
         await check(`scroll ${theme} ${label}: fits, wheel scrolls both ways`, async () => {
           const menu = await open(theme)

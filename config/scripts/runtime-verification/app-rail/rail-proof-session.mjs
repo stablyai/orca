@@ -129,7 +129,7 @@ export async function runRailProof(name, body) {
         `teardown: fixture server children [${children.join(', ')}] ${childrenGone.every(Boolean) ? 'exited' : 'STILL RUNNING'}`
       )
       log(
-        `teardown: fixture server pid ${pid} (started by this run) ${serverGone ? 'stopped' : 'STILL RUNNING'}`
+        `teardown: fixture server pid ${String(pid)} (started by this run) ${serverGone ? 'stopped' : 'STILL RUNNING'}`
       )
     }
   }
