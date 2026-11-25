@@ -152,6 +152,11 @@ export function GoogleAccountRow({
         ) : (
           <p className="truncate text-xs text-muted-foreground">{servicesLine}</p>
         )}
+        {!connected && account.googleError ? (
+          <p className="truncate text-xs text-muted-foreground" title={account.googleError}>
+            {account.googleError}
+          </p>
+        ) : null}
       </div>
       {!connected ? (
         <Button size="sm" onClick={() => signIn(googleSignInChoices(account), account.email)}>

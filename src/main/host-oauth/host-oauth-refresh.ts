@@ -39,6 +39,9 @@ export type HostOAuthRefreshOutcome =
   | 'ended'
   | 'superseded'
 
+/** The provider's own words for a refused refresh (Google adds `error_subtype` and `error_description`). */
+export type HostOAuthRefusal = { error: string; subtype?: string; description?: string }
+
 export type HostOAuthRefresherConfig<TLogin> = {
   tokenUrl: string
   refreshAheadMs: number
@@ -51,7 +54,7 @@ export type HostOAuthRefresherConfig<TLogin> = {
   grantOf: (login: TLogin) => HostOAuthGrant | null
   /** Gets the login as saved now, never the one read before the request. */
   save: (id: string, login: TLogin, refreshed: HostOAuthRefreshed) => void | Promise<void>
-  ended: (id: string, login: TLogin, error: string) => void | Promise<void>
+  ended: (id: string, login: TLogin, refusal: HostOAuthRefusal) => void | Promise<void>
 }
 
 const TokenResponse = z.object({
@@ -60,7 +63,11 @@ const TokenResponse = z.object({
   expires_in: z.number().positive(),
   scope: z.string().min(1).optional()
 })
-const ErrorResponse = z.object({ error: z.string().min(1) })
+const ErrorResponse = z.object({
+  error: z.string().min(1),
+  error_subtype: z.string().min(1).optional().catch(undefined),
+  error_description: z.string().min(1).optional().catch(undefined)
+})
 
 export type HostOAuthRefresher = {
   /** Refreshes when due, or now when the provider refused the token (force). */
@@ -130,14 +137,18 @@ export function createHostOAuthRefresher<TLogin>(
       })
       return 'refreshed'
     }
-    const error = ErrorResponse.safeParse(body).data?.error
+    const refused = ErrorResponse.safeParse(body).data
     // invalid_grant arrives as a 400; a deleted client (invalid_client) can come as a 401.
     const gone =
-      error !== undefined &&
-      ((response.status === 400 && ended.has(error)) ||
-        (response.status === 401 && (config.endedErrors ?? []).includes(error)))
+      refused !== undefined &&
+      ((response.status === 400 && ended.has(refused.error)) ||
+        (response.status === 401 && (config.endedErrors ?? []).includes(refused.error)))
     if (gone) {
-      await config.ended(id, current, error)
+      await config.ended(id, current, {
+        error: refused.error,
+        ...(refused.error_subtype ? { subtype: refused.error_subtype } : {}),
+        ...(refused.error_description ? { description: refused.error_description } : {})
+      })
       return 'ended'
     }
     return 'offline'

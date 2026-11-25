@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createHostOAuthRefresher, type HostOAuthRefreshed } from './host-oauth-refresh'
+import {
+  createHostOAuthRefresher,
+  type HostOAuthRefreshed,
+  type HostOAuthRefusal
+} from './host-oauth-refresh'
 
 type Login = { refreshToken: string; expiresAt: number; clientId: string; clientSecret?: string }
 
@@ -11,7 +15,7 @@ function setup(options: { rotates: boolean; endedErrors?: string[]; login?: Part
     ['a', { refreshToken: 'r1', expiresAt: NOW + 60_000, clientId: 'c1', ...options.login }]
   ])
   const saved: HostOAuthRefreshed[] = []
-  const endedWith: string[] = []
+  const endedWith: HostOAuthRefusal[] = []
   const forms: URLSearchParams[] = []
   let answer: () => Response | Promise<Response> = () =>
     json(200, { access_token: 'a2', expires_in: 3600, scope: 'x y' })
@@ -88,9 +92,21 @@ describe('a login refreshed on this host', () => {
 
   it('hands back a grant the provider ended, and nothing else', async () => {
     const revoked = setup({ rotates: true })
-    revoked.answer(() => json(400, { error: 'invalid_grant' }))
+    revoked.answer(() =>
+      json(400, {
+        error: 'invalid_grant',
+        error_subtype: 'invalid_rapt',
+        error_description: 'reauth related error (invalid_rapt)'
+      })
+    )
     expect(await revoked.refresher.refresh('a', revoked.deps)).toBe('ended')
-    expect(revoked.endedWith).toEqual(['invalid_grant'])
+    expect(revoked.endedWith).toEqual([
+      {
+        error: 'invalid_grant',
+        subtype: 'invalid_rapt',
+        description: 'reauth related error (invalid_rapt)'
+      }
+    ])
 
     const deletedClient = setup({ rotates: false, endedErrors: ['invalid_client'] })
     deletedClient.answer(() => json(401, { error: 'invalid_client' }))
@@ -115,7 +131,7 @@ describe('a login changed while its refresh is in flight', () => {
       ['a', { refreshToken: 'r1', expiresAt: NOW, clientId: 'c1' }]
     ])
     const saved: HostOAuthRefreshed[] = []
-    const ended: string[] = []
+    const ended: HostOAuthRefusal[] = []
     const refresher = createHostOAuthRefresher<Login>({
       tokenUrl: 'https://provider.example/token',
       refreshAheadMs: 60_000,

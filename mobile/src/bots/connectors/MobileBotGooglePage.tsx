@@ -209,7 +209,9 @@ export function MobileBotGooglePage(props: {
         {props.banner}
         {opened.status === 'reconnect' ? (
           <>
-            <SettingsNote>{ended}</SettingsNote>
+            <SettingsNote>
+              {opened.googleError ? `${ended}\n${opened.googleError}` : ended}
+            </SettingsNote>
             {reconnectGroup(opened, opened.email)}
           </>
         ) : opened === shown ? null : (
