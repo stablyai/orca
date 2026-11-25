@@ -15,6 +15,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.prForBranch',
     permission: 'workspace',
+    share: 'not-shared',
     params: PrForBranch,
     handler: async (params, { runtime, clientKind, signal }) =>
       runtime.getRepoPRForBranch(
@@ -36,6 +37,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.prChecks',
     permission: 'workspace',
+    share: 'not-shared',
     params: PullRequestChecks,
     handler: async (params, { runtime }) =>
       runtime.getRepoPRChecks(params.repo, params.prNumber, params.headSha, params.prRepo ?? null, {
@@ -47,6 +49,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.prCheckDetails',
     permission: 'workspace',
+    share: 'not-shared',
     params: PullRequestCheckDetails,
     handler: async (params, { runtime, signal }) =>
       runtime.getRepoPRCheckDetails(
@@ -64,6 +67,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.rerunPRChecks',
     permission: 'workspace',
+    share: 'not-shared',
     params: RerunPullRequestChecks,
     handler: async (params, { runtime }) =>
       runtime.rerunRepoPRChecks(params.repo, params.prNumber, {
@@ -75,6 +79,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.prComments',
     permission: 'workspace',
+    share: 'not-shared',
     params: PullRequest,
     handler: async (params, { runtime }) =>
       runtime.getRepoPRComments(params.repo, params.prNumber, params.prRepo ?? null, {
@@ -84,6 +89,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.setPRCommentReaction',
     permission: 'workspace',
+    share: 'not-shared',
     params: PRCommentReaction,
     handler: async (params, { runtime }) =>
       runtime.setRepoPRCommentReaction(
@@ -97,6 +103,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.prFileContents',
     permission: 'workspace',
+    share: 'not-shared',
     params: PullRequestFileContents,
     handler: async (params, { runtime }) =>
       runtime.getRepoPRFileContents(params.repo, {
@@ -112,6 +119,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.resolveReviewThread',
     permission: 'workspace',
+    share: 'not-shared',
     params: ReviewThread,
     handler: async (params, { runtime }) =>
       runtime.resolveRepoReviewThread(
@@ -124,6 +132,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.setPRFileViewed',
     permission: 'workspace',
+    share: 'not-shared',
     params: PullRequestFileViewed,
     handler: async (params, { runtime }) =>
       runtime.setRepoPRFileViewed(params.repo, {

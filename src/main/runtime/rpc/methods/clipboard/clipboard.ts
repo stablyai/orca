@@ -106,6 +106,7 @@ export const CLIPBOARD_METHODS = [
   defineMethod({
     name: 'clipboard.saveImageAsTempFile',
     permission: 'workspace',
+    share: 'not-shared',
     params: SaveImageAsTempFile,
     handler: async (params, ctx) => {
       const clientId = mobileClientId(ctx)
@@ -124,6 +125,7 @@ export const CLIPBOARD_METHODS = [
   defineMethod({
     name: 'clipboard.startImageUpload',
     permission: 'workspace',
+    share: 'not-shared',
     params: StartImageUpload,
     handler: (params, ctx) => {
       pruneExpiredUploads()
@@ -147,6 +149,7 @@ export const CLIPBOARD_METHODS = [
   defineMethod({
     name: 'clipboard.appendImageUploadChunk',
     permission: 'workspace',
+    share: 'not-shared',
     params: AppendImageUploadChunk,
     handler: (params, ctx) => {
       const upload = getUpload(params.uploadId)
@@ -167,6 +170,7 @@ export const CLIPBOARD_METHODS = [
   defineMethod({
     name: 'clipboard.commitImageUpload',
     permission: 'workspace',
+    share: 'not-shared',
     params: CommitImageUpload,
     handler: async (params, ctx) => {
       const upload = getUpload(params.uploadId)
@@ -195,6 +199,7 @@ export const CLIPBOARD_METHODS = [
   defineMethod({
     name: 'clipboard.abortImageUpload',
     permission: 'workspace',
+    share: 'not-shared',
     params: AbortImageUpload,
     handler: (params, ctx) => {
       pruneExpiredUploads()

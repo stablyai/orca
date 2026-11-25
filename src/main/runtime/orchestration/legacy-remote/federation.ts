@@ -42,6 +42,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
     },
     requires: ['accounts'],
     permission: 'workspace',
+    share: 'not-shared',
     params: FederationAttachStartParams,
     handler: async (params, context) => {
       const { runtime, orchestrationMutation } = context

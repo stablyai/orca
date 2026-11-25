@@ -48,6 +48,7 @@ export const BOT_MEMORY_METHODS = [
     // The one way a fact leaves a bot's MEMORY.md: a turn end puts back any other removal.
     name: 'bots.memory.forget',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotMemoryForget,
     handler: async (params, context) => {
       context.runtime.bots.assertEnabled()
@@ -65,6 +66,7 @@ export const BOT_MEMORY_METHODS = [
   defineMethod({
     name: 'bots.memory.edit',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotMemoryEdit,
     handler: async (params, context) => {
       context.runtime.bots.assertEnabled()
@@ -95,6 +97,7 @@ export const BOT_MEMORY_METHODS = [
   defineMethod({
     name: 'bots.memory.history',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotChat,
     handler: async (params, context) => {
       const { runtime } = context
@@ -112,6 +115,7 @@ export const BOT_MEMORY_METHODS = [
   defineMethod({
     name: 'bots.memory.undo',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotMemoryUndo,
     handler: async (params, context) => {
       context.runtime.bots.assertEnabled()

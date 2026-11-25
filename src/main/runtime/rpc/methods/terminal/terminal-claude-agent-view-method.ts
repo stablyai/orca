@@ -17,6 +17,7 @@ export const TERMINAL_CLAUDE_AGENT_VIEW_METHODS = [
   defineStreamingMethod({
     name: 'terminal.subscribeClaudeAgentViews',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, ctx, emit) => {
       let dispose = () => {}
@@ -34,6 +35,7 @@ export const TERMINAL_CLAUDE_AGENT_VIEW_METHODS = [
   defineMethod({
     name: 'terminal.viewClaudeAgent',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalViewClaudeAgent,
     handler: async (params, { runtime, signal }): Promise<{ view: ClaudeAgentViewResult }> => {
       const inputSource = terminalInputSourceForClient(params.client)

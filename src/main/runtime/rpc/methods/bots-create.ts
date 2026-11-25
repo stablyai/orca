@@ -13,6 +13,7 @@ import { defineMethod, InvalidArgumentError } from '../core'
 export const BOT_CREATE_METHOD = defineMethod({
   name: 'bots.create',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotCreate,
   handler: async (
     { handOff, takingOver, fromOffer, fromShare, fromTemplate, ...params },

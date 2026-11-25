@@ -30,6 +30,7 @@ export const CONNECTOR_METHODS = [
   defineMethod({
     name: 'connector.reply',
     permission: 'workspace',
+    share: 'not-shared',
     params: ConnectorReply,
     handler: async (params, context) => {
       const { replyId, text, review } = params

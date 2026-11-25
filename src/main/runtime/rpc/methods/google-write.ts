@@ -26,6 +26,7 @@ export const GOOGLE_WRITE_METHODS = [
   defineMethod({
     name: 'google.gmail.draft',
     permission: 'workspace',
+    share: 'not-shared',
     params: GmailDraftParams,
     handler: async (params, context) => {
       const api = await googleApiForCaller(params, context)
@@ -36,6 +37,7 @@ export const GOOGLE_WRITE_METHODS = [
   defineMethod({
     name: 'google.gmail.send',
     permission: 'workspace',
+    share: 'not-shared',
     params: GmailSendParams,
     handler: async (params, context) =>
       sendGmailDraft(await googleApiForCaller(params, context), params.ref)
@@ -43,6 +45,7 @@ export const GOOGLE_WRITE_METHODS = [
   defineMethod({
     name: 'google.gmail.modify',
     permission: 'workspace',
+    share: 'not-shared',
     params: GmailModifyParams,
     handler: async (params, context) =>
       modifyGmail(await googleApiForCaller(params, context), params)
@@ -50,6 +53,7 @@ export const GOOGLE_WRITE_METHODS = [
   defineMethod({
     name: 'google.calendar.create',
     permission: 'workspace',
+    share: 'not-shared',
     params: CalendarCreateParams,
     handler: async (params, context) => {
       const api = await googleApiForCaller(params, context)
@@ -64,6 +68,7 @@ export const GOOGLE_WRITE_METHODS = [
   defineMethod({
     name: 'google.calendar.update',
     permission: 'workspace',
+    share: 'not-shared',
     params: CalendarUpdateParams,
     handler: async (params, context) =>
       updateCalendarEvent(await googleApiForCaller(params, context), { ...params, now: Date.now() })
@@ -71,6 +76,7 @@ export const GOOGLE_WRITE_METHODS = [
   defineMethod({
     name: 'google.calendar.delete',
     permission: 'workspace',
+    share: 'not-shared',
     params: CalendarDeleteParams,
     handler: async (params, context) =>
       deleteCalendarEvent(await googleApiForCaller(params, context), { ...params, now: Date.now() })
@@ -78,6 +84,7 @@ export const GOOGLE_WRITE_METHODS = [
   defineMethod({
     name: 'google.calendar.respond',
     permission: 'workspace',
+    share: 'not-shared',
     params: CalendarRespondParams,
     handler: async (params, context) =>
       respondToCalendarEvent(await googleApiForCaller(params, context), {
@@ -88,6 +95,7 @@ export const GOOGLE_WRITE_METHODS = [
   defineMethod({
     name: 'google.calendar.suggestTime',
     permission: 'workspace',
+    share: 'not-shared',
     params: CalendarSuggestTimeParams,
     handler: async (params, context) =>
       suggestCalendarTime(await googleApiForCaller(params, context), { ...params, now: Date.now() })

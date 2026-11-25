@@ -12,6 +12,7 @@ export const GOOGLE_SETUP_SAVED_KEY_METHODS = [
   defineMethod({
     name: 'bots.googleSetup.importHostKey',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleSetupImportHostKey,
     handler: async ({ botId, file }, context) => {
       if (isAgentRpcCaller(context.caller)) {

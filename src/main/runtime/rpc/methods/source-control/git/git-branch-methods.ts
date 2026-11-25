@@ -5,6 +5,7 @@ export const GIT_BRANCH_METHODS = [
   defineMethod({
     name: 'git.switchBranch',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitSwitchBranch,
     handler: async (params, { runtime }) =>
       runtime.switchRuntimeGitBranch(params.worktree, params.target)

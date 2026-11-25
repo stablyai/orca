@@ -7,6 +7,7 @@ export const USAGE_ANALYTICS_METHODS = [
   defineMethod({
     name: 'usage.call',
     permission: 'workspace',
+    share: 'not-shared',
     params: UsageCallParams,
     handler: async (params) => invokeHostUsageAnalytics(params)
   })

@@ -113,6 +113,7 @@ export function actFailure(
 export const CONNECTOR_ACT_METHOD = defineMethod({
   name: 'connector.act',
   permission: 'workspace',
+  share: 'not-shared',
   params: ConnectorAct,
   handler: async ({ sessionId, verb, ref, args }, context) => {
     const { runtime } = context

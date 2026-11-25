@@ -25,6 +25,7 @@ export const CLIENT_EVENT_METHODS = [
   defineStreamingMethod({
     name: 'runtime.clientEvents.subscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: ClientEventsSubscribeParams,
     handler: async (params, ctx, emit) => {
       const { runtime, connectionId, clientKind, pairedDeviceId, clientCapabilities } = ctx
@@ -115,6 +116,7 @@ export const CLIENT_EVENT_METHODS = [
   defineMethod({
     name: 'runtime.clientEvents.unsubscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: ClientEventsUnsubscribeParams,
     handler: async (params, { runtime, connectionId }) => {
       const expectedPrefix = `runtime-client-events-${connectionId ?? 'inproc'}-`

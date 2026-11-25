@@ -1,7 +1,7 @@
 import { stopHelperAfterStart } from './worker-stop'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
-import type { RpcContext } from '../../../core'
+import { notShared, type RpcContext } from '../../../core'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { startFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-start'
 import { startLocalWorker } from './start/local-worker-start'
@@ -58,7 +58,7 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
       }
     },
     requires: ['accounts'],
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorkerStartParams,
     handler: async (params, ctx) => startWorker(params, ctx)
   })

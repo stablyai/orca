@@ -269,6 +269,7 @@ export const MANAGED_RUNTIME_INSTALL_METHODS = [
   defineStreamingMethod({
     name: 'managedRuntime.subscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: ManagedRuntimeAgentParams,
     handler: async ({ agent }, ctx, emit) =>
       streamManagedRuntimeInstall(agent, ctx, emit, {
@@ -283,6 +284,7 @@ export const MANAGED_RUNTIME_INSTALL_METHODS = [
   defineMethod({
     name: 'managedRuntime.install',
     permission: 'host-admin',
+    share: 'not-shared',
     params: ManagedRuntimeAgentParams,
     handler: async ({ agent, program }, { runtime }) => {
       const installation = await selectedInstallation(agent, runtime, program)
@@ -293,6 +295,7 @@ export const MANAGED_RUNTIME_INSTALL_METHODS = [
   defineMethod({
     name: 'managedRuntime.cancel',
     permission: 'host-admin',
+    share: 'not-shared',
     params: ManagedRuntimeCancelParams,
     handler: async ({ agent, operationId }, { runtime }) => {
       // The outcome once the run has unwound: `cancelled`, or `succeeded` if it had committed.
@@ -305,6 +308,7 @@ export const MANAGED_RUNTIME_INSTALL_METHODS = [
   defineMethod({
     name: 'managedRuntime.remove',
     permission: 'host-admin',
+    share: 'not-shared',
     params: ManagedRuntimeAgentParams,
     handler: async ({ agent, program }, { runtime }) => {
       const installation = await selectedInstallation(agent, runtime, program)

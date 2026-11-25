@@ -26,60 +26,70 @@ export const BROWSER_PROFILE_METHODS = [
   defineMethod({
     name: 'browser.tabSetProfile',
     permission: 'workspace',
+    share: 'not-shared',
     params: TabSetProfile,
     handler: async (params, { runtime }) => runtime.browserTabSetProfile(params)
   }),
   defineMethod({
     name: 'browser.tabProfileShow',
     permission: 'workspace',
+    share: 'not-shared',
     params: TabShow,
     handler: async (params, { runtime }) => runtime.browserTabProfileShow(params)
   }),
   defineMethod({
     name: 'browser.tabProfileClone',
     permission: 'workspace',
+    share: 'not-shared',
     params: TabProfileClone,
     handler: async (params, { runtime }) => runtime.browserTabProfileClone(params)
   }),
   defineMethod({
     name: 'browser.profileList',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => runtime.browserProfileList()
   }),
   defineMethod({
     name: 'browser.profileCreate',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProfileCreate,
     handler: async (params, { runtime }) => runtime.browserProfileCreate(params)
   }),
   defineMethod({
     name: 'browser.profileDelete',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProfileDelete,
     handler: async (params, { runtime }) => runtime.browserProfileDelete(params)
   }),
   defineMethod({
     name: 'browser.profileDetectBrowsers',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => runtime.browserProfileDetectBrowsers()
   }),
   defineMethod({
     name: 'browser.profileImportFromBrowser',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProfileImportFromBrowser,
     handler: async (params, { runtime }) => runtime.browserProfileImportFromBrowser(params)
   }),
   defineMethod({
     name: 'browser.profileClearGoogleCookies',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProfileClearGoogleCookies,
     handler: async (params, { runtime }) => runtime.browserProfileClearGoogleCookies(params)
   }),
   defineMethod({
     name: 'browser.profileClearDefaultCookies',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, context) => {
       refuseAgentCookieClear(context)
@@ -89,6 +99,7 @@ export const BROWSER_PROFILE_METHODS = [
   defineMethod({
     name: 'browser.profileClearCookies',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProfileClearCookies,
     handler: async (params, context) => {
       refuseAgentCookieClear(context)

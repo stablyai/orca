@@ -30,6 +30,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.checkIgnored',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitCheckIgnored,
     handler: async (params, { runtime }) =>
       runtime.checkRuntimeGitIgnoredPaths(params.worktree, params.paths)
@@ -37,12 +38,14 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.refs',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitRefs,
     handler: async (params, { runtime }) => runtime.getRuntimeGitRefs(params.worktree, params.query)
   }),
   defineMethod({
     name: 'git.history',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitHistory,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitHistory(params.worktree, {
@@ -57,24 +60,28 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.mutationInFlight',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.getRuntimeGitMutationInFlight(params.worktree)
   }),
   defineMethod({
     name: 'git.abortMerge',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitMerge(params.worktree)
   }),
   defineMethod({
     name: 'git.completeMerge',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.completeRuntimeGitMerge(params.worktree)
   }),
   defineMethod({
     name: 'git.abortRebase',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
   }),
@@ -82,6 +89,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.checkout',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitCheckout,
     handler: async (params, { runtime }) =>
       runtime.checkoutRuntimeGitBranch(params.worktree, params.branch, params.detached)
@@ -89,6 +97,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.localBranches',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.listRuntimeGitLocalBranches(params.worktree)
   }),
@@ -97,6 +106,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.branchCompare',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitBranchCompare,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitBranchCompare(params.worktree, params.baseRef, params.admissionTier)
@@ -104,6 +114,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.commitCompare',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitCommitCompare,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitCommitCompare(params.worktree, params.commitId)
@@ -111,6 +122,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.upstreamStatus',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitTargetedRemote,
     handler: async (params, { runtime }) =>
       params.pushTarget === undefined
@@ -120,6 +132,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.fetch',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitTargetedRemote,
     handler: async (params, { runtime }) =>
       params.pushTarget === undefined
@@ -129,6 +142,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.forkSync',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitForkSync,
     handler: async (params, { runtime }) =>
       runtime.syncRuntimeGitForkDefaultBranch(params.worktree, params.expectedUpstream)
@@ -136,6 +150,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.pull',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitTargetedRemote,
     handler: async (params, { runtime }) =>
       params.pushTarget === undefined
@@ -145,6 +160,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.fastForward',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitTargetedRemote,
     handler: async (params, { runtime }) =>
       params.pushTarget === undefined
@@ -154,6 +170,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.rebaseFromBase',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitRebaseFromBase,
     handler: async (params, { runtime }) =>
       runtime.rebaseRuntimeGitFromBase(params.worktree, params.baseRef)
@@ -161,6 +178,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.push',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitPush,
     handler: async (params, { runtime }) =>
       runtime.pushRuntimeGit(
@@ -173,6 +191,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.commit',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitCommit,
     handler: async (params, { runtime }) =>
       runtime.commitRuntimeGit(params.worktree, params.message)
@@ -181,6 +200,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.stage',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitFilePath,
     handler: async (params, { runtime }) =>
       runtime.stageRuntimeGitPath(params.worktree, params.filePath)
@@ -188,6 +208,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.bulkStage',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitBulkStage,
     handler: async (params, { runtime }) =>
       runtime.bulkStageRuntimeGitPaths(params.worktree, params.filePaths, params.scope)
@@ -195,6 +216,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.resolveConflict',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitResolveConflict,
     handler: async (params, { runtime }) =>
       runtime.resolveRuntimeGitConflict(params.worktree, params.filePath, params.resolution)
@@ -202,6 +224,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.unstage',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitFilePath,
     handler: async (params, { runtime }) =>
       runtime.unstageRuntimeGitPath(params.worktree, params.filePath)
@@ -209,6 +232,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.bulkUnstage',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitBulkPaths,
     handler: async (params, { runtime }) =>
       runtime.bulkUnstageRuntimeGitPaths(params.worktree, params.filePaths)
@@ -216,6 +240,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.discard',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitFilePath,
     handler: async (params, { runtime }) =>
       runtime.discardRuntimeGitPath(params.worktree, params.filePath)
@@ -223,6 +248,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.bulkDiscard',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitBulkPaths,
     handler: async (params, { runtime }) =>
       runtime.bulkDiscardRuntimeGitPaths(params.worktree, params.filePaths)
@@ -230,6 +256,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.remoteFileUrl',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitRemoteFileUrl,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitRemoteFileUrl(
@@ -242,6 +269,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.remoteCommitUrl',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitRemoteCommitUrl,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitRemoteCommitUrl(params.worktree, params.sha)

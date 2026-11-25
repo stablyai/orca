@@ -1,7 +1,7 @@
 /** Transport stamps proven scope; unstamped calls are local desktop/owner CLI. Non-owner methods require an explicitly granted permission. */
 import { MOBILE_RPC_METHOD_ALLOWLIST } from '../server/runtime-rpc-mobile-method-allowlist'
 import type { RpcMethodPermission, RuntimeDeviceGrant } from './rpc-method-permission'
-import { BOT_SHARE_RPC_METHODS } from '../../../../shared/bots/bot-share-rpc-methods'
+import type { RpcMethodShare } from '../../../../shared/bots/bot-share-rpc-methods'
 
 export type RpcCallerScope =
   | { kind: 'owner' }
@@ -35,7 +35,8 @@ const RUNTIME_PAIRED_STANDARD: ReadonlySet<RpcMethodPermission> = new Set([
 export function denyRpcMethodForCaller(
   scope: RpcCallerScope,
   methodName: string,
-  permission: RpcMethodPermission | undefined
+  permission: RpcMethodPermission | undefined,
+  share: RpcMethodShare | undefined
 ): string | null {
   if (scope.kind === 'mobile') {
     if (!MOBILE_RPC_METHOD_ALLOWLIST.has(methodName)) {
@@ -46,7 +47,7 @@ export function denyRpcMethodForCaller(
       : null
   }
   if (scope.kind === 'bot-share') {
-    return BOT_SHARE_RPC_METHODS.has(methodName)
+    return share !== undefined && share !== 'not-shared'
       ? null
       : `Method '${methodName}' is not available to a shared agent's teammates`
   }

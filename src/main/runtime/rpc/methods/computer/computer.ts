@@ -33,6 +33,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.capabilities',
     permission: 'workspace',
+    share: 'not-shared',
     params: ComputerCapabilitiesParams,
     handler: async () => {
       return await callComputerSidecarCapabilities()
@@ -41,6 +42,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.listApps',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: ListApps,
     handler: async () => {
       return await callComputerSidecarListApps()
@@ -49,6 +51,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.permissions',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: ComputerPermissions,
     handler: async (params) => {
       assertTeamAllowsComputerUse()
@@ -60,6 +63,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.permissionsStatus',
     permission: 'workspace',
+    share: 'not-shared',
     params: ComputerPermissionsStatusParams,
     handler: async () => {
       const { computerUsePermissionStatusGate } =
@@ -70,6 +74,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.launchApp',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: LaunchApp,
     handler: async (params) => {
       return await callComputerSidecarLaunchApp(params)
@@ -78,6 +83,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.listWindows',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: ListWindows,
     handler: async (params) => {
       return await callComputerSidecarListWindows(params)
@@ -86,6 +92,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.getAppState',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: ComputerObserveTarget,
     handler: async (params) => {
       return await callComputerSidecarSnapshot(params)
@@ -94,6 +101,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.click',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: Click,
     handler: async (params) => {
       return await callComputerSidecarAction('click', params)
@@ -102,6 +110,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.performSecondaryAction',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: PerformSecondaryAction,
     handler: async (params) => {
       return await callComputerSidecarAction('performSecondaryAction', params)
@@ -110,6 +119,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.scroll',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: Scroll,
     handler: async (params) => {
       return await callComputerSidecarAction('scroll', params)
@@ -118,6 +128,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.drag',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: Drag,
     handler: async (params) => {
       return await callComputerSidecarAction('drag', params)
@@ -126,6 +137,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.typeText',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: TypeText,
     handler: async (params) => {
       return await callComputerSidecarAction('typeText', params)
@@ -134,6 +146,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.pressKey',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: PressKey,
     handler: async (params) => {
       return await callComputerSidecarAction('pressKey', params)
@@ -142,6 +155,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.hotkey',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: Hotkey,
     handler: async (params) => {
       return await callComputerSidecarAction('hotkey', params)
@@ -150,6 +164,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.pasteText',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: PasteText,
     handler: async (params) => {
       return await callComputerSidecarAction('pasteText', params)
@@ -158,6 +173,7 @@ export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.setValue',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: SetValue,
     handler: async (params) => {
       return await callComputerSidecarAction('setValue', params)

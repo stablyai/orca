@@ -2,7 +2,7 @@ import {
   JIRA_PAYLOAD_CHUNK_CHARS,
   JIRA_PAYLOAD_MAX_CHARS
 } from '../../../../../../shared/jira/jira-payload-stream'
-import { defineMethod, defineStreamingMethod, type RpcContext } from '../../../core'
+import { notShared, defineMethod, defineStreamingMethod, type RpcContext } from '../../../core'
 import { JIRA_ATTACHMENT_IMAGE_METHODS } from './jira-attachment-image'
 import { JiraFavouriteFilterParams } from '../../../../../../shared/rpc-contract/jira/jira-favourite-filter-params'
 import {
@@ -55,21 +55,21 @@ export const JIRA_METHODS = [
   ...JIRA_ATTACHMENT_IMAGE_METHODS,
   defineMethod({
     name: 'jira.generateIssueSummary',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: GenerateIssueSummary,
     handler: (params, context) =>
       context.runtime.jiraGenerateIssueSummary(params, generationOwner(context), context.signal)
   }),
   defineMethod({
     name: 'jira.cancelGenerateIssueSummary',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: CancelGenerateIssueSummary,
     handler: (params, context) =>
       context.runtime.jiraCancelGenerateIssueSummary(params, generationOwner(context))
   }),
   defineMethod({
     name: 'jira.connect',
-    permission: 'accounts-admin',
+    ...notShared('accounts-admin'),
     params: Connect,
     handler: async (params, { runtime }) =>
       runtime.jiraConnect({
@@ -81,44 +81,44 @@ export const JIRA_METHODS = [
   }),
   defineMethod({
     name: 'jira.disconnect',
-    permission: 'accounts-admin',
+    ...notShared('accounts-admin'),
     params: SiteSelection,
     handler: async (params, { runtime }) => runtime.jiraDisconnect(params?.siteId)
   }),
   defineMethod({
     name: 'jira.selectSite',
-    permission: 'accounts-admin',
+    ...notShared('accounts-admin'),
     params: SelectSite,
     handler: async (params, { runtime }) => runtime.jiraSelectSite(params.siteId.trim())
   }),
   defineMethod({
     name: 'jira.status',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: null,
     handler: async (_params, { runtime }) => runtime.jiraStatus()
   }),
   defineMethod({
     name: 'jira.readStatus',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: null,
     handler: async (_params, { runtime }) => runtime.jiraReadStatus()
   }),
   defineMethod({
     name: 'jira.testConnection',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: SiteSelection,
     handler: async (params, { runtime }) => runtime.jiraTestConnection(params?.siteId)
   }),
   defineMethod({
     name: 'jira.searchIssues',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: SearchIssues,
     handler: async (params, { runtime, signal }) =>
       runtime.jiraSearchIssues(params.jql, params.limit, params.siteId, signal, params.strict)
   }),
   defineMethod({
     name: 'jira.listIssues',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ListIssues,
     handler: async (params, { runtime }) =>
       runtime.jiraListIssues(
@@ -131,14 +131,14 @@ export const JIRA_METHODS = [
   }),
   defineMethod({
     name: 'jira.getIssue',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: IssueKey,
     handler: async (params, { runtime }) =>
       runtime.jiraGetIssue(params.key.trim(), params.siteId, params.strict, params.mediaFormat)
   }),
   defineMethod({
     name: 'jira.lookupIssueSummary',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: IssueKey,
     handler: async (params, { runtime, signal }) => {
       if (!params.siteId) {
@@ -149,7 +149,7 @@ export const JIRA_METHODS = [
   }),
   defineStreamingMethod({
     name: 'jira.getIssueStream',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: IssueKey,
     handler: async (params, { runtime }, emit) => {
       emitJiraPayload(
@@ -165,7 +165,7 @@ export const JIRA_METHODS = [
   }),
   defineMethod({
     name: 'jira.createIssue',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: CreateIssue,
     handler: async (params, { runtime }) =>
       runtime.jiraCreateIssue({
@@ -180,28 +180,28 @@ export const JIRA_METHODS = [
   }),
   defineMethod({
     name: 'jira.updateIssue',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: IssueUpdate,
     handler: async (params, { runtime }) =>
       runtime.jiraUpdateIssue(params.key.trim(), params.updates, params.siteId)
   }),
   defineMethod({
     name: 'jira.addIssueComment',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: IssueComment,
     handler: async (params, { runtime }) =>
       runtime.jiraAddIssueComment(params.key.trim(), params.body.trim(), params.siteId)
   }),
   defineMethod({
     name: 'jira.issueComments',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: IssueKey,
     handler: async (params, { runtime }) =>
       runtime.jiraIssueComments(params.key.trim(), params.siteId, params.strict, params.mediaFormat)
   }),
   defineStreamingMethod({
     name: 'jira.issueCommentsStream',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: IssueKey,
     handler: async (params, { runtime }, emit) => {
       emitJiraPayload(
@@ -217,27 +217,27 @@ export const JIRA_METHODS = [
   }),
   defineMethod({
     name: 'jira.listFavouriteFilters',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: JiraFavouriteFilterParams,
     handler: async (params, { runtime, signal }) =>
       runtime.jiraListFavouriteFilters(params.siteId, signal)
   }),
   defineMethod({
     name: 'jira.listProjects',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: SiteSelection,
     handler: async (params, { runtime }) => runtime.jiraListProjects(params?.siteId, params?.strict)
   }),
   defineMethod({
     name: 'jira.listIssueTypes',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ProjectIssueTypes,
     handler: async (params, { runtime }) =>
       runtime.jiraListIssueTypes(params.projectIdOrKey.trim(), params.siteId, params.strict)
   }),
   defineMethod({
     name: 'jira.listCreateFields',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ProjectIssueTypeFields,
     handler: async (params, { runtime }) =>
       runtime.jiraListCreateFields(
@@ -249,34 +249,34 @@ export const JIRA_METHODS = [
   }),
   defineMethod({
     name: 'jira.listPriorities',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: SiteSelection,
     handler: async (params, { runtime }) =>
       runtime.jiraListPriorities(params?.siteId, params?.strict)
   }),
   defineMethod({
     name: 'jira.listAssignableUsers',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: AssignableUsers,
     handler: async (params, { runtime }) =>
       runtime.jiraListAssignableUsers(params.key.trim(), params.query, params.siteId, params.strict)
   }),
   defineMethod({
     name: 'jira.searchUsers',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: UserSearch,
     handler: async (params, { runtime }) => runtime.jiraSearchUsers(params.query, params.siteId)
   }),
   defineMethod({
     name: 'jira.listTransitions',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: IssueKey,
     handler: async (params, { runtime }) =>
       runtime.jiraListTransitions(params.key.trim(), params.siteId, params.strict)
   }),
   defineMethod({
     name: 'jira.getProjectStatusOrder',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ProjectStatusOrder,
     handler: async (params, { runtime }) =>
       runtime.jiraGetProjectStatusOrder(params.projectKey.trim(), params.siteId)

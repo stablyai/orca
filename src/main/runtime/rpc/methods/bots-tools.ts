@@ -142,6 +142,7 @@ export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolsList,
     handler: async (params, context) => {
       const bot = targetBot(params, context)
@@ -151,6 +152,7 @@ export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.problems',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolProblems,
     handler: async (params, context) => {
       const bot = targetBot(params, context)
@@ -169,6 +171,7 @@ export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.cancelProblems',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolsList,
     handler: (params, context) => {
       cancelBotToolHealthChecks(targetBot(params, context).id)
@@ -178,6 +181,7 @@ export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.add',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolAdd,
     handler: async (params, context): Promise<{ tool: BotOwnTool }> => {
       refuseFromLook(params, context)
@@ -206,6 +210,7 @@ export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.context',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolsList,
     handler: async (params, context) => {
       const cli = await botToolsHome(context.runtime, targetBot(params, context))
@@ -215,6 +220,7 @@ export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.details',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolTarget,
     handler: async (params, context) =>
       readBotToolDetails(
@@ -225,6 +231,7 @@ export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.update',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolUpdate,
     handler: async (params, context) => {
       refuseFromLook(params, context)
@@ -238,6 +245,7 @@ export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.remove',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolTarget,
     handler: async (params, context) => {
       refuseFromLook(params, context)
@@ -250,6 +258,7 @@ export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.connect',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolTarget,
     handler: async (params, context) => {
       refuseFromLook(params, context)
@@ -264,6 +273,7 @@ export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.finishSignIn',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolFinishSignIn,
     handler: async (params, context) => {
       refuseFromLook(params, context)
@@ -283,6 +293,7 @@ export const BOT_TOOLS_METHODS = [
     // What a Connect is waiting on; read from memory and the tools file, so a client can ask often.
     name: 'bots.tools.signInStatus',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolTarget,
     handler: async (params, context) => {
       const bot = targetBot(params, context)

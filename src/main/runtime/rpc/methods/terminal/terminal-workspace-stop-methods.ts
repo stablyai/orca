@@ -18,12 +18,14 @@ export const TERMINAL_WORKSPACE_STOP_METHODS = [
   defineMethod({
     name: 'terminal.stop',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalStop,
     handler: async (params, { runtime }) => runtime.stopTerminalsForWorktree(params.worktree)
   }),
   defineMethod({
     name: 'terminal.closeAll',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalCloseAll,
     handler: async (params, { runtime }) =>
       queueTerminalWorkspaceCommand(runtime, params.worktree, {
@@ -37,6 +39,7 @@ export const TERMINAL_WORKSPACE_STOP_METHODS = [
   defineMethod({
     name: 'terminal.sleep',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalSleep,
     handler: async (params, { runtime }) =>
       queueTerminalWorkspaceCommand(runtime, params.worktree, {
@@ -50,6 +53,7 @@ export const TERMINAL_WORKSPACE_STOP_METHODS = [
   defineMethod({
     name: 'terminal.stopExact',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalStopExact,
     handler: async (params, { runtime }) =>
       runtime.stopExactTerminalsForWorktree(params.worktree, params.expectedPtyIds, {

@@ -41,6 +41,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
       collection: true
     },
     permission: 'workspace',
+    share: 'not-shared',
     params: CheckParams,
     handler: async (
       params,

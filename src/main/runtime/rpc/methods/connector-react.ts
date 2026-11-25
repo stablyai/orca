@@ -34,6 +34,7 @@ const NO_MESSAGE =
 export const CONNECTOR_REACT_METHOD = defineMethod({
   name: 'connector.react',
   permission: 'workspace',
+  share: 'not-shared',
   params: ConnectorReact,
   handler: async ({ sessionId, emoji }, context) => {
     const { runtime } = context

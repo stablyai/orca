@@ -1,3 +1,4 @@
+import { notShared } from '../../../core'
 import { cancelWorkerStartWait } from './start/readiness/worker-start-waits'
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -36,7 +37,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.workerShow',
     access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorkerDispatchParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -91,7 +92,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.workerRead',
     access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorkerReadParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -132,7 +133,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.workerAbandon',
     access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationCaller, orchestrationCompatibilityEvidence }) => {
       const db = runtime.getOrchestrationDb()

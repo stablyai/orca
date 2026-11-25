@@ -5,6 +5,7 @@ import { defineMethod } from '../../core'
 export const WORKTREE_PROVISIONED_ROOT_METHOD = defineMethod({
   name: 'worktree.adoptProvisionedRoot',
   permission: 'workspace',
+  share: 'not-shared',
   params: WorktreeAdoptProvisionedRoot,
   handler: async (params, { runtime }) => {
     const { repo, linkedIssue, linkedPR, linkedGitLabMR, linkedGitLabIssue, ...request } = params

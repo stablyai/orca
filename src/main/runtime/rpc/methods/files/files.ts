@@ -1,4 +1,4 @@
-import { defineMethod, defineStreamingMethod } from '../../core'
+import { notShared, defineMethod, defineStreamingMethod } from '../../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
 import { dirListingPageCache } from './files-read-dir-page'
@@ -38,7 +38,7 @@ let filesWatchSubscriptionSeq = 0
 export const FILE_METHODS = [
   defineMethod({
     name: 'files.list',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeSelector,
     handler: async (params, { runtime, signal }) =>
       signal === undefined
@@ -47,7 +47,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.searchPaths',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FilePathSearch,
     handler: async (params, { runtime, signal, clientKind, requestId }) => {
       if (params.mode !== 'quick-open') {
@@ -73,7 +73,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.open',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FileOpenTab,
     handler: async (params, { runtime }) =>
       runtime.openMobileFile(
@@ -85,7 +85,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.openDiff',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FileOpenDiff,
     handler: async (params, { runtime }) =>
       runtime.openMobileDiff(
@@ -98,14 +98,14 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.read',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FileOpen,
     handler: async (params, { runtime }) =>
       runtime.readMobileFile(params.worktree, params.relativePath)
   }),
   defineMethod({
     name: 'files.readDocPreview',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: DocPreviewFileRead,
     handler: async (params, { runtime, clientKind, requestId }) =>
       runtime.readDocPreviewFile(
@@ -119,7 +119,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.readDocPreviewChunk',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: DocPreviewFileReadChunk,
     handler: async (params, { runtime }) =>
       runtime.readDocPreviewChunk(
@@ -135,7 +135,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.resolveTerminalPath',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ResolveTerminalPath,
     handler: async (params, { runtime, clientId }) =>
       runtime.resolveTerminalPath(
@@ -151,7 +151,7 @@ export const FILE_METHODS = [
   ...FILE_TERMINAL_ARTIFACT_METHODS,
   defineMethod({
     name: 'files.readPreview',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FileOpen,
     handler: async (params, { runtime, clientKind, requestId }) => {
       const budget = remoteFileContentBudget(clientKind, requestId)
@@ -162,7 +162,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.readChatImage',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ChatImageRead,
     handler: async (params, { runtime, clientKind, requestId }) =>
       runtime.readChatImagePreview(
@@ -173,7 +173,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.readChunk',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FileReadChunk,
     handler: async (params, { runtime }) =>
       runtime.readFileExplorerChunk(
@@ -185,7 +185,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.readDir',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FileDirRead,
     handler: async (params, { runtime, clientKind, requestId, connectionId }) => {
       const list = () =>
@@ -205,7 +205,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.browseServerDir',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ServerDirectoryBrowse,
     handler: async (params, { runtime }) => runtime.browseServerDir(params.path)
   }),
@@ -213,7 +213,7 @@ export const FILE_METHODS = [
   ...FILE_STAGED_SAVE_METHODS,
   defineMethod({
     name: 'files.search',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FileSearch,
     handler: async (params, { runtime, clientKind, requestId, signal }) =>
       limitSearchResultToContentBudget(
@@ -235,7 +235,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.listAll',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FileListAll,
     handler: async (params, { runtime, clientKind, requestId, signal }) => {
       const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
@@ -252,27 +252,27 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.listMarkdownDocuments',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.listRuntimeMarkdownDocuments(params.worktree)
   }),
   defineMethod({
     name: 'files.pathsExist',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FilePathsExist,
     handler: async (params, { runtime }) =>
       runtime.pathsExistRuntimeFiles(params.worktree, params.relativePaths)
   }),
   defineMethod({
     name: 'files.stat',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FileTreePath,
     handler: async (params, { runtime }) =>
       runtime.statRuntimeFile(params.worktree, params.relativePath)
   }),
   defineStreamingMethod({
     name: 'files.watch',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FileWatch,
     handler: async (params, { runtime, connectionId, signal }, emit) => {
       const seq = ++filesWatchSubscriptionSeq
@@ -290,7 +290,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.unwatch',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: FileUnwatch,
     handler: async (params, { runtime }) => {
       await runtime.cleanupSubscriptionAndWait(params.subscriptionId)

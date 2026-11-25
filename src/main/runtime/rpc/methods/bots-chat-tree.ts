@@ -1,3 +1,4 @@
+import { SHARE_BY_BOT, SHARE_SCOPED } from '../../../../shared/bots/bot-share-rpc-methods'
 import {
   BotChatSearch,
   BotChatsOwn,
@@ -25,6 +26,7 @@ export const BOT_CHAT_TREE_METHODS = [
   defineMethod({
     name: 'bots.chatTree',
     permission: 'workspace',
+    share: SHARE_BY_BOT,
     params: BotChatTreeRead,
     handler: async (params, context) => {
       const tree = await readSharedBotChatTree(context.runtime, params)
@@ -36,6 +38,7 @@ export const BOT_CHAT_TREE_METHODS = [
   defineMethod({
     name: 'bots.chats.own',
     permission: 'workspace',
+    share: SHARE_SCOPED,
     params: BotChatsOwn,
     handler: async (params, context) => {
       const host = runtimeBotChatTreeHost(context.runtime)
@@ -50,6 +53,7 @@ export const BOT_CHAT_TREE_METHODS = [
   defineMethod({
     name: 'bots.chats.search',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotChatSearch,
     handler: (params, { runtime }) => searchBotChats(runtimeBotChatSearchHost(runtime), params)
   })

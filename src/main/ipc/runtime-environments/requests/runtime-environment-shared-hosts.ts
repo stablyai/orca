@@ -2,9 +2,9 @@
 // reached over its share link. Every runtimeEnvironments call and stream asks this before the
 // paired-server registry, so a shared host has one route, the same as a paired server's.
 import {
-  BOT_SHARE_RPC_METHODS,
-  BOT_SHARE_STREAM_METHODS
-} from '../../../../shared/bots/bot-share-rpc-methods'
+  isBotShareMethod,
+  isBotShareStreamMethod
+} from '../../../runtime/rpc/methods/rpc-method-share'
 import type {
   RuntimeRpcFailure,
   RuntimeRpcResponse
@@ -78,7 +78,7 @@ async function sharedHostRoute(selector: string): Promise<SharedHostRoute | null
     status,
     call,
     subscribe: async (method, params, onResponse) => {
-      if (refusal(method) || !BOT_SHARE_STREAM_METHODS.has(method)) {
+      if (refusal(method) || !isBotShareStreamMethod(method)) {
         onResponse(await call(method, params))
         return () => {}
       }
@@ -107,7 +107,7 @@ export async function runtimeEnvironmentIdOf(
  * with the host's own answer and never sent.
  */
 function refusal(method: string): RuntimeRpcFailure | null {
-  return BOT_SHARE_RPC_METHODS.has(method)
+  return isBotShareMethod(method)
     ? null
     : {
         id: method,

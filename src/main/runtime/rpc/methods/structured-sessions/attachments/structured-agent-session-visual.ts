@@ -1,3 +1,4 @@
+import { SHARE_BY_SESSION } from '../../../../../../shared/bots/bot-share-rpc-methods'
 // Resolve readVisual scratch roots from host records; clients supply only session id/bare name.
 // Older hosts lack the method (mobile may see forbidden); clients show unavailable.
 
@@ -16,6 +17,7 @@ export const STRUCTURED_AGENT_SESSION_VISUAL_METHODS = [
   defineMethod({
     name: 'agentSession.readVisual',
     permission: 'workspace',
+    share: SHARE_BY_SESSION,
     params: ReadVisualParams,
     handler: async (params, ctx): Promise<AgentSessionReadVisualResult> => {
       const host = await requireInstalledStructuredHost(ctx)

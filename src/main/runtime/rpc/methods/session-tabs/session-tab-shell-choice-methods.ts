@@ -6,6 +6,7 @@ export const SESSION_TAB_SHELL_CHOICE_METHODS = [
   defineMethod({
     name: 'session.tabs.terminalShellChoices',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeTabSelector,
     handler: async (params, { runtime }) => ({
       shells: await runtime.listMobileSessionTerminalShellChoices(params.worktree)

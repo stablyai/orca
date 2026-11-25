@@ -27,24 +27,28 @@ export const PLUGIN_VIEW_METHODS = [
     // Renderer state only: the window is never shown, raised or focused.
     name: 'plugins.open',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginOpenParams,
     handler: async (params) => requirePluginView().open(params)
   }),
   defineMethod({
     name: 'plugins.shot',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginShotParams,
     handler: async (params) => requirePluginView().shot(params)
   }),
   defineMethod({
     name: 'plugins.shotEditor',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginShotEditorParams,
     handler: async (params) => requirePluginView().shotEditor(params)
   }),
   defineMethod({
     name: 'plugins.shotChrome',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginShotChromeParams,
     handler: async (params) => requirePluginView().shotChrome(params)
   }),
@@ -52,6 +56,7 @@ export const PLUGIN_VIEW_METHODS = [
     // Never opens the plugin's panel or reaches its guest or worker; see plugin-view-replay-shot.
     name: 'plugins.shotReplay',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginShotReplayParams,
     handler: async (params) => requirePluginView().shotReplay(params)
   })

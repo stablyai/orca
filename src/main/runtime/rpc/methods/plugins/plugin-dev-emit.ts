@@ -12,6 +12,7 @@ export const PLUGIN_DEV_EMIT_METHODS = [
     // Why host-admin: it runs plugin code on the host, like plugins.invokeCommand.
     name: 'plugins.devEmit',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginDevEmitParams,
     handler: async (params) => {
       const service = requirePluginService()
@@ -30,6 +31,7 @@ export const PLUGIN_DEV_EMIT_METHODS = [
   defineMethod({
     name: 'plugins.devHook',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginDevHookParams,
     handler: async (params) => {
       const service = requirePluginService()

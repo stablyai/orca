@@ -3,7 +3,7 @@ import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-fea
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
-import { defineMethod } from '../../core'
+import { notShared, defineMethod } from '../../core'
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
@@ -24,7 +24,7 @@ import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/term
 export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
     name: 'terminal.wait',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: TerminalWait,
     handler: async (params, { runtime, signal }) => ({
       wait: await runtime.waitForTerminal(params.terminal, {
@@ -37,7 +37,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
     name: 'terminal.create',
     requires: terminalCreateFeatureRequirement,
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: TerminalCreateParams,
     handler: async (params, context) => {
       const { runtime, pairedDeviceId, clientId, clientKind } = context
@@ -147,7 +147,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   }),
   defineMethod({
     name: 'terminal.split',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: TerminalSplit,
     handler: async (params, context) => {
       const { runtime, caller } = context
@@ -188,7 +188,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   ...TERMINAL_WORKSPACE_STOP_METHODS,
   defineMethod({
     name: 'terminal.resizeForClient',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: TerminalResizeForClient,
     handler: async (params, { runtime }) => {
       // Reject stale handles before resize can reach the wrong PTY (#7718).
@@ -213,7 +213,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   }),
   defineMethod({
     name: 'terminal.focus',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: TerminalFocus,
     handler: async (params, { runtime, clientKind }) => ({
       focus: await runtime.focusTerminal(params.terminal, {
@@ -226,7 +226,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
     // Keep reveal separate from host-side focus: only the desktop showing a remote pane can reveal it (#24688).
     name: 'terminal.reveal',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: TerminalReveal,
     handler: async (params, { runtime, clientKind }) => {
       // Local callers may move this window; paired callers need explicit host-navigation intent through focus.
@@ -248,7 +248,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   }),
   defineMethod({
     name: 'terminal.close',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: TerminalHandle,
     handler: async (params, context) => ({
       close: await withTerminalCloseAttribution(
@@ -262,7 +262,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   }),
   defineMethod({
     name: 'terminal.closeTab',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: TerminalHandle,
     handler: async (params, context) => ({
       close: await withTerminalCloseAttribution(
@@ -276,7 +276,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   }),
   defineMethod({
     name: 'agentTeams.tmuxCompat',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: AgentTeamsTmuxCompat,
     handler: async (params, { runtime }) => ({
       tmux: await runtime.handleAgentTeamsTmuxCompat(params)
@@ -284,7 +284,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   }),
   defineMethod({
     name: 'agentTeams.prepareLaunch',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: AgentTeamsPrepareLaunch,
     handler: async (params, { runtime }) => ({
       launch: await runtime.prepareClaudeAgentTeamsLeader({

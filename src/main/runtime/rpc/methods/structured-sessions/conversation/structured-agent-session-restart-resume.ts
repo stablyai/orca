@@ -28,6 +28,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
   defineMethod({
     name: 'agentSession.restartResumable',
     permission: 'workspace',
+    share: 'not-shared',
     params: RestartResumableParams,
     handler: async (_params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
@@ -44,6 +45,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     // Explicit dismissal abandons markers; dialog close only snoozes so the status-bar offer remains.
     name: 'agentSession.restartResumableDismiss',
     permission: 'workspace',
+    share: 'not-shared',
     params: RestartResumableParams,
     handler: async (params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
@@ -66,6 +68,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     // Reattach and ask agents to continue, for prompt/settings resume; legacy restartResume sends nothing.
     name: 'agentSession.restartContinue',
     permission: 'workspace',
+    share: 'not-shared',
     params: RestartResumeParams,
     handler: async (params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
@@ -83,6 +86,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     // The runtime continues what a restart cut off; clients wait for it before offering the rest.
     name: 'agentSession.restartLaunchSettled',
     permission: 'workspace',
+    share: 'not-shared',
     params: RestartLaunchSettledParams,
     handler: async (params, ctx) => {
       const launch = ctx.runtime.structuredAgentSessionLaunchContinuation
@@ -119,6 +123,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     // Continue the exact interrupted turn, separate from restart offers; clients negotiate its capability and name a readable chat.
     name: 'agentSession.continueInterrupted',
     permission: 'workspace',
+    share: 'not-shared',
     params: ContinueInterruptedParams,
     handler: async (params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
@@ -130,6 +135,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     // Keep published legacy reattach-only RPC answering no resume: agents now start only for work, and removal would break old clients.
     name: 'agentSession.restartResume',
     permission: 'workspace',
+    share: 'not-shared',
     params: RestartResumeParams,
     handler: async (_params, ctx) => {
       await ensureStructuredHostInstalled(ctx)

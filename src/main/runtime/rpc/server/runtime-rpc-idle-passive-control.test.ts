@@ -22,6 +22,7 @@ const METHODS = [
   defineMethod({
     name: 'test.slow',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: () =>
       new Promise<{ done: true }>((resolve) => (releaseSlow = () => resolve({ done: true })))
@@ -29,18 +30,21 @@ const METHODS = [
   defineMethod({
     name: 'test.work',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async () => ({ done: true })
   }),
   defineMethod({
     name: 'notifications.reportDesktopPresence',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async () => ({ ok: true })
   }),
   defineStreamingMethod({
     name: 'test.watch',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, { signal }, emit) =>
       new Promise<void>((resolve) => {

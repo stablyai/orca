@@ -18,7 +18,13 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { BotShareCallerScope } from '../callers/rpc-caller-scope'
-import { BOT_SHARE_RPC_METHODS } from '../../../../shared/bots/bot-share-rpc-methods'
+import {
+  BOT_SHARE_SCOPED_METHODS,
+  SHARE_BY_BOT,
+  SHARE_BY_ENVELOPE_SESSION,
+  SHARE_BY_SESSION
+} from '../../../../shared/bots/bot-share-rpc-methods'
+import { botShareMethodNames } from '../methods/rpc-method-share'
 import { defineMethod } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
@@ -152,25 +158,35 @@ beforeEach(() => {
       defineMethod({
         name: 'agentSession.history',
         permission: 'workspace',
+        share: SHARE_BY_SESSION,
         params: HistoryParams,
         handler: ran
       }),
       defineMethod({
         name: 'agentSession.respondToApproval',
         permission: 'workspace',
+        share: SHARE_BY_ENVELOPE_SESSION,
         params: RespondParams,
         handler: ran
       }),
-      defineMethod({ name: 'bots.chats', permission: 'workspace', params: BotChats, handler: ran }),
+      defineMethod({
+        name: 'bots.chats',
+        permission: 'workspace',
+        share: SHARE_BY_BOT,
+        params: BotChats,
+        handler: ran
+      }),
       defineMethod({
         name: 'agentSessionAttachment.uploadStart',
         permission: 'workspace',
+        share: SHARE_BY_SESSION,
         params: AttachmentUploadStartParams,
         handler: ran
       }),
       defineMethod({
         name: 'bots.chats.seen',
         permission: 'workspace',
+        share: 'not-shared',
         params: null,
         handler: ran
       }),
@@ -342,8 +358,46 @@ describe('the share guard', () => {
     expect(Object.keys(status ?? {}).filter((key) => !shared.has(key))).toEqual([])
   })
 
-  it('lists only methods this host serves', () => {
-    const served = new Set<string>(ALL_RPC_METHODS.map((method) => method.name))
-    expect([...BOT_SHARE_RPC_METHODS.keys()].filter((name) => !served.has(name))).toEqual([])
+  // The whole share surface, read off each method's own decision: a change here is a security review.
+  it('shares exactly these methods, each scoped one with its view', () => {
+    expect(botShareMethodNames().sort()).toEqual(
+      [
+        'agentSession.cancel',
+        'agentSession.currentRequests',
+        'agentSession.history',
+        'agentSession.item',
+        'agentSession.queuedMessageDelete',
+        'agentSession.queuedMessageEditHold',
+        'agentSession.queuedMessageMove',
+        'agentSession.queuedMessageSend',
+        'agentSession.queuedMessageUpdate',
+        'agentSession.queuedMessagesResume',
+        'agentSession.readVisual',
+        'agentSession.respondToApproval',
+        'agentSession.respondToQuestion',
+        'agentSession.send',
+        'agentSession.subscribe',
+        'agentSession.subscribeStatus',
+        'agentSession.unsubscribe',
+        'agentSessionAttachment.uploadAbort',
+        'agentSessionAttachment.uploadAppend',
+        'agentSessionAttachment.uploadCommit',
+        'agentSessionAttachment.uploadStart',
+        'bots.avatar.read',
+        'bots.chatTree',
+        'bots.chats',
+        'bots.chats.own',
+        'bots.list',
+        'bots.roster',
+        'bots.session.start',
+        'pairing.getEndpoints',
+        'pairing.provisionRelay',
+        'status.get'
+      ].sort()
+    )
+    const scoped = ALL_RPC_METHODS.filter(
+      (method) => method.share !== 'not-shared' && method.share.kind === 'scoped'
+    ).map((method) => method.name)
+    expect(scoped.sort()).toEqual([...BOT_SHARE_SCOPED_METHODS].sort())
   })
 })

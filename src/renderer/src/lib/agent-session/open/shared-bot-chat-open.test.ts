@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-import { BOT_SHARE_RPC_METHODS } from '../../../../../shared/bots/bot-share-rpc-methods'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
@@ -105,13 +104,24 @@ const call = vi.fn(
     _meta: { runtimeId: SHARED.environmentId }
   })
 )
+// The shared methods this flow asks (main's registry decides the full list).
+const SHARED_METHODS = new Set([
+  'bots.list',
+  'bots.chats',
+  'bots.chats.own',
+  'bots.chatTree',
+  'bots.session.start',
+  'agentSession.history',
+  'agentSession.subscribe',
+  'agentSession.subscribeStatus'
+])
 const environmentCall = async (request: {
   selector: string
   method: string
   params: { newChatId?: string }
 }) =>
   createCompatibleRuntimeStatusResponseIfNeeded(request) ??
-  (BOT_SHARE_RPC_METHODS.has(request.method)
+  (SHARED_METHODS.has(request.method)
     ? call({ environmentId: request.selector, method: request.method, params: request.params })
     : {
         id: request.method,

@@ -13,6 +13,7 @@ export const PROJECT_RUNTIME_METHODS = [
   defineMethod({
     name: 'project.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, { runtime }) => {
       runtime.enrichMissingRepoGitRemoteIdentities?.()
@@ -22,6 +23,7 @@ export const PROJECT_RUNTIME_METHODS = [
   defineMethod({
     name: 'project.update',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectUpdate,
     handler: (params, { runtime }) => ({
       project: runtime.updateProject(params.projectId, params.updates)
@@ -30,6 +32,7 @@ export const PROJECT_RUNTIME_METHODS = [
   defineMethod({
     name: 'projectHostSetup.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, { runtime }) => {
       runtime.enrichMissingRepoGitRemoteIdentities?.()
@@ -39,6 +42,7 @@ export const PROJECT_RUNTIME_METHODS = [
   defineMethod({
     name: 'projectHostSetup.create',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectHostSetupCreate,
     handler: (params, { runtime }) => ({
       result: runtime.createProjectHostSetup(params)
@@ -47,6 +51,7 @@ export const PROJECT_RUNTIME_METHODS = [
   defineMethod({
     name: 'projectHostSetup.setupExistingFolder',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectHostSetupExistingFolder,
     handler: async (params, context) => ({
       result: projectRepoResultVisibilityForClient(
@@ -58,6 +63,7 @@ export const PROJECT_RUNTIME_METHODS = [
   defineMethod({
     name: 'projectHostSetup.clone',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectHostSetupClone,
     handler: async (params, context) => ({
       result: projectRepoResultVisibilityForClient(
@@ -69,6 +75,7 @@ export const PROJECT_RUNTIME_METHODS = [
   defineMethod({
     name: 'projectHostSetup.update',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectHostSetupUpdate,
     handler: async (params, context) => ({
       result: projectRepoResultVisibilityForClient(
@@ -80,6 +87,7 @@ export const PROJECT_RUNTIME_METHODS = [
   defineMethod({
     name: 'projectHostSetup.delete',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectHostSetupDelete,
     handler: (params, context) => ({
       result: projectRepoResultVisibilityForClient(

@@ -93,6 +93,7 @@ export const NATIVE_CHAT_METHODS = [
   defineMethod({
     name: 'nativeChat.readSession',
     permission: 'workspace',
+    share: 'not-shared',
     params: NativeChatSession,
     handler: async (params, { runtime, clientKind, signal }) => {
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
@@ -129,6 +130,7 @@ export const NATIVE_CHAT_METHODS = [
   defineStreamingMethod({
     name: 'nativeChat.subscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: NativeChatSession,
     handler: async (
       params,
@@ -276,6 +278,7 @@ export const NATIVE_CHAT_METHODS = [
   defineMethod({
     name: 'nativeChat.unsubscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: NativeChatUnsubscribe,
     handler: async (params, { runtime, connectionId }) => {
       const connection = connectionId ?? 'local'

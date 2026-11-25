@@ -44,7 +44,12 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
   const reject = (rejected: RpcResponse) => ({ rejected })
   const method = registry.get(rawRequest.method)
   const callerScope = pinnedCallerScope ?? options?.callerScope ?? OWNER_RPC_CALLER_SCOPE
-  const denial = denyRpcMethodForCaller(callerScope, rawRequest.method, method?.permission)
+  const denial = denyRpcMethodForCaller(
+    callerScope,
+    rawRequest.method,
+    method?.permission,
+    method?.share
+  )
   if (denial) {
     return reject(errorResponse(rawRequest.id, meta, 'forbidden', denial))
   }
@@ -88,7 +93,7 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     if (callerScope.kind !== 'bot-share') {
       return admitted
     }
-    return refuseBotShareCall(runtime, callerScope, request.method, admitted.params).then(
+    return refuseBotShareCall(runtime, callerScope, method.share, admitted.params).then(
       (refusal) =>
         refusal ? reject(errorResponse(request.id, meta, 'not_found', refusal)) : admitted,
       (error) => reject(mapDispatcherError(request, meta, error))

@@ -21,6 +21,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
   defineStreamingMethod({
     name: 'terminal.multiplex',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalMultiplex,
     handler: async (
       _params,

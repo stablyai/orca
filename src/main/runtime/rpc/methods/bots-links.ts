@@ -22,6 +22,7 @@ async function forgetLinearLoginOnceUnlinked(
 export const BOT_LINKS_LIST = defineMethod({
   name: 'bots.links.list',
   permission: 'accounts-admin',
+  share: 'not-shared',
   params: null,
   handler: async (_params, context) => withHostCloudClient(context, (client) => client.links.list())
 })
@@ -29,6 +30,7 @@ export const BOT_LINKS_LIST = defineMethod({
 export const BOT_LINKS_UNLINK = defineMethod({
   name: 'bots.links.unlink',
   permission: 'accounts-admin',
+  share: 'not-shared',
   params: BotLinkedAccount,
   handler: async (link, context) =>
     withHostCloudClient(context, async (client) => {

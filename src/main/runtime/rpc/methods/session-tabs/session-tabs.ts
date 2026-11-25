@@ -33,6 +33,7 @@ export const SESSION_TAB_METHODS = [
   defineMethod({
     name: 'session.tabs.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeTabSelector,
     handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
       await prepareStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
@@ -56,6 +57,7 @@ export const SESSION_TAB_METHODS = [
   defineMethod({
     name: 'session.tabs.listAll',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, context) => {
       await prepareStructuredTabsIfSupported(context)
@@ -69,6 +71,7 @@ export const SESSION_TAB_METHODS = [
   defineStreamingMethod({
     name: 'session.tabs.subscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeTabSelector,
     handler: async (
       params,
@@ -280,6 +283,7 @@ export const SESSION_TAB_METHODS = [
   defineStreamingMethod({
     name: 'session.tabs.subscribeAll',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, context, emit) => subscribeSessionTabsInventory(context, emit)
   }),

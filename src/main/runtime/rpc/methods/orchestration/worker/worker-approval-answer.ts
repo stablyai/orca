@@ -40,6 +40,7 @@ export const ORCHESTRATION_WORKER_APPROVAL_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.approvalAnswer',
     permission: 'workspace',
+    share: 'not-shared',
     params: ApprovalAnswerParams,
     access: {
       kind: 'writes',

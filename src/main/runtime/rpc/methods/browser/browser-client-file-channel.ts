@@ -78,6 +78,7 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
   defineMethod({
     name: 'browser.clientHost.fileChannel.read',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserClientFileChannelReadParams,
     handler: async (params, context) => {
       const page = requireFileChannelPage(params, context)
@@ -98,6 +99,7 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
   defineMethod({
     name: 'browser.clientHost.fileChannel.begin',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserClientFileChannelBeginParams,
     handler: (params, context) => {
       const page = requireFileChannelPage(params, context)
@@ -135,6 +137,7 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
   defineMethod({
     name: 'browser.clientHost.fileChannel.write',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserClientFileChannelWriteParams,
     handler: async (params, context) => {
       const page = requireFileChannelPage(params, context)
@@ -168,6 +171,7 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
   defineMethod({
     name: 'browser.clientHost.fileChannel.abort',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserClientFileChannelAbortParams,
     handler: async (params, context) => {
       requireFileChannelPage(params, context)

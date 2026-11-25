@@ -4,6 +4,7 @@ import { defineMethod } from '../../core'
 export const WORKTREE_SLEEP_METHOD = defineMethod({
   name: 'worktree.sleep',
   permission: 'workspace',
+  share: 'not-shared',
   params: WorktreeSleepParams,
   // Sleep owns each workspace queue; do not queue twice. Answer on acceptance because phones ignore replies and sleep may outlast timeout.
   handler: async (params, { runtime, clientKind }) =>

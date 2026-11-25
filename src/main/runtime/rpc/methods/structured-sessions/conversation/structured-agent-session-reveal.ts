@@ -34,6 +34,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
   defineMethod({
     name: 'agentSession.reveal',
     permission: 'workspace',
+    share: 'not-shared',
     params: RevealParams,
     handler: async (params, ctx) => {
       const caller = params.navigation === 'caller' ? ctx.caller : undefined

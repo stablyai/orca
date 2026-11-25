@@ -1,3 +1,7 @@
+import {
+  SHARE_BY_ENVELOPE_SESSION,
+  SHARE_BY_SESSION
+} from '../../../../../shared/bots/bot-share-rpc-methods'
 import { STRUCTURED_AGENT_SESSION_CANCEL_METHOD } from '../structured-agent-session-cancel-method'
 import { STRUCTURED_AGENT_SESSION_MCP_METHODS } from './catalog/structured-agent-session-mcp'
 import { STRUCTURED_AGENT_SESSION_AUTO_REVIEW_METHODS } from './conversation/structured-agent-session-auto-review-approval'
@@ -71,6 +75,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.rewind',
     permission: 'workspace',
+    share: 'not-shared',
     params: RewindParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
@@ -81,12 +86,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.conversationCommand',
     permission: 'workspace',
+    share: 'not-shared',
     params: ConversationCommandParams,
     handler: runConversationCommandForClient
   }),
   defineMethod({
     name: 'agentSession.createSupport',
     permission: 'workspace',
+    share: 'not-shared',
     params: CreateSupportParams,
     handler: handleStructuredAgentSessionCreateSupport
   }),
@@ -94,6 +101,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.create',
     requires: ['accounts'],
     permission: 'workspace',
+    share: 'not-shared',
     params: CreateParams,
     handler: ORCA_LAYOUT_OWNER_IS_MAIN
       ? refusingStructuredAgentSessionCreatesClosedFirst(handleStructuredAgentSessionCreate)
@@ -102,12 +110,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.ensure',
     permission: 'workspace',
+    share: 'not-shared',
     params: AttachParams,
     handler: async (params, ctx) => attachClientSuppliedLocation(params, ctx)
   }),
   defineMethod({
     name: 'agentSession.send',
     permission: 'workspace',
+    share: SHARE_BY_ENVELOPE_SESSION,
     params: SendParams,
     handler: sendStructuredAgentSessionForClient
   }),
@@ -118,6 +128,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.sleepWorkspace',
     permission: 'workspace',
+    share: 'not-shared',
     params: SleepWorkspaceParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
@@ -168,6 +179,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.history',
     permission: 'workspace',
+    share: SHARE_BY_SESSION,
     params: HistoryParams,
     handler: async (params, ctx) => {
       const host = await requireInstalledHost(ctx, params.sessionId)
@@ -196,6 +208,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.unsubscribe',
     permission: 'workspace',
+    share: SHARE_BY_SESSION,
     params: UnsubscribeParams,
     handler: async (params, ctx) => {
       requireStructuredCleanupHost(ctx)

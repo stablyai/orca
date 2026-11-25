@@ -11,6 +11,7 @@ export const BOT_GITHUB_METHODS = [
   defineMethod({
     name: 'bots.github.state',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: null,
     // What the owner sees is what the next hello says, so a finished install reaches GitHub at once.
     handler: async (_params, context) =>
@@ -26,6 +27,7 @@ export const BOT_GITHUB_METHODS = [
   defineMethod({
     name: 'bots.github.users',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotGitHubUsers,
     handler: async ({ query }, context) =>
       withHostCloudClient(context, (client) => client.githubUsers(query))
@@ -33,6 +35,7 @@ export const BOT_GITHUB_METHODS = [
   defineMethod({
     name: 'bots.github.unlink',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotGitHubUnlink,
     handler: async ({ userId }, context) =>
       withHostCloudClient(context, (client) => client.unlinkGitHub(userId))
@@ -40,6 +43,7 @@ export const BOT_GITHUB_METHODS = [
   defineMethod({
     name: 'bots.github.setDefaultBot',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotGitHubDefaultBot,
     handler: async ({ botId, userId }, context) =>
       withHostCloudClient(context, (client) => client.setGitHubDefaultBot(botId, userId))

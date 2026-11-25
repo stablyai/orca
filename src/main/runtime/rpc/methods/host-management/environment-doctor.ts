@@ -9,6 +9,7 @@ export const ENVIRONMENT_DOCTOR_METHODS = [
   defineMethod({
     name: ENVIRONMENT_DOCTOR_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: EnvironmentDoctorParams,
     handler: async ({ path }) =>
       runEnvironmentDoctor(

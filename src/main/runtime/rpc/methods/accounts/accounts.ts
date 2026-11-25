@@ -56,6 +56,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.setHostLaunchEnv',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: HostAccountLaunchEnvParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind === 'mobile') {
@@ -69,6 +70,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.beginClaudeSignIn',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BeginClaudeSignInParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -80,6 +82,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.finishClaudeSignIn',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: FinishClaudeSignInParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -91,6 +94,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.cancelClaudeSignIn',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: FinishClaudeSignInParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -103,12 +107,14 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.listData',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_, { runtime }) => runtime.getDataAccountsSnapshot()
   }),
   defineMethod({
     name: 'accounts.addDataFromHome',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: AddDataAccountParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -120,6 +126,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.selectData',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: SelectDataAccountParams,
     handler: async (params, { runtime }) =>
       runtime.selectDataAccount(params.provider, params.accountId)
@@ -127,6 +134,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.removeData',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: RemoveDataAccountParams,
     handler: async (params, { runtime }) =>
       runtime.removeDataAccount(params.provider, params.accountId)
@@ -134,6 +142,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: ListAccountsParams,
     handler: async (params, { runtime }) => {
       // Refresh before replying: unfocused desktop polling and unopened account caches can leave mobile usage stale.
@@ -153,6 +162,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.selectClaude',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: SelectClaudeAccountParams,
     handler: async ({ accountId, ...options }, { runtime }) =>
       runtime.selectClaudeAccount(accountId, options)
@@ -160,6 +170,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.selectCodex',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: SelectAccountParams,
     handler: async (params, { runtime }) => runtime.selectCodexAccount(params.accountId)
   }),
@@ -167,6 +178,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     // Use a distinct RPC: old hosts strip unknown target fields and could otherwise clear the host slot.
     name: 'accounts.selectCodexForTarget',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: SelectCodexAccountForTargetParams,
     handler: async (params, { runtime }) =>
       runtime.selectCodexAccountForTarget(params.accountId, params.target)
@@ -174,6 +186,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.consumeCodexResetCredit',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: ConsumeCodexResetCreditParams,
     handler: async (params, { runtime }) =>
       runtime.consumeCodexRateLimitResetCredit(params.idempotencyKey, params.expectedScope)
@@ -181,12 +194,14 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.removeClaude',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeClaudeAccount(params.accountId)
   }),
   defineMethod({
     name: 'accounts.removeCodex',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeCodexAccount(params.accountId)
   }),
@@ -194,6 +209,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.addClaudeFromConfigDir',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: AddClaudeFromConfigDirParams,
     handler: async () => {
       throw new Error(
@@ -204,6 +220,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.addCodexFromHome',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: AddCodexFromHomeParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -219,6 +236,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.hostSignInStart',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: HostAccountSignInStartParams,
     handler: async ({ provider, accountId }, ctx) =>
       hostSignInFlows(ctx.runtime).start(signInOwner(ctx), provider, accountId)
@@ -226,6 +244,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.hostSignInWait',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: HostAccountSignInWaitParams,
     handler: async ({ flowId, afterRevision }, ctx) =>
       hostSignInFlows(ctx.runtime).wait(signInOwner(ctx), flowId, afterRevision, ctx.signal)
@@ -233,6 +252,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.hostSignInSubmitCode',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: HostAccountSignInCodeParams,
     handler: async ({ flowId, code }, ctx) =>
       hostSignInFlows(ctx.runtime).submitCode(signInOwner(ctx), flowId, code)
@@ -240,6 +260,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.hostSignInCancel',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: HostAccountSignInFlowParams,
     handler: async ({ flowId }, ctx) =>
       hostSignInFlows(ctx.runtime).cancel(signInOwner(ctx), flowId)
@@ -248,6 +269,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
   defineMethod({
     name: 'accounts.unsubscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: AccountsUnsubscribeParams,
     handler: async (params, { runtime }) => {
       runtime.cleanupSubscription(params.subscriptionId)

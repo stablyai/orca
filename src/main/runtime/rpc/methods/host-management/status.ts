@@ -1,3 +1,4 @@
+import { SHARE_SCOPED } from '../../../../../shared/bots/bot-share-rpc-methods'
 import { defineMethod } from '../../core'
 import { getRemoteServerUpdaterSnapshot } from '../../../hosts/management/remote-server-updater'
 import { getPublishedHostDescriptor } from '../../../hosts/platform-probe/host-descriptor'
@@ -10,6 +11,7 @@ export const STATUS_METHODS = [
   defineMethod({
     name: 'status.get',
     permission: 'workspace',
+    share: SHARE_SCOPED,
     params: StatusGetParams,
     handler: async (params, context) => {
       const { runtime, pairedDeviceId } = context

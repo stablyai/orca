@@ -1,17 +1,17 @@
 // The share guard, run once per call after its params parse: a teammate's call may name only the shared
 // bot and their own chats on it. Anything else answers not found, so another chat's existence never shows.
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { BOT_SHARE_RPC_METHODS } from '../../../../shared/bots/bot-share-rpc-methods'
+import type { RpcMethodShare } from '../../../../shared/bots/bot-share-rpc-methods'
 import type { BotShareCallerScope } from '../callers/rpc-caller-scope'
 import { botShareOwnsSession } from '../../../bots/team-share/bot-share-chats'
 
 export async function refuseBotShareCall(
   runtime: OrcaRuntimeService,
   scope: BotShareCallerScope,
-  methodName: string,
+  share: RpcMethodShare,
   params: unknown
 ): Promise<string | null> {
-  const access = BOT_SHARE_RPC_METHODS.get(methodName)
+  const access = share === 'not-shared' ? undefined : share
   switch (access?.kind) {
     case 'scoped':
     case 'self':

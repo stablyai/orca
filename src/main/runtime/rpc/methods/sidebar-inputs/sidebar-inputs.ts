@@ -14,6 +14,7 @@ export const SIDEBAR_INPUT_METHODS = [
   defineMethod({
     name: 'sidebarInputs.activityFacts',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) =>
       requireSwitchedOn(runtime.sidebarFacts).getWorkspaceActivityFacts()
@@ -21,6 +22,7 @@ export const SIDEBAR_INPUT_METHODS = [
   defineMethod({
     name: 'sidebarInputs.desktopFacts',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) =>
       readRuntimeDesktopSidebarFacts(
@@ -31,12 +33,14 @@ export const SIDEBAR_INPUT_METHODS = [
   defineMethod({
     name: 'sidebarInputs.pairedServerRows',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => requireSwitchedOn(runtime.pairedServerRows).snapshot()
   }),
   defineMethod({
     name: 'sidebarInputs.workspaceRows',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => {
       const rows = requireSwitchedOn(runtime.workspaceRows)
@@ -48,6 +52,7 @@ export const SIDEBAR_INPUT_METHODS = [
   defineMethod({
     name: 'sidebarInputs.reviewFacts',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) =>
       requireSwitchedOn(runtime.sidebarFacts).getWorkspaceReviewFacts()
@@ -55,6 +60,7 @@ export const SIDEBAR_INPUT_METHODS = [
   defineMethod({
     name: 'sidebarInputs.temporal',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) =>
       requireSwitchedOn(runtime.sidebarFacts).getSidebarTemporalSnapshot()
@@ -62,6 +68,7 @@ export const SIDEBAR_INPUT_METHODS = [
   defineMethod({
     name: 'sidebarInputs.read',
     permission: 'workspace',
+    share: 'not-shared',
     params: SidebarInputsReadParams,
     // Serve only this host's window/own phone; delegated phones use their desktop feed, while other desktops/web build their own.
     handler: async (params, context) => {
@@ -94,6 +101,7 @@ export const SIDEBAR_INPUT_METHODS = [
   defineMethod({
     name: 'sidebarSession.begin',
     permission: 'workspace',
+    share: 'not-shared',
     params: SidebarSessionBeginParams,
     handler: async ({ sessionId }, { runtime }) => {
       requireSwitchedOn(runtime.sidebarFacts).beginSidebarListSession(sessionId)
@@ -103,6 +111,7 @@ export const SIDEBAR_INPUT_METHODS = [
   defineMethod({
     name: 'sidebarInputs.workspaceCreations',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) =>
       requireSwitchedOn(runtime.workspaceLifecycle).creationsSnapshot()
@@ -110,6 +119,7 @@ export const SIDEBAR_INPUT_METHODS = [
   defineMethod({
     name: 'sidebarInputs.reportView',
     permission: 'workspace',
+    share: 'not-shared',
     params: ClientWorkspaceViewParams,
     // What a client window shows, so this host raises no unread flag on it; held until it closes.
     handler: async (params, { runtime, connectionId, signal }) => {
@@ -131,6 +141,7 @@ export const SIDEBAR_INPUT_METHODS = [
   defineMethod({
     name: 'ui.setCollapsed',
     permission: 'workspace',
+    share: 'not-shared',
     params: SetCollapsedParams,
     // Match ui.set callers because collapsedGroups is a shared-view preference.
     handler: (params, { runtime }) =>

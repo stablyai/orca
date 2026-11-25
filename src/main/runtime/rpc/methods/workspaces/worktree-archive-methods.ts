@@ -14,6 +14,7 @@ export const WORKTREE_ARCHIVE_METHODS = [
   defineMethod({
     name: 'worktree.archive',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeArchive,
     handler: async (params, { runtime }) => {
       const hostId = resolvePairedCallerHostId(
@@ -29,6 +30,7 @@ export const WORKTREE_ARCHIVE_METHODS = [
   defineMethod({
     name: 'worktree.restore',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeRestore,
     handler: async (params, { runtime }) => {
       const hostId = resolvePairedCallerHostId(

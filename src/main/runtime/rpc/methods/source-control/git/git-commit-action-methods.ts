@@ -9,6 +9,7 @@ export const GIT_COMMIT_ACTION_METHODS = [
   defineMethod({
     name: 'git.createBranch',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitCreateBranch,
     handler: async (params, { runtime }) =>
       runtime.createRuntimeGitBranch(params.worktree, params.name, params.startPoint)
@@ -16,6 +17,7 @@ export const GIT_COMMIT_ACTION_METHODS = [
   defineMethod({
     name: 'git.sequencerContinue',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitSequencer,
     handler: async (params, { runtime }) =>
       runtime.sequencerContinueRuntimeGit(params.worktree, params.operation)
@@ -23,6 +25,7 @@ export const GIT_COMMIT_ACTION_METHODS = [
   defineMethod({
     name: 'git.sequencerAbort',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitSequencer,
     handler: async (params, { runtime }) =>
       runtime.sequencerAbortRuntimeGit(params.worktree, params.operation)
@@ -30,6 +33,7 @@ export const GIT_COMMIT_ACTION_METHODS = [
   defineMethod({
     name: 'git.cherryPick',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitCommitAction,
     handler: async (params, { runtime }) =>
       runtime.cherryPickRuntimeGit(params.worktree, params.commitId)
@@ -37,6 +41,7 @@ export const GIT_COMMIT_ACTION_METHODS = [
   defineMethod({
     name: 'git.revert',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitCommitAction,
     handler: async (params, { runtime }) =>
       runtime.revertRuntimeGit(params.worktree, params.commitId)

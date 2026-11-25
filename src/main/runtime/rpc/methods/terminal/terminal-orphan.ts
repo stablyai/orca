@@ -7,6 +7,7 @@ export const TERMINAL_ORPHAN_METHODS = [
     // Adopting before placement could adopt a PTY the host is about to place itself.
     requires: ['unshownPlacement'],
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalAdoptOrphans,
     handler: async (params, { runtime }) => runtime.adoptTerminalOrphans(params)
   })

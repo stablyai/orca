@@ -13,24 +13,28 @@ export const SPEECH_METHODS = [
   defineMethod({
     name: 'speech.models.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: SpeechSetupRead,
     handler: async (params, { runtime }) => runtime.listMobileSpeechModels(params?.worktreeId)
   }),
   defineMethod({
     name: 'speech.models.download',
     permission: 'workspace',
+    share: 'not-shared',
     params: SpeechModelAction,
     handler: async (params, { runtime }) => runtime.downloadMobileSpeechModel(params.modelId)
   }),
   defineMethod({
     name: 'speech.models.delete',
     permission: 'workspace',
+    share: 'not-shared',
     params: SpeechModelAction,
     handler: async (params, { runtime }) => runtime.deleteMobileSpeechModel(params.modelId)
   }),
   defineMethod({
     name: 'speech.dictation.setup',
     permission: 'workspace',
+    share: 'not-shared',
     params: DictationSetup,
     handler: async (params, { runtime }) =>
       runtime.configureMobileDictation({
@@ -45,6 +49,7 @@ export const SPEECH_METHODS = [
   defineMethod({
     name: 'speech.dictation.start',
     permission: 'workspace',
+    share: 'not-shared',
     params: DictationStart,
     handler: async (params, { runtime, clientId }) =>
       runtime.startMobileDictation({ ...params, clientId })
@@ -52,12 +57,14 @@ export const SPEECH_METHODS = [
   defineMethod({
     name: 'speech.dictation.chunk',
     permission: 'workspace',
+    share: 'not-shared',
     params: DictationChunk,
     handler: (params, { runtime, clientId }) => runtime.feedMobileDictation({ ...params, clientId })
   }),
   defineMethod({
     name: 'speech.dictation.finish',
     permission: 'workspace',
+    share: 'not-shared',
     params: DictationHandle,
     handler: async (params, { runtime, clientId }) =>
       runtime.finishMobileDictation({ ...params, clientId })
@@ -65,6 +72,7 @@ export const SPEECH_METHODS = [
   defineMethod({
     name: 'speech.dictation.cancel',
     permission: 'workspace',
+    share: 'not-shared',
     params: DictationHandle,
     handler: async (params, { runtime, clientId }) =>
       runtime.cancelMobileDictation({ ...params, clientId })
@@ -72,18 +80,21 @@ export const SPEECH_METHODS = [
   defineMethod({
     name: 'speech.openAiKey.status',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => runtime.getOpenAiSpeechKeyStatus()
   }),
   defineMethod({
     name: 'speech.openAiKey.set',
     permission: 'settings-write',
+    share: 'not-shared',
     params: OpenAiSpeechKeySet,
     handler: async (params, { runtime }) => runtime.setOpenAiSpeechKey(params.apiKey)
   }),
   defineMethod({
     name: 'speech.openAiKey.clear',
     permission: 'settings-write',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => runtime.clearOpenAiSpeechKey()
   })

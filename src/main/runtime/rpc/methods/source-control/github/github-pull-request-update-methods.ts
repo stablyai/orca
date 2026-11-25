@@ -17,6 +17,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.updatePRTitle',
     permission: 'workspace',
+    share: 'not-shared',
     params: UpdatePrTitle,
     handler: async (params, { runtime }) =>
       runtime.updateRepoPRTitle(params.repo, params.prNumber, params.title, params.prRepo ?? null)
@@ -24,6 +25,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.updatePR',
     permission: 'workspace',
+    share: 'not-shared',
     params: UpdatePr,
     handler: async (params, { runtime }) =>
       runtime.updateRepoPRDetails(
@@ -36,6 +38,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.mergePR',
     permission: 'workspace',
+    share: 'not-shared',
     params: MergePr,
     handler: async (params, { runtime }) =>
       runtime.mergeRepoPR(
@@ -49,6 +52,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.setPRAutoMerge',
     permission: 'workspace',
+    share: 'not-shared',
     params: SetPrAutoMerge,
     handler: async (params, { runtime }) =>
       runtime.setRepoPRAutoMerge(
@@ -62,6 +66,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.updatePRState',
     permission: 'workspace',
+    share: 'not-shared',
     params: UpdatePrState,
     handler: async (params, { runtime }) =>
       runtime.updateRepoPRState(params.repo, params.prNumber, params.updates, params.prRepo ?? null)
@@ -69,6 +74,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.markPRReadyForReview',
     permission: 'workspace',
+    share: 'not-shared',
     params: MarkPrReadyForReview,
     handler: async (params, { runtime }) =>
       runtime.markRepoPRReadyForReview(params.repo, params.prNumber, params.prRepo ?? null)
@@ -76,6 +82,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.markPRDraft',
     permission: 'workspace',
+    share: 'not-shared',
     params: MarkPrDraft,
     handler: async (params, { runtime }) =>
       runtime.markRepoPRDraft(params.repo, params.prNumber, params.prRepo ?? null)
@@ -83,6 +90,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.requestPRReviewers',
     permission: 'workspace',
+    share: 'not-shared',
     params: RequestPrReviewers,
     handler: async (params, { runtime }) =>
       runtime.requestRepoPRReviewers(
@@ -95,6 +103,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.removePRReviewers',
     permission: 'workspace',
+    share: 'not-shared',
     params: RemovePrReviewers,
     handler: async (params, { runtime }) =>
       runtime.removeRepoPRReviewers(
@@ -107,6 +116,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.addPRReviewComment',
     permission: 'workspace',
+    share: 'not-shared',
     params: PRReviewComment,
     handler: async (params, { runtime }) =>
       runtime.addRepoPRReviewComment(params.repo, {
@@ -122,6 +132,7 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.addPRReviewCommentReply',
     permission: 'workspace',
+    share: 'not-shared',
     params: PRReviewCommentReply,
     handler: async (params, { runtime }) =>
       runtime.addRepoPRReviewCommentReply(params.repo, {

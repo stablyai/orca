@@ -12,6 +12,7 @@ export const BOT_LINEAR_METHODS = [
   defineMethod({
     name: 'bots.linear.state',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: null,
     handler: async (_params, context) =>
       withHostCloudClient(context, (client) => client.linearState())
@@ -19,6 +20,7 @@ export const BOT_LINEAR_METHODS = [
   defineMethod({
     name: 'bots.linear.unlink',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotLinearWorkspace,
     handler: async ({ workspaceId }, context) =>
       withHostCloudClient(context, async (client) => {
@@ -33,6 +35,7 @@ export const BOT_LINEAR_METHODS = [
   defineMethod({
     name: 'bots.linear.members',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotLinearMembers,
     handler: async ({ workspaceId, query }, context) =>
       withHostCloudClient(context, (client) => client.linearMembers(workspaceId, query))
@@ -40,6 +43,7 @@ export const BOT_LINEAR_METHODS = [
   defineMethod({
     name: 'bots.linear.setDefaultBot',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotLinearDefaultBot,
     handler: async ({ workspaceId, botId }, context) =>
       withHostCloudClient(context, (client) => client.setLinearDefaultBot(workspaceId, botId))

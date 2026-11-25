@@ -10,12 +10,14 @@ export const MOBILE_RELAY_HOSTS_METHODS = [
   defineMethod({
     name: MOBILE_RELAY_HOSTS_LIST_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, ctx) => (await ctx.mobileRelayHosts?.list()) ?? { hosts: [] }
   }),
   defineMethod({
     name: MOBILE_RELAY_HOST_WORKTREES_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: MobileRelayHostWorktreesParamsSchema,
     handler: async (params, ctx) => {
       const result = (await ctx.mobileRelayHosts?.worktrees(params.hostId)) ?? { worktrees: null }

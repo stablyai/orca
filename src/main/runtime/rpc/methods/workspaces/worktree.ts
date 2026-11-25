@@ -11,7 +11,7 @@ import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runti
 import { splitWorktreeId } from '../../../../../shared/worktree/id'
 import { buildCliWorkspaceProvenance } from '../../../../../shared/worktree/creation/cli-workspace-provenance'
 import { createWorktreeWithStartupAgent } from '../../../../agent-launch/startup-agent-worktree-create'
-import { defineMethod } from '../../core'
+import { notShared, defineMethod } from '../../core'
 import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
 import { resolvePairedCallerHostId } from '../pairing/paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
@@ -46,7 +46,7 @@ export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
   defineMethod({
     name: 'worktree.teardownMissingTerminals',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeTeardownMissingTerminalsParams,
     handler: async (params, { runtime }) =>
       runtime.teardownMissingManagedWorktreeTerminals(
@@ -57,7 +57,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.runApprovedSetup',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeRunApprovedSetup,
     handler: async (params, { runtime }) =>
       runApprovedCreatedWorktreeSetup(runtime, params.worktree, params.approvedSetupHash, {
@@ -66,7 +66,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.lineageList',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: null,
     handler: async (_params, { runtime }) => ({
       lineage: await runtime.listWorktreeLineage(),
@@ -79,7 +79,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.resolveCallerParent',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeResolveCallerParent,
     handler: async (params, { runtime }) =>
       await runtime.resolveCallerParentForAnotherStore(
@@ -89,7 +89,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.show',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeShow,
     handler: async (params, { runtime }) => ({
       worktree: await runtime.showManagedWorktree(params.worktree, undefined, {
@@ -101,7 +101,7 @@ export const WORKTREE_METHODS = [
   WORKSPACE_CLEANUP_SCAN_METHOD,
   defineMethod({
     name: 'worktree.activate',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeActivate,
     handler: async (params, { runtime, clientKind }) =>
       // Only mobile activation wakes host-renderer slept agents; preserve web/desktop behavior.
@@ -118,7 +118,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.create',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeCreate,
     handler: async (params, context) =>
       // Mobile retries after migration share clientMutationId; return the same pending/created worktree. Desktop/CLI without keys run plainly.
@@ -170,7 +170,7 @@ export const WORKTREE_METHODS = [
   WORKTREE_PROVISIONED_ROOT_METHOD,
   defineMethod({
     name: 'worktree.prefetchCreateBase',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreePrefetchCreateBase,
     handler: async (params, { runtime }) => {
       await runtime.prefetchManagedWorktreeCreateBase({
@@ -183,14 +183,14 @@ export const WORKTREE_METHODS = [
   WORKTREE_SET_METHOD,
   defineMethod({
     name: 'worktree.persistSortOrder',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeSortOrder,
     handler: async (params, { runtime }) =>
       runtime.persistManagedWorktreeSortOrder(params.orderedIds, params.hostIds)
   }),
   defineMethod({
     name: 'worktree.resolvePrBase',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeResolvePrBase,
     handler: async (params, { runtime }) =>
       runtime.resolveManagedPrBase({
@@ -204,7 +204,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.resolveMrBase',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeResolveMrBase,
     handler: async (params, { runtime }) =>
       runtime.resolveManagedMrBase({
@@ -218,7 +218,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.rm',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeRemove,
     handler: async (params, context) => {
       const { runtime } = context
@@ -276,7 +276,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.previewNestedRemoval',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreePreviewNestedRemoval,
     handler: async (params, { runtime }) =>
       runtime.previewNestedManagedWorktreeRemoval(
@@ -286,7 +286,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.forceDeleteBranch',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: WorktreeForceDeleteBranch,
     handler: async (params, { runtime }) => {
       const hostId = resolvePairedCallerHostId(

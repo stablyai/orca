@@ -6,6 +6,7 @@ export const AUTOMATIC_WORK_METHODS = [
   defineMethod({
     name: 'runtime.automaticWork.status',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => ({
       automaticWork: await runtime.getAutomaticWorkStatus()
@@ -14,6 +15,7 @@ export const AUTOMATIC_WORK_METHODS = [
   defineMethod({
     name: 'runtime.automaticWork.resume',
     permission: 'host-admin',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => {
       const outcome = await runtime.resumeAutomaticWork()

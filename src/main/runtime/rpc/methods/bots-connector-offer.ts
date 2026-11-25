@@ -64,6 +64,7 @@ export async function postConnectorOffer(
 export const BOT_CONNECTOR_OFFER_METHOD = defineMethod({
   name: 'bots.connector.offer',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotConnectorOffer,
   handler: async ({ callerSessionId, source, workspace }, { runtime, pairedDeviceId }) => {
     runtime.bots.assertEnabled()

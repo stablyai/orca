@@ -20,6 +20,7 @@ export const GIT_STATUS_METHODS = [
   defineMethod({
     name: 'git.submoduleStatus',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitSubmoduleStatus,
     handler: async (params, { runtime, clientCapabilities }) => {
       const status = await runtime.getRuntimeGitSubmoduleStatus(
@@ -36,6 +37,7 @@ export const GIT_STATUS_METHODS = [
   defineMethod({
     name: 'git.status',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitStatusParams,
     handler: async (params, { runtime, signal, clientCapabilities }) => {
       const options =
@@ -76,6 +78,7 @@ export const GIT_STATUS_METHODS = [
   defineMethod({
     name: 'git.atRiskLocalFiles',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeSelector,
     handler: async (params, { runtime, signal }) =>
       runtime.readRuntimeWorktreeAtRiskLocalFiles(params.worktree, signal)
@@ -83,6 +86,7 @@ export const GIT_STATUS_METHODS = [
   defineMethod({
     name: 'git.conflictOperation',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeSelector,
     handler: async (params, { runtime, clientCapabilities }) =>
       projectConflictOperation(

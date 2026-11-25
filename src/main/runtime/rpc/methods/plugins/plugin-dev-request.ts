@@ -8,6 +8,7 @@ export const PLUGIN_DEV_REQUEST_METHODS = [
     // Why host-admin: it runs plugin code on the host, like plugins.devEmit.
     name: 'plugins.devRequest',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginDevRequestParams,
     handler: async (params, ctx) => {
       const service = requirePluginService()

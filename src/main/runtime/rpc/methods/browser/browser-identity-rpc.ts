@@ -36,6 +36,7 @@ export const BROWSER_IDENTITY_METHODS = [
   defineMethod({
     name: 'browser.identity.get',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => ({
       ...(await hostIdentity().get()),
@@ -45,6 +46,7 @@ export const BROWSER_IDENTITY_METHODS = [
   defineMethod({
     name: 'browser.identity.set',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserIdentitySet,
     handler: async ({ mode, reset }, { runtime }) => {
       const result = await hostIdentity().set(mode, { reset })

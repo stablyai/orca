@@ -15,6 +15,7 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
   defineStreamingMethod({
     name: 'terminal.subscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalSubscribe,
     handler: async (
       params,

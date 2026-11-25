@@ -1,3 +1,4 @@
+import { SHARE_BY_SESSION } from '../../../../../../shared/bots/bot-share-rpc-methods'
 import { defineStreamingMethod } from '../../../core'
 import { sendingTextAppends } from '../../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { recordMobileViewOpened } from '../../../../../telemetry/mobile-client-telemetry'
@@ -16,6 +17,7 @@ import { projectReceiptDeviceEvent } from './structured-agent-session-receipt-de
 export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
   name: 'agentSession.subscribe',
   permission: 'workspace',
+  share: SHARE_BY_SESSION,
   params: SubscribeParams,
   handler: async (params, ctx, emitFrame) => {
     const { capabilities } = params

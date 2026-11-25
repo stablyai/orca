@@ -14,6 +14,7 @@ export const JIRA_ATTACHMENT_IMAGE_METHODS = [
   defineStreamingMethod({
     name: 'jira.attachmentImage',
     permission: 'workspace',
+    share: 'not-shared',
     params: AttachmentImage,
     handler: async ({ reference, transferId }, { sendBinary, signal }, emit) => {
       if (!sendBinary) {

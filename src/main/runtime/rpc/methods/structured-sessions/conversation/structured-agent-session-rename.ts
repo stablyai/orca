@@ -12,6 +12,7 @@ export const STRUCTURED_AGENT_SESSION_RENAME_METHODS = [
   defineMethod({
     name: 'agentSession.rename',
     permission: 'workspace',
+    share: 'not-shared',
     params: RenameParams,
     handler: async (params, ctx) => {
       const host = await requireRenameStructuredHost(ctx, params.sessionId)

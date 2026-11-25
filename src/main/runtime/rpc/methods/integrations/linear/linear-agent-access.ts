@@ -41,6 +41,7 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
   defineMethod({
     name: 'linear.saveIssue',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearSaveIssue,
     handler: async (params, { runtime, signal }) =>
       runtime.linearSaveIssue({ ...params, writeId: parseLinearWriteId(params.writeId) }, signal)
@@ -48,6 +49,7 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
   defineMethod({
     name: 'linear.agentSearchIssues',
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentSearchIssues,
     handler: async (params, { runtime }) =>
       runtime.linearSearchForAgents({
@@ -59,42 +61,49 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
   defineMethod({
     name: 'linear.issueContext',
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentIssueContext,
     handler: async (params, { runtime }) => runtime.linearIssueContext(params)
   }),
   defineMethod({
     name: 'linear.agentTeamList',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearWorkspaceRead,
     handler: async (params, { runtime }) => runtime.linearTeamListForAgents(params)
   }),
   defineMethod({
     name: 'linear.agentTeamMembers',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearTeamLookup,
     handler: async (params, { runtime }) => runtime.linearTeamMembersForAgents(params)
   }),
   defineMethod({
     name: 'linear.agentTeamStates',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearTeamLookup,
     handler: async (params, { runtime }) => runtime.linearTeamStatesForAgents(params)
   }),
   defineMethod({
     name: 'linear.agentTeamLabels',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearTeamLookup,
     handler: async (params, { runtime }) => runtime.linearTeamLabelsForAgents(params)
   }),
   defineMethod({
     name: 'linear.agentIssueList',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearIssueList,
     handler: async (params, { runtime, signal }) => runtime.linearIssueListForAgents(params, signal)
   }),
   defineMethod({
     name: 'linear.agentProjectList',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearProjectList,
     handler: async (params, { runtime, signal }) =>
       runtime.linearProjectListForAgents(params, signal)
@@ -102,30 +111,35 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
   defineMethod({
     name: 'linear.resolveCurrentIssue',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearCurrentContext,
     handler: async (params, { runtime }) => runtime.linearResolveCurrentIssue(params)
   }),
   defineMethod({
     name: 'linear.issueSetState',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearIssueSetState,
     handler: async (params, { runtime, signal }) => runtime.linearIssueSetState(params, signal)
   }),
   defineMethod({
     name: 'linear.issueUpdateTask',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearIssueUpdateTask,
     handler: async (params, { runtime, signal }) => runtime.linearIssueUpdateTask(params, signal)
   }),
   defineMethod({
     name: 'linear.issueRelationWrite',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearIssueRelationWrite,
     handler: async (params, { runtime, signal }) => runtime.linearIssueRelationWrite(params, signal)
   }),
   defineMethod({
     name: 'linear.issueAddComment',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearIssueAddComment,
     handler: async ({ callerSessionId, ...params }, { runtime, signal, pairedDeviceId }) => {
       const write = await readBotWriteTurn(runtime, callerSessionId, pairedDeviceId).catch(
@@ -155,18 +169,21 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
   defineMethod({
     name: 'linear.commentEdit',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearCommentEdit,
     handler: async (params, { runtime, signal }) => runtime.linearCommentEdit(params, signal)
   }),
   defineMethod({
     name: 'linear.commentDelete',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearCommentDelete,
     handler: async (params, { runtime, signal }) => runtime.linearCommentDelete(params, signal)
   }),
   defineMethod({
     name: 'linear.issueAttachLink',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearIssueAttachLink,
     handler: async (params, { runtime, signal }) =>
       runtime.linearIssueAttachLink(
@@ -177,6 +194,7 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
   defineMethod({
     name: 'linear.issueCreate',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearIssueCreate,
     handler: async (params, { runtime, signal }) =>
       runtime.linearIssueCreate({ ...params, writeId: parseLinearWriteId(params.writeId) }, signal)

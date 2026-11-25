@@ -31,6 +31,7 @@ export const ORCHESTRATION_ASK_METHODS = [
       targets: { to: 'party', resume: 'message', run: 'run' }
     },
     permission: 'workspace',
+    share: 'not-shared',
     params: AskParams,
     handler: async (
       params,

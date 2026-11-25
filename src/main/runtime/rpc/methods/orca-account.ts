@@ -36,12 +36,14 @@ export const ORCA_ACCOUNT_METHODS = [
   defineMethod({
     name: 'orcaAccount.status',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async () => server().status()
   }),
   defineMethod({
     name: 'orcaAccount.signIn.start',
     permission: 'workspace',
+    share: 'not-shared',
     params: OrcaAccountSignInStartParams,
     handler: async ({ switchAccount, approveInBrowser }, ctx) =>
       server().startSignIn(flowOwner(ctx), switchAccount ? 'switch-account' : 'sign-in', {
@@ -51,6 +53,7 @@ export const ORCA_ACCOUNT_METHODS = [
   defineMethod({
     name: 'orcaAccount.signIn.wait',
     permission: 'workspace',
+    share: 'not-shared',
     params: OrcaAccountSignInWaitParams,
     handler: async ({ flowId, afterRevision }, ctx) =>
       server().waitSignIn(flowOwner(ctx), flowId, afterRevision, ctx.signal)
@@ -58,6 +61,7 @@ export const ORCA_ACCOUNT_METHODS = [
   defineMethod({
     name: 'orcaAccount.signIn.complete',
     permission: 'workspace',
+    share: 'not-shared',
     params: OrcaAccountSignInCompleteParams,
     handler: async ({ flowId, code, state, redirectUri }, ctx) =>
       server().completeSignIn(flowOwner(ctx), flowId, { code, state, redirectUri })
@@ -65,24 +69,28 @@ export const ORCA_ACCOUNT_METHODS = [
   defineMethod({
     name: 'orcaAccount.signIn.cancel',
     permission: 'workspace',
+    share: 'not-shared',
     params: OrcaAccountSignInFlowParams,
     handler: async ({ flowId }, ctx) => server().cancelSignIn(flowOwner(ctx), flowId)
   }),
   defineMethod({
     name: 'orcaAccount.selectOrg',
     permission: 'workspace',
+    share: 'not-shared',
     params: OrcaAccountSelectOrgParams,
     handler: async ({ orgId }) => server().selectOrg(orgId)
   }),
   defineMethod({
     name: 'orcaAccount.signOut',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async () => server().signOut()
   }),
   defineStreamingMethod({
     name: 'orcaAccount.subscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime, connectionId }, emit) => {
       const account = server()
@@ -105,6 +113,7 @@ export const ORCA_ACCOUNT_METHODS = [
   defineMethod({
     name: 'orcaAccount.unsubscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: OrcaAccountUnsubscribeParams,
     handler: async ({ subscriptionId }, { runtime }) => {
       runtime.cleanupSubscription(subscriptionId)

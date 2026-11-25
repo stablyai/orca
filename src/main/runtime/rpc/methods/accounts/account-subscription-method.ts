@@ -8,6 +8,7 @@ let accountsSubscriptionSeq = 0
 export const ACCOUNT_SUBSCRIPTION_METHOD = defineStreamingMethod({
   name: 'accounts.subscribe',
   permission: 'workspace',
+  share: 'not-shared',
   params: null,
   handler: async (_params, { runtime, connectionId, signal, caller }, emit) => {
     if (signal?.aborted) {

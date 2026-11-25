@@ -9,6 +9,7 @@ import { readClientAskOutcome } from './orchestration/messaging/client-ask-card'
 export const BOT_REQUEST_OUTCOME_METHOD = defineMethod({
   name: 'bots.request.outcome',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotRequestOutcomeParams,
   handler: (
     { messageId, onClient },

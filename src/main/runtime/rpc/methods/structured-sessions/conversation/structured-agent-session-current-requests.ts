@@ -1,3 +1,4 @@
+import { SHARE_BY_SESSION } from '../../../../../../shared/bots/bot-share-rpc-methods'
 import { defineMethod, type RpcContext } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
 import { CurrentRequestsParams } from '../../../../../../shared/rpc-contract/structured-agent-session/agent-session-current-requests-params'
@@ -17,6 +18,7 @@ export const STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS = [
   defineMethod({
     name: 'agentSession.currentRequests',
     permission: 'workspace',
+    share: SHARE_BY_SESSION,
     params: CurrentRequestsParams,
     handler: async (params, ctx) => {
       if (!clientReadsCurrentRequests(ctx)) {

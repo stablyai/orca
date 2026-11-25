@@ -89,6 +89,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       }
     },
     permission: 'workspace',
+    share: 'not-shared',
     params: PeerMailDeliverParams,
     handler: async (params, ctx) => {
       const peerFingerprint = requireRuntimePairing(ctx)
@@ -171,6 +172,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
     name: 'orchestration.peerMailPull',
     access: { kind: 'localOnly', targets: {} },
     permission: 'workspace',
+    share: 'not-shared',
     params: PeerMailPullParams,
     handler: async (params, ctx) => {
       const peerFingerprint = requireRuntimePairing(ctx)
@@ -241,6 +243,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
     name: 'orchestration.peerMailAck',
     access: { kind: 'localOnly', targets: {} },
     permission: 'workspace',
+    share: 'not-shared',
     params: PeerMailAckParams,
     handler: (params, ctx) => {
       const peerFingerprint = requireRuntimePairing(ctx)

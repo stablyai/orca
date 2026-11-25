@@ -35,6 +35,7 @@ export const BROWSER_SCREENCAST_METHODS = [
   defineStreamingMethod({
     name: 'browser.screencast',
     permission: 'workspace',
+    share: 'not-shared',
     params: Screencast,
     handler: async (
       params,
@@ -54,6 +55,7 @@ export const BROWSER_SCREENCAST_METHODS = [
   defineMethod({
     name: 'browser.pagePromptAnswer',
     permission: 'workspace',
+    share: 'not-shared',
     params: PagePromptAnswer,
     // Like an ack, the answer names what it answers; only a device streaming the asking page is heard.
     handler: async (params, { pairedDeviceId }) => ({
@@ -63,6 +65,7 @@ export const BROWSER_SCREENCAST_METHODS = [
   defineMethod({
     name: 'browser.fileChooserAnswer',
     permission: 'workspace',
+    share: 'not-shared',
     params: FileChooserAnswer,
     // Only the device the picker was handed to is heard.
     handler: async (params, { pairedDeviceId }) => ({
@@ -72,6 +75,7 @@ export const BROWSER_SCREENCAST_METHODS = [
   defineMethod({
     name: 'browser.readPrintPdf',
     permission: 'workspace',
+    share: 'not-shared',
     params: ReadPrintPdf,
     // Only the device the print was handed to can read it.
     handler: async (params, { pairedDeviceId }) => readBrowserPrintPdf(pairedDeviceId, params)
@@ -79,12 +83,14 @@ export const BROWSER_SCREENCAST_METHODS = [
   defineMethod({
     name: 'browser.releasePrintPdf',
     permission: 'workspace',
+    share: 'not-shared',
     params: ReleasePrintPdf,
     handler: async (params, { pairedDeviceId }) => releaseBrowserPrintPdf(pairedDeviceId, params)
   }),
   defineStreamingMethod({
     name: 'browser.downloadCopyStream',
     permission: 'workspace',
+    share: 'not-shared',
     params: DownloadCopyStream,
     // Only the device the copy was offered to, and never an agent acting through it.
     handler: async (params, context, emit) => {
@@ -112,6 +118,7 @@ export const BROWSER_SCREENCAST_METHODS = [
   defineMethod({
     name: 'browser.releaseDownloadCopy',
     permission: 'workspace',
+    share: 'not-shared',
     params: ReleaseDownloadCopy,
     handler: async (params, context) => {
       ownerOnly(context, DOWNLOAD_COPY_OWNER_ONLY)
@@ -121,6 +128,7 @@ export const BROWSER_SCREENCAST_METHODS = [
   defineMethod({
     name: 'browser.screencast.reclaimForDesktop',
     permission: 'workspace',
+    share: 'not-shared',
     params: ScreencastReclaimForDesktop,
     // A desktop viewer's Take back, as on the host's own window; ends the phone's streams of the page.
     handler: async (params, context) => {
@@ -138,6 +146,7 @@ export const BROWSER_SCREENCAST_METHODS = [
   defineMethod({
     name: 'browser.screencast.unsubscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: ScreencastUnsubscribe,
     handler: async (params, { runtime }) => {
       if (!runtimeBrowserCommandsFactoryIsAvailable()) {
@@ -153,6 +162,7 @@ export const BROWSER_SCREENCAST_METHODS = [
   defineMethod({
     name: 'browser.screencast.ack',
     permission: 'workspace',
+    share: 'not-shared',
     params: ScreencastAck,
     // Late acks for an ended stream are normal; report them instead of failing the request.
     handler: async (params, { pairedDeviceId }) => ({

@@ -33,6 +33,7 @@ function mobileOwner(
 export const TERMINAL_INPUT_SESSION_METHOD = defineMethod({
   name: 'terminal.openInputSession',
   permission: 'workspace',
+  share: 'not-shared',
   params: TerminalOpenInputSession,
   handler: (params, context) => {
     const owner = mobileOwner(params, context)

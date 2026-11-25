@@ -75,6 +75,7 @@ export const PAIRED_SERVER_ASKS_METHODS = [
   defineMethod({
     name: 'pairedServerAsks.introduce',
     permission: 'workspace',
+    share: 'not-shared',
     params: PairedServerAskIntroduceParams,
     handler: async (params, ctx) => {
       requirePerson(ctx, 'introduce an agent here to a server chat')
@@ -91,6 +92,7 @@ export const PAIRED_SERVER_ASKS_METHODS = [
   defineMethod({
     name: 'pairedServerAsks.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: PairedServerAskListParams,
     handler: async (params, ctx) => {
       const rows = listPairedServerAsks(ctx.runtime.getOrchestrationDb(), { state: 'card' }).filter(
@@ -130,6 +132,7 @@ export const PAIRED_SERVER_ASKS_METHODS = [
   defineMethod({
     name: 'pairedServerAsks.decide',
     permission: 'workspace',
+    share: 'not-shared',
     params: PairedServerAskDecideParams,
     handler: (params, ctx) => {
       requirePerson(ctx, 'answer a message from an agent on a paired server')
@@ -139,6 +142,7 @@ export const PAIRED_SERVER_ASKS_METHODS = [
   defineMethod({
     name: 'pairedServerAsks.allowances',
     permission: 'workspace',
+    share: 'not-shared',
     params: PairedServerAllowancesParams,
     handler: async (params, ctx) => {
       const servers = listServerAllowances(ctx.runtime.getOrchestrationDb(), params.botId)
@@ -158,6 +162,7 @@ export const PAIRED_SERVER_ASKS_METHODS = [
   defineMethod({
     name: 'pairedServerAsks.allow',
     permission: 'workspace',
+    share: 'not-shared',
     params: PairedServerAllowParams,
     handler: async (params, ctx) => {
       requirePerson(ctx, 'let a paired server ask an agent here')
@@ -173,6 +178,7 @@ export const PAIRED_SERVER_ASKS_METHODS = [
   defineMethod({
     name: 'pairedServerAsks.disallow',
     permission: 'workspace',
+    share: 'not-shared',
     params: PairedServerDisallowParams,
     handler: (params, ctx) => {
       requirePerson(ctx, 'change which paired servers may ask an agent here')

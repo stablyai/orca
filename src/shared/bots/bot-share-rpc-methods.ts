@@ -1,5 +1,6 @@
-// What a teammate's share connection may call: one bot's chats and nothing else on the host. Every
-// method names how the share guard admits it, so a method can't be allowed without its check.
+// What a teammate's share connection may call: one bot's chats and nothing else on the host. Every RPC
+// method declares its `share` (an access below, or 'not-shared'), so none is allowed without its check
+// and none is added without a decision.
 import { z } from 'zod'
 
 /** `chat`: the session it names must be one of the teammate's own chats on the shared bot.
@@ -16,15 +17,15 @@ const SessionParams = z.looseObject({ sessionId: z.string() })
 const EnvelopeParams = z.looseObject({ envelope: SessionParams })
 const BotParams = z.looseObject({ botId: z.string() })
 
-const SESSION: BotShareMethodAccess = {
+export const SHARE_BY_SESSION: BotShareMethodAccess = {
   kind: 'chat',
   sessionId: (params) => SessionParams.safeParse(params).data?.sessionId
 }
-const ENVELOPE_SESSION: BotShareMethodAccess = {
+export const SHARE_BY_ENVELOPE_SESSION: BotShareMethodAccess = {
   kind: 'chat',
   sessionId: (params) => EnvelopeParams.safeParse(params).data?.envelope.sessionId
 }
-const BOT: BotShareMethodAccess = {
+export const SHARE_BY_BOT: BotShareMethodAccess = {
   kind: 'bot',
   botId: (params) => BotParams.safeParse(params).data?.botId
 }
@@ -38,45 +39,9 @@ export const BOT_SHARE_SCOPED_METHODS = [
   'status.get'
 ] as const
 export type BotShareScopedMethod = (typeof BOT_SHARE_SCOPED_METHODS)[number]
-const SELF: BotShareMethodAccess = { kind: 'self' }
+export const SHARE_SCOPED: BotShareMethodAccess = { kind: 'scoped' }
+/** Bound to the share socket's own caller key or device row. */
+export const SHARE_SELF: BotShareMethodAccess = { kind: 'self' }
 
-/** The shared methods that open a stream; every other one answers once. */
-export const BOT_SHARE_STREAM_METHODS: ReadonlySet<string> = new Set([
-  'agentSession.subscribe',
-  'agentSession.subscribeStatus'
-])
-
-export const BOT_SHARE_RPC_METHODS: ReadonlyMap<string, BotShareMethodAccess> = new Map<
-  string,
-  BotShareMethodAccess
->([
-  ...BOT_SHARE_SCOPED_METHODS.map((method) => [method, { kind: 'scoped' } as const] as const),
-  ['bots.avatar.read', BOT],
-  ['bots.chats', BOT],
-  ['bots.chatTree', BOT],
-  ['bots.session.start', BOT],
-  ['agentSession.history', SESSION],
-  ['agentSession.subscribe', SESSION],
-  ['agentSession.unsubscribe', SESSION],
-  ['agentSession.item', SESSION],
-  ['agentSession.currentRequests', SESSION],
-  ['agentSession.readVisual', SESSION],
-  ['agentSession.queuedMessageEditHold', SESSION],
-  ['agentSession.send', ENVELOPE_SESSION],
-  ['agentSession.respondToApproval', ENVELOPE_SESSION],
-  ['agentSession.respondToQuestion', ENVELOPE_SESSION],
-  ['agentSession.cancel', ENVELOPE_SESSION],
-  ['agentSession.queuedMessageSend', ENVELOPE_SESSION],
-  ['agentSession.queuedMessageDelete', ENVELOPE_SESSION],
-  ['agentSession.queuedMessageMove', ENVELOPE_SESSION],
-  ['agentSession.queuedMessageUpdate', ENVELOPE_SESSION],
-  ['agentSession.queuedMessagesResume', ENVELOPE_SESSION],
-  // An upload names the chat it is for; the rest go by upload id, under the share socket's own caller key.
-  ['agentSessionAttachment.uploadStart', SESSION],
-  ['agentSessionAttachment.uploadAppend', SELF],
-  ['agentSessionAttachment.uploadCommit', SELF],
-  ['agentSessionAttachment.uploadAbort', SELF],
-  // Both bind to the socket's own device row.
-  ['pairing.getEndpoints', SELF],
-  ['pairing.provisionRelay', SELF]
-])
+/** A method's share decision, required on every RPC method as `permission` is. */
+export type RpcMethodShare = BotShareMethodAccess | 'not-shared'

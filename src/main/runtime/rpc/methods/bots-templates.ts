@@ -6,6 +6,7 @@ export const BOT_TEMPLATE_METHODS = [
   defineMethod({
     name: 'bots.templates.suggest',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async () => ({
       ok: false as const,

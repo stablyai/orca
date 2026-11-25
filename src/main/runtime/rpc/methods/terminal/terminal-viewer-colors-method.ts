@@ -11,6 +11,7 @@ export const TERMINAL_VIEWER_COLORS_METHODS = [
   defineMethod({
     name: 'terminal.setViewerColors',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalSetViewerColors,
     // The host-wide default for PTYs no paired client launched: headless hosts take the last pusher's, windowed hosts keep their own.
     handler: async (params) => {

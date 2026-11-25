@@ -35,6 +35,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
     name: 'agentSession.continuationContext',
     permission: 'workspace',
+    share: 'not-shared',
     params: ContinuationContextParams,
     handler: async (params, ctx) =>
       (await requireInstalledStructuredHost(ctx, params.sessionId)).continuationContext(params)
@@ -42,6 +43,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
     name: 'agentSession.handoffStatus',
     permission: 'workspace',
+    share: 'not-shared',
     params: HandoffStatusParams,
     handler: async (params, ctx) =>
       (await requireInstalledStructuredHost(ctx, params.sessionId)).handoffStatus(params.sessionId)
@@ -49,6 +51,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
     name: 'agentSession.commands',
     permission: 'workspace',
+    share: 'not-shared',
     params: OptionsParams,
     handler: async (params, ctx) =>
       (await requireInstalledStructuredHost(ctx, params.sessionId)).readCommands(
@@ -59,6 +62,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
     name: 'agentSession.options',
     permission: 'workspace',
+    share: 'not-shared',
     params: OptionsParams,
     handler: async (params, ctx) => {
       const readsWithoutModel = clientReadsOptionsWithoutModel(ctx)
@@ -82,6 +86,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
     name: 'agentSession.modelCatalog',
     permission: 'workspace',
+    share: 'not-shared',
     params: ModelCatalogParams,
     // Session reads may build the host; session-less terminal reads must not open unused structured journals.
     handler: async ({ worktree, ...params }, ctx) => {

@@ -14,6 +14,7 @@ export const FILE_STAGED_SAVE_METHODS = [
   defineMethod({
     name: STAGED_FILE_SAVE_METHODS.begin,
     permission: 'workspace',
+    share: 'not-shared',
     params: FileSaveBegin,
     handler: async (params, { runtime, connectionId }) =>
       runtime.stagedFileSaves.begin(owner(connectionId), params)
@@ -21,6 +22,7 @@ export const FILE_STAGED_SAVE_METHODS = [
   defineMethod({
     name: STAGED_FILE_SAVE_METHODS.chunk,
     permission: 'workspace',
+    share: 'not-shared',
     params: FileSaveChunk,
     handler: async (params, { runtime, connectionId }) => {
       await runtime.stagedFileSaves.append(
@@ -35,6 +37,7 @@ export const FILE_STAGED_SAVE_METHODS = [
   defineMethod({
     name: STAGED_FILE_SAVE_METHODS.commit,
     permission: 'workspace',
+    share: 'not-shared',
     params: FileSaveCommit,
     handler: async (params, { runtime, connectionId }) =>
       runtime.stagedFileSaves.commit(owner(connectionId), params.saveId, params.diskPrecondition)
@@ -42,6 +45,7 @@ export const FILE_STAGED_SAVE_METHODS = [
   defineMethod({
     name: STAGED_FILE_SAVE_METHODS.abort,
     permission: 'workspace',
+    share: 'not-shared',
     params: FileSaveAbort,
     handler: async (params, { runtime, connectionId }) => {
       await runtime.stagedFileSaves.abort(owner(connectionId), params.saveId)

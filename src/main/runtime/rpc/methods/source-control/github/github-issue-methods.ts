@@ -12,6 +12,7 @@ export const GITHUB_ISSUE_METHODS = [
   defineMethod({
     name: 'github.uploadAttachment',
     permission: 'workspace',
+    share: 'not-shared',
     params: UploadGitHubAttachment,
     handler: (params, ctx) =>
       ctx.runtime.uploadGitHubAttachment(
@@ -23,6 +24,7 @@ export const GITHUB_ISSUE_METHODS = [
   defineMethod({
     name: 'github.issue',
     permission: 'workspace',
+    share: 'not-shared',
     params: Issue,
     handler: async (params, { runtime }) =>
       runtime.getRepoIssue(params.repo, params.number, params.ownerRepo)
@@ -30,6 +32,7 @@ export const GITHUB_ISSUE_METHODS = [
   defineMethod({
     name: 'github.createIssue',
     permission: 'workspace',
+    share: 'not-shared',
     params: CreateIssue,
     handler: async (params, { runtime }) => {
       const fields =
@@ -44,6 +47,7 @@ export const GITHUB_ISSUE_METHODS = [
   defineMethod({
     name: 'github.updateIssue',
     permission: 'workspace',
+    share: 'not-shared',
     params: UpdateIssue,
     handler: async (params, { runtime }) =>
       runtime.updateRepoIssue(
@@ -56,6 +60,7 @@ export const GITHUB_ISSUE_METHODS = [
   defineMethod({
     name: 'github.addIssueComment',
     permission: 'workspace',
+    share: 'not-shared',
     params: IssueComment,
     handler: async (params, { runtime }) =>
       params.type

@@ -42,6 +42,7 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
   defineStreamingMethod({
     name: 'desktopBrowserBridge.attach',
     permission: 'workspace',
+    share: 'not-shared',
     params: DesktopBrowserBridgeAttachParams,
     handler: async (params, context, emit) => {
       const caller = requireBridgeCaller(context)
@@ -91,6 +92,7 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
   defineMethod({
     name: 'desktopBrowserBridge.resultChunk',
     permission: 'workspace',
+    share: 'not-shared',
     params: DesktopBrowserBridgeResultChunkParams,
     handler: (params, context) => {
       const caller = requireBridgeCaller(context)
@@ -102,6 +104,7 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
   defineMethod({
     name: 'desktopBrowserBridge.result',
     permission: 'workspace',
+    share: 'not-shared',
     params: DesktopBrowserBridgeResultParams,
     handler: (params, context) => {
       const caller = requireBridgeCaller(context)
@@ -111,6 +114,7 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
   defineMethod({
     name: DESKTOP_BROWSER_BRIDGE_FILE_READ_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: DesktopBrowserBridgeFileReadParams,
     handler: (params, context) =>
       getDesktopBrowserBridgeRegistry(context.runtime).readHostFile(
@@ -121,6 +125,7 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
   defineMethod({
     name: DESKTOP_BROWSER_BRIDGE_DOWNLOAD_WRITE_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: DesktopBrowserBridgeDownloadWriteParams,
     handler: async (params, context) => ({
       accepted: true as const,
@@ -133,6 +138,7 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
   defineMethod({
     name: DESKTOP_BROWSER_BRIDGE_DOWNLOAD_ABORT_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: DesktopBrowserBridgeDownloadAbortParams,
     handler: (params, context) => ({
       released: getDesktopBrowserBridgeRegistry(context.runtime).abortDownload(

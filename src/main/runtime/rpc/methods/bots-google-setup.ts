@@ -173,6 +173,7 @@ export const GOOGLE_SETUP_METHODS = [
   defineMethod({
     name: 'bots.googleSetup.read',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleSetupRead,
     handler: (params, context) => {
       const { botId } = whose(params, context)
@@ -182,6 +183,7 @@ export const GOOGLE_SETUP_METHODS = [
   defineMethod({
     name: 'bots.googleSetup.write',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleSetupWrite,
     handler: async (params, context) => {
       const { botId, actor } = whose(params, context)
@@ -217,6 +219,7 @@ export const GOOGLE_SETUP_METHODS = [
   defineMethod({
     name: 'bots.googleSetup.answer',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleSetupAnswer,
     handler: async ({ botId, card, values }, context) => {
       // Card buttons run in the owner's Orca; an agent's CLI never answers for them.
@@ -232,6 +235,7 @@ export const GOOGLE_SETUP_METHODS = [
   defineMethod({
     name: 'bots.googleSetup.start',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleSetupStart,
     handler: async ({ botId, from, newApp }, context) => {
       // Set up Google is a button in the owner's Orca; a bot starts its own run with the CLI.

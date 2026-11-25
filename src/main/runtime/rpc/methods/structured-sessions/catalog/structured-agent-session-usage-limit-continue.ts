@@ -6,6 +6,7 @@ export const STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS = [
   defineMethod({
     name: 'agentSession.cancelUsageLimitContinue',
     permission: 'workspace',
+    share: 'not-shared',
     params: CancelUsageLimitContinueParams,
     handler: async (params, ctx) => {
       const host = await requireInstalledStructuredHost(ctx, params.sessionId)

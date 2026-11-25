@@ -1,4 +1,4 @@
-import { defineMethod, type RpcContext } from '../../core'
+import { notShared, defineMethod, type RpcContext } from '../../core'
 import type { PluginFrameEntry } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
 import { listPluginsForClients } from '../../../../plugins/discovery/plugin-client-list'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
@@ -103,7 +103,7 @@ function bindRpcPanelOwner(service: PluginService, context: RpcContext): string 
 export const PLUGIN_METHODS = [
   defineMethod({
     name: 'plugins.list',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: null,
     handler: async () => listForRpc()
   }),
@@ -111,7 +111,7 @@ export const PLUGIN_METHODS = [
     // Why the flag even for paired callers: an agent CLI reaches serve as a paired device too, so
     // no transport proves a person clicked; only the fingerprint from `approval_required` grants.
     name: 'plugins.consent',
-    permission: 'host-admin',
+    ...notShared('host-admin'),
     params: PluginRpcConsentParams,
     handler: async (params, context) => {
       const service = requirePluginService()
@@ -146,7 +146,7 @@ export const PLUGIN_METHODS = [
   }),
   defineMethod({
     name: 'plugins.setEnabled',
-    permission: 'host-admin',
+    ...notShared('host-admin'),
     params: PluginSetEnabledParams,
     handler: async (params, context) => {
       const service = requirePluginService()
@@ -173,7 +173,7 @@ export const PLUGIN_METHODS = [
   defineMethod({
     // Agent dev loop: same list Settings → Plugins edits; code stays inert without the approve flag.
     name: 'plugins.devLoad',
-    permission: 'host-admin',
+    ...notShared('host-admin'),
     params: PluginDevLoadParams,
     handler: async (params, context) => {
       const service = requirePluginService()
@@ -193,7 +193,7 @@ export const PLUGIN_METHODS = [
   }),
   defineMethod({
     name: 'plugins.devUnload',
-    permission: 'host-admin',
+    ...notShared('host-admin'),
     params: PluginDevUnloadParams,
     handler: async (params) => {
       const service = requirePluginService()
@@ -211,7 +211,7 @@ export const PLUGIN_METHODS = [
   defineMethod({
     // Settings → Plugins' switch for windowless hosts; it approves nothing, so only approved plugins run.
     name: 'plugins.setSystemEnabled',
-    permission: 'host-admin',
+    ...notShared('host-admin'),
     params: PluginSetSystemEnabledParams,
     handler: async (params) => {
       const service = requirePluginService()
@@ -227,7 +227,7 @@ export const PLUGIN_METHODS = [
   }),
   defineMethod({
     name: 'plugins.devInspect',
-    permission: 'host-admin',
+    ...notShared('host-admin'),
     params: PluginDevInspectParams,
     handler: async (params) => {
       const service = requirePluginService()
@@ -240,7 +240,7 @@ export const PLUGIN_METHODS = [
   }),
   defineMethod({
     name: 'plugins.refresh',
-    permission: 'host-admin',
+    ...notShared('host-admin'),
     params: null,
     handler: async () => {
       const service = requirePluginService()
@@ -251,7 +251,7 @@ export const PLUGIN_METHODS = [
   }),
   defineMethod({
     name: 'plugins.restart',
-    permission: 'host-admin',
+    ...notShared('host-admin'),
     params: PluginRestartParams,
     handler: async (params) => {
       const service = requirePluginService()
@@ -270,7 +270,7 @@ export const PLUGIN_METHODS = [
   }),
   defineMethod({
     name: 'plugins.getLogs',
-    permission: 'host-admin',
+    ...notShared('host-admin'),
     params: PluginGetLogsParams,
     handler: async (params) => {
       const service = requirePluginService()
@@ -283,7 +283,7 @@ export const PLUGIN_METHODS = [
   defineMethod({
     // Enforce panel capabilities here too because headless clients relay bridge calls over RPC.
     name: 'plugins.panelAction',
-    permission: 'host-admin',
+    ...notShared('host-admin'),
     // Apply raw admission before strict parsing so malformed/oversize traffic still consumes panel budget.
     params: PluginsPanelActionParams,
     handler: async (params, context) => {
@@ -296,7 +296,7 @@ export const PLUGIN_METHODS = [
   }),
   defineMethod({
     name: 'plugins.readPanelEntry',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: PluginReadPanelEntryParams,
     handler: async (params, context): Promise<PluginFrameEntry | null> => {
       const service = requirePluginService()
@@ -312,7 +312,7 @@ export const PLUGIN_METHODS = [
   }),
   defineMethod({
     name: 'plugins.invokeCommand',
-    permission: 'host-admin',
+    ...notShared('host-admin'),
     params: PluginInvokeCommandParams,
     handler: async (params) => {
       const service = requirePluginService()

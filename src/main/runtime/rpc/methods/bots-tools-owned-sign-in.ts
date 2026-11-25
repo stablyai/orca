@@ -50,6 +50,7 @@ export const BOT_TOOLS_OWNED_SIGN_IN_METHODS = [
   defineMethod({
     name: 'bots.tools.signIn.start',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolSignInStart,
     handler: async (params, context): Promise<BotToolSignInAttemptView> => {
       const owner = signInOwner(params.callerSessionId, context)
@@ -64,6 +65,7 @@ export const BOT_TOOLS_OWNED_SIGN_IN_METHODS = [
   defineMethod({
     name: 'bots.tools.signIn.wait',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolSignInWait,
     handler: (params, context) =>
       waitBotToolSignInAttempt(
@@ -76,6 +78,7 @@ export const BOT_TOOLS_OWNED_SIGN_IN_METHODS = [
   defineMethod({
     name: 'bots.tools.signIn.finish',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolSignInFinish,
     handler: (params, context) => {
       const owner = signInOwner(params.callerSessionId, context)
@@ -85,6 +88,7 @@ export const BOT_TOOLS_OWNED_SIGN_IN_METHODS = [
   defineMethod({
     name: 'bots.tools.signIn.cancel',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolSignInFlow,
     handler: (params, context) =>
       cancelBotToolSignInAttempt(signInOwner(params.callerSessionId, context), params.flowId)

@@ -10,6 +10,7 @@ export const STRUCTURED_AGENT_SESSION_MCP_METHODS = [
   defineMethod({
     name: 'agentSession.mcp',
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentSessionMcpParams,
     // MCP management talks to the running agent directly, outside the conversation's mutation queue.
     handler: async ({ sessionId, operation }, ctx): Promise<AgentSessionMcpResult> => {

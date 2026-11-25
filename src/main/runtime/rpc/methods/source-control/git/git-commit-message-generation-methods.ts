@@ -66,6 +66,7 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
     name: 'git.generateCommitMessage',
     requires: ['accounts'],
     permission: 'workspace',
+    share: 'not-shared',
     params: GitGenerateCommitMessage,
     handler: async (params, { runtime }) => {
       const override = buildCommitMessageGenerationOverride(params)
@@ -78,6 +79,7 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.discoverCommitMessageModels',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitDiscoverCommitMessageModels,
     handler: async (params, { runtime }) =>
       runtime.discoverRuntimeCommitMessageModels(
@@ -93,6 +95,7 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.cancelGenerateCommitMessage',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeSelector,
     handler: async (params, { runtime }) =>
       runtime.cancelRuntimeGenerateCommitMessage(params.worktree)
@@ -100,6 +103,7 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.generatePullRequestFields',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitGeneratePullRequestFields,
     handler: async (params, { runtime }) => {
       const input = {
@@ -120,6 +124,7 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.cancelGeneratePullRequestFields',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeSelector,
     handler: async (params, { runtime }) =>
       runtime.cancelRuntimeGeneratePullRequestFields(params.worktree)

@@ -1,3 +1,4 @@
+import { SHARE_BY_BOT, SHARE_SCOPED } from '../../../../shared/bots/bot-share-rpc-methods'
 import {
   BotActivityRead,
   BotAvatarRead,
@@ -103,6 +104,7 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.list',
     permission: 'workspace',
+    share: SHARE_SCOPED,
     params: null,
     // webhooks: whether this host's Orca Cloud takes them, so a bot can be offered webhook.call;
     // threadReplies: whether it binds an event's run to its thread, for --results-to thread.
@@ -144,6 +146,7 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.roster',
     permission: 'workspace',
+    share: SHARE_SCOPED,
     params: BotRoster,
     handler: async (params, context) => {
       const { runtime } = context
@@ -192,12 +195,14 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.update',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotUpdate,
     handler: updateBot
   }),
   defineMethod({
     name: 'bots.skillProjects.scan',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotSkillProjectsScan,
     handler: async (params, { runtime }) => {
       const bot = params.botId
@@ -213,6 +218,7 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.avatar.upload',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotAvatarUpload,
     handler: async (params, { runtime }) => ({
       bot: await runtime.bots.setAvatarImage(
@@ -226,6 +232,7 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.avatar.read',
     permission: 'workspace',
+    share: SHARE_BY_BOT,
     params: BotAvatarRead,
     handler: async (params, { runtime }) =>
       params.catalogRevision === undefined
@@ -235,6 +242,7 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.activity',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotActivityRead,
     handler: async (params, { runtime }) => ({
       activity: await readSharedBotActivity(runtime, params.botId)
@@ -243,6 +251,7 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.delete',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotDelete,
     handler: async (params, { runtime }) => {
       const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
@@ -267,6 +276,7 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.chat.reset',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotChatReset,
     handler: newHomeChat
   }),
@@ -274,6 +284,7 @@ export const BOT_METHODS = [
     // A new conversation beside the Chat, started the way the bot's thread sessions are.
     name: 'bots.session.start',
     permission: 'workspace',
+    share: SHARE_BY_BOT,
     params: BotSessionStart,
     handler: async (params, context) => {
       const { runtime } = context

@@ -10,6 +10,7 @@ export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
     name: 'orchestration.requestShow',
     access: { kind: 'reads', server: 'on', targets: { request: 'request' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: RequestShowParams,
     // Read durable receipts without writing/mutating again; keep this recovery query outside ORCHESTRATION_MUTATION_METHODS.
     handler: (

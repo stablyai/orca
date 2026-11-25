@@ -8,6 +8,7 @@ export const GITHUB_ACCOUNT_BINDING_METHODS = [
   defineMethod({
     name: 'github.listBindableAccounts',
     permission: 'workspace',
+    share: 'not-shared',
     params: BindableAccounts,
     handler: async (params, { runtime }) =>
       runtime.listGitHubBindableAccounts(params.repo, {
@@ -17,6 +18,7 @@ export const GITHUB_ACCOUNT_BINDING_METHODS = [
   defineMethod({
     name: 'github.validateAccountBinding',
     permission: 'workspace',
+    share: 'not-shared',
     params: ValidateAccountBinding,
     handler: async (params, { runtime }) =>
       runtime.validateGitHubAccountBinding(params.repo, {

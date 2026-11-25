@@ -26,6 +26,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     name: 'orchestration.federationFleetSnapshot',
     access: { kind: 'localOnly', targets: { dispatchIds: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: FederationFleetSnapshotParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const items = await mapWithConcurrency(params.dispatchIds, 16, async (dispatchId) => {
@@ -63,6 +64,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     name: 'orchestration.federationRelease',
     access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: FederationDispatchParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const attachment = requireHomeAttachment(
@@ -78,6 +80,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     name: 'orchestration.federationRetain',
     access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: FederationDispatchParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
@@ -91,6 +94,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     name: 'orchestration.federationShow',
     access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: FederationDispatchParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const attachment = requireHomeAttachment(
@@ -121,6 +125,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     name: 'orchestration.federationRead',
     access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: FederationReadParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
@@ -146,6 +151,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     name: 'orchestration.federationReadOutput',
     access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: FederationOutputReadParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const attachment = requireHomeAttachment(
@@ -231,6 +237,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     name: 'orchestration.federationStop',
     access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: FederationDispatchParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint, orchestrationMutation }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)

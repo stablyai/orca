@@ -45,6 +45,7 @@ export function releaseDeletedBotLinks(
 export const WORKTREE_RELEASE_BOT_HOME_METHOD = defineMethod({
   name: 'worktree.releaseBotHome',
   permission: 'workspace',
+  share: 'not-shared',
   params: WorktreeReleaseBotHome,
   handler: ({ botHomeKey, installationId }, { runtime }) =>
     isWorkspaceKey(botHomeKey)

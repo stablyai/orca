@@ -91,6 +91,7 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.discover',
     permission: 'workspace',
+    share: 'not-shared',
     params: SkillsDiscoverParams,
     handler: async (params, { runtime }) =>
       unavailableWhileWslDistroStopped(async () => {
@@ -109,6 +110,7 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.previewDelete',
     permission: 'workspace',
+    share: 'not-shared',
     params: SkillDeleteRequestSchema,
     handler: async (params, { runtime }) =>
       previewSkillDeleteRequest(
@@ -120,6 +122,7 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.delete',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: SkillDeleteRequestSchema,
     handler: async (params, { runtime }) =>
       runSkillDeleteRequest(
@@ -132,24 +135,28 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.planBundledOrca',
     permission: 'workspace',
+    share: 'not-shared',
     params: BundledSkillPlanRequestSchema,
     handler: (params, { runtime }) => runtime.planLocalBundledSkills(params)
   }),
   defineMethod({
     name: 'skills.executeBundledOrca',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: BundledSkillExecuteRequestSchema,
     handler: (params, { runtime }) => runtime.executeLocalBundledSkills(params)
   }),
   defineMethod({
     name: 'skills.autoUpdateBundledOrca',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: BundledSkillAutoUpdateRequestSchema,
     handler: (params, { runtime }) => runtime.autoUpdateLocalBundledSkills(params)
   }),
   defineMethod({
     name: 'skills.share',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: AgentSkillShareRequestSchema,
     handler: async (params, { runtime, signal, clientKind }) => {
       runtime.assertAgentSkillSharingAllowed()
@@ -201,6 +208,7 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.install',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: SkillInstallRequestSchema,
     handler: async (params, { runtime, signal, clientCapabilities }) => {
       const result = await runtime.installSharedSkillRequest(params, signal)
@@ -221,6 +229,7 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.installBundle',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: SkillBundleInstallRequestSchema,
     handler: (params, { runtime, signal }) =>
       runtime.installSharedSkillBundleRequest(params, signal)
@@ -228,6 +237,7 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.cancelInstall',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: SkillsCancelInstallParams,
     handler: (params, { runtime }) => ({
       cancelled: runtime.cancelSharedSkillInstall(params.operationId)
@@ -236,6 +246,7 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.getInstallProgress',
     permission: 'workspace',
+    share: 'not-shared',
     params: SkillsGetInstallProgressParams,
     handler: (params, { runtime }) => {
       const progress = runtime.getSharedSkillInstallProgress(params.operationId)
@@ -245,42 +256,49 @@ export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.previewInstall',
     permission: 'workspace',
+    share: 'not-shared',
     params: SkillInstallPreviewRequestSchema,
     handler: (params, { runtime }) => runtime.previewSharedSkillInstallRequest(params)
   }),
   defineMethod({
     name: 'skills.removeInstall',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: SkillRemoveRequestSchema,
     handler: (params, { runtime }) => runtime.removeSharedSkillInstallRequest(params)
   }),
   defineMethod({
     name: 'skills.listManagedInstalls',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, { runtime }) => runtime.listManagedSkillInstalls()
   }),
   defineMethod({
     name: 'skills.beginUpload',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: SkillUploadBeginRequestSchema,
     handler: (params, { runtime }) => runtime.beginSkillUpload(params)
   }),
   defineMethod({
     name: 'skills.uploadChunk',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: SkillUploadChunkRequestSchema,
     handler: (params, { runtime }) => runtime.appendSkillUploadChunk(params)
   }),
   defineMethod({
     name: 'skills.commitUpload',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: SkillUploadCommitRequestSchema,
     handler: (params, { runtime }) => runtime.commitSkillUpload(params.uploadId)
   }),
   defineMethod({
     name: 'skills.cancelUpload',
     permission: 'skills-admin',
+    share: 'not-shared',
     params: SkillUploadCommitRequestSchema,
     handler: (params, { runtime }) => runtime.cancelSkillUpload(params.uploadId)
   })

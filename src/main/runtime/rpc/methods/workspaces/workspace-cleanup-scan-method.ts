@@ -6,6 +6,7 @@ import { defineMethod } from '../../core'
 export const WORKSPACE_CLEANUP_SCAN_METHOD = defineMethod({
   name: 'workspaceCleanup.scan',
   permission: 'workspace',
+  share: 'not-shared',
   params: WorkspaceCleanupScanParams,
   handler: (params, { runtime, signal }) =>
     scanWorkspaceCleanup(runtime.requireStore(), params, {

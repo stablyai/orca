@@ -49,6 +49,7 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'ui.getJiraQuickFilters',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, { runtime }) =>
       normalizeJiraQuickFilterState(runtime.getUIState().jiraQuickFilterState)
@@ -56,6 +57,7 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'ui.setJiraQuickFilters',
     permission: 'workspace',
+    share: 'not-shared',
     params: JiraQuickFilterStateParam,
     handler: (params, { runtime }) => {
       const state = normalizeJiraQuickFilterState(params)
@@ -66,6 +68,7 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'ui.getJiraSavedFilters',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, { runtime }) =>
       normalizeJiraSavedFilterState(runtime.getUIState().jiraSavedFilterState)
@@ -73,6 +76,7 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'ui.mutateJiraSavedFilters',
     permission: 'workspace',
+    share: 'not-shared',
     params: JiraSavedFilterMutationParam,
     handler: (params, { runtime }) => {
       const state = mutateJiraSavedFilterState(runtime.getUIState().jiraSavedFilterState, params)
@@ -83,12 +87,14 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'settings.getAgentLaunch',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, { runtime }) => ({ settings: runtime.getClientAgentLaunchSettings() })
   }),
   defineMethod({
     name: 'settings.mutateAgentLaunch',
     permission: 'settings-write',
+    share: 'not-shared',
     params: AgentLaunchSettingsMutation,
     handler: async (params, { runtime }) => ({
       settings: await runtime.mutateClientAgentLaunchSettings(params)
@@ -97,6 +103,7 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'settings.get',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, { runtime }) => ({
       settings: runtime.getClientSettings(),
@@ -106,6 +113,7 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'settings.update',
     permission: 'settings-write',
+    share: 'not-shared',
     params: SettingsUpdate,
     handler: async (params, { runtime }) => {
       if (params.botsEnabled !== undefined) {
@@ -120,6 +128,7 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'settings.getTerminalQuickCommands',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     // Keep command bodies (up to ~240 KB) out of unrelated settings reads over paired/relay links.
     handler: (_params, ctx) => ({
@@ -132,6 +141,7 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'settings.updateTerminalQuickCommands',
     permission: 'settings-write',
+    share: 'not-shared',
     params: TerminalQuickCommandsUpdate,
     handler: (params, ctx) => {
       assertTerminalQuickCommandMutationReadableForClient(
@@ -150,6 +160,7 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'settings.updatePRBotAuthorOverride',
     permission: 'settings-write',
+    share: 'not-shared',
     params: PRBotAuthorOverrideUpdate,
     handler: (params, { runtime }) => ({
       settings: runtime.updateClientPRBotAuthorOverride(params)
@@ -158,6 +169,7 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'settings.mutateNativeChatSessionOptions',
     permission: 'settings-write',
+    share: 'not-shared',
     params: NativeChatSessionOptionsMutation,
     handler: async (params, { runtime }) => {
       const mutation = withoutSendCheckedEffortPicks(params)
@@ -173,12 +185,14 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'ui.get',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, context) => ({ ui: uiForCaller(context.runtime.getUIState(), context) })
   }),
   defineMethod({
     name: 'ui.set',
     permission: 'workspace',
+    share: 'not-shared',
     params: UiUpdate,
     // Keep pairing-local keys in the strict schema for older clients, then strip them here instead of rejecting their whole payload.
     handler: (params, context) => {
@@ -200,6 +214,7 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'ui.recordFeatureInteraction',
     permission: 'workspace',
+    share: 'not-shared',
     params: FeatureInteractionIdParam,
     handler: (params, context) => ({
       ui: uiForCaller(context.runtime.recordFeatureInteraction(params), context)

@@ -94,6 +94,7 @@ export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
 export const BOT_AGENT_CHOICES_METHOD = defineMethod({
   name: 'bots.agentChoices',
   permission: 'workspace',
+  share: 'not-shared',
   params: null,
   handler: async (_params, { runtime }) => ({ agents: await hostBotAgentChoices(runtime) })
 })

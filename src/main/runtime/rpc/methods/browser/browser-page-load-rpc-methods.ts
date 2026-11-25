@@ -6,12 +6,14 @@ export const BROWSER_PAGE_LOAD_METHODS = [
   defineMethod({
     name: 'browser.reload',
     permission: 'workspace',
+    share: 'not-shared',
     params: Reload,
     handler: async (params, { runtime }) => runtime.browserReload(params)
   }),
   defineMethod({
     name: 'browser.stop',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserTarget,
     handler: async (params, { runtime }) => runtime.browserStop(params)
   })

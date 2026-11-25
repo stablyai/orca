@@ -29,6 +29,7 @@ export const BOT_KICKOFF_METHODS = [
   defineMethod({
     name: 'bots.chat.open',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotChat,
     handler: async (params, { runtime }) => {
       runtime.bots.assertEnabled()
@@ -56,6 +57,7 @@ export const BOT_KICKOFF_METHODS = [
   defineMethod({
     name: 'bots.kickoff.retry',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotChat,
     // A new bot's Try again: its first turn ended without a word.
     handler: async (params, { runtime }) => {

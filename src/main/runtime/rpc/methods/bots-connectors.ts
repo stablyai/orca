@@ -28,6 +28,7 @@ const CapabilitiesResult = z.object({
 export const BOT_CONNECTORS_METHOD = defineMethod({
   name: 'bots.connectors',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotConnectors,
   handler: async ({ callerSessionId }, context): Promise<BotConnectorsView> => {
     const { runtime, pairedDeviceId } = context

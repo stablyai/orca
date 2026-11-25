@@ -18,6 +18,7 @@ export const ORCHESTRATION_GATE_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.run',
     permission: 'workspace',
+    share: 'not-shared',
     params: RunParams,
     access: { kind: 'localOnly', targets: {} },
     handler: (params, { runtime }) => {
@@ -59,6 +60,7 @@ export const ORCHESTRATION_GATE_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.runStop',
     permission: 'workspace',
+    share: 'not-shared',
     params: RunStopParams,
     access: { kind: 'localOnly', targets: {} },
     handler: (_params, { runtime }) => {
@@ -80,6 +82,7 @@ export const ORCHESTRATION_GATE_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.gateCreate',
     permission: 'workspace',
+    share: 'not-shared',
     params: GateCreateParams,
     access: {
       kind: 'localOnly',
@@ -101,6 +104,7 @@ export const ORCHESTRATION_GATE_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.gateResolve',
     permission: 'workspace',
+    share: 'not-shared',
     params: GateResolveParams,
     access: {
       kind: 'writes',
@@ -122,6 +126,7 @@ export const ORCHESTRATION_GATE_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.gateList',
     permission: 'workspace',
+    share: 'not-shared',
     params: GateListParams,
     access: {
       kind: 'reads',

@@ -21,6 +21,7 @@ import { defineMethod, InvalidArgumentError } from '../core'
 export const BOT_TAKE_OVER_METHOD = defineMethod({
   name: 'bots.takeOver',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotTakeOverParams,
   handler: async ({ botId, chat, takeOver }, context) => {
     const { runtime } = context

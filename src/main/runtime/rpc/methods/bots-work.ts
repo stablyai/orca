@@ -32,6 +32,7 @@ export const BOT_WORK_METHODS = [
   defineMethod({
     name: 'bots.work.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotWorkList,
     handler: async (params, context): Promise<BotWorkListResult> => {
       context.runtime.bots.assertEnabled()
@@ -42,6 +43,7 @@ export const BOT_WORK_METHODS = [
   defineMethod({
     name: 'bots.work.forget',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotWorkForget,
     handler: async (params, context) => {
       context.runtime.bots.assertEnabled()

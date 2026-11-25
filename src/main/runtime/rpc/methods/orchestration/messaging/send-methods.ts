@@ -47,6 +47,7 @@ export const ORCHESTRATION_SEND_METHODS = [
       targets: { to: 'party', threadId: 'message', run: 'run', payload: 'dispatch' }
     },
     permission: 'workspace',
+    share: 'not-shared',
     params: SendParams,
     replay: (params, { runtime, replayedMutationReceipt }) =>
       replayAcceptedSend(runtime, params, replayedMutationReceipt),

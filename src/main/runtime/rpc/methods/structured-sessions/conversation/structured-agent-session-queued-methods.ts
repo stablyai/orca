@@ -1,3 +1,7 @@
+import {
+  SHARE_BY_ENVELOPE_SESSION,
+  SHARE_BY_SESSION
+} from '../../../../../../shared/bots/bot-share-rpc-methods'
 // Do not gate queued-card actions on queued-messages.v2: hosts without it still publish unsent cards. Older pre-queue/edit hosts lack the methods.
 
 import { defineMethod } from '../../../core'
@@ -24,6 +28,7 @@ export const STRUCTURED_AGENT_SESSION_QUEUED_METHODS = [
   defineMethod({
     name: 'agentSession.queuedMessageUpdate',
     permission: 'workspace',
+    share: SHARE_BY_ENVELOPE_SESSION,
     params: QueuedMessageUpdateParams,
     handler: async (params, ctx) => {
       // A changed card is the editor's words now: it posts as whoever typed the edit.
@@ -41,6 +46,7 @@ export const STRUCTURED_AGENT_SESSION_QUEUED_METHODS = [
   defineMethod({
     name: 'agentSession.queuedMessageEditHold',
     permission: 'workspace',
+    share: SHARE_BY_SESSION,
     params: QueuedMessageEditHoldParams,
     handler: async (params, ctx) => {
       // Releasing a lease is cleanup: no admission condition may strand it until its deadline.
@@ -54,6 +60,7 @@ export const STRUCTURED_AGENT_SESSION_QUEUED_METHODS = [
   defineMethod({
     name: 'agentSession.queuedMessageSend',
     permission: 'workspace',
+    share: SHARE_BY_ENVELOPE_SESSION,
     params: QueuedMessageActionParams,
     handler: async (params, ctx) =>
       requireSessionHost(ctx, params.envelope.sessionId).queuedMessageSend(callerFor(ctx), params)
@@ -61,6 +68,7 @@ export const STRUCTURED_AGENT_SESSION_QUEUED_METHODS = [
   defineMethod({
     name: 'agentSession.queuedMessageDelete',
     permission: 'workspace',
+    share: SHARE_BY_ENVELOPE_SESSION,
     params: QueuedMessageActionParams,
     handler: async (params, ctx) =>
       requireSessionHost(ctx, params.envelope.sessionId).queuedMessageDelete(callerFor(ctx), params)
@@ -68,6 +76,7 @@ export const STRUCTURED_AGENT_SESSION_QUEUED_METHODS = [
   defineMethod({
     name: 'agentSession.queuedMessageMove',
     permission: 'workspace',
+    share: SHARE_BY_ENVELOPE_SESSION,
     params: QueuedMessageMoveParams,
     handler: async (params, ctx) =>
       requireSessionHost(ctx, params.envelope.sessionId).queuedMessageMove(callerFor(ctx), params)
@@ -75,6 +84,7 @@ export const STRUCTURED_AGENT_SESSION_QUEUED_METHODS = [
   defineMethod({
     name: 'agentSession.queuedMessagesResume',
     permission: 'workspace',
+    share: SHARE_BY_ENVELOPE_SESSION,
     params: QueuedMessagesResumeParams,
     handler: async (params, ctx) =>
       requireSessionHost(ctx, params.envelope.sessionId).queuedMessagesResume(

@@ -5,6 +5,7 @@ export const DIAGNOSTICS_METHODS = [
   defineMethod({
     name: 'diagnostics.memory',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime, caller }) => {
       // Paired machines get terminals only, as before; chat detail stays on this machine for now.

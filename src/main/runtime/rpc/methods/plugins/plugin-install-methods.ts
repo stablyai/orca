@@ -85,6 +85,7 @@ export const PLUGIN_INSTALL_METHODS = [
     // Git runs on this host with its own credentials and no prompts; code needs the approve flag.
     name: 'plugins.install',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginInstallParams,
     handler: async (params, context) => {
       const services = await requireInstallServices()
@@ -99,6 +100,7 @@ export const PLUGIN_INSTALL_METHODS = [
   defineMethod({
     name: 'plugins.update',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginUpdateParams,
     handler: async (params, context) => {
       const services = await requireInstallServices()
@@ -117,6 +119,7 @@ export const PLUGIN_INSTALL_METHODS = [
   defineMethod({
     name: 'plugins.uninstall',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginUninstallParams,
     handler: async (params) => {
       const services = await requireInstallServices()
@@ -146,6 +149,7 @@ export const PLUGIN_INSTALL_METHODS = [
   defineMethod({
     name: 'plugins.catalogList',
     permission: 'host-admin',
+    share: 'not-shared',
     params: null,
     handler: async () => {
       const services = await requireInstallServices()
@@ -155,6 +159,7 @@ export const PLUGIN_INSTALL_METHODS = [
   defineMethod({
     name: 'plugins.catalogAdd',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginCatalogAddParams,
     handler: async (params) => {
       const services = await requireInstallServices()
@@ -164,6 +169,7 @@ export const PLUGIN_INSTALL_METHODS = [
   defineMethod({
     name: 'plugins.catalogRemove',
     permission: 'host-admin',
+    share: 'not-shared',
     params: PluginCatalogRemoveParams,
     handler: async (params) => {
       const services = await requireInstallServices()

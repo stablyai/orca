@@ -6,6 +6,7 @@ export const RUNTIME_CLIENT_CAPABILITY_METHODS = [
   defineMethod({
     name: 'runtime.clientCapabilities.update',
     permission: 'workspace',
+    share: 'not-shared',
     params: ClientCapabilitiesUpdate,
     handler: (params, { updateClientCapabilities }) => {
       if (!updateClientCapabilities) {

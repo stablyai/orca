@@ -104,6 +104,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravityList',
     permission: 'workspace',
+    share: 'not-shared',
     params: AntigravityAccountTargetParams,
     handler: async (target, ctx) =>
       withAntigravityChatBackend(
@@ -115,6 +116,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravityAddCurrent',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: AntigravityAccountTargetParams,
     handler: async (target, ctx) =>
       withAntigravityChatBackend(
@@ -126,6 +128,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravitySelect',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: AntigravityAccountMutationParams,
     handler: async ({ target, accountId }, ctx) => {
       const service = await getAntigravityAccountService(target)
@@ -155,6 +158,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravityRemove',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: AntigravityAccountMutationParams,
     handler: async ({ target, accountId }, ctx) =>
       withAntigravityChatBackend(
@@ -166,6 +170,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravityChatSignInStart',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: AntigravityChatSignInStartParams,
     handler: async ({ intent }, ctx) =>
       startAntigravityChatSignIn(chatSignInHost(ctx.runtime), signInOwner(ctx), intent)
@@ -173,6 +178,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineStreamingMethod({
     name: 'accounts.antigravityChatSignInSubscribe',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: null,
     handler: async (_, ctx, emit) => {
       // A caller with no identity owns no flow, so it sees every flow as another client's.
@@ -193,12 +199,14 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravityChatSignInCancel',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: AntigravityChatSignInFlowParams,
     handler: async ({ flowId }, ctx) => cancelAntigravityChatSignIn(signInOwner(ctx), flowId)
   }),
   defineMethod({
     name: 'accounts.antigravityChatSignInComplete',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: AntigravityChatSignInCompleteParams,
     handler: async ({ flowId, callbackUrl }, ctx) =>
       completeAntigravityChatSignIn(signInOwner(ctx), flowId, callbackUrl)
@@ -206,12 +214,14 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravityChatAuthGet',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: null,
     handler: (_, ctx) => readAntigravityChatAuthConfig(ctx.runtime.requireStore())
   }),
   defineMethod({
     name: 'accounts.antigravityChatAuthApply',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: AntigravityChatAuthConfigSchema,
     handler: (config, ctx) =>
       applyAntigravityChatAuthConfig(
@@ -223,18 +233,21 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravityChatApiKeyStatus',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: null,
     handler: (_, ctx) => apiKeyStatus(ctx.runtime)
   }),
   defineMethod({
     name: 'accounts.antigravityChatAuthDetect',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: null,
     handler: (_, ctx) => detectChatAuth(ctx.runtime)
   }),
   defineMethod({
     name: 'accounts.antigravityChatApiKeySave',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: AntigravityChatApiKeySaveParams,
     handler: async ({ apiKey }, ctx) => {
       await storeAntigravityChatApiKey(apiKey)
@@ -247,6 +260,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravityChatApiKeyClear',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: null,
     handler: async (_, ctx) => {
       await clearAntigravityChatApiKey()

@@ -99,6 +99,7 @@ export function sendRunAgain(
 export const BOT_RUN_SEND_AGAIN_METHOD = defineMethod({
   name: 'bots.sendRunAgain',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotRunSendAgainParams,
   handler: async ({ botId, sessionId, runId }, context) => {
     const { runtime } = context

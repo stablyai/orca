@@ -15,6 +15,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
   defineMethod({
     name: 'terminal.setDisplayMode',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalSetDisplayMode,
     handler: async (params, { runtime }) => {
       // Reject stale handles before changing the wrong PTY's display mode or viewport (#7718).
@@ -37,6 +38,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
   defineMethod({
     name: 'terminal.restoreFit',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalHandle,
     handler: async (params, { runtime }) => {
       // Reject stale handles before reclaiming the wrong PTY to desktop size (#7718).
@@ -50,6 +52,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
   defineMethod({
     name: 'terminal.getDisplayMode',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalHandle,
     handler: async (params, { runtime }) => {
       const leaf = runtime.resolveLeafForHandle(params.terminal)
@@ -61,6 +64,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
   defineMethod({
     name: 'terminal.updateViewport',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalUpdateViewport,
     handler: async (params, { runtime }) => {
       // Reject stale handles before writing the wrong PTY's viewport (#7718).
@@ -88,6 +92,7 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
   defineMethod({
     name: 'terminal.unsubscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalUnsubscribe,
     handler: async (params, { runtime, connectionId, subscriptionRegistrationVersion }) => {
       if (params.requestId !== undefined) {
@@ -117,6 +122,7 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
   defineMethod({
     name: 'terminal.getAutoRestoreFit',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalGetAutoRestoreFitParams,
     handler: async (_params, { runtime }) => ({
       ms: runtime.getMobileAutoRestoreFitMs()
@@ -125,6 +131,7 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
   defineMethod({
     name: 'terminal.setAutoRestoreFit',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalSetAutoRestoreFit,
     handler: async (params, { runtime }) => ({
       ms: runtime.setMobileAutoRestoreFitMs(params.ms)
@@ -133,6 +140,7 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
   defineMethod({
     name: 'terminal.ackOutput',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalAckOutput,
     // Late acks for an ended stream are normal; report them instead of failing the request.
     handler: async (params, { pairedDeviceId }) => ({

@@ -24,36 +24,42 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.connect',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: Connect,
     handler: async (params, { runtime }) => runtime.linearConnect(params.apiKey.trim())
   }),
   defineMethod({
     name: 'linear.disconnect',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: WorkspaceSelection,
     handler: async (params, { runtime }) => runtime.linearDisconnect(params?.workspaceId)
   }),
   defineMethod({
     name: 'linear.selectWorkspace',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: SelectWorkspace,
     handler: async (params, { runtime }) => runtime.linearSelectWorkspace(params.workspaceId.trim())
   }),
   defineMethod({
     name: 'linear.status',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => runtime.linearStatus()
   }),
   defineMethod({
     name: 'linear.testConnection',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkspaceSelection,
     handler: async (params, { runtime }) => runtime.linearTestConnection(params?.workspaceId)
   }),
   defineMethod({
     name: 'linear.searchIssues',
     permission: 'workspace',
+    share: 'not-shared',
     params: SearchIssues,
     handler: async (params, { runtime }) =>
       runtime.linearSearchIssues(params.query, params.limit, params.workspaceId)
@@ -63,6 +69,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.createIssue',
     permission: 'workspace',
+    share: 'not-shared',
     params: CreateIssue,
     handler: async (params, { runtime }) =>
       runtime.linearCreateIssue(
@@ -83,6 +90,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.getIssue',
     permission: 'workspace',
+    share: 'not-shared',
     params: IssueId,
     handler: async (params, { runtime }) =>
       runtime.linearGetIssue(params.id.trim(), params.workspaceId)
@@ -90,6 +98,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.updateIssue',
     permission: 'workspace',
+    share: 'not-shared',
     params: IssueUpdate,
     handler: async (params, { runtime }) =>
       runtime.linearUpdateIssue(params.id.trim(), params.updates, params.workspaceId)
@@ -97,6 +106,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.addIssueComment',
     permission: 'workspace',
+    share: 'not-shared',
     params: IssueComment,
     handler: async (params, { runtime }) =>
       runtime.linearAddIssueComment(params.issueId.trim(), params.body.trim(), params.workspaceId)
@@ -104,6 +114,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.issueComments',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinearIssueCommentsParams,
     handler: async (params, { runtime }) =>
       runtime.linearIssueComments(params.issueId.trim(), params.workspaceId)
@@ -111,12 +122,14 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.listTeams',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkspaceSelection,
     handler: async (params, { runtime }) => runtime.linearListTeams(params?.workspaceId)
   }),
   defineMethod({
     name: 'linear.listProjects',
     permission: 'workspace',
+    share: 'not-shared',
     params: ListProjects,
     handler: async (params, { runtime }) =>
       runtime.linearListProjects(params?.query, params?.limit, params?.workspaceId, params?.force)
@@ -125,6 +138,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.getProject',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectId,
     handler: async (params, { runtime }) =>
       runtime.linearGetProject(params.id.trim(), params.workspaceId.trim(), params.force)
@@ -132,6 +146,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.listProjectIssues',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectIssues,
     handler: async (params, { runtime }) =>
       runtime.linearListProjectIssues(
@@ -144,6 +159,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.listCustomViews',
     permission: 'workspace',
+    share: 'not-shared',
     params: ListCustomViews,
     handler: async (params, { runtime }) =>
       runtime.linearListCustomViews(params.model, params.limit, params.workspaceId, params.force)
@@ -151,6 +167,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.getCustomView',
     permission: 'workspace',
+    share: 'not-shared',
     params: CustomViewId,
     handler: async (params, { runtime }) =>
       runtime.linearGetCustomView(
@@ -163,6 +180,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.listCustomViewIssues',
     permission: 'workspace',
+    share: 'not-shared',
     params: CustomViewContents,
     handler: async (params, { runtime }) =>
       runtime.linearListCustomViewIssues(
@@ -175,6 +193,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.listCustomViewProjects',
     permission: 'workspace',
+    share: 'not-shared',
     params: CustomViewContents,
     handler: async (params, { runtime }) =>
       runtime.linearListCustomViewProjects(
@@ -187,6 +206,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.teamStates',
     permission: 'workspace',
+    share: 'not-shared',
     params: TeamId,
     handler: async (params, { runtime }) =>
       runtime.linearTeamStates(params.teamId.trim(), params.workspaceId)
@@ -194,6 +214,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.teamLabels',
     permission: 'workspace',
+    share: 'not-shared',
     params: TeamId,
     handler: async (params, { runtime }) =>
       runtime.linearTeamLabels(params.teamId.trim(), params.workspaceId)
@@ -201,6 +222,7 @@ export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.teamMembers',
     permission: 'workspace',
+    share: 'not-shared',
     params: TeamId,
     handler: async (params, { runtime }) =>
       runtime.linearTeamMembers(params.teamId.trim(), params.workspaceId)

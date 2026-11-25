@@ -13,6 +13,7 @@ export const ORCHESTRATION_PEER_MAIL_RETURN_METHOD = defineOrchestrationMethod({
   name: 'orchestration.peerMailReturn',
   access: { kind: 'localOnly', targets: {} },
   permission: 'workspace',
+  share: 'not-shared',
   params: PeerMailReturnParams,
   handler: (params, ctx) => {
     const peerFingerprint = requireRuntimePairing(ctx)

@@ -14,6 +14,7 @@ export const ORCHESTRATION_PEER_RUN_METHODS = [
     name: 'orchestration.peerRunCancel',
     access: { kind: 'writes', targets: {} },
     permission: 'workspace',
+    share: 'not-shared',
     params: PeerRunCancelParams,
     /** The paired Orca reset its Run: close it here, then run the ordinary stop on each live worker. */
     handler: async (_params, { runtime, orchestrationCaller }) => {

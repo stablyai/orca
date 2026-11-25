@@ -26,6 +26,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
     name: 'orchestration.workerRelease',
     access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkerDispatchParams,
     handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
@@ -101,6 +102,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
     name: 'orchestration.workerRetain',
     access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkerRetainParams,
     handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
