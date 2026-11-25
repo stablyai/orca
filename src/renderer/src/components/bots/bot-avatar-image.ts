@@ -141,21 +141,33 @@ function useUploadSrc(bot: AvatarBot): string | null {
     if (!uploadKey) {
       return
     }
-    // An away server can't answer, but a picture already loaded from it still shows.
-    const pending = away
-      ? loadedUploadRead({ hostId, id }, uploadKey)
-      : uploadRead({ hostId, id }, uploadKey, generation)
-    if (!pending) {
-      return
-    }
+    const ref = { hostId, id }
     let live = true
-    void pending.then((read) => {
-      if (live && read !== 'failed') {
+    // A picture loaded for this version by any read (another view's, or one from before the host came
+    // back that answered late) shows here too, and an empty or failed answer never hides it.
+    const showLoaded = (): boolean => {
+      const loaded = peekBotUploadSrc(ref, uploadKey)
+      if (live && loaded) {
+        setUpload({ key: uploadKey, src: loaded })
+      }
+      return Boolean(loaded)
+    }
+    const key = botRefKey(ref)
+    const stopLoads = subscribeToBotUploadLoads((loadedKey) => {
+      if (loadedKey === key) {
+        showLoaded()
+      }
+    })
+    // An away server can't answer, but a picture already loaded from it still shows.
+    const pending = away ? loadedUploadRead(ref, uploadKey) : uploadRead(ref, uploadKey, generation)
+    void pending?.then((read) => {
+      if (live && read !== 'failed' && (read.src || !showLoaded())) {
         setUpload({ key: uploadKey, src: read.src })
       }
     })
     return () => {
       live = false
+      stopLoads()
     }
   }, [hostId, id, uploadKey, away, generation])
   return uploadKey && upload?.key === uploadKey ? upload.src : null

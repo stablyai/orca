@@ -15,6 +15,8 @@ import {
 
 type Read = { botId: string; settle: (png: string | null | Error) => void }
 const avatars = vi.hoisted((): { reads: Read[] } => ({ reads: [] }))
+// Whether the window says it is shown; after display wake it can say hidden while it is not.
+const windowPark = vi.hoisted(() => ({ visible: true }))
 
 // Each avatar read waits until the test answers it, so reads from before and after a come-back can be
 // answered in any order.
@@ -31,7 +33,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: () => new Promise(() => {})
 }))
 vi.mock('@/lib/window-activity/window-park-visibility', () => ({
-  getWindowParkVisible: () => true,
+  getWindowParkVisible: () => windowPark.visible,
   subscribeWindowParkVisibility: () => () => {}
 }))
 
@@ -91,6 +93,7 @@ function mountPanelRow() {
 
 beforeEach(() => {
   avatars.reads = []
+  windowPark.visible = true
   setBotHostListing({ hosts: [{ hostId: 'local', state: 'live' }], updateNeeded: [] })
 })
 
@@ -207,6 +210,91 @@ describe('group Items row faces on a paired server', () => {
     await flush()
     expect(third.result.current).toBe(PNG)
     expect(panel.readsOf()).toHaveLength(2)
+    panel.unmount()
+  })
+
+  // A read held over the come-back (A) and the read after it (B), answered in either order: a picture
+  // from either reaches every face already drawn, and the other's empty or failed answer never hides it.
+  for (const negative of [null, new Error('runtime_unavailable')]) {
+    for (const order of ['before first', 'after first'] as const) {
+      it(`shows the picture in a drawn row and header when the ${order === 'before first' ? 'read from before' : 'read after'} the come-back answers first (${negative === null ? 'empty' : 'failed'})`, async () => {
+        hostIs(CONNECTED)
+        const panel = mountPanelRow()
+        const header = panel.mountHeader()
+        await flush()
+        expect(panel.readsOf()).toHaveLength(1)
+        const before = panel.readsOf()[0]
+
+        hostIs(DISCONNECTED)
+        hostIs(CONNECTED)
+        await flush()
+        expect(panel.readsOf()).toHaveLength(2)
+        const after = panel.readsOf()[1]
+        if (order === 'before first') {
+          await answer(before, 'UE5H')
+          await answer(after, negative)
+        } else {
+          await answer(after, negative)
+          await answer(before, 'UE5H')
+        }
+        expect(panel.row()).toBe(PNG)
+        expect(header.result.current).toBe(PNG)
+
+        const third = panel.mountHeader()
+        await flush()
+        expect(third.result.current).toBe(PNG)
+        expect(panel.readsOf()).toHaveLength(2)
+        panel.unmount()
+      })
+    }
+  }
+
+  it('shows a picture a newly drawn row reads in a header whose own read failed', async () => {
+    hostIs(CONNECTED)
+    const first = mountPanelRow()
+    const header = first.mountHeader()
+    await answer(first.readsOf()[0], new Error('runtime_unavailable'))
+    expect(header.result.current).toBeNull()
+    expect(first.row()).toBeNull()
+
+    // Another panel draws the same member's face in the same come-back and reads it.
+    const panel = renderHook(() => useBotGroupFacePictures())
+    const face = panel.result.current.faceOf({ hostId: HOST, id: first.id }, VERSION)
+    act(() => {
+      face.subscribe(() => {})
+    })
+    await answer(first.readsOf()[1], 'UE5H')
+    expect(face.read()).toBe(PNG)
+    expect(header.result.current).toBe(PNG)
+    expect(first.row()).toBe(PNG)
+    expect(first.readsOf()).toHaveLength(2)
+    first.unmount()
+    panel.unmount()
+  })
+
+  it('keeps a row read started as the server comes back, while the window wrongly says hidden', async () => {
+    windowPark.visible = false
+    hostIs(CONNECTED)
+    hostIs(DISCONNECTED)
+    const panel = mountPanelRow()
+    // A scroll over the panel proves the window is shown though it says hidden.
+    act(() => {
+      document.dispatchEvent(new Event('wheel'))
+    })
+    expect(panel.readsOf()).toHaveLength(0)
+
+    hostIs(CONNECTED)
+    await flush()
+    expect(panel.readsOf()).toHaveLength(1)
+    await answer(panel.readsOf()[0], new Error('runtime_unavailable'))
+    expect(panel.row()).toBeNull()
+
+    // With no come-back since, a failed read waits for Back or reopen, not the next scroll.
+    act(() => {
+      document.dispatchEvent(new Event('wheel'))
+    })
+    await flush()
+    expect(panel.readsOf()).toHaveLength(1)
     panel.unmount()
   })
 })

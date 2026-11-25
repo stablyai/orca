@@ -19,7 +19,11 @@ import {
 import { parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import { peekBotUploadSrc as readCachedBotUploadSrc, readBotUploadSrc } from '../bot-avatar-image'
-import { watchFacePictureRecovery, type FacePicture as Picture } from './bot-group-face-recovery'
+import {
+  startFacePictureRead,
+  watchFacePictureRecovery,
+  type FacePicture as Picture
+} from './bot-group-face-recovery'
 
 /** A face's view of one member's picture version, stable for the panel's life. */
 export type BotGroupFacePicture = {
@@ -138,7 +142,7 @@ function createFacePictures(): BotGroupFacePictures {
     picture.reading = true
     picture.failed = false
     picture.retry = false
-    const attempt = ++picture.attempt
+    const attempt = startFacePictureRead(picture)
     void readBotUploadSrc(picture.bot, picture.version).then((src) => settle(picture, attempt, src))
   }
 
