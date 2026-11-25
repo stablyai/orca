@@ -35,8 +35,8 @@ async function latestTurn(
 }
 
 /**
- * A reattached agent's running turns go on, but this app's message ordinals start empty, so the
- * turn's next message would take an earlier one's row. Each running turn (the chat's and its
+ * A reattached agent's latest turns replay or go on, but this app's message ordinals start empty,
+ * so a turn's next message would take an earlier one's row. Each latest turn (the chat's and its
  * subagents') is numbered from Codex's own history first, as the live run numbered it.
  */
 export async function seedKeptCodexTurnOrdinals(input: {
@@ -88,13 +88,12 @@ export async function seedKeptCodexTurnOrdinals(input: {
         queue.push(...readReceiverThreadIds(item))
       }
     }
-    if (status === 'inProgress') {
-      input.translator.seedTurnOrdinals(
-        threadId,
-        turn.id,
-        items.filter((item) => isCodexMessageItemType(item.type)).map((item) => item.id)
-      )
-    }
+    // A turn that finished while detached still replays its last messages, numbered as live.
+    input.translator.seedTurnOrdinals(
+      threadId,
+      turn.id,
+      items.filter((item) => isCodexMessageItemType(item.type)).map((item) => item.id)
+    )
   }
   return fetched
 }

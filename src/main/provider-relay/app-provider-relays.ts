@@ -19,7 +19,8 @@ import {
   noteProviderRelayReattachedFromLastRun,
   keptProviderRelay,
   listKeptProviderRelays,
-  recheckKeptProviderRelay
+  recheckKeptProviderRelay,
+  providerRelayInventoryComplete as inventoryComplete
 } from './provider-relay-launch-inventory'
 import {
   KeptProviderRelayEndedError,
@@ -109,10 +110,16 @@ function policyFor(
   }
 }
 
-/** Lists the daemons' kept relays once per launch (again after a daemon that didn't answer).
- *  Where chats don't relay there are no daemons to ask, so the listing is whole at once. */
-export const listProviderRelaysAtLaunch = (): Promise<void> =>
-  listKeptProviderRelays(async () => (route ? route.all() : []))
+/** No agent can be kept where no relay route is installed (servers, SSH hosts). */
+export function providerRelayInventoryComplete(): boolean {
+  return !route || inventoryComplete()
+}
+
+/** Lists the daemons' kept relays once per launch (again after a daemon that didn't answer). */
+export function listProviderRelaysAtLaunch(): Promise<void> {
+  const installed = route
+  return installed ? listKeptProviderRelays(() => installed.all()) : Promise.resolve()
+}
 
 async function connected(client: DaemonClient | null): Promise<DaemonClient | null> {
   if (!client) {

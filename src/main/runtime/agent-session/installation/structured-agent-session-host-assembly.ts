@@ -110,12 +110,11 @@ export async function installOnJournal(
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
     ...(catalogOwner.modelCatalog ? { modelCatalog: catalogOwner.modelCatalog } : {})
   })
-  // Relayed output is acked once the writes covering it landed; streamed text is flushed only on ask.
-  // A forced ack (the daemon's ask) saves streamed text only when some is still unsaved.
-  installProviderRelayDurability(async (sessionId, force) => {
-    const saved = await host.flushStreamedEvents(sessionId, true)
-    return saved || (force && host.flushStreamedEvents(sessionId))
-  })
+  // Relayed output is acked once the writes covering it landed; streamed text is flushed only on
+  // ask. A forced ack (the daemon's ask, a hand-off) saves all streamed text, deferrable included.
+  installProviderRelayDurability((sessionId, force) =>
+    force ? host.flushStreamedEvents(sessionId) : host.flushStreamedEvents(sessionId, true)
+  )
   if (deps.attentionDelivery) {
     const installed = host
     const delivery = deps.attentionDelivery
