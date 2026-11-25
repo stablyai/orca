@@ -1,12 +1,21 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { useTranslate } from '@/i18n/use-translate'
 import { useTabGroupTabCloseCommands } from '../../../tab-group/workspace-model/useTabGroupTabCloseCommands'
 import { runNativeChatSplitTarget } from '../routing/native-chat-layout-actions'
+import { isBotChatTab } from '../../../bots/bot-workspace'
 import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { useTranslate } from '@/i18n/use-translate'
 
 const EMPTY_TABS: Tab[] = []
 const EMPTY_GROUPS: TabGroup[] = []
+
+/** A bot's Home stays open, as its tab's close is locked; a pinned tab closes only as one of several groups. */
+export function canCloseChatPane(groupCount: number, tab: Tab | undefined): boolean {
+  if (tab && isBotChatTab(tab)) {
+    return false
+  }
+  return groupCount > 1 || !tab?.isPinned
+}
 
 export function useStructuredChatPaneActions(tabId: string, worktreeId: string, groupId: string) {
   const t = useTranslate()
@@ -23,7 +32,10 @@ export function useStructuredChatPaneActions(tabId: string, worktreeId: string, 
       runNativeChatSplitTarget({ kind: 'workspace-tab', unifiedTabId: tabId, groupId }, 'right'),
     onSplitDown: () =>
       runNativeChatSplitTarget({ kind: 'workspace-tab', unifiedTabId: tabId, groupId }, 'down'),
-    canClosePane: groups.length > 1 || !groupTabs.find((tab) => tab.id === tabId)?.isPinned,
+    canClosePane: canCloseChatPane(
+      groups.length,
+      groupTabs.find((tab) => tab.id === tabId)
+    ),
     closeLabel,
     onClosePane: () => closeItem(tabId)
   }

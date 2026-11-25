@@ -1,18 +1,31 @@
-import { createPortal } from 'react-dom'
-import { autoUpdate, computePosition, offset, size } from '@floating-ui/dom'
-import { memo, useEffect, useRef, useLayoutEffect, useState } from 'react'
-import { Package, RotateCcw } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { memo, useContext, useEffect, useRef, useState } from 'react'
+import { ChevronRight, Package, RotateCcw } from 'lucide-react'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { cn } from '@/lib/class-names'
-import type { SkillSourceKind } from '../../../../../../shared/skills/discovery/skills'
-import { FilenameFirstPath } from '@/components/file-actions/file-path-cursor-tooltip'
-import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
+import {
+  NativeChatMentionOption,
+  NativeChatUnavailableMentions,
+  groupNativeChatMentionValues,
+  nativeChatMentionAnnouncement,
+  nativeChatMentionEmptyText,
+  nativeChatMentionTitle
+} from '../../NativeChatMentionOption'
+import { PickerGroupHeading } from '../../NativeChatPickerGroupHeading'
+import { NativeChatRoomContext } from '../../native-chat-room-context'
 import type { ComposerAutocomplete } from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
+import { nativeChatMentionValue } from '../native-chat-composer-types'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import {
+  getPickerAnnotation,
+  scopeLabel,
+  PickerListbox,
+  PickerOptionButton,
+  PickerStatus
+} from './NativeChatPickerParts'
+import { NativeChatMentionChatList } from './NativeChatMentionChatList'
+import { cn } from '@/lib/class-names'
 import { localizeSlashCommandDescription } from './native-chat-slash-command-descriptions'
 import { nativeChatPickerEmptyText } from './native-chat-picker-empty-text'
 
@@ -141,32 +154,6 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   )
 })
 
-function PickerGroupHeading({ kind }: { kind: 'commands' | 'skills' }): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <div className="px-2 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-      {kind === 'commands'
-        ? t('components.native-chat.composer.commands', 'Commands')
-        : t('components.native-chat.composer.skills', 'Skills')}
-    </div>
-  )
-}
-
-function PickerStatus({
-  busy = false,
-  children
-}: {
-  busy?: boolean
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
-      {busy ? <LoadingSpinner className="size-3.5" /> : null}
-      {children}
-    </div>
-  )
-}
-
 function PickerOption({
   item,
   index,
@@ -225,182 +212,170 @@ function PickerOption({
   )
 }
 
-function PickerListbox({
-  id,
-  children
-}: {
-  id: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  const marker = useRef<HTMLSpanElement>(null)
-  const listbox = useRef<HTMLDivElement>(null)
-  const [container, setContainer] = useState<HTMLElement | null>(null)
-  useLayoutEffect(() => {
-    setContainer(marker.current?.closest<HTMLElement>('.native-chat-appearance') ?? document.body)
-  }, [])
-  useLayoutEffect(() => {
-    const anchor = marker.current?.parentElement
-    const floating = listbox.current
-    if (!anchor || !floating) {
-      return
-    }
-    // autoUpdate also follows moves with no resize or scroll, like dragging the floating panel.
-    return autoUpdate(anchor, floating, () => {
-      void computePosition(anchor, floating, {
-        strategy: 'fixed',
-        placement: 'top-start',
-        middleware: [
-          offset(4),
-          size({
-            padding: 8,
-            apply: ({ rects, availableHeight }) => {
-              floating.style.width = `${rects.reference.width}px`
-              floating.style.maxHeight = `min(calc(var(--spacing) * 72), ${Math.max(0, availableHeight)}px)`
-            }
-          })
-        ]
-      }).then(({ x, y }) => {
-        floating.style.left = `${x}px`
-        floating.style.top = `${y}px`
-      })
-    })
-  }, [container])
-  return (
-    <>
-      <span ref={marker} />
-      {container &&
-        createPortal(
-          <div
-            ref={listbox}
-            id={id}
-            role="listbox"
-            data-focus-behavior="composer-suggestions"
-            // Inside the launch setup (a popover or the new-tab menu's submenu), take the menu layer those overlays use.
-            className={`scrollbar-sleek fixed left-0 top-0 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating ${marker.current?.closest('[data-slot="popover-content"], [data-slot="dropdown-menu-sub-content"]') ? 'z-[70]' : 'z-50'}`}
-          >
-            {children}
-          </div>,
-          container
-        )}
-    </>
-  )
-}
-
-function PickerOptionButton({
-  id,
-  selected,
-  activeItemRef,
-  onChoose,
-  children
-}: {
-  id: string
-  selected: boolean
-  activeItemRef: React.MutableRefObject<HTMLButtonElement | null>
-  onChoose: () => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <button
-      id={id}
-      ref={selected ? activeItemRef : null}
-      role="option"
-      aria-selected={selected}
-      type="button"
-      onPointerDown={(event) => {
-        // Accept before focus transfer because the textarea owns query and caret state.
-        event.preventDefault()
-        if (event.button === 0) {
-          onChoose()
-        }
-      }}
-      className={cn(
-        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground hover:[--muted-foreground:var(--accent-foreground)]',
-        selected &&
-          'border-border bg-accent text-accent-foreground [--muted-foreground:var(--accent-foreground)]'
-      )}
-    >
-      {children}
-    </button>
-  )
-}
-
-function getPickerAnnotation(item: NativeChatPickerItem, t: Translate = translate): string | null {
-  if (item.kind === 'skill' && item.location) {
-    return item.location
-  }
-  if (item.kind === 'command' && item.skillCollision) {
-    return t(
-      'components.native-chat.composer.skillCommandCollision',
-      'Also a skill name - agent decides'
-    )
-  }
-  if (item.kind === 'skill' && item.sources.length > 1) {
-    // Use sourceCount because i18next treats count as pluralization input and these keys have no plural variants.
-    return t(
-      'components.native-chat.composer.skillMultipleSources',
-      '{{sourceCount}} sources - agent resolves',
-      { sourceCount: item.sources.length }
-    )
-  }
-  return null
-}
-
-function scopeLabel(sourceKind: SkillSourceKind | undefined, t: Translate = translate): string {
-  const labels: Record<string, string> = {
-    repo: t('components.native-chat.composer.skillScopeProject', 'Project'),
-    home: t('components.native-chat.composer.skillScopePersonal', 'Personal'),
-    bundled: t('components.native-chat.composer.skillScopeBuiltIn', 'Built-in'),
-    plugin: t('components.native-chat.composer.skillScopePlugin', 'Plugin')
-  }
-  return sourceKind ? (labels[sourceKind] ?? '') : ''
-}
-
 export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
   mention,
   activeIndex,
   listboxId,
-  onChoose
+  onChoose,
+  onHover
 }: {
   mention: NativeChatMentionFiles
   activeIndex: number
   listboxId: string
   onChoose: (path: string) => void
+  onHover?: (index: number) => void
 }): React.JSX.Element {
   const t = useTranslate()
   useUiLanguageRevision()
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
-  const selectedIndex = Math.min(activeIndex, mention.files.length - 1)
+  const { files } = mention
+  const room = useContext(NativeChatRoomContext)
+  const selectedIndex = Math.min(activeIndex, files.length - 1)
+  const chats = room?.chats
+  const drilled = chats?.drill.open ?? null
 
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [selectedIndex, mention.files])
+  }, [selectedIndex, mention.files, drilled, chats?.drill.activeIndex])
+
+  // A bot's chats are read once its row has been highlighted or hovered a moment.
+  const memberOf = (value: string) =>
+    room?.mentions.find((mention) => nativeChatMentionValue(mention) === value) ??
+    room?.agents?.find((mention) => nativeChatMentionValue(mention) === value)
+  const matchOf = (value: string) => room?.matches?.find((match) => match.value === value)
+  const [hovered, setHovered] = useState<string | null>(null)
+  const highlighted = memberOf(files[selectedIndex] ?? '')?.id ?? null
+  const prefetch = chats?.picker.prefetch
+  useEffect(() => {
+    const botId = hovered ?? highlighted
+    if (!prefetch || !botId || drilled) {
+      return
+    }
+    const timer = setTimeout(() => prefetch(botId), BOT_CHATS_PREFETCH_MS)
+    return () => clearTimeout(timer)
+  }, [prefetch, hovered, highlighted, drilled])
+
+  if (chats && drilled) {
+    const member = room?.mentions.find((entry) => entry.id === drilled.botId)
+    const shown =
+      chats.picker.shown?.botId === drilled.botId
+        ? chats.picker.shown
+        : {
+            botId: drilled.botId,
+            name: member?.name ?? '',
+            avatar: member?.icon,
+            chats: { status: 'loading' as const }
+          }
+    return (
+      <PickerListbox id={listboxId}>
+        <NativeChatMentionChatList
+          shown={shown}
+          filter={drilled.filter}
+          activeIndex={chats.drill.activeIndex}
+          listboxId={listboxId}
+          activeItemRef={activeItemRef}
+          onPick={chats.drill.pick}
+          onBack={chats.drill.back}
+          onRetry={chats.picker.retry}
+        />
+      </PickerListbox>
+    )
+  }
 
   const statusText =
-    mention.files.length > 0
+    files.length > 0
       ? null
       : mention.loading
         ? t('components.native-chat.composer.loadingFiles', 'Loading files...')
         : mention.failed
           ? t('components.native-chat.composer.filesLoadFailed', "Couldn't load files")
-          : t('components.native-chat.composer.noFiles', 'No matching files')
-
-  return (
-    <PickerListbox id={listboxId}>
-      {mention.files.map((path, index) => (
-        <PickerOptionButton
-          key={path}
-          id={`${listboxId}-option-${index}`}
-          selected={index === selectedIndex}
-          activeItemRef={activeItemRef}
-          onChoose={() => onChoose(path)}
+          : room?.withFiles && room.unavailable.length > 0
+            ? null
+            : nativeChatMentionEmptyText(room !== null, room?.query)
+  // The room's bots lead, then this chat's crew agents, then files, each under its heading.
+  const { bots, agentCount, listed } = groupNativeChatMentionValues(
+    files,
+    room?.mentions,
+    room?.agents
+  )
+  const recent = Math.min(room?.recentCount ?? 0, bots)
+  const fileCount = files.length - listed
+  const grouped = room?.withFiles === true && bots + room.unavailable.length > 0
+  const botsHeaded = grouped || agentCount > 0 || recent > 0
+  // Paused bots are listed in the Bots group too, so they keep its heading when no other bot matches.
+  const pausedListed = grouped && (room?.unavailable.length ?? 0) > 0
+  const headed = grouped || agentCount > 0
+  const option = (path: string, index: number) => {
+    const member = room ? memberOf(path) : undefined
+    const selected = index === selectedIndex
+    const opens = member?.id && chats?.picker.offers(member.id) ? member.id : null
+    const row = (
+      <PickerOptionButton
+        key={path}
+        id={`${listboxId}-option-${index}`}
+        selected={selected}
+        activeItemRef={activeItemRef}
+        onChoose={() => onChoose(path)}
+        onHover={room && onHover ? () => onHover(index) : undefined}
+        onPointerEnter={member?.id ? () => setHovered(member.id ?? null) : undefined}
+        title={room ? nativeChatMentionTitle(path, room.mentions) : undefined}
+        // Room for the Chats action; important, as the row's own px-2 comes later in the CSS.
+        className={cn(member && 'items-center', opens && '!pr-20')}
+      >
+        <NativeChatMentionOption
+          value={path}
+          member={member}
+          match={room ? matchOf(path) : undefined}
+        />
+        {opens ? (
+          <span className="sr-only">
+            {t('components.native-chat.composer.chatsHint', 'Right arrow for chats')}
+          </span>
+        ) : null}
+      </PickerOptionButton>
+    )
+    if (!opens || !chats) {
+      return row
+    }
+    // Beside the option, never inside it, so the row stays one list option; → is the keyboard way.
+    return (
+      <div key={path} className="group/bot-row relative">
+        {row}
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => chats.drill.enter(opens)}
+          className={cn(
+            'absolute top-1/2 right-2 h-6 -translate-y-1/2 items-center gap-0.5 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-background/60 hover:text-foreground',
+            selected ? 'flex' : 'hidden group-hover/bot-row:flex'
+          )}
         >
-          <FileTypeIcon
-            filePath={path}
-            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-          />
-          <FilenameFirstPath path={path} />
-        </PickerOptionButton>
-      ))}
+          {t('components.native-chat.composer.botChats', 'Chats')}
+          <ChevronRight aria-hidden className="size-3" />
+        </button>
+      </div>
+    )
+  }
+  // In a room the polite region counts what Enter can pick.
+  return (
+    <PickerListbox id={listboxId} maxHeight={room ? 'calc(var(--spacing) * 74)' : undefined}>
+      {recent > 0 ? <PickerGroupHeading kind="recent" /> : null}
+      <div className="flex flex-col gap-0.5" onPointerLeave={() => setHovered(null)}>
+        {files.slice(0, recent).map(option)}
+        {botsHeaded && (bots > recent || pausedListed) ? <PickerGroupHeading kind="bots" /> : null}
+        {files.slice(recent, bots).map((path, index) => option(path, index + recent))}
+      </div>
+      {grouped ? <NativeChatUnavailableMentions room={room} /> : null}
+      {agentCount > 0 ? <PickerGroupHeading kind="agents" /> : null}
+      <div className="flex flex-col gap-0.5">
+        {files.slice(bots, listed).map((path, index) => option(path, index + bots))}
+      </div>
+      {headed && files.length > listed ? <PickerGroupHeading kind="files" /> : null}
+      <div className="flex flex-col gap-0.5">
+        {files.slice(listed).map((path, index) => option(path, index + listed))}
+      </div>
       {statusText ? (
         <PickerStatus>
           {mention.loading ? <LoadingSpinner className="size-3.5" /> : null}
@@ -408,8 +383,17 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
         </PickerStatus>
       ) : null}
       <div aria-live="polite" className="sr-only">
-        {statusText ?? ''}
+        {nativeChatMentionAnnouncement(
+          room?.withFiles,
+          bots,
+          fileCount,
+          statusText,
+          mention.loading || mention.failed
+        )}
       </div>
     </PickerListbox>
   )
 })
+
+/** How long a bot row stays highlighted or hovered before its chats are read. */
+const BOT_CHATS_PREFETCH_MS = 150

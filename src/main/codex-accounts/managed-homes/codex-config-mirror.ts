@@ -38,9 +38,9 @@ export class CodexConfigMirror {
     }
   })
 
-  readHostModelProvider(): string | null {
+  async readHostModelProvider(): Promise<string | null> {
     try {
-      return this.hostModelProvider.get()
+      return await this.hostModelProvider.get()
     } catch {
       console.warn('[codex-accounts] Failed to read canonical provider config')
       return null

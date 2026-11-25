@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 
 /** Bound absent restored pages beyond the first create ceiling; later four-page recovery batches may outlast it, so placement must revoke the notice. */
@@ -20,8 +21,9 @@ export function useRestoredClientHostedRecoveryWindow({
   const restoredFromSession = useAppStore(
     (s) => s.remoteBrowserPageHandlesByPageId[browserPageId]?.restoredFromSession === true
   )
-  const environmentReachable = useAppStore(
-    (s) => s.runtimeStatusByEnvironmentId.get(environmentId)?.status != null
+  const environmentReachable = useRuntimeHostStatusSelector(
+    environmentId,
+    (entry) => entry?.status != null
   )
   const awaitingRecovery = restoredFromSession && placementPending && !ownedInitialization
   const [windowElapsed, setWindowElapsed] = useState(false)

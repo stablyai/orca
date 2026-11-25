@@ -1,4 +1,6 @@
-import type { ProviderChild } from './provider-child'
+import { awaitProviderChildSpawn, directOwnerUnreaped, type ProviderChild } from './provider-child'
+import { DirectProviderChild } from './direct-provider-child'
+import { registerAgentProcess } from '../memory/agent-process-registry'
 import { spawnProviderProcess, type ProviderProcessSpawner } from './provider-process-spawn'
 import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
 import type { ProviderProcessLaunch } from './provider-process-launch'
@@ -40,6 +42,8 @@ type ManagedProviderProcessOptions = {
   /** Defaults to the root-only policy; only a provider with its own reaper overrides it. */
   policy?: (supervised: boolean) => ProviderProcessClosePolicy
   spawnImpl?: ProviderProcessSpawner
+  /** False keeps the launch in this app even where the agent host is available. */
+  allowHost?: boolean
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
   /** Defaults to accepting root exit or delivered writer termination without descendant proof. */
@@ -111,7 +115,7 @@ export function spawnManagedProviderProcess(
       `Supervised provider graceful exit must wait at least ${PROVIDER_SUPERVISOR_MAX_STOP_MS} ms; received ${policy.gracefulExitMs} ms`
     )
   }
-  const child = spawnProviderProcess(spec, options.spawnImpl)
+  const child = spawnProviderProcess(spec, options.spawnImpl, options.allowHost)
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   let observed: ProviderProcessExit | null = null
   let spawnFailed = false
@@ -150,11 +154,20 @@ export function spawnManagedProviderProcess(
   const exitPromise = new Promise<void>((resolve) => {
     resolveExit = resolve
   })
+  // Once the process exits or its pipes close, its pid can name another process.
+  let releaseAgentMemory: (() => void) | null = null
+  let agentMemoryRetired = false
+  const retireAgentMemory = (): void => {
+    agentMemoryRetired = true
+    releaseAgentMemory?.()
+    releaseAgentMemory = null
+  }
   const observeExit = (exit: ProviderProcessExit): void => {
     if (observed) {
       return
     }
     observed = exit
+    retireAgentMemory()
     resolveExit()
     for (const listener of listeners) {
       listener(exit)
@@ -174,9 +187,25 @@ export function spawnManagedProviderProcess(
     spawnError ??= error
   })
   child.on('close', (code, signal) => {
+    retireAgentMemory()
     const processless = spawnFailed && child.pid === undefined
     if (processless) {
       observeExit({ code, signal, processless })
+    }
+  })
+  // Hosted launches publish their pid only once the agent host starts them.
+  void awaitProviderChildSpawn(child).then(() => {
+    if (child.pid !== undefined && !agentMemoryRetired && !child.numericIdentityRetired) {
+      // A directly spawned owner keeps its pid until reaped, so its tree (what it still holds after the
+      // CLI exits) counts until then. Otherwise, once the leader exits or its outcome is lost, its pid
+      // can be reused while cleanup still runs.
+      releaseAgentMemory = registerAgentProcess(
+        (child instanceof DirectProviderChild ? child.raw.pid : undefined) ?? child.pid,
+        child.pid,
+        () =>
+          (child instanceof DirectProviderChild ? directOwnerUnreaped(child.raw) : undefined) ??
+          (child.leaderExited !== true && child.numericIdentityRetired !== true)
+      )
     }
   })
   const rootVerdict = (): DescendantTreeVerdict =>

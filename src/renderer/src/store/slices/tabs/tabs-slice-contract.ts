@@ -109,6 +109,8 @@ export type TabsSlice = {
       preserveWorktreeSelection?: boolean
       recordInteraction?: boolean
       terminalRetirementHandled?: boolean
+      /** Remove a duplicate view while another tab on the same host retains the conversation. */
+      preserveAgentSession?: boolean
       /** closeFile/close-all already own content cleanup and reopen capture. */
       editorRetirementHandled?: boolean
     }

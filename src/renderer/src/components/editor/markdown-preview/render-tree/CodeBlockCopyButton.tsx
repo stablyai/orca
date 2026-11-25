@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { Copy, Check } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
+import { toCodeClipboardText } from '@/lib/clipboard/clipboard-line-endings'
 
 type CodeBlockCopyButtonProps = React.HTMLAttributes<HTMLPreElement> & {
   children?: React.ReactNode
@@ -48,7 +49,7 @@ export default function CodeBlockCopyButton({
     })
 
     void window.api.ui
-      .writeClipboardText(text)
+      .writeClipboardText(toCodeClipboardText(text))
       .then(() => {
         if (!isMountedRef.current) {
           return

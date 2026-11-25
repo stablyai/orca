@@ -32,6 +32,7 @@ import {
   type AcceptedTask
 } from './task-record-model'
 import { TaskRecordReads } from './task-record-reads'
+import { runtimeStatusSubscriptionsFor } from '../../slices/runtime-status/views/runtime-status-subscriptions'
 
 /** The shared task record cache: owners and reads, plus the Project board surfaces of the same records. */
 export class GitHubTaskRecordCache extends TaskRecordReads {
@@ -228,10 +229,12 @@ export class GitHubTaskRecordCache extends TaskRecordReads {
 
 export function createGitHubTaskRecordCache(store: StoreApi<AppState>) {
   const cache = new GitHubTaskRecordCache(store)
+  runtimeStatusSubscriptionsFor(store).subscribeStatusChanges((change) =>
+    cache.syncRuntimeEnvironments(change.ids)
+  )
   store.subscribe((state, previous) => {
     if (
       state.repos !== previous.repos ||
-      state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
       state.runtimeEnvironments !== previous.runtimeEnvironments ||
       state.sshConnectionStates !== previous.sshConnectionStates ||
       state.sshStateByEnvironment !== previous.sshStateByEnvironment

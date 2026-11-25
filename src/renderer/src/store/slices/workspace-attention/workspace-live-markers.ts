@@ -2,6 +2,7 @@ import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-con
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { botGroupRoomSessions } from '@/lib/bot-group-room-sessions'
 
 // Only markers owned by live tabs count; closed tabs and superseded sessions cannot light or hold workspace dots.
 
@@ -82,6 +83,9 @@ export function workspaceMarkerTabs(sources: LiveMarkerSources, workspaceId: str
   for (const tab of sources.unifiedTabsByWorktree?.[workspaceId] ?? []) {
     if (tab.contentType === 'agent-session') {
       tabs.push({ id: tab.id, sessionId: tab.entityId ?? null })
+    } else if (tab.contentType === 'room' && tab.entityId) {
+      // An open room owns its members' markers, so a hidden thread's reply holds the group's dot.
+      tabs.push(...botGroupRoomSessions(tab.entityId))
     }
   }
   return tabs

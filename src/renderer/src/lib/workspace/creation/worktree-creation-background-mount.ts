@@ -46,22 +46,7 @@ export function openBackgroundDeclinedTerminal(
       promptDelivery: heldChatMessage || args.request.launchDraftPrompt ? 'draft' : 'auto-submit',
       activate: false,
       selectWorktree: false,
-      isCancelled: () => signal?.aborted === true,
-      buildStartup: () => {
-        const rebuilt = args.request.creationStartup?.legacy(
-          heldChatMessage ?? args.request.launchDraftPrompt ?? args.request.quickPrompt,
-          heldChatMessage || args.request.launchDraftPrompt ? 'draft' : 'auto-submit'
-        )
-        if (rebuilt?.promptPlan) {
-          return rebuilt.promptPlan
-        }
-        const plan = rebuilt?.startupPlan ?? args.request.startupPlan
-        return {
-          startupPlan: plan,
-          pasteDraftAfterLaunch: plan?.draftPrompt ?? plan?.followupPrompt ?? null,
-          submitPastedPrompt: Boolean(plan?.followupPrompt)
-        }
-      }
+      isCancelled: () => signal?.aborted === true
     })
     return {
       opened: true,

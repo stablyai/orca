@@ -12,6 +12,8 @@ import {
 import { readAgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { useAppStore } from '@/store/index'
+import { isAgentCliUpdateAgent } from '../../../../../shared/agent-launch/installation/agent-cli-update'
 import {
   supportsStructuredAgentSessionCreateOptionsMode,
   structuredAgentSessionHostSupports,
@@ -193,6 +195,13 @@ export async function launchStructuredAgentSession(
     )
   }
   delete intent.beforeCreate
+  if (isAgentCliUpdateAgent(params.agent)) {
+    // A chat start is when the host's own CLI matters; the check never holds up or fails the start.
+    const { target } = intent
+    void Promise.resolve()
+      .then(() => useAppStore.getState().checkAgentCliUpdates(target))
+      .catch(() => {})
+  }
   try {
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       intent.target,

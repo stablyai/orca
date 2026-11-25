@@ -128,7 +128,8 @@ function fingerprint(values: readonly (number | string)[]): number {
   // FNV-1a over the parts, kept a safe integer so it round-trips through sizeBytes.
   let hash = 0x811c9dc5
   for (const char of values.join('\u0000')) {
-    hash ^= char.charCodeAt(0)
+    // A whole code point: two emoji sharing a high surrogate must still hash differently.
+    hash ^= char.codePointAt(0) ?? 0
     hash = Math.imul(hash, 0x01000193) >>> 0
   }
   return hash

@@ -114,6 +114,7 @@ export async function listCodexHooks(
 ): Promise<CodexListedHook[]> {
   const result = await runCodexAppServerSession(
     {
+      allowHost: false,
       command: codexPath,
       // Disable plugin startup to avoid leaving marketplace clones behind short sessions.
       args: [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS],

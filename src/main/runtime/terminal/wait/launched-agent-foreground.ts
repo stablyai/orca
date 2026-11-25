@@ -16,6 +16,9 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 /** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'
 
+/** Set when the read's own fresh, fenced observation named exactly the agent asked about. */
+export type ExactAgentName = { named: boolean }
+
 export type LaunchedAgentHost = {
   remote: boolean
   windows: boolean
@@ -82,7 +85,8 @@ export async function readLaunchedAgentForeground(
   host: { remote: boolean; windows: boolean },
   ptyId: string,
   agent: TuiAgent,
-  expectedIncarnationId?: string
+  expectedIncarnationId?: string,
+  exact?: ExactAgentName
 ): Promise<LaunchedAgentForeground> {
   if (!controller) {
     return 'unknown'
@@ -106,6 +110,9 @@ export async function readLaunchedAgentForeground(
           observation.verdict !== 'observed'
         ) {
           return 'unknown'
+        }
+        if (exact) {
+          exact.named = recognizeAgentProcess(observation.processName)?.agent === agent
         }
         // Local policy has always admitted any non-shell, including user wrappers.
         if (!host.remote) {
@@ -187,4 +194,54 @@ export async function readLaunchedAgentForeground(
   } catch {
     return 'unknown'
   }
+}
+
+/** `agent` only when the program in front is `agent` itself: the launched-agent read, which on a
+ *  local host admits any non-shell, then a fresh process-table name at the owner that names it. */
+export async function readExactAgentForeground(
+  runtime: {
+    readLaunchedAgentForeground(
+      ptyId: string,
+      agent: TuiAgent,
+      exact?: ExactAgentName
+    ): Promise<LaunchedAgentForeground>
+  },
+  controller: Pick<RuntimePtyController, 'confirmForegroundProcess'> | null | undefined,
+  ptyId: string,
+  agent: TuiAgent
+): Promise<LaunchedAgentForeground> {
+  const exact: ExactAgentName = { named: false }
+  const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent, exact)
+  if (foreground !== 'agent' || exact.named) {
+    return foreground
+  }
+  return confirmAgentNameAtOwner(controller, ptyId, agent)
+}
+
+/** The same exact read for a local owner without foreground observation, scoped to the terminal of
+ *  the root PID its reattach discovery listed rather than refetching the owner's every session. */
+export async function readAdoptedRootAgentForeground(
+  controller: Pick<RuntimePtyController, 'confirmForegroundProcess'> | null | undefined,
+  rootPid: number,
+  ptyId: string,
+  agent: TuiAgent
+): Promise<LaunchedAgentForeground> {
+  try {
+    const rows = await readTerminalProcessRows(rootPid)
+    const foreground = rows ? judgeTerminalForeground(rows, rootPid, agent) : 'unknown'
+    return foreground === 'agent'
+      ? await confirmAgentNameAtOwner(controller, ptyId, agent)
+      : foreground
+  } catch {
+    return 'unknown'
+  }
+}
+
+async function confirmAgentNameAtOwner(
+  controller: Pick<RuntimePtyController, 'confirmForegroundProcess'> | null | undefined,
+  ptyId: string,
+  agent: TuiAgent
+): Promise<LaunchedAgentForeground> {
+  const name = (await controller?.confirmForegroundProcess?.(ptyId)) ?? null
+  return recognizeAgentProcess(name)?.agent === agent ? 'agent' : 'unknown'
 }

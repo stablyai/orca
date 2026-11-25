@@ -1,3 +1,4 @@
+import { activeRpcBrowserPagePicker } from '../../../browser/agent-browser/session-routing/person-pick-hold'
 import type {
   BrowserTabAnnotationsResult,
   BrowserTabCurrentResult,
@@ -136,7 +137,7 @@ export class RuntimeBrowserTabQueries {
     if (clientPage) {
       this.host
         .getRuntimeBrowserPageRegistry()
-        .activatePage(clientPage.browserPageId, clientPage.placement)
+        .activatePage(clientPage.browserPageId, clientPage.placement, activeRpcBrowserPagePicker())
       await publishSwitchedBrowserSessionTab(this.host, {
         placementKind: 'client',
         browserPageId: clientPage.browserPageId,

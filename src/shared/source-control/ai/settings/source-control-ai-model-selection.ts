@@ -168,9 +168,8 @@ export function selectPersistedModelId(args: {
   operation: AiTextOperation
   hostKey: string
   agentId: TuiAgent
-  defaultModelId: string
-}): string {
-  const { source, legacy, repoOverrides, operation, hostKey, agentId, defaultModelId } = args
+}): string | undefined {
+  const { source, legacy, repoOverrides, operation, hostKey, agentId } = args
   return (
     (isGlobalAiTextAction(operation)
       ? undefined
@@ -196,8 +195,7 @@ export function selectPersistedModelId(args: {
     legacy?.selectedModelByAgentByHost?.[hostKey]?.[agentId] ??
     (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
       ? legacy?.selectedModelByAgent?.[agentId]
-      : undefined) ??
-    defaultModelId
+      : undefined)
   )
 }
 

@@ -22,6 +22,7 @@ type GitRepoProbe = {
 export type GitRepoRegistrationInfo = {
   isRepo: boolean
   rootPath: string
+  /** Git toplevel of the main checkout when the path is a linked worktree. */
   mainRepoPath: string | null
 }
 
@@ -130,11 +131,12 @@ function* inspectGitRepoForRegistrationCommands(
               }
         if (location.toplevel) {
           rootPath = normalizeGitRepoRootForInputPath(path, location.toplevel)
-          mainRepoPath = mainRepoPathFromProbe(path, {
+          const mainCheckout = mainRepoPathFromProbe(path, {
             result: 'repo',
             insideWorkTree: true,
             ...location
           })
+          mainRepoPath = mainCheckout ? yield* getGitRepoRootCommands(mainCheckout) : null
         } else {
           rootPath = rootPathFromMarker(path)
         }

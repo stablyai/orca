@@ -34,8 +34,9 @@ async function isDirectory(path: string): Promise<boolean> {
   }
 }
 
-/** Floating workspace ids name mutable settings, so resume their pinned folder and refuse if it disappeared.
- * Worktree/folder ids still resolve by id; legacy unpinned floating records are repaired on launch. */
+/** Resume a pinned folder (a floating chat's, or the sub-folder an adopted conversation ran in) and
+ * refuse if it disappeared. Unpinned worktree/folder ids resolve by id; legacy unpinned floating
+ * records are repaired on launch. */
 export async function resolveAgentSessionLaunchDirectory(
   deps: AgentSessionLaunchDirectoryDeps,
   record: AgentSessionRecord

@@ -19,7 +19,3 @@ export function sessionSearchServiceInit(): AiVaultSessionSearchInit | null {
       }
     : null
 }
-
-export function resetSessionSearchServiceInitForTests(): void {
-  databasePath = null
-}

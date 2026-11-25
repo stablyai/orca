@@ -7,6 +7,7 @@ import { getOverlayFocusOwners } from '@/lib/overlay-interaction/overlay-focus-o
 import type { NativeChatComposerHandle } from '../native-chat-composer-types'
 import { registerNativeChatPane } from './native-chat-composer-mount'
 import {
+  type ComposerFocusText,
   getNativeChatComposerFocusRequestGeneration,
   registerNativeChatComposerReclaim
 } from './native-chat-composer-focus-intent'
@@ -79,8 +80,14 @@ export function useNativeChatComposerRevealFocus({
     }
     const reclaim = (
       onlyIfFocusUnclaimed = false,
-      sourceOverlays: readonly HTMLElement[] = []
+      sourceOverlays: readonly HTMLElement[] = [],
+      text?: ComposerFocusText
     ): void => {
+      if (text && 'append' in text) {
+        composerRef.current?.appendText(text.append, { glow: true })
+      } else if (text?.revealDraft) {
+        composerRef.current?.focus({ caretAtEnd: true, glow: true })
+      }
       if (getOverlayFocusOwners(rootRef.current ?? undefined).length > 0) {
         claimedRef.current = true
         explicitRef.current = false

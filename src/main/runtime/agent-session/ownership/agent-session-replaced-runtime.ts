@@ -8,6 +8,8 @@ import {
 } from '../records/agent-session-store-state'
 
 export type AgentSessionReplacedRuntime = {
+  /** The replaced runtime that held the owner loaded at `fence`, when the lease names it. */
+  runtime?: string
   /** The highest fence a replaced runtime granted; every lower fence was granted before it. */
   fence: number
   /** The last renewal of the owner loaded at `fence`, its last proof of life. */
@@ -35,6 +37,7 @@ export function agentSessionReplacedRuntimes(
     const runtimeEnd = owner?.runtime ? state.runtimeEnds?.get(owner.runtime) : undefined
     replaced.set(sessionId, {
       fence: currentFence,
+      ...(owner?.runtime ? { runtime: owner.runtime } : {}),
       ...(owner ? { lastProvenAliveAt: lease.lastRenewedAt } : {}),
       ...(runtimeEnd ? { runtimeEnd } : {})
     })

@@ -1,3 +1,4 @@
+import type { BotChangeScope } from '../../bots/bot-change-scope'
 import type { NotificationAttentionAcknowledgement } from '../../notifications/notification-settings-types'
 import type { CreateWorktreeResult } from '../../worktree/create-types'
 import type {
@@ -44,6 +45,8 @@ export type RuntimeClientEvent =
   | ({ type: 'workspaceMetadataSet' } & WorkspaceMetadataSet)
   /** What mobileRelay.hosts.list answers changed; phones re-read it instead of polling. */
   | { type: 'relayHostsChanged' }
+  /** An update of the user's own agent CLI on this host finished; clients check again. */
+  | { type: 'agentCliUpdateFinished'; agent: string }
   /** A desktop PR refresh found this checkout's PR (or its absence) changed; phones re-read it. */
   | { type: 'pullRequestChanged'; worktreeId: string; repoId: string; branch: string }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
@@ -68,6 +71,18 @@ export type RuntimeClientEvent =
     }
   // Why: browser profiles live on the host; old clients drop the unknown type and refetch on their old triggers.
   | { type: 'browserProfilesChanged' }
+  /** A bot, its automations or its Activity's work changed; readers re-read. Old clients drop it, and
+   *  ignore the scope: which bots (all when absent) and which kinds of change (any when absent); an
+   *  `items` notice also carries every bot's Needs you count. */
+  | ({ type: 'botsChanged' } & BotChangeScope)
+  /** A worker this chat session started appeared or changed state; that chat's worker list re-reads. Old clients drop it. */
+  | { type: 'orchestrationSessionWorkersChanged'; sessionId: string }
+  /** Any Dispatch was written, by a chat or a terminal; desktops re-read this host's worker lineage. Old clients drop it. */
+  | { type: 'agentOrchestrationChanged' }
+  /** A paired computer handed back replies to this host's agents' asks; their cards re-read. Old clients drop it. */
+  | { type: 'peerMailReturned' }
+  /** This host's MCP server list changed; clients showing it re-read. Old clients drop it. */
+  | { type: 'mcpServersChanged' }
   // Old clients drop the unknown type; the report RPC has the same run.
   | WorkspaceCleanupRunFinishedEvent
   | {

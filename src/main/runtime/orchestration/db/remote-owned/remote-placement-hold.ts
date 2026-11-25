@@ -12,6 +12,7 @@ export type RemotePlacementRow = {
   prior_task_status: TaskStatus
   dispatch_id: string | null
   created_at: string
+  never_sent_at: string | null
 }
 
 /**
@@ -36,6 +37,39 @@ export function getLiveRemotePlacement(
 /** A start claimed the Task here: no attempt on a server speaks for it any more. */
 export function retireRemotePlacement(db: OrchestrationDb, taskId: string): void {
   db.db.prepare('DELETE FROM remote_placements WHERE task_id = ?').run(taskId)
+}
+
+/**
+ * Every send under the reservation's key failed before leaving this Orca. It stays reserved, so a
+ * same-key retry resends, but a cancel of the Task may now retire it.
+ */
+export function markRemotePlacementNeverSent(
+  db: OrchestrationDb,
+  taskId: string,
+  requestKey: string
+): void {
+  db.db
+    .prepare(
+      `UPDATE remote_placements SET never_sent_at = datetime('now')
+       WHERE task_id = ? AND request_key = ? AND state = 'reserved'`
+    )
+    .run(taskId, requestKey)
+}
+
+/**
+ * A cancel of the Task retires its reservation when no start for it can have reached the server:
+ * no attempt there, and every send failed before leaving this Orca. Any other reservation may
+ * stand for a Dispatch the server created, so it keeps holding the Task.
+ */
+export function retireNeverSentReservation(db: OrchestrationDb, taskId: string): void {
+  db.db
+    .prepare(
+      `DELETE FROM remote_placements
+       WHERE task_id = ? AND state = 'reserved' AND dispatch_id IS NULL
+         AND never_sent_at IS NOT NULL
+         AND conversation_id IN (SELECT conversation_id FROM remote_run_links WHERE state = 'open')`
+    )
+    .run(taskId)
 }
 
 /**

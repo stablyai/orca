@@ -13,6 +13,7 @@ import { normalizeUsagePercentageDisplay } from '../../../shared/agent-usage/dis
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar/status-bar-usage-format'
 import { clampMarkdownTocPanelWidth } from '../../../shared/editor/markdown/markdown-toc-panel-width'
+import { normalizeSidebarBotsHeight } from '../../../shared/sidebar-bots-height'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/source-control/diff/combined-diff-file-tree-width'
 import {
   normalizeVisibleExecutionHostIds,
@@ -56,6 +57,8 @@ export function getPersistedUI(
     workspaceStatuses: normalizeWorkspaceStatuses(state.ui?.workspaceStatuses),
     workspaceBoardOpacity: clampWorkspaceBoardOpacity(state.ui?.workspaceBoardOpacity),
     workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(state.ui?.workspaceBoardColumnWidth),
+    sidebarBotsHeight: normalizeSidebarBotsHeight(state.ui?.sidebarBotsHeight) ?? undefined,
+    sidebarProjectsFirst: state.ui?.sidebarProjectsFirst === true,
     syncTaskStatusFromWorkspaceBoard: state.ui?.syncTaskStatusFromWorkspaceBoard === true,
     usagePercentageDisplay: normalizeUsagePercentageDisplay(state.ui?.usagePercentageDisplay),
     statusBarUsageMode: normalizeStatusBarUsageMode(state.ui?.statusBarUsageMode),

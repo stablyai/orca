@@ -19,6 +19,7 @@ import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   joinRepoWorktreeRows,
   scanRepoWorktreeRows,
+  worktreeRowMemoRepoKey,
   type RepoWorktreeRowDeps,
   type RepoWorktreeRowsScan
 } from './repo-worktree-row-resolution'
@@ -141,6 +142,7 @@ function joinRows(
     }
     return rows
   })
+  deps.rowMemo?.retainRepos(new Set(repos.map(worktreeRowMemoRepoKey)))
   const worktrees = projectResolvedWorktreeLineage(
     perRepoWorktrees.flat(),
     store.getAllWorktreeLineage?.() ?? {}

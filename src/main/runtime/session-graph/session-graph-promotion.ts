@@ -17,6 +17,10 @@ import type { ExecutionHostId } from '../../../shared/execution-host/execution-h
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { SessionTitleAuthority } from '../session-tabs/publication/session-title-publisher'
+import {
+  changedRelayKeys,
+  forgetDesktopRelayKeys
+} from '../../../shared/workspace-session/desktop-relay-ownership'
 
 export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateChanged {
   protected abstract captureSessionTitleAuthority(): SessionTitleAuthority
@@ -236,7 +240,14 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
 
       this.store.setWorkspaceSession(
         {
-          ...session,
+          ...forgetDesktopRelayKeys(
+            session,
+            changedRelayKeys(
+              session.remoteSessionIdsByTabId,
+              remoteSessionIdsByTabId,
+              ptys.flatMap(({ tabId }) => (tabId ? [tabId] : []))
+            )
+          ),
           activeWorktreeIdsOnShutdown,
           ...(activeConnectionIdsAtShutdown.length > 0 ? { activeConnectionIdsAtShutdown } : {}),
           ...(Object.keys(remoteSessionIdsByTabId).length > 0 ? { remoteSessionIdsByTabId } : {})

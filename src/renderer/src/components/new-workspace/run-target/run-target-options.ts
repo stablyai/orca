@@ -1,10 +1,5 @@
 import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
-import {
-  getProjectHostSetupSelectionKey,
-  type NeedsSetupProjectHostOption,
-  type ProjectHostSetupOption,
-  type ReadyProjectHostSetupOption
-} from '@/lib/workspace/creation/project-host-setup-options'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { boundHostList } from '@/components/host-picker/bounded-host-list'
@@ -14,10 +9,25 @@ export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes'
 export const RUN_TARGET_ADD_HOST_KEY = 'add-host'
 export const RUN_TARGET_RECIPES_KEY = 'per-workspace-env'
 
+export type RunTargetHostOption = {
+  id: string
+  hostId: ExecutionHostId
+  label: string
+  detail: string
+  description?: string
+  searchText?: string
+  available: boolean
+  /** Holds the host's position while a connection changes its availability. */
+  group?: 'ready' | 'unavailable'
+  icon?: React.ReactNode
+  trailing?: (select: () => void) => React.ReactNode
+  onSelect?: () => void
+  keepOpen?: boolean
+}
+
 /** A row in the run-target list. Hosts commit; the last two open a submenu. */
 export type RunTargetRowModel =
-  | { key: string; kind: 'ready'; option: ReadyProjectHostSetupOption }
-  | { key: string; kind: 'needs-setup'; option: NeedsSetupProjectHostOption }
+  | { key: string; kind: 'host'; option: RunTargetHostOption }
   | { key: typeof RUN_TARGET_RECIPES_KEY; kind: 'recipes' }
   | { key: typeof RUN_TARGET_ADD_HOST_KEY; kind: 'add-host' }
 
@@ -54,46 +64,33 @@ function matches(haystack: string, query: string): boolean {
 
 /** Show ready hosts first; bound and rank unready hosts, which may include every configured SSH host. */
 function buildHostRows(
-  hostOptions: readonly ProjectHostSetupOption[],
+  hostOptions: readonly RunTargetHostOption[],
   query: string
 ): { rows: RunTargetRowModel[]; hiddenHostCount: number } {
-  const hostMatches = (option: ProjectHostSetupOption): boolean =>
+  const hostMatches = (option: RunTargetHostOption): boolean =>
     query === '' ||
     matches(option.label, query) ||
     matches(option.detail, query) ||
-    (option.kind === 'ready' && matches(option.path, query))
+    matches(option.searchText ?? option.description ?? '', query)
 
-  const ready = hostOptions.filter(
-    (option): option is ReadyProjectHostSetupOption =>
-      option.kind === 'ready' && hostMatches(option)
-  )
+  const isReadyGroup = (option: RunTargetHostOption): boolean =>
+    option.group ? option.group === 'ready' : option.available
+  const ready = hostOptions.filter((option) => isReadyGroup(option) && hostMatches(option))
   const needsSetup = boundHostList(
     hostOptions
-      .filter(
-        (option): option is NeedsSetupProjectHostOption =>
-          option.kind === 'needs-setup' && hostMatches(option)
-      )
+      .filter((option) => !isReadyGroup(option) && hostMatches(option))
       .map((option) => ({
-        id: getProjectHostSetupSelectionKey(option),
+        id: option.id,
         label: option.label,
-        searchText: option.detail,
+        searchText: `${option.detail}\n${option.searchText ?? option.description ?? ''}`,
         option
       })),
     // Why the query again: ranks an exact name first so typing it always reaches the host.
     { query }
   )
-  const rows: RunTargetRowModel[] = [
-    ...ready.map((option) => ({
-      key: `host:${getProjectHostSetupSelectionKey(option)}`,
-      kind: 'ready' as const,
-      option
-    })),
-    ...needsSetup.shown.map(({ id, option }) => ({
-      key: `needs:${id}`,
-      kind: 'needs-setup' as const,
-      option
-    }))
-  ]
+  const rows: RunTargetRowModel[] = [...ready, ...needsSetup.shown.map(({ option }) => option)].map(
+    (option) => ({ key: `host:${option.id}`, kind: 'host', option })
+  )
   return { rows, hiddenHostCount: needsSetup.hiddenCount }
 }
 
@@ -130,7 +127,7 @@ export function buildRunTargetRows(
     query,
     hasAddHost
   }: {
-    hostOptions: readonly ProjectHostSetupOption[]
+    hostOptions: readonly RunTargetHostOption[]
     recipes: readonly EphemeralVmRecipeOption[]
     query: string
     hasAddHost: boolean

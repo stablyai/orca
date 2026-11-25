@@ -79,25 +79,24 @@ export function installTerminalPaneMountEvents(args: {
         ...(detail.ptyId ? { ptyId: detail.ptyId } : {}),
         ...(detail.activate === false ? { activate: false } : {})
       }
-      if (detail.command) {
-        const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
-          mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
-        )
-        recordCreatedTerminalPaneSplit(createdPane, {
-          source: detail.telemetrySource ?? 'command',
-          direction: detail.direction
-        })
-      } else {
-        const createdPane = mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
-        const telemetrySuppressed = createdPane
+      const split = () => mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
+      const createdPane =
+        detail.command || detail.env
+          ? splitPaneWithOneShotStartup(
+              ptyDeps,
+              { command: detail.command, env: detail.env },
+              split
+            )
+          : split()
+      const telemetrySuppressed =
+        !detail.command && createdPane
           ? consumePendingWebRuntimeSplitMirrorTelemetry(detail.sourcePtyId, detail.direction)
           : false
-        recordCreatedTerminalPaneSplit(createdPane, {
-          source: detail.telemetrySource ?? 'command',
-          direction: detail.direction,
-          telemetrySuppressed
-        })
-      }
+      recordCreatedTerminalPaneSplit(createdPane, {
+        source: detail.telemetrySource ?? 'command',
+        direction: detail.direction,
+        telemetrySuppressed
+      })
     }
   )
 

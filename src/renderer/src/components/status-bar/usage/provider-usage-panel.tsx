@@ -5,13 +5,7 @@ import type {
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import {
-  ClaudeIcon,
-  GeminiIcon,
-  MiniMaxIcon,
-  OpenAIIcon,
-  OpenCodeGoIcon
-} from '../accounts/provider-icons'
+import { ClaudeIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from '../accounts/provider-icons'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
@@ -20,8 +14,12 @@ import {
   getUsageWindowSections,
   type UsageWindowSection
 } from '../../../../../shared/agent-usage/display/usage-provider-windows'
+import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
 import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
-import { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
+import {
+  getProviderUsageErrorMessage,
+  getProviderUsageStatusLabel
+} from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { recomputeOn } from '@/lib/recompute-on'
@@ -73,9 +71,6 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
   }
-  if (provider === 'gemini') {
-    return <GeminiIcon size={13} />
-  }
   if (provider === 'opencode-go') {
     return <OpenCodeGoIcon size={13} />
   }
@@ -106,11 +101,14 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
 function ErrorMessage({
   message,
   label,
+  detail,
   stale = false,
   inverted = false
 }: {
   message: string
   label?: string
+  /** Raw provider error, kept as a hover detail when the message replaces it. */
+  detail?: string
   /** When true, prior data is still visible — show a softer "refresh failed" label. */
   stale?: boolean
   inverted?: boolean
@@ -129,9 +127,9 @@ function ErrorMessage({
       : (label ?? genericRefreshLabel)
 
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-0.5" title={detail}>
       <div className={`text-[11px] font-medium ${labelClass}`}>{resolvedLabel}</div>
-      <div className={detailClass}>{message}</div>
+      {message !== resolvedLabel ? <div className={detailClass}>{message}</div> : null}
     </div>
   )
 }
@@ -233,7 +231,8 @@ export function ProviderPanel({
   showResetCredits = true,
   usagePercentageDisplay = 'used',
   embedded = false,
-  headerAction
+  headerAction,
+  usageSignInHint
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
@@ -244,9 +243,11 @@ export function ProviderPanel({
   embedded?: boolean
   /** Rendered at the right of the provider name line, e.g. the Used/Left column toggle. */
   headerAction?: React.ReactNode
+  usageSignInHint?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const windowSections = p ? getWindowSections(p, t) : []
+  const signInRequired = p?.status === 'error' && isCodexUsageSignInRequired(p)
+  const windowSections = p && !signInRequired ? getWindowSections(p, t) : []
   const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
@@ -280,7 +281,10 @@ export function ProviderPanel({
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
+  if (
+    p.status === 'error' &&
+    (signInRequired || (!p.session && !p.weekly && !p.fableWeekly && !p.monthly))
+  ) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
         {embedded ? null : (
@@ -292,7 +296,8 @@ export function ProviderPanel({
         <div className={embedded ? undefined : 'mt-2'}>
           <ErrorMessage
             label={getProviderUsageStatusLabel(p, t)}
-            message={getProviderUsageErrorMessage(p, t)}
+            message={usageSignInHint ?? getProviderUsageErrorMessage(p, t)}
+            detail={signInRequired ? (p.error ?? undefined) : undefined}
             inverted={inverted}
           />
         </div>

@@ -9,6 +9,8 @@ import type { ClaudeStreamJsonConnection } from '../../claude-stream-json-connec
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { claudeStartFailure, claudeStartupAnswer } from '../../sdk-transport/claude-startup-failure'
 import type { AgentSessionStartFailure } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
+import type { ClaudeAcquisitionAttempt } from '../claude-structured-session-state'
+import { explainConfiguredCommandExit } from './claude-command-start-failure'
 
 /** A physical exit waits briefly for initialize's answer, which the start's verdict weighs
  *  against the exit; a query closed by that exit is no answer. */
@@ -46,9 +48,25 @@ export async function claudeExitForReport(
 }
 
 /** An exit before publication can follow initialize's answer, which only publication reads. */
+type StartupAnswerSource = Pick<
+  ClaudeStreamJsonConnection,
+  'startupFailure' | 'initializationResult'
+>
+
 export async function claudeStartupError(
+  observed: unknown,
+  attempt: Pick<ClaudeAcquisitionAttempt, 'launch' | 'published'> & {
+    connection: StartupAnswerSource | null
+  }
+): Promise<unknown> {
+  const answered = await weighClaudeStartupAnswer(observed, attempt.connection)
+  // Only a start is explained, after Claude's own answer: a published session's exit is no longer about its Command.
+  return attempt.published ? answered : explainConfiguredCommandExit(answered, attempt.launch)
+}
+
+async function weighClaudeStartupAnswer(
   error: unknown,
-  connection: ClaudeStreamJsonConnection | null
+  connection: StartupAnswerSource | null
 ): Promise<unknown> {
   const refusal = startupAcquisitionRefusal(error)
   if (refusal || !connection) {
@@ -65,11 +83,11 @@ export async function claudeStartupError(
  *  start's root-exit receipt is taken now, before the answer join can delay it. */
 export function claudeStartupExit(
   error: Error,
-  connection: ClaudeStreamJsonConnection | null,
+  attempt: Pick<ClaudeAcquisitionAttempt, 'connection' | 'launch' | 'published'>,
   events?: Pick<StructuredAgentSessionEventSink, 'observeRootExit'>
 ): [exited: Error, ended: Promise<unknown>] {
   events?.observeRootExit?.()
   // Mark in place because the fault report may retain this error object.
   const exited = withObservedProviderExit(error)
-  return [exited, claudeStartupError(exited, connection)]
+  return [exited, claudeStartupError(exited, attempt)]
 }

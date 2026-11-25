@@ -97,6 +97,7 @@ export type AgentStatusMetadata = {
   launchConfig?: SleepingAgentLaunchConfig | null
   launchToken?: string
   terminalResumeEligible?: false
+  executionHost?: 'shared'
   paneOwner?: { agent: AgentType; session: string }
 }
 

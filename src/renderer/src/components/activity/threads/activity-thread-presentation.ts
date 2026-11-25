@@ -1,7 +1,7 @@
 import type { AgentListStatus as ActivityThreadStatusId } from '../../../../../shared/agent-status/presentation/agent-list-status'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import { getAgentRowPrimaryText } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { showsAgentToolPreview } from '@/lib/agent-status/presentation/agent-row-tool-preview'
+import { showsAgentToolPreview } from '../../../../../shared/agent-status/presentation/agent-row-tool-preview'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
@@ -14,6 +14,9 @@ import {
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { Worktree } from '../../../../../shared/worktree/types'
+import type { ActivityGroupBy } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type {
   AgentStatusEntry,
   AgentStatusState
@@ -243,12 +246,12 @@ function normalizeScanLabel(value: string): string {
   return value.trim().toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ')
 }
 
-function previewDuplicatesIdentity(preview: string, title: string, workspace: string): boolean {
+function previewDuplicatesIdentity(preview: string, labels: readonly string[]): boolean {
   const normalized = normalizeScanLabel(preview)
   if (!normalized) {
     return true
   }
-  return normalized === normalizeScanLabel(title) || normalized === normalizeScanLabel(workspace)
+  return labels.some((label) => normalized === normalizeScanLabel(label))
 }
 
 export function activityThreadRowCopy(
@@ -267,7 +270,11 @@ export function activityThreadRowCopy(
   if (
     state !== 'unverifiable' &&
     renderedPreview &&
-    !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)
+    !previewDuplicatesIdentity(renderedPreview, [
+      taskTitle,
+      workspaceLabel,
+      thread.repo?.displayName ?? ''
+    ])
   ) {
     return {
       taskTitle,
@@ -288,4 +295,27 @@ export function activityThreadRowCopy(
     }
   }
   return { taskTitle, statusLine: '', statusKind: 'none', needsAttention, workspaceLabel }
+}
+
+/** The row names what its group header doesn't: the project chip, the workspace, or both. */
+export function activityThreadRowIdentity(
+  thread: {
+    repo: Pick<Repo, 'displayName'> | null
+    worktree: Pick<Worktree, 'displayName' | 'branch'>
+  },
+  groupBy: ActivityGroupBy
+): { showProject: boolean; showWorkspace: boolean } {
+  const showProject = thread.repo !== null && groupBy !== 'project'
+  // Why: the worktree group header shows the raw display name, which can be empty.
+  const headerNamesWorkspace =
+    groupBy === 'worktree' && Boolean(thread.worktree.displayName?.trim())
+  // Why: a folder workspace without a custom name falls back to the project name; the chip lowercases it.
+  const repeatsProject =
+    showProject &&
+    getActivityThreadWorkspaceTitle(thread.worktree).toLowerCase() ===
+      thread.repo?.displayName.trim().toLowerCase()
+  return {
+    showProject,
+    showWorkspace: !showProject || !(headerNamesWorkspace || repeatsProject)
+  }
 }

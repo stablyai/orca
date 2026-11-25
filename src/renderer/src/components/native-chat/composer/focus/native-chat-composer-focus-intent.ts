@@ -9,9 +9,13 @@ import {
 
 const PENDING_FOCUS_MS = 1000
 
+// `append` goes through the composer's appendText, which also leaves the caret after it.
+// `revealDraft` adds nothing: the text is already in the draft, so the caret only moves after it.
+export type ComposerFocusText = { append: string } | { revealDraft: true }
 type ComposerReclaim = (
   onlyIfFocusUnclaimed?: boolean,
-  sourceOverlays?: readonly HTMLElement[]
+  sourceOverlays?: readonly HTMLElement[],
+  text?: ComposerFocusText
 ) => void
 const revealedComposerReclaims = new Map<
   string,
@@ -19,6 +23,7 @@ const revealedComposerReclaims = new Map<
 >()
 type PendingComposerFocusRequest = {
   tabId: string | null
+  text?: ComposerFocusText
   cancel: () => void
   deliver: () => void
 }
@@ -26,7 +31,7 @@ let pendingFocusRequest: PendingComposerFocusRequest | null = null
 let focusRequestGeneration = 0
 
 export type NativeChatComposerFocusIntent = {
-  request: (tabId: string) => void
+  request: (tabId: string, text?: ComposerFocusText) => void
   cancel: () => void
 }
 
@@ -98,7 +103,7 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
     }
     if (destination) {
       cancel()
-      destination.reclaim(false, sources)
+      destination.reclaim(false, sources, pending.text)
     }
   }
   const pending: PendingComposerFocusRequest = { tabId: null, cancel, deliver }
@@ -108,11 +113,12 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
   document.addEventListener('pointerdown', cancel, true)
   document.addEventListener('keydown', cancelForNavigation, true)
   return {
-    request: (tabId) => {
+    request: (tabId, text) => {
       if (pendingFocusRequest !== pending) {
         return
       }
       pending.tabId = tabId
+      pending.text = text
       deliver()
     },
     cancel
@@ -122,12 +128,18 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
 /** Re-clicking a chat's active tab claims its composer again, as a terminal tab refocuses xterm. */
 export function requestNativeChatComposerFocus(
   tabId: string,
-  options: { onlyIfFocusUnclaimed?: boolean } = {}
+  options: { onlyIfFocusUnclaimed?: boolean; append?: string; revealDraft?: boolean } = {}
 ): void {
   if (options.onlyIfFocusUnclaimed) {
     // A rename return is one-shot, not an activation to replay after a hidden composer reveals.
     revealedComposerReclaims.get(tabId)?.reclaim(true)
     return
   }
-  captureNativeChatComposerFocusIntent().request(tabId)
+  const text: ComposerFocusText | undefined =
+    options.append !== undefined
+      ? { append: options.append }
+      : options.revealDraft
+        ? { revealDraft: true }
+        : undefined
+  captureNativeChatComposerFocusIntent().request(tabId, text)
 }

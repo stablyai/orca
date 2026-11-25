@@ -15,9 +15,17 @@ import { prepareReleaseSnapshotSource } from './release-checkout-prefetch.ts'
 // Add source workspace packages from each release’s own policy.
 const ARCHIVE_PATHS = ['src/main', 'src/shared', 'src/preload', 'src/renderer', 'src/types']
 // Why optional: a release may have either or both, and `git archive` refuses a missing pathspec.
-const OPTIONAL_ARCHIVE_PATHS = [
+export const OPTIONAL_ARCHIVE_PATHS = [
   'src/relay',
   'src/wsl-guest',
+  // Cloud contract files the desktop build compiles in; a unit test keeps this in step with its tsconfig.
+  'cloud/packages/connector-contract/src/connect-login-seal.ts',
+  'cloud/packages/connector-contract/src/connect-messages.ts',
+  'cloud/packages/connector-contract/src/connector-limits.ts',
+  'cloud/packages/connector-contract/src/linear-issue-names.ts',
+  'cloud/packages/connector-contract/src/webhook-matcher.ts',
+  'cloud/packages/connector-contract/src/webhook-names.ts',
+  'cloud/packages/connector-contract/src/webhook-routes.ts',
   // The phone row reader, before and after its move under agent-lineage/.
   'mobile/src/worktree/agent-row-display.ts',
   'mobile/src/worktree/agent-lineage/agent-row-display.ts',

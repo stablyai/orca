@@ -10,5 +10,7 @@ export const ORCHESTRATION_FEDERATION_ERROR_CODES = [
   'capability_unsupported',
   'relay_quota_exceeded',
   'server_mail_unsupported',
-  'mail_requires_server_pairing'
+  'mail_requires_server_pairing',
+  // The same mail is still being admitted there; nothing was applied, so the sender retries.
+  'delivery_in_progress'
 ] as const

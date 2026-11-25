@@ -1,14 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   fetchProviderAccountsSnapshot,
   getProviderAccountsOwnerKey,
   type ProviderAccountsSnapshot
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
-import { observedProviderAccounts } from '@/runtime/provider-accounts/observations/observed-provider-accounts'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-
-const noSubscription = () => () => {}
-const noSnapshot = () => null
 
 /** The switchers share snapshot loading; a failed provider half never replaces its roster. */
 export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
@@ -16,7 +12,6 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
   target: RuntimeClientTarget,
   syncKey: string,
   initial: ProviderAccountsSnapshot[Provider],
-  observe = false,
   enabled = true
 ) {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
@@ -32,46 +27,26 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
       mountedRef.current = false
     }
   }, [mountedRef])
-  const observation = useMemo(
-    () => observedProviderAccounts(ownerTarget, provider),
-    [ownerTarget, provider]
-  )
-  const observing = enabled && observe && environmentId !== null
-  const answer = useSyncExternalStore(
-    observing ? observation.subscribe : noSubscription,
-    observing ? observation.getSnapshot : noSnapshot,
-    noSnapshot
-  )
   const [local, setLocal] = useState({ ownerKey, accounts: initial, known: false })
   // Why: a list read started before a selection can settle after the selection reply.
   const writeSequenceRef = useRef(0)
   // Reused in-flight reads keep the sequence from when this list first awaited them.
   const readStartSequencesRef = useRef(new WeakMap<Promise<ProviderAccountsSnapshot>, number>())
-  const accounts = observing
-    ? (answer?.accounts ?? initial)
-    : local.ownerKey === ownerKey
-      ? local.accounts
-      : initial
-  const accountsLoaded = observing
-    ? (answer?.known ?? false)
-    : local.ownerKey === ownerKey && local.known
+  const accounts = local.ownerKey === ownerKey ? local.accounts : initial
+  const accountsLoaded = local.ownerKey === ownerKey && local.known
   const setAccounts = useCallback(
     (next: ProviderAccountsSnapshot[Provider]) => {
       if (!mountedRef.current) {
         return
       }
       writeSequenceRef.current += 1
-      if (observing) {
-        observation.setAccounts(next)
-      } else {
-        setLocal((previous) => ({
-          ownerKey,
-          accounts: next,
-          known: previous.ownerKey === ownerKey && previous.known
-        }))
-      }
+      setLocal((previous) => ({
+        ownerKey,
+        accounts: next,
+        known: previous.ownerKey === ownerKey && previous.known
+      }))
     },
-    [mountedRef, observing, observation, ownerKey]
+    [mountedRef, ownerKey]
   )
   const loadAccounts = useCallback(async () => {
     if (!enabled) {
@@ -86,19 +61,15 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
       return
     }
     if (mountedRef.current && writeSequence === writeSequenceRef.current) {
-      if (observing) {
-        observation.setAccounts(snapshot[provider])
-      } else {
-        setLocal({ ownerKey, accounts: snapshot[provider], known: true })
-      }
+      setLocal({ ownerKey, accounts: snapshot[provider], known: true })
     }
-  }, [provider, ownerTarget, ownerKey, observing, observation, mountedRef, enabled])
+  }, [provider, ownerTarget, ownerKey, mountedRef, enabled])
   useEffect(() => {
-    if (enabled && !observing) {
+    if (enabled) {
       void loadAccounts().catch((error: unknown) =>
         console.error(`Failed to load ${provider} accounts:`, error)
       )
     }
-  }, [loadAccounts, observing, provider, syncKey, enabled])
+  }, [loadAccounts, provider, syncKey, enabled])
   return { accounts, setAccounts, accountsLoaded, loadAccounts, mountedRef }
 }

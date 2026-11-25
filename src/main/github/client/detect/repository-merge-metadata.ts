@@ -9,6 +9,8 @@ import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../ap
 import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
 import { runCoalescedProbe } from '../../../git/remotes/coalesced-probe'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
+import { extractGraphqlErrors } from '../../project-view/project-error-classification'
 import type { GhExecOptions } from './../github-exec-scope'
 import {
   MERGE_QUEUE_CACHE_TTL_MS,
@@ -116,8 +118,9 @@ async function readRepositoryMergeMetadata(
   ) {
     return { mergeQueueRequired: null, autoMergeAllowed: null }
   }
-  const query = branchName
-    ? `query($owner: String!, $repo: String!, $branch: String!, $qualified: String!) {
+  const query = (withRuleMergeMethods: boolean): string =>
+    branchName
+      ? `query($owner: String!, $repo: String!, $branch: String!, $qualified: String!) {
     repository(owner: $owner, name: $repo) {
       viewerDefaultMergeMethod
       mergeCommitAllowed
@@ -126,11 +129,11 @@ async function readRepositoryMergeMetadata(
       autoMergeAllowed
       mergeQueue(branch: $branch) { id }
       ref(qualifiedName: $qualified) {
-        rules(first: 50) { nodes { type } }
+        rules(first: 50) { nodes { type${withRuleMergeMethods ? ' parameters { ... on PullRequestParameters { allowedMergeMethods } }' : ''} } }
       }
     }
   }`
-    : `query($owner: String!, $repo: String!) {
+      : `query($owner: String!, $repo: String!) {
     repository(owner: $owner, name: $repo) {
       viewerDefaultMergeMethod
       mergeCommitAllowed
@@ -139,13 +142,13 @@ async function readRepositoryMergeMetadata(
       autoMergeAllowed
     }
   }`
-  try {
+  const runQuery = async (withRuleMergeMethods: boolean): Promise<string> => {
     noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
     const args = [
       'api',
       'graphql',
       '-f',
-      `query=${query}`,
+      `query=${query(withRuleMergeMethods)}`,
       '-f',
       `owner=${ownerRepo.owner}`,
       '-f',
@@ -155,8 +158,19 @@ async function readRepositoryMergeMetadata(
       args.push('-f', `branch=${branchName}`)
       args.push('-f', `qualified=refs/heads/${branchName}`)
     }
-    const { stdout } = await ghExecFileAsync(args, ghOptions)
-    const parsed = JSON.parse(stdout) as {
+    return (await ghExecFileAsync(args, ghOptions)).stdout
+  }
+  try {
+    let stdout: string
+    try {
+      stdout = await runQuery(true)
+    } catch (error) {
+      if (!lacksRuleMergeMethodsSchema(error)) {
+        throw error
+      }
+      stdout = await runQuery(false)
+    }
+    const parsed: {
       data?: {
         repository?: {
           viewerDefaultMergeMethod?: unknown
@@ -165,17 +179,34 @@ async function readRepositoryMergeMetadata(
           squashMergeAllowed?: unknown
           autoMergeAllowed?: unknown
           mergeQueue?: { id?: unknown } | null
-          ref?: { rules?: { nodes?: ({ type?: unknown } | null)[] | null } | null } | null
+          ref?: {
+            rules?: {
+              nodes?:
+                | ({
+                    type?: unknown
+                    parameters?: { allowedMergeMethods?: unknown } | null
+                  } | null)[]
+                | null
+            } | null
+          } | null
         } | null
       }
-    }
+    } = JSON.parse(stdout)
     const repository = parsed.data?.repository
+    // GitHub enforces every PULL_REQUEST rule on the branch, so a method must pass all of them.
+    const ruleMergeMethods = (repository?.ref?.rules?.nodes ?? []).flatMap((rule) =>
+      rule?.type === 'PULL_REQUEST' && Array.isArray(rule.parameters?.allowedMergeMethods)
+        ? [rule.parameters.allowedMergeMethods]
+        : []
+    )
+    const rulesAllow = (method: 'MERGE' | 'SQUASH' | 'REBASE'): boolean =>
+      ruleMergeMethods.every((methods) => methods.includes(method))
     const mergeMethodSettings = repository
       ? normalizeGitHubPRMergeMethodSettings({
           defaultMethod: repository.viewerDefaultMergeMethod,
-          mergeCommitAllowed: repository.mergeCommitAllowed,
-          rebaseMergeAllowed: repository.rebaseMergeAllowed,
-          squashMergeAllowed: repository.squashMergeAllowed
+          mergeCommitAllowed: repository.mergeCommitAllowed === true && rulesAllow('MERGE'),
+          rebaseMergeAllowed: repository.rebaseMergeAllowed === true && rulesAllow('REBASE'),
+          squashMergeAllowed: repository.squashMergeAllowed === true && rulesAllow('SQUASH')
         })
       : undefined
     const value: GitHubRepositoryMergeMetadata = {
@@ -203,4 +234,18 @@ async function readRepositoryMergeMetadata(
     publish(value, MERGE_QUEUE_UNKNOWN_CACHE_TTL_MS, false)
     return value
   }
+}
+
+// Older GHES schemas lack ruleset merge methods; losing them must not lose merge-queue detection.
+function lacksRuleMergeMethodsSchema(error: unknown): boolean {
+  const { stderr, stdout } = extractExecError(error)
+  const errors = extractGraphqlErrors(stderr, stdout)
+  return (
+    errors.length > 0 &&
+    errors.every((graphqlError) =>
+      /'(?:parameters|allowedMergeMethods)'|\bPullRequestParameters\b/.test(
+        graphqlError.message ?? ''
+      )
+    )
+  )
 }

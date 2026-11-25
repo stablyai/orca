@@ -201,7 +201,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     return process.platform !== 'win32'
   }
 
-  protected resolveOpenCodeGoConfig(): OpenCodeGoResolvedConfig {
+  protected async resolveOpenCodeGoConfig(): Promise<OpenCodeGoResolvedConfig> {
     const config = this.openCodeGoConfigResolver?.() ?? {
       sessionCookie: '',
       workspaceIdOverride: ''
@@ -209,7 +209,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     try {
       return {
         ...config,
-        apiKey: this.openCodeGoApiKeyResolver?.() ?? '',
+        apiKey: (await this.openCodeGoApiKeyResolver?.()) ?? '',
         apiKeyError: null,
         apiKeyReadSkipped: false
       }
@@ -229,10 +229,10 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
   }
 
-  protected resolveMiniMaxConfig(): MiniMaxResolvedConfig {
+  protected async resolveMiniMaxConfig(): Promise<MiniMaxResolvedConfig> {
     try {
       return {
-        config: this.miniMaxConfigResolver?.() ?? {
+        config: (await this.miniMaxConfigResolver?.()) ?? {
           sessionCookie: '',
           groupId: '',
           models: 'general',
@@ -256,10 +256,10 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
   }
 
-  protected resolveZcodePlanConfig(): ZcodePlanResolvedConfig {
+  protected async resolveZcodePlanConfig(): Promise<ZcodePlanResolvedConfig> {
     try {
       return {
-        config: this.zcodePlanConfigResolver?.() ?? { site: 'zai', apiKey: '' },
+        config: (await this.zcodePlanConfigResolver?.()) ?? { site: 'zai', apiKey: '' },
         error: null
       }
     } catch (error) {

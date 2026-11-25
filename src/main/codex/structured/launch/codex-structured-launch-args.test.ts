@@ -1,58 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
-import { StructuredAgentArgumentsError } from '../../../native-chat/agent-launch/structured-agent-arguments-error'
+import { codexArgsMcpServerNames } from './codex-structured-launch-args'
 
-describe('codexStructuredLaunchArgs', () => {
-  it('drops permission options and config overrides owned by Orca', () => {
+describe('codexArgsMcpServerNames', () => {
+  it('names each server a -c/--config override sets as Codex does, keys raw, and stops at --', () => {
     expect(
-      codexStructuredLaunchArgs([
-        '--dangerously-bypass-approvals-and-sandbox',
-        '-a',
-        'never',
-        '--sandbox=danger-full-access',
-        '--approve-for-me',
+      codexArgsMcpServerNames([
+        '--config=mcp_servers={docs={url="https://docs.example/mcp"},db={command="pg"}}',
+        '-cmcp_servers."my server".url="https://x.example/mcp"',
+        '-c=mcp_servers.short.command="s"',
+        '--config',
+        'model="o3"',
+        '--search',
+        '--',
         '-c',
-        'approval_policy="never"',
-        '--config=sandbox_mode="danger-full-access"',
-        '-c',
-        'sandbox_workspace_write.writable_roots=["/tmp"]',
-        '-c',
-        '"sandbox_workspace_write".writable_roots=["/tmp"]',
-        '-c',
-        '\'approval_policy\'="never"',
-        '-c',
-        'model_reasoning_effort=high'
+        'mcp_servers.after.command="x"'
       ])
-    ).toEqual(['-c', 'model_reasoning_effort=high'])
+    ).toEqual(['docs', 'db', '"my server"', 'short'])
   })
 
-  it.each([
-    { tokens: ['a private prompt'], option: 'prompt', problem: 'positionalPrompt' },
-    { tokens: ['app-server'], option: 'prompt', problem: 'positionalPrompt' },
-    {
-      tokens: ['--remote', 'wss://private-host'],
-      option: '--remote',
-      problem: 'unsupportedOption'
-    },
-    { tokens: ['--remote=wss://private-host'], option: '--remote', problem: 'unsupportedOption' },
-    {
-      tokens: ['--remote-auth-token-env', 'PRIVATE_TOKEN'],
-      option: '--remote-auth-token-env',
-      problem: 'unsupportedOption'
-    },
-    { tokens: ['--unknown-flag=secret'], option: '--unknown-flag', problem: 'unsupportedOption' },
-    { tokens: ['--enable'], option: '--enable', problem: 'missingValue' }
-  ] as const)('rejects unsafe or incomplete arguments: %j', ({ tokens, option, problem }) => {
-    const thrown = () => codexStructuredLaunchArgs(tokens)
-    expect(thrown).toThrow(StructuredAgentArgumentsError)
-    try {
-      thrown()
-    } catch (error) {
-      expect(error).toMatchObject({
-        argumentProblem: { agent: 'Codex', option, problem }
-      })
-      expect(JSON.stringify(error)).not.toContain('secret')
-      expect(JSON.stringify(error)).not.toContain('private')
-    }
+  it('forgets the names a later whole mcp_servers table replaces', () => {
+    expect(
+      codexArgsMcpServerNames(['-c', 'mcp_servers.docs.command="x"', '-c', 'mcp_servers={}'])
+    ).toEqual([])
+    expect(
+      codexArgsMcpServerNames([
+        '-c',
+        'mcp_servers.docs.command="x"',
+        '-c',
+        'mcp_servers=none',
+        '-c',
+        'mcp_servers.db.command="y"'
+      ])
+    ).toEqual(['db'])
   })
 })

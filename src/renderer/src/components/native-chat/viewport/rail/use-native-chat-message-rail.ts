@@ -7,10 +7,8 @@ import { ALIGN_ARRIVED_PX } from '../virtualization/use-native-chat-viewport-ali
 import {
   buildNativeChatRailItems,
   mergeNativeChatRailOutline,
-  NATIVE_CHAT_RAIL_ROOMY_TICKS,
+  NATIVE_CHAT_RAIL_MAX_TICKS,
   nativeChatRailReplyPreview,
-  nativeChatRailTickCapacity,
-  selectNativeChatRailTicks,
   type NativeChatRailItem,
   type NativeChatRailOutlineEntry,
   type NativeChatRailTurnRows
@@ -24,8 +22,12 @@ export const NATIVE_CHAT_RAIL_IDLE_MS = 120
 export const NATIVE_CHAT_RAIL_MIN_WIDTH_PX = 512
 
 export type NativeChatMessageRailState = {
-  ticks: readonly NativeChatRailItem[]
+  /** Every prompt the rail knows, loaded or outline-only; ticks sample these. */
   items: readonly NativeChatRailItem[]
+  /** Prompts with a transcript slot, which the list shows. */
+  loadedItems: readonly NativeChatRailItem[]
+  /** More loaded prompts than ticks: hovering the rail lists them instead of previewing one. */
+  listMode: boolean
   activeId: string | null
   /** Light a tick now, ahead of the scroll that is taking the reader to it. */
   onActivate: (id: string) => void
@@ -56,7 +58,6 @@ export function useNativeChatMessageRail({
 }): NativeChatMessageRailState {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [wideEnough, setWideEnough] = useState(true)
-  const [maxTicks, setMaxTicks] = useState(NATIVE_CHAT_RAIL_ROOMY_TICKS)
 
   const previousItemsRef = useRef<readonly NativeChatRailItem[]>([])
   // Rebuilt only when the slots change: scroll and range renders reuse the last build.
@@ -157,7 +158,6 @@ export function useNativeChatMessageRail({
     }
     const measure = (): void => {
       setWideEnough(element.clientWidth >= NATIVE_CHAT_RAIL_MIN_WIDTH_PX)
-      setMaxTicks(nativeChatRailTickCapacity(element.clientHeight))
     }
     measure()
     const observer = new ResizeObserver(() => flushSync(measure))
@@ -167,10 +167,6 @@ export function useNativeChatMessageRail({
 
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [focusId, setFocusId] = useState<string | null>(null)
-  const ticks = useMemo(
-    () => selectNativeChatRailTicks({ items, keepIds: [activeId, focusId, previewId], maxTicks }),
-    [items, activeId, focusId, previewId, maxTicks]
-  )
   // Jumps that do not move the view fire no scroll event; schedule their landing read here.
   const onActivate = useCallback(
     (id: string) => {
@@ -185,8 +181,9 @@ export function useNativeChatMessageRail({
 
   return useMemo(
     () => ({
-      ticks,
       items,
+      loadedItems,
+      listMode: loadedItems.length > NATIVE_CHAT_RAIL_MAX_TICKS,
       activeId,
       onActivate,
       visible: wideEnough && items.length > 0,
@@ -196,6 +193,6 @@ export function useNativeChatMessageRail({
       focusId,
       onFocusItem: setFocusId
     }),
-    [ticks, items, activeId, onActivate, wideEnough, previewId, previewReply, focusId]
+    [items, loadedItems, activeId, onActivate, wideEnough, previewId, previewReply, focusId]
   )
 }

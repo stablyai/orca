@@ -1,7 +1,8 @@
+import { shallow } from 'zustand/shallow'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useSupportedGroupHookSettings } from '../repository/hooks/use-supported-group-hook-settings'
 import type { ProjectGroupSettingsEntry } from '../repository/hooks/use-supported-group-hook-settings'
 import { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -22,19 +23,30 @@ import {
   useChatSettingsOwnPermissions,
   useStructuredAgentSessionHostQueuesMessages
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import type { ProjectGroupingModel } from '../../../../../shared/sidebar-list/sections/project-section-grouping'
+import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
+import type { Bot } from '../../../../../shared/bot-types'
 import {
   buildCapabilitySettingsSections,
   buildSetupSettingsSections
 } from './settings-navigation-capability-sections'
 import { buildInterfaceSettingsSections } from './settings-navigation-interface-sections'
-import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
+import {
+  buildBotSettingsSections,
+  buildBotsPageSettingsSections
+} from './settings-navigation-bots-sections'
+import {
+  buildProjectSettingsSections,
+  buildRemoteSettingsSections
+} from './settings-navigation-remote-sections'
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from '../../../runtime/hosts/capabilities/useWindowsTerminalCapabilityOwnerKey'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useMcpServersAvailable } from './use-mcp-servers-available'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
-import type { ProjectGroupingModel } from '../../../../../shared/sidebar-list/sections/project-section-grouping'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
@@ -48,13 +60,16 @@ export function buildSettingsNavigationMetadata(
     isLocalWindowsHost = isWindows,
     isWindowsTerminalHost = isWindows,
     isWebClient,
+    botsEnabled = true,
     hostQueuesMessages = false,
     typedChatPermissions = false,
     managedBrowserCreationEnabled = !isWebClient,
     mobileEmulatorCreationEnabled = !isWebClient,
     isDev = import.meta.env.DEV,
     isLinearConnected = false,
+    mcpServersAvailable = false,
     repos,
+    bots = [],
     projectGroups,
     projectGrouping
   }: {
@@ -63,14 +78,17 @@ export function buildSettingsNavigationMetadata(
     isLocalWindowsHost?: boolean
     isWindowsTerminalHost?: boolean
     isWebClient: boolean
+    botsEnabled?: boolean
     hostQueuesMessages?: boolean
     typedChatPermissions?: boolean
     managedBrowserCreationEnabled?: boolean
     mobileEmulatorCreationEnabled?: boolean
     isDev?: boolean
     isLinearConnected?: boolean
+    mcpServersAvailable?: boolean
     projectGroups?: readonly ProjectGroupSettingsEntry[]
     repos: readonly Repo[]
+    bots?: readonly Bot[]
     projectGrouping?: ProjectGroupingModel
   },
   t?: Translate
@@ -98,13 +116,16 @@ export function buildSettingsNavigationMetadata(
     isLocalWindowsHost,
     isWindowsTerminalHost,
     isWebClient,
+    botsEnabled,
     hostQueuesMessages,
     typedChatPermissions,
     managedBrowserCreationEnabled,
     mobileEmulatorCreationEnabled,
     isDev,
     isLinearConnected,
+    mcpServersAvailable,
     repos,
+    bots,
     projectGroups,
     projectGrouping
   }
@@ -113,29 +134,37 @@ export function buildSettingsNavigationMetadata(
   return [
     ...buildCapabilitySettingsSections(options, t),
     ...buildSetupSettingsSections(options, t),
+    ...buildBotsPageSettingsSections(options),
     ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries, t),
     ...buildInterfaceSettingsSections(options, t),
-    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById, t)
+    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, t),
+    // Directly above Projects, as bots sit above the projects in the sidebar.
+    ...buildBotSettingsSections(options),
+    ...buildProjectSettingsSections(options, reposById, t)
   ]
 }
 
-export function useSettingsNavigationMetadata(): SettingsNavSection[] {
+/** `pickedHost`: Settings' own host picker, which can show MCP servers on a host the default isn't. */
+export function useSettingsNavigationMetadata(
+  pickedHost?: RuntimeClientTarget
+): SettingsNavSection[] {
   const t = useTranslate()
   // The locale subscription must also invalidate the memo or labels retain the previous language.
   const languageRevision = useUiLanguageRevision()
   const projectGroups = useSupportedGroupHookSettings()
   const repos = useAppStore((state) => state.repos)
+  const botsEnabled = useBotsEnabled()
+  const bots = useBots(botsEnabled)
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const settings = useAppStore((state) => state.settings)
-  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
-    useShallow((state) => {
-      const policy = getClientCreationActionPolicy(state, state.activeWorktreeId)
+  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] =
+    useAppStoreWithHostStatuses((state, statuses) => {
+      const policy = getClientCreationActionPolicy(state, state.activeWorktreeId, statuses)
       return [
         policy['managed-browser'].state === 'enabled',
         policy['mobile-emulator'].state === 'enabled'
       ] as const
-    })
-  )
+    }, shallow)
   const typedChatPermissions = useChatSettingsOwnPermissions()
   const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages({ kind: 'local' })
   const isMac = isMacUserAgent()
@@ -147,6 +176,10 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   )
   // Why: navigation is shared with the palette, which has no host picker.
   const runtimeTarget = defaultScopeHost(settings)
+  const mcpServersAvailable = useMcpServersAvailable(
+    isWebClient ? { kind: 'local' } : runtimeTarget,
+    isWebClient ? undefined : pickedHost
+  )
   const capabilityLoadTarget = isWebClient ? { kind: 'local' as const } : runtimeTarget
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     isWindows || isWebClient || runtimeTarget.kind === 'environment',
@@ -179,13 +212,16 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           isLocalWindowsHost,
           isWindowsTerminalHost,
           isWebClient,
+          botsEnabled,
           hostQueuesMessages,
           typedChatPermissions,
           managedBrowserCreationEnabled,
           mobileEmulatorCreationEnabled,
           isDev: import.meta.env.DEV,
           isLinearConnected,
+          mcpServersAvailable,
           repos,
+          bots,
           projectGroups,
           projectGrouping: {
             projects: projectHostSetupProjection.projects,
@@ -201,12 +237,15 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       isLocalWindowsHost,
       isWindowsTerminalHost,
       isWebClient,
+      botsEnabled,
       hostQueuesMessages,
       typedChatPermissions,
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       isLinearConnected,
+      mcpServersAvailable,
       repos,
+      bots,
       projectGroups,
       projectHostSetupProjection,
       languageRevision,

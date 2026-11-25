@@ -1,11 +1,9 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { writeManagedScript } from '../../agent-hooks/installation/scripts/managed-hook-script-write'
 import { getLockedExecutableAsidePath } from '../../agent-hooks/installation/scripts/locked-executable-rename'
 import {
-  refreshManagedScriptIfPresent,
   restoreManagedScript,
   scriptStillExists
 } from '../../agent-hooks/installation/scripts/managed-hook-script-refresh'
@@ -17,6 +15,7 @@ import {
   resolveBundledWindowsNativeHookExecutable,
   WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME
 } from '../../agent-hooks/installation/commands/windows-native-hook-executable'
+import { publishBundledWindowsNativeHookExecutable } from '../../agent-hooks/installation/scripts/windows-native-hook-publish'
 import { WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD } from '../../agent-hooks/installation/scripts/claude-background-job-guard'
 
 const PAYLOAD_FILE_NAME = 'claude-hook-impl.cmd'
@@ -95,15 +94,9 @@ export async function refreshWindowsClaudeHookFiles(
   entryPath: string,
   payload: string
 ): Promise<void> {
-  const bundledHook = resolveBundledWindowsNativeHookExecutable()
-  if (bundledHook) {
-    const executable = getWindowsClaudeHookExecutablePath(entryPath)
-    await readFile(bundledHook)
-      .then((bytes) =>
-        refreshManagedScriptIfPresent(executable, bytes, { moveLockedTargetAside: true })
-      )
-      .catch(() => {})
-  }
+  await publishBundledWindowsNativeHookExecutable(getWindowsClaudeHookExecutablePath(entryPath), {
+    createMissing: false
+  })
   // Refresh only surviving entries; creating a missing entry requires installation.
   if (!(await scriptStillExists(entryPath))) {
     return

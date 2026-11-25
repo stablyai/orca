@@ -3,7 +3,9 @@ import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { connectionHostStatusRead } from '../query/host-status-query'
 import {
   agentHistoryHostStatusSchema,
+  agentHistoryProjectSetupsSchema,
   agentHistorySessionScanSchema,
+  aiVaultSessionHandoffPromptSchema,
   resumeMetadataListSchema,
   resumeRepoListSchema
 } from './agent-history-reply-schema'
@@ -26,6 +28,17 @@ export const agentHistoryCapabilityRead = connectionHostStatusRead(agentHistoryH
 
 // Live: resume quotes for the desktop's Windows shell setting, which can change while connected.
 export const agentHistoryHostStatusRead = connectionHostStatusRead(agentHistoryHostStatus, 'live')
+
+// Best-effort: a host that can't list setups leaves Project scoped to the active repo.
+export const agentHistoryProjectSetupsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'projectHostSetup.agent-history-project-scope-or-skip',
+    method: 'projectHostSetup.list',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('agent-history-project-setups', agentHistoryProjectSetupsSchema)
+  })
+)
 
 export const agentHistorySessionScan = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -77,5 +90,16 @@ export const resumeWorktreeListRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('resume-worktrees', resumeMetadataListSchema)
+  })
+)
+
+// The host builds the hand-off prompt (and saves a database row first); a refusal fails the hand-off.
+export const aiVaultSessionHandoffPromptRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'aiVault.session-handoff-prompt',
+    method: 'aiVault.prepareSessionHandoffPrompt',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('session-handoff-prompt', aiVaultSessionHandoffPromptSchema)
   })
 )

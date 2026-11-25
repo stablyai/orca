@@ -13,6 +13,7 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
+import { readSidebarRevealTarget } from '../../sidebar-reveal-target-state'
 
 function workspacePassesFilters(
   worktree: Worktree,
@@ -125,6 +126,11 @@ export function useSidebarRevealRequests(args: {
       if (!currentSidebarWorktreeId) {
         return
       }
+      // Bots rows, and what no section lists, are not this list's to reveal: no filter
+      // dialog, no filter or group change, no pending reveal that could never land.
+      if (readSidebarRevealTarget().section !== 'projects') {
+        return
+      }
       const activeWorktree = getKnownSidebarWorktreeById(
         currentSidebarWorktreeId,
         worktreeMap,
@@ -153,7 +159,7 @@ export function useSidebarRevealRequests(args: {
               'sidebar.revealFiltered.description',
               'The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.'
             ),
-            confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust filters and reveal'),
+            confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust & reveal'),
             cancelLabel: translate('sidebar.revealFiltered.cancel', 'Keep filters')
           })
         } finally {

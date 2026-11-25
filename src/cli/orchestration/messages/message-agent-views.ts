@@ -5,6 +5,7 @@ import {
   type OrchestrationCheckOutput,
   type OrchestrationMessageSummary
 } from '../../../shared/orchestration/mailbox/orchestration-check-output'
+import { formatBotItemReportHint } from '../../../shared/bots/bot-item-report-hint'
 import { formatReportFollowUpLine } from '../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 import { escapeTerminalControlCharacters } from '../../../shared/terminal/output/terminal-control-character-escape'
 import { formatFieldPairs, orchestrationCliName, type OrchestrationAgentView } from '../agent-view'
@@ -23,6 +24,8 @@ export type MessageView = {
   handled?: boolean
   /** What to do after a finished task's report, with its command; the runtime chooses it. */
   followUp?: string
+  /** The open item a finished worker was started for, and how to update it. */
+  forItem?: string
   // Kept nested so sender-written payload can never stand in for Orca's own fields.
   payload?: Record<string, unknown> | string
 }
@@ -49,6 +52,9 @@ export function toMessageView(
     ...(options.recipient && message.read !== undefined ? { handled: message.read === 1 } : {}),
     ...(message.follow_up && !isLegacyReadOnlyMessage(message, options.legacyCompatibilityActive)
       ? { followUp: formatReportFollowUpLine(message.follow_up, orchestrationCliName()) }
+      : {}),
+    ...(message.for_item && !isLegacyReadOnlyMessage(message, options.legacyCompatibilityActive)
+      ? { forItem: formatBotItemReportHint(message.for_item, orchestrationCliName()) }
       : {}),
     ...payloadView(message)
   }
@@ -119,6 +125,9 @@ export function formatMessageViewText(view: MessageView, actionLine?: string): s
   }
   if (actionLine) {
     lines.push(actionLine)
+  }
+  if (view.forItem) {
+    lines.push(`[${escapeTerminalControlCharacters(view.forItem)}]`)
   }
   return lines.join('\n')
 }

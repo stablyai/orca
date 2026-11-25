@@ -1,4 +1,4 @@
-import type { Terminal } from '@xterm/xterm'
+import type { IDisposable, Terminal } from '@xterm/xterm'
 import { resolveCursorAgentImeAnchor, type TerminalImeAnchor } from './terminal-ime-anchor'
 
 type ImeAnchorCellMetrics = {
@@ -8,9 +8,18 @@ type ImeAnchorCellMetrics = {
   rows: number
 }
 
+// The prompt row only stays valid while the parked cursor and viewport stay put.
+type CursorAgentPromptCache = {
+  row: number
+  cursorY: number
+  baseY: number
+  cols: number
+  rows: number
+}
+
 type ImeAnchorStyleProperty = 'top' | 'left' | 'height' | 'lineHeight'
 
-/** OS candidate placement reads the focused textarea at compositionstart; correct xterm’s stale/hidden TUI cursor after its handlers. Keep compositionupdate correction for long CJK sequences, measuring public .xterm-screen bounds once per composition and skipping unchanged inline styles to avoid layout. Return the installed handler for disposal, or null before DOM open. */
+/** OS candidate placement reads the focused textarea at compositionstart; correct xterm’s stale/hidden TUI cursor after its handlers. Keep compositionupdate correction for long CJK sequences, and follow xterm renders while a Cursor Agent composition is active, measuring public .xterm-screen bounds and resolving the prompt row once per composition and skipping unchanged inline styles to avoid layout. Return a cleanup, or null before DOM open. */
 export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => void) | null {
   if (!terminal.element || !terminal.textarea) {
     return null
@@ -21,6 +30,8 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
   let metrics: ImeAnchorCellMetrics | null = null
   let deferredApply: number | null = null
   let cursorAgentSeen = false
+  let renderSubscription: IDisposable | null = null
+  let promptCache: CursorAgentPromptCache | null = null
 
   const measureCells = (): ImeAnchorCellMetrics | null => {
     if (!screenElement) {
@@ -77,6 +88,15 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
 
   const resolveAnchor = (): { anchor: TerminalImeAnchor; isCursorAgent: boolean } => {
     const buf = terminal.buffer.active
+    // Renders repeat while composing; a bottom-up prompt scan per render is too slow on large grids.
+    const promptRow =
+      promptCache &&
+      promptCache.cursorY === buf.cursorY &&
+      promptCache.baseY === buf.baseY &&
+      promptCache.cols === terminal.cols &&
+      promptCache.rows === terminal.rows
+        ? promptCache.row
+        : undefined
     // Cursor Agent leaves the public cursor on a blank row; anchor IME to its rendered prompt instead.
     const cursorAgentAnchor = resolveCursorAgentImeAnchor({
       buffer: buf,
@@ -84,9 +104,19 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       cols: terminal.cols,
       cursorX: buf.cursorX,
       cursorY: buf.cursorY,
-      knownCursorAgent: cursorAgentSeen
+      knownCursorAgent: cursorAgentSeen,
+      promptRow
     })
     cursorAgentSeen ||= cursorAgentAnchor !== null
+    promptCache = cursorAgentAnchor
+      ? {
+          row: cursorAgentAnchor.row,
+          cursorY: buf.cursorY,
+          baseY: buf.baseY,
+          cols: terminal.cols,
+          rows: terminal.rows
+        }
+      : null
     return {
       anchor: cursorAgentAnchor ?? {
         row: buf.cursorY,
@@ -100,10 +130,13 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     if (!screenElement) {
       return
     }
-    // Measure once per composition to pick up zoom/font changes without layout on every update.
+    // Measure once per composition to pick up zoom/font changes without layout on every update or render.
     const staleMetrics =
       !metrics || metrics.cols !== terminal.cols || metrics.rows !== terminal.rows
-    if (event?.type !== 'compositionupdate' || staleMetrics) {
+    if (event?.type === 'compositionstart') {
+      promptCache = null
+      metrics = measureCells()
+    } else if (staleMetrics) {
       metrics = measureCells()
     }
     const cells = metrics
@@ -112,7 +145,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
     const { anchor, isCursorAgent } = resolveAnchor()
     applyAnchor(anchor.row, anchor.column, cells, isCursorAgent)
-    // xterm repositions in setTimeout(0); correct after its timer, coalescing bursts and rereading the anchor.
+    // xterm repositions in setTimeout(0); correct after its timer, coalescing bursts.
     if (!isCursorAgent) {
       if (deferredApply !== null) {
         window.clearTimeout(deferredApply)
@@ -120,26 +153,45 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       }
       return
     }
+    // xterm resets the preedit to the buffer cursor on every render; follow renders only while composing.
+    renderSubscription ??= terminal.onRender(reapplyAfterRender)
     // Re-queue after xterm's latest timer while keeping only one correction pending.
     if (deferredApply !== null) {
       window.clearTimeout(deferredApply)
     }
+    // Reuse this anchor: a buffer change or resize renders again and re-queues with a fresh one.
     deferredApply = window.setTimeout(() => {
       deferredApply = null
-      if (!textarea.isConnected) {
-        return
-      }
-      if (!metrics || metrics.cols !== terminal.cols || metrics.rows !== terminal.rows) {
-        metrics = measureCells()
-      }
-      if (metrics) {
-        const current = resolveAnchor()
-        applyAnchor(current.anchor.row, current.anchor.column, metrics, current.isCursorAgent)
+      if (textarea.isConnected && terminal.cols === cells.cols && terminal.rows === cells.rows) {
+        applyAnchor(anchor.row, anchor.column, cells, true)
       }
     }, 0)
   }
 
-  terminal.element.addEventListener('compositionstart', handler)
-  terminal.element.addEventListener('compositionupdate', handler)
-  return handler
+  const stopFollowingRenders = (): void => {
+    renderSubscription?.dispose()
+    renderSubscription = null
+    if (deferredApply !== null) {
+      window.clearTimeout(deferredApply)
+      deferredApply = null
+    }
+    promptCache = null
+  }
+
+  const reapplyAfterRender = (): void => {
+    if (!compositionView?.classList.contains('active') || !textarea.isConnected) {
+      stopFollowingRenders()
+      return
+    }
+    handler()
+  }
+
+  const element = terminal.element
+  element.addEventListener('compositionstart', handler)
+  element.addEventListener('compositionupdate', handler)
+  return () => {
+    element.removeEventListener('compositionstart', handler)
+    element.removeEventListener('compositionupdate', handler)
+    stopFollowingRenders()
+  }
 }

@@ -168,6 +168,11 @@ jobs:
           restore-keys: |
             electron-builder-mac-
 
+      # Restore-keys bring back every older Electron zip; drop them so the next save keeps only this version.
+      - name: Prune stale Electron downloads
+        shell: bash
+        run: if [ -f config/scripts/electron-installation/prune-electron-download-cache.mjs ]; then node config/scripts/electron-installation/prune-electron-download-cache.mjs; fi
+
       # Install x64 and arm64 optional natives for both packaged macOS targets.
       - name: Install dependencies
         if: steps.freshness.outputs.should_build == 'true'

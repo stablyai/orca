@@ -1,4 +1,5 @@
 import {
+  TERMINAL_CSI_U_CTRL_ENTER_INPUT,
   TERMINAL_CTRL_BACKSPACE_INPUT,
   TERMINAL_KITTY_SHIFT_ENTER_INPUT
 } from '../../../../src/shared/terminal/protocol/input-modes/terminal-modified-enter-encoding'
@@ -179,6 +180,9 @@ function buildShortcutBytes(key: string, modifiers: TerminalShortcutModifier[]):
     // Saved keys carry no pane; the send path encodes this for the pane's negotiated keyboard modes.
     if (hasOnlyModifier(modifiers, 'shift')) {
       return TERMINAL_KITTY_SHIFT_ENTER_INPUT
+    }
+    if (hasOnlyModifier(modifiers, 'ctrl')) {
+      return TERMINAL_CSI_U_CTRL_ENTER_INPUT
     }
     const bytes = '\r'
     return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes

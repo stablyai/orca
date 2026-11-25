@@ -199,10 +199,11 @@ export async function getCurrentBranchAndHead(
   executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<{ branch: string; headOid: string | null }> {
-  // One process: the first HEAD prints the commit, the --abbrev-ref HEAD after it the branch.
+  // One process: the first HEAD prints the commit, the second the full ref (--abbrev-ref
+  // prints heads/<name> when a tag shares the branch name).
   const { stdout } = await runGitForHostedReview(
     repoPath,
-    ['rev-parse', 'HEAD', '--abbrev-ref', 'HEAD'],
+    ['rev-parse', 'HEAD', '--symbolic-full-name', 'HEAD'],
     executionHostId,
     options
   )

@@ -141,7 +141,7 @@ export function nativeChatGeneratedImageAnswers(
       segment = { images: [], answer: undefined }
       producers.set(message.agentId, segment)
     }
-    const facts = nativeChatTurnFoldRow(message, turnKey, false)
+    const facts = nativeChatTurnFoldRow(message, turnKey, undefined)
     if (facts.endsAnswer) {
       finish(segment)
       segment = { images: [], answer: undefined }

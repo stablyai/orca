@@ -1,4 +1,5 @@
 import type { StructuredAgentId } from '../provider-handles/agent-session-provider-handle'
+import type { AgentJournalMessageItem } from '../../journal/agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from '../../agent-session-wire'
 import type { z } from 'zod'
 import type { SendBody } from '../../../rpc-contract/structured-agent-session/structured-agent-session-message-params'
@@ -36,7 +37,9 @@ export type StructuredAgentSessionCreateParams = {
 
 export type StructuredAgentSessionFirstMessage = {
   clientMessageId: string
-  body: z.infer<typeof SendBody>
+  /** A run's fields only from the host: a client's body is parsed as `SendBody`. */
+  body: z.infer<typeof SendBody> &
+    Pick<AgentJournalMessageItem, 'memorySource' | 'triggeredBy' | 'origin' | 'automationRun'>
   selection?: Readonly<Record<string, string>>
 }
 

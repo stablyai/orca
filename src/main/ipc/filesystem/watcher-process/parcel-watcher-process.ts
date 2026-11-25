@@ -57,14 +57,6 @@ export async function disposeWatcherProcessAndWait(): Promise<void> {
   }
 }
 
-export function resetWatcherProcessForTest(): void {
-  sharedWatcherProcessSupervisor.resetForTest()
-}
-
-export function resetRuntimeWatcherProcessForTest(): void {
-  runtimeWatcherProcessPool.resetForTest()
-}
-
 export function forgetRuntimeWatcherProcessRoot(rootPath: string): void {
   runtimeWatcherProcessPool.forgetRoot(rootPath)
 }

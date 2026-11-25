@@ -30,11 +30,19 @@ import { translate } from '../../../i18n/mobile-i18n'
 export function fetchMergePR(
   client: UnvalidatedRpcRequestPort,
   worktreeId: string,
-  args: { prNumber: number; method?: GitHubPRMergeMethod; prRepo?: GitHubPrRepoSlug | null }
+  args: {
+    prNumber: number
+    method?: GitHubPRMergeMethod
+    prRepo?: GitHubPrRepoSlug | null
+    expectedHeadSha?: string | null
+  }
 ): Promise<GitHubPrMutationOutcome> {
   const params: Record<string, unknown> = { prNumber: args.prNumber }
   if (args.method) {
     params.method = args.method
+  }
+  if (args.expectedHeadSha) {
+    params.expectedHeadSha = args.expectedHeadSha
   }
   return settleGithubPrMutation(githubPrMergeRun, () =>
     githubPrMergeRun.request(

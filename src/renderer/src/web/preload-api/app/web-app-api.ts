@@ -28,6 +28,8 @@ export function createWebAppApi(): Partial<PreloadApi> {
       setWindowMaterialSuppressed: () => Promise.resolve(),
       relaunch: () => Promise.resolve(window.location.reload()),
       restart: () => Promise.resolve(window.location.reload()),
+      // The browser client never shows desktop install-on-quit recovery.
+      quit: () => Promise.resolve(),
       reload: () => Promise.resolve(window.location.reload()),
       stageBeforeUnloadSync: ({ sessions, ui }) => {
         // Why: beforeunload cannot await the paired runtime, so the web adapter
@@ -52,7 +54,6 @@ export function createWebAppApi(): Partial<PreloadApi> {
       getMacCapturedDigitRowChords: () => Promise.resolve([]),
       getKeyboardLayoutSnapshot: () => Promise.resolve(null),
       onKeyboardLayoutChanged: () => () => undefined,
-      setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
       getFloatingMarkdownDirectory: () => Promise.resolve(''),
       pickFloatingMarkdownDocument: () => Promise.resolve(null),

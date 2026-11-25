@@ -6,7 +6,9 @@ import {
   NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER,
   isNativeChatVisualFileName
 } from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
+import { WEBHOOK_HOOK_ID_PATTERN } from '../../../../../../shared/connector-webhook-contract'
 import { NativeChatInlineVisual } from './NativeChatInlineVisual'
+import { NativeChatWebhookCard } from '../../NativeChatWebhookCard'
 import type { NativeChatVisualOwner } from './native-chat-visual-owner'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
 import {
@@ -16,11 +18,17 @@ import {
 
 type DivProps = ComponentPropsWithoutRef<'div'> & ExtraProps
 
-function placeholderAttributes(props: DivProps): { nonce: unknown; file: unknown; title: unknown } {
+function placeholderAttributes(props: DivProps): {
+  nonce: unknown
+  file: unknown
+  title: unknown
+  hook: unknown
+} {
   return {
     nonce: 'data-orca-visual' in props ? props['data-orca-visual'] : undefined,
     file: 'data-orca-visual-file' in props ? props['data-orca-visual-file'] : undefined,
-    title: 'data-orca-visual-title' in props ? props['data-orca-visual-title'] : undefined
+    title: 'data-orca-visual-title' in props ? props['data-orca-visual-title'] : undefined,
+    hook: 'data-orca-visual-hook' in props ? props['data-orca-visual-hook'] : undefined
   }
 }
 
@@ -35,8 +43,15 @@ function createVisualExtension(
   nonce: string
 ): CommentMarkdownExtension {
   function VisualPlaceholder({ node: _node, ...props }: DivProps): React.JSX.Element {
-    const { nonce: placeholderNonce, file, title } = placeholderAttributes(props)
+    const { nonce: placeholderNonce, file, title, hook } = placeholderAttributes(props)
     // Only the parser's own placeholders carry this message's nonce; the fields are re-checked anyway.
+    if (
+      placeholderNonce === nonce &&
+      typeof hook === 'string' &&
+      WEBHOOK_HOOK_ID_PATTERN.test(hook)
+    ) {
+      return <NativeChatWebhookCard owner={owner} hookId={hook} />
+    }
     if (
       placeholderNonce !== nonce ||
       typeof file !== 'string' ||

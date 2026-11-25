@@ -46,9 +46,11 @@ export function OrcaSignInButton({
 }
 
 export function OrcaSignInWaitNotice({
-  className
+  className,
+  cancelLabel
 }: {
   className?: string
+  cancelLabel?: string
 }): React.JSX.Element | null {
   const t = useTranslate()
   const link = useAppStore((state) => state.orcaProfileSignInProgress?.link)
@@ -77,7 +79,7 @@ export function OrcaSignInWaitNotice({
         size="xs"
         onClick={() => void window.api.orcaProfiles.cancelSignIn().catch(() => {})}
       >
-        {t('auto.components.OrcaSignInProgress.cancel', 'Cancel')}
+        {cancelLabel ?? t('auto.components.OrcaSignInProgress.cancel', 'Cancel')}
       </Button>
     </div>
   )

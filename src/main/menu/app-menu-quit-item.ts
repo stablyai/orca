@@ -14,13 +14,15 @@ function createAppMenuQuitItem(
   onQuit: (() => void) | undefined,
   macAppName?: string
 ): Electron.MenuItemConstructorOptions {
-  const exitLabel = macAppName === undefined ? translateMain('menu.exit', 'Exit') : undefined
+  const label =
+    macAppName === undefined
+      ? translateMain('menu.exit', 'Exit')
+      : translateMain('menu.quitApp', `Quit ${macAppName}`, { appName: macAppName })
   if (!onQuit) {
-    return { role: 'quit', ...(exitLabel ? { label: exitLabel } : {}) }
+    return { role: 'quit', label }
   }
   return {
-    label:
-      exitLabel ?? translateMain('menu.quitApp', `Quit ${macAppName}`, { appName: macAppName }),
+    label,
     // Match Electron quit accelerators, including no accelerator on Windows.
     ...(process.platform === 'win32' ? {} : { accelerator: 'CmdOrCtrl+Q' }),
     click: () => onQuit()

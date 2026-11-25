@@ -199,9 +199,10 @@ export function applyJournalDomainItem(
   const next = previous ? journalItemRevisionValue(previous, rendered) : rendered
   const executionOwner =
     row.executionOwner ?? (stored?.execution_owner == null ? null : Number(stored.execution_owner))
+  const final = input.kind === 'text-snapshot' && input.final === true
   const items =
     blindText &&
-    writeJournalDomainTextSnapshot(db, target, stored, next, row.ownerFence!, executionOwner)
+    writeJournalDomainTextSnapshot(db, target, stored, next, row.ownerFence!, executionOwner, final)
       ? [next]
       : writeJournalDomainCurrentItem(db, target, {
           inputObservation: row,

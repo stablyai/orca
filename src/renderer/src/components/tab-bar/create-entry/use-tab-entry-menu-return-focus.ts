@@ -31,3 +31,17 @@ export function useTabEntryMenuReturnFocus(
     return () => menu.removeEventListener('keydown', handleMenuKeyDown, true)
   }, [inputRef, menuOpen])
 }
+
+/** Focus search once the menu opens, including in a bot's home where bot rows sit first. */
+export function useTabEntryMenuOpenFocus(
+  inputRef: RefObject<HTMLInputElement | null>,
+  focus: boolean
+): void {
+  useEffect(() => {
+    if (!focus) {
+      return
+    }
+    const focusFrame = requestAnimationFrame(() => inputRef.current?.focus())
+    return () => cancelAnimationFrame(focusFrame)
+  }, [inputRef, focus])
+}

@@ -139,12 +139,3 @@ export function usePublishRemoteServerNoticeShowing(
     [environmentId, showing, surface]
   )
 }
-
-export function resetRemoteServerNoticeClaimsForTests(): void {
-  for (const outage of outages.values()) {
-    if (outage.releaseTimer !== null) {
-      window.clearTimeout(outage.releaseTimer)
-    }
-  }
-  outages.clear()
-}

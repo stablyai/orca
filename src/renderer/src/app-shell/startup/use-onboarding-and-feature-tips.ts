@@ -15,6 +15,7 @@ import {
 } from '../../components/feature-tips/feature-tip-telemetry'
 import { useAppStore } from '../../store/index'
 import { isWebClientLocation } from '../platform/web-client-location'
+import { useBotsEnabled, useHasBot } from '../../lib/bot-catalog'
 import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 
 export type OnboardingGate = ReturnType<typeof useOnboardingAndFeatureTips>
@@ -35,6 +36,7 @@ export function useOnboardingAndFeatureTips() {
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const chatUiLaunchTipVariant = useAppStore((s) => s.chatUiLaunchTipVariant)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
+  const hasBot = useHasBot(useBotsEnabled() && !isWebClientLocation())
   const actions = useAppStore(
     useShallow((s) => ({
       openModal: s.openModal,
@@ -122,6 +124,7 @@ export function useOnboardingAndFeatureTips() {
     const featureTipsDecision = getFeatureTipsAppOpenDecision({
       activeModal,
       cliInstalled: featureTipCliInstalled,
+      hasBot,
       featureTipsSeenIds,
       featureInteractions,
       chatUiLaunchTipVariant,
@@ -178,6 +181,7 @@ export function useOnboardingAndFeatureTips() {
     featureTipCliInstalled,
     featureInteractions,
     featureTipsSeenIds,
+    hasBot,
     onboarding,
     persistedUIReady,
     settings

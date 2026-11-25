@@ -87,15 +87,12 @@ export async function createAcknowledgedTabRetirementFixture(bound = false) {
   })
   setRuntimeDesktopSurface({
     showNotification: () => false,
-    findWindowById: () => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exercised close path only checks destruction and, for a paired client's close, throttling.
-      return {
-        isDestroyed: () => false,
-        webContents: { isDestroyed: () => false, setBackgroundThrottling: () => {} }
-      } as never
-    },
-    onIpc: () => {},
-    removeIpcListener: () => {}
+    // The exercised close path only checks that the renderer is alive and, for a paired client's close, holds publication.
+    hasWindow: () => true,
+    hasLiveRenderer: () => true,
+    sendToWindow: () => true,
+    requestRenderer: () => Promise.reject(new Error('unexpected renderer request')),
+    holdRendererPublication: () => () => {}
   })
   const runtime = new OrcaRuntimeService(store)
   runtime.attachWindow(1)

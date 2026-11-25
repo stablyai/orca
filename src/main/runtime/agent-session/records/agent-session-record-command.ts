@@ -7,7 +7,10 @@ import {
 } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionLastTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-last-turn'
-import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
+import {
+  withMovedAccountHome,
+  type createAgentSessionOwnerProof
+} from '../ownership/agent-session-owner-proof'
 import { recordAgentSessionAcquisitionExit } from '../ownership/agent-session-acquisition-exit-transition'
 import {
   commitAgentSessionProcessIdentity,
@@ -20,6 +23,11 @@ import {
   reviseAgentSessionProviderResumePoint
 } from '../ownership/agent-session-provider-handle-transition'
 import { releaseAgentSessionOwnerAfterSurfaceClose } from '../ownership/agent-session-surface-release-transition'
+import {
+  recordAgentSessionInstructionsKey,
+  withOpenedAgentSessionInstructionsKey,
+  type AgentSessionInstructionsReceipt
+} from './agent-session-instructions-receipt'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
 import {
   pickAgentSessionOption,
@@ -58,7 +66,13 @@ export type AgentSessionRecordCommand =
     }
   | { kind: 'evict'; args: WithoutRecord<typeof evictAgentSessionOwner> }
   | { kind: 'release-unproven'; args: WithoutRecord<typeof releaseUnprovenAgentSessionOwner> }
-  | { kind: 'provider-handle'; args: WithoutRecord<typeof recordAgentSessionProviderHandle> }
+  | {
+      kind: 'provider-handle'
+      args: WithoutRecord<typeof recordAgentSessionProviderHandle>
+      /** The launch's instructions, recorded when the open confirms the agent was given them. */
+      launched?: { key: string; rebuilt: boolean } | null
+    }
+  | { kind: 'instructions-key'; receipt: AgentSessionInstructionsReceipt }
   | { kind: 'resume-point'; args: WithoutRecord<typeof reviseAgentSessionProviderResumePoint> }
   | {
       kind: 'release-surface'
@@ -136,15 +150,19 @@ export function applyAgentSessionRecordCommand(
         }),
         command.args.accountAcquisition
       )
-      next = command.args.launchedAccountHome
-        ? {
-            ...proved,
-            launchedAccount: {
-              fence: command.args.fence,
-              accountHome: command.args.launchedAccountHome
+      next = withMovedAccountHome(
+        command.args.launchedAccountHome
+          ? {
+              ...proved,
+              launchedAccount: {
+                fence: command.args.fence,
+                accountHome: command.args.launchedAccountHome
+              }
             }
-          }
-        : proved
+          : proved,
+        record,
+        command.args.movedAccountHome
+      )
       break
     }
     case 'evict':
@@ -154,7 +172,14 @@ export function applyAgentSessionRecordCommand(
       next = releaseUnprovenAgentSessionOwner({ ...command.args, record })
       break
     case 'provider-handle':
-      next = recordAgentSessionProviderHandle({ ...command.args, record })
+      next = withOpenedAgentSessionInstructionsKey(
+        recordAgentSessionProviderHandle({ ...command.args, record }),
+        command.launched,
+        command.args.link
+      )
+      break
+    case 'instructions-key':
+      next = recordAgentSessionInstructionsKey(record, command.receipt)
       break
     case 'resume-point':
       next = reviseAgentSessionProviderResumePoint({ ...command.args, record })

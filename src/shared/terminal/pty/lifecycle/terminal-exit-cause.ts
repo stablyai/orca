@@ -17,12 +17,24 @@ export type TerminalExitCause =
 export type TerminalExitUnknownReason =
   /** A stop was issued and no exit was ever observed, so the process may still be alive. */
   | 'stop_unverified'
+  /** Its terminal host or session went away with no stop asked for; nothing saw the process end. */
+  | 'host_lost'
   /** The host cannot report its child's status at all (see {@link hostReportsChildExitStatus}). */
   | 'host_status_unavailable'
   /** Older daemons/SSH relays report only a code; zero cannot distinguish a clean exit from a signal. */
   | 'cause_unreported'
 
 export const OPERATOR_CLOSE_EXIT_CAUSE: TerminalExitCause = { kind: 'operator_close' }
+
+/** Set by the producer that lost the host or session; a bare -1 still reads as an unconfirmed stop. */
+export const HOST_LOST_EXIT_CAUSE: TerminalExitCause = { kind: 'unknown', reason: 'host_lost' }
+
+/** No exit was observed, so the process may still be alive. */
+export function isUnobservedTerminalExit(cause: TerminalExitCause): boolean {
+  return (
+    cause.kind === 'unknown' && (cause.reason === 'stop_unverified' || cause.reason === 'host_lost')
+  )
+}
 
 /** Lost-contact sentinel, rejected as proof of death. Default omitted host status to this, never 0. */
 export const UNVERIFIED_PROCESS_EXIT_CODE = -1
@@ -68,6 +80,8 @@ export function describeTerminalExitCause(cause: TerminalExitCause): string {
       switch (cause.reason) {
         case 'stop_unverified':
           return 'Agent process stop was requested but never confirmed'
+        case 'host_lost':
+          return 'Agent process lost; its terminal host or session is gone'
         case 'host_status_unavailable':
           return 'Agent process ended; this host cannot report why'
         case 'cause_unreported':

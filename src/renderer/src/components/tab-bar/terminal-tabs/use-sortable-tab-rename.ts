@@ -3,18 +3,22 @@ import {
   RENAME_TERMINAL_TAB_EVENT,
   type RenameTerminalTabDetail
 } from './terminal-tab-rename-request'
+import { useBlurSaveOnUnmount } from '@/lib/text-input/focus/use-blur-save-on-unmount'
 
 /** Snapshot rename text once, commit at most once, and handle only events addressed to this tab. */
 export function useSortableTabRename({
   tabId,
   title,
   customTitle,
-  onSetCustomTitle
+  onSetCustomTitle,
+  renamable = true
 }: {
   tabId: string
   title: string
   customTitle?: string | null
   onSetCustomTitle: (tabId: string, title: string | null) => void
+  /** False for a tab whose name is fixed, such as a bot's Home. */
+  renamable?: boolean
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [renameValue, setRenameValue] = useState('')
@@ -23,11 +27,14 @@ export function useSortableTabRename({
   const committedOrCancelledRef = useRef(false)
 
   const handleRenameOpen = useCallback(() => {
+    if (!renamable) {
+      return
+    }
     committedOrCancelledRef.current = false
     // Why: snapshot title once; don't refresh if tab.title changes mid-edit (e.g. OSC) so the user's edits aren't overwritten.
     setRenameValue(customTitle ?? title)
     setIsEditing(true)
-  }, [customTitle, title])
+  }, [customTitle, title, renamable])
 
   const commitRename = useCallback(() => {
     if (committedOrCancelledRef.current) {
@@ -38,6 +45,8 @@ export function useSortableTabRename({
     onSetCustomTitle(tabId, trimmed.length > 0 ? trimmed : null)
     setIsEditing(false)
   }, [renameValue, onSetCustomTitle, tabId])
+
+  useBlurSaveOnUnmount(() => isEditing && !committedOrCancelledRef.current, commitRename)
 
   const cancelRename = useCallback(() => {
     committedOrCancelledRef.current = true

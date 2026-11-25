@@ -30,6 +30,10 @@ import {
 } from './queued-messages/queued-message-table'
 import { queuedMessageUpdateDecision } from './queued-messages/queued-message-update'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+import {
+  recordJournalConnectorReplies,
+  withdrawJournalConnectorReplies
+} from './connector-replies/journal-connector-replies'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -136,6 +140,7 @@ export function applyJournalDomainQueueCommand(
       }
       changes = [{ prior: null, card }]
       result = { kind: 'queue-insert', card }
+      recordJournalConnectorReplies(db, target, input.messageId, true, input.body)
       break
     }
     case 'queue-update': {
@@ -177,6 +182,7 @@ export function applyJournalDomainQueueCommand(
           : []
       )
       retire = changes.map(({ card }) => card.messageId)
+      withdrawJournalConnectorReplies(db, target, retire, Date.now())
       result = { kind: 'queue-withdraw', cards: changes.map(({ card }) => card) }
       break
     case 'queue-move': {

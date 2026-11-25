@@ -1,5 +1,6 @@
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { ActivityBarPosition } from '../../../../../shared/ui-chrome/ui-chrome-types'
+import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 
 /** Capture hydrated baseline and persist only locally changed fields: shared desktop/web/mobile UI snapshots otherwise overwrite peers’ disjoint updates (STA-5781). */
 export type PersistedUIWriteBaseline = {
@@ -10,6 +11,9 @@ export type PersistedUIWriteBaseline = {
   rightSidebarTab: PersistedUIState['rightSidebarTab']
   rightSidebarExplorerView: PersistedUIState['rightSidebarExplorerView']
   rightSidebarWidth: number
+  activityBarOrder: string[]
+  activityBarBotOrder: string[]
+  activityBarHidden: string[]
   activityBarPosition: ActivityBarPosition
   markdownTocPanelWidth: number
   combinedDiffFileTreeWidth: number
@@ -44,6 +48,9 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   rightSidebarExplorerView: true,
   rightSidebarWidth: true,
   activityBarPosition: true,
+  activityBarOrder: true,
+  activityBarBotOrder: true,
+  activityBarHidden: true,
   markdownTocPanelWidth: true,
   combinedDiffFileTreeWidth: true,
   groupBy: true,
@@ -103,9 +110,15 @@ function stringArrayEqual(a: readonly string[], b: readonly string[]): boolean {
 /** Compares collection fields by value so hydration does not produce redundant persistence writes from new identities. */
 function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: unknown): boolean {
   if (field === 'gitGraphFiltersByWorktree') {
-    return a === b || JSON.stringify(a) === JSON.stringify(b)
+    // Same equality as hydration, so a key-order-only difference is never unsaved.
+    return persistedUIValuesEqual(a, b)
   }
-  if (field === 'filterRepoIds') {
+  if (
+    field === 'filterRepoIds' ||
+    field === 'activityBarOrder' ||
+    field === 'activityBarBotOrder' ||
+    field === 'activityBarHidden'
+  ) {
     return stringArrayEqual(a as readonly string[], b as readonly string[])
   }
   if (field === 'visibleWorkspaceHostIds') {

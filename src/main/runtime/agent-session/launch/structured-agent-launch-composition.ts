@@ -1,5 +1,7 @@
 // Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
+import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
+import { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -19,6 +21,7 @@ import {
   sealStructuredSessionChild,
   STRUCTURED_CHILD_ENV_TO_DELETE
 } from '../environment/structured-session-child-env'
+import { type LinkedSkills, NO_LINKED_SKILLS } from '../../../native-chat/native-chat-skill-roots'
 
 /** Where a launch's shared inputs come from. */
 export type StructuredAgentLaunchSources = {
@@ -34,9 +37,31 @@ export type StructuredAgentLaunchSources = {
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   prepareVisuals?: PrepareNativeChatVisuals
+  /** Standing instructions the agent's own system prompt carries for this session; null adds none. */
+  resolveInstructions?: (
+    record: AgentSessionRecord,
+    launchDirectory: string,
+    /** How to use the linked projects' skills, as `linkedSkillsSection` writes it; null for none. */
+    linkedSkills: string | null,
+    /** See `StructuredAgentDefinition.instructionsEachStart`. */
+    eachStart: boolean
+  ) => Promise<string | null>
   /** Rereads the base environment after a lookup that started at `askedAt` found no program in
    *  it; absent never retries. */
   refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
+  /** How a session may only read (a bot's look-around or tidy-up); absent or null: it isn't. */
+  readOnlySession?: (sessionId: string) => ReadOnlySessionMode | null
+  /** Work every launch of this session waits for, read-only ones too; a rejection stops the launch. */
+  prepareLaunch?: (record: AgentSessionRecord, launchDirectory: string) => Promise<void>
+  /** The MCP servers Orca adds to the session: a bot's own, and the host's list; absent adds none. */
+  resolveToolServers?: (
+    record: AgentSessionRecord,
+    launchDirectory: string
+  ) => Promise<SessionMcpTools>
+  /** A bot's linked-skills folder and the projects in it, scanned for this launch; absent: none. */
+  resolveLinkedSkills?: (record: AgentSessionRecord) => Promise<LinkedSkills>
+  /** The agent loaded fewer linked skills than its instructions said; this section replaces it. */
+  reportLinkedSkills?: (sessionId: string, linkedSkills: string | null) => void
 }
 
 /** Resolve each input lazily once in agent-defined order; refusals before directory reads leave floating records unpinned. */
@@ -51,11 +76,21 @@ export type StructuredAgentLaunchBasis = {
   environment(): Promise<Record<string, string>>
   /** Null when the chat gets no visuals. */
   visuals(): Promise<NativeChatVisualsLaunch | null>
+  /** Null when there are none. A resumed conversation keeps the ones it started with, in both agents. */
+  instructions(linkedSkills?: string | null): Promise<string | null>
+  /** The MCP servers Orca adds (a bot's own and the host's list); none for a read-only session. */
+  toolServers(): Promise<SessionMcpTools>
+  /** The bot's linked-skills folder the chat loads beside the agent's own; none for any other chat. */
+  linkedSkills(): Promise<LinkedSkills>
+  /** After launch, when the agent turned the linked skill roots down. */
+  linkedSkillsRefused(linkedSkills: string | null): void
   commandSettings(): StructuredAgentCommandSettings
   /** After a missing program, refresh both environment reads together; absent means no retry. */
   refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
   /** The permission mode the host decided this start runs with; absent asks. */
   permissionMode?: AgentChatPermissionChoice
+  /** The session may only read: the agent's part adds its own enforcement of this mode. */
+  readOnly: ReadOnlySessionMode | null
 }
 
 export type StructuredLaunchRequest = {
@@ -76,6 +111,8 @@ export type StructuredAgentLaunchPart<L> = {
   inheritedEnvToDelete: readonly string[]
   /** See `sealStructuredSessionChild`. */
   cliRuntimeCommand?: string
+  /** Added to the commands' environment (`SealedStructuredSessionChild.commandEnv`); the seal's identity wins. */
+  commandEnv?: Readonly<Record<string, string>>
 }
 
 /** An agent's own part of a launch; it sees the session, never the spawn token. */
@@ -145,19 +182,49 @@ async function composedPart<L>(
 ): Promise<StructuredAgentLaunchPart<L> & { cwd: string }> {
   const record = admittedRecord(definition, sources.store, identity.sessionId)
   const launchEnv = once(() => sources.resolveAgentLaunchEnv?.(definition.agent) ?? {})
+  const launchDirectory = once(() => resolveAgentSessionLaunchDirectory(sources, record))
   const readEnvironments = () => ({
     base: once(sources.resolveBaseEnvironment),
     agent: once(() => sources.resolveAgentEnvironment(definition.agent))
   })
   let environments = readEnvironments()
   const refresh = sources.refreshAfterMissingProgram
+  const readOnly = sources.readOnlySession?.(record.sessionId) ?? null
   const basis: StructuredAgentLaunchBasis = {
     record,
-    launchDirectory: once(() => resolveAgentSessionLaunchDirectory(sources, record)),
+    launchDirectory,
     baseEnvironment: () => environments.base(),
     launchEnv,
     environment: () => environments.agent(),
-    visuals: once(async () => (await sources.prepareVisuals?.(record.sessionId)) ?? null),
+    // A read-only session gets no visuals folder, which is a place it could write.
+    visuals: once(async () =>
+      readOnly ? null : ((await sources.prepareVisuals?.(record.sessionId)) ?? null)
+    ),
+    // A launch asks once; the section is the first call's.
+    instructions: (() => {
+      let read: Promise<string | null> | null = null
+      return (linkedSkills: string | null = null) =>
+        (read ??= (async () =>
+          sources.resolveInstructions
+            ? sources.resolveInstructions(
+                record,
+                await launchDirectory(),
+                linkedSkills,
+                definition.instructionsEachStart
+              )
+            : linkedSkills)())
+    })(),
+    // A read-only session gets none: Look around keeps every tool off.
+    toolServers: once(async () =>
+      readOnly || !sources.resolveToolServers
+        ? SessionMcpTools.none
+        : sources.resolveToolServers(record, await launchDirectory())
+    ),
+    linkedSkills: once(
+      async () => (await sources.resolveLinkedSkills?.(record)) ?? NO_LINKED_SKILLS
+    ),
+    linkedSkillsRefused: (linkedSkills) =>
+      sources.reportLinkedSkills?.(record.sessionId, linkedSkills),
     commandSettings: once(() => sources.resolveCommandSettings?.() ?? {}),
     ...(refresh
       ? {
@@ -167,8 +234,11 @@ async function composedPart<L>(
           }
         }
       : {}),
-    ...(permissionMode ? { permissionMode } : {})
+    // Ask, whatever the chat chose: the agent's part answers its asks from the read-only allow-list.
+    ...(readOnly ? { permissionMode: 'ask' as const } : permissionMode ? { permissionMode } : {}),
+    readOnly
   }
+  await sources.prepareLaunch?.(record, await launchDirectory())
   const composed = await part(basis, identity)
   return {
     ...composed,
@@ -184,13 +254,8 @@ export function composeStructuredLaunch<L>(
   part: StructuredAgentLaunchPartResolver<L>
 ): StructuredAgentLaunchResolver<L> {
   return async ({ identity, spawnToken, permissionMode }) => {
-    const { launch, cwd, env, inheritedEnvToDelete, cliRuntimeCommand } = await composedPart(
-      definition,
-      sources,
-      part,
-      identity,
-      permissionMode
-    )
+    const { launch, cwd, env, inheritedEnvToDelete, cliRuntimeCommand, commandEnv } =
+      await composedPart(definition, sources, part, identity, permissionMode)
     admittedRecord(definition, sources.store, identity.sessionId)
     const child = sealStructuredSessionChild({
       sessionId: identity.sessionId,
@@ -204,7 +269,7 @@ export function composeStructuredLaunch<L>(
       cwd,
       env: child.env,
       envToDelete: child.envToDelete,
-      commandEnv: child.commandEnv
+      commandEnv: { ...commandEnv, ...child.commandEnv }
     }
   }
 }
@@ -240,6 +305,20 @@ export function structuredAgentLaunchSources(
     ...(deps.resolveAgentLaunchEnv ? { resolveAgentLaunchEnv: deps.resolveAgentLaunchEnv } : {}),
     ...(deps.resolveAgentCommandSettings
       ? { resolveCommandSettings: deps.resolveAgentCommandSettings }
+      : {}),
+    ...(deps.resolveSessionInstructions
+      ? { resolveInstructions: deps.resolveSessionInstructions }
+      : {}),
+    ...(deps.readOnlySession ? { readOnlySession: deps.readOnlySession } : {}),
+    ...(deps.resolveSessionToolServers
+      ? { resolveToolServers: deps.resolveSessionToolServers }
+      : {}),
+    ...(deps.prepareSessionLaunch ? { prepareLaunch: deps.prepareSessionLaunch } : {}),
+    ...(deps.resolveSessionLinkedSkills
+      ? { resolveLinkedSkills: deps.resolveSessionLinkedSkills }
+      : {}),
+    ...(deps.reportSessionLinkedSkills
+      ? { reportLinkedSkills: deps.reportSessionLinkedSkills }
       : {}),
     // Wired by the real hosts only, so a test runtime never loads the bundled skill.
     ...(deps.nativeChatVisuals

@@ -87,6 +87,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   turnEndDisposition?: TurnEndDisposition
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
+  /** A tmux or shared server, not this pane, runs this conversation: never the pane's resume. */
+  executionHost?: 'shared'
   /** Resume identity update only; the status-shaped fields are transport placeholders. */
   providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
@@ -116,7 +118,7 @@ export type AgentStatusCacheIdentity = {
   stateStartedAt: number
 }
 
-/** A pane's saved resume the host refused because a native chat is that conversation's home. */
+/** A pane's resume identity the host retired after an exit or refused restore. */
 export type RefusedPaneResume = {
   expectedStatus?: AgentStatusCacheIdentity
   expectedSavedRecord?: { paneKey: string; capturedAt: number; updatedAt: number }

@@ -6,6 +6,7 @@ export function ActivityThreadHoverCardRoot({
   open,
   onOpenChange,
   openDelay,
+  pointerOpenMode,
   closeDelay,
   enabled = true,
   trigger,
@@ -14,12 +15,19 @@ export function ActivityThreadHoverCardRoot({
   open: boolean
   onOpenChange: (open: boolean) => void
   openDelay?: number
+  pointerOpenMode?: 'rest' | 'immediate'
   closeDelay?: number
   enabled?: boolean
   trigger: React.ReactElement
   children: React.ReactNode
 }): React.JSX.Element {
-  const intent = useActivityThreadHoverCardIntent({ open, onOpenChange, openDelay, enabled })
+  const intent = useActivityThreadHoverCardIntent({
+    open,
+    onOpenChange,
+    openDelay,
+    pointerOpenMode,
+    enabled
+  })
 
   return (
     <HoverCard open={open} onOpenChange={intent.onOpenChange} openDelay={0} closeDelay={closeDelay}>

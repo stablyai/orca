@@ -75,6 +75,7 @@ export function createMobileAgentMessageSource() {
       const tab = indexed.get(senderKey(sender))?.tab
       return agentMessageSenderLabel({
         localChat: tab?.type === 'agent-session',
+        botName: sender.bot ? sender.name : null,
         customLabel: tab?.title,
         snapshotName: sender.name,
         tabLabel: tab?.title,

@@ -1,6 +1,7 @@
 import type { OrcaCloudAuthConfig } from '../cloud-auth/profile-cloud-auth-config'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
 import { orcaCloudSessionKey, type OrcaCloudSession } from './profile-cloud-session-store'
+import { sessionBelongsToProfile } from './profile-cloud-session-identity'
 import {
   isAmbiguousCloudRequestFailure,
   OrcaCloudRequestError,
@@ -205,7 +206,10 @@ export async function readFreshOrcaCloudSession(
   userDataPath: string
 ): Promise<FreshCloudSessionResult> {
   const session = readCloudSession(active.profile.id, userDataPath)
-  if (session.status !== 'found') {
+  if (
+    session.status !== 'found' ||
+    !sessionBelongsToProfile(session.session, active.profile.cloud)
+  ) {
     return { status: 'reconnect-required' }
   }
   if (!shouldRefreshCloudSession(session.session)) {
@@ -263,24 +267,39 @@ export async function runWithFreshOrcaCloudSession<T>(
     if (!isAccessTokenRejected(error)) {
       throw error
     }
-    // Reuse a rotation that already happened or is in flight; start a new one only once per backoff.
-    const key = orcaCloudSessionKey(active.profile.id, userDataPath)
-    const stored = readCloudSession(active.profile.id, userDataPath)
-    const rotatedSince =
-      stored.status === 'found' && stored.session.refreshToken !== session.session.refreshToken
-    if (!rotatedSince && !inflightCloudSessionRefreshes.has(key) && !takeForcedRefreshSlot(key)) {
-      throw error
-    }
-    const refreshed = await forceRefreshOrcaCloudSession(
+    const refreshed = await refreshAfterRejectedAccessToken(
       config,
       active,
       userDataPath,
       session.session
     )
+    if (refreshed.status === 'skipped') {
+      throw error
+    }
     if (refreshed.status !== 'found') {
       return { status: 'reconnect-required' }
     }
     // The auth server just accepted this session, so a second rejection is the operation's error.
     return { status: 'ok', value: await operation(refreshed.session) }
   }
+}
+
+/**
+ * After a 401 for `session`'s access token: reuses a rotation that already happened or is in
+ * flight, else starts one at most once per backoff per session, shared by every caller.
+ */
+export async function refreshAfterRejectedAccessToken(
+  config: OrcaCloudAuthConfig,
+  active: ActiveOrcaProfileState,
+  userDataPath: string,
+  session: OrcaCloudSession
+): Promise<FreshCloudSessionResult | { status: 'skipped' }> {
+  const key = orcaCloudSessionKey(active.profile.id, userDataPath)
+  const stored = readCloudSession(active.profile.id, userDataPath)
+  const rotatedSince =
+    stored.status === 'found' && stored.session.refreshToken !== session.refreshToken
+  if (!rotatedSince && !inflightCloudSessionRefreshes.has(key) && !takeForcedRefreshSlot(key)) {
+    return { status: 'skipped' }
+  }
+  return await forceRefreshOrcaCloudSession(config, active, userDataPath, session)
 }

@@ -60,7 +60,7 @@ const defaultLookups: StoreSenderLookups = {
 }
 
 /**
- * The caller must be the top frame of an Orca browser tab, in a local browser profile that runs
+ * The caller must be the top frame of an Orca browser tab, in a session that runs
  * extensions, whose document is exactly https://chromewebstore.google.com.
  */
 export function resolveChromeWebStoreFrame(

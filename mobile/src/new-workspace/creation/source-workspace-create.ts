@@ -5,7 +5,7 @@ import {
   resolveComposerPrBase
 } from '../source-selection/composer-source-base-resolve'
 import type { MobileComposerCreateSelection } from '../source-selection/mobile-composer-source-types'
-import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
+import { resolveWorkspaceCreateName } from '../../../../src/shared/workspace/naming/workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
 import { toTaskItem } from '../source-selection/composer-work-item-task'
 import {
@@ -204,7 +204,7 @@ async function createBranchWorkspace(args: {
 
   if (selection.reuse) {
     // A reused branch is fixed; display-name suffixes cannot resolve its collision, so fail before wasting retries.
-    const baseName = resolveMobileWorkspaceCreateName({
+    const baseName = resolveWorkspaceCreateName({
       draft: workspaceName,
       fallback: selection.localBranchName
     })
@@ -232,7 +232,7 @@ async function createBranchWorkspace(args: {
     })
   }
 
-  const baseName = resolveMobileWorkspaceCreateName({
+  const baseName = resolveWorkspaceCreateName({
     draft: workspaceName,
     fallback: selection.branchNameOverride || selection.localBranchName
   })

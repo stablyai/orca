@@ -33,7 +33,6 @@ import {
   setWorkspaceCleanupRuleEnabled,
   type WorkspaceCleanupRuleKey
 } from './workspace-cleanup-rule-keys'
-import { WorkspaceCleanupChatHistorySetting } from './workspace-cleanup-chat-history-setting'
 import {
   WorkspaceCleanupRuleChangeDialog,
   type WorkspaceCleanupRuleChangeRequest
@@ -74,7 +73,7 @@ export function WorkspaceCleanupSettingsPane({
     updateSettings
   )
   const rules = hostRules.state === 'ready' ? hostRules.rules : null
-  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, adoptPreview, refreshReport } =
+  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, adoptPreview } =
     useWorkspaceCleanupHostActivity(owner, rules)
   const matches = useMemo(() => summarizeMatches(preview), [preview])
   const [pending, setPending] = useState<{
@@ -381,12 +380,6 @@ export function WorkspaceCleanupSettingsPane({
           }
         />
       </WorkspaceCleanupAutomaticSection>
-      <WorkspaceCleanupChatHistorySetting
-        hostScope={hostScope}
-        settings={settings}
-        updateSettings={updateSettings}
-        onChanged={refreshReport}
-      />
       {showProtection ? (
         <WorkspaceCleanupProtectionSection
           keepIgnoredFiles={currentRules.keepWhen === 'any-local-files'}

@@ -20,8 +20,11 @@ import {
   RelayedPhoneReplies,
   relayedPhoneCapabilities,
   rewriteRelayedPhoneRequest,
-  withRelayedLaunchChatDefault
+  withRelayedLaunchChatDefault,
+  withRelayedSourceControlAiSettings
 } from './relayed-phone-frames'
+import { GitGenerateCommitMessage } from '../../../shared/rpc-contract/source-control/git-params'
+import { getDefaultSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 
 const DESKTOP_TOKEN = 'a'.repeat(48)
 const HOST_TOKEN = 'b'.repeat(48)
@@ -197,4 +200,32 @@ it("keeps the phone's own Chat or CLI pick over the desktop default", () => {
   })
   const stamped = JSON.parse(withRelayedLaunchChatDefault(frame, 'agent.launchReplay', () => false))
   expect(stamped.params.nativeChatDefault).toBe(true)
+})
+
+describe('withRelayedSourceControlAiSettings', () => {
+  const sourceControlAi = { ...getDefaultSourceControlAiSettings(), agentId: 'codex' as const }
+  const desktop = () => ({
+    sourceControlAi,
+    agentCmdOverrides: { codex: '/opt/codex' },
+    defaultTuiAgent: 'blank' as const
+  })
+
+  it("sends the desktop's AI settings and its key for this server with a relayed generation", () => {
+    const frame = JSON.stringify({
+      id: 'g1',
+      method: 'git.generateCommitMessage',
+      params: { worktree: 'id:w1' }
+    })
+    const params = JSON.parse(
+      withRelayedSourceControlAiSettings(frame, 'git.generateCommitMessage', 'env-1', desktop)
+    ).params
+    expect(params).toEqual({
+      worktree: 'id:w1',
+      sourceControlAi,
+      agentCmdOverrides: { codex: '/opt/codex' },
+      defaultTuiAgent: null,
+      commitMessageDiscoveryHostKey: 'runtime:env-1'
+    })
+    expect(GitGenerateCommitMessage.safeParse(params).success).toBe(true)
+  })
 })

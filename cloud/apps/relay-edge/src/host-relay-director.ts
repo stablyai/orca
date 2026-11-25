@@ -84,8 +84,7 @@ export abstract class HostRelayDirector extends HostRelayPhones {
       if (!namespace) { break }
       try {
         const index = namespace.get(namespace.idFromName(userId))
-        if (op === 'add') { await index.add(pending.relayHostId) }
-        else { await index.remove(pending.relayHostId) }
+        await (op === 'add' ? index.add(pending.relayHostId) : index.remove(pending.relayHostId))
         acked[userId] = op
       } catch {
         // Retried below.

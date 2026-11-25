@@ -1,4 +1,8 @@
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import type {
+  AgentCliModelRequirement,
+  AgentCliUpdateAgent
+} from '../../agent-launch/installation/agent-cli-update'
 
 export type SessionOptionValue = string | boolean
 
@@ -25,6 +29,8 @@ export type NativeChatLiveOptionTransport = 'catalog' | 'agent-session'
 export type SessionOptionDisabledReason =
   | 'available-after-session-start'
   | 'set-when-session-starts'
+  | 'models-loading'
+  | 'sign-in-for-models'
 
 export type SessionOptionDescriptor = {
   id: string
@@ -38,6 +44,10 @@ export type SessionOptionDescriptor = {
         choices: SessionOptionSelectChoice[]
         /** Presentation when no value is known; never an input selection. */
         placeholder?: string
+        /** What the running agent reports when currentValue delegates to it; presentation only. */
+        reportedValue?: string
+        /** The agent whose own settings an Own permission choice follows; presentation only. */
+        settingsAgent?: string
       }
     /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {
@@ -51,6 +61,8 @@ export type SessionOptionDescriptor = {
   disabledReason?: SessionOptionDisabledReason
   /** Active value when a saved selection intentionally waits for a later input. */
   activeValue?: string
+  /** Model-pill display only: a provider fallback runs in place of currentValue, which stays the selection. */
+  fallbackModel?: string
   /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
 }
@@ -111,11 +123,28 @@ export type NativeChatSessionOptionSettingsMutation =
         value: SessionOptionValue
         adoptModelAsLaunchDefault?: boolean
       }[]
+      /** The chat the picks were made in; picks in a bot's conversation are kept on that bot. */
+      sessionId?: string
     }
   | { type: 'clear-model-if-missing'; agent: AgentType; availableModelIds: readonly string[] }
 
+/** The user's own CLI on the chat's host, too old for models on Orca's list. */
+export type SessionOptionsCliUpdate = {
+  agent: AgentCliUpdateAgent
+  /** Newest first. */
+  models: readonly AgentCliModelRequirement[]
+  /** False when the user runs the update themselves; the rows then only say why. */
+  runnable: boolean
+  phase: 'idle' | 'running' | 'failed'
+  start: () => void
+  /** Opens the failed run's output; its Try again runs `start`. */
+  openFailure: () => void
+}
+
 export type SessionOptionsSurface = {
   demandModelCatalog?: () => void
+  /** Absent for Orca's own CLI copy and a Command override, and while no listed model needs an update. */
+  cliUpdate?: SessionOptionsCliUpdate
   /** Live local admission for a structured action, before consuming its composer trigger. */
   admits?: (id: string, value: SessionOptionValue) => boolean
   getSnapshot(): SessionOptionDescriptor[]

@@ -21,6 +21,8 @@ export function nativeChatRowOffersRewind(
     message.command === undefined &&
     message.sentAs === undefined &&
     message.from === undefined &&
+    message.asker === undefined &&
+    message.automationRun === undefined &&
     message.blocks.every((block) => block.type !== 'image-ref' || Boolean(block.path))
   )
 }

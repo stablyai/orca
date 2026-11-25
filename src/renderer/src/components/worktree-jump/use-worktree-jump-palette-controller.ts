@@ -14,6 +14,8 @@ import { useWorktreeJumpPaletteSelectionActions } from './selection/use-worktree
 import { useWorktreeJumpPaletteCreateAction } from './workspaces/use-worktree-jump-palette-create-action'
 import { useWorktreeJumpPaletteTaskSearch } from './tasks/use-worktree-jump-palette-task-search'
 import { useWorktreeJumpPaletteTaskUrl } from './tasks/use-worktree-jump-palette-task-url'
+import { useWorktreeJumpPaletteBotScope } from './use-worktree-jump-palette-bot-scope'
+import { useWorktreeJumpPaletteBotScopeEntries } from './worktree-jump-palette-bot-scope-entries'
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { usePaletteSearchEvaluationContext } from '@/lib/workspace/search/palette/use-palette-search-evaluation-context'
 import type { WorktreePaletteRequestGuard } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
@@ -30,9 +32,20 @@ export function useWorktreeJumpPaletteController({
 }) {
   const storeState = useWorktreeJumpPaletteStoreState({ visible, lingering })
   const localState = useWorktreeJumpPaletteLocalState({ createLookupGuard, visible })
+  // Showing only bots, every other section keeps the inputs it had, so none of its work reruns.
+  const scoped = localState.scope === 'bots'
+  const othersLocal = scoped
+    ? {
+        ...localState,
+        query: localState.scopeHeldQuery,
+        deferredQuery: localState.scopeHeldQuery,
+        paletteSearchQuery: localState.scopeHeldQuery.trim(),
+        createWorktreeName: ''
+      }
+    : localState
   const paletteEvaluationSnapshot = useMemo(
     () => ({
-      query: localState.paletteSearchQuery,
+      query: othersLocal.paletteSearchQuery,
       agentStatus: storeState.agentStatusByPaneKey,
       worktrees: storeState.workspaces,
       browserPages: storeState.browserPagesByWorkspace,
@@ -43,7 +56,7 @@ export function useWorktreeJumpPaletteController({
       visible
     }),
     [
-      localState.paletteSearchQuery,
+      othersLocal.paletteSearchQuery,
       storeState.agentStatusByPaneKey,
       storeState.workspaces,
       storeState.browserPagesByWorkspace,
@@ -58,15 +71,21 @@ export function useWorktreeJumpPaletteController({
   const evaluation = { paletteSearchContext }
   const taskUrl = useWorktreeJumpPaletteTaskUrl({
     visible,
-    createWorktreeName: localState.createWorktreeName,
+    createWorktreeName: othersLocal.createWorktreeName,
     taskSourceUrl: localState.taskSourceUrl,
     createLookupGuard
   })
   const filter = useWorktreeJumpPaletteFilter({ ...storeState, ...localState })
-  const taskSearch = useWorktreeJumpPaletteTaskSearch({ ...storeState, ...localState, ...filter })
+  // Showing only bots, task search is off: pending and debounced requests abort and no status shows.
+  const taskSearch = useWorktreeJumpPaletteTaskSearch({
+    ...storeState,
+    ...othersLocal,
+    ...filter,
+    visible: visible && !scoped
+  })
   const worktrees = useWorktreeJumpPaletteWorktrees({
     ...storeState,
-    ...localState,
+    ...othersLocal,
     ...filter,
     ...evaluation
   })
@@ -74,11 +93,12 @@ export function useWorktreeJumpPaletteController({
     ...localState,
     ...filter,
     ...evaluation,
-    visible
+    visible,
+    scoped
   })
   const openTabs = useWorktreeJumpPaletteOpenTabs({
     ...storeState,
-    ...localState,
+    ...othersLocal,
     ...filter,
     ...worktrees,
     ...extraResults,
@@ -86,20 +106,20 @@ export function useWorktreeJumpPaletteController({
   })
   const recentTabs = useWorktreeJumpPaletteRecentTabs({
     ...storeState,
-    ...localState,
+    ...othersLocal,
     ...filter,
     ...worktrees,
     ...openTabs
   })
   const projectTargets = useWorktreeJumpPaletteProjectTargets({
     ...storeState,
-    ...localState,
+    ...othersLocal,
     ...filter,
     ...worktrees
   })
   const quickActions = useWorktreeJumpPaletteQuickActions({
     ...storeState,
-    ...localState,
+    ...othersLocal,
     ...worktrees,
     ...openTabs,
     ...projectTargets
@@ -113,10 +133,19 @@ export function useWorktreeJumpPaletteController({
     ...projectTargets,
     ...quickActions,
     ...extraResults,
-    ...taskUrl
+    ...taskUrl,
+    scoped
+  })
+  const botScopeEntries = useWorktreeJumpPaletteBotScopeEntries({
+    ...extraResults,
+    scoped,
+    query: localState.query,
+    visibleExtraSections: sections.paletteSections.visibleExtraSections,
+    handleExpandSection: sections.handleExpandSection
   })
   const listEntries = useWorktreeJumpPaletteListEntries({
     ...localState,
+    ...botScopeEntries,
     ...worktrees,
     ...openTabs,
     ...sections,
@@ -137,12 +166,18 @@ export function useWorktreeJumpPaletteController({
     ...taskSearch,
     ...taskUrl
   })
+  const botScope = useWorktreeJumpPaletteBotScope({
+    ...localState,
+    visible,
+    handleQueryChange: selectionLifecycle.handleQueryChange
+  })
   const selectionActions = useWorktreeJumpPaletteSelectionActions({
     ...storeState,
     ...localState,
     ...quickActions,
     ...taskSearch,
-    ...selectionLifecycle
+    ...selectionLifecycle,
+    botScope
   })
   const emojiInput = useWorkspaceEmojiShortcodeInput({
     inputRef: localState.inputRef,
@@ -177,6 +212,8 @@ export function useWorktreeJumpPaletteController({
     ...listEntries,
     ...selectionLifecycle,
     ...selectionActions,
+    botScope,
+    botScopeNote: botScopeEntries.botScopeNote,
     paletteNowMs: worktrees.hasQuery ? paletteSearchContext.nowMs : storeState.paletteNowMs,
     emojiInput,
     ...createAction

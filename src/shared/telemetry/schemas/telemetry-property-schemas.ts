@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   FEATURE_WALL_EXIT_ACTIONS,
   FEATURE_WALL_TOUR_DEPTH_STEPS
@@ -23,7 +23,6 @@ export const AGENT_KIND_VALUES = [
   'prime-agent',
   'qoder',
   'qoder-cn',
-  'gemini',
   'antigravity',
   'aider',
   'goose',
@@ -60,7 +59,12 @@ export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
 export type AgentKind = z.infer<typeof agentKindSchema>
 
 // Only launch failures are observable; provider auth/rate-limit/network errors remain inside the CLI subprocess.
-export const errorClassSchema = z.enum(['binary_not_found', 'paste_readiness_timeout', 'unknown'])
+export const errorClassSchema = z.enum([
+  'binary_not_found',
+  'paste_readiness_timeout',
+  'paste_agent_exited',
+  'unknown'
+])
 export type ErrorClass = z.infer<typeof errorClassSchema>
 
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])
@@ -206,8 +210,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',
   'experimentalEphemeralVms',
-  'experimentalConnectors',
-  'geminiCliOAuthEnabled'
+  'botsEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
 export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>

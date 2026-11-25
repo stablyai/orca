@@ -35,6 +35,27 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["'tests/e2e/desktop/computer-use/computer-*.e2e.ts'"]
   },
   {
+    name: 'bot automation eval (pnpm eval:bot-automations)',
+    manual: true,
+    include: ['src/cli/bot-automation-eval/*.eval.ts'],
+    sources: ['config/vitest.bot-automation-eval.config.ts'],
+    mirrors: ["'src/cli/bot-automation-eval/*.eval.ts'"]
+  },
+  {
+    name: 'bot orchestration eval (pnpm eval:bot-orchestration)',
+    manual: true,
+    include: ['src/cli/bot-orchestration-eval/*.eval.ts'],
+    sources: ['config/vitest.bot-orchestration-eval.config.ts'],
+    mirrors: ["'src/cli/bot-orchestration-eval/*.eval.ts'"]
+  },
+  {
+    name: 'bots chat-tree bench (node tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-bench.mjs)',
+    manual: true,
+    include: ['tests/tools/benchmarks/bot-chat-tree/*-benchmark.ts'],
+    sources: ['tests/tools/benchmarks/bot-chat-tree/vitest.bot-chat-tree-bench.config.ts'],
+    mirrors: ["'tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-notices-benchmark.ts'"]
+  },
+  {
     name: 'mobile',
     include: ['mobile/src/**/*.test.ts', 'mobile/src/**/*.test.tsx', 'mobile/scripts/**/*.test.ts'],
     sources: ['mobile/vitest.config.ts'],
@@ -49,14 +70,13 @@ const NON_UNIT_TEST_RUNNERS = [
     sources: [`cloud/apps/${app}/vitest.config.ts`],
     mirrors: ["include: ['src/**/*.test.ts']"]
   })),
-  {
-    name: 'cloud relay-edge',
-    include: ['cloud/apps/relay-edge/test/**/*.test.ts'],
-    sources: ['cloud/apps/relay-edge/vitest.config.ts'],
+  ...['relay-edge', 'connector-wake'].map((app) => ({
+    name: `cloud ${app}`,
+    include: [`cloud/apps/${app}/test/**/*.test.ts`],
+    sources: [`cloud/apps/${app}/vitest.config.ts`],
     mirrors: ["include: ['test/**/*.test.ts']"]
-  },
+  })),
   ...[
-    'cloud/apps/relay-fence-broker',
     'cloud/apps/relay-ingress',
     'cloud/packages/cloud-database',
     'cloud/packages/connector-contract',
@@ -68,19 +88,7 @@ const NON_UNIT_TEST_RUNNERS = [
     include: [`${dir}/${VITEST_DEFAULT_INCLUDE}`],
     sources: [`${dir}/package.json`],
     mirrors: ['vitest run']
-  })),
-  {
-    name: 'cloud node:test',
-    include: [
-      'cloud/dev/scripts/run-relay-tests.test.mjs',
-      '.github/actions/cloud-sql-rollout-lease/*.test.mjs'
-    ],
-    sources: ['cloud/package.json'],
-    mirrors: [
-      'dev/scripts/run-relay-tests.test.mjs',
-      '../.github/actions/cloud-sql-rollout-lease/*.test.mjs'
-    ]
-  }
+  }))
 ]
 
 const DEDICATED_UNIT_FILES = UNIT_EXCLUDE.filter((glob) => !defaultExclude.includes(glob))

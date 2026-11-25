@@ -45,13 +45,18 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
 
 function DialogOverlay({
   className,
+  scrim = 'default',
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+}: React.ComponentProps<typeof DialogPrimitive.Overlay> & {
+  /** `dark` hides the app behind full-window media. */
+  scrim?: 'default' | 'dark'
+}) {
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        'fixed inset-0 z-50 bg-black/55 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        'fixed inset-0 z-50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        scrim === 'dark' ? 'bg-black/80' : 'bg-black/55',
         className
       )}
       {...props}
@@ -59,8 +64,16 @@ function DialogOverlay({
   )
 }
 
-const dialogContentSurfaceVariants = cva('', {
+/** Media sits straight on the scrim; scaling in would make its edge controls slide. */
+const MEDIA_SURFACE_CLASS =
+  'inset-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:shadow-none'
+
+const dialogContentVariants = cva('', {
   variants: {
+    density: {
+      default: '',
+      compact: 'gap-3.5 p-4'
+    },
     surface: {
       default: '',
       /** The tinted, edge-to-edge panel of the two-column feature tip dialogs. */
@@ -68,11 +81,17 @@ const dialogContentSurfaceVariants = cva('', {
         'gap-0 bg-[color-mix(in_srgb,var(--foreground)_8%,var(--background))] p-0 dark:bg-[color-mix(in_srgb,var(--foreground)_16%,var(--background))]',
       /** Edge to edge, for an embedded panel that brings its own header and padding. */
       panel: 'gap-0 p-0',
+      /** `panel`, opaque: content scrolling under sticky headings (`bg-popover`) must not show through. */
+      'opaque-panel': 'gap-0 bg-popover p-0',
       /** Trust, consent and provenance decisions: host-owned tokens a plugin theme cannot restyle. */
-      security: SECURITY_SURFACE_CLASS
+      security: SECURITY_SURFACE_CLASS,
+      media: MEDIA_SURFACE_CLASS,
+      /** `media` stepping through a set: focus can rest on the dialog, whose ring the content draws
+       *  above the image (`group-focus-visible/media-gallery`), since a zoomed image covers its edges. */
+      'media-gallery': `${MEDIA_SURFACE_CLASS} group/media-gallery`
     }
   },
-  defaultVariants: { surface: 'default' }
+  defaultVariants: { density: 'default', surface: 'default' }
 })
 
 function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }) {
@@ -84,7 +103,7 @@ function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }
   const button = (
     <DialogPrimitive.Close
       data-slot="dialog-close"
-      className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+      className="absolute top-4 right-4 rounded-xs opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
     >
       {variant === 'minimize' ? <Minus className="size-3.5" /> : <XIcon />}
       <span className="sr-only">{label}</span>
@@ -105,7 +124,10 @@ function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }
 const unifiedDialogSizeClass: Record<UnifiedDialogSize, string> = {
   confirm: 'sm:max-w-[420px]',
   form: 'sm:max-w-[480px]',
-  list: 'sm:max-w-[520px]'
+  list: 'sm:max-w-[520px]',
+  // The review keeps its final bounds while the panes fill and the dialog fades in.
+  review:
+    'flex h-[min(28rem,calc(100dvh-3rem))] flex-col sm:max-w-[680px] data-[state=open]:[--tw-enter-scale:1]! data-[state=closed]:[--tw-exit-scale:1]!'
 }
 
 function DialogContent({
@@ -115,22 +137,26 @@ function DialogContent({
   showCloseButton,
   closeButtonVariant = 'close',
   surface,
+  density,
   size,
   scrollable = false,
+  phoneSheet = false,
   busy = false,
   initialFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> &
-  VariantProps<typeof dialogContentSurfaceVariants> & {
+  VariantProps<typeof dialogContentVariants> & {
     overlayClassName?: string
     /** Defaults on, except for the unified sizes, whose footer Cancel closes instead. */
     showCloseButton?: boolean
     closeButtonVariant?: 'close' | 'minimize'
     /** `compact` is a short confirmation's width, like the close prompts. `confirm`, `form` and
      *  `list` are the unified layout: one padding and type scale, footer with a start slot. */
-    size?: 'default' | 'compact' | UnifiedDialogSize
+    size?: 'default' | 'compact' | 'flush' | UnifiedDialogSize
     /** The whole dialog scrolls within the viewport instead of growing past it. */
     scrollable?: boolean
+    /** In a phone-width window it sits on the bottom edge, full width, as a bottom sheet. */
+    phoneSheet?: boolean
     /** Work is running: Esc, outside presses and `DialogCancel` cannot close the dialog. */
     busy?: boolean
     /** `cancel` starts focus on the `DialogCancel`, for destructive and trust decisions. */
@@ -142,20 +168,25 @@ function DialogContent({
   const { onOpenAutoFocus, onPointerDownOutside, onInteractOutside } = props
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay className={overlayClassName} />
+      <DialogOverlay
+        className={overlayClassName}
+        scrim={surface === 'media' || surface === 'media-gallery' ? 'dark' : 'default'}
+      />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         data-size={size}
         // Match dropdown surface/border/shadow tokens for dark-mode contrast; minmax(0,1fr) prevents long tokens from widening the grid and pushing footers outside.
         className={cn(
-          'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-dialog-surface p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] duration-200 outline-none dark:border-white/14 dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg data-[size=compact]:sm:max-w-sm',
+          'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-dialog-surface p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] duration-200 outline-none dark:border-white/14 dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg data-[size=compact]:sm:max-w-sm data-[size=flush]:gap-0 data-[size=flush]:p-0',
           unified &&
             cn(
               'gap-3 rounded-[10px] p-5 [&_[data-slot=checkbox][data-state=unchecked]]:border-muted-foreground',
               unifiedDialogSizeClass[size]
             ),
-          dialogContentSurfaceVariants({ surface }),
+          dialogContentVariants({ density, surface }),
           scrollable && 'max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek',
+          phoneSheet &&
+            'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none',
           className
         )}
         {...props}
@@ -225,7 +256,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
 
 // Why data-slot: a Radix checkbox is also a <button> and must keep its own box.
 const unifiedFooterButtonClass =
-  '[&>[data-slot=button]]:h-auto [&>[data-slot=button]]:min-h-8 [&>[data-slot=button]]:max-w-full [&>[data-slot=button]]:py-1.5 [&>[data-slot=button]]:text-center [&>[data-slot=button]]:whitespace-normal [&>[data-slot=button]]:[overflow-wrap:anywhere]'
+  '[&>[data-slot=button]]:h-auto [&>[data-slot=button]]:min-h-8 [&>[data-slot=button]]:text-[13px] [&>[data-slot=button]]:max-w-full [&>[data-slot=button]]:py-1.5 [&>[data-slot=button]]:text-center [&>[data-slot=button]]:whitespace-normal [&>[data-slot=button]]:[overflow-wrap:anywhere]'
 
 // Why: a ghost action's text lines up with the dialog's left edge, like the link-style extras.
 const unifiedFooterStartClass = 'has-[>[data-variant=ghost]:first-child]:-ml-3'
@@ -234,12 +265,15 @@ function DialogFooter({
   className,
   showCloseButton = false,
   start,
+  variant = 'default',
   children,
   ...props
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean
   /** Unified layout only: one extra on the left (a link, a ghost action or "Don't ask again"). */
   start?: React.ReactNode
+  /** `bar`: a full-width footer strip with a top divider, for edge-to-edge dialogs (p-0). */
+  variant?: 'default' | 'bar'
 }) {
   const t = useTranslate()
   const { unified } = useDialogLayout()
@@ -256,7 +290,11 @@ function DialogFooter({
     return (
       <div
         data-slot="dialog-footer"
-        className={cn('mt-2 flex flex-wrap items-center gap-2', className)}
+        className={cn(
+          'mt-2 flex flex-wrap items-center gap-2',
+          variant === 'bar' && 'mt-0 border-t border-border px-4 py-3',
+          className
+        )}
         {...props}
       >
         {start ? (
@@ -287,7 +325,11 @@ function DialogFooter({
   return (
     <div
       data-slot="dialog-footer"
-      className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
+      className={cn(
+        'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
+        variant === 'bar' && 'border-t border-border px-4 py-3',
+        className
+      )}
       {...props}
     >
       {children}

@@ -3,11 +3,9 @@
 # This is a RATCHET: counts may only GO DOWN. Layout comes from the runtime; send a command
 # instead. Prune after removing writes: pnpm check:layout-writer-ratchets --prune
 3 src/renderer/src/attention/notification-subject-owner.ts
-1 src/renderer/src/components/activity/threads/use-agent-pane-threads.ts
 3 src/renderer/src/components/cmd-j/palette-live-status.tsx
 4 src/renderer/src/components/floating-terminal/workspace/floating-workspace-terminal-actions.ts
 1 src/renderer/src/components/sidebar/workspace-card/activity/use-worktree-activity-status.ts
-1 src/renderer/src/components/sidebar/workspace-card/activity/use-worktree-activity-statuses.ts
 4 src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-send-target-inputs.ts
 4 src/renderer/src/components/sidebar/worktree-list/listing/use-agent-send-target.ts
 1 src/renderer/src/components/status-bar/workspace-storage/decisions/workspace-space-decision-inputs.ts

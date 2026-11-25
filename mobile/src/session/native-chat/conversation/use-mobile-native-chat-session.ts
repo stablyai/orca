@@ -1,3 +1,4 @@
+import type { MobileSessionItemPresentation } from '../../mobile-session-item-target'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { EMPTY_NATIVE_CHAT_TRANSCRIPT } from '../../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-retention'
 import {
@@ -33,7 +34,7 @@ import { useStoredChatTranscript } from '../transcript/persistence/use-stored-ch
 
 import type { MobileNativeChatStatus } from '../status/mobile-native-chat-session-status'
 
-export type MobileNativeChatSession = {
+export type MobileNativeChatSession = MobileSessionItemPresentation & {
   messages: NativeChatMessage[]
   status: MobileNativeChatStatus
   // Unsettled reads or passive resets may still hold another tab’s history; wait before interpreting empty messages as a seed/retirement boundary.
@@ -85,7 +86,6 @@ export function useMobileNativeChatSession(args: {
   const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
   const identity = terminalChatTranscriptIdentity(sourceIdentity, agent, sessionId, transcriptPath)
-  // Derive pre-read status from props now; a passive effect would lag one commit.
   const initialStatus: MobileNativeChatStatus =
     !client || !agent ? 'idle' : !sessionId ? 'waiting-session' : 'loading'
   // Tag settled outcomes by identity so a switched tab cannot inherit the previous transcript’s verdict.

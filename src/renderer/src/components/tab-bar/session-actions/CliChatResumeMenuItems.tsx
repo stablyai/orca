@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
@@ -15,7 +16,9 @@ export function CliChatResumeMenuItems({
   leadingSeparator: boolean
   onComplete?: () => void
 }): React.JSX.Element | null {
-  const [source] = useState(() => resolveCliChatResumeSource(useAppStore.getState(), { tab }))
+  const [source] = useState(() =>
+    resolveCliChatResumeSource(useAppStore.getState(), readRuntimeStatuses(), { tab })
+  )
   const pending = useCliChatResumePending(source)
   // Radix disables pointer events on disabled items, so a tooltip-less "update" item would only confuse.
   if (!source || source.hostUpdateRequired) {

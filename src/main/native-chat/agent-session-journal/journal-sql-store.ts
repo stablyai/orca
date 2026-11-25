@@ -2,9 +2,10 @@ import { receiptRow } from './journal-sql-receipt-row'
 import type { JournalForkStageBegin, JournalForkInstall } from './journal-fork-stages'
 import type { JournalSqlForkCopy } from './journal-sql-fork-copy'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
-import { writeJournalAutomaticSubmission } from './journal-sql-automatic-submission'
-import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
-import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
+import {
+  writeJournalAutomaticSubmission,
+  type JournalAutomaticAnswers
+} from './journal-sql-automatic-submission'
 import { JournalGoalAttachmentInverse } from './writing/journal-goal-attachment-inverse'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
@@ -42,11 +43,10 @@ import type { JournalDomainEditLeaseOutcome } from './journal-domain-edit-leases
 /** Every writer command a live handle sends; the open command belongs to the database. */
 export type JournalSqlStoreOperation = Exclude<JournalWriterOperation, { kind: 'open' }>
 
-export type JournalSqlStorePreparation = {
+export type JournalSqlStorePreparation = JournalAutomaticAnswers & {
   forkInstall?: JournalForkInstall
   facts?: Omit<JournalWriterHostFacts, 'identity'>
   receipt?: JournalOperationReceipt
-  custody?: (source: AgentMessageSource) => QueuedMessageOwed
   /** Adopt host facts staged by prepare only after the writer acknowledges their commit. */
   settle?: (commit: JournalWriterCommit | undefined) => void
 }
@@ -55,6 +55,8 @@ export type JournalSqlStorePreparation = {
 export type JournalSqlStorePrepare = (
   context: JournalReceiptStage
 ) => JournalSqlStorePreparation | Promise<JournalSqlStorePreparation>
+
+type JournalHistoryAsk = Omit<JournalDomainHistoryRequest, 'sessionId'>
 
 /** A live ownership token and worker ports; no reduced chat or writable connection lives here. */
 export class SqlAgentSessionJournal extends SqlJournalAppends {
@@ -138,12 +140,13 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     sequence: this.acknowledged.sequence
   })
   observationHandle = (): string => this.target.ownerToken
+  /** Count a send in flight for this chat, from admission until its dispatch settles. */
+  holdSending = (): (() => void) => this.database.sending.hold(this.identity.sessionId)
   get isClosed(): boolean {
     return this.closed
   }
-  wroteBeforeOpen(sequence: number | undefined): boolean {
-    return journalWroteBeforeOpen(this.physicalCursor(), this.openedThrough, sequence)
-  }
+  wroteBeforeOpen = (sequence: number | undefined): boolean =>
+    journalWroteBeforeOpen(this.physicalCursor(), this.openedThrough, sequence)
 
   /** Nonthrowing publication runs on the command lane, after receipts have adopted COMMIT. */
   observeCommits(listener: (commit: JournalWriterCommit) => void): () => void {
@@ -186,12 +189,13 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
           operation,
           facts,
           savedAt,
+          ...this.database.sending.urgency(this.identity.sessionId, preparation.forkInstall),
           ...(staged ? { effects: staged.effects } : {}),
           ...(preparation.forkInstall ? { forkInstall: preparation.forkInstall } : {})
         }
         commit =
           operation.kind === 'automatic-submission' || operation.kind === 'send-admission'
-            ? await writeJournalAutomaticSubmission(writer, command, preparation.custody)
+            ? await writeJournalAutomaticSubmission(writer, command, preparation)
             : await writer.write(command)
       } catch (error) {
         preparation.settle?.(undefined)
@@ -209,6 +213,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
         if (epoch === null) {
           throw new Error('a committed journal replacement has no physical epoch')
         }
+        this.database.rememberSessionEpoch(this.identity.sessionId, epoch)
         this.target = { ...this.target, epoch }
       }
       if (commit.goals) {
@@ -286,12 +291,9 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   }
 
   /** One reader snapshot answers the page and, when asked, current work beside it. */
-  history(
-    request: Omit<JournalDomainHistoryRequest, 'sessionId'>,
-    work?: JournalDomainHistoryWork
-  ) {
+  history(request: JournalHistoryAsk, work?: JournalDomainHistoryWork, signal?: AbortSignal) {
     const sessionId = this.identity.sessionId
-    return this.database.readers.domainHistoryFrame({ ...request, sessionId }, work)
+    return this.database.readers.domainHistoryFrame({ ...request, sessionId }, work, signal)
   }
 
   readWork<K extends JournalWorkRead['kind']>(

@@ -1,4 +1,4 @@
-// OpenCode 1.x models --verbose emits each provider/model ID followed by indented JSON.
+// OpenCode 1.x and its forks' `models --verbose` emit each provider/model ID followed by indented JSON.
 
 import { z } from 'zod'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
@@ -27,8 +27,8 @@ function modelOption(id: string, metadata: unknown): AgentSessionModelOption {
   const name = meta.success ? meta.data.name : undefined
   const variants = meta.success ? Object.keys(meta.data.variants ?? {}) : []
   const providerId = id.slice(0, id.indexOf('/'))
-  // This parser serves only OpenCode < 2.0, whose ACP session runs a listed default variant, else
-  // the first listed one; the listing keeps the runtime's variant order.
+  // This parser serves only OpenCode < 2.0 and its 1.x forks, whose ACP session runs a listed
+  // default variant, else the first listed one; the listing keeps the runtime's variant order.
   const runsVariant = variants.includes(DEFAULT_VARIANT) ? DEFAULT_VARIANT : variants[0]
   return {
     id,
@@ -61,7 +61,8 @@ export function parseOpenCodeModelListing(stdout: string): AgentSessionModelOpti
   const closesObject = (line: string, first: boolean): boolean =>
     line.trimEnd() === '}' || (first && line.trimEnd() === '{}')
   for (let index = 0; index < lines.length; index++) {
-    const id = (lines[index] ?? '').trim()
+    // MiMo Code follows each ID with its context window: `<id> — window 1M, compacts at 900K`.
+    const id = (lines[index] ?? '').split(' — ')[0].trim()
     if (!isModelIdLine(id)) {
       continue
     }

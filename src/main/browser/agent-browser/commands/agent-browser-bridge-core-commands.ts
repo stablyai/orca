@@ -17,10 +17,12 @@ import {
   waitForInFlightNavigation
 } from './agent-browser-navigation-settle'
 import { AgentBrowserBridgeQueue } from '../command-queue/agent-browser-bridge-queue'
+import type { ResolvedBrowserCommandTarget } from '../session-routing/agent-browser-command-target'
 import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-cli-page-admission'
 import { agentBrowserSnapshotArgs } from '../protocol/agent-browser-snapshot-arguments'
 import { getBrowserPasskeyRequest } from '../../webauthn/browser-passkey-requests'
 import { whenBrowserExtensionsReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-start'
+import { claimBrowserPageFirstLoad } from '../../guest-lifecycle/browser-page-memory'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
   async snapshot(
@@ -88,7 +90,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     url: string,
     worktreeId?: string,
     browserPageId?: string,
-    options: { reportEffects?: boolean } = {}
+    { awaitFirstLoad, ...options }: { reportEffects?: boolean; awaitFirstLoad?: boolean } = {}
   ): Promise<BrowserGotoResult> {
     return this.enqueueInertAction(
       worktreeId,
@@ -99,8 +101,21 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         if (!navigationUrl) {
           throw new BrowserError('invalid_argument', `Unsupported browser URL: ${url}`)
         }
+        // A tab opened at this URL is already loading it; loading again would resend the request.
+        const firstLoad = awaitFirstLoad
+          ? claimBrowserPageFirstLoad(target.browserPageId, navigationUrl)
+          : null
+        if (firstLoad && firstLoad.guest === wc) {
+          const deadline = Date.now() + EMBEDDED_NAVIGATION_TIMEOUT_MS
+          await firstLoad.load
+          // Its address committed long ago, so a navigation the page started since still counts.
+          return this.settleNavigation(worktreeId, target, wc, navigationUrl, false, deadline, true)
+        }
         // A new tab's profile may still be starting its extensions; its first page waits for them.
         await whenBrowserExtensionsReadyForPage(wc)
+        if (wc.isDestroyed()) {
+          throw new BrowserError('browser_tab_closed', 'Tab was closed while command was running')
+        }
         const navigationState: { preventUnloadEvent: Electron.Event | null } = {
           preventUnloadEvent: null
         }
@@ -155,47 +170,65 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
             clearTimeout(navigationTimeout)
           }
         }
-        // A superseding navigation can still be loading when the first load rejects. The outgoing
-        // page (its own load ending, a beforeunload replaceState) can also settle loadURL while
-        // the requested navigation is pending, so getURL() still names the outgoing document.
-        const committedUrl = wc.getURL()
-        const pendingUrl = this.browserManager.getInFlightNavigationUrl(wc)
-        const settledBeforeCommit =
-          !navigationAborted &&
-          committedUrl !== navigationUrl &&
-          (isWaitingForMainFrameResponse(wc) ||
-            (pendingUrl !== null && pendingUrl !== committedUrl))
-        const navigationInFlight = navigationAborted || settledBeforeCommit
-        if (navigationInFlight) {
-          const outcome = await waitForInFlightNavigation(
-            wc,
-            Math.max(0, navigationDeadline - Date.now())
-          )
-          // Only an aborted load fails at the deadline; an early-settled one reports the current page.
-          if (navigationAborted && outcome === 'timed-out') {
-            throw new BrowserError(
-              'browser_error',
-              `Failed to navigate browser page ${target.browserPageId}: Browser navigation timed out after ${EMBEDDED_NAVIGATION_TIMEOUT_MS}ms`
-            )
-          }
-        }
-
-        // Process swaps can replace the guest while retaining the page ID.
-        const navigatedTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
-        const navigatedWebContents = this.requireTargetWebContents(navigatedTarget)
-        const loadError = navigationInFlight
-          ? this.browserManager.getBrowserPageLoadError(target.browserPageId)
-          : null
-        if (loadError) {
-          throw new BrowserError(
-            'browser_error',
-            `Failed to navigate browser page ${target.browserPageId}: ${loadError.description} (${loadError.code})`
-          )
-        }
-        return { url: navigatedWebContents.getURL(), title: navigatedWebContents.getTitle() }
+        return this.settleNavigation(
+          worktreeId,
+          target,
+          wc,
+          navigationUrl,
+          navigationAborted,
+          navigationDeadline
+        )
       },
       { ensureSession: false, ...options }
     )
+  }
+
+  private async settleNavigation(
+    worktreeId: string | undefined,
+    target: ResolvedBrowserCommandTarget,
+    wc: Electron.WebContents,
+    navigationUrl: string,
+    navigationAborted: boolean,
+    navigationDeadline: number,
+    afterCommit = false
+  ): Promise<BrowserGotoResult> {
+    // A superseding navigation can still be loading when the first load rejects. The outgoing
+    // page (its own load ending, a beforeunload replaceState) can also settle loadURL while
+    // the requested navigation is pending, so getURL() still names the outgoing document.
+    const committedUrl = wc.getURL()
+    const pendingUrl = this.browserManager.getInFlightNavigationUrl(wc)
+    const settledBeforeCommit =
+      !navigationAborted &&
+      (afterCommit || committedUrl !== navigationUrl) &&
+      (isWaitingForMainFrameResponse(wc) || (pendingUrl !== null && pendingUrl !== committedUrl))
+    const navigationInFlight = navigationAborted || settledBeforeCommit
+    if (navigationInFlight) {
+      const outcome = await waitForInFlightNavigation(
+        wc,
+        Math.max(0, navigationDeadline - Date.now())
+      )
+      // Only an aborted load fails at the deadline; an early-settled one reports the current page.
+      if (navigationAborted && outcome === 'timed-out') {
+        throw new BrowserError(
+          'browser_error',
+          `Failed to navigate browser page ${target.browserPageId}: Browser navigation timed out after ${EMBEDDED_NAVIGATION_TIMEOUT_MS}ms`
+        )
+      }
+    }
+
+    // Process swaps can replace the guest while retaining the page ID.
+    const navigatedTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+    const navigatedWebContents = this.requireTargetWebContents(navigatedTarget)
+    const loadError = navigationInFlight
+      ? this.browserManager.getBrowserPageLoadError(target.browserPageId)
+      : null
+    if (loadError) {
+      throw new BrowserError(
+        'browser_error',
+        `Failed to navigate browser page ${target.browserPageId}: ${loadError.description} (${loadError.code})`
+      )
+    }
+    return { url: navigatedWebContents.getURL(), title: navigatedWebContents.getTitle() }
   }
 
   async fill(
@@ -211,7 +244,10 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
       worktreeId,
       browserPageId,
       async (sessionName) => {
-        await this.actOnElement(sessionName, element, 'fill', FILL_ELEMENT_FUNCTION, [value])
+        await this.actOnElement(sessionName, element, 'fill', FILL_ELEMENT_FUNCTION, {
+          args: [value],
+          movesFocus: true
+        })
         return { filled: element }
       },
       { requireScopedTarget: true, elements: [element] }

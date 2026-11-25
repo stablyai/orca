@@ -1,0 +1,4 @@
+# Direct reads of a chat card field (block.botRequest, message.toolAdded, ...) per client file.
+# This is a RATCHET: counts may only go DOWN. Read cards with nativeChatBotCardOf or
+# nativeChatBotMessageCardOf (src/shared/native-chat/bot-cards/native-chat-bot-card-kind.ts).
+# Prune after a fix: pnpm check:bot-card-field-reader-ratchet --prune

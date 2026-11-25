@@ -148,7 +148,9 @@ export function collectDirtyMobileSessionWorkspaces(
   }
   if (
     before.browserPagesByWorkspace !== after.browserPagesByWorkspace ||
-    before.browserCertificateFailuresByPageId !== after.browserCertificateFailuresByPageId
+    before.browserCertificateFailuresByPageId !== after.browserCertificateFailuresByPageId ||
+    before.browserAudiblePageIds !== after.browserAudiblePageIds ||
+    before.browserAudioMutedTabIds !== after.browserAudioMutedTabIds
   ) {
     for (const [worktreeId, workspaces] of Object.entries(next.publication.browserTabsByWorktree)) {
       if (workspaces.length > 0) {

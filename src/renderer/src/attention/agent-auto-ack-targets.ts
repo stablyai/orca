@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/workspace-layout/tab-groups/tab-types'
 import { collectTabGroupLayoutGroupIds } from '../../../shared/workspace-layout/tab-groups/tab-group-moves'
 import { isPresenceConfirmed } from './agent-auto-ack-presence'
+import { botGroupRoomSessions } from '@/lib/bot-group-room-sessions'
 import {
   selectFloatingWorkspacePanelVisible,
   type FloatingWorkspacePanelVisibilityState
@@ -47,6 +48,11 @@ function resolveWorkspaceAutoAckTargets(
       targets.push({ tabId: tab.id, worktreeId, surfaceKind: 'structured' })
     } else if (tab?.contentType === 'terminal') {
       targets.push({ tabId: tab.entityId, worktreeId, surfaceKind: 'terminal' })
+    } else if (tab?.contentType === 'room') {
+      // A room shows only its own members' chats, never its sibling threads'.
+      for (const session of botGroupRoomSessions(tab.entityId)) {
+        targets.push({ tabId: session.id, worktreeId, surfaceKind: 'structured' })
+      }
     }
   }
   return targets

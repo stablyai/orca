@@ -111,7 +111,7 @@ export class WebRuntimeClient {
   call(
     method: string,
     params?: unknown,
-    options?: { timeoutMs?: number; signal?: AbortSignal; expectedConnectionEpoch?: number }
+    options?: Parameters<WebRuntimeConnectionTransport['call']>[2] & { force?: true }
   ): Promise<RuntimeRpcResponse<unknown>> {
     return method === 'status.get' && this.statusOwner
       ? this.statusOwner.refresh(options)

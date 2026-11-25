@@ -2,6 +2,7 @@ import {
   openStructuredAgentSession,
   structuredSessionOpenFailure
 } from '../../../../../shared/agent-session/view/open-structured-agent-session'
+import { unreachableOpenFailure } from '../../../../../shared/agent-session/view/structured-session-open-failure-detail'
 import type {
   StructuredSessionOpenSource,
   StructuredSessionOpenResult,
@@ -87,7 +88,7 @@ type DesktopInteractionOptions = {
   deps?: StructuredSessionOpenAdapterDeps
   locate?: StructuredSessionOpenDeps['locate']
   initialize?: () => boolean
-  present: (result: StructuredSessionOpenResult) => void
+  present: (result: StructuredSessionOpenResult, owner: RuntimeClientTarget) => void
   onError?: () => void
 }
 
@@ -137,7 +138,7 @@ export async function openDesktopStructuredSessionInteraction(
     .then(
       (result) => {
         if (initialized) {
-          options.present(result)
+          options.present(result, owner)
         }
         return result
       },
@@ -239,7 +240,7 @@ export async function revealStructuredSession(target: {
       )
     } catch (error) {
       // Only a version block proves age; other probe failures say nothing about the chat (as in remote-agent-session-launch).
-      return isRuntimeCompatBlockError(error) ? 'host-cannot-open' : 'unreachable'
+      return isRuntimeCompatBlockError(error) ? 'host-cannot-open' : unreachableOpenFailure(error)
     }
     if (!supported) {
       return 'host-cannot-open'
@@ -257,8 +258,8 @@ export async function revealStructuredSession(target: {
         }
       )
     )
-  } catch {
-    return 'unreachable'
+  } catch (error) {
+    return unreachableOpenFailure(error)
   }
   if (result?.ok === true) {
     return { sessionId: result.sessionId, worktreeId: result.workspaceId, agent: result.agent }
@@ -270,13 +271,13 @@ export async function revealStructuredSession(target: {
   return result?.refusal?.code === 'agent_session_identity_required'
     ? 'gone'
     : result?.refusal?.code === 'agent_session_operation_unknown'
-      ? 'unreachable'
+      ? unreachableOpenFailure(result.refusal)
       : 'host-cannot-open'
 }
 
 type AgentSessionRevealReply =
   | { ok: true; sessionId: string; workspaceId: string; agent: string }
-  | { ok: false; refusal: { code?: string; details?: unknown } }
+  | { ok: false; refusal: { code?: string; message?: string; details?: unknown } }
 
 async function refreshStructuredSessionTabs(
   worktreeId: string,

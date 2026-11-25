@@ -34,7 +34,7 @@ import {
   normalizeTitleText
 } from '../../parsing/session-scanner-text-normalization'
 import { extractString } from '../../../../shared/text/trimmed-string'
-import { parseJsonObject } from '../../parsing/session-json-object'
+import { readJsonObjectMembers } from '../../parsing/session-json-object'
 
 type ParserSessionOptions = {
   signal?: AbortSignal
@@ -80,11 +80,45 @@ export function cloneClaudeSessionParseState(
   }
 }
 
+// Every top-level field consumeClaudeSessionRecord reads; keep in sync when it reads another.
+const CLAUDE_RECORD_FIELDS: ReadonlySet<string> = new Set([
+  'type',
+  'sessionId',
+  'timestamp',
+  'cwd',
+  'gitBranch',
+  'customTitle',
+  'aiTitle',
+  'agentName',
+  'operation',
+  'content',
+  'lastPrompt',
+  'isMeta',
+  'message'
+])
+
+// Tool results and attachments can parse to ~20x their size; listing never reads them (#42921).
 export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: string): void {
-  const record = parseJsonObject(line)
-  if (record) {
-    consumeClaudeSessionRecord(state, record)
+  const members = readJsonObjectMembers(line, CLAUDE_RECORD_FIELDS)
+  if (!members) {
+    return
   }
+  const record: Record<string, unknown> = {}
+  try {
+    for (const [key, raw] of members) {
+      if (key !== 'message') {
+        record[key] = JSON.parse(raw)
+      }
+    }
+    const message = members.get('message')
+    // Other record types, such as api-request-blob, carry whole API requests here.
+    if (message !== undefined && (record.type === 'user' || record.type === 'assistant')) {
+      record.message = JSON.parse(message)
+    }
+  } catch {
+    return
+  }
+  consumeClaudeSessionRecord(state, record)
 }
 
 export function consumeClaudeSessionRecord(

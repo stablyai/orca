@@ -53,6 +53,11 @@ export class MainDaemonAttachments {
     return this.endpointLosses.has(ptyId) ? this.attaching.get(ptyId) : undefined
   }
 
+  /** Main's attach of this session, while queued or in flight. */
+  pending(ptyId: string): Promise<boolean> | undefined {
+    return this.attaching.get(ptyId)
+  }
+
   /** Inventory proved the session live; attach it, or retry once an in-flight refusal settles. */
   reconcile(ptyId: string): void {
     const attempt = this.attaching.get(ptyId)

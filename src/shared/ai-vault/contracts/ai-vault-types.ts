@@ -13,7 +13,6 @@ export const AI_VAULT_AGENTS = [
   'omp',
   'prime-agent',
   'cursor',
-  'gemini',
   'antigravity',
   'rovo',
   'copilot',
@@ -33,6 +32,9 @@ export const AI_VAULT_AGENTS = [
 
 // RPC clamps scopePaths to this bound because paths only widen discovery; matching producer-side caps are optional.
 export const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
+
+// One host's list scan can take minutes on a busy server, far past the default remote RPC timeout.
+export const AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS = 150_000
 
 // IPC drops Error.name; recognize cancelled scans by this shared message literal.
 export const AI_VAULT_SCAN_CANCELLED_MESSAGE = 'Agent Session History scan was cancelled'
@@ -73,7 +75,6 @@ export const AI_VAULT_AGENT_LABELS = {
   omp: 'OMP',
   'prime-agent': 'Prime Agent',
   cursor: 'Cursor',
-  gemini: 'Gemini',
   antigravity: 'Antigravity',
   rovo: 'Rovo Dev',
   copilot: 'GitHub Copilot',

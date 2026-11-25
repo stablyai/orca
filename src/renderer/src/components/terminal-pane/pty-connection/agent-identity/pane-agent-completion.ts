@@ -26,6 +26,7 @@ export function installPaneAgentCompletion(session: ConnectPanePtySession): void
     isRemotePtyId: isRemoteExecutionHostPtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
     inspectProcess: inspectRuntimeTerminalProcess,
+    receivesForegroundExitNotices: () => session.mainSideEffectAuthority,
     confirmForegroundProcess: confirmRuntimeTerminalForegroundProcess,
     dispatchHookLifecycle: (payload) =>
       dispatchAgentHookTerminalLifecycle(session.cacheKey, payload),

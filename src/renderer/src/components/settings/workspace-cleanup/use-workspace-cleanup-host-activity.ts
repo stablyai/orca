@@ -43,8 +43,6 @@ export function useWorkspaceCleanupHostActivity(
   previewRules: (rules: WorkspaceCleanupRules) => Promise<WorkspaceCleanupPreview>
   /** Makes a preview of rules that were just saved the page's matches, instead of scanning them again. */
   adoptPreview: (rules: WorkspaceCleanupRules, preview: WorkspaceCleanupPreview) => void
-  /** Reads the report again after a setting outside the rules changed the next run. */
-  refreshReport: () => void
 } {
   const t = useTranslate()
   const environmentId = runtimeTargetEnvironmentId(owner)
@@ -64,7 +62,6 @@ export function useWorkspaceCleanupHostActivity(
   } | null>(null)
   const [cleaningUp, setCleaningUp] = useState(false)
   const [revision, setRevision] = useState(0)
-  const [reportRevision, setReportRevision] = useState(0)
 
   useEffect(
     () =>
@@ -106,7 +103,7 @@ export function useWorkspaceCleanupHostActivity(
       current = false
     }
     // A rule change reschedules the next run, so the report is read again with the rules.
-  }, [environmentId, ownerKey, rulesKey, revision, reportRevision])
+  }, [environmentId, ownerKey, rulesKey, revision])
 
   const previewIsCurrent =
     previewState?.ownerKey === ownerKey &&
@@ -180,7 +177,6 @@ export function useWorkspaceCleanupHostActivity(
     cleanUpNow,
     previewRules,
     adoptPreview: (savedRules, preview) =>
-      setPreviewState({ ownerKey, rulesKey: JSON.stringify(savedRules), revision, preview }),
-    refreshReport: () => setReportRevision((value) => value + 1)
+      setPreviewState({ ownerKey, rulesKey: JSON.stringify(savedRules), revision, preview })
   }
 }

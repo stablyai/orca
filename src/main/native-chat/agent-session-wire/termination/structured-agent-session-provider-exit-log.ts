@@ -1,5 +1,5 @@
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { redactString } from '../../../observability/redactor'
+import { redactString } from '../../../../shared/observability/redactor'
 import { startSpan } from '../../../observability/tracer'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'

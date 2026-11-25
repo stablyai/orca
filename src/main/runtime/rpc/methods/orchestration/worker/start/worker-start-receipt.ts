@@ -1,4 +1,8 @@
 import { formatTerminalStartFailure } from '../../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import {
+  describeTerminalHostCapRefusal,
+  readTerminalHostCapRefusal
+} from '../../../../../../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { WorkerDispatchRow } from '../../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
@@ -6,13 +10,15 @@ import { tearDownFailedWorkerStart } from './readiness/failed-worker-start-teard
 import { reportFailedWorkerStart } from '../../../../../orchestration/workers/turn-stops/failed-worker-start-report'
 import {
   isUnknownWorkerStartOutcome,
+  monitorWorkerSetup,
+  type WorkerEffect,
   type createStructuredWorkerSessionForWorktree,
   type WorkerSetupReceipt
 } from './placement/worker-placement-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './launch/worker-launch-preferences'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { replaceDispatchCapabilities } from '../../../../../orchestration/terminal-authority/views/worker-terminal-redaction'
-import { redactString } from '../../../../../../observability/redactor'
+import { redactString } from '../../../../../../../shared/observability/redactor'
 
 type WorkerStartFailureArgs = {
   runtime: OrcaRuntimeService
@@ -78,21 +84,40 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 }
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
+  const hostCap = readTerminalHostCapRefusal(args.error)
   // A launch's printed output can echo its injected capability or other secrets; the receipt must never carry them.
   const reason = redactString(
     replaceDispatchCapabilities(
-      formatTerminalStartFailure(args.error) ??
+      (hostCap && describeTerminalHostCapRefusal(hostCap, "the worker's terminal")) ??
+        formatTerminalStartFailure(args.error) ??
         (args.error instanceof Error ? args.error.message : String(args.error))
     ).value
   )
-  const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
+  const unknown = isUnknownWorkerStartOutcome(args.error)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
     : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
-  if (!unknown) {
+  // A structured session is torn down below, so only a surface that stays can hold an unsent brief.
+  if (unknown && !args.structuredSession) {
+    void args.runtime.reportUnconfirmedWorkerStart(args.dispatchId).catch((error: unknown) => {
+      console.warn('[orchestration] reporting an unconfirmed worker start failed', error)
+    })
+  } else if (!unknown) {
     reportFailedWorkerStart(args.db, worker, (handle, type) =>
       args.runtime.notifyMessageArrived(handle, type)
     )
+  }
+  if (!unknown) {
+    // Its setup may still fail; that outcome keeps the setup terminal open after release.
+    monitorWorkerSetup({
+      runtime: args.runtime,
+      db: args.db,
+      runId: args.runId,
+      dispatchId: args.dispatchId,
+      setupReceipt: args.setup,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this host wrote these effects from WorkerEffect[].
+      effects: JSON.parse(worker.effects) as WorkerEffect[]
+    })
   }
   // Offer cleanup for this start's still-owned resource, including a chat retaining its refused task.
   const residual = unknown ? undefined : args.db.getWorkerTerminalResourceByOwner(args.dispatchId)
@@ -105,6 +130,7 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
     stage: worker.stage,
     failedStage: args.failedStage,
     lastError: reason,
+    ...(hostCap ? { blockedReason: hostCap.code } : {}),
     setup: args.setup,
     launch: args.launch,
     mode: args.mode,
@@ -122,6 +148,8 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
             `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
           ]
         }
-      : {})
+      : hostCap
+        ? { nextCommands: ['orca orchestration worker-list --terminal-state reclaimable --json'] }
+        : {})
   }
 }

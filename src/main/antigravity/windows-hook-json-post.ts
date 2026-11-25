@@ -5,6 +5,7 @@ import {
 } from '../agent-hooks/installation/scripts/hook-stdin-contract'
 
 // curl reads payload@- before starting its timeout; agy can keep that pipe open.
+// Fallback when orca-agent-hook.exe is absent; the 3 s read cap matches it so agy's 10 s kill stays far off.
 export const WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT = String.raw`
 const http = require('node:http');
 const { StringDecoder } = require('node:string_decoder');
@@ -23,7 +24,7 @@ let invalid = false;
 const stack = [];
 const maxBytes = ${HOOK_REQUEST_MAX_BYTES};
 let idleTimer;
-const absoluteTimer = setTimeout(finish, 7000);
+const absoluteTimer = setTimeout(finish, 3000);
 function finish() {
   if (finished) return;
   finished = true;

@@ -8,12 +8,8 @@
     "../src/preload/api/**/*",
     "../src/main/pi/rpc/options/rpc-model-schema.ts",
     "../src/main/pi/rpc/options/rpc-model-options.ts",
-    "../src/shared/**/*"
-  ],
-  "exclude": [
-    "../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-host-platform.test.ts",
-    "../src/renderer/src/components/browser-pane/assemble-chrome/client-hosted/ClientHostedBrowserPagePane.test.tsx",
-    "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts"
+    "../src/shared/**/*",
+    "../cloud/packages/connector-contract/src/connect-messages.ts"
   ],
   "compilerOptions": {
     "composite": true,

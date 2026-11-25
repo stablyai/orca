@@ -2,7 +2,8 @@
 
 import type { ProgramStatusFacet } from '../../program-status/facet'
 import type { AgentProviderSessionMetadata } from '../../agent-session/lifecycle/agent-session-resume'
-import type { AgentMainAgentStatus } from '../lifecycle/main-agent-status'
+import type { AgentMainAgentStatus, AgentTurnFailure } from '../lifecycle/main-agent-status'
+import { MAX_PROVIDER_DIAGNOSTIC_CHARS } from '../../agent-session/failures/agent-session-failure'
 import type { AgentStateHistoryEntry } from '../lifecycle/agent-state-history'
 import { isAgentTurnOutcome } from '../lifecycle/agent-turn-outcome'
 import type { OrchestrationFleetAttention } from '../../orchestration/fleet/orchestration-fleet-attention'
@@ -17,7 +18,8 @@ import {
   normalizeOptionalField,
   normalizeOptionalMultilineField,
   normalizePromptField,
-  normalizeTurnCompletedAtField
+  normalizeTurnCompletedAtField,
+  normalizeBackgroundCommandsField
 } from './agent-status-field-normalization'
 import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
 
@@ -133,6 +135,8 @@ export type AgentStatusEntry = {
   launchAttested?: boolean
   /** False when the status belongs to a non-terminal owner that restores itself. */
   terminalResumeEligible?: false
+  /** A tmux or shared server, not this pane, runs this conversation: never the pane's resume. */
+  executionHost?: 'shared'
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
   /** Live OSC 7501 facet never decides state; read through resolveProgramStatusPresentation beside the state owner. */
@@ -170,6 +174,8 @@ export type AgentStatusPayload = {
   turnCompletedAt?: number
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
+  /** While the lead's turn is over and only its background shells keep the row `working`: what they run. */
+  backgroundCommands?: string[]
   /** The main agent's own state and last-turn verdict. See AgentMainAgentStatus. Producers publish it
    *  beside the combined `state`; a reader that predates it keeps reading `state`. */
   mainAgent?: AgentMainAgentStatus
@@ -204,6 +210,7 @@ export function pickParsedAgentStatusPayload(
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {}),
+    ...(row.backgroundCommands !== undefined ? { backgroundCommands: row.backgroundCommands } : {}),
     ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {}),
     ...(row.claudeTaskWakeupPending !== undefined
       ? { claudeTaskWakeupPending: row.claudeTaskWakeupPending }
@@ -250,6 +257,19 @@ export const AGENT_STATUS_JSON_STRUCTURE_LIMITS = {
   nestingDepth: 16
 } as const
 
+/** A failed turn's error code (`rate_limit`) and its bounded message; anything else is dropped. */
+function normalizeAgentTurnFailure(value: unknown): AgentTurnFailure | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined
+  }
+  const { error, message } = value as Record<string, unknown>
+  if (typeof error !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(error)) {
+    return undefined
+  }
+  const text = normalizeOptionalMultilineField(message, MAX_PROVIDER_DIAGNOSTIC_CHARS)
+  return { error, ...(text ? { message: text } : {}) }
+}
+
 /** Drop malformed mainAgent alone; combined state remains valid, matching the older-host fallback. */
 export function normalizeMainAgentStatusField(value: unknown): AgentMainAgentStatus | undefined {
   if (typeof value !== 'object' || value === null) {
@@ -263,10 +283,15 @@ export function normalizeMainAgentStatusField(value: unknown): AgentMainAgentSta
   if (typeof obj.stateStartedAt !== 'number' || !Number.isFinite(obj.stateStartedAt)) {
     return undefined
   }
+  const failure =
+    state === 'done' && obj.outcome === 'failure'
+      ? normalizeAgentTurnFailure(obj.failure)
+      : undefined
   return {
     state,
     // Why: a verdict belongs to a finished turn; anything riding on a live state is stale.
     ...(state === 'done' && isAgentTurnOutcome(obj.outcome) ? { outcome: obj.outcome } : {}),
+    ...(failure ? { failure } : {}),
     ...(state === 'working' && obj.stopping === true ? { stopping: true as const } : {}),
     stateStartedAt: obj.stateStartedAt
   }
@@ -314,6 +339,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
     turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeAgentSubagentsField(obj.subagents),
+    backgroundCommands: normalizeBackgroundCommandsField(obj.backgroundCommands, state),
     mainAgent: normalizeMainAgentStatusField(obj.mainAgent),
     ...(obj.agentType === 'claude' &&
     state !== 'done' &&

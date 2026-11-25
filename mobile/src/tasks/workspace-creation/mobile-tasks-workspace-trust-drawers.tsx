@@ -189,7 +189,7 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
               key="action-2"
               title={translate(
                 'tasks.workspaceTrustDrawers.skipSetupAndCreate',
-                'Skip setup and create'
+                'Create without setup'
               )}
               leading={<X size={16} color={colors.textPrimary} />}
               disabled={creatingKey === setupPrompt.item.key}

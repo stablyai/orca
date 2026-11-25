@@ -57,6 +57,7 @@ type WorkerAgentPlacementArgs = {
   requestedWorktree: string
   /** Present only when this start creates a worktree. */
   creationTarget: WorkerWorktreeCreationTarget | undefined
+  orchestrationRunId: string
   /** The already-resolved placement, present only when this start does not create one. */
   resolvedWorktree: PlacedWorktree | undefined
   /** Decided before the dispatch record; for an existing worktree, already settled on its host. */
@@ -173,6 +174,10 @@ async function launchWorkerAgent(
             dispatchId: args.dispatchId,
             requestedWorktree: args.requestedWorktree,
             target: requirePlacement(args.creationTarget),
+            orchestrationContext: {
+              taskId: args.taskId,
+              orchestrationRunId: args.orchestrationRunId
+            },
             params: args.params,
             agent,
             // The executor withholds the startup agent exactly when the worker is to be a session.

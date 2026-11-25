@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { onWorkspaceCleanupRunFinished } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import { useAppStore } from '@/store/index'
+import { findLastVisitedLiveWorkspaceId } from '@/store/slices/ui/workspace-navigation-history'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getExecutionHostLabel,
@@ -107,8 +108,18 @@ export function useAiVaultPanelHostScope(
     () => runtimeHostOptions.map((option) => option.id),
     [runtimeHostOptions]
   )
+  // Why: closing the last tab leaves no workspace, which says nothing about the host; keep the last one's (#40727).
+  const navHistory = useAppStore((s) => s.worktreeNavHistory)
+  const navHistoryIndex = useAppStore((s) => s.worktreeNavHistoryIndex)
+  const lastVisitedWorkspaceId = useMemo(
+    () =>
+      workspaceId === null
+        ? findLastVisitedLiveWorkspaceId(navHistory, navHistoryIndex, resumeTargetState)
+        : null,
+    [navHistory, navHistoryIndex, resumeTargetState, workspaceId]
+  )
   const hostScope = useAiVaultExecutionHostScope({
-    activeWorktreeId: workspaceId,
+    activeWorktreeId: workspaceId ?? lastVisitedWorkspaceId,
     resumeTargetState,
     availableExecutionHostScopes
   })

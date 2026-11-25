@@ -199,3 +199,6 @@ export function assertOwnedHostCodexManagedHomePath(
   }
   throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: verdict.error })
 }
+
+/** An account folder whose home may be Orca's, before ownership is checked. */
+export type CodexAccountHomeCandidate = { accountsRoot: string; accountId: string }

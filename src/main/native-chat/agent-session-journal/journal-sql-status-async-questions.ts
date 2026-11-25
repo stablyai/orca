@@ -8,6 +8,7 @@ import {
 } from '../../../shared/agent-session/view/structured-agent-session-async-questions'
 import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { isDeliveredNativeChatUserMessage } from '../../../shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AgentSessionAwaitedQuestion } from '../../../shared/agent-session/agent-session-wire'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import type { JournalStatusPosition } from './journal-status-items'
 
@@ -17,7 +18,7 @@ import type { JournalStatusPosition } from './journal-status-items'
 export function readJournalSqlOpenAsyncQuestion(
   state: JournalSqlStatusContext,
   floor: number
-): string | undefined {
+): AgentSessionAwaitedQuestion | undefined {
   let later: AgentJournalRenderItem[] = []
   const submissions: AgentJournalSubmission[] = []
   let before: JournalStatusPosition | undefined

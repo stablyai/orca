@@ -29,10 +29,12 @@ import { useComposerHostedAddProject } from '../project-selection/use-composer-h
 import { useComposerState } from '@/hooks/useComposerState'
 import {
   composerLaunchWorkspace,
-  quickWorkspacePickerInputs,
+  quickWorkspacePickerInputs
+} from '@/lib/workspace/creation/quick-workspace-agent-selection'
+import {
   pickQuickWorkspaceAgent,
   resolveQuickWorkspaceAgentSelection
-} from '@/lib/workspace/creation/quick-workspace-agent-selection'
+} from '../../../../../shared/agent-launch/catalog/quick-workspace-agent-selection'
 import { useAgentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
@@ -171,11 +173,19 @@ function QuickTabBody({
   const detected = cardProps.detectedAgentIds ? [...cardProps.detectedAgentIds] : null
   const choicePending = (agent: TuiAgent): boolean =>
     agentChoicePending(useAppStore.getState(), agent, launchWorkspace, detected)
+  const observation = useAgentMenuObservation(
+    cardProps.agentRows?.target ?? null,
+    active && Boolean(cardProps.agentRows),
+    cardProps.agentRows?.detectionTarget,
+    { wakeOnOpen: true }
+  )
+  // The rows' host list governs picks; until a paired server states it, preselect by this client's list.
+  const disabledTuiAgents = observation.preferences.disabledTuiAgents
   // Pending discovery preserves the existing catalog fallback; current facts settle the default.
   const preferredQuickAgent = pickQuickWorkspaceAgent(
     settings?.defaultTuiAgent,
     cardProps.detectedAgentIds,
-    settings?.disabledTuiAgents,
+    observation.preferencesInherited ? settings?.disabledTuiAgents : disabledTuiAgents,
     offeredAgentIds,
     choicePending
   )
@@ -186,7 +196,7 @@ function QuickTabBody({
     detectedAgentIds: cardProps.detectedAgentIds,
     offeredAgentIds,
     selectedChoiceUnresolved: Boolean(quickAgentOverride && choicePending(quickAgentOverride)),
-    disabledTuiAgents: settings?.disabledTuiAgents
+    disabledTuiAgents
   })
   if (resolvedQuickAgentSelection.quickAgentOverride !== quickAgentOverride) {
     // Repair invalid picks before children render an unavailable option.
@@ -200,12 +210,6 @@ function QuickTabBody({
   const [quickAgentPick, setQuickAgentPick] = useState<
     Omit<NonNullable<ComposerModalData['recovery']>, 'note'>
   >(modalData.recovery ?? { agent: null })
-  const observation = useAgentMenuObservation(
-    cardProps.agentRows?.target ?? null,
-    active && Boolean(cardProps.agentRows),
-    cardProps.agentRows?.detectionTarget,
-    { wakeOnOpen: true }
-  )
   const pickerDraft =
     quickAgentPick.agent === quickAgent && quickAgentPick.contextKey === observation.contextKey
       ? quickAgentPick.draft

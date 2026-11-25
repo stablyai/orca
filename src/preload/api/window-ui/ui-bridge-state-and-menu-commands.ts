@@ -1,4 +1,5 @@
 import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
+import type { BotDeepLinkOutcome } from '../../../shared/bot-deep-link'
 import type { BrowserTabCreateRequest } from '../../../shared/browser/workspaces/browser-tab-create-request'
 import { ipcRenderer } from 'electron'
 import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
@@ -46,6 +47,13 @@ export const uiStateAndMenuCommandsApi = {
   },
   consumePendingSkillShare: (): Promise<string | null> =>
     ipcRenderer.invoke('ui:consumePendingSkillShare'),
+  onBotLinkPending: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('ui:botLinkPending', listener)
+    return () => ipcRenderer.removeListener('ui:botLinkPending', listener)
+  },
+  consumePendingBotLink: (): Promise<BotDeepLinkOutcome | null> =>
+    ipcRenderer.invoke('ui:consumePendingBotLink'),
   onOpenPluginInstallLink: (callback: (link: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, link: string): void => callback(link)
     ipcRenderer.on('ui:openPluginInstallLink', listener)
@@ -86,8 +94,9 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:toggleRightSidebar', listener)
     return () => ipcRenderer.removeListener('ui:toggleRightSidebar', listener)
   },
-  onToggleWorktreePalette: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
+  onToggleWorktreePalette: (callback: (options?: { openOnly?: boolean }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, options?: { openOnly?: boolean }) =>
+      callback(options)
     ipcRenderer.on('ui:toggleWorktreePalette', listener)
     return () => ipcRenderer.removeListener('ui:toggleWorktreePalette', listener)
   },

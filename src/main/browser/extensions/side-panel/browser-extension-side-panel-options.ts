@@ -14,10 +14,11 @@ type ExtensionOptions = {
 }
 
 // Why memory only: Chrome forgets setOptions when the extension unloads or the browser restarts.
-const optionsByKey = new Map<string, ExtensionOptions>()
+// Why by profile first: a tab closing touches only its own profile's extensions.
+const optionsByProfile = new Map<string, Map<string, ExtensionOptions>>()
 
-function optionsKey(profileId: string, extensionId: string): string {
-  return `${profileId}\0${extensionId}`
+function optionsFor(profileId: string, extensionId: string): ExtensionOptions | undefined {
+  return optionsByProfile.get(profileId)?.get(extensionId)
 }
 
 function manifestOptions(extension: Electron.Extension): BrowserExtensionSidePanelOptions | null {
@@ -45,7 +46,7 @@ export function getSidePanelGlobalOptions(
   profileId: string,
   extension: Electron.Extension
 ): BrowserExtensionSidePanelOptions | null {
-  return optionsByKey.get(optionsKey(profileId, extension.id))?.global ?? manifestOptions(extension)
+  return optionsFor(profileId, extension.id)?.global ?? manifestOptions(extension)
 }
 
 export function getSidePanelTabOptions(
@@ -53,7 +54,7 @@ export function getSidePanelTabOptions(
   extensionId: string,
   tabId: number
 ): BrowserExtensionSidePanelOptions | null {
-  return optionsByKey.get(optionsKey(profileId, extensionId))?.tabs.get(tabId) ?? null
+  return optionsFor(profileId, extensionId)?.tabs.get(tabId) ?? null
 }
 
 /** What applies on a tab: its own options, else the global ones (Chrome's getOptions order). */
@@ -76,7 +77,7 @@ export function isUsableSidePanel(
 
 /** Tabs that have options of their own, where the global panel never shows. */
 export function listSidePanelTabsWithOwnOptions(profileId: string, extensionId: string): number[] {
-  return [...(optionsByKey.get(optionsKey(profileId, extensionId))?.tabs.keys() ?? [])]
+  return [...(optionsFor(profileId, extensionId)?.tabs.keys() ?? [])]
 }
 
 /**
@@ -89,9 +90,10 @@ export function setSidePanelOptions(
   extension: Electron.Extension,
   change: { tabId?: number; path?: string; enabled?: boolean }
 ): BrowserExtensionSidePanelOptions {
-  const key = optionsKey(profileId, extension.id)
-  const entry = optionsByKey.get(key) ?? { global: null, tabs: new Map() }
-  optionsByKey.set(key, entry)
+  const byExtension = optionsByProfile.get(profileId) ?? new Map<string, ExtensionOptions>()
+  optionsByProfile.set(profileId, byExtension)
+  const entry = byExtension.get(extension.id) ?? { global: null, tabs: new Map() }
+  byExtension.set(extension.id, entry)
   const previous =
     change.tabId === undefined
       ? (entry.global ?? manifestOptions(extension))
@@ -111,18 +113,19 @@ export function setSidePanelOptions(
 
 /** True when some extension had options for the tab (a global panel may show there again). */
 export function forgetSidePanelTabOptions(profileId: string, tabId: number): boolean {
-  const prefix = `${profileId}\0`
   let forgot = false
-  for (const [key, entry] of optionsByKey) {
-    if (key.startsWith(prefix)) {
-      forgot = entry.tabs.delete(tabId) || forgot
-    }
+  for (const entry of optionsByProfile.get(profileId)?.values() ?? []) {
+    forgot = entry.tabs.delete(tabId) || forgot
   }
   return forgot
 }
 
 export function forgetSidePanelExtensionOptions(profileId: string, extensionId: string): void {
-  optionsByKey.delete(optionsKey(profileId, extensionId))
+  const byExtension = optionsByProfile.get(profileId)
+  byExtension?.delete(extensionId)
+  if (byExtension?.size === 0) {
+    optionsByProfile.delete(profileId)
+  }
 }
 
 export function getOpenSidePanelOnActionClick(profileId: string, extensionId: string): boolean {

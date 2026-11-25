@@ -10,6 +10,7 @@ export function orcadSessionScannerIdleTimeoutMs(
   return isWslHost() ? WSL_HOST_SESSION_SCANNER_IDLE_TIMEOUT_MS : null
 }
 
+/** Loads the scanner spawn module only when this host overrides its idle timeout. */
 export async function applyOrcadSessionScannerIdleTimeout(): Promise<void> {
   const timeoutMs = orcadSessionScannerIdleTimeoutMs()
   if (timeoutMs !== null) {

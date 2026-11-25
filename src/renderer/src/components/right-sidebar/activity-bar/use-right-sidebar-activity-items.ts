@@ -1,15 +1,19 @@
 import { useMemo } from 'react'
-import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
-import { useAppStore } from '@/store/index'
+import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
-import { getPluginPanelActivityItems } from '../plugin-panels/plugin-panel-activity-items'
+import {
+  builtInTabNames,
+  getPluginPanelActivityItems,
+  withDistinctPluginPanelNames
+} from '../plugin-panels/plugin-panel-activity-items'
+import { getDefaultRightSidebarActivityItems } from './right-sidebar-default-activity-items'
 import {
   getPortsPanelOwnerKey,
   portsPanelHostForOwnerKey,
-  portsPanelReachesSshHost
+  portsPanelReachesRemoteHost
 } from '../ports/ports-panel-host'
 import {
   collectInstalledPluginTabKeys,
@@ -18,10 +22,26 @@ import {
   type PluginPanelsFetchStatus
 } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
+import { getActiveChecksStatus } from '../checks-panel/status/active-checks-status'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { AgentSessionHistoryIcon } from './agent-session-history-icon'
 import type { ActivityBarItem } from './activity-bar-buttons'
+import { useBotForWorkspace, useBotGroupForWorkspace } from '../../bots/bot-workspace'
+import { useFocusedChatWorkers } from '@/lib/focused-chat-workers'
+import { useBotNeedsYouCount, useBotNow } from '../../bots/use-bot-now'
+import { usePublishedBotsNeedsYou } from '../../bots/bot-needs-you-published'
+import { useBots } from '@/lib/bot-catalog'
+import type { Bot } from '../../../../../shared/bot-types'
+import type { BotGroup } from '../../../../../shared/bots/bot-group'
+import { botGroupMemberBots } from '../../../../../shared/bots/bot-sidebar-entries'
+
+const NO_BOTS: readonly Bot[] = []
+
+function useGroupMembers(group: BotGroup | null): readonly Bot[] {
+  const bots = useBots(group !== null)
+  return useMemo(() => (group ? botGroupMemberBots(group, bots) : NO_BOTS), [group, bots])
+}
 
 export type RightSidebarActivityItems = {
   visibleItems: ActivityBarItem[]
@@ -29,6 +49,7 @@ export type RightSidebarActivityItems = {
   pluginSystemEnabled: boolean
   pluginFetchStatus: PluginPanelsFetchStatus
   installedPluginTabKeys: Set<string>
+  isBotPage: boolean
 }
 
 export function useRightSidebarActivityItems({
@@ -51,11 +72,26 @@ export function useRightSidebarActivityItems({
   const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
+  const bot = useBotForWorkspace(isFolderWorkspace ? activeWorktreeId : null)
+  const isBot = bot !== null
+  const group = useBotGroupForWorkspace(isFolderWorkspace ? activeWorktreeId : null)
+  const isGroupHome = group !== null
+  const groupMembers = useGroupMembers(group)
+  const now = useBotNow(bot)
+  const { needs } = now
+  // A bot's first tab is Home: its badge counts Orca's asks and items in Needs you. A group's counts
+  // its members' as their own tabs do, published by its open panel.
+  const botNeedsYou = useBotNeedsYouCount(bot, now)
+  const groupNeedsYou = usePublishedBotsNeedsYou(groupMembers)
+  const needsYou = isGroupHome ? groupNeedsYou : botNeedsYou
+  const showsHomeTab = isBot || isGroupHome
+  // The same read as Activity's count, so connector reads aren't repeated for the tab.
+  const connectorsNeedingOwner = needs.filter((need) => need.kind === 'connector').length
+  const hasChatWorkers = useFocusedChatWorkers(rightSidebarOpen && !isBot).workers.length > 0
   // Why the owner: a managed server's workspace names its server, not an SSH connection.
-  const hasSshHost = useAppStore((s) =>
-    portsPanelReachesSshHost(
-      portsPanelHostForOwnerKey(getPortsPanelOwnerKey(s, activeWorktreeId)),
-      s.runtimeEnvironments
+  const hasRemoteHost = useAppStore((s) =>
+    portsPanelReachesRemoteHost(
+      portsPanelHostForOwnerKey(getPortsPanelOwnerKey(s, activeWorktreeId))
     )
   )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
@@ -71,80 +107,78 @@ export function useRightSidebarActivityItems({
     () => collectInstalledPluginTabKeys(installedPlugins),
     [installedPlugins]
   )
-
-  const activityItems = useMemo<ActivityBarItem[]>(
-    () => [
-      {
-        id: 'explorer',
-        icon: Files,
-        title: t('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
-        shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
-      },
-      {
-        id: 'vault',
-        icon: AgentSessionHistoryIcon,
-        title: t('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
-        shortcut: ''
-      },
-      {
-        id: 'workspaces',
-        icon: Workflow,
-        title: t('auto.components.right.sidebar.index.folderWorkspaces', 'Attached worktrees'),
-        shortcut: '',
-        folderOnly: true
-      },
-      {
-        id: 'pr-checks',
-        icon: ListChecks,
-        title: t('auto.components.right.sidebar.index.parentPrChecks', 'PR Checks'),
-        shortcut: '',
-        folderOnly: true
-      },
-      {
-        id: 'source-control',
-        icon: GitBranch,
-        title: t('auto.components.right.sidebar.index.0314901467', 'Source Control'),
-        shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
-        gitOnly: true
-      },
-      {
-        id: 'checks',
-        icon: ListChecks,
-        title: t('auto.components.right.sidebar.index.83a10e3c44', 'Checks'),
-        shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
-        gitOnly: true
-      },
-      {
-        id: 'ports',
-        icon: Plug,
-        title: t('auto.components.right.sidebar.index.441733b630', 'Ports'),
-        shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
-        sshOnly: true
-      },
-      // Append plugin tabs to preserve built-in navigation positions.
-      ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
-    ],
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-    [
-      checksShortcut,
-      explorerShortcut,
-      pluginPanelErrors,
-      visiblePluginPanels,
-      portsShortcut,
-      sourceControlShortcut,
-      languageRevision,
-      t
-    ]
+  // Why here: the checks tab announces this status, so a plugin tab's name is judged against it.
+  const creatingWorktree = useAppStore(selectWorktreeCreationSurfaceShown)
+  const checksStatus = useAppStore((s) =>
+    s.rightSidebarOpen && !creatingWorktree ? getActiveChecksStatus(s) : null
   )
 
+  // A bot's page labels every tab (labeledTab): Home, Connectors, Chats, Files.
+  const activityItems = useMemo<ActivityBarItem[]>(() => {
+    const builtInItems = getDefaultRightSidebarActivityItems({
+      t,
+      explorerShortcut,
+      sourceControlShortcut,
+      checksShortcut,
+      portsShortcut,
+      isBot,
+      showsHomeTab,
+      needsYou,
+      connectorsNeedingOwner
+    })
+    return [
+      ...builtInItems,
+      // Append plugin tabs to preserve built-in navigation positions. Checked against every built-in
+      // label, not only the visible ones, so a plugin tab's name never depends on what is shown.
+      ...getPluginPanelActivityItems(
+        visiblePluginPanels,
+        pluginPanelErrors,
+        builtInTabNames(builtInItems, t)
+      ).map((item) => ({
+        ...item,
+        labeledTab: isBot
+      }))
+    ]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [
+    checksShortcut,
+    explorerShortcut,
+    pluginPanelErrors,
+    visiblePluginPanels,
+    portsShortcut,
+    sourceControlShortcut,
+    isBot,
+    showsHomeTab,
+    needsYou,
+    connectorsNeedingOwner,
+    languageRevision,
+    t
+  ])
+
+  // Why after visibility: only tabs on screen together need names a screen reader can tell apart.
   const visibleItems = useMemo(
     () =>
-      getVisibleRightSidebarActivityItems(activityItems, {
-        isFolder,
-        isFolderWorkspace,
-        hasSshHost
-      }),
-    [activityItems, isFolder, isFolderWorkspace, hasSshHost]
+      withDistinctPluginPanelNames(
+        getVisibleRightSidebarActivityItems(activityItems, {
+          isFolder,
+          isFolderWorkspace,
+          hasRemoteHost,
+          isBot,
+          isGroupHome,
+          hasChatWorkers
+        }),
+        (item) => item.statusIndicator ?? (item.id === 'checks' ? checksStatus : null)
+      ),
+    [
+      activityItems,
+      isFolder,
+      isFolderWorkspace,
+      hasRemoteHost,
+      isBot,
+      isGroupHome,
+      hasChatWorkers,
+      checksStatus
+    ]
   )
 
   const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null
@@ -154,6 +188,7 @@ export function useRightSidebarActivityItems({
     activeFolderWorkspaceKey,
     pluginSystemEnabled,
     pluginFetchStatus,
-    installedPluginTabKeys
+    installedPluginTabKeys,
+    isBotPage: isBot
   }
 }

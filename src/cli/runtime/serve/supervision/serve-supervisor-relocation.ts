@@ -9,7 +9,7 @@ import { isProcessAlive } from '../../../../shared/remote-runtime/serve-supervis
 /** Relocated supervisors can no longer derive the app root from __dirname. */
 export const SERVE_SUPERVISOR_APP_ROOT_ENV = 'ORCA_SERVE_SUPERVISOR_APP_ROOT'
 
-const PACKAGED_APP_ROOT_NAME = 'app.asar.unpacked'
+export const PACKAGED_APP_ROOT_NAME = 'app.asar.unpacked'
 const COMPLETE_MARKER = '.complete'
 const USERS_DIR = '.users'
 const TEMPORARY_PREFIX = '.tmp-'

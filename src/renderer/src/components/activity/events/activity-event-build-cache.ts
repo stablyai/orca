@@ -16,10 +16,16 @@ import { buildPaneActivityEvents } from './activity-pane-events'
 import {
   buildActivityTabContext,
   buildActivityTabHostIndex,
+  keepsActivityTabIdentities,
+  patchActivityTabIndexes,
   type ActivityTabContext,
-  type ActivityTabHostIndex
+  type ActivityTabHostIndex,
+  type TabBucketChange
 } from './activity-event-builder-context'
+import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { BuildActivityEventsArgs } from './activity-event-builder'
+import { KeyedRebuildPlan } from '../../../../../shared/collections/keyed-rebuild-plan'
 
 type ActivityTabInputs = Pick<
   BuildActivityEventsArgs,
@@ -44,13 +50,83 @@ type PaneActivityCacheEntry = {
   rowEntry: AgentStatusEntry
 }
 
+export type PaneBuild = {
+  events: ActivityEvent[]
+  live: ActivityLiveAgentSnapshot | null
+  rowEntry: AgentStatusEntry
+}
+
 export type ActivityEventBuildCache = {
   panes: Map<string, PaneActivityCacheEntry>
   tabs?: ActivityTabIndexes
+  /** Each accepted status's last outcome; null when it had no tab to attribute. */
+  live: Map<string, { entry: AgentStatusEntry; build: PaneBuild | null }>
+  plan: KeyedRebuildPlan
 }
 
 export function createActivityEventBuildCache(): ActivityEventBuildCache {
-  return { panes: new Map() }
+  return { panes: new Map(), live: new Map(), plan: new KeyedRebuildPlan() }
+}
+
+export function resetActivityEventBuildCache(cache: ActivityEventBuildCache): void {
+  cache.panes.clear()
+  cache.tabs = undefined
+  cache.live.clear()
+  cache.plan.reset()
+}
+
+/** The replaced buckets of an addressed write that kept the workspace set; null when it can't be read so. */
+function replacedBuckets<T extends TerminalTab | Tab>(
+  next: Record<string, T[]>,
+  previous: Record<string, T[]>
+): TabBucketChange<T>[] | null {
+  const changes = readTabMapChanges(next, previous)
+  if (!changes) {
+    return []
+  }
+  if (changes.kind !== 'addressed' || changes.workspaceSetChanged) {
+    return null
+  }
+  const buckets: TabBucketChange<T>[] = []
+  for (const worktreeId of changes.workspaceIds) {
+    const before = Object.hasOwn(previous, worktreeId) ? previous[worktreeId] : undefined
+    const after = Object.hasOwn(next, worktreeId) ? next[worktreeId] : undefined
+    if (!before || !after || !keepsActivityTabIdentities({ worktreeId, before, after })) {
+      return null
+    }
+    buckets.push({ worktreeId, before, after })
+  }
+  return buckets
+}
+
+// A title or label write replaces buckets without moving any tab, so only those buckets re-index.
+function patchedTabIndexes(
+  args: ActivityTabInputs,
+  previous: ActivityTabIndexes
+): ActivityTabIndexes | null {
+  if (
+    previous.chatNames !== args.chatNames ||
+    !previous.unifiedTabsByWorktree ||
+    !args.unifiedTabsByWorktree
+  ) {
+    return null
+  }
+  const terminal = replacedBuckets(args.tabsByWorktree, previous.tabsByWorktree)
+  const unified =
+    terminal && replacedBuckets(args.unifiedTabsByWorktree, previous.unifiedTabsByWorktree)
+  if (
+    !terminal ||
+    !unified ||
+    // Only this cache holds the indexes, so patching them in place leaves no reader behind.
+    !patchActivityTabIndexes(previous.context, previous.hosts, terminal, unified, args.chatNames)
+  ) {
+    return null
+  }
+  return {
+    ...previous,
+    tabsByWorktree: args.tabsByWorktree,
+    unifiedTabsByWorktree: args.unifiedTabsByWorktree
+  }
 }
 
 export function resolveActivityTabIndexes(
@@ -66,7 +142,7 @@ export function resolveActivityTabIndexes(
   ) {
     return previous
   }
-  const next: ActivityTabIndexes = {
+  const next: ActivityTabIndexes = (previous && patchedTabIndexes(args, previous)) ?? {
     tabsByWorktree: args.tabsByWorktree,
     unifiedTabsByWorktree: args.unifiedTabsByWorktree,
     chatNames: args.chatNames,
@@ -106,7 +182,7 @@ export function resolvePaneBuild(
   request: PaneBuildRequest,
   cache: ActivityEventBuildCache | undefined,
   seenCacheKeys: Set<string> | null
-): { events: ActivityEvent[]; live: ActivityLiveAgentSnapshot | null; rowEntry: AgentStatusEntry } {
+): PaneBuild {
   seenCacheKeys?.add(request.cacheKey)
   const cached = cache?.panes.get(request.cacheKey)
   const inputsUnchanged =

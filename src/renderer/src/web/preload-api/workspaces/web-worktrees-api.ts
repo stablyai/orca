@@ -267,6 +267,17 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     },
     // Why: the capture lives in desktop main memory, unexposed over pairing; the dialog falls back to the persisted excerpt.
     getBranchRenameFailureOutput: async () => null,
+    // Why: retry runs in desktop main against local history and Git; paired clients only dismiss.
+    getBranchAutoRenameRetryAvailability: async () => ({
+      available: false,
+      runningAttemptId: null
+    }),
+    retryBranchAutoRename: async () => ({
+      attemptId: null,
+      outcome: { kind: 'ineligible', reason: 'unavailable' },
+      finishedAt: Date.now()
+    }),
+    onBranchAutoRenameAttempt: () => noopUnsubscribe,
     onChanged: () => noopUnsubscribe,
     onGitStatusMetadataChanged: () => noopUnsubscribe,
     onHeadIdentitiesChanged: () => noopUnsubscribe,

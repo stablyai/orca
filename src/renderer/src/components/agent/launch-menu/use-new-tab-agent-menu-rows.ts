@@ -1,7 +1,8 @@
 import {
   createAgentMenuTerminalPendingSelector,
-  readAgentMenuLaunchFacts
+  useAgentMenuLaunchFacts
 } from './agent-menu-launch-facts'
+import { buildRouteInputForStatuses } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   useAppViewExternalStore,
   useAppStateView,
@@ -13,14 +14,12 @@ import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-
 
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { readRuntimeStatusesForView } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
-} from '../../../../../shared/execution-host/execution-host'
+import * as ExecutionHost from '../../../../../shared/execution-host/execution-host'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
-import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -40,6 +39,7 @@ import {
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
+import type { AgentMenuObservationOptions } from './agent-menu-observation-options'
 import { readDetectedAgentsForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/agent-session/launch/inventory/host-chat-program'
@@ -56,14 +56,11 @@ export function useNewTabAgentMenuRows(
   options?: AgentMenuObservationOptions
 ): NewTabAgentMenuModel {
   // Only the new-tab menu opens setup chats; pickers that save an agent need one that runs.
-  return useAgentMenuObservation(target, open, detectionTarget, {
-    ...options,
-    offerAgentSetup: true
-  }).model
+  const observationOptions = { ...options, offerAgentSetup: true }
+  return useAgentMenuObservation(target, open, detectionTarget, observationOptions).model
 }
 
-/** `wakeOnOpen`: `open` is the user opening this picker, a user act that may start its WSL distro. */
-export type AgentMenuObservationOptions = { wakeOnOpen?: boolean; offerAgentSetup?: boolean }
+export type { AgentMenuObservationOptions }
 
 export function useAgentMenuObservation(
   target: string | AgentMenuRowsTarget | null,
@@ -72,6 +69,7 @@ export function useAgentMenuObservation(
   options?: AgentMenuObservationOptions
 ) {
   const state = useAppStateView().getState()
+  const hostStatuses = readRuntimeStatusesForView(useAppStateView())
   const viewActive = useAppStateViewActive()
   const worktreeId = typeof target === 'string' ? target : target?.workspace.worktreeId
   const launchCwd = typeof target === 'string' ? undefined : target?.launchCwd
@@ -81,7 +79,8 @@ export function useAgentMenuObservation(
     (state) => typeof target === 'string' && state.activeWorktreeId === worktreeId
   )
   // Why: acquiring while the workspace is shown means the first open already knows its agents.
-  const acquired = useDetectedAgents(viewActive && (open || shown) ? detectionTarget : undefined)
+  const acquireTarget = viewActive && (open || shown) ? detectionTarget : undefined
+  const acquired = useDetectedAgents(acquireTarget, 'enabled', options?.observationGroup)
   useAgentPickerRefusedWake(viewActive && options?.wakeOnOpen === true && open, detectionTarget)
   // Closing the menu or leaving the workspace must not erase the known inventory.
   const storedIds = useAppStateValue((state) =>
@@ -105,7 +104,7 @@ export function useAgentMenuObservation(
     typeof target === 'string'
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
       : (target?.workspace ?? { kind: 'floating' as const })
-  const facts = useAppStateValue(useShallow((state) => readAgentMenuLaunchFacts(state, workspace)))
+  const facts = useAgentMenuLaunchFacts(workspace)
   const prospective = typeof target === 'string' ? undefined : target?.workspace
   const repoId = prospective?.repoId
   const repoHostId = prospective?.executionHostId
@@ -114,14 +113,15 @@ export function useAgentMenuObservation(
       createAgentMenuTerminalPendingSelector({ worktreeId, repoId, executionHostId: repoHostId }),
     [worktreeId, repoId, repoHostId]
   )
-  const terminalPending = useAppStateValue(terminalPendingSelector)
-  const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
-  const { settings, pending: preferencesPending } = useHostAgentMenuSettings(
+  const terminalPending = useAppStateValueWithHostStatuses(terminalPendingSelector)
+  const input = buildRouteInputForStatuses(state, hostStatuses, { agent: 'claude', workspace })
+  const hostPreferences = useHostAgentMenuSettings(
     unresolvedTarget ? null : facts,
     desktopSettings,
     viewActive && (open || shown),
     viewActive && open
   )
+  const { settings, pending: preferencesPending } = hostPreferences
   useAppStateValue(
     useShallow((state) => [
       state.settings?.defaultTuiAgent,
@@ -139,7 +139,7 @@ export function useAgentMenuObservation(
     ])
   )
   const plain = hostChatAnswer(input) === 'no-chats'
-  const local = facts.executionHostId === LOCAL_EXECUTION_HOST_ID
+  const local = facts.executionHostId === ExecutionHost.LOCAL_EXECUTION_HOST_ID
   // Use published host-wide availability when supported; older hosts defer final admission to the launch request.
   const published =
     input.hostCapabilities?.includes(AVAILABILITY) === true &&
@@ -159,14 +159,12 @@ export function useAgentMenuObservation(
   const localCatalog =
     local && roster
       ? roster
-      : readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, state.runtimeStatusByEnvironmentId)?.map(
+      : readHostStructuredAgents(ExecutionHost.LOCAL_EXECUTION_HOST_ID, hostStatuses)?.map(
           ({ agent }) => agent
         )
   const hostCatalog =
     roster ??
-    readHostStructuredAgents(facts.executionHostId, state.runtimeStatusByEnvironmentId)?.map(
-      ({ agent }) => agent
-    )
+    readHostStructuredAgents(facts.executionHostId, hostStatuses)?.map(({ agent }) => agent)
   const chatAgents = [
     ...new Set([
       'claude',
@@ -190,7 +188,7 @@ export function useAgentMenuObservation(
   const localCatalogPending =
     !local &&
     catalogUnlearned(
-      LOCAL_EXECUTION_HOST_ID,
+      ExecutionHost.LOCAL_EXECUTION_HOST_ID,
       null,
       localCapabilities.state === 'known' ? localCapabilities.capabilities : null
     )
@@ -214,7 +212,7 @@ export function useAgentMenuObservation(
     if (unresolvedTarget) {
       return 'not-yet-known'
     }
-    answerContext ??= buildAgentLaunchRouteInput(state, {
+    answerContext ??= buildRouteInputForStatuses(state, hostStatuses, {
       agent,
       workspace,
       ...(launchCwd ? { tuiCustomization: { cwd: launchCwd } } : {})
@@ -234,13 +232,14 @@ export function useAgentMenuObservation(
   }
   const executionHostId = unresolvedTarget
     ? undefined
-    : parseExecutionHostId(facts.executionHostId)?.id
+    : ExecutionHost.parseExecutionHostId(facts.executionHostId)?.id
+  const { detectedIds } = detection
   const rows = buildNewTabAgentMenuRows({
     settings,
-    detectedOnHost: detection.detectedIds,
+    detectedOnHost: detectedIds,
     chatAgents,
     chatProgram: (agent) =>
-      unresolvedTarget ? 'unlearned' : readChatProgram(state, agent, input, detection.detectedIds),
+      unresolvedTarget ? 'unlearned' : readChatProgram(hostStatuses, agent, input, detectedIds),
     hostChatAnswer: answerFor,
     offerAgentSetup: options?.offerAgentSetup,
     hostPlatform: facts.hostPlatform
@@ -271,6 +270,7 @@ export function useAgentMenuObservation(
     model,
     preferences: { defaultTuiAgent, disabledTuiAgents, agentLaunchChoices },
     preferencesPending,
+    preferencesInherited: hostPreferences.inherited,
     detection,
     contextKey: JSON.stringify([workspace, launchCwd, facts]),
     selectionFor: (

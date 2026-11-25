@@ -23,7 +23,7 @@ import type { WorkerThreadRole } from './worker-thread-roles'
 const LEDGER_KEY = 'orca.worker-send-ledger.v1'
 const LARGE_SEND_LOG_KEY = 'orca.worker-large-send-log.v1'
 const SLOTS = 48
-const SLOT_BYTES = 184
+const SLOT_BYTES = 192
 const TEXT_BYTES = 40
 const OWNER = 0
 const LAST_DEPTH = 4
@@ -37,11 +37,16 @@ const LAST_TRUNCATED = 56
 const ROLE = 64
 const LAST_KIND = ROLE + TEXT_BYTES
 const MAX_KIND = LAST_KIND + TEXT_BYTES
+const PRODUCED_BYTES = MAX_KIND + TEXT_BYTES
+// Bun's getHeapStatistics walks the heap (~7 ms a call); only the Bun unit-test shards run there.
+const UNDER_BUN = process.versions.bun !== undefined
 
 export type WorkerSendLedgerEntry = {
   role: string
   threadId: number
   sends: number
+  /** Every send's walked bytes; a lower bound once a walk is cut short. */
+  producedBytes: number
   lastAt: number
   lastKind: string
   lastItems: number
@@ -149,6 +154,7 @@ function recordSend(view: DataView, shape: WorkerMessageShape): void {
   view.setFloat64(SENDS, view.getFloat64(SENDS, true) + 1, true)
   view.setFloat64(LAST_AT, Date.now(), true)
   view.setFloat64(LAST_BYTES, shape.bytes, true)
+  view.setFloat64(PRODUCED_BYTES, view.getFloat64(PRODUCED_BYTES, true) + shape.bytes, true)
   view.setFloat64(LAST_ITEMS, shape.items, true)
   view.setInt32(LAST_DEPTH, shape.depth, true)
   view.setInt32(LAST_TRUNCATED, shape.truncated ? 1 : 0, true)
@@ -157,7 +163,9 @@ function recordSend(view: DataView, shape: WorkerMessageShape): void {
     view.setFloat64(MAX_BYTES, shape.bytes, true)
     writeText(view, MAX_KIND, shape.kind)
   }
-  view.setFloat64(HEAP_USED, getHeapStatistics().used_heap_size, true)
+  if (!UNDER_BUN) {
+    view.setFloat64(HEAP_USED, getHeapStatistics().used_heap_size, true)
+  }
 }
 
 function logLargeSend(path: string, role: string, shape: WorkerMessageShape): void {
@@ -189,6 +197,7 @@ export function readWorkerSendLedger(): WorkerSendLedgerEntry[] {
       role: readText(view, ROLE),
       threadId: owner,
       sends: view.getFloat64(SENDS, true),
+      producedBytes: view.getFloat64(PRODUCED_BYTES, true),
       lastAt: view.getFloat64(LAST_AT, true),
       lastKind: readText(view, LAST_KIND),
       lastItems: view.getFloat64(LAST_ITEMS, true),

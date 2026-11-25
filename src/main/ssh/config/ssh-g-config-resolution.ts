@@ -169,8 +169,9 @@ async function expandSiteInclude(pattern: string, baseDir: string): Promise<stri
       continue
     }
     // Only the trailing `dir/*` form OpenSSH ships by default is expanded; anything fancier is doubt.
+    // win32 join() rewrites `/` as `\`, so check both separators.
     const dir = dirname(absolute.slice(0, star + 1))
-    if (absolute.slice(star + 1).includes('/')) {
+    if (/[\\/]/.test(absolute.slice(star + 1))) {
       return null
     }
     try {
@@ -195,7 +196,8 @@ export async function runSshG(args: string[]): Promise<SshResolvedConfig | null>
   // -- prevents option injection; process-host hides console windows and bounds this probe (#10488).
   try {
     const result = await runProcess({
-      program: 'ssh',
+      // Honor the user's explicit ssh override; otherwise PATH ssh, which may be newer than the system one.
+      program: process.env.ORCA_SYSTEM_SSH_PATH || 'ssh',
       args,
       timeoutMs: SSH_G_TIMEOUT_MS
     })

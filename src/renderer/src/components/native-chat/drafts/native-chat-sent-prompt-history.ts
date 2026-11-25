@@ -63,8 +63,9 @@ export function nativeChatSentPrompts(source: NativeChatRecallSource): NativeCha
     compareMessages,
     orderMessages
   )) {
-    // `from` marks a prompt another agent sent; it was never typed here.
-    if (message.role !== 'user' || message.from) {
+    // `from`, `asker` and `automationRun` mark a prompt another agent, a connector or an automation
+    // sent; never typed here.
+    if (message.role !== 'user' || message.from || message.asker || message.automationRun) {
       continue
     }
     while (

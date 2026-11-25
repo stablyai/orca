@@ -21,7 +21,11 @@ import {
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
 } from './agent-session-store-row-rules'
-import { AgentSessionTabTable, type PersistedAgentSessionTab } from './agent-session-tab-table'
+import { agentSessionTabTableFromStored } from './agent-session-tab-table'
+import {
+  readAgentSessionBackgroundMeta,
+  writeAgentSessionBackgroundMeta
+} from './agent-session-background-meta'
 
 /** Never-recorded differs from recorded-empty; legacy fallback cannot infer this from row count (#17439). */
 export const AGENT_SESSION_TABS_RECORDED = 'session_tabs_recorded'
@@ -185,7 +189,7 @@ export function loadAgentSessionStoreTabs(
   const recorded = db
     .prepare('SELECT 1 AS present FROM agent_session_store_meta WHERE key = ?')
     .get(AGENT_SESSION_TABS_RECORDED)
-  const table = new AgentSessionTabTable()
+  const table = agentSessionTabTableFromStored([], readAgentSessionBackgroundMeta(db))
   for (const row of db
     .prepare(
       'SELECT tab_id AS tabId, session_id AS sessionId FROM agent_session_tabs ORDER BY position'
@@ -208,7 +212,7 @@ export function loadAgentSessionStoreTabs(
 
 function writeTabIndex(
   db: Database.Database,
-  index: { recorded: boolean; tabs: readonly PersistedAgentSessionTab[] }
+  index: NonNullable<AgentSessionStoreRowWrites['sessionTabs']>
 ): void {
   const saved = new Map(
     db
@@ -255,6 +259,7 @@ function writeTabIndex(
       AGENT_SESSION_TABS_RECORDED
     )
   }
+  writeAgentSessionBackgroundMeta(db, index)
 }
 
 // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.

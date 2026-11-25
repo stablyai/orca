@@ -2,6 +2,14 @@ import type { ExecutionHostId } from '../../../../src/shared/execution-host/exec
 import type { RuntimeWorktreePsSummary } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { ProjectSectionRepo } from '../../../../src/shared/sidebar-list/sections/project-section-grouping'
 import type { WorkspaceRowFilters } from '../../../../src/shared/workspace-view/workspace-row-filters'
+import type { WorktreeStatus } from '../../../../src/shared/worktree/row-display/worktree-status-rollup'
+import type {
+  MobileBotChatLineFacts,
+  MobileBotChatPagingFacts,
+  MobileBotChatRowFacts,
+  MobileBotGroupRowFacts,
+  MobileBotRowFacts
+} from '../../bots/host-bot-row-facts'
 
 /** Fields every host the phone pairs with sends; the rest are optional because older hosts omit them. */
 type AlwaysSentHostRowField =
@@ -49,6 +57,21 @@ export type WorktreeRowView = WorktreeHostContextView & {
   /** The collapse key the shared builder gave this row's children; set only on a feed-built list. */
   lineageGroupKey?: string
   isLastLineageChild?: boolean
+  /** Set on a bot's home folder row, which the Bots section draws as the bot. */
+  botFacts?: MobileBotRowFacts
+  /** Set on a group's hidden home row, which the Bots section draws as the room. */
+  botGroupFacts?: MobileBotGroupRowFacts
+  botWorkspace?: true
+  /** A bot or group row after the first in the Bots list, which draws its own divider above. */
+  botDivider?: true
+  /** A bot's chat row in the Bots list, drawn over its bot's home row. */
+  botChat?: MobileBotChatRowFacts
+  /** A chat's worker paging row ("Show 8 more workers · Show fewer"), drawn over its bot's home row. */
+  botChatPaging?: MobileBotChatPagingFacts
+  /** A bot worker's workspace under its chat, drawn as one line. */
+  botChatLine?: MobileBotChatLineFacts
+  /** Drawn faded, as a paused bot and its workspaces are. */
+  dimmed?: true
 }
 
 export type WorkspaceListItem = { row: Worktree; view: WorktreeRowView }
@@ -69,6 +92,9 @@ export type SectionRepo = ProjectSectionRepo & {
 // Pending creations name only their project; null belongs under the list’s own header.
 export type SectionPendingCreation = { key: string; repoName: string | null }
 
+/** One quiet line after a Bots list, keyed by the computer it is about. */
+export type BotsListEndLine = { key: string; text: string }
+
 export type Section = {
   /** The list identity; unique even when one header repeats in several host sections. */
   key: string
@@ -82,5 +108,22 @@ export type Section = {
   /** The header's own count from a feed-built list, which a collapsed section still shows. */
   count?: number
   pendingCreations?: SectionPendingCreation[]
+  /** The computer New bot starts on, when any takes a new bot from this phone: the header offers "+". */
+  newBotHostId?: ExecutionHostId
+  /** This computer's bots, unfiltered by search: New group needs two of them. */
+  botCount?: number
+  /** Quiet lines after a Bots list's last row, e.g. a computer too old to list its bots. */
+  endLines?: BotsListEndLine[]
+  /** Each listed bot's state, which the folded header sums up. */
+  botPreview?: {
+    status: WorktreeStatus
+    unread: boolean
+    paused: boolean
+    attention?: boolean
+    needs: {
+      line: Pick<MobileBotRowFacts['line'], 'workers' | 'itemsNeedingYou'>
+      agents: NonNullable<Worktree['agents']>
+    }
+  }[]
   data: WorkspaceListItem[]
 }

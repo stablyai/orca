@@ -90,6 +90,11 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     this.onUnpairedDeviceAuthFailure = callback
   }
 
+  // Registry instances are replaced on restart, so the listener lives here and is rebound per instance.
+  setOnPairedDevicesChanged(callback: (() => void) | null): void {
+    this.onPairedDevicesChanged = callback
+  }
+
   setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
     this.mobileRelayPairingProvider = provider
   }
@@ -107,6 +112,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           // Share local stream allocator so relayed ids cannot collide on phone sockets.
           allocateStreamId: allocateTerminalSubscriptionStreamId,
           nativeChatDefault: (agent) => isStructuredNativeChatDefaultFor(this.runtime, agent),
+          sourceControlAiSettings: () => this.runtime.requireStore().getSettings(),
           prepareBrowserHost: async (host) => {
             if (this.runtime.getStatus().capabilities?.includes('browser.screencast.v1')) {
               const placement = await hosts.prepareBrowserHost?.(
@@ -187,6 +193,8 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     grants?: readonly RuntimeDeviceGrant[]
     // Desktop UI only; absent keeps headless offers valid until scanned.
     offerTtlMs?: number
+    // The paired client whose terminal asked; revoking it revokes the offer and whoever paired with it.
+    createdByDeviceId?: string
   }):
     | PairingOfferUnavailable
     | {
@@ -226,10 +234,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     try {
       const reach = args.reach ?? 'network'
       const grants = args.grants ?? []
-      const ttl = args.offerTtlMs
+      const options = { offerTtlMs: args.offerTtlMs, createdByDeviceId: args.createdByDeviceId }
       device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants, ttl)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants, ttl)
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants, options)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants, options)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)

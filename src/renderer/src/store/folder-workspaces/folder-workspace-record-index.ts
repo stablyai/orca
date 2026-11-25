@@ -7,8 +7,23 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host/execut
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { selectFolderWorkspaces } from '../workspaces/catalog/workspace-record-fields'
+import type { AppState } from '../types'
 
 // ─── Keyed records ───────────────────────────────────────────────────
+
+/** One folder workspace on the host that owns it; another host's row with the same id never answers. */
+export function selectFolderWorkspaceOnHost(
+  state: Pick<AppState, 'folderWorkspaces' | 'repos' | 'projectGroups'>,
+  folderWorkspaceId: string,
+  hostId: ExecutionHostId
+): FolderWorkspace | undefined {
+  const result = resolveQualifiedIndexedFolderWorkspace<FolderWorkspace>(
+    state,
+    folderWorkspaceId,
+    hostId
+  )
+  return result.kind === 'selected' ? result.value.workspace : undefined
+}
 
 const folderRecordsById = new WeakMap<
   readonly FolderWorkspace[],

@@ -65,13 +65,16 @@ export const WORKSPACE_CLEANUP_HANDLERS: Record<string, CommandHandler> = {
       'workspaceCleanup.runNow',
       { trigger: 'cli' }
     )
-    // A run with no rule on watches nothing, so its receipt is empty.
+    // A run with no rule on watches nothing, so its receipt is empty. The lookup only picks the wording,
+    // so a failed one prints the receipt rather than discarding a run that finished.
     const rulesOff =
       !json &&
       response.result.rows.length === 0 &&
       !response.result.error &&
-      (await callWorkspaceCleanup<WorkspaceCleanupReport>(client, 'workspaceCleanup.report')).result
-        .nextRunAt === null
+      (await callWorkspaceCleanup<WorkspaceCleanupReport>(client, 'workspaceCleanup.report').then(
+        (report) => report.result.nextRunAt === null,
+        () => false
+      ))
     printResult(response, json, (run) =>
       rulesOff ? NO_WORKSPACE_CLEANUP_RULE_ON : formatWorkspaceCleanupRun(run)
     )

@@ -73,7 +73,8 @@ export async function prepareAndInvokeAppRestart<T>(
   eventTarget: EventTarget,
   invoke: () => Promise<T>,
   awaitCheckpoint: () => Promise<void>,
-  willRestart: (result: T) => boolean = () => true
+  willRestart: (result: T) => boolean = () => true,
+  isCanceled?: () => boolean
 ): Promise<T> {
   const state = appRestartState(eventTarget)
   if (state.pending) {
@@ -85,7 +86,8 @@ export async function prepareAndInvokeAppRestart<T>(
       await prepareRendererForAppRestart(eventTarget, {
         startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
         abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
-        awaitCheckpoint
+        awaitCheckpoint,
+        isCanceled
       })
     }
     try {

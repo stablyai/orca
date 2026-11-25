@@ -2,6 +2,7 @@ import { subscribeWebWorkspaceSleep } from '../workspaces/web-workspace-sleep-no
 import { savePastedTextAsWebAgentSessionAttachment } from '../agents/web-pasted-text-upload'
 import { createWebExplorerRootSync } from '../workspaces/web-explorer-root-sync'
 import { createWebJiraFilterStateApi } from '../jira/web-jira-filter-state-api'
+import { WEB_PENDING_LINK_API } from './web-pending-link-api'
 import type { PreloadApi } from '../../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard/clipboard-text'
 import type { ReadClipboardTextOptions } from '../../../../../shared/clipboard/clipboard-text'
@@ -14,6 +15,7 @@ import {
   readClipboardImageThumbnail,
   saveWebClipboardImageAsTempFile,
   writeWebClipboardImage,
+  writeWebSecretClipboardText,
   writeWebClipboardText
 } from '../clipboard/web-clipboard-api'
 import {
@@ -162,6 +164,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
     writeClipboardText: writeWebClipboardText,
     writeTerminalClipboardText: writeWebClipboardText,
+    writeSecretClipboardText: writeWebSecretClipboardText,
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: writeWebClipboardImage,
@@ -187,10 +190,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     consumePendingOpenSettings: () => Promise.resolve(false),
     onQuitAndStopAllSessions: () => noopUnsubscribe,
     consumePendingQuitAndStopAllSessions: () => Promise.resolve(false),
-    onOpenSkillShare: () => noopUnsubscribe,
-    consumePendingSkillShare: () => Promise.resolve(null),
-    onOpenPluginInstallLink: () => noopUnsubscribe,
-    consumePendingPluginInstallLink: () => Promise.resolve(null),
+    ...WEB_PENDING_LINK_API,
     // Why: the web client has no OS shell handing it files, so there is never a queued open.
     onOpenMarkdownFiles: () => noopUnsubscribe,
     consumePendingMarkdownFileOpens: () => Promise.resolve([]),

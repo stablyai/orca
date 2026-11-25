@@ -10,7 +10,7 @@ import {
   rendererAgentStatusObservations,
   hostOwnsCommandCodeStatus
 } from '@/lib/agent-status/evidence/renderer-agent-status-observations'
-import { isRetainedProgramResult } from '@/lib/program-status/row'
+import { isRetainedProgramResult } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '@/store/index'
 import {
   cancelCommandCodeDoneSettle,

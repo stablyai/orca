@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Info } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
-import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/execution-host/project-runtime-preference'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
@@ -15,69 +14,19 @@ export type AgentSessionSourceHomeControl = {
 
 type UpdateSettings = (updates: Partial<GlobalSettings>) => void | Promise<void>
 
-/** Match launch-time case-insensitive distro keys so edits cannot hide an active override or create duplicate keys. */
-function findWslSourceHomeKey(
-  wsl: Record<string, string> | undefined,
-  distro: string
-): string | undefined {
-  const normalized = distro.trim().toLowerCase()
-  return Object.keys(wsl ?? {}).find((key) => key.trim().toLowerCase() === normalized)
-}
-
+// Only the host ~/.codex receives imports, so the control edits the host value under any runtime.
 export function buildCodexSessionSourceHomeControl(
-  settings: Pick<GlobalSettings, 'codexSessionSourceHome' | 'localWindowsRuntimeDefault'>,
+  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>,
   updateSettings: UpdateSettings
 ): AgentSessionSourceHomeControl {
-  const runtimeScope = normalizeGlobalWindowsRuntimeDefault(settings.localWindowsRuntimeDefault)
-  const sourceHome = settings.codexSessionSourceHome
-  // Without a selected WSL distro, use host history control instead of a null distro key.
-  const wslDistro = runtimeScope.kind === 'wsl' ? runtimeScope.distro?.trim() : undefined
-  if (wslDistro) {
-    const existingKey = findWslSourceHomeKey(sourceHome?.wsl, wslDistro)
-    return {
-      runtimeLabel: `${wslDistro}: ~/.codex`,
-      value: (existingKey ? sourceHome?.wsl?.[existingKey] : undefined) ?? '',
-      onSave: (value: string) =>
-        saveCodexSessionSourceHome(settings, updateSettings, {
-          runtime: 'wsl',
-          distro: existingKey ?? wslDistro,
-          value
-        })
-    }
-  }
   return {
     runtimeLabel: '~/.codex',
-    value: sourceHome?.host ?? '',
-    onSave: (value: string) =>
-      saveCodexSessionSourceHome(settings, updateSettings, { runtime: 'host', value })
-  }
-}
-
-function saveCodexSessionSourceHome(
-  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>,
-  updateSettings: UpdateSettings,
-  args: { runtime: 'host'; value: string } | { runtime: 'wsl'; distro: string; value: string }
-): void {
-  const current = settings.codexSessionSourceHome ?? {}
-  const trimmed = args.value.trim()
-  if (args.runtime === 'host') {
-    updateSettings({ codexSessionSourceHome: { ...current, host: trimmed || undefined } })
-    return
-  }
-  const nextWsl = { ...current.wsl }
-  // Reuse case-insensitive stored keys to avoid stale differently-cased duplicates.
-  const targetKey = findWslSourceHomeKey(nextWsl, args.distro) ?? args.distro
-  if (trimmed) {
-    nextWsl[targetKey] = trimmed
-  } else {
-    delete nextWsl[targetKey]
-  }
-  updateSettings({
-    codexSessionSourceHome: {
-      ...current,
-      wsl: Object.keys(nextWsl).length > 0 ? nextWsl : undefined
+    value: settings.codexSessionSourceHome?.host ?? '',
+    onSave: (value: string) => {
+      const host = value.trim() || undefined
+      updateSettings({ codexSessionSourceHome: { ...settings.codexSessionSourceHome, host } })
     }
-  })
+  }
 }
 
 export function AgentSessionSourceHomeInput({
@@ -95,14 +44,17 @@ export function AgentSessionSourceHomeInput({
   return (
     <div className="flex flex-col gap-1">
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {t('auto.components.settings.AgentsPane.codexSessionSource', 'Codex home to import from')}
+        {t(
+          'auto.components.settings.AgentsPane.codexSessionSource',
+          'Import Codex conversations from'
+        )}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
               aria-label={t(
                 'auto.components.settings.AgentsPane.codexSessionSourceInfo',
-                'About importing Codex history'
+                'About importing Codex conversations'
               )}
               className="grid size-4 place-items-center rounded text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
@@ -112,7 +64,7 @@ export function AgentSessionSourceHomeInput({
           <TooltipContent side="top" sideOffset={6} className="max-w-xs">
             {t(
               'auto.components.settings.AgentsPane.codexSessionSourceTooltip',
-              'Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.'
+              "While history is shared across accounts, Orca copies this Codex home's conversations into ~/.codex so /resume lists them. Turns added in this folder after a conversation is copied don't reach the copy."
             )}
           </TooltipContent>
         </Tooltip>

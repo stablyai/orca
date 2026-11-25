@@ -16,7 +16,7 @@ export function rolloutTwinPath(path: string): string {
 
 // Codex compresses a cold rollout keeping its mtime and appends to the `.jsonl` when both exist,
 // so a `.jsonl` no newer than a non-empty `.zst` holds nothing the `.zst` lacks.
-function plainWins(plain: BigIntStats, compressed: BigIntStats): boolean {
+export function plainWins(plain: BigIntStats, compressed: BigIntStats): boolean {
   return compressed.size === 0n || plain.mtimeNs > compressed.mtimeNs
 }
 

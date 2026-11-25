@@ -60,7 +60,3 @@ export async function listRemoteRuntimeSessionTabsAfterCurrentInFlight(
   }
   return listRemoteRuntimeSessionTabsDeduped(args)
 }
-
-export function getRemoteRuntimeSessionTabsInFlightCountForTests(): number {
-  return inFlightBySession.size
-}

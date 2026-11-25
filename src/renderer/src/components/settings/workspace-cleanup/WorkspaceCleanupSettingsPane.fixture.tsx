@@ -68,22 +68,9 @@ function Pane(): React.JSX.Element {
   )
 }
 
-export const chatHistoryOff = defineFixture({
+export const withActivity = defineFixture({
   width: 760,
   store: { settings },
   setup,
   render: () => <Pane />
-})
-
-export const chatHistoryConfirm = defineFixture({
-  width: 760,
-  store: { settings },
-  setup,
-  render: () => <Pane />,
-  interact: async (frame) => {
-    const toggle = frame.querySelector<HTMLElement>(
-      '[role="switch"][aria-label="Delete chat history with the workspace"]'
-    )
-    toggle?.click()
-  }
 })

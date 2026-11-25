@@ -133,7 +133,7 @@ function RosterHarness({
         {providers
           .filter((p) => p.status !== 'unavailable')
           .map((p) => (
-            <ProviderSegment key={p.provider} p={p} compact={false} display={display} mode={mode} />
+            <ProviderSegment key={p.provider} p={p} display={display} mode={mode} />
           ))}
       </div>
       <DropdownMenu defaultOpen modal={false}>
@@ -159,8 +159,6 @@ function RosterHarness({
             renderRow={(p, row) => (
               <ProviderDetailsMenu
                 provider={p}
-                compact={false}
-                iconOnly={false}
                 asSubmenu
                 triggerContent={row}
                 ariaLabel="Open usage details"
@@ -374,14 +372,12 @@ export const statusBarFableOnly = defineFixture({
   width: 420,
   render: () => (
     <div className="flex flex-col gap-2 bg-background p-3 text-xs">
-      {(['verbose', 'compact'] as const).flatMap((mode) =>
-        [false, true].map((compact) => (
-          <div key={`${mode}-${compact}`} className="flex items-center gap-3">
-            <span className="w-40 text-muted-foreground">{`${mode} · ${compact ? 'narrow' : 'normal'} density`}</span>
-            <LiveProviderSegment p={claudeFor(PRESETS.fableOnly)} compact={compact} mode={mode} />
-          </div>
-        ))
-      )}
+      {(['verbose', 'compact'] as const).map((mode) => (
+        <div key={mode} className="flex items-center gap-3">
+          <span className="w-40 text-muted-foreground">{mode}</span>
+          <LiveProviderSegment p={claudeFor(PRESETS.fableOnly)} mode={mode} />
+        </div>
+      ))}
     </div>
   )
 })

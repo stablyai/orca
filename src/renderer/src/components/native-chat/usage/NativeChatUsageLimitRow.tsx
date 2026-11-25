@@ -1,8 +1,10 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { NativeChatNoticeAuthRecovery } from '../antigravity-auth/NativeChatAntigravityAuthRecovery'
 import { Check, Clock, Gauge, Loader2, MessageSquarePlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store'
 import { validResetAt } from '@/components/status-bar/usage/usage-reset-caption'
 import type { NativeChatTextBlock } from '../../../../../shared/native-chat/native-chat-types'
 import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
@@ -15,6 +17,7 @@ import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedCont
 import { useNativeChatUsageLimitActions } from './NativeChatUsageLimitActions'
 import {
   openUsageLimitContinueSetting,
+  turnOnUsageLimitAutoContinue,
   type NativeChatUsageLimitAutoContinueState
 } from './native-chat-usage-limit-auto-continue-setting'
 import { useUsageLimitContinueClock } from './use-usage-limit-continue-clock'
@@ -99,6 +102,9 @@ function AutoContinueTool({
   autoTime: string | null
 }): React.JSX.Element {
   const t = useTranslate()
+  const settingOn = useAppStore(
+    (state) => state.settings?.nativeChatAutoContinueAfterUsageLimit === true
+  )
   if (auto.kind === 'scheduled') {
     return (
       <UsageLimitToolButton
@@ -110,6 +116,22 @@ function AutoContinueTool({
         pressed
         disabled={auto.cancelDisabled}
         onClick={auto.cancel}
+      >
+        <Clock className="size-3.5" />
+      </UsageLimitToolButton>
+    )
+  }
+  // Off with the setting off: the clock turns it on here, and the host schedules this chat. The
+  // host also says off for a chat it can't continue while the setting is on; that opens Settings.
+  if (auto.kind === 'off' && !settingOn) {
+    return (
+      <UsageLimitToolButton
+        label={t(
+          'components.native-chat.usageLimitActions.turnOnAutoContinue',
+          'Auto-continue on reset'
+        )}
+        pressed={false}
+        onClick={turnOnUsageLimitAutoContinue}
       >
         <Clock className="size-3.5" />
       </UsageLimitToolButton>
@@ -136,13 +158,7 @@ function AutoContinueTool({
 }
 
 /** A usage-limit notice as one row: what limit, when the chat can go on, and icon tools. */
-export function NativeChatUsageLimitRow({
-  block,
-  failure,
-  agentName,
-  detail,
-  active
-}: {
+type UsageLimitRowProps = {
   block: NativeChatTextBlock
   failure: AgentSessionFailureFact
   agentName?: string
@@ -150,7 +166,25 @@ export function NativeChatUsageLimitRow({
   detail?: string
   /** This row is the chat's current usage-limit stop, so its recovery actions apply. */
   active: boolean
-}): React.JSX.Element {
+}
+
+/** The usage-limit card, and under it Antigravity's offer of another detected sign-in. */
+export function NativeChatUsageLimitRow(props: UsageLimitRowProps): React.JSX.Element {
+  return (
+    <div className="space-y-2">
+      <UsageLimitCard {...props} />
+      <NativeChatNoticeAuthRecovery block={props.block} agentName={props.agentName} />
+    </div>
+  )
+}
+
+function UsageLimitCard({
+  block,
+  failure,
+  agentName,
+  detail,
+  active
+}: UsageLimitRowProps): React.JSX.Element {
   const t = useTranslate()
   const view = useNativeChatOrcaStopView()
   const actions = useNativeChatUsageLimitActions()
@@ -310,7 +344,7 @@ export function NativeChatUsageLimitRow({
                     <UsageLimitToolButton
                       label={t(
                         'components.native-chat.usageLimitActions.handOff',
-                        'Hand off to another agent'
+                        'Hand off to agent'
                       )}
                       disabled={actions.disabled}
                       busy={actions.preparing}

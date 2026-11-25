@@ -3,6 +3,15 @@ import { withLostProviderOutcome } from '../../provider-process/provider-process
 import { resolveProviderChildEnv } from '../../provider-process/provider-process-launch'
 import { processEnvWithoutAgentSession } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
+import {
+  CodexAppServerRequestError,
+  CodexAppServerUnsupportedError,
+  CodexAppServerTimeoutError
+} from './codex-app-server-request-error'
+export {
+  CodexAppServerUnsupportedError,
+  CodexAppServerTimeoutError
+} from './codex-app-server-request-error'
 import { withCliRuntimeOnPath } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   killCodexAppServerProcessTree,
@@ -10,6 +19,7 @@ import {
   type CodexAppServerSpawn
 } from './codex-app-server-process-tree-kill'
 import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
+import { oversizedLineError } from './codex-app-server-frame-size-error'
 
 export type CodexAppServerInvocation = {
   command: string
@@ -26,21 +36,7 @@ export type CodexAppServerInvocation = {
   experimentalApi?: boolean
   /** Kill unsupervised plugin trees before stdin EOF; root exit leaves children behind and blocks tree killing. */
   treeKillOnFinish?: boolean
-}
-
-/** Missing app-server subcommand or RPC method; only this class marks capability caches unsupported. */
-export class CodexAppServerUnsupportedError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'CodexAppServerUnsupportedError'
-  }
-}
-
-export class CodexAppServerTimeoutError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'CodexAppServerTimeoutError'
-  }
+  allowHost?: boolean
 }
 
 export function isCodexAppServerUnsupportedError(error: unknown): boolean {
@@ -97,6 +93,7 @@ export async function runCodexAppServerSession<T>(
     {
       site: CODEX_APP_SERVER_KILL_SITE,
       inheritedEnv: pairedEnv,
+      allowHost: invocation.allowHost ?? spawnImpl === spawnCodexAppServerProcess,
       spawnImpl: (spec) =>
         spawnImpl(spec.program, [...(spec.args ?? [])], {
           env: spec.env,
@@ -154,7 +151,11 @@ export async function runCodexAppServerSession<T>(
         waiter.resolve(message)
       }
     },
-    onRejected: () => undefined,
+    onRejected: (rejected) => {
+      if (rejected.kind === 'line-too-long') {
+        failPending(oversizedLineError(rejected))
+      }
+    },
     onFatal: failPending
   })
 
@@ -258,8 +259,12 @@ export async function runCodexAppServerSession<T>(
           `codex app-server does not support ${method}: ${response.error.message ?? 'method not found'}`
         )
       }
-      throw new Error(
-        `codex app-server ${method} failed: ${response.error.message ?? 'unknown error'}`
+      // Kept structured, so callers tell a refused request (e.g. an unknown method variant) from a failure.
+      throw new CodexAppServerRequestError(
+        method,
+        typeof response.error.code === 'number' ? response.error.code : null,
+        `codex app-server ${method} failed: ${response.error.message ?? 'unknown error'}`,
+        response.error.message
       )
     }
     return response.result

@@ -1,7 +1,12 @@
 import { Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
+import {
+  getSystemDefaultLanes,
+  clearsHiddenWslLanes,
+  systemDefaultCandidates
+} from '../scope/system-default-lanes'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { ButtonGroup } from '../../../ui/button-group'
@@ -16,7 +21,7 @@ import {
   ClaudeSignInLinkMenu,
   withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
-import { addClaudeAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
+import { signInClaudeAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { HostAccountSignInPrompt } from '../sign-in/HostAccountSignInPrompt'
 import {
   accountAdditionShownInPrompt,
@@ -35,6 +40,7 @@ export function renderClaudeAccountsSection(
     accountRuntime,
     accountRuntimeSentenceLabel,
     accountRuntimeUnavailable,
+    accountVisibilityOptions,
     claudeAccounts,
     claudeAction,
     isRemoteAccountScope,
@@ -48,6 +54,21 @@ export function renderClaudeAccountsSection(
     visibleClaudeAccounts,
     wslCapabilitiesLoading
   } = model
+  // Remote Claude has no targeted select, so System default resets only the shown lane and says so.
+  const skipsWslLanes = clearsHiddenWslLanes(
+    getSystemDefaultLanes(
+      accountRuntime,
+      systemDefaultCandidates(
+        claudeAccounts.accounts,
+        visibleClaudeAccounts,
+        accountVisibilityOptions
+      ),
+      claudeAccounts,
+      isRemoteAccountScope
+    )
+  )
+  // The shown lane itself is a remote WSL lane, which the host cannot reset at all.
+  const shownLaneBlocked = isRemoteAccountScope && accountRuntime.runtime === 'wsl'
   // System default belongs to the host home, never a WSL distro.
   const systemDefaultEmail =
     accountRuntime.runtime === 'host' ? claudeAccounts.systemDefaultEmail : undefined
@@ -65,7 +86,7 @@ export function renderClaudeAccountsSection(
     runClaudeAccountAction('adding', () =>
       trackAccountAddition('claude', accountOwner, () =>
         accountOwner.kind === 'environment'
-          ? addClaudeAccountOnHost(accountOwner)
+          ? signInClaudeAccountOnHost(accountOwner)
           : withCopiedClaudeLink(
               copyLink,
               window.api.claudeAccounts.add({
@@ -180,7 +201,7 @@ export function renderClaudeAccountsSection(
                   })
                 )
               }
-              disabled={claudeAction !== 'idle' || accountRuntimeUnavailable}
+              disabled={claudeAction !== 'idle' || accountRuntimeUnavailable || shownLaneBlocked}
               className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
                 systemClaudeActive
                   ? 'border-foreground/20 bg-accent/15'
@@ -206,11 +227,16 @@ export function renderClaudeAccountsSection(
                   ) : null}
                 </div>
                 <span className="truncate text-[11px] text-muted-foreground">
-                  {t(
-                    'auto.components.settings.AccountsPane.e05d0ff737',
-                    'Use your current {{value0}} Claude login.',
-                    { value0: accountRuntimeSentenceLabel }
-                  )}
+                  {skipsWslLanes || shownLaneBlocked
+                    ? t(
+                        'accounts.selection.claudeWslLanesNotReset',
+                        "WSL Claude accounts can't be reset from here yet."
+                      )
+                    : t(
+                        'auto.components.settings.AccountsPane.e05d0ff737',
+                        'Use your current {{value0}} Claude login.',
+                        { value0: accountRuntimeSentenceLabel }
+                      )}
                 </span>
               </div>
             </button>

@@ -1,11 +1,16 @@
 import { GitHistoryRefName } from '../source-control/git-params'
-import { z } from 'zod'
+import * as z from 'zod'
+import { StatusBarItems } from './client-ui-status-bar-params'
 import { isFeatureTipSeenId } from '../../feature-education/feature-tips'
 import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
 } from '../../worktree/row-display/card-properties'
 import { isPluginPanelTabKey } from '../../plugins/frames/plugin-tab-key'
+import {
+  STATIC_RIGHT_SIDEBAR_TABS,
+  type StaticRightSidebarTab
+} from '../../ui-chrome/ui-chrome-types'
 import { isFeatureInteractionId } from '../../feature-education/interactions/feature-interactions'
 import type { FeatureInteractionId } from '../../feature-education/interactions/feature-interaction-catalog'
 import {
@@ -31,25 +36,12 @@ export const UnknownRecord = z.record(z.string(), z.unknown())
 
 export const UnknownRecordArray = z.array(UnknownRecord)
 
-export type StaticRightSidebarTab = (typeof STATIC_RIGHT_SIDEBAR_TABS)[number]
-
 // Derive from the shared union; drift previously omitted cli and rejected whole client payloads.
 export const WorktreeCardPropertyParam = z.enum(WORKTREE_CARD_PROPERTIES)
 
 export const WorktreeCardProperties = z
   .array(WorktreeCardPropertyParam)
   .transform((value) => normalizeWorktreeCardProperties(value))
-
-export const STATIC_RIGHT_SIDEBAR_TABS = [
-  'explorer',
-  'search',
-  'vault',
-  'workspaces',
-  'pr-checks',
-  'source-control',
-  'checks',
-  'ports'
-] as const
 
 // Plugin panels are open-ended `plugin:<publisher>.<id>/<panel>` keys, so the
 // schema validates their shape rather than enumerating them.
@@ -62,24 +54,6 @@ export const RightSidebarTabParam = z.custom<StaticRightSidebarTab | `plugin:${s
 )
 
 export const AgentActivityDisplayMode = z.enum(['compact', 'full'])
-
-export const StatusBarItem = z.enum([
-  'claude',
-  'codex',
-  'gemini',
-  'antigravity',
-  'opencode-go',
-  'kimi',
-  'minimax',
-  'grok',
-  'cursor',
-  'zcode',
-  'muse',
-  'ssh',
-  'resource-usage',
-  'ports',
-  'git-blame'
-])
 
 export const WorkspaceStatusDefinition = z.object({
   id: z.string(),
@@ -113,17 +87,21 @@ export const FeatureInteractionIdParam = z.custom<FeatureInteractionId>(isFeatur
   message: 'Unknown feature interaction id'
 })
 
-export const TopLevelViewSchema = z.enum([
-  'terminal',
-  'settings',
-  'tasks',
-  'activity',
-  'automations',
-  'space',
-  'skills',
-  'artifacts',
-  'mobile'
-])
+export const TopLevelViewSchema = z
+  .enum([
+    'terminal',
+    'settings',
+    'tasks',
+    'activity',
+    'automations',
+    'space',
+    'skills',
+    // Bot templates was a view before it became a dialog; an older peer can still send it.
+    'botTemplates',
+    'artifacts',
+    'mobile'
+  ])
+  .transform((view) => (view === 'botTemplates' ? 'terminal' : view))
 
 export const UiUpdateFields = z
   .object({
@@ -138,6 +116,9 @@ export const UiUpdateFields = z
     rightSidebarExplorerView: z.enum(['files', 'search']).optional(),
     rightSidebarWidth: z.number().finite().optional(),
     activityBarPosition: z.enum(['top', 'side']).optional(),
+    activityBarOrder: z.array(z.string()).optional(),
+    activityBarBotOrder: z.array(z.string()).optional(),
+    activityBarHidden: z.array(z.string()).optional(),
     markdownTocPanelWidth: z.number().finite().optional(),
     combinedDiffFileTreeWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
@@ -155,6 +136,15 @@ export const UiUpdateFields = z
     agentsHideWorkspacesFromOtherDevices: z.boolean().optional(),
     agentsHideAutomationGeneratedWorkspaces: z.boolean().optional(),
     agentsHideCliCreatedWorkspaces: z.boolean().optional(),
+    hideBotCreatedWorkspaces: z.boolean().optional(),
+    botSidebarView: z
+      .object({
+        sortBy: z.enum(['manual', 'smart', 'recent', 'name']),
+        hidePausedBots: z.boolean(),
+        hideSleepingWorkers: z.boolean()
+      })
+      .optional(),
+    botChatFolds: z.record(z.string(), z.enum(['open', 'folded'])).optional(),
     agentsShowChildAgents: z.boolean().optional(),
     agentsCompactMode: z.boolean().optional(),
     agentsShowSearch: z.boolean().optional(),
@@ -191,12 +181,14 @@ export const UiUpdateFields = z
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),
+    sidebarBotsHeight: z.number().finite().nullable().optional(),
+    sidebarProjectsFirst: z.boolean().optional(),
     syncTaskStatusFromWorkspaceBoard: z.boolean().optional(),
     _workspaceStatusesDefaultOrderMigrated: z.boolean().optional(),
     _workspaceStatusesReorderedDefaultRepaired: z.boolean().optional(),
     _workspaceStatusesDefaultWorkflowMigrated: z.boolean().optional(),
     _workspaceStatusesDefaultVisualsMigrated: z.boolean().optional(),
-    statusBarItems: z.array(StatusBarItem).optional(),
+    statusBarItems: StatusBarItems.optional(),
     _portsStatusBarDefaultAdded: z.boolean().optional(),
     _kimiStatusBarDefaultAdded: z.boolean().optional(),
     _minimaxStatusBarDefaultAdded: z.boolean().optional(),
@@ -216,7 +208,6 @@ export const UiUpdateFields = z
           .object({
             claude: z.string().optional(),
             codex: z.string().optional(),
-            gemini: z.string().optional(),
             'opencode-go': z.string().optional(),
             kimi: z.string().optional(),
             minimax: z.string().optional(),

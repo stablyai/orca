@@ -35,6 +35,7 @@ import { recoverMobileRelayPairing } from '../src/pairing/mobile-relay-pairing-r
 import { appUpdateChecker, isRetiredGithubAndroidApp } from '../src/app-update/app-update-runtime'
 import { AppMoveScreen } from '../src/app-move/AppMoveScreen'
 import { SideSafeArea } from '../src/layout/side-safe-area'
+import { BotLinkRouter } from '../src/bots/BotLinkRouter'
 import { SideRailProvider } from '../src/layout/side-rail'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
 import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
@@ -245,6 +246,8 @@ export default function RootLayout() {
                 />
               </Stack>
             </SideSafeArea>
+            {/* Last, so its waiting drawer sits above whatever screen the link landed on. */}
+            <BotLinkRouter />
           </SideRailProvider>
           {isRetiredGithubAndroidApp ? <AppMoveScreen /> : null}
         </View>

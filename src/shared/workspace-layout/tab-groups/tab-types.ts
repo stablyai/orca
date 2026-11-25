@@ -25,6 +25,8 @@ export type TabContentType =
   | 'agent-session'
   | 'browser'
   | 'simulator'
+  /** A bot group's room; its entity is the group id. */
+  | 'room'
 
 export type WorkspaceVisibleTabType =
   | 'terminal'
@@ -34,17 +36,31 @@ export type WorkspaceVisibleTabType =
   | 'simulator'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
-// Many content kinds collapse to editor; resolve a concrete tab and project forward instead of trying to invert equality.
-export function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
-  if (
-    contentType === 'agent-session' ||
-    contentType === 'browser' ||
-    contentType === 'terminal' ||
-    contentType === 'simulator'
-  ) {
-    return contentType
+/** What each tab kind is, in one place, so a new kind must state every trait. */
+export const TAB_CONTENT_TRAITS: Record<
+  TabContentType,
+  {
+    /** Shown without a live terminal, browser or editor record behind it. */
+    renderableWithoutRecord: boolean
+    /** Many content kinds collapse to editor; resolve a concrete tab and project forward. */
+    visibleType: WorkspaceVisibleTabType
   }
-  return 'editor'
+> = {
+  terminal: { renderableWithoutRecord: false, visibleType: 'terminal' },
+  editor: { renderableWithoutRecord: false, visibleType: 'editor' },
+  diff: { renderableWithoutRecord: false, visibleType: 'editor' },
+  'conflict-review': { renderableWithoutRecord: false, visibleType: 'editor' },
+  'check-details': { renderableWithoutRecord: false, visibleType: 'editor' },
+  'git-graph': { renderableWithoutRecord: false, visibleType: 'editor' },
+  'agent-session': { renderableWithoutRecord: true, visibleType: 'agent-session' },
+  browser: { renderableWithoutRecord: false, visibleType: 'browser' },
+  simulator: { renderableWithoutRecord: true, visibleType: 'simulator' },
+  // A room is a chat surface, shown where an agent chat is.
+  room: { renderableWithoutRecord: true, visibleType: 'agent-session' }
+}
+
+export function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
+  return TAB_CONTENT_TRAITS[contentType].visibleType
 }
 
 export type Tab = {

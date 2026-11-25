@@ -9,7 +9,13 @@ import {
   journalPragmaNumber,
   type OpenJournalDatabase
 } from './journal-database'
-import { journalDatabasePath } from './journal-host-database'
+import {
+  JOURNAL_LEGACY_CONVERTED_BY,
+  journalDatabasePath,
+  journalDomainDatabasePath,
+  journalRunningOrcaVersion
+} from './journal-host-database'
+import { tryFoldJournalTextTails } from '../journal-text-tail'
 import {
   JOURNAL_DOMAIN_SCHEMA_VERSION,
   migrateJournalDomainSchema
@@ -20,14 +26,8 @@ import {
   JOURNAL_LEGACY_REVISIONS_KEPT,
   reconcileJournalLegacySource
 } from './journal-legacy-reconcile'
-import {
-  captureJournalLegacySourceReceipt,
-  JOURNAL_LEGACY_SOURCE_RECEIPT
-} from './journal-legacy-source-receipt'
-
-export function journalDomainDatabasePath(stateDirectory: string): string {
-  return join(stateDirectory, 'agent-session-domain.db')
-}
+import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
+import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */
 export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {
@@ -62,6 +62,8 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
       )
       meta.run(JOURNAL_LEGACY_SOURCE_RECEIPT, JSON.stringify(sourceReceipt))
       meta.run(JOURNAL_LEGACY_REVISIONS_KEPT, '1')
+      // An unknown version is no later than any, and waits for a launch that knows its own.
+      meta.run(JOURNAL_LEGACY_CONVERTED_BY, journalRunningOrcaVersion() ?? 'unknown')
       const checkpoint = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
       if (checkpoint?.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
         throw new Error('chat initialization could not fold its private WAL')
@@ -140,6 +142,8 @@ export function openJournalDomainDatabase(filename: string): OpenJournalDatabase
     db.pragma('checkpoint_fullfsync = ON')
     db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)
     migrateJournalDomainSchema(db)
+    // Before any chat opens or reader starts, so recovery settles the whole saved text.
+    tryFoldJournalTextTails(db)
     ensurePRWatchTables(db)
     hardenSqliteDatabaseFiles(filename)
     transferred = true

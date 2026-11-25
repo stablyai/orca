@@ -84,7 +84,7 @@ export const WORKTREE_METHODS = [
     handler: async (params, { runtime }) =>
       await runtime.resolveCallerParentForAnotherStore(
         params,
-        readCallerStoreInstallationId(runtime.getRuntimeId(), getCanonicalUserDataPath())
+        await readCallerStoreInstallationId(runtime.getRuntimeId(), getCanonicalUserDataPath())
       )
   }),
   defineMethod({

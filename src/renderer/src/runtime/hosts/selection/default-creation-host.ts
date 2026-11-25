@@ -22,8 +22,8 @@ export function defaultCreationHost(settings: DefaultHostSettings): RuntimeClien
 }
 
 /**
- * Initial host of a row-less source (Linear, Jira, the status-bar account switchers) or a settings
- * scope, until the page's own host picker overrides it.
+ * Initial host of a row-less source (Linear, Jira) or a settings scope, until the page's own host
+ * picker overrides it.
  */
 export function defaultScopeHost(settings: DefaultHostSettings): RuntimeClientTarget {
   return readDefaultHost(settings)

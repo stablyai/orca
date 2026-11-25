@@ -73,41 +73,75 @@ export function splitProfileStateDomainValue(
   return parts
 }
 
+/** A stored part with its key already parsed into the object path it sits at. */
+export type ProfileStateDocumentPathPart = { path: readonly string[]; payload: string }
+
+/**
+ * Writes, in order, the text pieces whose concatenation is the document the depth-first ordered
+ * parts reproduce. Readers assemble it; the writer hashes it without building one large string.
+ */
+export function emitProfileStateDomainPayload(
+  parts: Iterable<ProfileStateDocumentPathPart>,
+  write: (piece: string) => void
+): void {
+  let open: readonly string[] = []
+  let opened = 0
+  let count = 0
+  // A lone root part is the whole document; only later parts make it an object member list.
+  let pendingRoot: string | undefined
+  for (const { path, payload } of parts) {
+    let common = 0
+    while (common < opened && common < path.length - 1 && open[common] === path[common]) {
+      common++
+    }
+    if (count === 0) {
+      if (path.length === 0) {
+        pendingRoot = payload
+        count++
+        continue
+      }
+      write('{')
+    } else {
+      if (pendingRoot !== undefined) {
+        write(`{${pendingRoot}`)
+        pendingRoot = undefined
+      }
+      write(`${'}'.repeat(opened - common)},`)
+    }
+    for (let i = common; i < path.length - 1; i++) {
+      write(`${JSON.stringify(path[i])}:{`)
+    }
+    if (path.length > 0) {
+      write(`${JSON.stringify(path.at(-1))}:`)
+    }
+    write(payload)
+    open = path
+    opened = Math.max(path.length - 1, 0)
+    count++
+  }
+  if (count === 0) {
+    write('{}')
+  } else if (pendingRoot !== undefined) {
+    write(pendingRoot)
+  } else {
+    write('}'.repeat(opened + 1))
+  }
+}
+
 /** Inverse of split: rebuild the document text from depth-first ordered parts. */
 export function assembleProfileStateDomainPayload(
   parts: readonly ProfileStateDocumentPart[]
 ): string {
+  function* pathParts(): Generator<ProfileStateDocumentPathPart> {
+    for (const { key, payload } of parts) {
+      yield { path: parsePartKey(key), payload }
+    }
+  }
   let out = ''
-  let open: string[] = []
-  let first = true
-  for (const part of parts) {
-    const path = parsePartKey(part.key)
-    let common = 0
-    while (common < open.length && common < path.length - 1 && open[common] === path[common]) {
-      common++
-    }
-    for (let i = open.length; i > common; i--) {
-      out += '}'
-    }
-    open = open.slice(0, common)
-    if (!first) {
-      out += ','
-    }
-    for (let i = common; i < path.length - 1; i++) {
-      out += `${JSON.stringify(path[i])}:{`
-      open.push(path[i]!)
-    }
-    if (path.length > 0) {
-      out += `${JSON.stringify(path.at(-1))}:`
-    }
-    out += part.payload
-    first = false
-  }
-  out += '}'.repeat(open.length)
-  if (parts.length === 0) {
-    return '{}'
-  }
-  return parts.length === 1 && parsePartKey(parts[0]!.key).length === 0 ? out : `{${out}}`
+  emitProfileStateDomainPayload(pathParts(), (piece) => {
+    out += piece
+  })
+  return out
 }
 
 function parsePartKey(key: string): string[] {

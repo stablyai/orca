@@ -1,3 +1,4 @@
+import type { PromptStandingRead } from '../agent-session-wire/observations/structured-agent-session-prompt-standing'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
@@ -38,6 +39,8 @@ export type JournalObserverRead = {
   start: number
   floor?: number
   firstInputSubmissionKey: string | null
+  /** A bot's session, whose quiet-marker answers the preview skips. */
+  botSession?: true
 }
 
 export type JournalObserverResult = {
@@ -51,6 +54,7 @@ export type JournalObserverResult = {
   usageLimitCut: HostUsageLimitCut | null
   orcaStopCut: NativeChatOrcaStopCut | null
   work: {
+    promptStandings?: PromptStandingRead
     liveFence: number | null
     allowsObservation: boolean
     working: boolean
@@ -59,6 +63,8 @@ export type JournalObserverResult = {
     owedEnteredSubmissions: AgentJournalSubmission[]
     owedSendingSubmissions: AgentJournalSubmission[]
     activeTurn: { item: AgentJournalRenderItem; turnId: string } | null
+    /** The message that opened the running turn (one sent into it joined it); null when none runs. */
+    activeTurnOpener?: AgentJournalRenderItem | null
     latestTurn: AgentSessionLatestTurn | null
     actionablePrompts: AgentJournalRenderItem[]
     restatedSubmissions: AgentJournalSubmission[]

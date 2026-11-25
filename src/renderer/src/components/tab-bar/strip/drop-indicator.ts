@@ -12,8 +12,9 @@ export function getDropIndicatorClasses(dropIndicator: DropIndicator): string {
 }
 
 // Keep the foreground marker above selection/unread layers; zero horizontal inset avoids scrollWidth jitter at the strip’s end.
+// Why the tab-group variant: with split groups only the focused group's active tab is accented, else every group reads as focused.
 export const ACTIVE_TAB_INDICATOR_CLASSES =
-  'pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-tab-active-indicator z-20 group-data-[single-tab]/tab-strip:hidden'
+  'pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-tab-active-indicator z-20 group-data-[single-tab]/tab-strip:hidden group-data-[unfocused-split-group]/tab-group:hidden'
 
 export function getTabRootStateClasses(isActive: boolean): string {
   return isActive

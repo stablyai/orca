@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import type { ClientChannel } from 'ssh2'
 import type { AutomationPrecheck } from '../../../shared/automations/automation-definition'
 import type { AutomationPrecheckResult } from '../../../shared/automations/history/automation-run'
@@ -99,10 +100,14 @@ export function killLocalPrecheckProcessTree(
     }
     try {
       // Shell prechecks can leave descendants running after the root exits.
-      const killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
+      const killer = spawn(
+        windowsSystem32Binary('taskkill.exe'),
+        ['/pid', String(pid), '/t', '/f'],
+        {
+          stdio: 'ignore',
+          windowsHide: true
+        }
+      )
       killer.on('error', () => child.kill())
       killer.unref()
     } catch {

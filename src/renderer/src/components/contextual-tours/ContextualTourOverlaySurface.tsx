@@ -48,7 +48,6 @@ export type ActiveTourRenderState = {
   secondaryAction?: ContextualTourStepAction
   preferredPlacement?: ContextualTourStepPlacement
   targetPulse?: boolean
-  hidePrimaryAction?: boolean
   isLastStep: boolean
   isFirstStep: boolean
   panelHost: HTMLElement | null
@@ -134,11 +133,10 @@ export function ContextualTourOverlaySurface({
   const defaultPrimaryAction = {
     kind: renderState.isLastStep ? 'complete' : 'next',
     label: renderState.isLastStep
-      ? t('auto.components.contextual.tours.ContextualTourOverlaySurface.complete', 'Done')
+      ? t('auto.components.contextual.tours.ContextualTourOverlaySurface.complete', 'Finish')
       : t('auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418', 'Next')
   } satisfies ContextualTourStepAction
-  const primaryAction =
-    renderState.primaryAction ?? (renderState.hidePrimaryAction ? null : defaultPrimaryAction)
+  const primaryAction = renderState.primaryAction ?? defaultPrimaryAction
   const showTargetRings = renderState.targetPulse === true
   const targetRingStyle = showTargetRings
     ? ({
@@ -255,21 +253,19 @@ export function ContextualTourOverlaySurface({
                 {renderState.secondaryAction.label}
               </Button>
             ) : null}
-            {primaryAction ? (
-              <Button
-                type="button"
-                size="xs"
-                onClick={
-                  primaryAction.kind === defaultPrimaryAction.kind &&
-                  primaryAction.label === defaultPrimaryAction.label
-                    ? onNext
-                    : () => onStepAction(primaryAction)
-                }
-              >
-                {primaryAction.label}
-                {primaryAction.kind === 'next' && !renderState.isLastStep ? <ArrowRight /> : null}
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              size="xs"
+              onClick={
+                primaryAction.kind === defaultPrimaryAction.kind &&
+                primaryAction.label === defaultPrimaryAction.label
+                  ? onNext
+                  : () => onStepAction(primaryAction)
+              }
+            >
+              {primaryAction.label}
+              {primaryAction.kind === 'next' && !renderState.isLastStep ? <ArrowRight /> : null}
+            </Button>
           </div>
         </div>
       </div>

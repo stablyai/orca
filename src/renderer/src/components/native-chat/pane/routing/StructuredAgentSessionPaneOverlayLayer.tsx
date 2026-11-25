@@ -10,6 +10,7 @@ import {
 import { ActivityPortalContainer } from '@/components/ui/activity-portal-container'
 import { RetainedPaneHost } from '../../../tab-group/retained-pane/RetainedPaneHost'
 import NativeChatView from '../../NativeChatView'
+import { BotGroupChat } from '../../../bots/BotGroupChat'
 import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat-composer-editor-owner'
 import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'
 import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
@@ -82,6 +83,39 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   )
 })
 
+/** A bot group's room: retained like a chat so switching tabs never remounts it. */
+const RoomOverlaySlot = memo(function RoomOverlaySlot({
+  tab,
+  isActive,
+  isFocusedGroup,
+  hasSplitGroups,
+  onFocusOwningGroup
+}: {
+  tab: Tab
+  isActive: boolean
+  isFocusedGroup: boolean
+  hasSplitGroups: boolean
+  onFocusOwningGroup: (groupId: string) => void
+}): React.JSX.Element {
+  const backdropActive = useWindowBackdropActive()
+  return (
+    <RetainedPaneHost
+      groupId={tab.groupId}
+      isVisible={isActive}
+      dimmed={hasSplitGroups && !isFocusedGroup && !backdropActive}
+      data-room-overlay-tab-id={tab.id}
+      onFocusOwningGroup={onFocusOwningGroup}
+    >
+      <BotGroupChat
+        roomId={tab.entityId}
+        tabId={tab.id}
+        isVisible={isActive}
+        isFocusedGroup={isFocusedGroup}
+      />
+    </RetainedPaneHost>
+  )
+})
+
 const StructuredAgentSessionPaneOverlayLayer = memo(
   function StructuredAgentSessionPaneOverlayLayer({
     worktreeId,
@@ -117,6 +151,12 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       () => unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab)),
       [unifiedTabs]
     )
+    const roomTabs = useMemo(
+      () => unifiedTabs.filter((tab) => tab.contentType === 'room'),
+      [unifiedTabs]
+    )
+    const isActive = (tab: Tab) =>
+      Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)
     // Why: a chat holds no view state until it is first shown, and mounting every restored chat runs the renderer out of memory at thousands of tabs.
     const [shownTabIds, setShownTabIds] = useState(NO_SHOWN_TAB_IDS)
     const mountedTabs = useMemo(
@@ -151,6 +191,16 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
               groupActiveTabById.get(tab.groupId) === tab.id &&
               tab.groupId === activeGroupId
             )}
+            hasSplitGroups={groups.length > 1}
+            onFocusOwningGroup={focusOwningGroup}
+          />
+        ))}
+        {roomTabs.map((tab) => (
+          <RoomOverlaySlot
+            key={tab.id}
+            tab={tab}
+            isActive={isActive(tab)}
+            isFocusedGroup={isActive(tab) && tab.groupId === activeGroupId}
             hasSplitGroups={groups.length > 1}
             onFocusOwningGroup={focusOwningGroup}
           />

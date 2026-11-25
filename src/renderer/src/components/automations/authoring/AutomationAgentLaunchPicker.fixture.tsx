@@ -24,7 +24,8 @@ const DRAFT: AutomationDraft = {
   customSchedule: '',
   savedSchedule: null,
   missedRunGraceMinutes: '',
-  scheduleWarning: null
+  scheduleWarning: null,
+  bot: null
 }
 
 function AgentField(): React.JSX.Element {

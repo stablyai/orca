@@ -58,7 +58,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     }
     setGithubProjectError('')
     setGithubProjectPartialFailures([])
-    const reply = await githubProjectListRead.request(client, { host: 'github.com' })
+    const reply = await githubProjectListRead.request(client, {})
     const result = githubProjectListRead.interpret(reply)
     if (!result.ok) {
       throw new Error(result.error.message)

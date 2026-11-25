@@ -44,10 +44,6 @@ export function createAutomationDispatchToken(automationId: string, runId: strin
   return token
 }
 
-export function getAutomationDispatchTokenCountForTests(): number {
-  return dispatchTokens.size
-}
-
 export function beginAutomationDispatchTokenUse(args: {
   automationId: string
   runId: string

@@ -20,6 +20,8 @@ export type OpenAppHttpLinkOptions = {
   worktreeId?: string | null
   /** The click, so the setting's Shift escape modifier applies. */
   event?: AppHttpLinkClick
+  /** Opens in the workspace's browser whatever the link setting says. */
+  forceInApp?: boolean
   /** Explicit destination override when a surface bypasses the link setting. */
   destination?: 'orca' | 'system'
 }
@@ -62,7 +64,8 @@ export function openAppHttpLink(
     worktreeId: host?.worktreeId ?? null,
     sourceOwner: host?.owner ?? LOCAL_OWNER,
     allowRemoteInApp: true,
-    modifierHeld: isEscapeModifierClick(options.event)
+    modifierHeld: isEscapeModifierClick(options.event),
+    ...(options.forceInApp ? { forceInApp: true } : {})
   })
 }
 

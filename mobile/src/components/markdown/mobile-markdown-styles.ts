@@ -57,6 +57,13 @@ export const styles = themedStyleSheet(() => ({
   sub: { fontSize: 10, position: 'relative', top: 3 },
   kbd: { borderWidth: 1, borderColor: colors.borderSubtle },
   ins: { textDecorationLine: 'underline' },
+  // Desktop's mention chip: medium weight on a fill that reads on any surface, the user bubble too.
+  mention: {
+    fontWeight: '500',
+    color: colors.textPrimary,
+    backgroundColor: colors.translucentFill,
+    borderRadius: radii.mark
+  },
   inlineCodeLink: {
     color: colors.accentBlue,
     textDecorationLine: 'underline'

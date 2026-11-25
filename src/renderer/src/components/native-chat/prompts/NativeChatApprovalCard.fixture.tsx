@@ -24,7 +24,9 @@ export const fileChanges = defineFixture({
 })
 
 const expandDetails = (frame: HTMLElement): void => {
-  frame.querySelector<HTMLButtonElement>('[data-slot="collapsible-trigger"]')?.click()
+  frame
+    .querySelector<HTMLButtonElement>('[data-native-chat-approval-actions] [aria-expanded]')
+    ?.click()
 }
 
 export const fileChangesExpanded = defineFixture({ ...fileChanges, interact: expandDetails })

@@ -6,6 +6,13 @@ import type {
 import { structuredAgentSessionOwnerInputs } from '../session-ownership/structured-agent-session-owner'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { agentSenderAliasParts, assembleAgentSenderAliases } from './agent-sender-alias-projection'
+import {
+  HostPartDraft,
+  merge,
+  wholeHostRowsFor,
+  type HostPart,
+  type LocatedRows as BaseLocatedRows
+} from './agent-sender-host-part'
 
 /** `paneKey` is this window's name for the pane; `hostPaneKey` is the name its host gave it. */
 export type LocatedAgentSender = AgentSenderAssociation & {
@@ -16,37 +23,31 @@ export type LocatedAgentSender = AgentSenderAssociation & {
 const key = (host: string, address: string) => JSON.stringify([host, address])
 type Aliases = ReturnType<typeof assembleAgentSenderAliases>
 type Located = LocatedAgentSender | null
-/** One host's rows on this window's panes (null where they disagree), with reverse pane maps. */
-type HostPart = {
-  identities: Map<string, Located>
-  principals: Set<string>
-  /** The rows it runs for each home principal that attached them. */
-  attachments: Map<string, Map<string, Located>>
-  panes: Map<string, string[]>
-  attachedPanes: Map<string, [principal: string, identity: string][]>
-}
 type SenderIndex = {
   parts: ReadonlyMap<string, HostPart>
   results: Map<string, Located | undefined>
   /** Whether another host claims a pane, by pane and claiming host. */
   rivals: Map<string, boolean>
 }
-type LocatedRows = {
+type LocatedRows = BaseLocatedRows & {
   aliases: Aliases
   host: string
-  associations: LocatedAgentSender[]
-  attachments: [principal: string, row: LocatedAgentSender][]
 }
 
 const EMPTY: AppState['agentSenderPublicationsByHost'] = Object.freeze({})
 let aliasCache: { inputs: unknown[]; parts: readonly unknown[]; aliases: Aliases } | undefined
 const locatedRows = new WeakMap<AgentSenderPublication, LocatedRows>()
-const hostParts = new WeakMap<object, { aliases: Aliases; host: string; part: HostPart }>()
+type BuiltPart = {
+  aliases: Aliases
+  host: string
+  scopes: Record<string, AgentSenderPublication>
+  part: HostPart
+}
+const hostParts = new WeakMap<object, BuiltPart>()
+/** Each host's newest part: the base a later scope change edits instead of rebuilding. */
+const latestParts = new Map<string, BuiltPart>()
 const indexes = new WeakMap<object, { aliases: Aliases; index: SenderIndex }>()
 let joins = 0
-let claims = 0
-/** Rows joined to panes and identity claims resolved. */
-export const agentSenderIndexWorkForTest = () => ({ joins, claims })
 
 function senderAliases(state: AppState): Aliases {
   const inputs = [
@@ -67,19 +68,6 @@ function senderAliases(state: AppState): Aliases {
   }
   aliasCache = { inputs, parts, aliases: assembleAgentSenderAliases(parts) }
   return aliasCache.aliases
-}
-
-/** Equal claims keep the first; a disagreement, or an ambiguous claim, is ambiguous. */
-function merge(current: Located | undefined, next: Located): Located
-function merge(current: Located | undefined, next: Located | undefined): Located | undefined
-function merge(current: Located | undefined, next: Located | undefined): Located | undefined {
-  if (next === undefined || current === null) {
-    return current
-  }
-  if (current === undefined || next === null) {
-    return next
-  }
-  return JSON.stringify(current) === JSON.stringify(next) ? current : null
 }
 
 function locate(publication: AgentSenderPublication, host: string, aliases: Aliases): LocatedRows {
@@ -109,7 +97,9 @@ function locate(publication: AgentSenderPublication, host: string, aliases: Alia
   return rows
 }
 
-/** The whole-host publication is the baseline; each newer scope replaces its worktree's rows. */
+/** The whole-host publication is the baseline; each newer scope replaces its worktree's rows.
+ *  A change to scopes alone edits the host's previous part: the replaced scopes leave, and the
+ *  baseline rows of worktrees that gained or lost a scope swap in or out. */
 function hostPart(
   host: string,
   scopes: Record<string, AgentSenderPublication>,
@@ -119,48 +109,69 @@ function hostPart(
   if (cached?.aliases === aliases && cached.host === host) {
     return cached.part
   }
-  const part: HostPart = {
-    identities: new Map(),
-    principals: new Set(),
-    attachments: new Map(),
-    panes: new Map(),
-    attachedPanes: new Map()
-  }
-  const onPane = <T>(map: Map<string, T[]>, row: LocatedAgentSender, value: T) => {
-    const pane = key(row.worktreeId, row.paneKey)
-    const values = map.get(pane) ?? []
-    values.push(value)
-    map.set(pane, values)
-  }
+  const previous = latestParts.get(host)
   const whole = scopes['*']
-  const scoped = Object.entries(scopes).flatMap(([id, value]) => (id === '*' ? [] : [value]))
-  for (const publication of whole ? [whole, ...scoped] : scoped) {
-    const kept = (row: LocatedAgentSender) =>
-      publication !== whole || scoped.length === 0 || !Object.hasOwn(scopes, row.worktreeId)
-    const rows = locate(publication, host, aliases)
-    for (const row of rows.associations) {
-      if (kept(row)) {
-        joins++
-        part.identities.set(row.identity, merge(part.identities.get(row.identity), row))
-        onPane(part.panes, row, row.identity)
-      }
-    }
-    for (const [principal, row] of rows.attachments) {
-      if (kept(row)) {
-        joins++
-        const bucket = part.attachments.get(principal) ?? new Map<string, Located>()
-        part.attachments.set(principal, bucket)
-        bucket.set(row.identity, merge(bucket.get(row.identity), row))
-        onPane(part.attachedPanes, row, [principal, row.identity])
-      }
-    }
-    // Principals repeat in every scope of a host; each joins once.
-    for (const { peerFingerprint, homePeerFingerprint } of publication.principals) {
-      part.principals.add(key(peerFingerprint, homePeerFingerprint))
+  const part =
+    previous?.aliases === aliases && previous.scopes['*'] === whole
+      ? editedHostPart(host, previous, scopes, aliases)
+      : builtHostPart(host, scopes, aliases)
+  const built = { aliases, host, scopes, part }
+  hostParts.set(scopes, built)
+  latestParts.set(host, built)
+  return part
+}
+
+function builtHostPart(
+  host: string,
+  scopes: Record<string, AgentSenderPublication>,
+  aliases: Aliases
+): HostPart {
+  const draft = new HostPartDraft(undefined, () => joins++)
+  const whole = scopes['*']
+  if (whole) {
+    draft.rows(locate(whole, host, aliases), 1, (row) => !Object.hasOwn(scopes, row.worktreeId))
+    draft.publicationPrincipals(whole, 1)
+  }
+  for (const [id, publication] of Object.entries(scopes)) {
+    if (id !== '*') {
+      draft.rows(locate(publication, host, aliases), 1)
+      draft.publicationPrincipals(publication, 1)
     }
   }
-  hostParts.set(scopes, { aliases, host, part })
-  return part
+  return draft.finish()
+}
+
+function editedHostPart(
+  host: string,
+  previous: BuiltPart,
+  scopes: Record<string, AgentSenderPublication>,
+  aliases: Aliases
+): HostPart {
+  const draft = new HostPartDraft(previous.part, () => joins++)
+  const whole = scopes['*']
+  const wholeRows = whole && locate(whole, host, aliases)
+  const ids = new Set([...Object.keys(previous.scopes), ...Object.keys(scopes)])
+  ids.delete('*')
+  for (const id of ids) {
+    const before = previous.scopes[id]
+    const after = scopes[id]
+    if (before === after) {
+      continue
+    }
+    if (before) {
+      draft.rows(locate(before, host, aliases), -1)
+      draft.publicationPrincipals(before, -1)
+    } else if (wholeRows) {
+      draft.rows(wholeHostRowsFor(wholeRows, id), -1)
+    }
+    if (after) {
+      draft.rows(locate(after, host, aliases), 1)
+      draft.publicationPrincipals(after, 1)
+    } else if (wholeRows) {
+      draft.rows(wholeHostRowsFor(wholeRows, id), 1)
+    }
+  }
+  return draft.finish()
 }
 
 function senderIndex(state: AppState): SenderIndex {
@@ -173,6 +184,11 @@ function senderIndex(state: AppState): SenderIndex {
   const parts = new Map(
     Object.entries(source).map(([host, scopes]) => [host, hostPart(host, scopes, aliases)])
   )
+  for (const host of latestParts.keys()) {
+    if (!parts.has(host)) {
+      latestParts.delete(host)
+    }
+  }
   const index: SenderIndex = { parts, results: new Map(), rivals: new Map() }
   indexes.set(source, { aliases, index })
   return index
@@ -180,10 +196,9 @@ function senderIndex(state: AppState): SenderIndex {
 
 /** A host's claim for an identity: its own rows, then every row a peer runs for its principals. */
 function claim(index: SenderIndex, host: string, identity: string): Located | undefined {
-  claims++
   const part = index.parts.get(host)
   let value = part?.identities.get(identity)
-  for (const principal of part?.principals ?? []) {
+  for (const principal of part?.principals.keys() ?? []) {
     for (const executing of index.parts.values()) {
       value = merge(value, executing.attachments.get(principal)?.get(identity))
     }

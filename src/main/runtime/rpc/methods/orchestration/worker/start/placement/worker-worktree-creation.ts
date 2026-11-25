@@ -8,16 +8,21 @@ import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import { resolveUnattendedSetupDecision } from '../../../../../../../workspace-hooks/effective-hook-config'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
-import { parseWorkspaceKey } from '../../../../../../../../shared/workspace/identity/workspace-scope'
+import type { WorkspaceKey } from '../../../../../../../../shared/workspace/identity/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../../../../shared/workspace/identity/workspace-scope'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-placement-topology'
 import type { CrossStoreParentRef } from '../../../../../../../../shared/worktree/lineage-types'
+import { bindWorkerTerminal } from '../../../../../../orchestration/db/worker-terminal/worker-bound-terminals'
 
 /** The repo a new worker worktree is created in, and its parent for `new-child`. */
 export type WorkerWorktreeCreationTarget = {
   repoSelector: string
   parentWorktreeId?: string
-  /** A multi-repo folder workspace parent (`folder:<id>`); its destination repo is explicit. */
-  parentWorkspace?: string
+  /** Set instead of `parentWorktreeId` when the caller is a folder workspace (a bot's home, say). */
+  parentFolderWorkspace?: WorkspaceKey
   /** The paired coordinator's own workspace, on its machine. */
   crossStoreParent?: CrossStoreParentRef
 }
@@ -44,18 +49,21 @@ export async function resolveWorkerWorktreeCreationTarget(args: {
     }
     return { repoSelector: repo, crossStoreParent: args.crossStoreParent }
   }
-  // A folder workspace spans several repos, so its child names the destination repo itself.
-  if (
-    requestedWorktree === 'new-child' &&
-    parseWorkspaceKey(args.callerWorktreeId)?.type === 'folder'
-  ) {
+  const caller = parseWorkspaceKey(args.callerWorktreeId)
+  if (caller?.type === 'folder') {
+    // A folder has no repo of its own, so it must name the one to create in.
     if (!repo) {
       throw new OrchestrationError(
         'invalid_argument',
-        '--worktree new-child from a multi-repo folder workspace needs --repo <selector> naming the repo to create the worktree in.'
+        'A worker started from a folder workspace needs --repo to create a worktree.'
       )
     }
-    return { repoSelector: repo, parentWorkspace: args.callerWorktreeId }
+    return {
+      repoSelector: repo,
+      ...(requestedWorktree === 'new-child'
+        ? { parentFolderWorkspace: folderWorkspaceKey(caller.folderWorkspaceId) }
+        : {})
+    }
   }
   const callerWorktree = await args.runtime
     .showManagedWorktree(`id:${args.callerWorktreeId}`)
@@ -114,6 +122,8 @@ export async function createWorkerWorktree(args: {
   dispatchId: string
   requestedWorktree: string
   target: WorkerWorktreeCreationTarget
+  /** Recorded on the new workspace's lineage, so it reads as this worker's. */
+  orchestrationContext?: { taskId: string; orchestrationRunId: string }
   params: {
     name?: string
     baseBranch?: string
@@ -176,9 +186,12 @@ export async function createWorkerWorktree(args: {
         }
       : {
           parentWorktree: target.parentWorktreeId,
-          ...(target.parentWorkspace ? { parentWorkspace: target.parentWorkspace } : {}),
+          ...(target.parentFolderWorkspace
+            ? { parentWorkspace: target.parentFolderWorkspace }
+            : {}),
           noParent: requestedWorktree === 'new-top-level',
-          callerTerminalHandle: params.from
+          callerTerminalHandle: params.from,
+          orchestrationContext: args.orchestrationContext
         }
   })
   const terminalHandle = created.startupTerminal?.handle
@@ -211,14 +224,20 @@ export async function createWorkerWorktree(args: {
   })
   const setupTerminalHandle = created.setupReceipt?.terminalHandle
   for (const terminal of listed.terminals) {
+    const role =
+      terminal.handle === terminalHandle
+        ? 'agent'
+        : terminal.handle === setupTerminalHandle
+          ? 'setup'
+          : 'configured_tab'
+    const paneKey = role === 'agent' ? null : runtime.getTerminalPaneKey(terminal.handle)
+    if (role !== 'agent' && paneKey) {
+      // They close with the worker; release checks each handle still names this pane.
+      bindWorkerTerminal(db, { dispatchId, terminalHandle: terminal.handle, paneKey, role })
+    }
     effects.push({
       kind: 'terminal',
-      role:
-        terminal.handle === terminalHandle
-          ? 'agent'
-          : terminal.handle === setupTerminalHandle
-            ? 'setup'
-            : 'configured_tab',
+      role,
       // Agent-first creation made every listed terminal; reused_agent_terminal incorrectly mixed role with lifecycle.
       action: 'created',
       id: terminal.handle,

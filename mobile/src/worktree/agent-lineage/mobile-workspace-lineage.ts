@@ -130,7 +130,9 @@ function getCrossStoreView(
 export function getMobileWorkspaceLineageChildren<Row extends MobileLineageRow>(
   listed: readonly Row[],
   stores?: MobileLineageStores,
-  filterRepoIds: readonly string[] = []
+  filterRepoIds: readonly string[] = [],
+  /** A host's own folder record for a row that does not report its folder parent itself. */
+  folderRecordOf?: (row: Row) => WorkspaceLineageEdge | undefined
 ): Map<string, Row[]> {
   const rows = getResolutionRows(listed)
   // The shared policy: worktree parent, then folder workspace, then another store. The phone trusts
@@ -146,7 +148,7 @@ export function getMobileWorkspaceLineageChildren<Row extends MobileLineageRow>(
         : undefined
     },
     crossStoreLineage: getCrossStoreView(rows, stores),
-    folderRecordOf: (row) => readFolderEdge(row.worktree),
+    folderRecordOf: (row) => readFolderEdge(row.worktree) ?? folderRecordOf?.(row.worktree),
     keepSameStoreCycles: true
   })
   const parentByChild = new Map([...resolved].map(([child, parent]) => [child, parent.worktree]))

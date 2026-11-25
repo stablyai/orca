@@ -35,6 +35,10 @@ function sleepSync(ms: number): void {
 }
 
 export function removeTreeSync(targetPath: string): void {
+  // Bun on Windows empties the cwd for rm('') (oven-sh/bun#47420); match Node's no-op.
+  if (targetPath === '') {
+    return
+  }
   const options = transientLockRemovalOptions()
   const extraAttempts = process.platform === 'win32' ? WINDOWS_RM_MAX_RETRIES : 0
   let attempt = 0
@@ -60,6 +64,10 @@ export async function removeTree(
   targetPath: string,
   options: { rm?: AsyncRm; signal?: AbortSignal } = {}
 ): Promise<void> {
+  // Same Bun rm('') cwd wipe as removeTreeSync.
+  if (targetPath === '') {
+    return
+  }
   const rm = options.rm ?? nodeRm
   const passDelays = process.platform === 'win32' ? WINDOWS_REMOVE_PASS_DELAYS_MS : []
   for (let attempt = 0; ; attempt += 1) {

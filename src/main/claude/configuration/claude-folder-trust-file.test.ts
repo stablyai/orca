@@ -55,12 +55,16 @@ describe('grantClaudeFolderTrust', () => {
     })
   })
 
-  it('keeps an owner-only mode through the rewrite', async () => {
-    const file = join(root, '.claude.json')
-    writeConfig(file, {}, 0o600)
-    await grantClaudeFolderTrust({ configFile: file, folderKeys: ['/wt'] })
-    expect(statSync(file).mode & 0o777).toBe(0o600)
-  })
+  // Windows reports every writable file as 0666 and has no owner-only mode to preserve.
+  it.skipIf(process.platform === 'win32')(
+    'keeps an owner-only mode through the rewrite',
+    async () => {
+      const file = join(root, '.claude.json')
+      writeConfig(file, {}, 0o600)
+      await grantClaudeFolderTrust({ configFile: file, folderKeys: ['/wt'] })
+      expect(statSync(file).mode & 0o777).toBe(0o600)
+    }
+  )
 
   it('leaves a corrupt file byte-for-byte untouched', async () => {
     const file = join(root, '.claude.json')
@@ -71,18 +75,22 @@ describe('grantClaudeFolderTrust', () => {
     expect(readFileSync(file, 'utf-8')).toBe('{"oauthAccount": ')
   })
 
-  it('updates a symlinked config through its target and keeps the link', async () => {
-    const target = join(root, 'dotfiles-claude.json')
-    const link = join(root, '.claude.json')
-    writeConfig(target, { theme: 'dark' })
-    symlinkSync(target, link)
-    await grantClaudeFolderTrust({ configFile: link, folderKeys: ['/wt'] })
-    expect(lstatSync(link).isSymbolicLink()).toBe(true)
-    expect(readConfig(target)).toEqual({
-      theme: 'dark',
-      projects: { '/wt': { hasTrustDialogAccepted: true } }
-    })
-  })
+  // A file link needs the symlink privilege on Windows (Developer Mode).
+  it.skipIf(process.platform === 'win32')(
+    'updates a symlinked config through its target and keeps the link',
+    async () => {
+      const target = join(root, 'dotfiles-claude.json')
+      const link = join(root, '.claude.json')
+      writeConfig(target, { theme: 'dark' })
+      symlinkSync(target, link)
+      await grantClaudeFolderTrust({ configFile: link, folderKeys: ['/wt'] })
+      expect(lstatSync(link).isSymbolicLink()).toBe(true)
+      expect(readConfig(target)).toEqual({
+        theme: 'dark',
+        projects: { '/wt': { hasTrustDialogAccepted: true } }
+      })
+    }
+  )
 })
 
 describe('grantClaudeWorkspaceTrust', () => {
@@ -90,7 +98,8 @@ describe('grantClaudeWorkspaceTrust', () => {
     const real = join(root, 'real-folder')
     mkdirSync(real)
     const link = join(root, 'linked-folder')
-    symlinkSync(real, link)
+    // A junction needs no symlink privilege on Windows; POSIX ignores the type.
+    symlinkSync(real, link, 'junction')
     const file = join(root, '.claude.json')
     writeConfig(file, {})
     await expect(

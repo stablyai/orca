@@ -11,6 +11,9 @@ export type BridgeSessionBack = {
   readonly connectionPathFrames?: true
   /** The page's `ready` said it reads `appInactive` frames. */
   readonly appInactiveFrames?: true
+  /** The page's `ready` said it answers `appResumed` frames. */
+  readonly appResumedFrames?: true
+  readonly botItemLinks?: true
   readonly terminalKeyRailClaim?: { readonly inputOwner?: string }
 }
 

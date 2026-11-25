@@ -1,27 +1,35 @@
-const CONFIGURED_ANTIGRAVITY_ACP_ENVIRONMENT_KEYS = new Set([
-  'AGY_ACP_FORCE_FILE_STORAGE',
-  'BROWSER',
-  'PYTHONUNBUFFERED',
-  'ELECTRON_RUN_AS_NODE'
-])
+import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import { isChromiumCrashpadPipeNameKey } from '../pty/shell-startup/chromium-crashpad-pipe-env'
 
-/** Remove inherited authentication, harness and stale Electron Crashpad overrides. */
+// The credentials each saved account type reads from the launch environment.
+const AUTH_ENVIRONMENT_KEYS: Partial<
+  Record<AntigravityChatAuthConfig['method'], ReadonlySet<string>>
+> = {
+  'gemini-api-key': new Set(['GEMINI_API_KEY', 'GOOGLE_GEMINI_BASE_URL']),
+  'agent-platform': new Set([
+    'GOOGLE_APPLICATION_CREDENTIALS',
+    'GOOGLE_CLOUD_PROJECT',
+    'GOOGLE_CLOUD_LOCATION',
+    'GOOGLE_CLOUD_QUOTA_PROJECT',
+    'CLOUDSDK_CORE_PROJECT'
+  ])
+}
+
+/** Remove inherited authentication, agy ACP overrides (such as forcing file storage, which would
+ *  hide agy's keyring login) and stale Electron Crashpad overrides, keeping only the credentials the
+ *  chat's saved account type reads. */
 export function scrubAntigravityAcpEnvironment(
   env: Record<string, string | undefined>,
-  inherited: NodeJS.ProcessEnv
+  inherited: NodeJS.ProcessEnv,
+  chatAuth?: AntigravityChatAuthConfig
 ): string[] {
+  const kept = chatAuth ? AUTH_ENVIRONMENT_KEYS[chatAuth.method] : undefined
   const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter((key) => {
     const normalized = process.platform === 'win32' ? key.toUpperCase() : key
-    const shadowsConfiguredValue =
-      process.platform === 'win32' &&
-      CONFIGURED_ANTIGRAVITY_ACP_ENVIRONMENT_KEYS.has(normalized) &&
-      key !== normalized
     return (
-      shadowsConfiguredValue ||
-      normalized.toUpperCase() === 'CHROME_CRASHPAD_PIPE_NAME' ||
-      (!CONFIGURED_ANTIGRAVITY_ACP_ENVIRONMENT_KEYS.has(normalized) &&
+      isChromiumCrashpadPipeNameKey(key) ||
+      (!kept?.has(normalized) &&
         (normalized === 'GEMINI_API_KEY' ||
-          normalized === 'ANTIGRAVITY_HARNESS_PATH' ||
           normalized === 'GCLOUD_PROJECT' ||
           normalized === 'CLOUDSDK_CORE_PROJECT' ||
           normalized.startsWith('GOOGLE_') ||

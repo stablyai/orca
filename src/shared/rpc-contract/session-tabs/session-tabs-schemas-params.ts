@@ -1,3 +1,4 @@
+import { BotLinkOpenTargetSchema } from '../../bots/bot-link-open-target'
 import { z } from 'zod'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { TAB_ACTIVATION_INTENTS } from '../../workspace-layout/tab-groups/tab-activation-intent'
@@ -32,6 +33,10 @@ export const ActivateTab = WorktreeTabSelector.extend({
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
   // Absent means user intent for old clients; only automatic activation may refuse a slept pane.
   intent: z.enum(TAB_ACTIVATION_INTENTS).optional()
+})
+
+export const BotLinkActivateTab = ActivateTab.extend({
+  botLinkTarget: BotLinkOpenTargetSchema.optional()
 })
 
 export const CloseTab = ActivateTab.extend({

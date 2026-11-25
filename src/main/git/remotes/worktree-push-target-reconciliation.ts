@@ -100,10 +100,6 @@ function shouldReconcileNow(repoId: string): boolean {
   return last === undefined || Date.now() - last >= RECONCILE_COOLDOWN_MS
 }
 
-export function _resetPrRemoteReconciliationRateLimitForTests(): void {
-  lastReconciledAtByRepoId.clear()
-}
-
 function logReclaimed(repoPath: string, reclaimed: string[]): void {
   if (reclaimed.length > 0) {
     console.log(

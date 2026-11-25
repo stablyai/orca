@@ -32,7 +32,7 @@ export async function addIssueComment(
   | { ok: true; id: string; url?: string | null; parentId?: string | null }
   | { ok: false; error: string }
 > {
-  const entry = getClients(workspaceId)[0]
+  const entry = (await getClients(workspaceId))[0]
   if (!entry) {
     return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
@@ -57,7 +57,7 @@ export async function addIssueComment(
     }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.workspace.id)
+      await clearToken(entry.workspace.id)
       throw error
     }
     const message = error instanceof Error ? error.message : String(error)
@@ -73,7 +73,7 @@ export async function addIssueCommentForAgent(
   workspaceId: string,
   options: { id: string; parentId?: string | null; signal?: AbortSignal; beforeInvoke?: () => void }
 ): Promise<LinearCommentWriteRecord> {
-  const entry = getClients(workspaceId)[0]
+  const entry = (await getClients(workspaceId))[0]
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
@@ -124,7 +124,7 @@ export async function updateIssueCommentForAgent(
   workspaceId: string,
   options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
 ): Promise<LinearCommentWriteRecord> {
-  const entry = getClients(workspaceId)[0]
+  const entry = (await getClients(workspaceId))[0]
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
@@ -154,7 +154,7 @@ export async function deleteIssueCommentForAgent(
   workspaceId: string,
   options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
 ): Promise<void> {
-  const entry = getClients(workspaceId)[0]
+  const entry = (await getClients(workspaceId))[0]
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
@@ -178,7 +178,7 @@ export async function createIssueAttachment(
   workspaceId: string,
   options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
 ): Promise<LinearAttachmentWriteRecord> {
-  const entry = getClients(workspaceId)[0]
+  const entry = (await getClients(workspaceId))[0]
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
@@ -255,7 +255,7 @@ export async function getIssueComments(
   issueId: string,
   workspaceId?: string | null
 ): Promise<LinearComment[]> {
-  const entry = getClients(workspaceId)[0]
+  const entry = (await getClients(workspaceId))[0]
   if (!entry) {
     return []
   }
@@ -282,7 +282,7 @@ export async function getIssueComments(
     return comments.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.workspace.id)
+      await clearToken(entry.workspace.id)
       throw error
     }
     console.warn('[linear] getIssueComments failed:', error)

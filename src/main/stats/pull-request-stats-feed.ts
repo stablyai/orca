@@ -7,14 +7,15 @@ export function feedPullRequestStats(
   stats: StatsCollector,
   readRepos: () => readonly Pick<Repo, 'id' | 'path'>[]
 ): () => void {
-  return addPRRefreshOutcomeObserver((candidate, outcome) => {
+  return addPRRefreshOutcomeObserver((candidate, outcome, aliases) => {
     if (outcome.kind !== 'found' || stats.hasCountedPR(outcome.pr.url)) {
       return
     }
     const repos = readRepos()
     const repo =
-      repos.find((entry) => entry.id === candidate.repoId) ??
-      repos.find((entry) => resolve(entry.path) === resolve(candidate.repoPath))
+      [candidate, ...aliases]
+        .map(({ repoId }) => repos.find((entry) => entry.id === repoId))
+        .find(Boolean) ?? repos.find((entry) => resolve(entry.path) === resolve(candidate.repoPath))
     if (repo) {
       stats.record({
         type: 'pr_created',

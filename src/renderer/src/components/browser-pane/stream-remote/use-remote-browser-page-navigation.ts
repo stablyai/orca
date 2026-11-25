@@ -1,7 +1,10 @@
 import { runRemoteBrowserNavigationCommand } from './remote-browser-page-navigation-command'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import { useCallback, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
+import { browserNavigationLeavesFaviconOrigin } from '../../../../../shared/browser/browser-favicon-url'
 import { normalizeBrowserHistoryUrl } from '../../../../../shared/workspace-session/workspace-session-browser-history'
 import { resolveBrowserAddressBarSubmission } from '../navigate/browser-address-bar-navigation'
 import { routeWorkspaceDocAddressSubmission } from '../navigate/workspace-doc-address-submission'
@@ -52,11 +55,14 @@ export function useRemoteBrowserPageNavigation({
   setPaneBusy: (busy: boolean) => void
 }): {
   applyRemoteTabInfo: (tab: BrowserTabInfo) => void
-  prepareCertificateProceed: () => void
+  /** Ends the in-flight action's claim on the pane, whose RPC may outlive the load it started. */
+  abandonRemoteNavigation: () => void
+  stopRemotePage: () => Promise<void>
   scheduleRemoteTabInfoRefresh: (token: RemoteBrowserOperationToken, delayMs?: number) => void
   runRemoteNavigation: (
     method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
-    url?: string
+    url?: string,
+    ignoreCache?: boolean
   ) => Promise<void>
   navigateToUrl: (url: string) => void
   submitAddressBar: () => void
@@ -82,13 +88,18 @@ export function useRemoteBrowserPageNavigation({
       onUpdatePageState(browserTab.id, {
         title,
         loading: false,
+        // Like local pages: the old site's icon must not ride along until the host sends the new one.
+        ...(page && page.url !== safeUrl && browserNavigationLeavesFaviconOrigin(page.url, safeUrl)
+          ? { faviconUrl: null }
+          : {}),
         ...(tab.loadError !== undefined ? { loadError: tab.loadError } : {})
       })
       // File remote navigations in client suggestion history only when URL/title changes; post-input tab reads must not rewrite the store.
       const filing = `${normalizeBrowserHistoryUrl(safeUrl)}\n${title}`
       if (filing !== lastFiledHistoryRef.current) {
         lastFiledHistoryRef.current = filing
-        addBrowserHistoryEntry(safeUrl, title)
+        // The host's icon belongs to this document only once the page already shows its URL.
+        addBrowserHistoryEntry(safeUrl, title, page?.url === safeUrl ? page.faviconUrl : undefined)
       }
       setAddressBarValueFromPage(toDisplayUrl(safeUrl))
     },
@@ -112,7 +123,7 @@ export function useRemoteBrowserPageNavigation({
     [applyRemoteTabMetadata, browserTab.id]
   )
 
-  const prepareCertificateProceed = useCallback((): void => {
+  const abandonRemoteNavigation = useCallback((): void => {
     navigationSequence.current += 1
     const token = createRemoteOperationToken()
     if (token) {
@@ -122,6 +133,52 @@ export function useRemoteBrowserPageNavigation({
     setPaneBusy(false)
     setPaneNotice(null)
   }, [createRemoteOperationToken, lifecycle, onUpdatePageState, setPaneBusy, setPaneNotice])
+
+  const stopRemotePage = useCallback(async (): Promise<void> => {
+    const target = runtimeTarget()
+    if (!target || stagedPage) {
+      return
+    }
+    abandonRemoteNavigation()
+    // Only a page the host already has can be stopped; resolving one here could create it.
+    const pageId = lifecycle.tokens.remotePage
+    const token = pageId ? createRemoteOperationToken(pageId) : null
+    if (!pageId || !token) {
+      return
+    }
+    try {
+      await callRuntimeRpc(
+        target,
+        'browser.stop',
+        { worktree: runtimeWorktree, page: pageId },
+        { timeoutMs: 10_000, suppressFeatureInteraction: true }
+      )
+      // Read the stopped page's state; the session ignores the read if anything newer lands first.
+      await lifecycle.session.refreshTabInfo(token)
+    } catch (error) {
+      if (!isCurrentRemoteOperationToken(token)) {
+        return
+      }
+      if (isRemoteBrowserPageMissingError(error)) {
+        closeMissingRemotePage(pageId)
+        return
+      }
+      setPaneNotice({
+        kind: 'consequence',
+        text: error instanceof Error ? error.message : 'Remote browser command failed.'
+      })
+    }
+  }, [
+    abandonRemoteNavigation,
+    closeMissingRemotePage,
+    createRemoteOperationToken,
+    isCurrentRemoteOperationToken,
+    lifecycle,
+    runtimeTarget,
+    runtimeWorktree,
+    setPaneNotice,
+    stagedPage
+  ])
 
   const scheduleRemoteTabInfoRefresh = useCallback(
     (token: RemoteBrowserOperationToken, delayMs = 250): void => {
@@ -133,7 +190,8 @@ export function useRemoteBrowserPageNavigation({
   const runRemoteNavigation = useCallback(
     async (
       method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
-      url?: string
+      url?: string,
+      ignoreCache?: boolean
     ) => {
       return runRemoteBrowserNavigationCommand(
         {
@@ -152,7 +210,8 @@ export function useRemoteBrowserPageNavigation({
           applyRemoteTabMetadata
         },
         method,
-        url
+        url,
+        ignoreCache
       )
     },
     [
@@ -204,7 +263,8 @@ export function useRemoteBrowserPageNavigation({
 
   return {
     applyRemoteTabInfo,
-    prepareCertificateProceed,
+    abandonRemoteNavigation,
+    stopRemotePage,
     scheduleRemoteTabInfoRefresh,
     runRemoteNavigation,
     navigateToUrl,

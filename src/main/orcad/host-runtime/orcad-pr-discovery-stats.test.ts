@@ -4,10 +4,8 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 import { runHostedPRRead } from '../../github/pull-requests/refresh/pr-refresh-coordinator'
-import {
-  makeCandidate,
-  makePR
-} from '../../github/pull-requests/refresh/pr-refresh-coordinator-test-harness'
+import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { startOrcadStats } from './orcad-stats'
 
 it('counts background PR discoveries once on a headless host without opening a PR screen', async () => {
@@ -20,13 +18,29 @@ it('counts background PR discoveries once on a headless host without opening a P
     (cleanup) => cleanups.push(cleanup),
     () => [{ id: 'repo-1', path: repoPath }]
   )
-  const candidate = makeCandidate({ repoPath })
-  const read = () =>
-    runHostedPRRead(candidate, async () => ({ kind: 'found', pr: makePR(), fetchedAt: 1 }))
+  const candidate: GitHubPRRefreshCandidate = {
+    cacheKey: 'repo::feature/test',
+    repoPath,
+    branch: 'feature/test',
+    repoKind: 'git',
+    repoId: 'repo-1',
+    worktreeId: 'wt-1'
+  }
+  const pr: PRInfo = {
+    number: 12,
+    title: 'Test PR',
+    state: 'open',
+    url: 'https://github.com/acme/repo/pull/12',
+    checksStatus: 'pending',
+    updatedAt: '2026-05-12T00:00:00Z',
+    mergeable: 'MERGEABLE',
+    headSha: 'head-sha'
+  }
+  const read = () => runHostedPRRead(candidate, async () => ({ kind: 'found', pr, fetchedAt: 1 }))
   try {
     await runHostedPRRead(
-      makeCandidate({ repoId: 'unregistered', repoPath: join(directory, 'unregistered') }),
-      async () => ({ kind: 'found', pr: makePR(), fetchedAt: 1 })
+      { ...candidate, repoId: 'unregistered', repoPath: join(directory, 'unregistered') },
+      async () => ({ kind: 'found', pr, fetchedAt: 1 })
     )
     await runHostedPRRead(candidate, async () => ({ kind: 'no-pr', fetchedAt: 1 }))
     expect(stats.getSummary().totalPRsCreated).toBe(0)
@@ -38,7 +52,7 @@ it('counts background PR discoveries once on a headless host without opening a P
     }
     await runHostedPRRead(candidate, async () => ({
       kind: 'found',
-      pr: makePR({ url: 'https://github.com/acme/repo/pull/13', number: 13 }),
+      pr: { ...pr, url: 'https://github.com/acme/repo/pull/13', number: 13 },
       fetchedAt: 2
     }))
     expect(stats.getSummary().totalPRsCreated).toBe(1)

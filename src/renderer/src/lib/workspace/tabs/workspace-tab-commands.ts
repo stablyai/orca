@@ -27,6 +27,7 @@ import {
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/workspace/floating-workspace-open-intent'
 import { closeWorkspaceBrowserTab } from '../../browser/workspace/workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-workspace-source-resolution'
+import { isBotChatTab } from '@/components/bots/bot-workspace'
 import { getActiveTabNavOrder } from '@/lib/workspace/tabs/order/group-tab-order'
 import { reorderTabInGroup } from '@/runtime/workspace-layout/commands/tab-group-layout-owner-commands'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
@@ -201,6 +202,9 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     const tab = target.tab
     if (command.context === 'terminal' && tab.contentType === 'terminal') {
       return false
+    }
+    if (isBotChatTab(tab)) {
+      return true
     }
     const commands = createWorkspaceTabCloseCommands({
       worktreeId: target.worktreeId,

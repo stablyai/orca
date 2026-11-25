@@ -187,12 +187,16 @@ export function projectAgentSessionConversationOutline(
       sequence === undefined ||
       stopped.has(message.id) ||
       message.role !== 'user' ||
+      message.orcaNotice !== undefined ||
       message.from !== undefined ||
       !nativeChatRowRendersContent(message.blocks)
     ) {
       continue
     }
-    const preview = facts?.userPreview(message) ?? nativeChatUserMessagePreview(message)
+    // An automation's run ticks by its automation's name, as its row reads.
+    const preview = message.automationRun
+      ? { text: message.automationRun.automation.name, imageCount: 0 }
+      : (facts?.userPreview(message) ?? nativeChatUserMessagePreview(message))
     const turnKey = turnKeys[index]
     const reply = turnKey === undefined ? undefined : replies.get(turnKey)
     entries.push({

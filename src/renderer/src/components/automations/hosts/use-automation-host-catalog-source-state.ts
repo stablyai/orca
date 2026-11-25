@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
@@ -31,7 +32,7 @@ export function useAutomationHostCatalogSourceState({
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetsHydrated = useAppStore((s) => s.sshTargetsHydrated)
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const runtimeCatalogSettled = useAppStore((s) => s.runtimeEnvironmentCatalogSettled)
 
   const desktopSsh = useMemo(

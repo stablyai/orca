@@ -84,7 +84,9 @@ export function readPersistedStateJson(path = dataFile(), profileId = 'persisten
   }
 }
 
-export function createStore(options: Pick<StoreRuntimeOptions, 'paneShellPath'> = {}): Store {
+export function createStore(
+  options: Pick<StoreRuntimeOptions, 'paneShellPath' | 'storageAuthority'> = {}
+): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { ...options, dataFile: dataFile() })
@@ -132,7 +134,7 @@ export function readPersistedState(
 }
 
 /** Restore aliases omitted by serialization, as Store.load does; use readPersistedState for raw state. */
-export function readDataFile(): unknown {
+export function readDataFile(): PersistedState {
   const parsed = readPersistedState()
   hydrateWorktreeMetaAliasProjection(parsed)
   return parsed

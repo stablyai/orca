@@ -7,8 +7,7 @@ export function normalizeLocalhostHostname(hostname: string): string {
   return hostname.replace(/^\[|\]$/g, '').toLowerCase()
 }
 
-// Only explicit-port http(s) loopback URLs can be attributed to scanned workspace ports.
-export function parseLoopbackUrlWithPort(rawUrl: string): URL | null {
+function parseLoopbackHttpUrl(rawUrl: string): URL | null {
   let url: URL
   try {
     url = new URL(rawUrl)
@@ -18,10 +17,17 @@ export function parseLoopbackUrlWithPort(rawUrl: string): URL | null {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     return null
   }
-  if (!url.port || !LOOPBACK_LOCALHOST_HOSTS.has(normalizeLocalhostHostname(url.hostname))) {
-    return null
-  }
-  return url
+  return LOOPBACK_LOCALHOST_HOSTS.has(normalizeLocalhostHostname(url.hostname)) ? url : null
+}
+
+export function isLoopbackHttpUrl(rawUrl: string): boolean {
+  return parseLoopbackHttpUrl(rawUrl) !== null
+}
+
+// Only explicit-port http(s) loopback URLs can be attributed to scanned workspace ports.
+export function parseLoopbackUrlWithPort(rawUrl: string): URL | null {
+  const url = parseLoopbackHttpUrl(rawUrl)
+  return url?.port ? url : null
 }
 
 // Wildcard bind addresses are not connectable on Windows; use their matching loopback for proxy targets.

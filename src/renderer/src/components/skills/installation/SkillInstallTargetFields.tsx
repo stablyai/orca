@@ -26,7 +26,7 @@ export function SkillInstallTargetFields(props: {
   executionTarget: { kind: 'wsl'; distro: string } | null
   onExecutionTargetChange(value: { kind: 'wsl'; distro: string } | null): void
   runtimeEnvironments: readonly { id: string; name: string }[]
-  runtimeStatus: Map<string, { status: { capabilities?: string[] } | null }>
+  runtimeStatus: ReadonlyMap<string, { status: { capabilities?: string[] } | null }>
   workspaceChoices: readonly SkillInstallWorkspaceChoice[]
   requiredCapability?: string
   providers: ReadonlySet<SkillInstallProviderId>
@@ -174,7 +174,7 @@ export function SkillInstallTargetFields(props: {
 function skillInstallMachineOptions(
   props: {
     runtimeEnvironments: readonly { id: string; name: string }[]
-    runtimeStatus: Map<string, { status: { capabilities?: string[] } | null }>
+    runtimeStatus: ReadonlyMap<string, { status: { capabilities?: string[] } | null }>
     requiredCapability?: string
   },
   t: Translate = translate

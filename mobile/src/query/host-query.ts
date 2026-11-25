@@ -62,7 +62,8 @@ type HostQueryFetch<TInput extends HostQueryParams, TData> = (
 
 // `live` marks an action's read (readHostQueryLive), which must not be served from a host-side cache.
 // `previousFromStore` says `previous` is an earlier launch's copy that no read in this document confirmed.
-export type HostQueryRead = { live: boolean; previousFromStore: boolean }
+// `hostId` names the paired host, for a fetch that shares another family's per-host single-flight.
+export type HostQueryRead = { live: boolean; previousFromStore: boolean; hostId: string }
 
 export function defineHostQuery<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData> & { fetch: HostQueryFetch<TInput, TData> }
@@ -93,7 +94,8 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
       ? ({ client: queryClient }) =>
           fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey), {
             live: false,
-            previousFromStore: holdsRestoredHostQueryData(queryClient, hashKey(queryKey))
+            previousFromStore: holdsRestoredHostQueryData(queryClient, hashKey(queryKey)),
+            hostId
           })
       : skipToken,
     meta: { streamBacked, signal, persist }
@@ -123,7 +125,8 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
     (() =>
       fetch(hostReadClient(client), target, input, undefined, {
         live: true,
-        previousFromStore: false
+        previousFromStore: false,
+        hostId
       }))
   if (!read && !live) {
     throw new Error(`${query.family} is read by its screen`)

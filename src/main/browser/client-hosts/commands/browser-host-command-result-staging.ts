@@ -47,19 +47,11 @@ export async function stageBrowserHostCommandResult(
     )
   }
   try {
-    for (
-      let offset = 0;
-      offset < bytes.byteLength;
-      offset += BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES
-    ) {
-      if (signal.aborted) {
-        return failed('browser_client_page_command_aborted')
-      }
-      const chunk = bytes.subarray(
-        offset,
-        offset + BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES
-      )
-      await sendChunk({ ...identity, offset, contentBase64: chunk.toString('base64') })
+    const sent = await sendResultChunks(bytes, signal, (offset, contentBase64) =>
+      sendChunk({ ...identity, offset, contentBase64 })
+    )
+    if (!sent) {
+      return failed('browser_client_page_command_aborted')
     }
   } catch (error) {
     // Keep the host or transport code (e.g. too large, unavailable) so the agent sees why.
@@ -71,6 +63,26 @@ export async function stageBrowserHostCommandResult(
     )
   }
   return { status: 'completed', stagedValueBytes: bytes.byteLength }
+}
+
+/** Sends a serialized result in frame-sized pieces, in order; false when aborted first. */
+export async function sendResultChunks(
+  bytes: Buffer,
+  signal: AbortSignal,
+  sendChunk: (offset: number, contentBase64: string) => Promise<void>
+): Promise<boolean> {
+  for (
+    let offset = 0;
+    offset < bytes.byteLength;
+    offset += BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES
+  ) {
+    if (signal.aborted) {
+      return false
+    }
+    const chunk = bytes.subarray(offset, offset + BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES)
+    await sendChunk(offset, chunk.toString('base64'))
+  }
+  return true
 }
 
 // Why: an unstaged value travels in one request with its identity, which must fit the host's inbound frame.
@@ -90,6 +102,6 @@ function failed(errorCode: string, message?: string): BrowserClientHostCommandRe
   return { status: 'failed', errorCode, ...(errorMessage ? { errorMessage } : {}) }
 }
 
-function formatMegabytes(bytes: number): string {
+export function formatMegabytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

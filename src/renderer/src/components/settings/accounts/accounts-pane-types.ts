@@ -2,6 +2,7 @@ import type { ObservedAccountPlans } from '@/lib/provider-accounts/observed-acco
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type {
+  ClaudeAccountSelectResult,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/agent-accounts/managed-account-types'
@@ -60,12 +61,14 @@ export type ProviderAccountVisibilityOptions = {
 export type CodexAccountActionRunner = (
   action: ProviderAccountAction,
   operation: () => Promise<CodexRateLimitAccountsState>,
-  actionRuntime?: ProviderAccountRuntimeView
+  /** Several lanes when one System default clears host and WSL slots together. */
+  actionRuntime?: ProviderAccountRuntimeView | readonly ProviderAccountRuntimeView[]
 ) => Promise<void>
 
 export type ClaudeAccountActionRunner = (
   action: ProviderAccountAction,
-  operation: () => Promise<ClaudeRateLimitAccountsState>,
+  /** A switch on a server also reports what it did with its running sessions. */
+  operation: () => Promise<ClaudeAccountSelectResult>,
   actionRuntime?: ProviderAccountRuntimeView
 ) => Promise<void>
 

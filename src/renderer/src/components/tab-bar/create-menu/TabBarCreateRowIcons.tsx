@@ -10,6 +10,7 @@ import type { useCreateRowScroller } from './use-create-row-scroller'
 
 type CreateRowScroller = ReturnType<typeof useCreateRowScroller>
 import type { TabBarCreateRowItem } from './tab-bar-create-row-item'
+import { isPressedPointer } from './use-create-row-hover-tooltip'
 
 export const CREATE_ROW_HIGHLIGHT_CLASS = 'bg-black/8 text-foreground dark:bg-white/14'
 
@@ -17,21 +18,25 @@ export const CREATE_ROW_HIGHLIGHT_CLASS = 'bg-black/8 text-foreground dark:bg-wh
 export function TabBarCreateRowIcons({
   items,
   highlightedIndex,
+  tooltipIndex,
   overflow,
   scrollerRef,
   attachScroller,
   onEscape,
   onHover,
+  onPress,
   onRun
 }: {
   items: readonly TabBarCreateRowItem[]
   highlightedIndex: number | null
+  tooltipIndex: number | null
   overflow: CreateRowScroller['overflow']
   scrollerRef: CreateRowScroller['scrollerRef']
   attachScroller: CreateRowScroller['attachScroller']
   /** Controlled tooltips sit above the menu and take Escape first; it must still close the menu. */
   onEscape: () => void
-  onHover: (index: number | null) => void
+  onHover: (index: number | null, pressed?: boolean) => void
+  onPress: () => void
   onRun: (item: TabBarCreateRowItem) => void
 }): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
@@ -59,7 +64,7 @@ export function TabBarCreateRowIcons({
             ? formatShortcutKeyComboDetails(item.actionId, keybindings)
             : []
           return (
-            <Tooltip key={item.id} open={highlighted}>
+            <Tooltip key={item.id} open={index === tooltipIndex}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
@@ -71,8 +76,9 @@ export function TabBarCreateRowIcons({
                     highlighted && CREATE_ROW_HIGHLIGHT_CLASS
                   )}
                   // Why move, not enter: scrolling slides icons under a resting cursor without a real hover.
-                  onPointerMove={() => onHover(index)}
+                  onPointerMove={(event) => onHover(index, isPressedPointer(event))}
                   onPointerLeave={() => onHover(null)}
+                  onPointerDown={onPress}
                   onClick={() => onRun(item)}
                 >
                   {item.icon}

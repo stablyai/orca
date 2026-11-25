@@ -11,7 +11,10 @@ import {
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
 } from '../../runtime/agent-session/records/agent-session-store-row-rules'
-import type { PersistedAgentSessionTab } from '../../runtime/agent-session/records/agent-session-tab-table'
+import type {
+  AgentSessionTabTable,
+  PersistedAgentSessionTab
+} from '../../runtime/agent-session/records/agent-session-tab-table'
 
 type KeyedRowWrites = { upsert: [key: string, json: string][]; remove: string[] }
 
@@ -21,7 +24,14 @@ export type AgentSessionStoreRowWrites = {
   /** The whole list when it changed, else null. */
   retiredClaimKeys: RetiredAgentSessionClaimKey[] | null
   /** Complete changed index; recorded: false distinguishes a never-recorded index. */
-  sessionTabs: { recorded: boolean; tabs: PersistedAgentSessionTab[] } | null
+  sessionTabs: {
+    recorded: boolean
+    tabs: PersistedAgentSessionTab[]
+    /** Open chats with no tab; null when unchanged. */
+    background: string[] | null
+    /** The one-time background backfill finished in this write. */
+    backgroundBackfilled: boolean
+  } | null
 }
 
 /** A row as a load parses it back: JSON drops `undefined` members that an in-memory check sees. */
@@ -116,6 +126,26 @@ export function agentSessionStoreRowChanges(
     records,
     operations,
     retiredClaimKeys,
-    sessionTabs: tabsChanged ? { recorded: draft.sessionTabs !== null, tabs } : null
+    sessionTabs: tabsChanged
+      ? {
+          recorded: draft.sessionTabs !== null,
+          tabs,
+          background: changedBackground(published.sessionTabs, draft.sessionTabs),
+          backgroundBackfilled:
+            (draft.sessionTabs?.backgroundBackfilled ?? false) &&
+            !(published.sessionTabs?.backgroundBackfilled ?? false)
+        }
+      : null
   }
+}
+
+function changedBackground(
+  published: AgentSessionTabTable | null,
+  next: AgentSessionTabTable | null
+): string[] | null {
+  const before = published?.backgroundSessionIds() ?? []
+  const after = next?.backgroundSessionIds() ?? []
+  return before.length === after.length && before.every((id, index) => id === after[index])
+    ? null
+    : after
 }
