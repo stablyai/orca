@@ -232,6 +232,15 @@ export function buildSkillDiscoverySources(
       ['agent-skills'],
       'cursor'
     ),
+    // Why: agy reads `~/.gemini/skills` too (chat homes link it), so skills there stay manageable.
+    source(
+      'home-gemini',
+      'Antigravity home',
+      pathApi.join(home, '.gemini', 'skills'),
+      'home',
+      ['agent-skills'],
+      'antigravity'
+    ),
     // Why: Antigravity also reads its CLI's skill folder beside the `config/skills` install root.
     source(
       'home-antigravity-cli',
