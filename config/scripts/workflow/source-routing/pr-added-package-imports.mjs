@@ -57,7 +57,7 @@ export function prAddsPackageImport(diffBase, isTestFile) {
     return addsPackageImport(diff, isTestFile)
   } catch (error) {
     process.stderr.write(
-      `pr-added-package-imports: couldn't read the diff, running packaging: ${error}\n`
+      `pr-added-package-imports: couldn't read the diff, running packaging: ${error instanceof Error ? error.message : String(error)}\n`
     )
     return true
   }
