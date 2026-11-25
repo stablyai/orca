@@ -3,7 +3,7 @@
 // would hand them to every session). Sign-ins need a configured server, so each bot has a sign-in
 // folder of its own, made a git repo so Claude keys it to itself, mirroring the bot's servers; Claude
 // keeps a token by server name and URL, so the chats' launch config finds it.
-import type { BotLaunchTools } from './bot-launch-tools'
+import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import type { McpHttpServerConfig, McpStdioServerConfig } from '@anthropic-ai/claude-agent-sdk'
 import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -59,6 +59,27 @@ export async function readClaudeInheritedTools(
   return [...servers, ...plugins]
 }
 
+/**
+ * The names of the servers Claude already loads in `cwd` for the account in `configDir`: its user
+ * servers, its local ones for that folder and the folder's `.mcp.json`. A server from Orca of the
+ * same name would shadow or be shadowed by one of them.
+ */
+export async function claudeOwnServerNames(
+  configDir: string | null,
+  cwd: string
+): Promise<string[]> {
+  const [user, local, project] = await Promise.all([
+    readClaudeInheritedTools(configDir),
+    readClaudeMirror(configDir, cwd),
+    readJson(join(cwd, '.mcp.json'))
+  ])
+  return [
+    ...user.filter((tool) => !tool.plugin).map((tool) => tool.name),
+    ...Object.keys(local),
+    ...Object.keys(record(project.mcpServers))
+  ]
+}
+
 // npm's launchers are .cmd shims on Windows, which Claude Code can only start through cmd.
 const WINDOWS_CMD_SHIMS = new Set(['npx', 'npm', 'pnpm', 'pnpx', 'yarn'])
 const CMD_SPECIAL = /[&|<>^()%]/g
@@ -72,6 +93,17 @@ export function cmdShimArgument(arg: string): string {
   return arg === '' || /[\s"]/.test(arg) ? arg : arg.replace(CMD_SPECIAL, '^^^$&')
 }
 
+/** A command server's program and args as a CLI that starts it with Node's spawn can run it. */
+export function cmdShimmedCommand(
+  server: { command: string; args: readonly string[] },
+  platform: NodeJS.Platform = process.platform
+): { command: string; args: string[] } {
+  const shim = platform === 'win32' && WINDOWS_CMD_SHIMS.has(server.command.toLowerCase())
+  return shim
+    ? { command: 'cmd', args: ['/c', server.command, ...server.args.map(cmdShimArgument)] }
+    : { command: server.command, args: [...server.args] }
+}
+
 /** The servers as Claude's own config writes them. */
 export function claudeServerConfig(
   server: BotToolServer,
@@ -80,18 +112,16 @@ export function claudeServerConfig(
   if ('url' in server) {
     return { type: 'http', url: server.url, ...(server.headers ? { headers: server.headers } : {}) }
   }
-  const shim = platform === 'win32' && WINDOWS_CMD_SHIMS.has(server.command.toLowerCase())
   return {
     type: 'stdio',
-    command: shim ? 'cmd' : server.command,
-    args: shim ? ['/c', server.command, ...server.args.map(cmdShimArgument)] : server.args,
+    ...cmdShimmedCommand(server, platform),
     ...(server.env ? { env: server.env } : {})
   }
 }
 
 /** The bot's servers for a chat's launch, added to the owner's own (never strict). */
 export function claudeLaunchServers(
-  tools: BotLaunchTools
+  tools: SessionMcpTools
 ): Record<string, McpHttpServerConfig | McpStdioServerConfig> {
   return Object.fromEntries(
     tools.servers.map((server) => [server.name, claudeServerConfig(server)])

@@ -7,12 +7,12 @@ import {
   type BotItemQuestionShape
 } from '../../../../../shared/bots/bot-item-ask'
 import {
-  botItemAnswersText,
   botItemHeldAnswersText,
   botItemNamedAnswerLines,
   botItemNamedAnswers
 } from '../../../../../shared/bots/bot-item-answer-lines'
 import type { BotItemPendingIntent } from '../../../../../shared/bots/bot-item-pending-comments'
+import { botItemHeldWordsMatch } from '../../../../../shared/bots/bot-item-refused-reply'
 import { useNativeChatDraft } from '../../native-chat/drafts/use-native-chat-draft'
 import {
   readNativeChatDraftCache,
@@ -40,11 +40,6 @@ export function useBotItemHeldAnswers(
   return { held, hold }
 }
 
-/** The same words, as a held line writes them. */
-function sameWords(held: string | null, sent: string): boolean {
-  return held !== null && held === sent.replace(/\s+/g, ' ').trim()
-}
-
 /** The host has a send (or may: one discarded after it may have arrived): each answer it sent leaves
  *  the ask's held picks, question by question, only where that question's line still holds exactly
  *  what was sent. Lines picked since, or added to the ask after it was sent, stay as they are; a sent
@@ -57,7 +52,7 @@ export function botItemClearDeliveredAnswers(scopeKey: string, intent: BotItemPe
   const cleared = new Map<number, string>()
   answers.forEach((words, index) => {
     const line = named[index]
-    if (words && line?.words && sameWords(line.words, words)) {
+    if (words && line?.words && botItemHeldWordsMatch(line.words, words)) {
       cleared.set(line.lineIndex, line.head)
     }
   })
@@ -86,29 +81,4 @@ export function botItemClearDeliveredAnswers(scopeKey: string, intent: BotItemPe
     scopeKey,
     kept.every((line) => line.trim() === '' || heads.has(line.trim())) ? '' : kept.join('\n')
   )
-}
-
-/** What a refused send of an ask of several questions gives back to the comment box: the words the
- *  ask's held picks don't keep (a line's words posted with files, or words riding along), as typed;
- *  the answers still held stay on the card, so a resend can't post them twice. */
-export function botItemRefusedAnswerWords(
-  scopeKey: string,
-  intent: BotItemPendingIntent,
-  text: string
-): string {
-  const { shape, answers, rideAlongText } = intent
-  const held = botItemNamedAnswers(shape, readNativeChatDraftCache(scopeKey))
-  // Image marks alone go: the box gets words back, not the images.
-  const unheld = answers.flatMap((words, index) =>
-    words?.replace(/\[Image #\d+\]/g, '').trim() && !sameWords(held[index] ?? null, words)
-      ? [words.trim()]
-      : []
-  )
-  const original = rideAlongText ?? text
-  const prefix = rideAlongText === undefined ? botItemAnswersText(shape, answers) : ''
-  if (!original.startsWith(prefix)) {
-    return text
-  }
-  const rest = prefix ? original.slice(prefix.length).replace(/^\n/, '') : original
-  return [...unheld, rest].filter((part) => part.trim()).join('\n')
 }

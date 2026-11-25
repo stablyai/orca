@@ -30,6 +30,7 @@ import type { AcpStructuredOptions } from '../../options/acp-structured-options'
 import type { AcpStructuredPrompts } from '../../requests/acp-structured-prompts'
 import { acpSessionStartMeta } from '../../launch/acp-session-meta'
 import { buildAcpStartupSetup, resolveAcpSessionMeta } from './acp-handshake-setup'
+import { withAcpSessionOpen } from '../../launch/acp-instructions'
 import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-adapter-deps'
 import { AcpStructuredTurns } from '../../turns/acp-structured-turns'
 import type { AcpStructuredTurnsDeps } from '../../turns/acp-turn-dispatch-contract'
@@ -106,15 +107,17 @@ export async function initializeAcpStructuredSession(
           input.lanes.clear()
           const attaching = input.lanes.create(resume.sessionId, true)
           liveLane = attaching
-          const opened = await connection.start(
-            {
-              cwd,
-              mcpServers: launch.mcpServers ?? [],
-              sessionId: resume.sessionId,
-              ...acpSessionStartMeta(spec, meta, reopenMeta),
-              ...setup
-            },
-            acceptSession
+          const opened = await withAcpSessionOpen(launch, cwd, () =>
+            connection.start(
+              {
+                cwd,
+                mcpServers: launch.mcpServers ?? [],
+                sessionId: resume.sessionId,
+                ...acpSessionStartMeta(spec, meta, reopenMeta),
+                ...setup
+              },
+              acceptSession
+            )
           )
           assertStarting()
           const frames = input.lanes.finishLoad()
@@ -171,9 +174,8 @@ export async function initializeAcpStructuredSession(
   if (!started || !liveLane) {
     liveLane?.dispose()
     input.lanes.clear()
-    const undo = await launch.aroundNewSession?.(launch.cwd)
-    try {
-      started = await connection.start(
+    started = await withAcpSessionOpen(launch, launch.cwd, () =>
+      connection.start(
         {
           cwd: launch.cwd,
           mcpServers: launch.mcpServers ?? [],
@@ -182,9 +184,7 @@ export async function initializeAcpStructuredSession(
         },
         acceptSession
       )
-    } finally {
-      await undo?.()
-    }
+    )
     assertStarting()
   }
   if (!liveLane) {

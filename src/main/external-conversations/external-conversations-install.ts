@@ -34,6 +34,7 @@ import {
   type ConversationReplyFill
 } from './external-conversation-reply-fill'
 import { usageLimitReplyPause } from './external-conversation-reply-pause'
+import { liveEmptyTurnRetry } from './external-conversation-reply-empty-retry'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
 import { endRestartCutTurns, heldTurnEnds } from './external-conversation-restart-cuts'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
@@ -238,6 +239,7 @@ function connectorReplyOutbox(
   const filled = () => runtime.getConnectorCloud?.()?.repliesFilled()
   const usageLimitDisposition = async (sessionId: string, turnItemId: string) =>
     getStructuredAgentSessionHost()?.usageLimitContinue.disposition(sessionId, turnItemId)
+  const { retry, settleWith } = liveEmptyTurnRetry(journal, getStructuredAgentSessionHost, signal)
   const fill = conversationReplyFill(
     journal,
     filled,
@@ -247,7 +249,8 @@ function connectorReplyOutbox(
     }),
     journalAskedByOwner(async (sessionId) =>
       getStructuredAgentSessionHost()?.journalReads(sessionId)
-    )
+    ),
+    retry
   )
   const recovery = new ConnectorReplyRecovery({
     journal,
@@ -260,11 +263,13 @@ function connectorReplyOutbox(
     fillTurn: fill,
     filled,
     usageLimitDisposition,
+    retrySending: retry.sending,
     // This start's own continuations of restart cuts claim first; whatever they left closes then.
     ...(runtime.structuredAgentSessionLaunchContinuation
       ? { continuationsSettled: runtime.structuredAgentSessionLaunchContinuation.continued }
       : {})
   })
+  settleWith(recovery)
   setConnectorClaimSource((sessionId, cut) => recovery.claimFor(sessionId, cut))
   let unwatchStatus: (() => void) | undefined
   let unwatchPauses: (() => void) | undefined

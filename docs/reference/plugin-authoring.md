@@ -421,6 +421,31 @@ test('keeps an agent write', async () => {
 })
 ```
 
+### MCP servers
+
+`contributes.mcpServers` gives the agents Orca launches on a host your MCP servers, next to the
+ones the user added themselves. Each one has a `name` and either a `url` (a remote server) or a
+`command` with optional `args` and `env` (a local stdio server):
+
+```json
+"execution": "declarative",
+"contributes": {
+  "mcpServers": [
+    { "name": "acme", "url": "https://mcp.acme.dev/mcp" },
+    { "name": "acme-local", "command": "npx", "args": ["-y", "@acme/mcp-server"] }
+  ]
+}
+```
+
+- They appear in Settings → MCP servers under **From plugins**, on each host where the plugin is
+  installed and enabled. The user picks the agents and workspaces each one is on for; the address
+  and command stay yours.
+- A server that asks for a sign-in gets Orca's own sign-in, which every agent then uses. Don't put
+  keys or tokens in the manifest: it is public, and `headers` aren't accepted.
+- The servers are bound to the reviewed manifest, so changing one asks the user to approve the
+  update again. Disabling or uninstalling the plugin removes them and signs them out.
+- When a name is already taken on that host, Orca gives yours a free one (`acme-2`).
+
 ## 2. Load it while you work
 
 From the plugin folder, run:
@@ -729,12 +754,10 @@ arbitrary plugin UI:
 - `connections`: account providers with a host-run sign-in.
 - `agentHarnesses`: new coding-agent harnesses described as data.
 - `sidebarCards`: declarative left-sidebar cards whose values a worker updates.
-- `mcpServers`: MCP server definitions offered to the agents Orca launches.
 - `skills`: agent skills shipped as files.
 - `hooks`: agent lifecycle hooks for the agents Orca launches.
 
-`skills`, `mcpServers` and `hooks` will mean what they mean in agent-plugin formats such as
-Claude Code's. Orca does not reserve `agents`, because those formats use it for subagent files.
+`skills` and `hooks` will mean what they mean in agent-plugin formats such as Claude Code's. Orca does not reserve `agents`, because those formats use it for subagent files.
 
 See [the manifest reference](plugin-manifest.md#planned-contribution-points) for details.
 

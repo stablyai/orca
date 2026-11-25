@@ -1,14 +1,39 @@
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
+import { GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY } from '../../shared/google/google-connect-types'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { GOOGLE_HANDLERS } from './google'
 import { formatGoogleStatus } from './google-status-format'
 
-function run(flags: Record<string, string | boolean>) {
-  const call = vi.fn(async (method: string, params?: Record<string, unknown>) =>
-    method === 'bots.list'
-      ? { result: { bots: [{ id: 'scout', name: 'Scout' }] } }
-      : { result: { bot: { name: 'Scout', google: params?.on === true } } }
-  )
+// google.bot.set's params on a host from before account choice (v1.4.273): a list is dropped.
+const OlderHostParams = z.object({ botId: z.string(), on: z.boolean() })
+
+function run(
+  flags: Record<string, string | boolean>,
+  host: { capabilities: string[]; older?: boolean } = {
+    capabilities: [GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY]
+  }
+) {
+  const call = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+    if (method === 'bots.list') {
+      return { result: { bots: [{ id: 'scout', name: 'Scout' }] } }
+    }
+    if (method === 'status.get') {
+      return { result: { machineName: 'old-mac', capabilities: host.capabilities } }
+    }
+    const saved: Record<string, unknown> = host.older
+      ? OlderHostParams.parse(params)
+      : (params ?? {})
+    return {
+      result: {
+        bot: {
+          name: 'Scout',
+          google: params?.on === true,
+          ...(saved.accounts ? { accounts: saved.accounts } : {})
+        }
+      }
+    }
+  })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these fields.
   const ctx = {
     flags: new Map(Object.entries({ bot: 'Scout', ...flags })),
@@ -30,10 +55,28 @@ describe('orca google bot', () => {
     })
     const on = run({ on: true })
     await on.done
-    expect(on.call).toHaveBeenLastCalledWith('google.bot.set', { botId: 'scout', on: true })
+    expect(on.call).toHaveBeenLastCalledWith('google.bot.set', {
+      botId: 'scout',
+      on: true,
+      allAccounts: true
+    })
     const off = run({ off: true })
     await off.done
     expect(off.call).toHaveBeenLastCalledWith('google.bot.set', { botId: 'scout', on: false })
+  })
+
+  it('never sends --accounts to a host that would drop the list', async () => {
+    const older = run({ accounts: 'me@work.com' }, { capabilities: [], older: true })
+    await expect(older.done).rejects.toThrow('Update Orca on old-mac to choose accounts.')
+    expect(older.call).not.toHaveBeenCalledWith('google.bot.set', expect.anything())
+    // On/off still works there.
+    await run({ on: true }, { capabilities: [], older: true }).done
+    // A host that claims account choice but drops the list fails loudly.
+    const dropped = run(
+      { accounts: 'me@work.com' },
+      { capabilities: [GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY], older: true }
+    )
+    await expect(dropped.done).rejects.toThrow("didn't keep the account list")
   })
 
   it('takes exactly one of --on, --off and --accounts, and only emails', async () => {

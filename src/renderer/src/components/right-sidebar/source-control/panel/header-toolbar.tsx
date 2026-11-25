@@ -51,6 +51,8 @@ type SourceControlHeaderToolbarProps = {
   manualReviewUrl?: string | null
   branchLineTotal?: GitBranchLineTotal | null
   rebase?: BaseRebaseActions | null
+  /** Labeled Git Graph button; null where the context has no Git history (folders). */
+  graphControl?: React.ReactNode
 }
 
 function renderOverflowMenu(
@@ -96,7 +98,8 @@ export function SourceControlHeaderToolbar({
   headControl,
   manualReviewUrl,
   branchLineTotal,
-  rebase
+  rebase,
+  graphControl
 }: SourceControlHeaderToolbarProps): React.JSX.Element {
   const t = useTranslate()
   const embedded = useSourceControlScope() !== null
@@ -254,6 +257,7 @@ export function SourceControlHeaderToolbar({
         {actionsSlot
           ? createPortal(
               <>
+                {graphControl}
                 {filterToggle}
                 {renderOverflowMenu(overflowProps)}
               </>,
@@ -290,6 +294,7 @@ export function SourceControlHeaderToolbar({
               // Pin filter/overflow right without stretching Create PR.
               <span className="min-w-0 flex-1" aria-hidden="true" />
             ) : null}
+            {graphControl}
             {filterToggle}
             {renderOverflowMenu(overflowProps)}
           </>

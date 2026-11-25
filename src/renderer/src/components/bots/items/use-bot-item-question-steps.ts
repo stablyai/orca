@@ -13,20 +13,19 @@ import type {
   BotItemCommentSkill,
   BotItemEvent
 } from '../../../../../shared/bots/bot-items'
-import {
-  botItemQuestionLine,
-  type BotItemQuestionShape
-} from '../../../../../shared/bots/bot-item-ask'
+import type { BotItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
 import {
   botItemAnswersText,
   botItemAnswerWords,
   botItemRideAlongText
 } from '../../../../../shared/bots/bot-item-answer-lines'
 import {
+  botItemAskLine,
   botItemWaitingAsk,
   botItemWaitingLine,
   type BotItemWaitingLine
 } from '../../../../../shared/bots/bot-item-question-answers'
+import { createBotItemReplyTargetHook } from '../../../../../shared/bots/use-bot-item-question-steps'
 import type {
   BotItemPendingComment,
   BotItemPendingIntent
@@ -41,6 +40,8 @@ import {
 } from '../../native-chat/drafts/native-chat-composer-draft-store'
 
 const NO_ASK: BotItemQuestionShape = { body: '', decisions: [] }
+
+const useBotItemReplyTarget = createBotItemReplyTargetHook({ useState })
 
 export type BotItemQuestionSteps = {
   askId: string
@@ -103,7 +104,9 @@ export function useBotItemQuestionSteps(
   ) => void
   /** The box's next draft answers no line: recovered answers of an earlier ask, a comment of its own. */
   answerNone: () => void
-  /** What the comment box replies to: with several questions, the line its draft was started on. */
+  /** Type your answer, or a quick reply's edit, on a one-question ask: the box answers it, its words too. */
+  answerWaiting: () => void
+  /** What the comment box replies to: the line named when its draft started (shared with the phone). */
   waitingLine: BotItemWaitingLine | null
 } {
   // As cheap as the box's own waiting-line read, on each render.
@@ -120,13 +123,6 @@ export function useBotItemQuestionSteps(
   const skipping = pending.find(
     (entry) => entry.intent?.askId === askId && !entry.failed && entry.skipped?.length
   )?.skipped
-  // The line the box's draft answers: the line named when its first words arrived (typed, pasted,
-  // dictated or restored alike: the box's draft store says), until it is empty again; `none`: no line.
-  // `explicit`: a line's own edit or Type your answer named it, so it holds in an empty box too, until
-  // a send.
-  const [bound, setBound] = useState<
-    { askId: string; index: number; explicit: boolean } | 'none' | null
-  >(null)
   const boxScope = botItemCommentDraftScope(bot, item.uid)
   const subscribeBox = useCallback(
     (listener: () => void) => subscribeToNativeChatComposerDraft(boxScope, listener),
@@ -149,6 +145,15 @@ export function useBotItemQuestionSteps(
   // A line another client answered meanwhile keeps that answer; its pick is dropped.
   const picks = shape.decisions.map((_, at) => (lines.includes(at) ? (held[at] ?? null) : null))
   const eligible = (index: number): boolean => lines.includes(index) && !picks[index]
+  // The line the box's draft answers, taken when its first words arrived (typed, pasted, dictated or
+  // restored alike: the box's draft store says). A one-question ask's line goes once its answer is
+  // on its way.
+  const open = waiting
+    ? lines.filter(eligible).map((index) => botItemAskLine(askId, shape, index))
+    : oneLine && !pending.some((entry) => !entry.failed && entry.intent?.askId === oneLine.eventId)
+      ? [oneLine]
+      : []
+  const target = useBotItemReplyTarget(open, boxEmpty)
   // Stored picks: a line a comment answered by name loses its pick; one on its way keeps it, to
   // recover if the host refuses it.
   const stored = (index: number, words: string | null): (string | null)[] =>
@@ -172,7 +177,7 @@ export function useBotItemQuestionSteps(
     }
   })
   const bind = useLatestHandler((index: number) => {
-    setBound({ askId, index, explicit: true })
+    target.bind(`${askId}:${index}`)
     if (held[index]) {
       hold(stored(index, null))
     }
@@ -193,12 +198,15 @@ export function useBotItemQuestionSteps(
       replyingTo: string | null,
       skills?: readonly BotItemCommentSkill[]
     ) => {
-      setBound(null)
+      target.release()
       if (!waiting) {
-        const answers = replyingTo !== null && oneLine !== null
+        // Naming the question it answers, so a reply that lands after the agent asked anew is
+        // refused; else a comment of its own, never left for the host to take as an answer.
+        const questionId =
+          oneLine !== null && replyingTo === oneLine.id ? oneLine.eventId : undefined
         // Answering the one question: what it answers stays with the send.
         const intent =
-          answers && asked
+          questionId !== undefined && asked
             ? {
                 askId: asked.askId,
                 shape: asked.shape,
@@ -206,21 +214,10 @@ export function useBotItemQuestionSteps(
                   botItemAnswerWords(asked.shape, index, { text })
                 )
               }
-            : answers
-              ? { askId: oneLine.eventId, shape: NO_ASK, answers: [] }
+            : questionId !== undefined
+              ? { askId: questionId, shape: NO_ASK, answers: [] }
               : undefined
-        // Naming the question it answers, so a reply that lands after the agent asked anew is refused.
-        const questionId =
-          oneLine !== null && replyingTo === oneLine.id ? oneLine.eventId : undefined
-        send(
-          text,
-          paths,
-          questionId,
-          oneLine !== null && replyingTo === null,
-          skills,
-          undefined,
-          intent
-        )
+        send(text, paths, questionId, questionId === undefined, skills, undefined, intent)
         return
       }
       const line = shape.decisions.findIndex((_, index) => replyingTo === `${askId}:${index}`)
@@ -251,7 +248,13 @@ export function useBotItemQuestionSteps(
       }
     }
   )
-  const answerNone = useLatestHandler(() => setBound('none'))
+  const answerNone = useLatestHandler(() => target.none())
+  // Several questions: the line's own edit or Type your answer already bound its line (`steps.bind`).
+  const answerWaiting = useLatestHandler(() => {
+    if (!waiting && open[0]) {
+      target.bind(open[0].id)
+    }
+  })
   // Read fresh each render, as the waiting ask is.
   const steps: BotItemQuestionSteps | null = waiting
     ? {
@@ -279,54 +282,13 @@ export function useBotItemQuestionSteps(
       : undefined
     send(text, [], asked?.askId, undefined, undefined, undefined, intent)
   })
-  // The box's draft keeps the line it was started on; once that line can't take it, no other line
-  // is named over the same words. An empty box names the first line open and not picked.
-  const first = lines.find((index) => !picks[index])
-  // The draft's first words take the line named then; an emptied draft lets go of it. A draft already
-  // there when the item opens (restored) names no line: which one it was for is not known.
-  const [wasEmpty, setWasEmpty] = useState(boxEmpty)
-  if (wasEmpty !== boxEmpty) {
-    setWasEmpty(boxEmpty)
-    if (
-      !boxEmpty &&
-      bound !== 'none' &&
-      (!bound || bound.askId !== askId || !eligible(bound.index))
-    ) {
-      setBound(waiting && first !== undefined ? { askId, index: first, explicit: false } : 'none')
-    } else if (boxEmpty && (bound === 'none' || (bound && !bound.explicit))) {
-      setBound(null)
-    }
-  }
-  const boxLine = (): number | undefined => {
-    if (bound === 'none') {
-      return undefined
-    }
-    if (!bound || bound.askId !== askId) {
-      return boxEmpty ? first : undefined
-    }
-    return eligible(bound.index) ? bound.index : boxEmpty ? first : undefined
-  }
-  const line = waiting ? boxLine() : undefined
-  const stepLine = line === undefined ? undefined : shape.decisions[line]
   return {
     steps,
     sent,
     quick,
     fromBox,
     answerNone,
-    waitingLine: waiting
-      ? stepLine
-        ? {
-            id: `${askId}:${line}`,
-            eventId: askId,
-            line: botItemQuestionLine(stepLine.question),
-            replies: stepLine.replies.length > 0
-          }
-        : null
-      : // Its answer on its way: the box names it no longer.
-        oneLine &&
-          !pending.some((entry) => !entry.failed && entry.intent?.askId === oneLine.eventId)
-        ? oneLine
-        : null
+    answerWaiting,
+    waitingLine: target.line
   }
 }
