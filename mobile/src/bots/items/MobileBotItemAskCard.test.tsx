@@ -73,23 +73,31 @@ const two: BotItemQuestionShape = {
 type Ask = { askId: string; shape: BotItemQuestionShape; open: number[] } | null
 const ask1: Ask = { askId: 'ask-1', shape: one, open: [0] }
 
-function Card({ itemKey, ask, send }: { itemKey: string; ask: Ask; send: Send }) {
+type Host = { askId: string | null; closed: boolean }
+
+function Card({ itemKey, ask, host, send }: { itemKey: string; ask: Ask; host: Host; send: Send }) {
   return useMobileBotItemAskSlot({
     itemKey,
     ask,
     online: true,
     replying: false,
     loaded: true,
+    host,
     onOpenWithCard: () => {},
     send
   }).card
 }
 
-function open(itemKey: string, ask: Ask = ask1, send: Send = () => {}): void {
+function open(
+  itemKey: string,
+  ask: Ask = ask1,
+  send: Send = () => {},
+  host: Host = { askId: ask?.askId ?? null, closed: false }
+): void {
   const client = documentQueryClient()
   queries = client
   act(() => {
-    tree = create(client.wrap(createElement(Card, { itemKey, ask, send })))
+    tree = create(client.wrap(createElement(Card, { itemKey, ask, host, send })))
   })
 }
 
@@ -148,14 +156,26 @@ it('keeps the whole card after a Send that didn’t go, though only one line cha
   expect(otherInput()?.props.value).toBe('Cam')
 })
 
-it('drops the card once the host’s read shows the ask answered', async () => {
+it('keeps the card while the host names its ask, though the loaded history doesn’t show it yet', async () => {
   open('host\0bot\0item-5')
   typeOther('Ship it')
   await close()
 
-  open('host\0bot\0item-5', null)
+  // The page read the item, but not yet the older events that hold the ask.
+  open('host\0bot\0item-5', null, undefined, { askId: 'ask-1', closed: false })
   await close()
   open('host\0bot\0item-5')
+  expect(otherInput()?.props.value).toBe('Ship it')
+})
+
+it('drops the card once the item closes', async () => {
+  open('host\0bot\0item-7')
+  typeOther('Ship it')
+  await close()
+
+  open('host\0bot\0item-7', null, undefined, { askId: null, closed: true })
+  await close()
+  open('host\0bot\0item-7')
   expect(otherInput()).toBeUndefined()
 })
 

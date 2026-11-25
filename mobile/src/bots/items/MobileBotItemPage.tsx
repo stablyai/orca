@@ -13,6 +13,7 @@ import {
   type BotItem
 } from '../../../../src/shared/bots/bot-items'
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
+import { botItemHostWaitingAsk } from '../../../../src/shared/bots/bot-item-question-answers'
 import type { BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tree'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { MobileEdgeFade } from '../../components/list/MobileEdgeFade'
@@ -136,6 +137,12 @@ export function MobileBotItemPage({
     online: online && !view.failed,
     replying,
     loaded: view.item !== null,
+    host: view.item
+      ? {
+          askId: botItemHostWaitingAsk(view.item),
+          closed: view.item.status === 'done' || view.item.status === 'canceled'
+        }
+      : null,
     onOpenWithCard: jump.top,
     send: quick
   })

@@ -328,7 +328,9 @@ export function createBotItemQuestionStepsHooks(
     const quick = useLatest(
       (text: string, answering?: { askId: string; skipped: readonly number[] }) => {
         let intent: BotItemPendingIntent | undefined
-        if (asked) {
+        // The card names the ask it answered: a newer one read since isn't it, so the reply stays
+        // bound to the card's ask, the host refuses it, and its words go back to the comment box.
+        if (asked && (!answering || answering.askId === asked.askId)) {
           const { shape: own } = asked
           // Several lines: only those the text names; a line it skips stays open until the read.
           const answers =
@@ -341,7 +343,7 @@ export function createBotItemQuestionStepsHooks(
         send(
           text,
           [],
-          asked?.askId ?? answering?.askId,
+          answering?.askId ?? asked?.askId,
           undefined,
           undefined,
           answering?.skipped,
