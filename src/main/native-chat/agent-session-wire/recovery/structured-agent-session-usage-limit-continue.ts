@@ -140,7 +140,8 @@ export class StructuredAgentSessionUsageLimitContinue {
           ? 'scheduled'
           : 'off'
     // An unknown reset has no time to promise, yet fresh room still releases it: say nothing.
-    if ((hold.unknownReset || hold.awaitingRoom) && state === 'scheduled') {
+    // A relaunch's stand-in reset is no reset at all, so it never reads as "can continue now".
+    if (hold.awaitingRoom || (hold.unknownReset && state === 'scheduled')) {
       return undefined
     }
     return {

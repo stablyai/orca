@@ -195,9 +195,8 @@ export class UsageLimitAccountHolds {
       movedCut = moved?.cut === switchFreeIdentity(limited)
     const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
     let [scope, hold] = [this.scopes.get(id), this.holds.get(id)]
-    const awaitingRoom =
-      limited.resetFromSwitch === true &&
-      this.relaunched.at(id, switchFreeIdentity(limited)) !== undefined
+    const relaunchedCut = this.relaunched.at(id, switchFreeIdentity(limited)) !== undefined
+    const awaitingRoom = limited.resetFromSwitch === true && relaunchedCut
     if (!hold && !scope) {
       return {
         resetsAt: cut.resetsAt,
@@ -220,6 +219,7 @@ export class UsageLimitAccountHolds {
       cut,
       movedCut,
       awaitingRoom,
+      spentHolds: movedCut || relaunchedCut,
       scope,
       hold,
       now,

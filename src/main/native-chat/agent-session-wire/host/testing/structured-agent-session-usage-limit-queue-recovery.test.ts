@@ -42,6 +42,7 @@ function reading(usedPercent: number, updatedAt: number): ProviderRateLimits {
 
 async function relaunchedChat(reset: number | null = RESET) {
   let clock = NOW
+  let enabled = true
   let homePath = join(tmpdir(), 'orca-usage-fixture', 'a')
   const nextHome = join(tmpdir(), 'orca-usage-fixture', 'b')
   const readingSource = { home: nextHome, provenance: 'fixture' }
@@ -69,7 +70,7 @@ async function relaunchedChat(reset: number | null = RESET) {
     restartable: true,
     acquiredAccountHome: accountHome,
     usageLimitAutoContinue: {
-      isEnabled: () => true,
+      isEnabled: () => enabled,
       isWorkspaceAsleep: () => false,
       subscribe: () => () => {},
       ...sources
@@ -151,6 +152,9 @@ async function relaunchedChat(reset: number | null = RESET) {
     relaunch,
     rest,
     requested,
+    setEnabled: (next: boolean) => {
+      enabled = next
+    },
     pass: async (offset: number, next: ProviderRateLimits | null) => {
       clock = NOW + offset
       limits = next
@@ -310,6 +314,13 @@ it('reads the switched account once and requires fresh room before a resetless r
   await eventually(async () =>
     expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()
   )
+})
+
+it('publishes no continue time for a resetless relaunched cut while auto-continue is off', async () => {
+  const { host, pass, setEnabled } = await relaunchedChat(null)
+  setEnabled(false)
+  expect(await pass(5_000, null)).toEqual([])
+  expect(await host.readUsageLimitContinue(SESSION)).toBeUndefined()
 })
 
 it('continues a resetless relaunched cut when fresh room arrives after a day held', async () => {

@@ -263,3 +263,35 @@ it('uses an existing account selection reading without starting another read', a
   holds.askForRelaunchRoom('chat', holds.withSwitchReset('chat', CUT), SWITCHED + 5_000)
   expect(asked).toBe(0)
 })
+
+it('holds a relaunched cut with a known reset on spending read before that reset', async () => {
+  const resetsAt = SWITCHED + 60_000
+  const spentUntil = resetsAt + 3_600_000
+  const holds = new UsageLimitAccountHolds()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution reads only these fields
+  const host = {
+    store: {
+      getRecord: () => ({
+        provider: 'codex',
+        location: { wslDistro: null },
+        launchedAccount: { fence: 4, accountHome: NEXT },
+        lease: { runtimeFence: 4 }
+      })
+    },
+    launchAccountHome: async () => NEXT,
+    usageLimitAutoContinue: {
+      accountUsage: async () => ({
+        scope: NEXT.path,
+        account: {
+          key: NEXT.path,
+          read: () => reading({ usedPercent: 100, resetsAt: spentUntil }),
+          refresh: () => true
+        }
+      })
+    }
+  } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
+  const cut = { ...CUT, resetsAt }
+  await holds.attribute('chat', host, cut, SWITCHED)
+  expect(holds.verdict('chat', cut, resetsAt + 200_000).resetsAt).toBe(spentUntil)
+  expect(holds.ready('chat', cut, resetsAt + 200_000)).toBe(false)
+})

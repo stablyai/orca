@@ -28,6 +28,7 @@ export function accountHoldVerdict({
   cut,
   movedCut,
   awaitingRoom,
+  spentHolds,
   scope,
   hold,
   now,
@@ -36,6 +37,7 @@ export function accountHoldVerdict({
   cut: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset
   movedCut: boolean
   awaitingRoom: boolean
+  spentHolds: boolean
   scope: UsageLimitAccountScope | undefined
   hold: UsageLimitAccountHold
   now: number
@@ -59,11 +61,11 @@ export function accountHoldVerdict({
     typeof covering === 'number' ? covering : cut.resetsAt
   )
   const spentUntil = account && reading && rateLimitSpentUntil(reading)
-  // A spent reading always holds a still-recoverable moved cut, even when the reading itself is
-  // older than its turn. It cannot make an expired task eligible again.
+  // A spent reading always holds a still-recoverable moved or relaunched cut, even when the reading
+  // itself is older than its turn. It cannot make an expired task eligible again.
   if (
     reading &&
-    (movedCut || awaitingRoom) &&
+    spentHolds &&
     spentUntil !== undefined &&
     now - cut.resetsAt <= NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS
   ) {
