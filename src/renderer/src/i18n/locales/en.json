@@ -23834,7 +23834,8 @@
           "correctionWord": "Correction word",
           "correctionWordDescription": "Say it to take back what you just said: “at four, {{word}}, at five”.",
           "correctionWordOff": "None"
-        }
+        },
+        "localOnlyNotice": "Talk instead of typing in any pane. These settings apply to this computer only; {{host}} keeps its own."
       },
       "repositoryHooks": {
         "availableEnvVars": "Available environment variables"
