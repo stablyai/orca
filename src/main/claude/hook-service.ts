@@ -159,7 +159,7 @@ export class ClaudeHookService {
     }
     const status = { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
     return this.usesWindowsEntry
-      ? getWindowsClaudeHookFileStatus(status, scriptPath, matchedForms.includes(1))
+      ? getWindowsClaudeHookFileStatus(status, scriptPath, matchedForms.some(Boolean))
       : status
   }
 
