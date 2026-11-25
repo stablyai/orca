@@ -297,6 +297,10 @@ export class TeamsTriggerChecker {
       for (const target of targets) {
         const since = state.listeners[target.botId] ?? now
         if (occurredAt >= since && ruleMatches(target.rule, chatRef, text)) {
+          // A run starts only while the person it was matched for is still the one signed in.
+          if ((await this.deps.graph().account()).userId !== userId) {
+            throw new TeamsGraphError(0, 'The Teams sign-in changed during the check.')
+          }
           const event = runEvent(target.rule, chat, message, ref, occurredAt, text)
           handed = (await this.fire(target, event)) && handed
         }
