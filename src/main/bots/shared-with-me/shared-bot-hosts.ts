@@ -172,10 +172,14 @@ export class SharedBotHosts {
     }
     this.publish()
     if (!this.stopped) {
-      const waitMs = sharedBotsPollMs(this.store.list(), (entry) => ({
-        link: this.linkFor(entry).current(),
-        waiting: entry.held.some((held) => this.held.isWaiting(held))
-      }))
+      const waitMs = sharedBotsPollMs(
+        this.store.list(),
+        (entry) => ({
+          link: this.linkFor(entry).current(),
+          waiting: entry.held.some((held) => this.held.isWaiting(held))
+        }),
+        this.now()
+      )
       this.timer = setTimeout(() => void this.refresh(), waitMs)
       this.timer.unref?.()
     }

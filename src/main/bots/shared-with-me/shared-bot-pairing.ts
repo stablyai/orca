@@ -97,17 +97,31 @@ export function sendsHeld(
 // New shares and invites resolve within this; pairing and held messages are read sooner.
 const IDLE_POLL_MS = 10 * 60 * 1000
 const BUSY_POLL_MS = 30 * 1000
+// Just after an Accept the host mints its offer within seconds; reading at the busy pace left the
+// agent Disconnected for up to half a minute after that.
+const ACCEPTING_POLL_MS = 2 * 1000
+const ACCEPTING_WINDOW_MS = 2 * 60 * 1000
 
 /** How long until the next read of the share list: soon while one is pairing, has a held message or
- *  its host is away, so each settles without a click. */
-export function sharedBotsPollMs<E extends { resume?: unknown }>(
+ *  its host is away, so each settles without a click; sooner still while an Accept awaits its offer. */
+export function sharedBotsPollMs<E extends { resume?: unknown; acceptedAt?: number }>(
   entries: readonly E[],
-  state: (entry: E) => { link: string; waiting: boolean }
+  state: (entry: E) => { link: string; waiting: boolean },
+  now: number
 ): number {
-  return entries.some((entry) => {
-    const { link, waiting } = state(entry)
-    return !entry.resume || link !== 'live' || waiting
-  })
+  const states = entries.map((entry) => ({ entry, ...state(entry) }))
+  if (
+    states.some(
+      ({ entry, link }) =>
+        !entry.resume &&
+        link !== 'live' &&
+        entry.acceptedAt !== undefined &&
+        now - entry.acceptedAt < ACCEPTING_WINDOW_MS
+    )
+  ) {
+    return ACCEPTING_POLL_MS
+  }
+  return states.some(({ entry, link, waiting }) => !entry.resume || link !== 'live' || waiting)
     ? BUSY_POLL_MS
     : IDLE_POLL_MS
 }
