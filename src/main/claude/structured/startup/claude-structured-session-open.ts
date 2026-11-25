@@ -170,6 +170,12 @@ async function openStartingClaudeSession(
     current()
   }
   startup.open()
+  // A pick saved since this agent's launch reaches it at ready; until then nothing but Full access
+  // auto-approves, ahead of the waiting requests the release hands on.
+  const picked = request.permissionMode?.()
+  if (kept && picked != null && picked !== 'full-access') {
+    session.liveFullAccess?.unpicked()
+  }
   kept?.releaseOutput()
   return { ...result, link: session.link, newConversation: !resumesTranscript }
 }
