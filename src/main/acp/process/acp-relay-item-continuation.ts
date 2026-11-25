@@ -50,7 +50,8 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
       overflow: boolean,
       savedThrough: number,
       openChildren: readonly string[]
-    ) => void
+    ) => void,
+    private readonly prompting: () => boolean = () => false
   ) {}
 
   /** The messages this attach's cut split, as the client named them; null: unnamed, so guessed. */
@@ -61,14 +62,15 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     children: new Set()
   }
 
-  /** An agent-started turn may run across the attach until it ends or a prompt is sent. */
+  /** A turn running across the attach (the agent's own, or a prompt's) until one ends or a send. */
   private agentTurnOpen = true
 
+  /** A moved message may still resume: while a prompt runs or the turn running at attach goes on. */
   mayResume(): boolean {
-    return this.agentTurnOpen
+    return this.agentTurnOpen || this.prompting()
   }
 
-  /** The agent's own turn ended: its messages resume no more. */
+  /** The turn running at attach ended: its messages resume no more. */
   agentTurnEnded(): void {
     this.agentTurnOpen = false
   }
@@ -159,7 +161,8 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     })
   }
 
-  /** A named message resumes only inside a prompt still running, or a child session still open. */
+  /** A named message resumes only inside a prompt still running, an agent-started turn not yet
+   *  ended, or a child session still open. */
   awaits(key: string): boolean {
     let session: unknown
     try {
@@ -170,7 +173,7 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     }
     return typeof session === 'string' && this.resumable.children.has(session)
       ? true
-      : this.resumable.prompt
+      : this.resumable.prompt || this.agentTurnOpen
   }
 
   settles(line: string): string | null {

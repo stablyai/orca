@@ -9,8 +9,10 @@ import { RelayedProviderOutput } from '../../../provider-relay/relayed-provider-
 import { acpRelayFloors } from '../acp-relay-turns'
 
 // Seeded orderings of an OpenCode-like agent's output (messages that resume their id after others,
-// reasoning, calls, child sessions, prompt answers) against acks, lazily saved streamed text, forced
-// cuts, graceful restarts and crashes, through the real floor, output and continuation. Invariant:
+// reasoning, calls and long call progress, child sessions, prompt answers, turns the agent starts
+// itself) against acks, lazily saved streamed text, forced cuts, replays held while the chat opens
+// (the spool lets a held ack's lines go), graceful restarts and crashes, through the real floor,
+// output and continuation. Invariant:
 // every message's saved rows join to exactly the agent's text (none lost, none repeated, none on
 // another message's row); after a crash a line may show twice, but none is lost.
 
@@ -31,6 +33,8 @@ function random(seed: number): () => number {
 const ROOT = 's'
 /** The daemon's relay, the same at every attach. */
 const RELAY_ID = 'r1'
+/** Not an ACP method: marks where the app reads an agent-started turn as ended. */
+const AGENT_TURN_QUIET = 'test/agent_turn_quiet'
 const rpc = (method: string, params: unknown) => JSON.stringify({ jsonrpc: '2.0', method, params })
 const rootUpdate = (update: Record<string, unknown>) =>
   rpc('session/update', { sessionId: ROOT, update })
@@ -48,6 +52,8 @@ class Agent {
   private nextId = 0
   private openCalls: string[] = []
   prompt: { id: number; since: number; answeredAt: number | null } | null = null
+  /** A turn the agent started itself (no prompt), and the lines its turns ended at. */
+  agentTurn = false
 
   constructor(private readonly rand: () => number) {}
 
@@ -85,10 +91,31 @@ class Agent {
   }
 
   step(): void {
-    const running = this.prompt !== null && this.prompt.answeredAt === null
+    const prompted = this.prompt !== null && this.prompt.answeredAt === null
+    const running = prompted || this.agentTurn
     const children = this.children.filter((child) => !child.ended)
+    if (!running && this.rand() < 0.1) {
+      // The agent starts a turn of its own: its messages are new.
+      this.agentTurn = true
+      this.root.recent = []
+    }
+    if (this.agentTurn && this.rand() < 0.06) {
+      this.endAgentTurn()
+      return
+    }
     const roll = this.rand()
-    if (running && roll < 0.5) {
+    if (running && roll < (this.agentTurn ? 0.05 : 0.008)) {
+      // A long call's progress: past the continuation's quiet end before a message resumes.
+      const call = `call-${this.nextId++}`
+      for (let at = 0; at < 300; at += 1) {
+        this.emit(
+          rootUpdate({ sessionUpdate: 'tool_call_update', toolCallId: call, status: 'in_progress' })
+        )
+      }
+      this.emit(
+        rootUpdate({ sessionUpdate: 'tool_call_update', toolCallId: call, status: 'completed' })
+      )
+    } else if (running && roll < 0.5) {
       this.chunk(this.root)
     } else if (children.length > 0 && roll < 0.7) {
       this.chunk(this.pick(children))
@@ -101,14 +128,23 @@ class Agent {
       this.emit(
         rootUpdate({ sessionUpdate: 'tool_call_update', toolCallId: call, status: 'completed' })
       )
-    } else if (running && roll < 0.86 && this.children.length < 6) {
+    } else if (prompted && roll < 0.86 && this.children.length < 6) {
       this.children.push({ id: `c${this.children.length}`, recent: [], ended: false })
     } else if (children.length > 0 && roll < 0.9) {
       const child = this.pick(children)
       child.ended = true
       this.emit(childLine(child.id, { type: 'status', status: 'completed' }))
-    } else if (running && roll < 0.95) {
+    } else if (prompted && roll < 0.95) {
       this.answer()
+    }
+  }
+
+  endAgentTurn(): void {
+    if (this.agentTurn) {
+      this.agentTurn = false
+      this.openCalls = []
+      // Where the app, reading it, sees the turn go quiet.
+      this.emit(rpc(AGENT_TURN_QUIET, {}))
     }
   }
 
@@ -119,11 +155,14 @@ class Agent {
         JSON.stringify({ jsonrpc: '2.0', id: this.prompt.id, result: { stopReason: 'end_turn' } })
       )
       this.prompt.answeredAt = this.lines.length
+      // An answered prompt's messages never resume.
+      this.root.recent = []
     }
   }
 
   finish(): void {
     this.answer()
+    this.endAgentTurn()
     for (const child of this.children.filter((open) => !open.ended)) {
       child.ended = true
       this.emit(childLine(child.id, { type: 'status', status: 'completed' }))
@@ -138,14 +177,22 @@ class Agent {
 /** The daemon's spool, as acks and cuts leave it. */
 class Daemon {
   acked = 0
+  /** Lines the spool let go at its cap, as it does for a held replay's ack. */
+  truncated = 0
   readonly cut = new ProviderRelayCut()
 
   ack(
     seq: number,
     keepFrom?: number,
-    flags: { cut?: true; cutKeys?: string[]; savedThrough?: number } = {}
+    flags: { cut?: true; held?: true; cutKeys?: string[]; savedThrough?: number } = {}
   ) {
     this.cut.record(seq, keepFrom, flags)
+    if (flags.held) {
+      // At its cap the spool releases through the client's ack, held lines included.
+      this.truncated = Math.max(this.truncated, seq)
+      this.acked = Math.max(this.acked, seq)
+      return { ackedThrough: seq, truncatedThrough: seq }
+    }
     const through = keepFrom === undefined ? seq : Math.min(seq, keepFrom - 1)
     this.acked = Math.max(this.acked, through)
     return { ackedThrough: through, truncatedThrough: 0 }
@@ -216,6 +263,7 @@ async function run(
   const journal = new Journal()
 
   const attach = () => {
+    const from = daemon.acked
     const { turns, continuation: hook, ackFloor } = acpRelayFloors(true)
     const stdout = new Readable({ read() {} })
     const push = stdout.push.bind(stdout)
@@ -227,14 +275,20 @@ async function run(
         if (typeof parsed === 'object' && parsed !== null && 'params' in parsed) {
           turns.observeSessionUpdate(parsed.params)
         }
+        if (line.includes(AGENT_TURN_QUIET)) {
+          turns.agentTurnEnded()
+        }
         if (typeof parsed === 'object' && parsed !== null && 'result' in parsed) {
           answerPrompt?.('id' in parsed ? parsed.id : null)
         }
       }
       return push(chunk)
     }
+    // A reopening chat holds the replay until it opens.
+    const held = from > 0 && rand() < 0.4
     const output = new RelayedProviderOutput({
       stdout,
+      ...(held ? { passWhileHeld: () => false } : {}),
       ackFloor: new ProviderRelayCarriedWork([]).withFloor(ackFloor()),
       // Streamed text is saved when the daemon asks (forced) or at some barriers, else still live.
       durable: async (force) => {
@@ -247,7 +301,6 @@ async function run(
       ack: async (seq, keepFrom, flags) => daemon.ack(seq, keepFrom, flags),
       scheduleAck: () => () => {}
     })
-    const from = daemon.acked
     output.restartAt(from)
     const prompt = agent.prompt
     const owed =
@@ -268,7 +321,7 @@ async function run(
       initializeResultSent: false,
       stderrTail: '',
       exit: null,
-      ...daemon.cut.report(0),
+      ...daemon.cut.report(daemon.truncated),
       ...(owed.length > 0 ? { outstanding: owed } : {}),
       openWork: { subagent: agent.openChildren() }
     }
@@ -301,6 +354,8 @@ async function run(
     }
     deliver()
     const send = () => {
+      // A send ends the agent's own turn.
+      agent.endAgentTurn()
       agent.prompt = {
         id: (agent.prompt?.id ?? 0) + 1,
         since: agent.lines.length,
@@ -316,7 +371,11 @@ async function run(
   let app = attach()
   for (let at = 0; at < STEPS; at += 1) {
     const roll = rand()
-    if (!agent.prompt || (agent.prompt.answeredAt !== null && roll < 0.15)) {
+    if (app.output.holding && roll < 0.25) {
+      await app.output.release()
+    } else if (!agent.prompt || (agent.prompt.answeredAt !== null && roll < 0.15)) {
+      // The chat is open before it sends.
+      await app.output.release()
       app.send()
     } else if (roll < 0.62) {
       agent.step()
@@ -347,6 +406,7 @@ async function run(
     }
     app.deliver()
   }
+  await app.output.release()
   agent.finish()
   app.deliver()
   await app.output.settle()

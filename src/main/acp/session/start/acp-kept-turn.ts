@@ -9,6 +9,7 @@ import {
 } from '../acp-structured-session-adapter-deps'
 import { applyAcpLivePermissionMode } from '../../options/acp-live-permission-mode'
 import { carryKeptAcpBackgroundWork } from './acp-kept-background-work'
+import { probeAcpChildStops } from '../../turns/acp-structured-child-stop'
 import { assertAcpStartingSession, type AcpStructuredChild } from '../children/acp-structured-child'
 
 /** The translator's turn from the journal's spelling of its id; null for host turns and for ids
@@ -122,5 +123,17 @@ export async function carryOnKeptAcpAgent<Opened>(
     }
   }
   kept.releaseOutput()
+  // Probed once output flows: a paused agent couldn't answer within the probe's deadline.
+  void child.connection
+    .initialize()
+    .then((initialized) =>
+      probeAcpChildStops(child.connection, deps.spec.dialect, initialized, true)
+    )
+    .then(
+      (childStops) => {
+        child.childStops = childStops
+      },
+      () => undefined
+    )
   return opened
 }

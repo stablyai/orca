@@ -166,10 +166,12 @@ describe('ACP relay item continuation', () => {
       JSON.stringify({ jsonrpc: '2.0', id: 7, result: { stopReason: 'end_turn' } }),
       undefined
     )
+    // The app's turns end the prompt it adopted, so nothing running at the attach resumes.
+    hook.agentTurnEnded()
     expect(cut?.done).toBe(true)
   })
 
-  it("stops after the replay when a named message's prompt was answered, though a subagent runs on", () => {
+  it('stops after the replay once the turn running at attach ended, though a subagent runs on', () => {
     const hook = new AcpRelayItemContinuation(true)
     const named = {
       ...attach(undefined, 10),
@@ -180,6 +182,9 @@ describe('ACP relay item continuation', () => {
     for (let seq = 11; seq <= 16; seq += 1) {
       cut?.lines(seq, chunk('m2', `b${seq}`), undefined)
     }
+    // An agent-started turn may still be running: m1 could resume in it.
+    expect(cut?.done).toBe(false)
+    hook.agentTurnEnded()
     expect(cut?.done).toBe(true)
   })
 

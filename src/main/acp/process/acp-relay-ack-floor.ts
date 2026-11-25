@@ -1,5 +1,6 @@
 import type { ProviderRelayAckFloor } from '../../provider-relay/relayed-provider-output'
 import { acpCutKeyNames, CONTINUED_ID, type AcpRelayItem as Item } from './acp-relay-cut-key-names'
+import { jsonRpcAnswerId } from '../../provider-relay/relayed-json-rpc-lines'
 import {
   ACP_MESSAGE_BOUNDARIES,
   ACP_MESSAGE_CHUNKS,
@@ -76,6 +77,8 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
   /** Messages of agent-started turns the app ended: a late chunk of one is dropped, as live. */
   private endedByTurn = new Set<string>()
   private wakeAck: (() => void) | null = null
+  /** The latest answer line read: a prompt's answer ends its turn only after later lines were. */
+  private answeredAt: number | null = null
   /** An earlier cut named fewer than it split: this attach's cuts say so too. */
   private carriedOverflow = false
   /** Child sessions open at that cut: their unnamed messages may resume past the prompt's end. */
@@ -97,6 +100,7 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
     const update = acpSessionUpdateFields(line)
     const kind = update?.sessionUpdate
     if (!update || !kind) {
+      this.answeredAt = !update && jsonRpcAnswerId(line) !== null ? seq : this.answeredAt
       return
     }
     const session = update.sessionId
@@ -301,13 +305,24 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
     this.calls.delete(toolCallId)
   }
 
-  /** Answered or failed: its calls Orca backgrounds are restated from their saved rows instead. */
-  endTurn(): void {
-    this.calls.clear()
+  /** Answered or failed: its calls Orca backgrounds are restated from their saved rows instead.
+   *  `answered`: ended by an answer the app reads after it (a promise's turn), so what the agent
+   *  began after the last answer line belongs to its next turn and stays. */
+  endTurn(answered = false): void {
+    const after = answered ? this.answeredAt : null
+    const next = (seq?: number) => after !== null && seq !== undefined && seq > after
+    for (const [id, call] of this.calls) {
+      if (!next(call.seq)) {
+        this.calls.delete(id)
+      }
+    }
     // A subagent's message goes on past its parent's prompt, until its own next message or status.
     for (const open of [this.messages, this.cutMessages, this.pausedCuts, this.superseded]) {
       for (const [id, item] of open) {
-        if (!item.child) {
+        if (
+          !item.child &&
+          !next('seq' in item && typeof item.seq === 'number' ? item.seq : undefined)
+        ) {
           open.delete(id)
           this.retire(id, item)
         }
@@ -322,6 +337,7 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
     this.turnStart = null
     this.turnPending = false
     this.numbered = false
+    this.answeredAt = null
   }
 
   /** Ends a session's messages, all but `except`. */

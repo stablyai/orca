@@ -14,8 +14,12 @@ export class AcpRelayTurns {
   private running = false
   private serial = 0
   private current: AcpRelayAckFloor | null = null
-  /** Told when no agent-started turn can resume: its own end, or a prompt sent. */
+  /** Told when no turn running at an attach can resume: an agent turn's end, a send, an answer. */
   onAgentTurnOver: (() => void) | null = null
+
+  get prompting(): boolean {
+    return this.running
+  }
 
   /** A fresh floor for each attach, holding a prompt that runs across it. */
   readonly ackFloor = (): ProviderRelayAckFloor => {
@@ -34,7 +38,8 @@ export class AcpRelayTurns {
     const end = (): void => {
       if (serial === this.serial && this.running) {
         this.running = false
-        this.current?.endTurn()
+        this.current?.endTurn(true)
+        this.onAgentTurnOver?.()
       }
     }
     const answered = send()
@@ -78,7 +83,11 @@ export class AcpRelayTurns {
  *  carries on the cuts the last one named. */
 export function acpRelayFloors(childSessions: boolean) {
   const turns = new AcpRelayTurns()
-  const continuation = new AcpRelayItemContinuation(childSessions, turns.inheritCuts)
+  const continuation = new AcpRelayItemContinuation(
+    childSessions,
+    turns.inheritCuts,
+    () => turns.prompting
+  )
   turns.onAgentTurnOver = () => continuation.agentTurnEnded()
   const ackFloor = () => {
     continuation.reset()

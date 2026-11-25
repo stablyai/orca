@@ -87,7 +87,8 @@ describe('kept ACP agent reattach', () => {
           managed: relayedManagedProcess(child),
           child,
           reattached: true,
-          turns: new AcpRelayTurns()
+          turns: new AcpRelayTurns(),
+          abandon: async () => {}
         }
       }
     )
