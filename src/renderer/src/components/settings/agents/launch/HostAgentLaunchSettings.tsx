@@ -7,6 +7,7 @@ import {
   type AgentPermissionsRenderer,
   AgentLaunchSettingsCatalog
 } from './AgentLaunchSettingsCatalog'
+import { DoubaoSignInCheck } from './DoubaoSignInCheck'
 import { AgentLaunchSettingsLoading } from './AgentLaunchSettingsLoading'
 
 import {
@@ -63,6 +64,7 @@ export function HostAgentLaunchSettings({
     publishRead(next)
   }, [])
   const [saveFailed, setSaveFailed] = useState(false)
+  const [doubaoEnvRevision, setDoubaoEnvRevision] = useState(0)
   const mutationTail = useRef<Promise<void> | null>(null)
   const refresh = useCallback(async (): Promise<void> => {
     controllerRef.current?.abort()
@@ -126,6 +128,13 @@ export function HostAgentLaunchSettings({
       const settings = await mutateHostAgentLaunchSettings(owner, mutation, controller.signal)
       if (!controller.signal.aborted) {
         setRead({ ...latest, settings })
+        // Host snapshots expose only variable names, so a same-name replacement needs its write receipt.
+        if (
+          (mutation.type === 'environment-set' || mutation.type === 'environment-remove') &&
+          mutation.agent === 'doubao'
+        ) {
+          setDoubaoEnvRevision((revision) => revision + 1)
+        }
         acknowledged?.(latest.settings, settings)
       }
     } catch {
@@ -188,6 +197,13 @@ export function HostAgentLaunchSettings({
           settings={read.settings}
           mutate={mutate}
           detectionTarget={detectionTarget}
+          doubaoSignIn={
+            <DoubaoSignInCheck
+              key={doubaoEnvRevision}
+              command={read.settings.agentCmdOverrides.doubao}
+              environmentId={environmentId}
+            />
+          }
           hostName={hostName}
           renderPermissions={renderPermissions}
           autoSupported={read.autoSupported}

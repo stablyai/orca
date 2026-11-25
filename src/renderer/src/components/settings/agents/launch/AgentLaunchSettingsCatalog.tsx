@@ -61,7 +61,6 @@ import { AgentLaunchDefaultsGroup } from '@/components/settings/agents/launch/Ag
 import { AgentDetectionCatalog } from '@/components/settings/agents/launch/AgentDetectionCatalog'
 import type { AgentCatalogRowProps } from '@/components/settings/agents/launch/AgentCatalogRow'
 import { HostAgentEnvironmentEditor } from '@/components/settings/agents/launch/HostAgentEnvironmentEditor'
-import { doubaoSignInCheckForTarget } from './DoubaoSignInCheck'
 import { buildCodexSessionSourceHomeControl } from '@/components/agent/launch-settings/codex-session-source-home-control'
 import { buildAgentOpensAs } from '@/lib/agent-session/launch/native-chat-provider-choice'
 import {
@@ -84,6 +83,7 @@ export function AgentLaunchSettingsCatalog({
   mutate,
   detectionTarget,
   hostName,
+  doubaoSignIn,
   renderPermissions,
   refreshSettings,
   autoSupported = true,
@@ -96,6 +96,7 @@ export function AgentLaunchSettingsCatalog({
   mutate: (mutation: AgentLaunchSettingsMutation) => Promise<void>
   detectionTarget: AgentDetectionTarget
   hostName: string | null
+  doubaoSignIn: React.ReactNode
   renderPermissions: AgentPermissionsRenderer
   refreshSettings?: () => void
   autoSupported?: boolean
@@ -232,10 +233,7 @@ export function AgentLaunchSettingsCatalog({
     agent: (typeof catalog)[number],
     isDetected: boolean
   ): AgentCatalogRowProps => ({
-    cliSignIn:
-      isDetected && agent.id === 'doubao'
-        ? doubaoSignInCheckForTarget(detectionTarget, settings.agentCmdOverrides.doubao)
-        : undefined,
+    cliSignIn: isDetected && agent.id === 'doubao' ? doubaoSignIn : undefined,
     cliUpdate: isDetected ? (
       <AgentCliUpdateButton detectionTarget={detectionTarget} agent={agent.id} />
     ) : undefined,

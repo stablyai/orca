@@ -1,15 +1,69 @@
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import { runtimeTargetForWorktreeOwner } from '@/store/slices/worktrees/listing/worktree-owner-target'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
-import { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
+import { createWebRuntimeSessionTerminalOnHost } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { normalizeAgentProviderSession } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+
+async function resumeDoubaoSession(
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined,
+  providerSession: AgentProviderSessionMetadata
+): Promise<void> {
+  const target = runtimeTargetForWorktreeOwner(useAppStore.getState(), worktreeId, executionHostId)
+  if (target.kind === 'local' && !isPairedWebClientWindow()) {
+    await callRuntimeRpc(target, 'terminal.ensureAgentSession', {
+      kind: 'explicit',
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      agent: 'doubao',
+      providerSession,
+      presentation: 'focused'
+    })
+    return
+  }
+  // The browser already knows its pairing while the renderer's host catalog is still loading.
+  const environmentId =
+    target.kind === 'environment'
+      ? target.environmentId
+      : getPairedWebClientEnvironmentId({
+          runtimeEnvironments: await window.api.runtimeEnvironments.list()
+        })
+  const result = await createWebRuntimeSessionTerminalOnHost(
+    {
+      worktreeId,
+      environmentId,
+      agentSessionKind: 'resume',
+      launchAgent: 'doubao',
+      providerSession,
+      // An older owner cannot preserve the selected provider session and its launch settings.
+      legacyAgentLaunch: async () => {
+        throw new Error(
+          translate(
+            'agentLaunch.updateServer',
+            'Update Orca on this workspace’s server, then try again.'
+          )
+        )
+      },
+      activate: true
+    },
+    { notifyFailure: false }
+  )
+  if (result.status === 'failed') {
+    throw new Error(result.message)
+  }
+}
 
 export function DoubaoSessionResume({
   worktreeId,
@@ -38,51 +92,13 @@ export function DoubaoSessionResume({
     setPending(true)
     setError('')
     try {
-      const target = runtimeTargetForWorktreeOwner(
-        useAppStore.getState(),
-        worktreeId,
-        executionHostId
-      )
-      if (target.kind === 'environment') {
-        const result = await createWebRuntimeSessionTerminal(
-          {
-            worktreeId,
-            environmentId: target.environmentId,
-            agentSessionKind: 'resume',
-            launchAgent: 'doubao',
-            providerSession,
-            // An older owner cannot preserve the selected provider session and its launch settings.
-            legacyAgentLaunch: async () => {
-              throw new Error(
-                t(
-                  'agentLaunch.updateServer',
-                  'Update Orca on this workspace’s server, then try again.'
-                )
-              )
-            },
-            activate: true
-          },
-          { notifyFailure: false }
-        )
-        if (result.status === 'failed') {
-          throw new Error(result.message)
-        }
-      } else {
-        await callRuntimeRpc(target, 'terminal.ensureAgentSession', {
-          kind: 'explicit',
-          worktree: toRuntimeWorktreeSelector(worktreeId),
-          agent: 'doubao',
-          providerSession,
-          presentation: 'focused'
-        })
-      }
+      await resumeDoubaoSession(worktreeId, executionHostId, providerSession)
       onResumed()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
-    } finally {
-      running.current = false
-      setPending(false)
     }
+    running.current = false
+    setPending(false)
   }
   return (
     <details

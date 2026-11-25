@@ -1,31 +1,35 @@
 import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
+import { shallow } from 'zustand/shallow'
 import type { DoubaoSignInStatus } from '../../../../../../shared/agent-launch/installation/doubao-sign-in-status'
 import { Button } from '@/components/ui/button'
 import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 
-export function doubaoSignInCheckForTarget(target: AgentDetectionTarget, command?: string) {
-  if (
-    target.kind === 'ssh' ||
-    target.worktreeId ||
-    (target.kind === 'local' && target.contextKey)
-  ) {
-    return null
+export function DoubaoSignInCheck({
+  environmentId,
+  command,
+  environment
+}: {
+  environmentId?: string
+  command?: string
+  environment?: Record<string, string>
+}) {
+  const [scope, setScope] = useState({ environment, revision: 0 })
+  if (!shallow(scope.environment ?? {}, environment ?? {})) {
+    setScope({ environment, revision: scope.revision + 1 })
   }
-  const environmentId = target.kind === 'runtime' ? target.environmentId : undefined
   return (
-    <DoubaoSignInCheck
-      key={JSON.stringify([environmentId, command])}
+    <DoubaoSignInProbe
+      key={JSON.stringify([environmentId, command, scope.revision])}
       environmentId={environmentId}
       command={command?.trim() || 'doubao'}
     />
   )
 }
 
-function DoubaoSignInCheck({
+function DoubaoSignInProbe({
   environmentId,
   command
 }: {

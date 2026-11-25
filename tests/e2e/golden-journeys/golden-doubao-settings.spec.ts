@@ -1,8 +1,13 @@
 import { expect, type Page } from '@stablyai/playwright-test'
 import { test } from '../desktop/electron-fixtures/orca-app'
 import { ensureTerminalVisible } from '../desktop/renderer-probes/store'
+import { expectTerminalAccessibilityText } from '../terminal/input/terminal-accessibility-tree'
 import { getTerminalContent } from '../terminal/layout/terminal-pane-identity'
-import { getGoldenStubAgentLaunchEnv, launchGoldenStubAgentFromNewTab } from './golden-stub-agent'
+import {
+  getGoldenStubAgentLaunchEnv,
+  GOLDEN_STUB_READY_MARKER,
+  launchGoldenStubAgentFromNewTab
+} from './golden-stub-agent'
 
 test.use({ launchEnv: getGoldenStubAgentLaunchEnv() })
 
@@ -28,8 +33,10 @@ test('configures Doubao from Settings and launches the saved CLI from a new tab'
   await command.press('Enter')
 
   const args = row.getByRole('textbox', { name: 'Arguments' })
-  await args.fill('--effort medium')
+  await args.fill('--effort medium -C .')
   await args.press('Enter')
+  const effortChip = row.getByRole('button', { name: 'Remove --effort medium', exact: true })
+  await expect(effortChip).toBeVisible()
   const env = row.getByPlaceholder('No default environment')
   await env.fill('ORCA_GOLDEN_REPORT_ARGS=1')
   await env.press('Enter')
@@ -44,12 +51,25 @@ test('configures Doubao from Settings and launches the saved CLI from a new tab'
   await orcaPage.reload()
   await openDoubaoSettings(orcaPage)
   await expect(command).toHaveValue('golden-stub-agent')
-  await expect(args).toHaveValue('--effort medium')
+  await expect(args).toHaveValue('-C .')
+  await expect(effortChip).toBeVisible()
   await expect(env).toHaveValue('ORCA_GOLDEN_REPORT_ARGS=1')
   await expect(permission).toHaveText('Ask for approval')
   await close.click()
   await ensureTerminalVisible(orcaPage)
+  const selectedTab = orcaPage.locator('[data-testid="sortable-tab"][data-active="true"]')
+  const originalTabId = await selectedTab.getAttribute('data-tab-id')
   await launchGoldenStubAgentFromNewTab(orcaPage, /^Doubao(?:\s|$)/i)
+  await expect(selectedTab).not.toHaveAttribute('data-tab-id', originalTabId ?? '')
+  const agentTabId = await selectedTab.getAttribute('data-tab-id')
+  if (!agentTabId) {
+    throw new Error('The selected Doubao terminal tab has no ID')
+  }
+  await expect(
+    orcaPage.locator(`[data-terminal-tab-id="${agentTabId}"] .xterm-screen`)
+  ).toBeVisible()
+  await expectTerminalAccessibilityText(orcaPage, agentTabId, GOLDEN_STUB_READY_MARKER)
+  await expect.poll(() => getTerminalContent(orcaPage)).toContain('"-C","."')
   await expect.poll(() => getTerminalContent(orcaPage)).toContain('"--effort","medium"')
   await expect
     .poll(() => getTerminalContent(orcaPage))
