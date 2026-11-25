@@ -30,13 +30,31 @@ const spawnTokens = new Map<string, string>()
 /** Agent integrations this build can reattach; a relay of any other is ended at launch. */
 const reattachableAgents = new Set<string>()
 
-export function registerReattachableProviderRelayAgent(agent: string): void {
+/** Integrations whose chat takes an ended agent's unread output by reattaching: no open to answer. */
+const drainsEnded = new Set<string>()
+
+export function registerReattachableProviderRelayAgent(
+  agent: string,
+  options?: { drainsEnded?: true }
+): void {
   reattachableAgents.add(agent)
+  if (options?.drainsEnded) {
+    drainsEnded.add(agent)
+  }
 }
 
 /** Its agent still runs. One that ended while detached can't answer a reattach's open, so its chat recovers as any ended agent's does. */
 export function keptProviderRelayOutstanding(info: ProviderRelayInfo): boolean {
   return info.exit === null
+}
+
+/** Outstanding, or ended while detached with output the chat never took, for an integration that
+ *  reads it without its agent; its chat then sees the agent end as it would have, answer first. */
+export function keptProviderRelayReattachable(info: ProviderRelayInfo): boolean {
+  return (
+    keptProviderRelayOutstanding(info) ||
+    (info.agent !== null && drainsEnded.has(info.agent) && info.nextSeq - 1 > info.ackedSeq)
+  )
 }
 
 /**

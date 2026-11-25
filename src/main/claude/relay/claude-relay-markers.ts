@@ -9,9 +9,10 @@ import {
   CLAUDE_TERMINAL_TASK_STATUSES
 } from './claude-relay-continuation'
 
-/** Recorded with each Claude relay; this build reattaches it. */
+/** Recorded with each Claude relay; this build reattaches it, even ended with unread output (its
+ *  kept connection replays an ended agent's output before its exit). */
 export const CLAUDE_RELAY_AGENT = 'claude-code'
-registerReattachableProviderRelayAgent(CLAUDE_RELAY_AGENT)
+registerReattachableProviderRelayAgent(CLAUDE_RELAY_AGENT, { drainsEnded: true })
 
 const SESSION = [['session_id']]
 const TASK = [['task_id']]
