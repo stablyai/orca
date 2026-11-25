@@ -17,6 +17,7 @@ import { AGENT_HOOK_COMMAND_SPECS } from './agent-hooks'
 import { AGENT_LAUNCH_COMMAND_SPECS } from './agent-launch'
 import { SLACK_COMMAND_SPECS } from './slack'
 import { GOOGLE_COMMAND_SPECS } from './google'
+import { TEAMS_COMMAND_SPECS } from './teams'
 import { GOOGLE_READ_COMMAND_SPECS } from './google-read'
 import { GOOGLE_FILES_COMMAND_SPECS } from './google-files'
 import { GOOGLE_WRITE_COMMAND_SPECS } from './google-write'
@@ -68,6 +69,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...AGENT_CONVERSATION_COMMAND_SPECS,
   ...CHAT_COMMAND_SPECS,
   ...SLACK_COMMAND_SPECS,
+  ...TEAMS_COMMAND_SPECS,
   ...GOOGLE_COMMAND_SPECS,
   ...GOOGLE_READ_COMMAND_SPECS,
   ...GOOGLE_FILES_COMMAND_SPECS,
