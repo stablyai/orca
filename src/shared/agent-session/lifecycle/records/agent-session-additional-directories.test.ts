@@ -70,6 +70,15 @@ describe('agent-session-additional-directories', () => {
         'powershell'
       )
     ).toThrow(/drive-relative/)
+
+    expect(() =>
+      resolveAdditionalDirectoriesFromLaunch(
+        ['C:docs'],
+        undefined,
+        '\\\\server\\share\\project',
+        'powershell'
+      )
+    ).toThrow(/drive-relative/)
   })
 
   it('enforces the 64-entry cap across merged directories', () => {

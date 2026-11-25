@@ -117,6 +117,11 @@ function resolveDirectoryAgainstCwd(directory: string, cwd: string): string {
     return `${cwdDrive}${normalizePosixSegments(joined).replaceAll('/', '\\')}`
   }
   if (uncMatch) {
+    if (dirDriveRelative) {
+      throw new Error(
+        `Cannot resolve drive-relative directory "${directory}" against "${cwd}". Use an absolute path.`
+      )
+    }
     const shareRoot = `\\\\${uncMatch[1]}\\${uncMatch[2]}`
     const base =
       directory.startsWith('\\') || directory.startsWith('/')
