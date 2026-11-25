@@ -11,7 +11,7 @@ const EXTENSION_BY_TYPE: Record<string, string> = {
   'image/svg+xml': 'svg',
   'image/avif': 'avif'
 }
-const FILE_EXTENSION = /\.[a-z0-9]{2,5}$/i
+const IMAGE_EXTENSION = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|tiff?)$/i
 
 function safeBaseName(title: string): string {
   return title.replace(/[/\\:*?"<>|]+/g, '-').trim() || 'image'
@@ -21,7 +21,11 @@ function safeBaseName(title: string): string {
 function imageDownloadFileName(title: string, type: string): string {
   const base = safeBaseName(title)
   const extension = EXTENSION_BY_TYPE[type.split(';', 1)[0]]
-  return extension && !FILE_EXTENSION.test(base) ? `${base}.${extension}` : base
+  const current = IMAGE_EXTENSION.exec(base)?.[1].toLowerCase().replace('jpeg', 'jpg')
+  if (!extension || current === extension) {
+    return base
+  }
+  return `${base.replace(IMAGE_EXTENSION, '')}.${extension}`
 }
 
 async function fetchImageBlob(src: string): Promise<Blob | null> {
@@ -61,7 +65,7 @@ export async function downloadImage(
     }
     // Sources fetch can't read (e.g. orca-media://) save the same PNG that Copy makes.
     const png = await renderImagePngDataUrl(src, size, background ?? null, false)
-    saveAs(png, `${safeBaseName(title).replace(FILE_EXTENSION, '')}.png`)
+    saveAs(png, imageDownloadFileName(title, 'image/png'))
   } catch (error) {
     toast.error(
       translate(
