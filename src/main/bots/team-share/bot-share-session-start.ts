@@ -40,10 +40,6 @@ async function startNewBotShareSession(
     return null
   })
   return (
-    empty ??
-    (await startBotSession(runtime, bot, {
-      actsFor: { actsFor: [botShareAsker(scope)] },
-      hostTab: false
-    }))
+    empty ?? (await startBotSession(runtime, bot, { actsFor: { actsFor: [botShareAsker(scope)] } }))
   )
 }

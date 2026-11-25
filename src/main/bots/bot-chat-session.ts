@@ -1,6 +1,6 @@
 // An agent's sessions are native chats in its home folder; each person it works with has one ongoing
 // Home Chat: the owner's, shared with its direct messages, and one per teammate it is shared with.
-import type { AutomationTriggeredBy } from '../../shared/bots/bot-acts-for'
+import { opensHostTab, type AutomationTriggeredBy } from '../../shared/bots/bot-acts-for'
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import { randomUUID } from 'node:crypto'
 import {
@@ -263,7 +263,7 @@ export async function requireStructuredHost(
 /** A new native chat in the bot's home, through native chat's own create, on the bot's agent (and its
  *  model, options and permission override, if any); the launch adds the preamble. With `message`, that message starts it,
  *  under the caller's id so its turn can be found. A `background` one (a thread's or a run's) gets no
- *  tab; it waits in the bot's Activity. */
+ *  tab; it waits in the bot's Activity. Nor does one a teammate started (`opensHostTab`). */
 export async function startBotSession(
   runtime: OrcaRuntimeService,
   bot: Bot,
@@ -271,8 +271,6 @@ export async function startBotSession(
     sessionId?: string
     message?: { text: string; clientMessageId: string; run?: BotRunFields }
     background?: true
-    /** False: no tab here, yet a person's chat (a teammate's, whose tab is on their computer). */
-    hostTab?: false
     /** Whom the conversation acts for, recorded before it starts; unrecorded, its first message says. */
     actsFor?: BotConversationActsFor
   } & Pick<StructuredAgentSessionCreateOptions, 'beforeFirstMessage' | 'beforeDelivery'> = {}
@@ -298,7 +296,7 @@ export async function startBotSession(
   }
   const host = () => requireStructuredHost(runtime)
   const create =
-    input.background || input.hostTab === false
+    input.background || !opensHostTab(input.actsFor?.actsFor)
       ? createBackgroundStructuredAgentSession
       : createStructuredAgentSessionForWorktree
   const created = await create({
