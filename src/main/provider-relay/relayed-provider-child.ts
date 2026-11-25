@@ -218,11 +218,12 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     if (this.state === 'exited' || this.state === 'detached') {
       return
     }
+    // Nothing more is read first: a line read during the last ack would be saved but not acked.
+    this.unbind?.()
+    this.unbind = null
     await this.settle(true)
     this.state = 'detached'
     this.output.stop()
-    this.unbind?.()
-    this.unbind = null
     await this.options.channel.detach(this.relayId, policy)
   }
 
