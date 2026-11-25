@@ -27,3 +27,17 @@ export function refreshAfterGiteaWrite<T>(
 ): void {
   void read().then(apply, () => toast.error(refreshFailedMessage))
 }
+
+/** Wraps a setter so that, of overlapping reads started on one counter, only the newest applies. */
+export function newestReadOnly<T>(
+  counter: { current: number },
+  apply: (value: T) => void
+): (value: T) => void {
+  counter.current += 1
+  const readId = counter.current
+  return (value) => {
+    if (readId === counter.current) {
+      apply(value)
+    }
+  }
+}

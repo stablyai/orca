@@ -1,6 +1,6 @@
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useAppStore } from '@/store'
-import { refreshAfterGiteaWrite, runGiteaMutation } from './gitea-mutation'
+import { newestReadOnly, refreshAfterGiteaWrite, runGiteaMutation } from './gitea-mutation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
 import { scoped } from './gitea-pr-request-scope'
@@ -75,6 +75,7 @@ export function GiteaIssueWorkspace({
   const [repoLabels, setRepoLabels] = useState<GiteaLabel[]>([])
   const [repoAssignees, setRepoAssignees] = useState<GiteaUser[]>([])
   const requestRef = useRef(0)
+  const commentReadRef = useRef(0)
 
   const item = selection?.item ?? null
   const repo = selection?.repo ?? null
@@ -188,7 +189,7 @@ export function GiteaIssueWorkspace({
       setCommentDraft('')
       refreshAfterGiteaWrite(
         () => giteaApiFor(scope).issueComments(scoped(scope, { number: item.number })),
-        setComments,
+        newestReadOnly(commentReadRef, setComments),
         translate(
           'auto.components.GiteaIssueWorkspace.commentRefreshFailed',
           'Comment added. Refresh to see it.'

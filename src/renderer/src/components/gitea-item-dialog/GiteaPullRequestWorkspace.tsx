@@ -1,6 +1,6 @@
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
-import { useCallback, useState } from 'react'
-import { refreshAfterGiteaWrite, runGiteaMutation } from './gitea-mutation'
+import { useCallback, useRef, useState } from 'react'
+import { newestReadOnly, refreshAfterGiteaWrite, runGiteaMutation } from './gitea-mutation'
 import { ArrowRight, ExternalLink, GitPullRequest, LoaderCircle, Send, X } from 'lucide-react'
 import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
 import { toast } from 'sonner'
@@ -64,6 +64,9 @@ function GiteaPullRequestWorkspaceContent({
     setReviewComments,
     loading
   } = useGiteaPrResources(selection)
+  // Overlapping refreshes after back-to-back comments: only the newest read may replace a list.
+  const commentReadRef = useRef(0)
+  const reviewCommentReadRef = useRef(0)
 
   const handleSubmitComment = useCallback(async (): Promise<void> => {
     if (!scope || !item || submitting) {
@@ -82,7 +85,7 @@ function GiteaPullRequestWorkspaceContent({
       setCommentDraft('')
       refreshAfterGiteaWrite(
         () => giteaApiFor(scope).issueComments(scoped(scope, { number: item.number })),
-        setComments,
+        newestReadOnly(commentReadRef, setComments),
         translate(
           'auto.components.GiteaPullRequestWorkspace.commentRefreshFailed',
           'Comment added. Refresh to see it.'
@@ -132,7 +135,7 @@ function GiteaPullRequestWorkspaceContent({
       if (added) {
         refreshAfterGiteaWrite(
           () => giteaApiFor(scope).prReviewComments(scoped(scope, { number: item.number })),
-          setReviewComments,
+          newestReadOnly(reviewCommentReadRef, setReviewComments),
           translate(
             'auto.components.GiteaPullRequestWorkspace.commentRefreshFailed',
             'Comment added. Refresh to see it.'
@@ -282,6 +285,7 @@ function GiteaPullRequestWorkspaceContent({
                 body={body}
                 comments={comments}
                 files={files}
+                totalChangedFiles={detail?.changedFiles}
                 checks={checks}
                 scope={scope}
                 baseSha={detail?.baseSha ?? ''}

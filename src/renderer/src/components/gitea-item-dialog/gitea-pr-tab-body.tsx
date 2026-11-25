@@ -17,6 +17,8 @@ type GiteaPrTabBodyProps = {
   body?: string
   comments: GiteaComment[]
   files: GiteaPRFile[]
+  /** The PR's changed-file count, which can exceed the files Orca loads. */
+  totalChangedFiles?: number
   checks: GiteaPRCheck[] | null
   scope: GiteaIssueScope
   baseSha: string
@@ -33,6 +35,7 @@ export function GiteaPrTabBody({
   body,
   comments,
   files,
+  totalChangedFiles,
   checks,
   scope,
   baseSha,
@@ -63,7 +66,18 @@ export function GiteaPrTabBody({
   if (tab === 'files') {
     return (
       <div className="flex flex-col gap-3 p-3">
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-3">
+          {files.length > 0 &&
+          totalChangedFiles !== undefined &&
+          totalChangedFiles > files.length ? (
+            <p className="mr-auto text-xs text-muted-foreground">
+              {t(
+                'auto.components.gitea.pr.tab.body.truncatedFiles',
+                'Showing {{shown}} of {{total}} changed files. Open the pull request in Gitea for the rest.',
+                { shown: files.length, total: totalChangedFiles }
+              )}
+            </p>
+          ) : null}
           <Button variant="outline" size="xs" onClick={onToggleSideBySide}>
             {sideBySide
               ? t('auto.components.gitea.pr.tab.body.413feaa83a', 'Inline')

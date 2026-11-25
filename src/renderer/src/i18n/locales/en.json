@@ -21164,7 +21164,8 @@
               "1fe3a05742": "No description provided.",
               "413feaa83a": "Inline",
               "5372c28376": "Side by side",
-              "53ab0c5a49": "No changed files."
+              "53ab0c5a49": "No changed files.",
+              "truncatedFiles": "Showing {{shown}} of {{total}} changed files. Open the pull request in Gitea for the rest."
             }
           }
         },

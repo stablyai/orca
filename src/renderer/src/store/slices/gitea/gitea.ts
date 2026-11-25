@@ -51,13 +51,23 @@ function requestArgs(scope: GiteaIssueScope): GiteaIssueScope {
   }
 }
 
+// Status reads can overlap (first load, then a refresh after connecting); an older answer never wins.
+let statusReadSeq = 0
+let latestAppliedStatusRead = 0
+
 export const createGiteaSlice: StateCreator<AppState, [], [], GiteaSlice> = (set, get) => ({
   giteaStatus: null,
   giteaStatusLoaded: false,
 
   refreshGiteaStatus: async () => {
+    statusReadSeq += 1
+    const readId = statusReadSeq
     try {
       const status = await window.api.gitea.status()
+      if (readId < latestAppliedStatusRead) {
+        return get().giteaStatus
+      }
+      latestAppliedStatusRead = readId
       set({ giteaStatus: status, giteaStatusLoaded: true })
       return status
     } catch {

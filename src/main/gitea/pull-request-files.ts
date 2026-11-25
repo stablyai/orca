@@ -11,7 +11,7 @@ type RawGiteaPullFile = {
 }
 
 const PULL_FILE_PAGE_LIMIT = 50
-// Up to 1,000 changed files; the PR header still reports the full count past that.
+// Up to 1,000 changed files; past that the Files tab says how many of the PR's changed files it shows.
 const PULL_FILE_MAX_PAGES = 20
 
 function mapFileStatus(status: string | null | undefined): GiteaPRFileStatus {
