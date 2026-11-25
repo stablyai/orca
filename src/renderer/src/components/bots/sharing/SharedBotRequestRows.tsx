@@ -9,6 +9,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useSharedBotRequests } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import type { SharedBotRequestView } from '../../../../../shared/bots/shared-bot-hosts'
+import { aroundOwner } from '../../../../../shared/bots/shared-bot-owner-name'
 import { BotOwnerAvatar } from '../bot-connector-people'
 import { BotShareMark } from './BotShareMark'
 import { SharedBotInviteDialog, SharedBotRequestAvatar } from './SharedBotInviteDialog'
@@ -26,9 +27,11 @@ export function SharedBotRequestRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
-  const invited = t('bots.share.invite.invitedYou', '{{owner}} invited you', {
-    owner: request.ownerName
-  })
+  const invitedLine = (owner: string): string =>
+    t('bots.share.invite.invitedYou', '{{owner}} invited you', { owner })
+  const invited = invitedLine(request.ownerName)
+  // A name too long for the line shortens first, so "invited you" always reads whole.
+  const { before, after } = aroundOwner(invitedLine)
   return (
     <>
       <div
@@ -62,32 +65,42 @@ export function SharedBotRequestRow({
           </span>
         </span>
         <div className="flex min-w-0 flex-1 flex-col justify-center">
-          <div className="flex min-w-0 items-center gap-1.5 opacity-60">
-            <span className="block min-w-0 truncate text-[13px] leading-5 text-foreground/80">
-              {request.botName}
+          <div className="flex min-w-0 items-center gap-1">
+            <span className="flex min-w-0 items-center gap-1.5 opacity-60">
+              <span className="block min-w-0 truncate text-[13px] leading-5 text-foreground/80">
+                {request.botName}
+              </span>
+              <BotShareMark
+                line={t('bots.share.sharedBy', 'Shared by {{name}}', { name: request.ownerName })}
+              />
             </span>
-            <BotShareMark
-              line={t('bots.share.sharedBy', 'Shared by {{name}}', { name: request.ownerName })}
-            />
+            {/* On the name's line, so the inviter's line has the row's whole width; the negative
+                margin keeps the button's height out of the line's. */}
+            <span className="-my-0.5 ml-auto shrink-0">
+              <Button
+                variant="ghost"
+                size="xs"
+                tabIndex={-1}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setOpen(true)
+                }}
+              >
+                {t('bots.share.invite.view', 'View invite')}
+              </Button>
+            </span>
           </div>
           <div className="flex min-w-0 items-center gap-1 text-xs leading-4 text-muted-foreground">
             <span className="size-3.5 shrink-0">
               <BotOwnerAvatar iconClassName="size-2.5" />
             </span>
-            <span className="truncate">{invited}</span>
+            <span className="flex min-w-0 whitespace-pre">
+              <span className="shrink-0">{before}</span>
+              <span className="truncate">{request.ownerName}</span>
+              <span className="shrink-0">{after}</span>
+            </span>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="xs"
-          tabIndex={-1}
-          onClick={(event) => {
-            event.stopPropagation()
-            setOpen(true)
-          }}
-        >
-          {t('bots.share.invite.view', 'View invite')}
-        </Button>
       </div>
       <SharedBotInviteDialog request={request} open={open} onOpenChange={setOpen} />
     </>

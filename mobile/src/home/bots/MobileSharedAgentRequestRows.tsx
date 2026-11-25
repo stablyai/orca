@@ -19,7 +19,7 @@ import {
 import type { SharedBotPhoneRequest } from '../../../../src/shared/bots/bot-share-phone'
 import type { AgentCardService } from '../../../../src/shared/bots/agent-card-contract'
 import { agentCardAvatar, agentCardServices } from '../../../../src/shared/bots/shared-agent-card'
-import { ownerShortName } from '../../../../src/shared/bots/shared-bot-owner-name'
+import { aroundOwner, ownerShortName } from '../../../../src/shared/bots/shared-bot-owner-name'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, ListRow } from '../../components/list/ListGroup'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
@@ -172,9 +172,11 @@ function RequestRow({ pairedHostId, request, divider }: HostRequest & { divider:
       Alert.alert(t('bots.share.requestFailed', 'Couldn’t answer the request. Try again.'))
     }
   }
-  const invited = t('bots.share.invite.invitedYou', '{{owner}} invited you', {
-    owner: request.ownerName
-  })
+  const invitedLine = (owner: string): string =>
+    t('bots.share.invite.invitedYou', '{{owner}} invited you', { owner })
+  const invited = invitedLine(request.ownerName)
+  // The name shortens first, so who invited and "invited you" both stay readable.
+  const { before, after } = aroundOwner(invitedLine)
   return (
     <>
       <Pressable
@@ -210,9 +212,13 @@ function RequestRow({ pairedHostId, request, divider }: HostRequest & { divider:
             <View style={styles.person}>
               <UserRound size={10} color={colors.textMuted} />
             </View>
-            <Text numberOfLines={1} style={styles.line}>
-              {invited}
-            </Text>
+            <View style={styles.invited}>
+              {before ? <Text style={[styles.line, styles.fixed]}>{before}</Text> : null}
+              <Text numberOfLines={1} style={styles.line}>
+                {request.ownerName}
+              </Text>
+              {after ? <Text style={[styles.line, styles.fixed]}>{after}</Text> : null}
+            </View>
           </View>
         </View>
         {answering ? (
@@ -287,6 +293,8 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised
   },
   line: { flexShrink: 1, fontSize: 13, color: colors.textMuted },
+  invited: { flexDirection: 'row', flexShrink: 1, minWidth: 0 },
+  fixed: { flexShrink: 0 },
   view: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   purpose: {
     fontSize: typography.bodySize,
