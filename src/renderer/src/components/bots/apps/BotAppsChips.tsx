@@ -1,5 +1,6 @@
 // Add apps' filter chips: All, each category with an app, then Composio and Custom. Categories that
-// don't fit fold, from the end, into More; Composio and Custom always show.
+// don't fit fold, from the end, into More; Composio and Custom always show. Add an MCP server uses
+// them too, with its own categories and no Composio.
 import React, { useLayoutEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import {
@@ -10,16 +11,19 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { botAppCategoryName, type BotAppCategory } from './bot-app-catalog'
+import type { BotAppCategory } from './bot-app-catalog'
 
 /** What the list shows: everything, the bot's own, one category, Composio's apps, or the custom ones. */
-export type BotAppsView = 'all' | 'mine' | BotAppCategory | 'composio' | 'catalog' | 'custom'
+export type BotAppsView = AppsView<BotAppCategory>
+export type AppsView<C extends string> = 'all' | 'mine' | C | 'composio' | 'catalog' | 'custom'
 
-type Chip = { value: BotAppsView; label: string }
+type Chip<C extends string> = { value: AppsView<C>; label: string }
 
 const CHIP =
   'inline-flex h-7.5 shrink-0 cursor-pointer items-center gap-1 rounded-full bg-secondary px-3 text-sm font-medium whitespace-nowrap text-secondary-foreground transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-[on=true]:bg-foreground data-[on=true]:text-background'
 const GAP = 6
+// The More menu's own chip id, apart from any category's (Add an MCP server has a "more" category).
+const FOLD = 'fold:more'
 
 function MoreFace({ label }: { label: string }): React.JSX.Element {
   return (
@@ -60,15 +64,19 @@ function updateScrollFade(row: HTMLElement): void {
   row.toggleAttribute('data-fade-end', row.scrollLeft + row.clientWidth + 1 < row.scrollWidth)
 }
 
-export function BotAppsChips({
+export function BotAppsChips<C extends string = BotAppCategory>({
   view,
   onView,
-  categories
+  categories,
+  categoryName,
+  composio = true
 }: {
-  view: BotAppsView
-  onView: (view: BotAppsView) => void
+  view: AppsView<C>
+  onView: (view: AppsView<C>) => void
   /** Categories with an app, in order. */
-  categories: readonly BotAppCategory[]
+  categories: readonly C[]
+  categoryName: (category: C) => string
+  composio?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const rowRef = useRef<HTMLDivElement>(null)
@@ -80,17 +88,19 @@ export function BotAppsChips({
   // Set once focus is handed to a chip, so the closing menu doesn't send it back to More.
   const handedOff = useRef(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const all: Chip = { value: 'all', label: t('bots.apps.chip.all', 'All') }
-  const categoryChips: Chip[] = categories.map((category) => ({
+  const all: Chip<C> = { value: 'all', label: t('bots.apps.chip.all', 'All') }
+  const categoryChips: Chip<C>[] = categories.map((category) => ({
     value: category,
-    label: botAppCategoryName(category)
+    label: categoryName(category)
   }))
-  const pinned: Chip[] = [
-    { value: 'composio', label: t('bots.apps.chip.composio', 'Composio') },
+  const pinned: Chip<C>[] = [
+    ...(composio
+      ? [{ value: 'composio' as const, label: t('bots.apps.chip.composio', 'Composio') }]
+      : []),
     { value: 'custom', label: t('bots.apps.custom.name', 'Custom') }
   ]
   const moreLabel = t('bots.apps.chip.more', 'More')
-  const selected: BotAppsView = view === 'catalog' ? 'composio' : view
+  const selected: AppsView<C> = view === 'catalog' ? 'composio' : view
   const [shown, setShown] = useState(categoryChips.length)
   const [focusedChip, setFocusedChip] = useState<string | null>(null)
 
@@ -151,13 +161,13 @@ export function BotAppsChips({
   const selectedChip = front.some((chip) => chip.value === selected)
     ? selected
     : foldedPick
-      ? 'more'
+      ? FOLD
       : 'all'
   const focusedChipFolds = folded.some((chip) => chip.value === focusedChip)
   const tabStop = focusedChipFolds
-    ? 'more'
+    ? FOLD
     : front.some((chip) => chip.value === focusedChip) ||
-        (focusedChip === 'more' && folded.length > 0)
+        (focusedChip === FOLD && folded.length > 0)
       ? focusedChip
       : selectedChip
 
@@ -179,13 +189,13 @@ export function BotAppsChips({
       unfolded.focus()
       return
     }
-    const moreWasRemoved = folded.length === 0 && (focusedChip === 'more' || restore)
+    const moreWasRemoved = folded.length === 0 && (focusedChip === FOLD || restore)
     if ((focusedChipFolds || moreWasRemoved) && lost) {
       row.querySelector<HTMLButtonElement>('[data-chip][tabindex="0"]')?.focus()
     }
   }, [focusedChip, focusedChipFolds, folded.length])
 
-  const chip = (item: Chip): React.JSX.Element => (
+  const chip = (item: Chip<C>): React.JSX.Element => (
     <button
       key={item.value}
       type="button"
@@ -271,8 +281,8 @@ export function BotAppsChips({
                 aria-haspopup="menu"
                 aria-expanded={undefined}
                 data-on={foldedPick !== undefined}
-                data-chip="more"
-                tabIndex={tabStop === 'more' ? 0 : -1}
+                data-chip={FOLD}
+                tabIndex={tabStop === FOLD ? 0 : -1}
                 title={foldedPick?.label}
                 className={CHIP}
               >

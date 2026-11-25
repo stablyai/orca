@@ -5,6 +5,7 @@ import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-
 import { getGeneralPaneSearchEntries } from '@/components/settings/general/general-search'
 import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations/integrations-search'
 import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/skills/linear/linear-agent-skill-search'
+import { getMcpServersPaneSearchEntries } from '@/components/settings/mcp-servers/mcp-servers-search'
 import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile/mobile-settings-search'
 import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/accounts/orca/orca-account-settings-search'
 import { OrcaLogoSettingsIcon } from '@/components/settings/page/orca-logo-settings-icon'
@@ -22,6 +23,7 @@ import {
   Mic,
   MousePointerClick,
   Network,
+  Plug,
   SlidersHorizontal,
   Smartphone,
   UserCog
@@ -29,7 +31,12 @@ import {
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildCapabilitySettingsSections(
-  { isLocalWindowsHost, isWebClient, isLinearConnected }: SettingsNavigationBuildOptions,
+  {
+    isLocalWindowsHost,
+    isWebClient,
+    isLinearConnected,
+    mcpServersAvailable = false
+  }: SettingsNavigationBuildOptions,
   t: Translate = translate
 ): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -52,6 +59,21 @@ export function buildCapabilitySettingsSections(
       }),
       group: 'capabilities'
     },
+    ...(mcpServersAvailable
+      ? [
+          {
+            id: 'mcp-servers',
+            title: t('settings.mcpServers.title', 'MCP servers'),
+            description: t(
+              'settings.mcpServers.description',
+              'Servers your agents can use. Changes apply to new sessions.'
+            ),
+            icon: Plug,
+            searchEntries: getMcpServersPaneSearchEntries(t),
+            group: 'capabilities' as const
+          }
+        ]
+      : []),
     {
       id: 'accounts',
       title: t('auto.hooks.useSettingsNavigationMetadata.f70ac54d38', 'AI Provider Accounts'),

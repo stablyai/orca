@@ -17,11 +17,14 @@ import type { BotToolDraft } from '../../../../shared/bots/bot-tool-draft'
 export function BotToolDetailsFields({
   draft,
   onChange,
-  focusName = false
+  focusName = false,
+  forBot = true
 }: {
   draft: BotToolDraft
   onChange: (draft: BotToolDraft) => void
   focusName?: boolean
+  /** The notes about a bot's computer and its CLI's sign-in; Settings › MCP servers has neither. */
+  forBot?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const patch = (changes: Partial<BotToolDraft>) => onChange({ ...draft, ...changes })
@@ -84,7 +87,7 @@ export function BotToolDetailsFields({
               )}
             />
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p hidden={!forBot} className="text-xs text-muted-foreground">
             {t(
               'settings.bots.tools.details.transport',
               'Streamable HTTP · localhost means this bot’s computer.'
@@ -96,9 +99,10 @@ export function BotToolDetailsFields({
               kind="header"
               rows={draft.headers}
               onChange={(headers) => patch({ headers })}
+              locked={!forBot}
             />
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p hidden={!forBot} className="text-xs text-muted-foreground">
             {t(
               'settings.bots.tools.details.authHint',
               'If the server needs browser sign-in, Connect appears after its native check.'
@@ -166,7 +170,7 @@ export function BotToolDetailsFields({
             >
               {t('settings.bots.tools.details.addArg', '+ Add argument')}
             </Button>
-            <p className="text-xs text-muted-foreground">
+            <p hidden={!forBot} className="text-xs text-muted-foreground">
               {t(
                 'settings.bots.tools.details.argsHint',
                 'One exact argument per row. Spaces and empty arguments are preserved.'
@@ -179,6 +183,7 @@ export function BotToolDetailsFields({
               kind="variable"
               rows={draft.env}
               onChange={(env) => patch({ env })}
+              locked={!forBot}
             />
           </div>
         </>
