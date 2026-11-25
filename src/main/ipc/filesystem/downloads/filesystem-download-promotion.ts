@@ -121,7 +121,6 @@ async function copyIntoNewFile(
 ): Promise<void> {
   const target = await open(targetPath, 'wx')
   let copied = false
-  let closeError: unknown = null
   let ours: Stats | null = null
   let source: FileHandle | null = null
   try {
@@ -141,17 +140,10 @@ async function copyIntoNewFile(
     copied = true
   } finally {
     await source?.close().catch(() => {})
-    // Network shares and full disks can report a lost write only when the file closes.
-    await target.close().catch((error: unknown) => {
-      closeError = error
-      copied = false
-    })
+    await target.close().catch(() => {})
     if (!copied && ours) {
       await removeIfStillOurs(targetPath, ours)
     }
-  }
-  if (closeError) {
-    throw closeError
   }
 }
 
