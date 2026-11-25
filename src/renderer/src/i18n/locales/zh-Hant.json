@@ -628,6 +628,11 @@
         "description": "使用代理程式根據第一則訊息為新聊天命名。產生名稱前，聊天會顯示第一則訊息。",
         "enable": "自動為聊天命名",
         "recipe": "聊天名稱",
+        "useChatAgent": "使用聊天的代理程式",
+        "configuredCliAgent": "使用已設定的 CLI 代理程式（{{agent}}）",
+        "configuredCliAgentUnknown": "使用已設定的 CLI 代理程式",
+        "clearCliArguments": "清除 CLI 引數即可改用各聊天的代理程式。",
+        "cliArgumentsPlaceholder": "已設定之 CLI 命名代理程式的選用引數",
         "recipeDescription": "根據新聊天的第一則訊息生成簡短名稱。",
         "customCommandDescription": "選擇「自訂命令」的配方共用此命令列。使用 {prompt} 將輸入作為引數傳遞，否則會以管線傳送至標準輸入。",
         "saveFailed": "無法儲存聊天命名設定。",
@@ -690,6 +695,34 @@
         "orcaCouldNotRestart": "Orca 無法重新啟動。",
         "manualAdministratorSteps": "手動步驟",
         "restartOrca": "重新啟動"
+      },
+      "limit": {
+        "label": "執行中終端機數量上限",
+        "description": "限制你在此主機上所有專案中執行中的終端機數量。",
+        "system": "系統 PTY 上限：{{value}}",
+        "unknown": "無法取得",
+        "shared": "與其他終端機應用程式共用。這是總容量，不是剩餘可用數量。",
+        "disconnected": "此主機已中斷連線。請重新連線以檢視或變更其終端機上限。",
+        "unsupported": "此主機的終端機服務尚不支援變更此上限。",
+        "environment": "此 Orca 執行個體的終端機上限由其執行環境設定。請在此主機上移除該覆寫設定，才能在這裡編輯。",
+        "savedUnreadable": "無法讀取此主機已儲存的終端機上限，目前使用 {{value}}。輸入數值並按 Enter 即可取代。",
+        "failed": "無法確認終端機上限。請再試一次。",
+        "retry": "重試",
+        "unit": "個終端機",
+        "search": {
+          "limit": "上限",
+          "maximum": "最大值",
+          "pty": "pty",
+          "capacity": "容量"
+        }
+      },
+      "wordSeparators": {
+        "description": "按兩下選取時視為字詞邊界的字元，包含空格。",
+        "noSpaceHint": "未包含空格 — 按兩下會跨越空格選取。"
+      },
+      "fontSize": {
+        "decrease": "減小字型大小",
+        "increase": "增大字型大小"
       }
     },
     "appearance": {
@@ -721,7 +754,14 @@
         "antigravityToggleDescription": "顯示目前工作區的 Antigravity 訂閱用量。",
         "grokToggleDescription": "透過 Grok CLI 登入後顯示 Grok 訂閱額度用量。",
         "cursorToggleDescription": "透過 cursor-agent 或 Cursor IDE 登入後顯示 Cursor 方案用量。",
-        "zcodeToggleDescription": "顯示 ZCode Coding Plan 配額用量。"
+        "zcodeToggleDescription": "顯示 ZCode Coding Plan 配額用量。",
+        "museToggleDescription": "顯示來自 Muse CLI 的 Muse 訂閱配額。",
+        "gitBlameTitle": "Git blame",
+        "gitBlameDescription": "在狀態列中顯示最後修改游標所在行的人。",
+        "gitBlameKeywordBlame": "追溯",
+        "gitBlameKeywordAuthor": "作者",
+        "gitBlameKeywordCommit": "提交",
+        "gitBlameToggleDescription": "顯示游標所在行的作者，以及修改距今多久。點選即可開啟該提交。"
       },
       "menuBarIcon": {
         "description": "在 macOS 選單列中保留 Orca 捷徑和活動指示器。",
@@ -778,6 +818,42 @@
           "monaco": "monaco",
           "syntax": "語法"
         }
+      },
+      "tilingWindowMode": {
+        "title": "平鋪式視窗管理員模式",
+        "description": "隱藏最小化和最大化按鈕，並將工作區分頁移到頂端邊緣。請使用你的視窗管理員移動視窗及調整其大小。"
+      },
+      "reduceVisualEffects": {
+        "description": "關閉對話方塊和選單後方的模糊效果，並在重新啟動後關閉視窗半透明效果。有助於遠端桌面和沒有 GPU 的電腦。",
+        "keywords": {
+          "blur": "模糊",
+          "transparency": "透明度",
+          "performance": "效能",
+          "remote": "遠端",
+          "gpu": "gpu"
+        },
+        "08c854149e": "減少視覺效果"
+      },
+      "appIcon": {
+        "importCustom": "自訂…",
+        "replaceCustom": "取代自訂圖示…",
+        "removeCustom": "移除自訂圖示",
+        "customKeyword": "自訂",
+        "importKeyword": "匯入",
+        "importErrors": {
+          "unsupportedFormat": "不支援的圖片。請選擇 PNG 或 JPEG 檔案。",
+          "unreadable": "無法讀取所選檔案。",
+          "tooLarge": "圖片大於 {{max}} MB。",
+          "notSquare": "應用程式圖示必須是正方形。",
+          "tooSmall": "圖片至少須為 {{min}}×{{min}} 像素。",
+          "tooBig": "圖片最多只能是 {{max}}×{{max}} 像素。",
+          "undecodable": "無法解碼所選圖片。",
+          "saveFailed": "無法儲存自訂圖示。"
+        }
+      },
+      "uiZoom": {
+        "zoomOut": "縮小",
+        "zoomIn": "放大"
       }
     },
     "browser": {
@@ -1035,7 +1111,12 @@
         "modifierOnly": "請按下一般按鍵，不要只按修飾鍵。",
         "invalidBindingValue": "請使用字串、字串陣列、null 或 false。",
         "stringArrayRequired": "請使用字串陣列。",
-        "fileNotObject": "鍵繫結檔案必須包含 JSON 物件。"
+        "fileNotObject": "鍵繫結檔案必須包含 JSON 物件。",
+        "digitIndex": "請選擇 1–9 的數字鍵搭配修飾鍵，例如 Cmd+1 或 Ctrl+1。",
+        "exampleChord": "請使用 Ctrl+Shift+P 或 Cmd+K 這類快速鍵。",
+        "modOrPlatform": "請使用 Mod 或特定平台的修飾鍵，不要同時使用兩者。",
+        "needModifier": "請至少包含一個修飾鍵。",
+        "needNonModifier": "請按下一般按鍵，不要只按修飾鍵。"
       },
       "diagnostics": {
         "sectionNotObject": "{{section}} 必須是物件。",
@@ -1046,7 +1127,30 @@
         "conflictingOverrides": "已忽略有衝突的自訂快速鍵：{{actions}}。",
         "readFailed": "無法讀取鍵繫結檔案：{{reason}}"
       },
+      "actions": {
+        "tab": {
+          "newAgentNamed": "新增 {{agent}} 分頁",
+          "newAgent": "新增代理程式分頁（預設代理程式）"
+        }
+      },
+      "filters": {
+        "all": "全部",
+        "modified": "已修改",
+        "conflicts": "衝突"
+      },
+      "conflict": "{{binding}} 與 {{titles}} 衝突。",
       "groups": {
+        "agents": "代理程式",
+        "browser": "瀏覽器",
+        "chat": "聊天",
+        "editors": "編輯器",
+        "fileExplorer": "檔案總管",
+        "global": "全域",
+        "quickCommands": "快速命令",
+        "settings": "設定",
+        "tabNavigation": "分頁導覽",
+        "tabs": "分頁",
+        "terminalPanes": "終端機窗格",
         "bots": "機器人"
       }
     },
@@ -1103,6 +1207,14 @@
       "keywordEndOfFile": "檔案結尾",
       "62aa3336d9": "插入結尾換行符號"
     },
+    "editorEndOfLine": {
+      "title": "行尾",
+      "description": "新檔案與尚無換行的檔案所使用的行尾字元。「自動」會依執行該檔案所屬工作區的系統決定：Linux、macOS 與 WSL 使用 LF，Windows 使用 CRLF。已有換行的檔案會保留原本的行尾。",
+      "keywordLineEnding": "行尾字元",
+      "auto": "自動",
+      "lf": "LF",
+      "crlf": "CRLF"
+    },
     "repositoryFormatter": {
       "description": "儲存時格式化使用此專案的格式化工具。",
       "saveFailed": "無法儲存格式化工具設定。",
@@ -1134,12 +1246,57 @@
       },
       "whoCanAsk": "誰可以向 {{bot}} 提問"
     },
+    "windowMaterial": {
+      "description": "半透明終端機後方顯示的內容。需要重新啟動。",
+      "off": "不透明",
+      "translucent": "半透明",
+      "acrylic": "壓克力模糊",
+      "blur": "模糊",
+      "reducedEffects": "開啟「減少視覺效果」或系統的「減少透明度」設定時會關閉。",
+      "needsOpacity": "將「背景不透明度」調到小於 1，即可透過終端機看到桌面。",
+      "linuxCompositor": "是否套用模糊由你的合成器決定。需要重新啟動。",
+      "restartDescription": "重新啟動 Orca 以套用視窗材質變更。",
+      "keywords": {
+        "acrylic": "壓克力"
+      },
+      "windowsUnsupported": "需要 Windows 11 22H2 版或更新版本。",
+      "fc2ba9b528": "視窗材質"
+    },
     "sharedLinks": {
       "keywordBots": "機器人"
+    },
+    "breadcrumb": {
+      "settings": "設定",
+      "label": "設定階層導覽",
+      "close": "關閉設定"
+    },
+    "search": {
+      "clear": "清除搜尋",
+      "results": "設定搜尋結果",
+      "noResults": "沒有符合「{{value0}}」的設定",
+      "moreResults": "還有 {{value0}} 項 · 繼續輸入以縮小範圍"
     },
     "voice": {
       "cleanup": {
         "recipeDescription": "在輸入前整理聽寫文字。"
+      }
+    },
+    "notifications": {
+      "perfNotices": {
+        "disk": {
+          "label": "磁碟空間即將用盡",
+          "description": "磁碟空間即將用盡時，建議清理工作區。"
+        },
+        "hiddenTabs": {
+          "label": "隱藏的瀏覽器分頁",
+          "description": "有許多隱藏的瀏覽器分頁仍保持載入時，建議開啟 Memory Saver。"
+        },
+        "search": {
+          "disk": "磁碟",
+          "warning": "警告",
+          "tabs": "分頁",
+          "memory": "記憶體"
+        }
       }
     },
     "automaticUpdates": {
@@ -1167,11 +1324,126 @@
     "artifacts": {
       "teamDisabled": "您的團隊已關閉成品分享。"
     },
+    "navigation": {
+      "accounts": {
+        "description": "選用的 Claude、Codex、Antigravity、OpenCode Go、MiniMax 與 Grok 帳戶切換及用量設定。"
+      }
+    },
     "general": {
+      "openInMenu": {
+        "keyword": {
+          "windsurf": "windsurf",
+          "devin": "devin",
+          "devinDesktop": "devin desktop",
+          "antigravity": "antigravity"
+        }
+      },
+      "confirmations": {
+        "artifactHelp": "任何持有其公開連結的人都會失去存取權。",
+        "pinned": "關閉固定的分頁",
+        "workspace": "刪除工作區",
+        "runningHelp": "停止仍在執行的代理程式或指令前先詢問。",
+        "artifact": "刪除成品",
+        "automationHelp": "其執行紀錄也會一併刪除。",
+        "automation": "刪除自動化",
+        "title": "確認提示",
+        "running": "關閉執行中的聊天或終端機",
+        "chat": "刪除聊天"
+      },
+      "pages": {
+        "folder": "工作區資料夾",
+        "editor": "編輯器與差異",
+        "openIn": "開啟於",
+        "worktrees": "來自其他工具的工作樹"
+      },
+      "folder": {
+        "oneFolder": "單一資料夾",
+        "perProject": "每個專案一個資料夾"
+      },
+      "search": {
+        "keywords": {
+          "claude": "Claude",
+          "auto_save": "自動儲存",
+          "source": "來源",
+          "share": "分享",
+          "star": "星號",
+          "gsd": "GSD",
+          "update": "更新",
+          "markdown": "Markdown",
+          "diff": "差異",
+          "whitespace": "空白字元",
+          "ask_before": "事先詢問",
+          "confirmations": "確認提示",
+          "command_line": "命令列",
+          "artifact": "成品",
+          "version": "版本",
+          "spaces": "空格",
+          "link": "連結",
+          "tabs": "分頁",
+          "trim": "去除空白",
+          "root": "根目錄",
+          "word_wrap": "自動換行",
+          "wrap": "換行",
+          "location": "位置",
+          "custom": "自訂",
+          "indentation": "縮排",
+          "long_lines": "長行",
+          "about": "關於"
+        }
+      },
+      "cli": {
+        "title": "命令列",
+        "otherTerminals": "在其他終端機中使用 {{command}}",
+        "skillTitle": "給代理程式用的 Orca 技能",
+        "description": "Orca 內建的終端機已經可以使用。"
+      },
+      "previewTabs": {
+        "title": "預覽分頁",
+        "description": "單擊檔案會重複使用同一個預覽分頁，直到你編輯或固定它為止。"
+      },
+      "autoSave": {
+        "title": "自動儲存",
+        "description": "停止編輯片刻後自動儲存。"
+      },
+      "editorGroups": {
+        "saving": "儲存",
+        "markdown": "Markdown",
+        "editor": "編輯器",
+        "diffs": "差異"
+      },
+      "editor": {
+        "sideBySide": "並排差異",
+        "inline": "行內差異",
+        "description": "儲存、編輯器、差異與 Markdown 選項"
+      },
+      "workspaces": {
+        "title": "工作區"
+      },
+      "worktrees": {
+        "addFolder": "新增資料夾…",
+        "customRules": "自訂規則",
+        "cancelAdd": "取消",
+        "hidden": "全部隱藏",
+        "description": "Claude Code、GSD 與其他位置",
+        "shown": "預設顯示"
+      },
+      "openIn": {
+        "none": "尚未新增應用程式",
+        "description": "工作區「開啟於」選單中的應用程式"
+      },
+      "tabs": {
+        "title": "分頁"
+      },
       "about": {
         "title": "關於",
         "version": "Orca {{version}}"
-      }
+      },
+      "inlineBlameTitle": "行內 git blame",
+      "inlineBlameDescription": "在游標所在行的行尾顯示最後修改這一行的人與時間。",
+      "inlineBlameKeywordBlame": "追溯",
+      "inlineBlameKeywordGit": "git",
+      "inlineBlameKeywordAuthor": "作者",
+      "inlineBlameKeywordAnnotation": "註解"
     },
     "updateDelay": {
       "1b4d825e0e": "更新延遲",
@@ -8107,12 +8379,14 @@
           "5195f0b9ef": "在編輯格式化 Markdown 時顯示瀏覽器拼字底線和建議。",
           "9b18de6eea": "在檔案編輯器中自動換行長行，而無需水平捲動。",
           "collapseUnchangedDescription": "在檔案差異中僅顯示變更的行及少量周圍內容，其餘部分隱藏在可展開的區塊中。「檢視所有變更」的差異一律以這種方式折疊。",
+          "markdownDefaultViewDesc": "開啟 Markdown 檔案時使用的檢視。也可以在 Markdown 分頁中對檢視切換器按右鍵來變更。",
           "a37865966c": "自動儲存檔案",
           "8b3f8e6b83": "Markdown 審查筆記",
           "89ba15b474": "自動儲存延遲",
           "75e326278e": "編輯器自動換行",
           "a0361dfb05": "Markdown 拼字檢查（格式化文字）",
           "3f63d16992": "預設差異檔案樹",
+          "1dd79964bf": "預設 Markdown 檢視",
           "b11d620d45": "預設差異檢視",
           "0971ef5c63": "差異顯示空白",
           "916c5582f2": "折疊未變更的區域",
@@ -8192,6 +8466,9 @@
           "d2f33670a9": "從 Ghostty 匯入",
           "273e7e81fe": "設定檔",
           "1f744a72f4": "設定檔",
+          "not_found_choose_file": "這台電腦上找不到 Ghostty 設定檔。請選擇設定檔，從其他位置匯入。",
+          "cleared": "已清除",
+          "80e9b42a86": "選擇設定檔",
           "9759d2dfa2": "套用變更"
         },
         "WarpThemeImportModal": {
@@ -8218,7 +8495,9 @@
           "import_theme_other": "匯入 {{value0}} 個主題",
           "1bceb1553d": "匯入主題",
           "00aaf588da": "選擇資料夾",
-          "77f3e3d390": "選擇檔案"
+          "import_theme": "匯入 {{value0}} 個主題",
+          "77f3e3d390": "選擇檔案",
+          "found_theme": "找到 {{value0}} 個主題"
         },
         "useWarpThemeImport": {
           "unknown_error": "未知錯誤",
@@ -8453,6 +8732,7 @@
           "7f45542625": "已要求測試通知",
           "98d70fb261": "自訂通知聲音無法播放",
           "c83b05a055": "該系統不支援通知",
+          "e1b1724793": "程式設計代理程式要求權限或提出問題。",
           "6bc7bd7b6e": "終端機響鈴",
           "0acae1066d": "代理程式任務完成",
           "3b77513cd0": "接收已隱藏工作區的通知",
@@ -8461,7 +8741,8 @@
           "9c41a0d367": "啟用通知",
           "f5b0498e1f": "傳送測試通知",
           "b3c7207c8f": "通知聲音",
-          "38e3bbeb25": "選擇自訂檔案"
+          "38e3bbeb25": "選擇自訂檔案",
+          "05f5c5ab50": "代理程式需要輸入"
         },
         "OpenAiTranscriptionKeyDialog": {
           "d246b2bdb3": "本機執行階段金鑰使用 Electron 加密儲存（如果可用）儲存在 ~/.orca 中。",
@@ -9022,7 +9303,8 @@
           "ceefb9d7f1": "未找到主題。",
           "imported_themes": "已匯入",
           "search_terminal_themes": "搜尋終端機主題",
-          "plugin_themes": "外掛"
+          "plugin_themes": "外掛",
+          "delete_imported_theme": "刪除 {{value0}}"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -9031,7 +9313,8 @@
           "60f8a673a7": "返回應用程式",
           "6503182299": "入門清單",
           "82db1b7de4": "入門清單，已完成 {{value0}}/{{value1}}。顯示設定指南。",
-          "df38d612b7": "尚未新增專案。"
+          "df38d612b7": "尚未新增專案。",
+          "progressComplete": "已完成 {{value0}}/{{value1}}"
         },
         "ShortcutFilterRail": {
           "28b63545bf": "狀態",
@@ -9269,6 +9552,7 @@
           "4415beb958": "已停用",
           "4e7d41a9f0": "已啟用",
           "dimUnfocusedPanes": "調暗未聚焦的窗格。",
+          "kitty_import": "從 Kitty 匯入",
           "4adb9364f4": "游標形狀",
           "4d8b35c479": "非作用中窗格不透明度",
           "55c3f22e7c": "游標不透明度",
@@ -9410,6 +9694,8 @@
           "match_dark_mode_description": "在淺色模式中沿用深色模式的終端機主題和分隔線顏色。",
           "light_preview_description": "顯示實際生效的淺色終端機外觀。",
           "dark_preview_description": "顯示實際生效的深色終端機外觀。",
+          "deleted_imported_theme": "已刪除「{{value0}}」",
+          "undo": "復原",
           "3ebb499929": "深色模式預覽",
           "43afde3df7": "淺色模式分隔線顏色",
           "2a11e028ff": "淺色模式預覽",
@@ -9881,6 +10167,16 @@
               "34f2b8c539": "Cursor 用量"
             },
             "matchTerminal": "與終端機一致",
+            "museUsageDescription": "在狀態列中顯示 Muse 訂閱配額。",
+            "muse": "muse",
+            "meta": "meta",
+            "statusBarUsageFormat": {
+              "title": "用量格式",
+              "description": "使用預留位置自訂各供應商用量在狀態列中的顯示方式。",
+              "format": "格式",
+              "template": "範本",
+              "placeholder": "預留位置"
+            },
             "37e6b58b0e": "使用者介面縮放",
             "931c53cd16": "Claude 用量",
             "1b404ee6ad": "顯示 Orca Mobile 按鈕",
@@ -9898,6 +10194,7 @@
             "9bc701a4d1": "顯示任務按鈕",
             "c29089716e": "Kimi 用量",
             "96e32c1118": "MiniMax 用量",
+            "e8d2710689": "Muse 用量",
             "aff6e6afdf": "IDE 字型",
             "ba1f9d39a6": "Antigravity 用量"
           }
@@ -10379,6 +10676,9 @@
             "confirm": "確認",
             "close": "關閉",
             "omp": "OMP",
+            "markdownDefaultViewDesc": "開啟 Markdown 檔案時使用的檢視。也可以在 Markdown 分頁中對檢視切換器按右鍵來變更。",
+            "markdownSourceKw": "原始碼",
+            "markdownRichKw": "富文字",
             "d9168badd2": "自動儲存延遲",
             "34cda90656": "提示詞快取計時器",
             "b8e1e1ac68": "預設差異檔案樹",
@@ -10390,6 +10690,7 @@
             "b180c1041b": "分頁順序",
             "0504f69ba0": "檢查更新",
             "728a309ce1": "Markdown 審查筆記",
+            "0f9304f821": "預設 Markdown 檢視",
             "66395fb7ff": "編輯器字型",
             "aa1c06eb2c": "預設差異檢視",
             "8ad175042b": "格式化 Markdown 拼字檢查",
@@ -10691,6 +10992,11 @@
             "remote": "遠端",
             "ssh": "ssh",
             "mute": "靜音",
+            "c9b2b656e0": "當程式設計代理程式要求權限或提出問題時發出通知。",
+            "b8bf5471d1": "權限",
+            "5b9dafd570": "問題",
+            "009548060d": "輸入",
+            "32f70cca40": "代理程式需要輸入",
             "55ecae5b7e": "傳送測試通知",
             "25f58f061f": "啟用通知",
             "fe11c91724": "通知音量",
@@ -11226,6 +11532,8 @@
             "ddd5efe113": "殼層",
             "3de504994c": "用於新開啟的本機互動式終端機窗格的殼層與引數",
             "1733ccd3e9": "終端機殼層",
+            "kitty_import": "從 Kitty 匯入",
+            "kitty_import_description": "從 kitty.conf 一次性匯入支援的設定。",
             "10344a316c": "字詞分隔字元",
             "b1061a2826": "GPU 加速",
             "8afdce471f": "字型大小",
@@ -13396,12 +13704,59 @@
           "addFolder": "新增資料夾",
           "install": "安裝"
         },
+        "editorTypography": {
+          "fontSizeUnit": "px",
+          "lineHeightAuto": "自動",
+          "ligaturesAutoEnabled": "自動 - 為「{{value0}}」啟用。",
+          "ligaturesAutoDisabled": "自動 - 對「{{value0}}」停用。",
+          "ligaturesOff": "關閉",
+          "ligaturesAuto": "自動",
+          "ligaturesOn": "開啟",
+          "fontSmoothingGrayscale": "灰階",
+          "fontSmoothingNative": "原生",
+          "typographyKw": "排版",
+          "fontSizeDesc": "檔案編輯器與差異檢視的基準字型大小。留空則跟隨終端機字型大小。",
+          "sizeKw": "大小",
+          "fontWeightDesc": "檔案編輯器與差異檢視的字型粗細。留空則使用一般粗細（400）。",
+          "weightKw": "粗細",
+          "boldKw": "粗體",
+          "lineHeightDesc": "行距為編輯器字型大小的倍數；8 以上的值會視為像素。留空或設為 0 則自動調整行距。",
+          "lineHeightKw": "行高",
+          "spacingKw": "間距",
+          "ligaturesDesc": "在檔案編輯器與差異檢視中將 => 和 !== 等字元組合顯示為連字。",
+          "ligaturesKw": "連字",
+          "ligatureKw": "連字",
+          "fontFeaturesKw": "字型特性",
+          "fontSmoothingDesc": "終端機與程式碼編輯器平滑文字的方式。「原生」繪製的字形較粗，較接近其他 macOS 終端機。",
+          "smoothingKw": "平滑",
+          "antialiasingKw": "反鋸齒",
+          "thinKw": "文字太細",
+          "d4b7264499": "字型平滑",
+          "8e8a87f9ed": "編輯器行高",
+          "83db4f82b0": "編輯器字型連字",
+          "09d72edc6f": "編輯器字型粗細",
+          "253fc29ebb": "編輯器字型大小"
+        },
+        "FontAutocomplete": {
+          "installedFontsUnavailable": "無法列出已安裝的字型。輸入任何已安裝字型的名稱即可使用。"
+        },
+        "TerminalConfigImportModal": {
+          "kitty_title": "從 Kitty 匯入",
+          "kitty_description": "檢視將從 kitty.conf 及其引入的檔案匯入的設定。",
+          "kitty_not_found": "這台電腦上找不到 kitty.conf。請選擇設定檔，從其他位置匯入。"
+        },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "圖示主題",
             "description": "來自已啟用外掛的檔案與資料夾圖示。",
             "builtIn": "內建",
             "search": "搜尋圖示主題…"
+          },
+          "lightTheme": "淺色主題",
+          "darkTheme": "深色主題",
+          "languageUnavailable": "{{value0}}（無法使用）",
+          "themeSlot": {
+            "description": "此模式下的應用程式顏色。"
           }
         },
         "PluginAddMenu": {
@@ -13478,13 +13833,34 @@
           "create": "建立"
         },
         "AppearanceThemeControl": {
+          "useTerminalTheme": "使用主題顏色",
           "dynamic": "動態",
+          "browseThemes": "瀏覽主題",
+          "moreThemes": "更多主題",
+          "moreThemesLoading": "正在載入主題…",
+          "installingTheme": "正在安裝 {{value0}}…",
           "searchThemes": "搜尋主題…",
           "noThemes": "沒有符合搜尋條件的主題。",
           "7ad388ec82": "與終端機一致"
         },
         "SettingsSearchableSelect": {
-          "noMatches": "沒有符合的項目。"
+          "noMatches": "沒有符合的項目。",
+          "searchHosts": "搜尋主機…",
+          "searchLanguages": "搜尋語言…"
+        },
+        "StatusBarUsageFormatSetting": {
+          "reset": "重設",
+          "previewLabel": "預覽",
+          "previewBuiltin": "留空以使用 Orca 的內建格式。",
+          "placeholder": {
+            "provider": "供應商名稱",
+            "plan": "方案（Codex）",
+            "windows": "用量週期百分比",
+            "reset": "距離重設的時間，例如 3h 15m",
+            "resetAt": "重設的時刻，例如 20:50",
+            "optional": "其中任一預留位置為空時，整段省略",
+            "usagePools": "具名用量池，例如 Antigravity 模型"
+          }
         },
         "RepositoryRemoveProjectSection": {
           "filesNoteVmRecipe": "VM 配方決定是否刪除其環境與檔案。",
@@ -21386,6 +21762,11 @@
           "scrollback": "回捲",
           "snap": "貼齊",
           "position": "位置"
+        },
+        "claudeCodeThemeSync": {
+          "description": "這台電腦上的 Claude Code 會使用你的終端機配色，並即時跟隨主題變更，包括在 Orca 之外。關閉此選項會還原你先前的 Claude Code 主題。在 Claude Code 中選擇主題會停止同步。",
+          "claude": "claude",
+          "9353305ea6": "讓 Claude Code 與終端機主題一致"
         }
       },
       "nativeChat": {
@@ -21408,6 +21789,22 @@
         "shellEnvSearchVariables": "環境變數",
         "shellEnvSearchPath": "PATH",
         "shellEnvSearchProxy": "代理",
+        "linkPreviewsToggleLabel": "切換連結預覽",
+        "linkPreviewsTitle": "連結預覽",
+        "linkPreviewsCopy": "滑鼠暫留在網頁連結上時會顯示預覽卡片。Orca 會擷取該網頁來產生預覽，因此網站能看到這個請求。",
+        "linkPreviewsSearchUnfurl": "連結展開",
+        "linkPreviewsSearchHover": "暫留卡片",
+        "composerSpellcheckTitle": "拼字檢查與自動修正",
+        "composerSpellcheckCopy": "在訊息輸入框中為拼錯的字加上底線，並套用系統的文字替換。關閉後只會在這裡停用這兩項功能，不會變更系統層級的設定。",
+        "composerSpellcheckSearchSpelling": "拼字檢查",
+        "composerSpellcheckSearchAutocorrect": "自動修正",
+        "usageLimitContinueTitle": "用量上限重設時自動繼續聊天",
+        "usageLimitContinueCopy": "上限重設時，Orca 會傳送「Continue where you left off.」。適用於所有已知重設時間的聊天。",
+        "usageLimitContinueSearchLimit": "用量上限",
+        "usageLimitContinueSearchReset": "重設",
+        "usageLimitContinueToggleLabel": "切換用量上限重設時自動繼續聊天",
+        "usageLimitContinueUnsupported": "請更新 {{host}} 上的 Orca，才能在該主機上變更此設定。",
+        "usageLimitContinueUpdateFailed": "無法更新 {{host}} 上的設定。",
         "idleStopTitle": "閒置多久後停止代理",
         "idleStopCopy": "聊天閒置達到此時長後，結束該聊天的代理以釋放記憶體。聊天會保留，你傳送下一則訊息時代理會重新啟動。如果代理在輪次之間仍會在背景繼續工作，請選擇「永不」。",
         "idleStopSearchIdle": "idle",
@@ -21416,7 +21813,12 @@
         "idleStopNever": "永不",
         "openedPullRequestsTitle": "已建立的 PR",
         "openedPullRequestsCopy": "在回覆下方顯示每個回合建立的 PR、標題和行數。",
+        "openedPullRequestsSearchPr": "PR",
         "openedPullRequestsSearchCard": "PR 卡片",
+        "ciResultLinesTitle": "CI 結果行",
+        "ciResultLinesCopy": "代理程式建立或推送過提交的 PR 完成 CI 時，在聊天中顯示一行結果。",
+        "ciResultLinesSearchChecks": "檢查",
+        "ciResultLinesSearchPr": "PR",
         "turnActivityTitle": "回合活動",
         "turnDiffsTitle": "回合差異",
         "turnDiffsCopy": "在回覆下方顯示每個回合變更的檔案及行數。",
@@ -21441,6 +21843,24 @@
         "fillerWords": {
           "0134406785": "移除語氣詞",
           "short": "移除「嗯」和「呃」。"
+        },
+        "openAiCompatible": {
+          "updateFailed": "無法更新供應商",
+          "title": "OpenAI 相容供應商",
+          "description": "只有在選取 OpenAI 相容模型時，音訊才會傳送到此服務。適用於 Groq、Mistral、OpenAI 和本機伺服器。",
+          "baseUrl": "基礎 URL",
+          "baseUrlPlaceholder": "https://api.groq.com/openai/v1",
+          "model": "模型",
+          "modelPlaceholder": "whisper-large-v3-turbo",
+          "apiKey": "API 金鑰",
+          "keySaved": "已儲存的金鑰會保留",
+          "keyOptional": "本機伺服器可不填",
+          "save": "儲存",
+          "rowConfigured": "已為 OpenAI 相容模型儲存基礎 URL 和模型。",
+          "rowMissing": "選取 OpenAI 相容模型前，請先新增基礎 URL 和模型。",
+          "edit": "編輯",
+          "removeLabel": "移除 OpenAI 相容供應商",
+          "setUp": "設定"
         },
         "input": {
           "title": "輸入",
@@ -21599,6 +22019,7 @@
           "correctionWordDescription": "說出此詞即可收回剛才的話，例如：「四點，{{word}}，五點」。",
           "correctionWordOff": "無"
         },
+        "localOnlyNotice": "在任何窗格中用說話取代打字。這些設定僅適用於這台電腦；{{host}} 保有自己的設定。",
         "keepLoaded": {
           "label": "保持模型載入",
           "description": "模型載入期間，聽寫會立即開始。",
@@ -21858,6 +22279,15 @@
           "diskSpace": "磁碟空間",
           "cleanup": "清理",
           "chatHistory": "刪除聊天記錄"
+        }
+      },
+      "notifications": {
+        "server": {
+          "fallbackHost": "此伺服器",
+          "updateFailed": "無法更新 {{host}} 上的通知。",
+          "unsupported": "請更新 {{host}} 上的 Orca，才能在這裡變更其通知。",
+          "enabledDescription": "{{host}} 為其代理程式和終端機發出的提醒，包括推播到你的手機。",
+          "sectionDescription": "{{host}} 為其代理程式和終端機發出的提醒。"
         }
       }
     },
@@ -23931,6 +24361,7 @@
       "terminalSplitDown": "向下分割終端機",
       "terminalSwitchInputSource": "切換輸入來源／語言（原生）",
       "newAgentTab": "新增 {{agent}} 分頁",
+      "tabNewBrowserSplitRight": "向右分割並新增瀏覽器分頁",
       "eca3c9fdd7": "選取分頁 1–9",
       "53ae577e44": "瀏覽器下一頁",
       "324e886c0f": "移至上一個變更",
@@ -23938,6 +24369,7 @@
       "82c1bf448c": "顯示或隱藏代理程式儀表板",
       "9cb1023d40": "新增審查註記",
       "57c4fb0edd": "工作樹歷程：前進",
+      "5468defe61": "摺疊／展開所有專案",
       "02dd0f77a0": "工作樹歷程：返回",
       "bb3beaeef6": "重設大小",
       "258e7f75ec": "複製上下文",
