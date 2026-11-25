@@ -72,6 +72,8 @@ type TabFolder = {
   target: EditorExternalWatchTarget
   targetKey: string
   path: string
+  /** Deepest link on the way from the workspace root, once main has answered. */
+  link: string | undefined
   watch: FolderWatch | undefined
 }
 
@@ -115,7 +117,13 @@ export class SymlinkedTabFolderWatches {
       if (!target) {
         continue
       }
-      const folder: TabFolder = { target, targetKey, path: folderPath, watch: undefined }
+      const folder: TabFolder = {
+        target,
+        targetKey,
+        path: folderPath,
+        link: undefined,
+        watch: undefined
+      }
       this.folders.set(key, folder)
       void window.api.fs
         .findDeepestSymlinkBelowRoot({ rootPath: target.worktreePath, path: folderPath })
@@ -145,15 +153,24 @@ export class SymlinkedTabFolderWatches {
   }
 
   // Why never swap a working watch for a new outer one: releasing it drops its queued events, and the new one may fail.
-  private joinWatch(folder: TabFolder, link: string, heldWatchRoots: HeldWatchRoots): void {
+  private joinWatch(
+    folder: TabFolder,
+    link: string,
+    heldWatchRoots: HeldWatchRoots,
+    ownPathOnly = false
+  ): void {
+    folder.link = link
     const plan = this.planWatch(folder, link, heldWatchRoots)
     // Why: only a folder's own-path watch is returned failed; joining it retries it, as a fresh request would.
     if (plan.watch && isWatchRootFailed(heldWatchRoots, toWatchRoot(plan.watch.path))) {
-      retryFailedWatchRoot(heldWatchRoots, toWatchRoot(plan.watch.path), (error) =>
-        this.onWatchError(folder.target, error)
+      const failed = plan.watch
+      retryFailedWatchRoot(heldWatchRoots, toWatchRoot(failed.path), (error) =>
+        this.watchFailed(failed, folder.target, error, heldWatchRoots)
       )
     }
-    const watch = plan.watch ?? this.startWatch(plan.startAt, folder.target, heldWatchRoots)
+    const watch =
+      plan.watch ??
+      this.startWatch(ownPathOnly ? folder.path : plan.startAt, folder.target, heldWatchRoots)
     folder.watch = watch
     watch.folders.add(folder)
     const entry = watch.targets.get(folder.targetKey)
@@ -254,9 +271,30 @@ export class SymlinkedTabFolderWatches {
     const watch: FolderWatch = { path, folders: new Set(), targets: new Map() }
     this.watches.set(normalizeRuntimePathForComparison(path), watch)
     void acquireWatchRoot(heldWatchRoots, toWatchRoot(path), (error) =>
-      this.onWatchError(owner, error)
+      this.watchFailed(watch, owner, error, heldWatchRoots)
     )
     return watch
+  }
+
+  /** Why: nested folders joined it while it was pending; each finds another working watch or starts one at its own path. */
+  private watchFailed(
+    watch: FolderWatch,
+    owner: EditorExternalWatchTarget,
+    error: unknown,
+    heldWatchRoots: HeldWatchRoots
+  ): void {
+    this.onWatchError(owner, error)
+    const path = normalizeRuntimePathForComparison(watch.path)
+    if (this.watches.get(path) !== watch) {
+      return
+    }
+    // Why safe: deleting the visited entry while iterating a Set is defined, and a moved folder never rejoins this watch.
+    for (const folder of watch.folders) {
+      if (folder.link && normalizeRuntimePathForComparison(folder.path) !== path) {
+        this.leaveWatch(folder, heldWatchRoots)
+        this.joinWatch(folder, folder.link, heldWatchRoots, true)
+      }
+    }
   }
 }
 
