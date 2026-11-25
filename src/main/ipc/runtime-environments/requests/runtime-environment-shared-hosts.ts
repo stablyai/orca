@@ -106,7 +106,7 @@ async function sharedHostRoute(selector: string): Promise<SharedHostRoute | null
 /** This computer's phones' keys to the shared hosts, once the kept shares are loaded; null where no
  *  window lists shared agents. */
 export async function sharedHostPhoneGrants(): Promise<SharedBotHosts['phones'] | null> {
-  const hosts = sharedHosts
+  const hosts = sharedHosts?.hosts
   await hosts?.ready()
   return hosts?.phones ?? null
 }

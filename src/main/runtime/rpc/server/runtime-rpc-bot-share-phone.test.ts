@@ -299,6 +299,7 @@ describe('a phone asking its own computer for a key', () => {
     routeSharedHostsThrough({
       ready: async () => {},
       reaches: () => false,
+      views: () => [],
       call: async () => {
         throw new Error('unused')
       },
