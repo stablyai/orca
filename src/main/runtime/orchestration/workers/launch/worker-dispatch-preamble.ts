@@ -16,6 +16,8 @@ export type PreambleParams = {
   devMode?: boolean
   // Packaged WSL uses orca-ide; other hosts retain their existing launcher.
   cliCommand?: OrchestrationCliCommand
+  // Codex's Windows sandbox account cannot read Orca's install there (#49301).
+  runsOnNativeWindows?: boolean
   // Supply actual preflight drift only; spurious warnings train workers to ignore stale-base evidence.
   baseDrift?: {
     base: string
@@ -50,6 +52,16 @@ function dispatchIdentityLines(params: PreambleParams): string {
       ? [`Your Orca session ID is: ${params.workerHandle}`]
       : [])
   ].join('\n')
+}
+
+function windowsSandboxLine(cli: string, runsOnNativeWindows: boolean | undefined): string {
+  if (!runsOnNativeWindows) {
+    return ''
+  }
+  return `On Windows, if a sandboxed shell reports \`${cli}\` as not recognized or access denied before
+Orca itself runs, the sandbox cannot read Orca's install: re-run that command, and later
+\`${cli}\` commands including worker_done, with escalated permissions.
+`
 }
 
 // Chat mail arrives directly; terminal workers need the check syntax so they never guess `check --from`.
@@ -99,7 +111,7 @@ ${dispatchIdentityLines(params)}
 The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestration\` commands
 below, and message it only to ask, report a blocker, or finish; it needs no progress updates
 unless the task asks.
-Do only this task, yourself: no subagents or helper workers unless the task asks.
+${windowsSandboxLine(cli, params.runsOnNativeWindows)}Do only this task, yourself: no subagents or helper workers unless the task asks.
 Terminals you open with \`${cli} terminal create\` or \`split\` close with this worker; add --keep-open to one the user keeps.
 
 === CLI COMMANDS ===
