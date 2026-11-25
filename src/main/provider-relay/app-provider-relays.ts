@@ -14,8 +14,10 @@ export {
   registerReattachableProviderRelayAgent
 } from './provider-relay-launch-inventory'
 import {
+  dropListedProviderRelay,
   forgetKeptProviderRelay,
-  keptProviderRelayOutstanding,
+  keptProviderRelayAttachable,
+  providerRelayAgentOpensEnded,
   noteProviderRelayReattachedFromLastRun,
   keptProviderRelay,
   listKeptProviderRelays,
@@ -223,15 +225,11 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
   }
   const { channel, info } = relay
   let endedSince = false
-  if (
-    keptProviderRelayOutstanding(info) &&
-    info.pid !== null &&
-    (await connected(channel.client))
-  ) {
+  if (keptProviderRelayAttachable(info) && (await connected(channel.client))) {
     const child = relayedChild(channel, info.relayId, info.pid, launch, launch.passWhileHeld)
     const attached = await child.start(info.ackedSeq).catch(() => null)
-    // An agent that ended since the listing can't answer the chat's open; it recovers as ended.
-    endedSince = (attached?.exit ?? null) !== null
+    // An agent that ended can't answer the chat's open, unless its integration opens ended ones.
+    endedSince = (attached?.exit ?? null) !== null && !providerRelayAgentOpensEnded(info.agent)
     if (attached && !endedSince) {
       forgetKeptProviderRelay(launch.chatKey, relay)
       reattachedChildren.add(child)
@@ -248,8 +246,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
   if (verdict !== 'gone') {
     throw new KeptProviderRelayUnreachableError(launch.chatKey)
   }
-  forgetKeptProviderRelay(launch.chatKey, relay)
-  void channel.close(info.relayId).catch(() => {})
+  dropListedProviderRelay(launch.chatKey, true) // a failed attach never drops unread output
   if (providerRelayRebinding(launch.chatKey)) {
     throw new KeptProviderRelayEndedError(launch.chatKey)
   }

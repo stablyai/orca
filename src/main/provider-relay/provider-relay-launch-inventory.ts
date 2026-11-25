@@ -30,13 +30,44 @@ const spawnTokens = new Map<string, string>()
 /** Agent integrations this build can reattach; a relay of any other is ended at launch. */
 const reattachableAgents = new Set<string>()
 
-export function registerReattachableProviderRelayAgent(agent: string): void {
+/** Integrations whose open works on an ended agent: handed one once, to show its unread output. */
+const opensEndedAgents = new Set<string>()
+
+export function registerReattachableProviderRelayAgent(
+  agent: string,
+  options: { opensEnded?: boolean } = {}
+): void {
   reattachableAgents.add(agent)
+  if (options.opensEnded) {
+    opensEndedAgents.add(agent)
+  }
 }
 
-/** Its agent still runs. One that ended while detached can't answer a reattach's open, so its chat recovers as any ended agent's does. */
+/** Output the agent printed that no app took. */
+export function keptProviderRelayUnread(info: ProviderRelayInfo): boolean {
+  return info.nextSeq - 1 > info.ackedSeq
+}
+
+export function providerRelayAgentOpensEnded(agent: string | null): boolean {
+  return agent !== null && opensEndedAgents.has(agent)
+}
+
+/**
+ * Its agent still runs, or ended with unread output its integration can open an ended agent to
+ * show. Any other ended agent can't answer a reattach's open: its chat recovers as ended.
+ */
 export function keptProviderRelayOutstanding(info: ProviderRelayInfo): boolean {
-  return info.exit === null
+  return (
+    info.exit === null ||
+    (providerRelayAgentOpensEnded(info.agent) && keptProviderRelayUnread(info))
+  )
+}
+
+/** Outstanding, with a process to attach to. */
+export function keptProviderRelayAttachable(
+  info: ProviderRelayInfo
+): info is ProviderRelayInfo & { pid: number } {
+  return info.pid !== null && keptProviderRelayOutstanding(info)
 }
 
 /**
@@ -192,11 +223,14 @@ export function keptRunningProviderRelayPid(chatKey: string): number | null {
 }
 
 /** Ended relays found at launch are dropped once their chat cold-resumes. */
-export function dropListedProviderRelay(chatKey: string): void {
+/** `keepUnread`: output no app took stays with the daemon (it expires there); a deleted chat drops it. */
+export function dropListedProviderRelay(chatKey: string, keepUnread = false): void {
   const relay = keptProviderRelay(chatKey)
   if (relay) {
     forgetKeptProviderRelay(chatKey, relay)
-    void relay.channel.close(relay.info.relayId).catch(() => {})
+    if (!keepUnread || !keptProviderRelayUnread(relay.info)) {
+      void relay.channel.close(relay.info.relayId).catch(() => {})
+    }
   }
 }
 
