@@ -129,6 +129,7 @@ async function readHost(environmentId: string, read: HostRead, attempt: number):
     // An older host has no such method; its rows stay flat as before rather than being asked again.
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       read.unsupportedAt = getRuntimeEnvironmentConnectionGeneration(environmentId)
+      watchUnsupportedHosts()
     } else {
       failed = true
     }
@@ -154,4 +155,31 @@ async function readHost(environmentId: string, read: HostRead, attempt: number):
       void readHost(environmentId, read, attempt + 1)
     }, delay)
   }
+}
+
+let stopWatchingUnsupportedHosts: (() => void) | null = null
+
+/** Re-ask a host without the method the moment its connection changes, whichever of the wake's
+ *  refresh and its new runtime id lands first; unwatched once no such host remains. */
+function watchUnsupportedHosts(): void {
+  if (stopWatchingUnsupportedHosts) {
+    return
+  }
+  stopWatchingUnsupportedHosts = useAppStore.subscribe(() => {
+    let waiting = false
+    for (const [environmentId, read] of reads) {
+      if (read.unsupportedAt === null) {
+        continue
+      }
+      if (read.unsupportedAt === getRuntimeEnvironmentConnectionGeneration(environmentId)) {
+        waiting = true
+        continue
+      }
+      refreshRemoteAgentOrchestration(environmentId)
+    }
+    if (!waiting) {
+      stopWatchingUnsupportedHosts?.()
+      stopWatchingUnsupportedHosts = null
+    }
+  })
 }

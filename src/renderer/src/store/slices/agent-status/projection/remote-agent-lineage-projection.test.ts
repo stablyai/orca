@@ -61,3 +61,44 @@ it('ignores another host’s context for a pane this window runs elsewhere', () 
   expect(listed().map((row) => row.paneKey)).toEqual([WORKER])
   expect(listed()[0]?.entry.orchestration).toBeUndefined()
 })
+
+it('drops the remote row’s lineage when its host’s last context leaves', () => {
+  const store = useAppStore.getState()
+  store.setRuntimeAgentOrchestrationByPaneKey(
+    { [WORKER]: { taskId: 'task-w', dispatchId: 'dispatch-w', parentPaneKey: COORDINATOR } },
+    HOST
+  )
+  expect(listed()[0]?.entry.orchestration?.parentPaneKey).toBe(COORDINATOR)
+  store.setRuntimeAgentOrchestrationByPaneKey({}, HOST)
+  expect(listed()[0]?.entry.orchestration).toBeUndefined()
+})
+
+it('keeps a local terminal’s own lineage when a remote host reports the same pane key', () => {
+  const LOCAL_TAB = 'tab-local'
+  const LOCAL_WORKER = makePaneKey(LOCAL_TAB, LEAF)
+  const LOCAL_COORDINATOR = makePaneKey('tab-local-coordinator', LEAF)
+  useAppStore.setState({
+    tabsByWorktree: {
+      [WORKTREE]: [makeTab({ id: LOCAL_TAB, worktreeId: WORKTREE, title: '✳ Claude Code' })]
+    },
+    ptyIdsByTabId: { [LOCAL_TAB]: ['pty-local'] },
+    terminalLayoutsByTabId: {
+      [LOCAL_TAB]: {
+        root: { type: 'leaf', leafId: LEAF },
+        activeLeafId: LEAF,
+        expandedLeafId: null
+      }
+    }
+  })
+  const store = useAppStore.getState()
+  store.setRuntimeAgentOrchestrationByPaneKey({
+    [LOCAL_WORKER]: { taskId: 'task-l', dispatchId: 'dispatch-l', parentPaneKey: LOCAL_COORDINATOR }
+  })
+  store.setRuntimeAgentOrchestrationByPaneKey(
+    { [LOCAL_WORKER]: { taskId: 'task-r', dispatchId: 'dispatch-r', parentPaneKey: COORDINATOR } },
+    HOST
+  )
+  const row = listed().find((candidate) => candidate.paneKey === LOCAL_WORKER)
+  expect(row?.entry.orchestration?.dispatchId).toBe('dispatch-l')
+  expect(row?.entry.orchestration?.parentPaneKey).toBe(LOCAL_COORDINATOR)
+})

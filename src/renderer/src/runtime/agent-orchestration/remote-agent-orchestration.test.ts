@@ -11,6 +11,7 @@ import {
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   canonicalOrchestrationForRow,
+  orchestrationForStatusRows,
   selectVisibleAgentOrchestration
 } from './visible-agent-orchestration'
 import {
@@ -140,6 +141,26 @@ describe('remote host worker lineage', () => {
     expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
   })
 
+  it('re-asks a host without the method when its new connection lands after the wake refresh', async () => {
+    callRuntimeRpc.mockRejectedValueOnce(
+      new RuntimeRpcCallError({
+        id: 'r2',
+        ok: false,
+        error: { code: 'method_not_found', message: 'missing' }
+      })
+    )
+    callRuntimeRpc.mockResolvedValue({ contexts: {} })
+    refreshRemoteAgentOrchestration('wake-host')
+    await settle()
+    // The wake's refresh ran first and skipped; the new runtime id publishes afterwards.
+    refreshRemoteAgentOrchestration('wake-host')
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
+    advanceRuntimeEnvironmentConnectionGeneration('wake-host')
+    useAppStore.setState({})
+    await settle()
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+  })
+
   it('answers a burst of host writes with one read after it settles', async () => {
     vi.useFakeTimers()
     callRuntimeRpc.mockResolvedValue({ contexts: {} })
@@ -194,5 +215,35 @@ describe('remote host worker lineage', () => {
     ).toEqual({ [WORKER]: HOST_CONTEXTS[WORKER] })
     expect(parseRemoteAgentOrchestration({ contexts: [] })).toEqual({})
     expect(parseRemoteAgentOrchestration(null)).toEqual({})
+  })
+})
+
+describe('this computer’s rows while a remote host has lineage', () => {
+  it('reads a local chat worker’s context unchanged, even when its parent key names a remote chat', () => {
+    const localWorker = makeStructuredChatTab({
+      id: structuredAgentSessionTabId('local-worker'),
+      entityId: 'local-worker',
+      worktreeId: 'wt-local',
+      agentSessionAgent: 'claude',
+      executionHostId: 'local'
+    })
+    useAppStore.setState({
+      runtimeAgentOrchestrationByPaneKey: {},
+      remoteAgentOrchestrationByHost: {},
+      unifiedTabsByWorktree: {
+        'wt-local': [localWorker],
+        'wt-wsl': [remoteChat('assistant'), remoteChat('orchestrator'), remoteChat('worker')]
+      }
+    })
+    const localKey = paneKeyOf('local-worker')
+    // The local parent's key is spelled like a chat the remote host runs here.
+    const local = { taskId: 'task-l', dispatchId: 'dispatch-l', parentPaneKey: ASSISTANT }
+    const store = useAppStore.getState()
+    store.setRuntimeAgentOrchestrationByPaneKey({ [localKey]: local })
+    store.setRuntimeAgentOrchestrationByPaneKey(structuredClone(HOST_CONTEXTS), HOST)
+    const rows = orchestrationForStatusRows(useAppStore.getState())
+    expect(rows[localKey]).toBe(useAppStore.getState().runtimeAgentOrchestrationByPaneKey[localKey])
+    expect(rows[localKey]?.parentPaneKey).toBe(ASSISTANT)
+    expect(rows[WORKER]?.parentPaneKey).toBe(ORCHESTRATOR)
   })
 })

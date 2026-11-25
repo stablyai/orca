@@ -1,5 +1,8 @@
 import type { AppState } from '../../../types'
-import { orchestrationForStatusRows } from '@/runtime/agent-orchestration/visible-agent-orchestration'
+import {
+  orchestrationForStatusRows,
+  remoteRowContextsFor
+} from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusChange } from '../contracts/agent-status-contract'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
@@ -22,24 +25,19 @@ const SEAM_AGENT_PRESENTATION_FIELDS = [
   'terminalLayoutsByTabId'
 ] as const
 
-/** Pane keys whose remote context appeared, changed or left since the previous projection input. */
-function changedRemoteContextKeys(state: AppState, previous: AppState | null): Set<string> {
+/** Row keys whose applied remote context appeared, changed or left: a re-keyed chat, the first
+ *  host context arriving and the last leaving all show up here, as the raw host maps cannot say. */
+function changedRemoteRowKeys(
+  before: AgentStatusProjectionState['remoteRows'],
+  after: AgentStatusProjectionState['remoteRows']
+): Set<string> {
   const keys = new Set<string>()
-  const before = previous?.remoteAgentOrchestrationByHost ?? {}
-  const after = state.remoteAgentOrchestrationByHost ?? {}
   if (before === after) {
     return keys
   }
-  for (const host of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    const old = before[host] ?? {}
-    const next = after[host] ?? {}
-    if (old === next) {
-      continue
-    }
-    for (const key of new Set([...Object.keys(old), ...Object.keys(next)])) {
-      if (old[key] !== next[key]) {
-        keys.add(key)
-      }
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (before[key] !== after[key]) {
+      keys.add(key)
     }
   }
   return keys
@@ -166,8 +164,9 @@ export function stageProjectionTopology(
       }
     }
   }
-  // A remote host's contexts re-place the panes its changed keys name, as the local map's do.
-  for (const key of changedRemoteContextKeys(state, previous)) {
+  // Rows whose remote context changed re-place, as the local map's keys do.
+  const remoteRows = remoteRowContextsFor(state)
+  for (const key of changedRemoteRowKeys(data.remoteRows, remoteRows)) {
     changedKeys.add(key)
     const identity = parseAgentStatusPaneIdentity(key, represented.get(key))
     if (identity) {
@@ -244,6 +243,7 @@ export function stageProjectionTopology(
     (nextUnsupported.has(key) ? nextUnsupported.get(key) : data.unsupportedRows.get(key))
   return {
     previous,
+    remoteRows,
     moved,
     changedTabs,
     bindingTabs,

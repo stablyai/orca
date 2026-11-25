@@ -18,6 +18,7 @@ import {
   orchestrationRowWorkForTest,
   rowIdentities
 } from './orchestration-row-identities'
+import { EMPTY_REMOTE_ROWS, remoteRowContexts } from './remote-row-orchestration'
 
 type Contexts = Record<string, AgentStatusOrchestrationContext>
 export type VisibleOrchestrationState = WorktreeRuntimeOwnerState &
@@ -72,6 +73,8 @@ let terminalCache:
       inputs: TerminalInputs
       hosts: Map<string, string | null>
       ptys: Map<string, string | null>
+      /** A terminal tab's host by bare tab id, which is how a pane key names it. */
+      tabs: Map<string, string | null>
     }
   | undefined
 
@@ -96,7 +99,7 @@ function terminalProvenanceInputsMatch(state: TerminalInputs, previous: Terminal
   )
 }
 
-function terminalProvenance(state: VisibleOrchestrationState) {
+export function terminalProvenance(state: VisibleOrchestrationState) {
   const inputs: TerminalInputs = {
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
     tabsByWorktree: state.tabsByWorktree,
@@ -108,6 +111,7 @@ function terminalProvenance(state: VisibleOrchestrationState) {
     return terminalCache
   }
   const hosts = new Map<string, string | null>()
+  const tabsById = new Map<string, string | null>()
   const ptys = new Map<string, string | null>()
   const merge = (map: Map<string, string | null>, key: string, host: string | null) => {
     map.set(key, map.has(key) && map.get(key) !== host ? null : host)
@@ -137,6 +141,7 @@ function terminalProvenance(state: VisibleOrchestrationState) {
       visits++
       if (tab.contentType === 'terminal' && tab.executionHostId) {
         merge(hosts, aliasKey(tab.worktreeId, tab.entityId), tab.executionHostId)
+        merge(tabsById, tab.entityId, tab.executionHostId)
       }
     }
   }
@@ -146,10 +151,11 @@ function terminalProvenance(state: VisibleOrchestrationState) {
       const host = ptyHost(tab.ptyId)
       if (host !== undefined) {
         merge(hosts, aliasKey(worktree, tab.id), host)
+        merge(tabsById, tab.id, host)
       }
     }
   }
-  terminalCache = { inputs, hosts, ptys }
+  terminalCache = { inputs, hosts, ptys, tabs: tabsById }
   return terminalCache
 }
 
@@ -190,16 +196,12 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
   for (const [key, context] of Object.entries(state.runtimeAgentOrchestrationByPaneKey ?? EMPTY)) {
     adapt(key, context, producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID)
   }
-  for (const [host, hostContexts] of Object.entries(
-    state.remoteAgentOrchestrationByHost ?? EMPTY
+  // A remote context names only rows that host runs here; it never re-parents this computer's rows.
+  for (const [row, context] of Object.entries(
+    remoteRowContexts(state.remoteAgentOrchestrationByHost, rows, terminals)
   )) {
-    for (const [key, context] of Object.entries(hostContexts)) {
-      // A terminal pane this window runs on another host is not this host's pane, whatever its key.
-      const terminalHost = terminals.ptys.get(parseAgentStatusPaneIdentity(key)?.tabId ?? '')
-      if (!terminalHost || terminalHost === host) {
-        adapt(key, context, host)
-      }
-    }
+    visits++
+    contexts[row] = context
   }
   const embedded = (
     entry: NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>,
@@ -264,12 +266,28 @@ export function selectVisibleAgentOrchestration(state: VisibleOrchestrationState
   return projection(state).contexts
 }
 
-/** The contexts status rows read by their own pane key: this computer's map until a remote host has any. */
+let statusRowsCache: { local: Contexts; remote: Contexts; merged: Contexts } | undefined
+
+/** Status rows read this computer's map unchanged, with only remote-run rows taking their host's context. */
 export function orchestrationForStatusRows(state: VisibleOrchestrationState): Contexts {
-  const remote = state.remoteAgentOrchestrationByHost
-  return remote && Object.keys(remote).length > 0
-    ? selectVisibleAgentOrchestration(state)
-    : (state.runtimeAgentOrchestrationByPaneKey ?? EMPTY)
+  const local = state.runtimeAgentOrchestrationByPaneKey ?? EMPTY
+  const remote = remoteRowContextsFor(state)
+  if (remote === EMPTY_REMOTE_ROWS) {
+    return local
+  }
+  if (statusRowsCache?.local !== local || statusRowsCache.remote !== remote) {
+    statusRowsCache = { local, remote, merged: { ...local, ...remote } }
+  }
+  return statusRowsCache.merged
+}
+
+/** The remote contexts applied to rows, by row key; identity holds while no applied context changed. */
+export function remoteRowContextsFor(state: VisibleOrchestrationState): Contexts {
+  return remoteRowContexts(
+    state.remoteAgentOrchestrationByHost,
+    rowIdentities(state),
+    terminalProvenance(state)
+  )
 }
 
 /** The same row identity joins graph enrichment and first status paint, without translating stored parents. */
