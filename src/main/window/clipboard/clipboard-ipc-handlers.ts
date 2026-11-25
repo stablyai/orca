@@ -176,7 +176,7 @@ export function registerClipboardHandlers(
       if (args?.png !== undefined) {
         const { png, ...target } = args
         return queueGeneratedNoteImageSave(async () => {
-          if (!isAdmissibleGeneratedNoteImage(png)) {
+          if (!(png instanceof Uint8Array) || !(await isAdmissibleGeneratedNoteImage(png))) {
             throw new Error('Notes image is not a PNG Orca can save.')
           }
           return saveClipboardImageBufferForTarget(Buffer.from(png), target, handlerOptions)

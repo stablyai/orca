@@ -114,6 +114,7 @@ it('Shift+arrow pans a larger step than arrow', () => {
   }
   for (const shiftKey of [false, true]) {
     handleNativeChatMediaViewportKey(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these fields of the key event.
       {
         key: 'ArrowRight',
         shiftKey,
@@ -133,7 +134,8 @@ it('stepping to another image keeps the opener, and closing returns focus to it'
   const opener = document.createElement('button')
   document.body.append(opener)
   opener.focus()
-  const session = { current: { opener: null, bodies: 0 } as NativeChatMediaViewerFocusSession }
+  const state: NativeChatMediaViewerFocusSession = { opener: null, bodies: 0 }
+  const session = { current: state }
   const event = (): Event => new Event('focus', { cancelable: true })
   // First image: records the opener.
   const first = renderHook(() => useNativeChatMediaViewerFocus(session, () => {}))

@@ -413,7 +413,7 @@ function ViewerBody({
         </div>
       ) : null}
       {notes.length > 0 && !(narrow && annotating && !panelHidden) ? (
-        <div className="absolute right-3 bottom-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-2.5">
+        <div className="absolute right-3 bottom-3 z-10 flex max-w-[min(28rem,calc(100%-1.5rem))] flex-col items-end gap-1.5">
           <SendButton
             canSend={canSend}
             busy={busy}

@@ -140,3 +140,21 @@ export const tooLargeToAnnotate = defineFixture({
     />
   )
 })
+
+/** A queued message is being edited in the message box. */
+export const editingHeld = defineFixture({
+  width: 1280,
+  render: () => <InChat blocked="editing" />
+})
+
+/** The message box holds a command. */
+export const commandHeld = defineFixture({
+  width: 1280,
+  render: () => <InChat blocked="command" />
+})
+
+/** A narrow window: the notes panel is a bottom sheet and Send's reason sits in it. */
+export const goalHeldNarrow = defineFixture({
+  width: 360,
+  render: () => <InChat blocked="goal" />
+})

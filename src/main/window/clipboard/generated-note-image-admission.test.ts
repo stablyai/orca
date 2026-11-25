@@ -19,10 +19,10 @@ const PNG_2x3_TWO_ROWS = Uint8Array.from([
   66, 96, 130
 ])
 
-it('admits a notes PNG only when its image data decodes to exactly its rows', () => {
-  expect(isAdmissibleGeneratedNoteImage(PNG_2x3)).toBe(true)
-  expect(isAdmissibleGeneratedNoteImage(PNG_2x3_TWO_ROWS)).toBe(false)
-  expect(isAdmissibleGeneratedNoteImage(PNG_2x3.subarray(0, 60))).toBe(false)
+it('admits a notes PNG only when its image data decodes to exactly its rows', async () => {
+  expect(await isAdmissibleGeneratedNoteImage(PNG_2x3)).toBe(true)
+  expect(await isAdmissibleGeneratedNoteImage(PNG_2x3_TWO_ROWS)).toBe(false)
+  expect(await isAdmissibleGeneratedNoteImage(PNG_2x3.subarray(0, 60))).toBe(false)
 })
 
 it('saves notes images one at a time, even when one fails', async () => {

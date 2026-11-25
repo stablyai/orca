@@ -253,7 +253,8 @@ export function NativeChatMediaViewerZoom({
   )
 }
 
-/** Send at the bottom right (in the sheet when narrow), with why it is unavailable beside it. */
+/** Send at the bottom right (in the sheet when narrow), with why it is unavailable above it (beside
+ *  it in the sheet), clear of the zoom controls at the bottom left. */
 export function NativeChatNotesSendButton({
   canSend,
   busy,
@@ -279,7 +280,7 @@ export function NativeChatNotesSendButton({
             'text-xs',
             inSheet
               ? 'flex-1 text-media-paper-muted'
-              : 'rounded-md bg-media-canvas/80 px-2 py-1 text-media-canvas-foreground'
+              : 'rounded-md bg-media-canvas/80 px-2 py-1 text-right text-media-canvas-foreground'
           )}
         >
           {reason}
