@@ -41,6 +41,8 @@ export class ProviderRelay {
   /** The attachment the exit last went to, so one client never gets it twice. */
   private exitSentTo: ProviderRelayAttachment | null = null
   private readonly idleStop: ProviderRelayIdleStop
+  /** What a paused relay asks its client to ack: only while streaming live, never mid-replay. */
+  private readonly askedSeq = () => (this.spool.streaming ? this.spool.nextSeq - 1 : null)
 
   constructor(private readonly options: RelayOptions) {
     this.relayId = options.relayId
@@ -53,6 +55,7 @@ export class ProviderRelay {
       deliver: (record) => this.deliver(record),
       onPressureChanged: (paused) => {
         this.spoolPaused = paused
+        this.attachment?.whilePaused(paused, this.askedSeq)
         this.updateReading()
       },
       drained: () => this.attachment?.drained() ?? Promise.resolve(),
@@ -187,6 +190,7 @@ export class ProviderRelay {
     if (this.attachment !== attachment) {
       throw new Error(RELAY_TAKEN_OVER)
     }
+    attachment.whilePaused(this.spoolPaused, this.askedSeq)
     if (this.exitAnnounced) {
       this.sendExit()
     }

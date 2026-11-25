@@ -112,6 +112,34 @@ describe('relayed provider output', () => {
     expect(acks).toEqual(['12 keep 11', '12 cut'])
   })
 
+  it("keeps saving until its acks reach the daemon's ask, so a short first answer never stalls the agent", async () => {
+    const { output, acks, releaseDurable, journal } = rig()
+    output.restartAt(0)
+    output.line('relayData', 1, 'one')
+    output.line('relayData', 2, 'two')
+    // The daemon asked through 4; lines 3 and 4 are still on their way.
+    journal.liveText = true
+    const first = output.settle(true, 4)
+    await releaseDurable()
+    await first
+    expect(acks).toEqual([2])
+    // A command keeps streaming unsaved text: an ordinary ack would wait, and the daemon won't ask again.
+    output.line('relayData', 3, 'three')
+    output.line('relayData', 4, 'four')
+    journal.liveText = true
+    const next = output.settle()
+    await releaseDurable()
+    await next
+    expect(acks).toEqual([2, 4])
+    // Past the ask, ordinary acks wait for the text again.
+    output.line('relayData', 5, 'five')
+    journal.liveText = true
+    const later = output.settle()
+    await releaseDurable()
+    await later
+    expect(acks).toEqual([2, 4])
+  })
+
   it('keeps a cut the ack floor reported until an ack carrying it succeeds', async () => {
     const sent: string[] = []
     let fail = true
