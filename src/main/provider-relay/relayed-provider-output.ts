@@ -373,8 +373,8 @@ export class RelayedProviderOutput {
         // The daemon let kept lines go at its file cap: they are given up, as a cut it records.
         const ackedThrough = jsonProperty(reply, 'ackedThrough')
         if (typeof ackedThrough === 'number' && keepFrom !== null && ackedThrough >= keepFrom) {
+          // keptFrom stays: the daemon still keeps, so the next ack without a floor must reach it.
           this.releasedThrough = Math.max(this.releasedThrough, ackedThrough)
-          this.keptFrom = null
           this.options.ackFloor?.released?.(ackedThrough)
         }
       } catch {
