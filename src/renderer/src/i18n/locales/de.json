@@ -21682,8 +21682,8 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Offen halten",
-        "bannerRunning": "Worker · schließt {{minutes}} Min. nach Abschluss",
-        "bannerFinished": "Worker abgeschlossen · schließt in {{countdown}}",
+        "bannerRunning": "Schließt {{minutes}} Min. nach Abschluss",
+        "bannerFinished": "Abgeschlossen · schließt in {{countdown}}",
         "bannerFinishedStatus": "Worker abgeschlossen · schließt bald",
         "boundRunning": "Schließt mit {{worker}}",
         "boundFinished": "{{worker}} abgeschlossen · Schließt in {{countdown}}",

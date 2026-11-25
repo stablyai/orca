@@ -24170,8 +24170,8 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Keep open",
-        "bannerRunning": "Worker · closes {{minutes}} min after finishing",
-        "bannerFinished": "Worker finished · closes in {{countdown}}",
+        "bannerRunning": "Closes {{minutes}} min after finishing",
+        "bannerFinished": "Finished · closes in {{countdown}}",
         "bannerFinishedStatus": "Worker finished · closes soon",
         "boundRunning": "Closes with {{worker}}",
         "boundFinished": "{{worker}} finished · Closes in {{countdown}}",

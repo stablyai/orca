@@ -23181,8 +23181,8 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "열어 두기",
-        "bannerRunning": "워커 · 완료 {{minutes}}분 후 닫힘",
-        "bannerFinished": "워커 완료 · {{countdown}} 후 닫힘",
+        "bannerRunning": "완료 {{minutes}}분 후 닫힘",
+        "bannerFinished": "완료 · {{countdown}} 후 닫힘",
         "bannerFinishedStatus": "워커 완료 · 곧 닫힘",
         "boundRunning": "{{worker}}와(과) 함께 닫힘",
         "boundFinished": "{{worker}} 완료 · {{countdown}} 후 닫힘",

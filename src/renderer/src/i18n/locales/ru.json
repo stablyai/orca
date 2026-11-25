@@ -22408,8 +22408,8 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Оставить открытым",
-        "bannerRunning": "Воркер · закроется через {{minutes}} мин после завершения",
-        "bannerFinished": "Воркер завершён · закроется через {{countdown}}",
+        "bannerRunning": "Закроется через {{minutes}} мин после завершения",
+        "bannerFinished": "Завершён · закроется через {{countdown}}",
         "bannerFinishedStatus": "Воркер завершён · скоро закроется",
         "boundRunning": "Закроется вместе с: {{worker}}",
         "boundFinished": "{{worker}} завершён · Закроется через {{countdown}}",

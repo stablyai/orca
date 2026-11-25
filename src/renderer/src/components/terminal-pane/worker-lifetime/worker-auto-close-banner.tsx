@@ -27,13 +27,13 @@ export function workerAutoCloseBannerProps(
   ) : countdown === null ? (
     t(
       'components.orchestration.workerAutoClose.bannerRunning',
-      'Worker · closes {{minutes}} min after finishing',
+      'Closes {{minutes}} min after finishing',
       { minutes: Math.round(WORKER_AUTO_CLOSE_GRACE_MS / 60_000) }
     )
   ) : (
     t(
       'components.orchestration.workerAutoClose.bannerFinished',
-      'Worker finished · closes in {{countdown}}',
+      'Finished · closes in {{countdown}}',
       { countdown }
     )
   )

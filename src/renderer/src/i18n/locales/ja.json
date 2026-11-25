@@ -21984,8 +21984,8 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "開いたままにする",
-        "bannerRunning": "ワーカー · 完了の{{minutes}}分後に閉じます",
-        "bannerFinished": "ワーカーが完了 · {{countdown}}後に閉じます",
+        "bannerRunning": "完了の{{minutes}}分後に閉じます",
+        "bannerFinished": "完了 · {{countdown}}後に閉じます",
         "bannerFinishedStatus": "ワーカーが完了 · まもなく閉じます",
         "boundRunning": "{{worker}} と一緒に閉じます",
         "boundFinished": "{{worker}} が完了しました · {{countdown}} 後に閉じます",

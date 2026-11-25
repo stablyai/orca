@@ -24,17 +24,23 @@ function layoutPaneTopBanners(pane: HTMLElement, leaving?: HTMLElement): void {
   }
 }
 
-/** A pane without a title bar floats its controls over its top row, from a separate overlay layer. */
-function floatingPaneControls(pane: HTMLElement): HTMLElement | null {
-  const tabId =
-    pane.parentElement?.closest<HTMLElement>('[data-terminal-tab-id]')?.dataset.terminalTabId
-  const leafId = pane.dataset.leafId
-  if (!tabId || !leafId) {
-    return null
-  }
-  return document.querySelector<HTMLElement>(
-    `.pane-title-bar[data-chromeless][data-terminal-tab-id="${CSS.escape(tabId)}"][data-leaf-id="${CSS.escape(leafId)}"] .pane-title-actions`
+/** The tab's pane-title overlay: a sibling layer of the panes that draws each pane's header. */
+function paneTitleLayer(pane: HTMLElement): HTMLElement | null {
+  return (
+    pane
+      .closest('[data-terminal-overlay-tab-id]')
+      ?.querySelector<HTMLElement>(':scope > .pane-title-overlay-layer') ?? null
   )
+}
+
+/** A pane without a title bar floats its controls over its top row, from that overlay layer. */
+function floatingPaneControls(pane: HTMLElement, layer: HTMLElement | null): HTMLElement | null {
+  const leafId = pane.dataset.leafId
+  return leafId && layer
+    ? layer.querySelector<HTMLElement>(
+        `.pane-title-bar[data-chromeless][data-pane-title-leaf-id="${CSS.escape(leafId)}"] .pane-title-actions`
+      )
+    : null
 }
 
 /** How far those controls reach in from the pane's right edge, so a quiet banner's action can clear them. */
@@ -55,26 +61,29 @@ function useReservePaneTopSpace(): React.RefObject<HTMLDivElement | null> {
     if (!banner || !pane) {
       return
     }
+    const layer = paneTitleLayer(pane)
     // Why the whole pane: two banners can share it, so each one's height moves the ones below.
     const reserve = (): void => {
       layoutPaneTopBanners(pane)
-      measureControlsInset(banner, floatingPaneControls(pane))
+      measureControlsInset(banner, floatingPaneControls(pane, layer))
     }
-    const observer = new ResizeObserver(reserve)
-    observer.observe(banner)
+    const resizes = new ResizeObserver(reserve)
+    resizes.observe(banner)
+    // Why watch the overlay: its header can mount after this banner, gain or lose its title bar, or add
+    // Hand off and Continue in chat once the agent is detected.
+    const headers = new MutationObserver(reserve)
+    if (layer) {
+      headers.observe(layer, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['data-chromeless']
+      })
+    }
     reserve()
-    // Why a frame later: the overlay mounts and positions its controls after this commit. Why observe
-    // them: Hand off and Continue in chat appear once the agent is detected.
-    const frame = requestAnimationFrame(() => {
-      const controls = floatingPaneControls(pane)
-      if (controls) {
-        observer.observe(controls)
-      }
-      reserve()
-    })
     return () => {
-      cancelAnimationFrame(frame)
-      observer.disconnect()
+      headers.disconnect()
+      resizes.disconnect()
       // Why exclude this banner: React runs this before it takes the node out of the pane.
       layoutPaneTopBanners(pane, banner)
     }
@@ -192,10 +201,11 @@ export function PaneTopBanner({
       <div
         ref={ref}
         role={announcement === undefined ? 'status' : undefined}
+        data-tone="quiet"
         className={cn(
           // Why these insets: the text starts at the terminal's first column, and the action ends where the terminal's last
           // column does or, under floating pane controls, a gap before them.
-          'relative flex h-8 items-center gap-2 border-b border-border bg-background pr-[max(var(--pane-padding-x,4px),calc(var(--orca-pane-top-banner-controls-inset,0px)+0.5rem))] pl-(--pane-padding-x,4px) text-xs',
+          'relative flex h-8 items-center gap-2 border-b border-border pr-[max(var(--pane-padding-x,4px),calc(var(--orca-pane-top-banner-controls-inset,0px)+0.5rem))] pl-(--pane-padding-x,4px) text-xs',
           className
         )}
       >
@@ -205,7 +215,7 @@ export function PaneTopBanner({
         {progress === undefined ? null : (
           <span
             aria-hidden="true"
-            className="absolute -bottom-px left-0 h-0.5 w-full origin-left bg-theme-accent opacity-70 transition-transform duration-1000 ease-linear motion-reduce:transition-none"
+            className="absolute right-(--pane-padding-x,4px) -bottom-px left-(--pane-padding-x,4px) h-0.5 origin-left bg-theme-accent opacity-70 transition-transform duration-1000 ease-linear motion-reduce:transition-none"
             style={{ transform: `scaleX(${Math.min(1, Math.max(0, progress))})` }}
           />
         )}

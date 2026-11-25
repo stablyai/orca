@@ -45,7 +45,7 @@ export const workerFinished = defineFixture({
   render: () => <WorkerPane state={FINISHED} />
 })
 export const workerNarrow = defineFixture({
-  width: 240,
+  width: 320,
   render: () => (
     <>
       <WorkerPane state={RUNNING} />

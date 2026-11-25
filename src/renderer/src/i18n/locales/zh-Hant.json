@@ -21358,8 +21358,8 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "保持開啟",
-        "bannerRunning": "工作者 · 完成後 {{minutes}} 分鐘關閉",
-        "bannerFinished": "工作者已完成 · {{countdown}}後關閉",
+        "bannerRunning": "完成後 {{minutes}} 分鐘關閉",
+        "bannerFinished": "已完成 · {{countdown}}後關閉",
         "bannerFinishedStatus": "工作者已完成 · 即將關閉",
         "boundRunning": "會隨 {{worker}} 一併關閉",
         "boundFinished": "{{worker}} 已完成 · {{countdown}}後關閉",
