@@ -1,6 +1,5 @@
 import { useRef } from 'react'
 import { FileText, Globe, SquareTerminal, UserRound } from 'lucide-react-native'
-import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import {
   ActionSheetContent,
   type ActionSheetAction
@@ -47,7 +46,7 @@ type Props = {
   browserProfileLabel: string | null
   canCreateMarkdownNote: boolean
   onClose: () => void
-  onCreateAgent: (agent: TuiAgent, nativeChatDefault: boolean | undefined) => void
+  onCreateAgent: (option: MobileNewTabAgentOption) => void
   /** Desktop's Windows shell entries the host would start, its default first; empty keeps one Terminal row. */
   terminalShells: readonly BuiltInWindowsTerminalShell[]
   onCreateTerminal: (shell?: BuiltInWindowsTerminalShell) => void
@@ -160,9 +159,7 @@ export function MobileNewTabSheet({
         <MobileAgentTileGrid
           options={agentOptions}
           showCliOnly={surfaceChoice?.selected === 'chat'}
-          onPick={(option) =>
-            closeAndRun(() => onCreateAgent(option.agent, option.nativeChatDefault))
-          }
+          onPick={(option) => closeAndRun(() => onCreateAgent(option))}
         />
       ) : null}
       {bot ? <SectionHeader title={t('session.sheets.more', 'More')} /> : null}

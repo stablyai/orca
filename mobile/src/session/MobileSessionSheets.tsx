@@ -136,12 +136,12 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onChooseBrowserProfile={() => browserProfile.setPickerOpen(true)}
         canCreateMarkdownNote={!isFloatingWorkspaceRoute && onPairedHost}
         onClose={() => setShowCreateTabDrawer(false)}
-        onCreateAgent={(agent, nativeChatDefault) => {
-          const terminalView = createTabAgentSurfaceChoice?.selected === 'terminal'
+        onCreateAgent={({ agent, nativeChatDefault, launchSurface }) => {
+          const terminalView = launchSurface === 'terminal'
           void handleCreateTerminal(
             agent,
             terminalView ? { terminalView } : undefined,
-            terminalView ? false : nativeChatDefault
+            nativeChatDefault
           )
         }}
         terminalShells={terminalShells}
