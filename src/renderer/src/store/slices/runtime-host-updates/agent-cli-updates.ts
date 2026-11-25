@@ -89,6 +89,8 @@ export type AgentCliUpdatesSlice = {
   recheckAgentCliUpdates: (target: RuntimeClientTarget) => void
   /** Checks as `checkAgentCliUpdates` does, but past a much shorter interval, when the user opens the list. */
   checkAgentCliUpdatesOnOpen: (target: RuntimeClientTarget) => Promise<void>
+  /** Opens the list asking this computer and every paired server, so a host only used through terminals is discovered. */
+  checkAgentCliUpdatesOnOpenForAllHosts: () => Promise<void>
   /** Drops the answers of paired hosts that were removed or re-paired; a disconnected host keeps its own. */
   forgetAgentCliUpdateHosts: (environmentIds: readonly string[]) => void
   /** Resolves true once the host reports the CLI current. */
@@ -220,6 +222,19 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
     checkAgentCliUpdates: (target) => checkPastInterval(target, CHECK_INTERVAL_MS),
 
     checkAgentCliUpdatesOnOpen: (target) => checkPastInterval(target, OPEN_CHECK_INTERVAL_MS),
+
+    checkAgentCliUpdatesOnOpenForAllHosts: async () => {
+      // Capability and per-host intervals stay in checkPastInterval; unlisted hosts just join the same ask.
+      await Promise.all(
+        [
+          LOCAL_TARGET,
+          ...get().runtimeEnvironments.map(({ id }) => ({
+            kind: 'environment' as const,
+            environmentId: id
+          }))
+        ].map((target) => get().checkAgentCliUpdatesOnOpen(target))
+      )
+    },
 
     forgetAgentCliUpdateHosts: (environmentIds) => {
       environmentIds.forEach((id) => {

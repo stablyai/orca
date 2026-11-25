@@ -4,6 +4,10 @@ import {
   type AgentCliUpdate
 } from '../../../../../shared/agent-launch/installation/agent-cli-update'
 import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import {
+  RUNTIME_CAPABILITIES,
+  type RuntimeCapability
+} from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 import { createTestStore } from '../../testing/app-store-test-fixture'
@@ -24,21 +28,23 @@ const stale: AgentCliUpdate = {
   runnable: true
 }
 
-const hostStatus = (): RuntimeEnvironmentStatus => ({
-  status: createCompatibleRuntimeStatusResponse().result,
+const hostStatus = (
+  capabilities: RuntimeCapability[] = [...RUNTIME_CAPABILITIES]
+): RuntimeEnvironmentStatus => ({
+  status: { ...createCompatibleRuntimeStatusResponse().result, capabilities },
   checkedAt: 1
 })
 
 const listed = { updates: [stale], runs: {} }
+// The slice keeps its check times per module, so fake clocks must march forward across describes.
+let hour = 0
 
 describe('checkAgentCliUpdatesOnOpen', () => {
-  let hour = 0
   beforeEach(() => {
     callRuntimeRpc.mockReset()
     vi.useFakeTimers({ toFake: ['Date'] })
-    // Past any interval an earlier test started; the slice keeps its check times per module.
-    hour += 1
     vi.setSystemTime(Date.now() + hour * 60 * 60_000)
+    hour += 1
   })
   afterEach(() => vi.useRealTimers())
 
@@ -228,5 +234,54 @@ describe('runAgentCliUpdate', () => {
     await vi.waitFor(() => expect(answers).toHaveLength(4))
     answers[3]()
     expect(await Promise.all(runs)).toEqual([true, true, true, true])
+  })
+})
+
+describe('checkAgentCliUpdatesOnOpenForAllHosts', () => {
+  beforeEach(() => {
+    callRuntimeRpc.mockReset()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.now() + hour * 60 * 60_000)
+    hour += 1
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('asks this computer and every peer, skipping hosts without the update capability', async () => {
+    callRuntimeRpc.mockResolvedValue({ updates: [stale] })
+    const store = createTestStore()
+    store
+      .getState()
+      .setRuntimeEnvironments([
+        publicRuntimeEnvironment({ id: 'peer' }),
+        publicRuntimeEnvironment({ id: 'off' })
+      ])
+    store.setState({
+      runtimeStatusByEnvironmentId: new Map([
+        ['peer', hostStatus()],
+        ['off', hostStatus([])]
+      ])
+    })
+    await store.getState().checkAgentCliUpdatesOnOpenForAllHosts()
+    expect(callRuntimeRpc.mock.calls.map(([target]) => target)).toEqual([
+      LOCAL,
+      { kind: 'environment', environmentId: 'peer' }
+    ])
+    // A peer only used through terminals joins the list when it is asked for the first time.
+    expect([...store.getState().agentCliUpdates.keys()]).toEqual(['', 'peer'])
+  })
+
+  it('does not ask a host this window removed', async () => {
+    callRuntimeRpc.mockResolvedValue({ updates: [stale] })
+    const store = createTestStore()
+    store.getState().setRuntimeEnvironments([publicRuntimeEnvironment({ id: 'peer' })])
+    store.setState({ runtimeStatusByEnvironmentId: new Map([['peer', hostStatus()]]) })
+    await store.getState().checkAgentCliUpdatesOnOpenForAllHosts()
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+
+    store.getState().setRuntimeEnvironments([])
+    callRuntimeRpc.mockClear()
+    vi.setSystemTime(Date.now() + 15_000)
+    await store.getState().checkAgentCliUpdatesOnOpenForAllHosts()
+    expect(callRuntimeRpc.mock.calls.map(([target]) => target)).toEqual([LOCAL])
   })
 })

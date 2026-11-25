@@ -3,24 +3,18 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import { agentCliUpdateHostTarget } from '@/store/slices/runtime-host-updates/agent-cli-updates'
 import { useAgentCliUpdateGroups } from '@/components/agent-cli-update/use-agent-cli-update-groups'
 import {
   AgentCliUpdateList,
   agentCliUpdateBusy,
   agentCliUpdateStartable,
-  runAgentCliUpdateRow,
-  type AgentCliUpdateGroup
+  runAgentCliUpdateRow
 } from './AgentCliUpdateList'
 
-// A CLI the user updated in a terminal clears once its host is asked again.
-function checkGroupsOnOpen(open: boolean, groups: readonly AgentCliUpdateGroup[]): void {
-  if (!open) {
-    return
-  }
-  const { checkAgentCliUpdatesOnOpen } = useAppStore.getState()
-  for (const group of groups) {
-    void checkAgentCliUpdatesOnOpen(agentCliUpdateHostTarget(group.hostKey))
+// Opening asks every connected host, not just the listed ones, so a server used only through terminals shows up too.
+function checkOnOpen(open: boolean): void {
+  if (open) {
+    void useAppStore.getState().checkAgentCliUpdatesOnOpenForAllHosts()
   }
 }
 
@@ -57,7 +51,7 @@ export function AgentCliUpdateStatusSegment(): React.JSX.Element | null {
         }
 
   return (
-    <Popover onOpenChange={(open) => checkGroupsOnOpen(open, groups)}>
+    <Popover onOpenChange={checkOnOpen}>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
