@@ -31,15 +31,21 @@ export function applyPickerSuggestion(
   draft: string,
   caret: number,
   item: NativeChatPickerItem
-): { draft: string; caret: number; insertedToken: string } {
+): { draft: string; caret: number; insertedToken: string; replacedEnd: number } {
   const before = draft.slice(0, caret)
-  const after = draft.slice(caret)
   const slashMatch = before.match(LEADING_SLASH_TRIGGER) ?? before.match(MID_PROMPT_SLASH_TRIGGER)
   const query = slashMatch?.[1] ?? (item.kind === 'skill' ? matchSkillSigil(before) : null)
   if (query === null) {
-    return { draft, caret, insertedToken: '' }
+    return { draft, caret, insertedToken: '', replacedEnd: caret }
   }
   const tokenStart = before.length - query.length - 1
+  // Why: a caret placed inside an existing token replaces the whole token and the space after it.
+  const replacedEnd = caret + (draft.slice(caret).match(/^\S* ?/)?.[0].length ?? 0)
   const nextBefore = `${before.slice(0, tokenStart)}${item.token} `
-  return { draft: nextBefore + after, caret: nextBefore.length, insertedToken: item.token }
+  return {
+    draft: nextBefore + draft.slice(replacedEnd),
+    caret: nextBefore.length,
+    insertedToken: item.token,
+    replacedEnd
+  }
 }
