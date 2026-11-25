@@ -4,7 +4,6 @@ import type { StatusBarItem } from '../ui-chrome/ui-chrome-types'
 export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'claude',
   'codex',
-  'gemini',
   'antigravity',
   'opencode-go',
   'kimi',
@@ -38,6 +37,10 @@ export function migrateStatusBarItems(items: readonly string[] | undefined): Sta
   const source = Array.isArray(items) ? items : DEFAULT_STATUS_BAR_ITEMS
   const out: string[] = []
   for (const id of source) {
+    // Gemini CLI usage was removed; profiles and older peers may still list it.
+    if (id === 'gemini') {
+      continue
+    }
     const mapped = id === 'memory' || id === 'sessions' ? 'resource-usage' : id
     if (!out.includes(mapped)) {
       out.push(mapped)

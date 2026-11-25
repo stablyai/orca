@@ -16,7 +16,7 @@ import type { AcpDispatchSettlement } from './acp-turn-dispatch-contract'
 
 const SESSION_ID = 'sess-1'
 const PROVIDER_SESSION_ID = 'acp-sess-1'
-const PROMPT_STEER_DIALECT = { ...ANTIGRAVITY_ACP_DIALECT, promptSteers: true as const }
+const CANCEL_STEER_DIALECT = { ...ANTIGRAVITY_ACP_DIALECT, promptSteers: undefined }
 
 const harnesses: { lane: AcpStructuredLane; agent: AcpScriptedAgent }[] = []
 
@@ -71,7 +71,7 @@ async function createHarness(options: { promptSteers: boolean }) {
     agentName: 'Antigravity',
     generation: 'gen-1',
     providerSessionId: PROVIDER_SESSION_ID,
-    dialect: options.promptSteers ? PROMPT_STEER_DIALECT : ANTIGRAVITY_ACP_DIALECT,
+    dialect: options.promptSteers ? ANTIGRAVITY_ACP_DIALECT : CANCEL_STEER_DIALECT,
     logger: createStructuredAgentSessionLogger(),
     now: () => ++clock,
     onInputAccepted: (clientMessageId) => turns.accept(clientMessageId),
@@ -89,7 +89,7 @@ async function createHarness(options: { promptSteers: boolean }) {
     withdrawRequests,
     lane,
     agentName: 'Antigravity',
-    dialect: options.promptSteers ? PROMPT_STEER_DIALECT : ANTIGRAVITY_ACP_DIALECT,
+    dialect: options.promptSteers ? ANTIGRAVITY_ACP_DIALECT : CANCEL_STEER_DIALECT,
     now: () => ++clock,
     settle: (settlement) => settlements.push(settlement),
     sessionLost: (error) => sessionLosses.push(error)

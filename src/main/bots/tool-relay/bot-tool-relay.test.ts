@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _resetSecretStoreForTests } from '../../../shared/secure-storage/secret-store'
 import { changeBotToolCredentials, useBotToolCredentialsRoot } from '../bot-tool-credentials'
 import { botToolCredentialSource } from '../tool-oauth/bot-tool-credential-source'
-import { BotToolRelay } from './bot-tool-relay'
+import { BotToolRelay, MCP_HOST_LIST_RELAY_OWNER } from './bot-tool-relay'
 import {
   call,
   closeUpstreams,
@@ -208,6 +208,17 @@ describe("Orca's tool relay", () => {
       body: '{}'
     })
     expect(answer.status).toBe(401)
+  })
+
+  it('lets the host list’s checks reach its tools without the token naming a bot', async () => {
+    const tool = await upstream((_seen, res) => res.end('{}'))
+    const host = await botWith(tool.url, MCP_HOST_LIST_RELAY_OWNER)
+    expect(relay.botOf(host.token)).toBeNull()
+    const answer = await call(host.address, {
+      headers: { ...json, authorization: `Bearer ${host.token}` },
+      body: '{}'
+    })
+    expect(answer.status).toBe(200)
   })
 
   it('never follows a redirect with saved values, and passes a refusal on as 403', async () => {

@@ -303,7 +303,12 @@ export async function acquireAcpStructuredSession(input: {
   session = child
   childState.assertAcpStartingSession(child, input.abandoned)
   return {
-    acquisition: { process, acquisitionGeneration: generation },
+    acquisition: {
+      process,
+      acquisitionGeneration: generation,
+      // The chat keeps the home this launch moved it to.
+      ...(launch.launchedAccountHome ? { movedAccountHome: launch.launchedAccountHome } : {})
+    },
     session: child
   }
 }

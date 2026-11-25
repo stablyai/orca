@@ -183,7 +183,7 @@ function replying(
   })
 }
 
-/** An idle reply with only the question chip, textbox and send control. */
+/** Nothing typed yet: about four lines of room, the tools on their own row below. */
 export const empty360 = replying(401, SHORT_QUESTION, '', 360, 640)
 export const empty700 = replying(402, SHORT_QUESTION, '', 700, 640)
 /** A long answer: the box grows to its cap, then scrolls. */
@@ -264,7 +264,7 @@ export const hidden700 = {
   interact: hidden360.interact
 }
 
-// Idle and empty, the box is one compact row; focus opens it, and it folds back only when focus leaves it empty.
+// With no question waiting, the box is one row (attach, text, the arrows, mic, send), idle or focused.
 
 function plain(uid: number, draft: string, width: number): ComponentFixture {
   const { item, events } = asking(uid, SHORT_QUESTION, EARLIER)
@@ -278,84 +278,15 @@ function plain(uid: number, draft: string, width: number): ComponentFixture {
   }
 }
 
-function editor(frame: HTMLElement): HTMLElement | null {
-  return frame.querySelector<HTMLElement>('[contenteditable]')
-}
-
 const focusBox = async (frame: HTMLElement): Promise<void> => {
   await pause(200)
-  editor(frame)?.focus()
+  frame.querySelector<HTMLElement>('[contenteditable]')?.focus()
   await pause(300)
 }
-/** Focus in, then out to the Back row. */
-const focusThenLeave = async (frame: HTMLElement): Promise<void> => {
-  await focusBox(frame)
-  frame.querySelector<HTMLElement>('button')?.focus()
-  await pause(400)
-}
 
-export const compactIdle360 = plain(421, '', 360)
-export const compactIdle700 = plain(422, '', 700)
-export const compactFocused360 = { ...plain(423, '', 360), interact: focusBox }
-export const compactFocused700 = { ...plain(424, '', 700), interact: focusBox }
-export const compactTyping360 = {
-  ...plain(425, 'Only the latest quarter', 360),
-  interact: focusBox
-}
-export const compactTyping700 = {
-  ...plain(426, 'Only the latest quarter', 700),
-  interact: focusBox
-}
-/** A draft keeps it open after focus leaves. */
-export const compactDraftBlurred360 = {
-  ...plain(427, 'Only the latest quarter', 360),
-  interact: focusThenLeave
-}
-export const compactDraftBlurred700 = {
-  ...plain(428, 'Only the latest quarter', 700),
-  interact: focusThenLeave
-}
-/** Empty when focus leaves: it folds back. */
-export const compactEmptyBlurred360 = {
-  ...plain(429, '', 360),
-  interact: focusThenLeave
-}
-export const compactEmptyBlurred700 = {
-  ...plain(430, '', 700),
-  interact: focusThenLeave
-}
-/** "Replying to" stays above the compact row. */
-export const compactReplying360 = longActivityEmpty(431, 360)
-export const compactReplying700 = longActivityEmpty(432, 700)
-export const compactReplyingFocused360 = {
-  ...longActivityEmpty(433, 360),
-  interact: focusBox
-}
-export const compactReplyingFocused700 = {
-  ...longActivityEmpty(434, 700),
-  interact: focusBox
-}
-
-function longActivityEmpty(uid: number, width: number): ComponentFixture {
-  return replying(uid, LONG_QUESTION, '', width, 520, EARLIER)
-}
-
-/** Read partway up Activity, then the box opens: the messages in view stay where they were. */
-async function readPartway(frame: HTMLElement): Promise<void> {
-  await pause(300)
-  const scroller = frame.querySelector<HTMLElement>('.overflow-y-auto')
-  scroller?.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true }))
-  if (scroller) {
-    scroller.scrollTop = 120
-  }
-  await pause(300)
-}
-export const scrolledIdle360 = { ...plain(435, '', 360), interact: readPartway }
-export const scrolledFocused360 = {
-  ...plain(436, '', 360),
-  interact: async (frame: HTMLElement) => {
-    await readPartway(frame)
-    editor(frame)?.focus()
-    await pause(400)
-  }
-}
+export const idle360 = plain(421, '', 360)
+export const idle700 = plain(422, '', 700)
+export const focused360 = { ...plain(423, '', 360), interact: focusBox }
+export const focused700 = { ...plain(424, '', 700), interact: focusBox }
+export const typing360 = { ...plain(425, 'Only the latest quarter', 360), interact: focusBox }
+export const emptyFocused360 = { ...empty360, interact: focusBox }
