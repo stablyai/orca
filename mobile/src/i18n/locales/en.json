@@ -3534,8 +3534,9 @@
     },
     "nativeChatProse": {
       "attachedImage": "Attached image",
-      "image": "image",
-      "openImageHint": "Opens the image full size"
+      "openImageHint": "Opens the image full size",
+      "pastedImage": "Pasted image",
+      "imageCount": "{{count}} images"
     },
     "nativeChatToolLine": {
       "durationMilliseconds": "{{milliseconds}}ms",

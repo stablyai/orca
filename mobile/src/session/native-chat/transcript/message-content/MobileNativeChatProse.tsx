@@ -1,4 +1,5 @@
 import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
+import { mobileNativeChatImageLabel } from './mobile-native-chat-image-label'
 import { mobileNativeChatMarkdownImageBlock } from './mobile-native-chat-markdown-image-block'
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
@@ -168,9 +169,10 @@ function ImageAttachment({
     return <View style={styles.imageThumb} accessibilityLabel={label} />
   }
   if (!uri) {
+    // Never the host's path (another person's folders on a shared agent): the desktop's label.
     return (
       <Text style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
-        🖼 {block.alt ?? block.path ?? block.url ?? t('chat.nativeChatProse.image', 'image')}
+        🖼 {mobileNativeChatImageLabel(block, t)}
       </Text>
     )
   }

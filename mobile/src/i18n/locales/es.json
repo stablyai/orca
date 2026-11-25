@@ -291,7 +291,6 @@
     },
     "nativeChatProse": {
       "attachedImage": "Imagen adjunta",
-      "image": "imagen",
       "openImageHint": "Abre la imagen a tamaño completo."
     },
     "nativeChatToolLine": {

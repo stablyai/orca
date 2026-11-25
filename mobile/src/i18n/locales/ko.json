@@ -287,7 +287,6 @@
     },
     "nativeChatProse": {
       "attachedImage": "첨부 이미지",
-      "image": "이미지",
       "openImageHint": "이미지를 원본 크기로 엽니다."
     },
     "nativeChatToolLine": {

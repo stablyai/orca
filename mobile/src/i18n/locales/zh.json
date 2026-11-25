@@ -377,7 +377,6 @@
     },
     "nativeChatProse": {
       "attachedImage": "附件图片",
-      "image": "图片",
       "openImageHint": "以原尺寸打开图片"
     },
     "nativeChatToolLine": {

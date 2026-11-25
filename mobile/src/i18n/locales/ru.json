@@ -295,7 +295,6 @@
     },
     "nativeChatProse": {
       "attachedImage": "Прикреплённое изображение",
-      "image": "изображение",
       "openImageHint": "Открывает изображение в полном размере"
     },
     "nativeChatToolLine": {

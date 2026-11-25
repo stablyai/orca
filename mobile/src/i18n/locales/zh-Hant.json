@@ -287,7 +287,6 @@
     },
     "nativeChatProse": {
       "attachedImage": "附加的圖片",
-      "image": "圖片",
       "openImageHint": "以原始大小開啟圖片"
     },
     "nativeChatToolLine": {

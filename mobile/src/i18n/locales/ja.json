@@ -287,7 +287,6 @@
     },
     "nativeChatProse": {
       "attachedImage": "添付画像",
-      "image": "画像",
       "openImageHint": "画像をフルサイズで開きます。"
     },
     "nativeChatToolLine": {

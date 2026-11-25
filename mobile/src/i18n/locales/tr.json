@@ -287,7 +287,6 @@
     },
     "nativeChatProse": {
       "attachedImage": "Ekli görsel",
-      "image": "görsel",
       "openImageHint": "Görseli tam boyutta açar"
     },
     "nativeChatToolLine": {
