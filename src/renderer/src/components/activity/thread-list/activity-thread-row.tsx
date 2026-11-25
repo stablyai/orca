@@ -103,11 +103,11 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   const agentLabel = formatAgentTypeLabel(thread.agentType)
   const sendTarget = useActivityThreadSendTarget(thread.paneKey)
   const sendStatus = sendTarget?.target.status
-  // While the send picker is open, a click on a target row picks it instead of opening the thread; row controls keep their own action.
+  // While the send picker is open, a click on a target row picks it instead of opening the thread; row controls and links keep their own action.
   const handleSendTargetClickCapture = (event: React.MouseEvent) => {
     if (
       !sendTarget ||
-      (event.target instanceof Element && event.target.closest('[data-activity-thread-control]'))
+      (event.target instanceof Element && event.target.closest('[data-activity-thread-control], a'))
     ) {
       return
     }
@@ -153,6 +153,16 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
               <button
                 type="button"
                 aria-label={taskTitle}
+                // The picker turns this button into the send action, so screen readers hear that instead of "open".
+                aria-description={
+                  sendTarget
+                    ? (sendTarget.target.disabledReason ??
+                      t(
+                        'auto.components.dashboard.DashboardAgentRow.0272969e28',
+                        'Send to this agent'
+                      ))
+                    : undefined
+                }
                 aria-keyshortcuts="Enter Space"
                 onClick={(event) => {
                   event.stopPropagation()
