@@ -155,7 +155,9 @@ export function usePersistedUIWriter(): void {
       // Retain Clear completed across restart.
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
       // Retain explicit mark-unread across restart.
-      manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey
+      manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey,
+      // Typed per keystroke; this debounce saves it once typing pauses.
+      botSidebarSearchQuery: s.botSidebarSearchQuery
     }))
   )
   useEffect(() => {

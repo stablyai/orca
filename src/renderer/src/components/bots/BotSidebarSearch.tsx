@@ -70,6 +70,8 @@ type SearchPanelProps = {
   onSupersede: () => void
   /** Esc: the section closes the search and puts focus back on its toggle. */
   onCancel: () => void
+  /** False when a saved search reopened at startup, so it doesn't take focus from where the user is. */
+  autoFocus: boolean
 }
 
 /** Holds the Bots list in one place whether or not search is open, so typing never remounts its rows or chats. */
@@ -152,13 +154,15 @@ function BotSidebarSearchPanel({
   botsById,
   onSelect,
   onSupersede,
-  onHasQueryChange
+  onHasQueryChange,
+  autoFocus
 }: Omit<SearchPanelProps, 'bots'> & {
   botsById: ReadonlyMap<string, Bot>
   onHasQueryChange: (hasQuery: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [query, setQuery] = useState('')
+  const query = useAppStore((s) => s.botSidebarSearchQuery)
+  const setQuery = useAppStore((s) => s.setBotSidebarSearchQuery)
   const inputRef = useRef<HTMLInputElement>(null)
   const requestedPurposes = useRef(false)
   const hidePaused = useAppStore((s) => s.botSidebarView.hidePausedBots)
@@ -195,6 +199,13 @@ function BotSidebarSearchPanel({
     onHasQueryChange(hasQuery)
   }, [hasQuery, onHasQueryChange])
   useEffect(() => () => onHasQueryChange(false), [onHasQueryChange])
+  // A restored query matches purposes too, which typing would otherwise have fetched.
+  useEffect(() => {
+    if (useAppStore.getState().botSidebarSearchQuery.trim() && !requestedPurposes.current) {
+      requestedPurposes.current = true
+      void refreshBotPurposes()
+    }
+  }, [])
 
   const changeQuery = (value: string): void => {
     if (value.trim() && !requestedPurposes.current) {
@@ -227,7 +238,7 @@ function BotSidebarSearchPanel({
         <Search className="pointer-events-none absolute top-1/2 left-[22px] size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           ref={inputRef}
-          autoFocus
+          autoFocus={autoFocus}
           type="search"
           value={query}
           aria-label={label}

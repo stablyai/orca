@@ -144,6 +144,7 @@ export const UiUpdateFields = z
         hideSleepingWorkers: z.boolean()
       })
       .optional(),
+    botSidebarSearchQuery: z.string().optional(),
     botChatFolds: z.record(z.string(), z.enum(['open', 'folded'])).optional(),
     agentsShowChildAgents: z.boolean().optional(),
     agentsCompactMode: z.boolean().optional(),

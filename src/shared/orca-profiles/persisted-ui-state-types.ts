@@ -113,6 +113,8 @@ export type PersistedUIState = {
   hideBotCreatedWorkspaces?: boolean
   /** The Bots section's Bot options. Absent means Manual order, nothing hidden. */
   botSidebarView?: BotSidebarView
+  /** The Bots section's search text, this computer's own; non-empty reopens the field. Absent means none. */
+  botSidebarSearchQuery?: string
   /** A bot chat's manual fold in Activity and the sidebar, by `botChatFoldKey`. Absent means none. */
   botChatFolds?: Record<string, BotChatFold>
   /** Agents-view: include child (orchestration-dispatched) agent threads. Absent means off. */

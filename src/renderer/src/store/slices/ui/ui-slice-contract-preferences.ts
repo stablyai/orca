@@ -65,6 +65,9 @@ export type UISlicePreferences = {
   setHideBotCreatedWorkspaces: (v: boolean) => void
   botSidebarView: BotSidebarView
   setBotSidebarView: (patch: Partial<BotSidebarView>) => void
+  /** Saved by the debounced persisted-UI writer, not per keystroke. */
+  botSidebarSearchQuery: string
+  setBotSidebarSearchQuery: (query: string) => void
   botChatFolds: Record<string, BotChatFold>
   /** A chat's manual fold, shared by Activity and the sidebar; undefined while it folds by default. */
   botChatFold: (hostId: string, botId: string, chatId: string) => BotChatFold | undefined

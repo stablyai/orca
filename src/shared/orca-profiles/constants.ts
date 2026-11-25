@@ -161,6 +161,7 @@ export function getDefaultUIState(): PersistedUIState {
     agentsHideCliCreatedWorkspaces: false,
     hideBotCreatedWorkspaces: true,
     botSidebarView: DEFAULT_BOT_SIDEBAR_VIEW,
+    botSidebarSearchQuery: '',
     agentsShowChildAgents: false,
     agentsCompactMode: true,
     agentsShowSearch: true,

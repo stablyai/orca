@@ -17,6 +17,8 @@ export function createUiBotPreferenceActions(set: UISliceSet, get: UISliceGet): 
       set({ botSidebarView })
       window.api.ui.set({ botSidebarView }).catch(console.error)
     },
+    botSidebarSearchQuery: '',
+    setBotSidebarSearchQuery: (botSidebarSearchQuery) => set({ botSidebarSearchQuery }),
     botChatFolds: {},
     botChatFold: (hostId, botId, chatId) =>
       get().botChatFolds[botChatFoldKey(hostId, botId, chatId)],

@@ -315,7 +315,8 @@ export function SidebarBotsSection({
           bots,
           onSelect: search.select,
           onSupersede: search.supersede,
-          onCancel: search.cancel
+          onCancel: search.cancel,
+          autoFocus: search.focusField
         }}
       >
         <BotsRevealProvider value={reveal}>
