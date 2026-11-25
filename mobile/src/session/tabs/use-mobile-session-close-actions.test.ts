@@ -77,6 +77,7 @@ function mountSession(pendingSelection: PendingSessionSelection | null) {
       appliedSessionTabsRevisionRef: { current: 0 },
       closedTabTombstonesRef: { current: new Map() },
       closingTerminalTabsRef: { current: new Set() },
+      terminalRowHandlesRef: { current: new Map() },
       selectedSessionTabIdRef: { current: null },
       markdownDocsRef: { current: new Map() },
       terminalDiagnosticsRef: { current: { tabsApplied: () => {} } },
@@ -177,4 +178,25 @@ it('preserves another active terminal when the rebound tab closes', async () => 
   })
 
   expect(state.activeHandle).toBe('pty-3')
+})
+
+it('clears a handle rebound before closing from a stale tab snapshot', async () => {
+  const { model, state, reply } = mountSession(null)
+  const staleTab = terminalTab('tab-1', 'pty-1', true)
+
+  act(() => {
+    model.applySessionTabs(snapshot(2, [terminalTab('tab-1', 'pty-2', true)]))
+  })
+  expect(state.activeHandle).toBe('pty-2')
+
+  const closing = model.handleCloseSessionTab(staleTab)
+  act(() => {
+    model.applySessionTabs(snapshot(3, []))
+  })
+  await act(async () => {
+    reply({ id: '1', ok: true, result: { closed: true } })
+    await closing
+  })
+
+  expect(state.activeHandle).toBeNull()
 })
