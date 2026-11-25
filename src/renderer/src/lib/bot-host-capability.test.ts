@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import type { Bot } from '../../../shared/bot-types'
 import { botHomeOfSession } from '../../../shared/bots/bot-home-of'
+import { setSharedBotHostLookup } from '../../../shared/bots/bot-home-host'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { botHomeRuleApplies } from './bot-host-capability'
 
@@ -12,13 +13,19 @@ const OLD_SERVER: ExecutionHostId = 'runtime:env-old'
 const STATUSES = new Map([
   ['env-old', { status: { capabilities: [] } }]
 ]) as unknown as RuntimeStatuses
-const sharedHost = (hostId: ExecutionHostId) => (hostId === SHARED ? {} : null)
 
 describe('the Home rule on a shared agent', () => {
+  // As the window's shared-agents catalog answers it.
+  let stopLookup = (): void => {}
+  beforeEach(() => {
+    stopLookup = setSharedBotHostLookup((environmentId) => environmentId === 'env-shared')
+  })
+  afterEach(() => stopLookup())
+
   it('applies on a shared agent’s host, which has no status here; not on an older paired server', () => {
-    expect(botHomeRuleApplies({ hostId: SHARED }, new Map(), sharedHost)).toBe(true)
-    expect(botHomeRuleApplies({ hostId: OLD_SERVER }, STATUSES, sharedHost)).toBe(false)
-    expect(botHomeRuleApplies({ hostId: 'local' }, new Map(), sharedHost)).toBe(true)
+    expect(botHomeRuleApplies({ hostId: SHARED }, new Map())).toBe(true)
+    expect(botHomeRuleApplies({ hostId: OLD_SERVER }, STATUSES)).toBe(false)
+    expect(botHomeRuleApplies({ hostId: 'local' }, new Map())).toBe(true)
   })
 
   it('finds the viewer’s own Home on a projected bot, and a teammate’s on the owner’s', () => {

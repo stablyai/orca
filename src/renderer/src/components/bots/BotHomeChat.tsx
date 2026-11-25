@@ -9,6 +9,7 @@ import { isBotHomeTab, isLocalBotChatTab } from '../../../../shared/bots/bot-hom
 import { botHomeHostId } from '../../../../shared/bots/bot-home-host'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { openSharedBotChat } from '@/lib/agent-session/open/shared-bot-chat-open'
+import { useBotHostDown } from '@/lib/bot-host-views'
 
 /** A bot's page always has its Home tab, this account's own on a shared agent; the runtime keeps the
  *  Chat or makes a new one, e.g. after an agent change. */
@@ -29,19 +30,31 @@ export function BotHomeChat({ workspaceId }: { workspaceId: string }): null {
           isLocalBotChatTab(tab, bot) && isBotHomeTab(tab, bot) && tab.agentSessionAgent === agent
       )
   )
+  // Asked again once an away or connecting host is live.
+  const down = useBotHostDown(hostId ?? LOCAL_EXECUTION_HOST_ID) !== null
   useEffect(() => {
-    if (botId && hostId && ready && !shown) {
-      openBotChat({ hostId, id: botId })
-        // A shared agent's host keeps no tabs for this account: its Home's tab is kept here.
-        .then((opened) => openSharedBotChat({ workspaceId, sessionId: opened }))
-        .catch((error: unknown) => {
-          console.error('Failed to open the bot chat:', error)
-          // A refused Home says why once per bot; a dropped call still retries quietly on the next change.
-          if (readAgentSessionErrorRefusal(error)) {
-            toast.error(botErrorMessage(error), { id: `bot-home-refused:${botId}` })
-          }
-        })
+    if (!botId || !hostId || !ready || shown || down) {
+      return
     }
-  }, [botId, hostId, agent, sessionId, ready, shown, workspaceId])
+    // Left the page meanwhile: its tab must not pull the user back.
+    let left = false
+    openBotChat({ hostId, id: botId })
+      // A shared agent's host keeps no tabs for this account: its Home's tab is kept here.
+      .then((opened) => {
+        if (!left) {
+          openSharedBotChat({ workspaceId, sessionId: opened })
+        }
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to open the bot chat:', error)
+        // A refused Home says why once per bot; a dropped call still retries quietly on the next change.
+        if (readAgentSessionErrorRefusal(error)) {
+          toast.error(botErrorMessage(error), { id: `bot-home-refused:${botId}` })
+        }
+      })
+    return () => {
+      left = true
+    }
+  }, [botId, hostId, agent, sessionId, ready, shown, down, workspaceId])
   return null
 }

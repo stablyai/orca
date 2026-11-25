@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, render } from '@testing-library/react'
+import { BotHomeChat } from '@/components/bots/BotHomeChat'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -14,7 +16,7 @@ import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/wor
 import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { structuredAgentSessionTargetForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { publishBots, readHostBots, setBotHostListing } from '../../bot-catalog-snapshot'
-import { openBotHome, openBotHomeTab, startBotSession } from '../../bot-catalog'
+import { newBotHomeChat, openBotHome, openBotHomeTab, startBotSession } from '../../bot-catalog'
 import { installSharedBotNewChatSwap } from '@/runtime/hosts/shared-bot-hosts/shared-bot-new-chat-swap'
 import { buildWorkspaceSessionPayload } from '../../workspace/persistence/workspace-session'
 import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
@@ -83,6 +85,23 @@ function resetStore(): void {
   )
 }
 
+// This account's Home on the owner's computer: made on first open, replaced by New Home Chat.
+let theirHome: string | null = null
+// While set, the owner's computer hasn't answered an open yet.
+let openAnswered: Promise<void> | null = null
+let homesMade = 0
+const homeAnswer = (method: string): { sessionId: string } | null => {
+  if (method === 'bots.chat.open') {
+    theirHome ??= `their-home-${++homesMade}`
+    return { sessionId: theirHome }
+  }
+  if (method === 'bots.chat.reset') {
+    theirHome = `their-home-${++homesMade}`
+    return { sessionId: theirHome }
+  }
+  return null
+}
+
 let stopCatalog: () => void = () => {}
 let changed: (state: SharedBotHostsState) => void = () => {}
 // The owner's host as the share reaches it, through runtimeEnvironments: main's share gate refuses
@@ -95,19 +114,26 @@ const call = vi.fn(
     environmentId: string
     method: string
     params: { newChatId?: string }
-  }) => ({
-    id: method,
-    ok: true,
-    result:
-      method === 'bots.list'
-        ? { bots: [ivy], threadReplies: false }
-        : { sessionId: params.newChatId ? 'chat-real' : 'shared-new-1' },
-    _meta: { runtimeId: SHARED.environmentId }
-  })
+  }) => {
+    if (method === 'bots.chat.open' && openAnswered) {
+      await openAnswered
+    }
+    return {
+      id: method,
+      ok: true,
+      result:
+        method === 'bots.list'
+          ? { bots: [{ ...ivy, chatSessionId: theirHome }], threadReplies: false }
+          : (homeAnswer(method) ?? { sessionId: params.newChatId ? 'chat-real' : 'shared-new-1' }),
+      _meta: { runtimeId: SHARED.environmentId }
+    }
+  }
 )
 // The shared methods this flow asks (main's registry decides the full list).
 const SHARED_METHODS = new Set([
   'bots.list',
+  'bots.chat.open',
+  'bots.chat.reset',
   'bots.chats',
   'bots.chats.own',
   'bots.chatTree',
@@ -132,6 +158,9 @@ const environmentCall = async (request: {
 
 beforeEach(async () => {
   call.mockClear()
+  theirHome = null
+  homesMade = 0
+  openAnswered = null
   vi.stubGlobal('api', {
     ...window.api,
     sharedBotHosts: {
@@ -233,7 +262,7 @@ describe('a shared agent’s chats on this computer', () => {
     expect(tabs().map((tab) => tab.entityId)).toEqual(['chat-1'])
   })
 
-  it('opens its home here from Home, reading only this computer’s workspaces and never its owner’s Home Chat', async () => {
+  it('opens its home here on this account’s own Home, reading only this computer’s workspaces', async () => {
     call.mockClear()
     const fetchFolderWorkspaces = vi.fn(async () => {})
     useAppStore.setState({ fetchFolderWorkspaces })
@@ -241,11 +270,18 @@ describe('a shared agent’s chats on this computer', () => {
     expect(await openBotHomeTab(bot)).toBe(true)
     expect(useAppStore.getState().activeWorktreeId).toBe(HOME_KEY)
     expect(fetchFolderWorkspaces).toHaveBeenCalledWith({ runtimeEnvironmentId: null })
-    // The owner's Home Chat is theirs: the share refuses it here, and no tab of it opens.
     const asked = call.mock.calls.map(([request]) => request.method)
     expect(asked).not.toContain('folderWorkspaces.list')
-    expect(asked).not.toContain('bots.chat.open')
-    expect(tabs()).toEqual([])
+    expect(asked).toContain('bots.chat.open')
+    expect(tabs().map((tab) => tab.entityId)).toEqual(['their-home-1'])
+  })
+
+  it('closes the replaced Home’s tab here on New Home Chat, as the host does for its own', async () => {
+    const [bot] = readHostBots(HOST)
+    await openBotHomeTab(bot)
+    expect(tabs().map((tab) => tab.entityId)).toEqual(['their-home-1'])
+    expect(await newBotHomeChat(readHostBots(HOST)[0])).toBe('their-home-2')
+    expect(tabs().map((tab) => tab.entityId)).not.toContain('their-home-1')
   })
 
   it('opens a new chat started while the owner’s computer is away, and moves it to the chat the host starts once back', async () => {
@@ -269,5 +305,38 @@ describe('a shared agent’s chats on this computer', () => {
       method: 'bots.session.start',
       params: { botId: 'bot-1', newChatId: 'shared-new-1' }
     })
+  })
+})
+
+describe('a shared agent’s page keeps this account’s Home, as a local agent’s does', () => {
+  const asked = () => call.mock.calls.map(([request]) => request.method)
+  afterEach(cleanup)
+  const page = () => {
+    useAppStore.setState({ workspaceSessionReady: true })
+    return render(<BotHomeChat workspaceId={HOME_KEY} />)
+  }
+
+  it('opens it once the owner’s computer is live, never while it connects', async () => {
+    setBotHostListing({ hosts: [{ hostId: HOST, state: 'connecting' }], updateNeeded: [] })
+    page()
+    await act(async () => {})
+    expect(asked()).not.toContain('bots.chat.open')
+    await act(async () => {
+      setBotHostListing({ hosts: [{ hostId: HOST, state: 'live' }], updateNeeded: [] })
+    })
+    await vi.waitFor(() => expect(tabs().map((tab) => tab.entityId)).toEqual(['their-home-1']))
+  })
+
+  it('opens no tab for it once the page was left while the owner’s computer answered', async () => {
+    let answer = (): void => {}
+    openAnswered = new Promise((resolve) => (answer = resolve))
+    const shown = page()
+    await vi.waitFor(() => expect(asked()).toContain('bots.chat.open'))
+    useAppStore.setState({ activeWorktreeId: null })
+    shown.unmount()
+    await act(async () => answer())
+    await act(async () => {})
+    expect(tabs()).toEqual([])
+    expect(useAppStore.getState().activeWorktreeId).toBeNull()
   })
 })

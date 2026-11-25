@@ -64,7 +64,7 @@ import { requestNativeChatComposerFocus } from '../components/native-chat/compos
 import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/drafts/native-chat-draft-scope'
 import { botHomeHostId } from '../../../shared/bots/bot-home-host'
 import { sharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
-import { openSharedBotChat } from './agent-session/open/shared-bot-chat-open'
+import { closeSharedBotChat, openSharedBotChat } from './agent-session/open/shared-bot-chat-open'
 
 export { isHome, readBots, readHostBots, refreshBotHost, refreshBots, subscribeToBotChanges }
 
@@ -274,10 +274,18 @@ export async function openBotChat(bot: BotRef): Promise<string> {
 
 /** A new Home Chat; the old one stops, leaves the tab bar and stays in history. */
 export async function newBotHomeChat(bot: BotRef): Promise<string> {
+  const saved = readHostBots(bot.hostId).find((entry) => entry.id === bot.id)
   const { sessionId } = await callBotRpc<{ sessionId: string }>(bot, 'bots.chat.reset', {
     botId: bot.id
   })
   await refreshBotHost(bot.hostId)
+  // A shared agent's host keeps no tabs for this account: the Home it replaced leaves them here.
+  if (saved?.chatSessionId) {
+    closeSharedBotChat({
+      workspaceId: folderWorkspaceKey(saved.folderWorkspaceId),
+      sessionId: saved.chatSessionId
+    })
+  }
   return sessionId
 }
 
