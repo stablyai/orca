@@ -1,5 +1,16 @@
 import { randomUUID } from 'node:crypto'
-import { link, lstat, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import {
+  copyFile,
+  link,
+  lstat,
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile
+} from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isHardLinkUnsupported } from '../../filesystem/hard-link-unsupported-error'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
@@ -37,7 +48,7 @@ function orcaBlockRange(existing: string): { start: number; end: number } | null
 }
 
 /** Writes Orca's text into `cwd`'s `path` whole, so the agent never reads a half-written file.
- *  A symlink on the way, or a file that cannot be read, stays untouched. The result is readable
+ *  A symlink on the way, or a file that cannot be read as UTF-8, stays untouched. The result is readable
  *  only by this host's user, a file the user wrote included, since it now carries the bot's
  *  instructions. An inheritable ACL the user set on the folder still applies on top of that. */
 export async function writeFolderContextFile(
@@ -64,14 +75,15 @@ export async function writeFolderContextFile(
         return null
       }
       // A link may point outside the folder or into a tracked file, so it is left as the user's.
-      return info.isSymbolicLink() ? undefined : readFile(target, 'utf8').catch(() => undefined)
+      return info.isSymbolicLink() ? undefined : readUtf8(target).catch(() => undefined)
     },
     (existing) => withOrcaText(existing, text, agentName)
   )
 }
 
 /** Takes Orca's text back out of `cwd`'s `path`: deletes a file Orca wrote for `agentName`, or
- *  removes only Orca's block from a file the user wrote. A symlink or unreadable file stays. */
+ *  removes only Orca's block from a file the user wrote. A symlink, or a file that cannot be
+ *  read as UTF-8, stays. */
 export async function removeFolderContextFile(
   cwd: string,
   path: string,
@@ -82,7 +94,7 @@ export async function removeFolderContextFile(
     target,
     async () => {
       const info = await lstat(target).catch(() => null)
-      return info?.isFile() ? readFile(target, 'utf8').catch(() => undefined) : undefined
+      return info?.isFile() ? readUtf8(target).catch(() => undefined) : undefined
     },
     (existing) => (existing === null ? undefined : withoutOrcaText(existing, agentName))
   )
@@ -105,8 +117,6 @@ function withoutOrcaText(existing: string, agentName: string): string | null | u
   const blankAfter = /^\r?\n/.exec(existing.slice(end))
   if (blankBefore && (end === existing.length || blankAfter)) {
     start -= blankBefore[1].length
-  } else if (start === 0 && blankAfter) {
-    end += blankAfter[0].length
   }
   return existing.slice(0, start) + existing.slice(end)
 }
@@ -184,20 +194,34 @@ async function createFrom(staged: string, target: string): Promise<boolean> {
       throw error
     }
   }
-  if (await lstat(target).catch(() => null)) {
-    return false
+  try {
+    await copyFile(staged, target, constants.COPYFILE_EXCL)
+    return true
+  } catch (error) {
+    if (errnoCodeOrUnknown(error) === 'EEXIST') {
+      return false
+    }
+    throw error
   }
-  await rename(staged, target)
-  return true
 }
 
-async function readIfPresent(path: string): Promise<string | null> {
+async function readIfPresent(path: string): Promise<string | null | undefined> {
   try {
-    return await readFile(path, 'utf8')
+    return await readUtf8(path)
   } catch (error) {
     if (isDefinitiveAbsence(error)) {
       return null
     }
     throw error
+  }
+}
+
+/** Undefined for bytes that aren't UTF-8: written back as text they would come out changed. */
+async function readUtf8(path: string): Promise<string | undefined> {
+  const bytes = await readFile(path)
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
+  } catch {
+    return undefined
   }
 }

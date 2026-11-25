@@ -159,6 +159,14 @@ it("leaves every byte around Orca's block as the user wrote it", async () => {
   expect(await readFile(path, 'utf8')).toBe(`${user}\tmore\n`)
 })
 
+it("leaves a file that isn't UTF-8 as it is", async () => {
+  const path = join(dir, 'GEMINI.md')
+  const bytes = Buffer.from('caf\xe9\n\n<!-- orca:begin -->\nbot\n<!-- orca:end -->\n', 'latin1')
+  await writeFile(path, bytes)
+  await removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')
+  expect(await readFile(path)).toEqual(bytes)
+})
+
 it.each([
   ['a file Orca wrote', null],
   ['a file the user wrote', 'My own rules.\n']
