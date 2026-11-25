@@ -5109,6 +5109,12 @@
                 "message": "Claude 사용량은 다음에 Claude를 실행할 때 업데이트됩니다."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Codex 실행 시 업데이트됨",
+                "message": "Codex 사용량은 다음에 Codex를 실행할 때 업데이트됩니다."
+              }
+            },
             "remoteOwnerNotConfigured": "{{server}}에 구성되지 않음",
             "remoteOwnerSignInSavedHere": "로그인 정보는 이 컴퓨터에만 저장되어 있습니다.",
             "claudeNoUsageFromHost": "{{server}}에서 사용량 없음",

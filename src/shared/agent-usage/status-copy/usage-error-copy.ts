@@ -68,6 +68,11 @@ export function isClaudeUsageWaitingForClaude(p: UsageStatusCopySource): boolean
   return p.provider === 'claude' && p.usageMetadata?.failureKind === 'stale-token'
 }
 
+/** An unselected Codex login's access token lapsed; Codex renews it the next time it runs there. */
+export function isCodexUsageWaitingForCodex(p: UsageStatusCopySource): boolean {
+  return p.provider === 'codex' && p.usageMetadata?.failureKind === 'delegated-refresh-required'
+}
+
 export function getProviderUsageStatusLabel(
   p: UsageStatusCopySource,
   t: UsageCopyTranslate
@@ -85,6 +90,9 @@ export function getProviderUsageStatusLabel(
   }
   if (delegatedCliProvider === 'kimi') {
     return t('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
+  }
+  if (isCodexUsageWaitingForCodex(p)) {
+    return t('auto.components.status.bar.tooltip.codex.waiting.label', 'Updates when Codex runs')
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
@@ -170,6 +178,12 @@ export function getProviderUsageErrorMessage(
     return t(
       'auto.components.status.bar.tooltip.a37e8c15d4',
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
+    )
+  }
+  if (isCodexUsageWaitingForCodex(p)) {
+    return t(
+      'auto.components.status.bar.tooltip.codex.waiting.message',
+      'Codex usage updates the next time Codex runs.'
     )
   }
   if (p.provider === 'cursor' && p.usageMetadata?.failureKind === 'stale-token') {

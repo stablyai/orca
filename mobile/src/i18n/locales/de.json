@@ -4422,6 +4422,12 @@
                 "message": "Die Claude-Nutzung wird beim nächsten Start von Claude aktualisiert."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Wird aktualisiert, wenn Codex läuft",
+                "message": "Die Codex-Nutzung wird beim nächsten Start von Codex aktualisiert."
+              }
+            },
             "1804cd8c3f": "Anmeldung wird aktualisiert",
             "bf2e739f18": "Anmeldung nicht verfügbar",
             "f8f0f9d8cc": "Netzwerkproblem",

@@ -5323,6 +5323,12 @@
                 "message": "Claude 用量将在下次运行 Claude 时更新"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "运行 Codex 时更新",
+                "message": "Codex 用量将在下次运行 Codex 时更新"
+              }
+            },
             "remoteOwnerNotConfigured": "未在 {{server}} 上配置",
             "remoteOwnerSignInSavedHere": "其登录信息仅保存在此电脑上",
             "claudeNoUsageFromHost": "{{server}} 无用量数据",

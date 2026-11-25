@@ -6088,6 +6088,12 @@
                 "message": "Claude kullanım bilgisi, Claude bir sonraki çalıştığında güncellenir."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Codex çalıştığında güncellenir",
+                "message": "Codex kullanım bilgisi, Codex bir sonraki çalıştığında güncellenir."
+              }
+            },
             "justNow": "az önce",
             "minutesAgo": "{{minutes}} dk önce",
             "hoursAgo": "{{hours}} sa önce",

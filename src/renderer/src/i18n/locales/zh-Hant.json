@@ -4985,6 +4985,12 @@
                 "message": "Claude 用量將在下次執行 Claude 時更新。"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "執行 Codex 時更新",
+                "message": "Codex 用量將在下次執行 Codex 時更新。"
+              }
+            },
             "justNow": "剛剛",
             "minutesAgo": "{{minutes}} 分鐘前",
             "hoursAgo": "{{hours}} 小時前",

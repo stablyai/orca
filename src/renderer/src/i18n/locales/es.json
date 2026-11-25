@@ -4485,6 +4485,12 @@
                 "message": "El uso de Claude se actualizará la próxima vez que ejecutes Claude."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Se actualiza cuando Codex se ejecuta",
+                "message": "El uso de Codex se actualizará la próxima vez que ejecutes Codex."
+              }
+            },
             "remoteOwnerNotConfigured": "No configurado en {{server}}",
             "remoteOwnerSignInSavedHere": "Su inicio de sesión solo está guardado en este equipo.",
             "claudeNoUsageFromHost": "Sin uso desde {{server}}",

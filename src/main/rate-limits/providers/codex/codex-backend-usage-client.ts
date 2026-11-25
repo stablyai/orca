@@ -74,6 +74,15 @@ export async function fetchCodexRateLimitsViaBackend(
   if (!headers || signal.aborted) {
     return null
   }
+  return requestCodexBackendUsage(request, headers, signal)
+}
+
+/** One usage GET with resolved auth headers; null when the response has no usable reading. */
+export async function requestCodexBackendUsage(
+  request: CodexBackendRequest,
+  headers: Record<string, string>,
+  signal: AbortSignal
+): Promise<ProviderRateLimits | null> {
   const response = await request(CODEX_USAGE_URL, { headers, signal })
   if (!response.ok) {
     await cancelUnreadResponseBody(response)

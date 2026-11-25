@@ -8341,6 +8341,12 @@
                 "message": "Claude usage updates the next time Claude runs."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Updates when Codex runs",
+                "message": "Codex usage updates the next time Codex runs."
+              }
+            },
             "1804cd8c3f": "Refreshing sign-in",
             "bf2e739f18": "Sign-in unavailable",
             "f8f0f9d8cc": "Network issue",

@@ -4528,6 +4528,12 @@
                 "message": "El uso de Claude se actualizará la próxima vez que ejecutes Claude."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Se actualiza cuando Codex se ejecuta",
+                "message": "El uso de Codex se actualizará la próxima vez que ejecutes Codex."
+              }
+            },
             "1804cd8c3f": "Actualizando inicio de sesión",
             "bf2e739f18": "Inicio de sesión no disponible",
             "f8f0f9d8cc": "Problema de red",

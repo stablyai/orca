@@ -3947,6 +3947,12 @@
                 "message": "O uso do Claude será atualizado na próxima vez que ele for executado."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Atualiza quando o Codex é executado",
+                "message": "O uso do Codex será atualizado na próxima vez que ele for executado."
+              }
+            },
             "justNow": "agora mesmo",
             "minutesAgo": "há {{minutes}} min",
             "hoursAgo": "há {{hours}} h",
