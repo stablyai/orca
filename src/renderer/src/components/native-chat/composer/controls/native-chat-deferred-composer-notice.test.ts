@@ -19,6 +19,10 @@ import {
   deleteNativeChatComposerDraftsOwnedBy
 } from '../../drafts/native-chat-composer-draft-removal'
 import { moveNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-move'
+import {
+  appendToNativeChatComposerDraft,
+  readNativeChatComposerDraft
+} from '../../drafts/native-chat-composer-draft-store'
 
 // A failure reported before its draft moves is published where the draft went; once the draft is
 // deleted for good, neither a waiting nor a late notice survives it.
@@ -114,4 +118,30 @@ it('reports a draft as holding feedback while a failure is waiting or being repo
   expect(hasDeferredNativeChatComposerNotice(scope)).toBe(true)
   expect(shownFor(scope)).toEqual(['Image paste failed.'])
   expect(hasDeferredNativeChatComposerNotice(scope)).toBe(false)
+})
+
+// Paired control: the draft holds stored input under another workspace (written before the move that
+// brought the notice). Owner-only teardown retires the feedback by the notice's own confirmed owner and
+// the stored input by the record's owner, so each workspace's cleanup takes only what it owns.
+it('retires feedback by its confirmed owner even when the stored draft names another', () => {
+  const scope = 'notice-conflicting-owner'
+  const stored: NativeChatComposerDraftOwner = {
+    workspaceId: 'notice-stored',
+    executionHostId: 'local'
+  }
+  const confirmed: NativeChatComposerDraftOwner = {
+    workspaceId: 'notice-confirmed',
+    executionHostId: 'local'
+  }
+  appendToNativeChatComposerDraft(scope, { text: 'typed earlier' }, stored)
+  const route = openNativeChatComposerNoticeRoute(scope, confirmed)
+  deferNativeChatComposerNotice(scope, 'Image paste failed.', undefined, confirmed)
+
+  deleteNativeChatComposerDraftsOwnedBy(stored)
+  expect(readNativeChatComposerDraft(scope).text).toBe('')
+  expect(hasDeferredNativeChatComposerNotice(scope)).toBe(true)
+
+  deleteNativeChatComposerDraftsOwnedBy(confirmed)
+  expect(closeNativeChatComposerNoticeRoute(route)).toBeNull()
+  expect(shownFor(scope)).toEqual([])
 })

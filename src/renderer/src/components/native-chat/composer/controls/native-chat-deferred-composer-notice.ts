@@ -49,12 +49,6 @@ export function hasDeferredNativeChatComposerNotice(scopeKey: string): boolean {
   return deferred.has(scopeKey) || routes.has(scopeKey)
 }
 
-export function deferredNativeChatComposerNoticeOwner(
-  scopeKey: string
-): NativeChatComposerDraftOwner | undefined {
-  return owners.get(scopeKey)
-}
-
 /** Call at publication; returns the draft to publish to, or null if that draft is gone. */
 export function closeNativeChatComposerNoticeRoute(
   route: NativeChatComposerNoticeRoute
@@ -68,7 +62,7 @@ export function closeNativeChatComposerNoticeRoute(
   return route.retired ? null : route.scopeKey
 }
 
-export function deferredNativeChatComposerNoticeScopes(): string[] {
+function deferredNativeChatComposerNoticeScopes(): string[] {
   return [...new Set([...deferred.keys(), ...routes.keys()])]
 }
 
@@ -80,6 +74,17 @@ export function retireDeferredNativeChatComposerNotices(scopeKey: string): void 
   }
   routes.delete(scopeKey)
   owners.delete(scopeKey)
+}
+
+/** Retire every notice whose draft matches, judged by the owner the notice itself was given. */
+export function retireDeferredNativeChatComposerNoticesWhere(
+  matches: (scopeKey: string, owner: NativeChatComposerDraftOwner | undefined) => boolean
+): void {
+  for (const scopeKey of deferredNativeChatComposerNoticeScopes()) {
+    if (matches(scopeKey, owners.get(scopeKey))) {
+      retireDeferredNativeChatComposerNotices(scopeKey)
+    }
+  }
 }
 
 export function deferNativeChatComposerNotice(

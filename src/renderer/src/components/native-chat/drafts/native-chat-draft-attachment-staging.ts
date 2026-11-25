@@ -183,6 +183,11 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
     ) ?? new Set(paths)
   files?.leases.add(lease)
   return {
+    /** Every submitted file is still referenced by the draft it moved with, which then keeps it readable. */
+    heldByDraft: (): boolean => {
+      const owner = files && currentFiles(files)
+      return !!owner && [...lease].every((path) => owner.draftPaths.has(path))
+    },
     release: (input?: NativeChatStagedInput): void => {
       if (files) {
         const owner = currentFiles(files)

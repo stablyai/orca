@@ -14,6 +14,7 @@ import {
 } from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import { clearNativeChatPendingAttachments } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { retireDeferredNativeChatComposerNoticesWhere } from '@/components/native-chat/composer/controls/native-chat-deferred-composer-notice'
 import {
   dropNativeChatPendingAttachmentsForTab,
   dropNativeChatPendingAttachmentsOwnedBy
@@ -82,15 +83,19 @@ export function deleteWorkspaceChatDraftOwners(
   const owners = new Set(
     keys.owners.map((owner) => JSON.stringify([owner.executionHostId, owner.workspaceId]))
   )
-  retireNativeChatComposerSubmissionsWhere((scope, draft) => {
-    const owner =
-      launchDraftSource(scope) ?? nativeChatLaunchPromptDraftOwner(scope) ?? draft?.owner
-    return (
-      !!owner &&
-      (owners.has(JSON.stringify([owner.executionHostId, owner.workspaceId])) ||
-        additionally?.(owner, scope) === true)
+  const retired = (owner: NativeChatComposerDraftOwner | undefined, scope: string): boolean =>
+    !!owner &&
+    (owners.has(JSON.stringify([owner.executionHostId, owner.workspaceId])) ||
+      additionally?.(owner, scope) === true)
+  retireNativeChatComposerSubmissionsWhere((scope, draft) =>
+    retired(
+      launchDraftSource(scope) ?? nativeChatLaunchPromptDraftOwner(scope) ?? draft?.owner,
+      scope
     )
-  })
+  )
+  // Also reached when a same-ID survivor skips the full draft sweep, and by project removal: a paste
+  // failure kept for a removed workspace's draft goes too, judged by the owner the notice was given.
+  retireDeferredNativeChatComposerNoticesWhere((scope, owner) => retired(owner, scope))
 }
 export function deleteProjectChatDrafts(projectId: string, executionHostId: ExecutionHostId): void {
   deleteWorkspaceChatDraftOwners(

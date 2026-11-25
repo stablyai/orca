@@ -9,6 +9,13 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-registry', (
 }))
 
 const {
+  captureNativeChatStagedInput,
+  hasNativeChatStagedFiles,
+  moveNativeChatStagedFiles,
+  reconcileNativeChatStagedDraft,
+  stageNativeChatDraftFile
+} = await import('@/components/native-chat/drafts/native-chat-draft-attachment-staging')
+const {
   confirmWorktreeCreationHandoffTarget,
   readWorktreeCreationHandoffTarget,
   releaseFirstSendFilesWhenHeld
@@ -32,18 +39,38 @@ it('confirms a handoff target only while its tab, session and host are unchanged
   expect(confirmWorktreeCreationHandoffTarget(captured!, 'wt')).toBeNull()
 })
 
-// The first send's staged files outlive an undelivered send to a chat that went stale (Retry needs
-// them); they are released once the send was delivered or the draft moved into a confirmed chat.
-it('releases the first send files only once a recipient holds them', async () => {
-  const released = async (delivered: boolean, transferred: boolean): Promise<boolean> => {
-    let release = false
+// The first send's staged file is released only once a holder is proven: a recorded delivery, or the
+// chat it moved into still referencing it. A moved draft whose send came back refused, with an
+// unavailable chip and no reference, keeps the original file readable.
+it('keeps a moved first-send file until it is delivered or still referenced', async () => {
+  const settle = async (
+    name: string,
+    delivered: boolean,
+    destinationImages: { id: string; path: string }[]
+  ): Promise<boolean> => {
+    const source = `first-send-source-${name}`
+    const destination = `first-send-destination-${name}`
+    const file = `blob:first-send-${name}`
+    stageNativeChatDraftFile(source, file)
+    const files = captureNativeChatStagedInput(source, { text: '', attachments: [{ path: file }] })
+    moveNativeChatStagedFiles(source, destination)
+    reconcileNativeChatStagedDraft(destination, {
+      text: '',
+      images: destinationImages.map((image) => (image.path ? image : { ...image, path: file }))
+    })
+    reconcileNativeChatStagedDraft(destination, { text: '', images: destinationImages })
     const delivery = Promise.resolve({ delivered, failureNotified: !delivered })
-    releaseFirstSendFilesWhenHeld(delivery, () => transferred, { release: () => (release = true) })
+    releaseFirstSendFilesWhenHeld(delivery, () => true, files)
     await delivery
     await Promise.resolve()
-    return release
+    return hasNativeChatStagedFiles(destination)
   }
-  expect(await released(false, false)).toBe(false)
-  expect(await released(true, false)).toBe(true)
-  expect(await released(false, true)).toBe(true)
+  // Refused and handed back as an unavailable chip: still readable for the recipient or Retry.
+  expect(await settle('expired', false, [{ id: 'returned', path: '' }])).toBe(true)
+  // The recipient holds a real reference: the lease goes, the draft keeps the file.
+  expect(
+    await settle('referenced', false, [{ id: 'kept', path: 'blob:first-send-referenced' }])
+  ).toBe(true)
+  // Recorded delivery with no reference left: the redundant copy is released.
+  expect(await settle('delivered', true, [])).toBe(false)
 })
