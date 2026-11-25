@@ -18,7 +18,7 @@ it.each(['active', 'elsewhere'])(
       id: `saved-${index}`,
       clientMessageId: `message-${index}`,
       sessionId,
-      get kind() {
+      get kind(): 'structured' {
         visits += 1
         return 'structured'
       },

@@ -1,9 +1,6 @@
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 import { settleMobileInstructionRecovery } from '../mobile-native-chat-recovery-delivery'
 import { useCallback } from 'react'
-import type { AgentSessionSlashCommand } from '../../../../../../src/shared/agent-session/agent-session-wire'
-import type { StructuredAgentId } from '../../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
@@ -27,8 +24,6 @@ import { isSlashCommandDraft } from '../../../../../../src/shared/native-chat/in
 import { UNCONFIRMED_SEND_RESTORED_MESSAGE } from './use-mobile-native-chat-unconfirmed-sends'
 
 export function useMobileStructuredNativeChatSendBridge(args: {
-  agent: StructuredAgentId | undefined
-  sessionCommands?: readonly AgentSessionSlashCommand[]
   sendStructured: (
     text: string,
     images?: string[],
@@ -58,14 +53,12 @@ export function useMobileStructuredNativeChatSendBridge(args: {
   ) => Promise<MobileNativeChatSendOutcome>
 } {
   const {
-    agent,
     captureSendOrigin,
     clearDraftForSend,
     holdUnconfirmed,
     onSendError,
     restoreRejectedDraft,
-    sendStructured,
-    sessionCommands
+    sendStructured
   } = args
   const sendWithOutcome = useCallback(
     async (
@@ -105,7 +98,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
               ? (readMobileNativeChatInFlightSend(inFlightId)?.send.sessionId ?? null)
               : null,
             [submission],
-            onSendError
+            onSendError,
+            []
           )
           intent?.onRecorded?.(submission)
         },
@@ -152,14 +146,12 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       return outcome
     },
     [
-      agent,
       captureSendOrigin,
       clearDraftForSend,
       holdUnconfirmed,
       onSendError,
       restoreRejectedDraft,
-      sendStructured,
-      sessionCommands
+      sendStructured
     ]
   )
   const send = useCallback(
