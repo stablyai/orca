@@ -46,6 +46,7 @@ export async function hydratePullRequestLookupData(
     checksUnavailable: checks === undefined,
     ...(mergeMetadata ? { mergeQueueRequired: mergeMetadata.mergeQueueRequired } : {}),
     ...(mergeMetadata ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed } : {}),
+    ...(mergeMetadata ? { viewerCanMerge: mergeMetadata.viewerCanMerge } : {}),
     ...(mergeMetadata?.mergeMethodSettings
       ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
       : {})

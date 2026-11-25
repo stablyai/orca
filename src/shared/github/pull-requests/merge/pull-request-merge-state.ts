@@ -8,6 +8,7 @@ import {
 export type GitHubPRMergeStateInput = GitHubPRAutoMergeAvailabilityInput & {
   checksStatus?: CheckStatus
   checksSummary?: ProviderCheckSummary
+  viewerCanMerge?: boolean | null
 }
 
 export type GitHubPRMergeStateKind =
@@ -38,6 +39,8 @@ export type GitHubPRMergeStateDecision = {
   kind: GitHubPRMergeStateKind
   directMergeAvailable: boolean
   autoMergeAction: GitHubPRAutoMergeActionIntent | null
+  /** The PR state allows a merge or auto-merge, but the viewer lacks write access. */
+  viewerMergeDenied: boolean
 }
 
 function checksState(item: GitHubPRMergeStateInput): CheckStatus | 'none' | undefined {
@@ -132,10 +135,17 @@ export function resolveGitHubPRMergeState(
   item: GitHubPRMergeStateInput
 ): GitHubPRMergeStateDecision {
   const kind = resolveMergeStateKind(item)
+  const stateAllowsDirectMerge = DIRECT_MERGE_KINDS.has(kind)
+  const autoMergeAction = resolveAutoMergeAction(item)
+  // Only a known lack of write access blocks; unknown permission leaves GitHub's answer to the merge itself.
+  const viewerCannotMerge = item.viewerCanMerge === false
+  const autoMergeDenied =
+    viewerCannotMerge && autoMergeAction !== null && autoMergeAction !== 'disable_auto_merge'
   return {
     kind,
-    directMergeAvailable: DIRECT_MERGE_KINDS.has(kind),
-    autoMergeAction: resolveAutoMergeAction(item)
+    directMergeAvailable: stateAllowsDirectMerge && !viewerCannotMerge,
+    autoMergeAction: autoMergeDenied ? null : autoMergeAction,
+    viewerMergeDenied: viewerCannotMerge && (stateAllowsDirectMerge || autoMergeDenied)
   }
 }
 

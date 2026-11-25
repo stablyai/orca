@@ -9,6 +9,8 @@ export const MERGE_QUEUE_CACHE_MAX_ENTRIES = 256
 export type GitHubRepositoryMergeMetadata = {
   mergeQueueRequired: boolean | null
   autoMergeAllowed: boolean | null
+  /** False only when GitHub reports less than write access; null when unknown. */
+  viewerCanMerge: boolean | null
   mergeMethodSettings?: GitHubPRMergeMethodSettings
 }
 

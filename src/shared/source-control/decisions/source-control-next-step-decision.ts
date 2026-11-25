@@ -112,7 +112,8 @@ function resolveReviewStep(
         stack: pr.stack,
         reviewMergeQueueRequired: pr.mergeQueueRequired,
         stackMergeQueueRequired: undefined,
-        directMergeAvailable: mergeState.directMergeAvailable
+        directMergeAvailable: mergeState.directMergeAvailable,
+        viewerCanMerge: pr.viewerCanMerge
       }).directMergeAvailable
     : mergeState.directMergeAvailable
   if (directMergeAvailable) {

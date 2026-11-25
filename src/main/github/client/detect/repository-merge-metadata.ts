@@ -116,13 +116,14 @@ async function readRepositoryMergeMetadata(
     ghOptions.signal?.aborted ||
     repositoryRateLimitGuard(ownerRepo, 'graphql', ghOptions).blocked
   ) {
-    return { mergeQueueRequired: null, autoMergeAllowed: null }
+    return { mergeQueueRequired: null, autoMergeAllowed: null, viewerCanMerge: null }
   }
   const query = (withRuleMergeMethods: boolean): string =>
     branchName
       ? `query($owner: String!, $repo: String!, $branch: String!, $qualified: String!) {
     repository(owner: $owner, name: $repo) {
       viewerDefaultMergeMethod
+      viewerPermission
       mergeCommitAllowed
       rebaseMergeAllowed
       squashMergeAllowed
@@ -136,6 +137,7 @@ async function readRepositoryMergeMetadata(
       : `query($owner: String!, $repo: String!) {
     repository(owner: $owner, name: $repo) {
       viewerDefaultMergeMethod
+      viewerPermission
       mergeCommitAllowed
       rebaseMergeAllowed
       squashMergeAllowed
@@ -174,6 +176,7 @@ async function readRepositoryMergeMetadata(
       data?: {
         repository?: {
           viewerDefaultMergeMethod?: unknown
+          viewerPermission?: unknown
           mergeCommitAllowed?: unknown
           rebaseMergeAllowed?: unknown
           squashMergeAllowed?: unknown
@@ -216,6 +219,7 @@ async function readRepositoryMergeMetadata(
         : null,
       autoMergeAllowed:
         typeof repository?.autoMergeAllowed === 'boolean' ? repository.autoMergeAllowed : null,
+      viewerCanMerge: viewerPermissionAllowsMerge(repository?.viewerPermission),
       ...(mergeMethodSettings ? { mergeMethodSettings } : {})
     }
     // Missing repository data remains unknown and retries on the short TTL.
@@ -229,11 +233,24 @@ async function readRepositoryMergeMetadata(
     // Cool down failed probes without treating unknown merge-queue state as false.
     const value: GitHubRepositoryMergeMetadata = {
       mergeQueueRequired: null,
-      autoMergeAllowed: null
+      autoMergeAllowed: null,
+      viewerCanMerge: null
     }
     publish(value, MERGE_QUEUE_UNKNOWN_CACHE_TTL_MS, false)
     return value
   }
+}
+
+// GitHub lets only write access and above merge or queue a pull request. GitHub App tokens get null,
+// and an unknown level must not block someone who can merge.
+function viewerPermissionAllowsMerge(permission: unknown): boolean | null {
+  if (permission === 'ADMIN' || permission === 'MAINTAIN' || permission === 'WRITE') {
+    return true
+  }
+  if (permission === 'READ' || permission === 'TRIAGE') {
+    return false
+  }
+  return null
 }
 
 // Older GHES schemas lack ruleset merge methods; losing them must not lose merge-queue detection.

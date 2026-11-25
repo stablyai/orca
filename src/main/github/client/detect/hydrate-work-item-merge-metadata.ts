@@ -19,7 +19,11 @@ export async function hydrateWorkItemRepositoryMergeMetadata(
     ghOptions,
     executionScope
   )
-  if (!mergeMetadata.mergeMethodSettings && mergeMetadata.autoMergeAllowed === null) {
+  if (
+    !mergeMetadata.mergeMethodSettings &&
+    mergeMetadata.autoMergeAllowed === null &&
+    mergeMetadata.viewerCanMerge === null
+  ) {
     return items
   }
   return items.map((item) =>
@@ -28,6 +32,9 @@ export async function hydrateWorkItemRepositoryMergeMetadata(
           ...item,
           ...(mergeMetadata.autoMergeAllowed !== null
             ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
+            : {}),
+          ...(mergeMetadata.viewerCanMerge !== null
+            ? { viewerCanMerge: mergeMetadata.viewerCanMerge }
             : {}),
           ...(mergeMetadata.mergeMethodSettings
             ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
