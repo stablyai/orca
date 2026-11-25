@@ -49,6 +49,7 @@ import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { AgentHistoryHandoffDrawer } from './AgentHistoryHandoffSheet'
 import { useAgentHistoryHandoff } from './use-agent-history-handoff'
 import { latestSessionConversationTurn } from '../../../src/shared/ai-vault/session-display/ai-vault-session-display'
+import { blockingAiVaultScanIssue } from '../../../src/shared/ai-vault/scanning/ai-vault-scan-issue-state'
 import { useAgentHistorySessionResume } from './use-agent-history-session-resume'
 
 export type MobileAgentSessionHistoryPanelProps = {
@@ -146,6 +147,8 @@ function MobileAgentSessionHistoryPanelContent({
     showMessage: setResumeMessage
   })
 
+  // A failed scan explains the empty list, so it outranks every other notice.
+  const scanBlocked = blockingAiVaultScanIssue({ sessions, issues }) !== null
   const resumeActionStateBySessionId = useMemo(
     () => buildMobileAgentHistoryResumeActionState(sessions, resumingSessionId),
     [resumingSessionId, sessions]
@@ -210,16 +213,18 @@ function MobileAgentSessionHistoryPanelContent({
         <MobileLoadErrorState error={screenState.message} onRetry={retry} />
       ) : (
         <>
-          {/* One notice at most: what just happened first, then what waits, then what the scan found. */}
+          {/* One notice at most: why the list is empty, what just happened, what waits, what the scan found. */}
           <AgentHistoryResumeNotice
-            message={resumeMessage}
+            message={scanBlocked ? null : resumeMessage}
             onDismiss={() => setResumeMessage(null)}
           />
           <AgentHistoryHandoffNotice
-            notice={resumeMessage ? null : handoff.notice}
+            notice={scanBlocked || resumeMessage ? null : handoff.notice}
             onDismiss={handoff.dismissNotice}
           />
-          {resumeMessage || handoff.notice ? null : (
+          {scanBlocked ? (
+            <AgentHistoryScanNotices sessions={sessions} issues={issues} />
+          ) : resumeMessage || handoff.notice ? null : (
             <>
               <AgentHistoryInterruptedNotice offer={restartOffer} />
               {agentHistoryInterruptedShown(restartOffer) ? null : (

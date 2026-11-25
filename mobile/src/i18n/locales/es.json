@@ -69,10 +69,7 @@
       "messages_one": "{{count}} mensaje",
       "messages_other": "{{count}} mensajes",
       "resumeSession": "Reanudar sesión de agente",
-      "continueInCli": "Continuar en la CLI",
-      "hidePreview": "Oculta los mensajes recientes.",
-      "showPreview": "Muestra los mensajes recientes.",
-      "you": "Tú"
+      "continueInCli": "Continuar en la CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "No se pudo contactar con el host",

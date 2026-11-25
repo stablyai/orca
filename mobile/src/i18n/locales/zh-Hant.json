@@ -67,10 +67,7 @@
       "messages_one": "{{count}} 則訊息",
       "messages_other": "{{count}} 則訊息",
       "resumeSession": "恢復代理程式工作階段",
-      "continueInCli": "在 CLI 中繼續",
-      "hidePreview": "隱藏最近的訊息。",
-      "showPreview": "顯示最近的訊息。",
-      "you": "你"
+      "continueInCli": "在 CLI 中繼續"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "無法連上主機",

@@ -67,10 +67,7 @@
       "messages_one": "{{count}} 件のメッセージ",
       "messages_other": "{{count}} 件のメッセージ",
       "resumeSession": "Agent セッションを再開",
-      "continueInCli": "CLIで続行",
-      "hidePreview": "最近のメッセージを非表示にします。",
-      "showPreview": "最近のメッセージを表示します。",
-      "you": "あなた"
+      "continueInCli": "CLIで続行"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "ホストに接続できません",
