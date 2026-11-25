@@ -137,3 +137,8 @@ export function automationAgentDidNotStart(rejection: { kind: string } | undefin
 export function automationAgentDidNotStartError(agent: string): string {
   return `${agent} did not start (the machine may have slept or startup timed out), so it never received this run's prompt. Run the automation again.`
 }
+
+/** A run Orca can no longer match to its turn: its prompt went in, but how it ended is unknown. */
+export function automationRunOutcomeUnknown(agent: string): string {
+  return `Orca restarted during this run and couldn't tell which of ${agent}'s replies was this run's, so its result is unknown. Open the chat to see how it ended.`
+}

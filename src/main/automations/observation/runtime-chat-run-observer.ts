@@ -1,4 +1,7 @@
-import { resolveChatAutomationRun } from './automation-chat-run-observation'
+import {
+  automationRunOutcomeUnknown,
+  resolveChatAutomationRun
+} from './automation-chat-run-observation'
 
 import type { JournalPublication } from '../../native-chat/agent-session-wire/host/structured-agent-session-conversations'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
@@ -10,6 +13,7 @@ import {
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { readAutomationRunReceipt } from '../launch/automation-run-receipt'
+import { automationRunOperationId } from '../launch/automation-run-operation'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
 import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 
@@ -27,18 +31,19 @@ export async function observeAutomationChatRun(
   const receipt = readAutomationRunReceipt(store, run)
   const agent =
     tuiAgentDisplayName(store.getConversation(run.chatSessionId)?.provider ?? 'Agent') ?? 'Agent'
-  if (
-    receipt?.kind !== 'chat' ||
-    receipt.sessionId !== run.chatSessionId ||
-    !receipt.messageId ||
-    !receipt.accepted
-  ) {
+  // No launch receipt: the run sent into a chat it did not launch, under its run-derived message id.
+  const runMessage = receipt === null
+  const messageId = runMessage
+    ? automationRunOperationId(run, 'run-message')
+    : receipt.kind === 'chat' && receipt.sessionId === run.chatSessionId && receipt.accepted
+      ? receipt.messageId
+      : null
+  if (!messageId) {
     return {
       status: 'dispatch_failed',
       error: `${agent} could not confirm this run's prompt. Open the chat before running again.`
     }
   }
-  const messageId = receipt.messageId
   const sessionId = run.chatSessionId
   return new Promise((resolve, reject) => {
     let release: (() => void) | undefined
@@ -132,6 +137,12 @@ export async function observeAutomationChatRun(
             agent,
             queued
           )
+          // A dispatched run's prompt was already taken, so a chat without it holds a run sent
+          // before run messages had derived ids: its turn cannot be told apart.
+          if (runMessage && !submission && !queued) {
+            finish({ status: 'completed', error: automationRunOutcomeUnknown(agent) })
+            return
+          }
           if (submission) {
             submissionId = submission.clientMessageId
             providerItemId = submission.providerItemId
