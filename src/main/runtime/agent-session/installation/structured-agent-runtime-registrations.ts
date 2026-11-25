@@ -221,8 +221,16 @@ function createAcpAdapter(
       keptWork: async (sessionId) => {
         const work = await context.host()?.currentWork(sessionId)
         // The oldest unanswered send is the prompt the agent owes; later ones are queued behind it.
-        const send = work?.restatedSubmissions()[0]?.clientMessageId
-        return { turnId: work?.activeTurnId() ?? null, unansweredSendId: send ?? null }
+        const send = work?.restatedSubmissions()[0]
+        const turn = work?.activeTurn()
+        const body = turn?.item.body
+        const sentAt =
+          body?.kind === 'turn' ? (body.requestedAt ?? body.startedAt) : send?.submittedAt
+        return {
+          turnId: turn?.turnId ?? null,
+          unansweredSendId: send?.clientMessageId ?? null,
+          sentAt: sentAt ?? null
+        }
       },
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
       onDispatchSettledLate: followUps.onDispatchSettledLate,

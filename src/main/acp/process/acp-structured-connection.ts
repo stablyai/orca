@@ -34,7 +34,7 @@ export type AcpStructuredConnection = Pick<
   readonly lostBeforeExit?: AcpAgentConnection['lostBeforeExit']
   readonly kept?: AcpAgentConnection['kept']
   /** The earlier app's prompt to a kept agent, when this agent reads its failure differently. */
-  earlierPrompt?: () => ReturnType<AcpKeptSession['earlierPrompt']>
+  earlierPrompt?: (sentAt?: number) => ReturnType<AcpKeptSession['earlierPrompt']>
 }
 
 export type ConnectAcpAgent<Connection = AcpStructuredConnection> = (

@@ -99,10 +99,6 @@ export class ProviderRelayChannel {
     agent: string,
     keep?: ProviderRelayKeepSpec
   ): Promise<ProviderRelaySpawnResult> {
-    // Without kept state a reattach would have nothing to restore, so such a launch goes as today.
-    if (keep && !this.client.getDaemonIdentity()?.providerRelayKeep) {
-      return Promise.resolve({ refused: 'unavailable' })
-    }
     return this.client.request(
       'relaySpawn',
       keep ? { spec, chatKey, agent, policy, keep } : { spec, chatKey, agent, policy },

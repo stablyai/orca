@@ -38,10 +38,11 @@ export type AcpStructuredSessionAdapterDeps = {
   /** Protected by this host's instance lock. */
   dataDirectory: string
   connect: ConnectAcpAgent
-  /** The chat's running turn and its latest unanswered send, for a kept agent to carry on. */
+  /** The chat's running turn and its latest unanswered send, for a kept agent to carry on, and
+   *  when the prompt it owes was sent. */
   keptWork?: (
     sessionId: string
-  ) => Promise<{ turnId: string | null; unansweredSendId: string | null }>
+  ) => Promise<{ turnId: string | null; unansweredSendId: string | null; sentAt?: number | null }>
   readProcessStartTime?: (pid: number) => Promise<number | null>
   onEvent?: (event: StructuredAgentSessionLifecycleEvent) => void
   /** `producer` is the reporting child's sink for durable changes. */

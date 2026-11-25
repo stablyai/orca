@@ -188,7 +188,11 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
           this.pausedCuts.delete(id)
           this.cutMessages.set(id, paused)
         }
-        this.open(this.messages, id, { seq, session, child: update.child === true })
+        // A cut message is never held: a replay can't rewrite it whole, and holding it from here
+        // would replay text already saved onto its continuation row.
+        if (!this.cutMessages.has(id)) {
+          this.open(this.messages, id, { seq, session, child: update.child === true })
+        }
       }
     }
     if (kind === 'tool_call' && update.toolCallId) {

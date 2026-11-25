@@ -131,4 +131,26 @@ describe('ACP relay item continuation', () => {
     })
     expect(ids).toEqual([undefined, 'm2', 'relay:r1:13:m1'])
   })
+
+  it('moves a named message that resumes only after the replay, until its prompt is answered', () => {
+    const hook = new AcpRelayItemContinuation()
+    const named = {
+      ...attach([{ id: 7, method: 'session/prompt' }], 10),
+      cutKeys: [JSON.stringify(['s', 'm1'])]
+    }
+    const cut = attachContinuation(hook, 'r1', 10, named)
+    for (let seq = 11; seq <= 16; seq += 1) {
+      cut?.lines(seq, chunk('m2', `b${seq}`), undefined)
+    }
+    // m1 was paused by a call before the quit; it resumes live, after the replay.
+    expect(cut?.done).toBe(false)
+    const [resumed = ''] = cut?.lines(20, chunk('m1', 'resumed'), undefined) ?? []
+    expect(idOf(resumed)).toBe('relay:r1:20:m1')
+    cut?.lines(
+      21,
+      JSON.stringify({ jsonrpc: '2.0', id: 7, result: { stopReason: 'end_turn' } }),
+      undefined
+    )
+    expect(cut?.done).toBe(true)
+  })
 })

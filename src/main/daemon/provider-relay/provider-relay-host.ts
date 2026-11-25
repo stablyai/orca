@@ -182,9 +182,9 @@ export class ProviderRelayHost {
     seq: unknown,
     keepFrom?: unknown,
     flags?: { cut?: unknown; held?: unknown; cutKeys?: unknown }
-  ): number {
+  ): { ackedThrough: number; truncatedThrough: number } {
     const relay = this.requireAttached(clientId, relayId)
-    const ackedThrough = relay.ack(
+    const acked = relay.ack(
       typeof seq === 'number' ? seq : 0,
       typeof keepFrom === 'number' ? keepFrom : undefined,
       {
@@ -194,7 +194,7 @@ export class ProviderRelayHost {
       }
     )
     this.removeIfFinished(relay)
-    return ackedThrough
+    return acked
   }
 
   /** A closed chat wants nothing more from its agent, so the ended relay goes with its spool. */

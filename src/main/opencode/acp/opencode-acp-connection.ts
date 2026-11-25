@@ -101,14 +101,14 @@ class OpenCodeAcpConnection extends AcpAgentConnection {
     }
   }
 
-  /** A kept agent's earlier prompt fails as one sent here would. */
-  earlierPrompt() {
+  /** A kept agent's earlier prompt, sent before this app started, fails as one sent here would. */
+  earlierPrompt(sentAt?: number) {
     const { kept } = this
-    return kept ? this.withNativeFailure(() => kept.earlierPrompt()) : undefined
+    return kept ? this.withNativeFailure(() => kept.earlierPrompt(), sentAt) : undefined
   }
 
-  private async withNativeFailure<T>(answered: () => Promise<T>): Promise<T> {
-    const startedAt = Date.now()
+  private async withNativeFailure<T>(answered: () => Promise<T>, sentAt?: number): Promise<T> {
+    const startedAt = sentAt ?? Date.now()
     try {
       return await answered()
     } catch (error) {
