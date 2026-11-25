@@ -30,20 +30,6 @@ import {
   waitForSessionReady
 } from '../../desktop/renderer-probes/store'
 
-async function waitForTerminalOutputForPtyId(
-  page: Page,
-  ptyId: string,
-  expected: string,
-  timeoutMs: number
-): Promise<void> {
-  await expect
-    .poll(async () => (await getTerminalContentForPtyId(page, ptyId, 8000)).includes(expected), {
-      timeout: timeoutMs,
-      message: `Terminal PTY ${ptyId} did not contain "${expected}"`
-    })
-    .toBe(true)
-}
-
 const SPLIT_RIGHT_CHORD = process.platform === 'darwin' ? 'Meta+d' : 'Control+Shift+d'
 const SEARCH_EVERYTHING_CHORD = process.platform === 'darwin' ? 'Meta+k' : 'Control+k'
 // The move has no default chord; a user binds one. F9 keeps clear of Alt's character remapping.
@@ -104,21 +90,66 @@ async function mountedLeafOwners(page: Page, leafId: string): Promise<(string | 
   )
 }
 
+/** A leaf's live pane in one tab: the PTY its pane is bound to and what its terminal shows. */
+type LeafOwner = { tabId: string; leafId: string; ptyId: string }
+
+/** Reads the leaf's pane from that tab's own manager only; null when the tab does not hold it. */
+async function readLeafOutput(
+  page: Page,
+  tabId: string,
+  leafId: string
+): Promise<{ ptyId: string | undefined; text: string } | null> {
+  return page.evaluate(
+    ({ tabId, leafId }) => {
+      const pane = window.__paneManagers
+        ?.get(tabId)
+        ?.getPanes()
+        .find((candidate) => candidate.leafId === leafId)
+      return pane
+        ? {
+            ptyId: pane.container.dataset.ptyId,
+            text: pane.serializeAddon.serialize().slice(-8000)
+          }
+        : null
+    },
+    { tabId, leafId }
+  )
+}
+
+/** The text appears in this tab's pane for this leaf, and that pane is bound to this PTY. */
+async function waitForLeafOutput(page: Page, owner: LeafOwner, expected: string): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const output = await readLeafOutput(page, owner.tabId, owner.leafId)
+        return output?.ptyId === owner.ptyId && output.text.includes(expected)
+      },
+      { timeout: 10_000, message: `${owner.tabId}/${owner.leafId} did not show "${expected}"` }
+    )
+    .toBe(true)
+}
+
 /**
  * Runs a command whose output is not in the bytes typed (they hold the two halves apart), so
- * seeing it proves the shell ran it, not just that the PTY echoed the keys.
+ * seeing it in the owner's pane proves its shell ran it, not just that the PTY echoed the keys.
  */
-async function runInShell(page: Page, ptyId: string, label: string): Promise<string> {
+async function runInShell(page: Page, owner: LeafOwner, label: string): Promise<string> {
   const stamp = `${Date.now()}`
   await page.keyboard.type(`printf '%s_%s\\n' ${label} ${stamp}\r`)
   const output = `${label}_${stamp}`
-  await waitForTerminalOutputForPtyId(page, ptyId, output, 10_000)
+  await waitForLeafOutput(page, owner, output)
   return output
 }
 
-async function splitWithMarker(
-  page: Page
-): Promise<{ leafId: string; ptyId: string; marker: string }> {
+type SplitPane = {
+  leafId: string
+  ptyId: string
+  marker: string
+  sourceTabId: string
+  sibling: { leafId: string; ptyId: string }
+}
+
+async function splitWithMarker(page: Page): Promise<SplitPane> {
   await waitForPaneIdentitySnapshot(page, 1)
   await focusActiveTerminalInput(page)
   await page.keyboard.press(SPLIT_RIGHT_CHORD)
@@ -126,30 +157,51 @@ async function splitWithMarker(
   const snapshot = await waitForPaneIdentitySnapshot(page, 2)
   const leafId = snapshot.activeLeafId
   const ptyId = leafId ? snapshot.ptyIdsByLeafId[leafId] : undefined
-  if (!leafId || !ptyId) {
-    throw new Error(`No bound active pane in ${JSON.stringify(snapshot)}`)
+  const sibling = Object.entries(snapshot.ptyIdsByLeafId).find(([id]) => id !== leafId)
+  if (!leafId || !ptyId || !sibling) {
+    throw new Error(`No bound split in ${JSON.stringify(snapshot)}`)
   }
   await focusActiveTerminalInput(page)
-  const marker = await runInShell(page, ptyId, 'MOVE_SCROLLBACK')
-  return { leafId, ptyId, marker }
+  const marker = await runInShell(page, { tabId: snapshot.tabId, leafId, ptyId }, 'MOVE_SCROLLBACK')
+  return {
+    leafId,
+    ptyId,
+    marker,
+    sourceTabId: snapshot.tabId,
+    sibling: { leafId: sibling[0], ptyId: sibling[1] }
+  }
 }
 
-async function expectMovedToOwnTab(
-  page: Page,
-  moved: { leafId: string; ptyId: string; marker: string },
-  sourceTabId: string
-): Promise<string> {
+/**
+ * The pane left with its shell for a new tab: the new tab's own pane for the leaf is bound to the
+ * same PTY, shows the scrollback and runs new input; the source no longer has a pane for it; the
+ * sibling stayed in the source with its own shell.
+ */
+async function expectPaneOwnedByNewTab(page: Page, moved: SplitPane): Promise<LeafOwner> {
   await expect
     .poll(async () => (await readLeafHome(page, moved.leafId))?.tabId ?? null)
-    .not.toBe(sourceTabId)
+    .not.toBe(moved.sourceTabId)
   const home = await readLeafHome(page, moved.leafId)
   expect(home).toEqual({ tabId: expect.any(String), ptyId: moved.ptyId, leafCount: 1 })
-  await expect.poll(async () => (await readTabs(page)).activeTabId).toBe(home!.tabId)
+  expect(await readLeafHome(page, moved.sibling.leafId)).toEqual({
+    tabId: moved.sourceTabId,
+    ptyId: moved.sibling.ptyId,
+    leafCount: 1
+  })
   await expect.poll(() => mountedLeafOwners(page, moved.leafId)).toEqual([home!.tabId])
-  // Same shell: the scrollback is still there, and it runs what is typed in the new tab.
-  await waitForTerminalOutputForPtyId(page, moved.ptyId, moved.marker, 10_000)
-  await runInShell(page, moved.ptyId, 'MOVE_FOCUS')
-  return home!.tabId
+  const owner = { tabId: home!.tabId, leafId: moved.leafId, ptyId: moved.ptyId }
+  await waitForLeafOutput(page, owner, moved.marker)
+  // Wrong-owner control: the same witness read through the source tab finds no pane for the leaf.
+  expect(await readLeafOutput(page, moved.sourceTabId, moved.leafId)).toBeNull()
+  return owner
+}
+
+async function expectMovedToOwnTab(page: Page, moved: SplitPane): Promise<string> {
+  const owner = await expectPaneOwnedByNewTab(page, moved)
+  await expect.poll(async () => (await readTabs(page)).activeTabId).toBe(owner.tabId)
+  // Typed into the new tab with nothing clicked: focus followed the pane.
+  await runInShell(page, owner, 'MOVE_FOCUS')
+  return owner.tabId
 }
 
 /**
@@ -184,15 +236,7 @@ async function openChatOnSplit(page: Page) {
       sourceTabId
     )
   ).toBe(moved.leafId)
-  const sibling = await page.evaluate(
-    ({ tabId, leafId }) =>
-      Object.entries(
-        window.__store!.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
-      ).find(([id]) => id !== leafId) ?? null,
-    { tabId: sourceTabId, leafId: moved.leafId }
-  )
-  expect(sibling).not.toBeNull()
-  return { moved, before, sourceTabId, reply, sourceReply, composer, sibling: sibling!, scratchDir }
+  return { moved, before, sourceTabId, reply, sourceReply, composer, scratchDir }
 }
 
 /** The pane left with its shell and conversation for a new tab in chat view; its sibling stayed. */
@@ -200,31 +244,20 @@ async function expectChatMovedToOwnTab(
   page: Page,
   chat: Awaited<ReturnType<typeof openChatOnSplit>>
 ) {
-  await expect
-    .poll(async () => (await readLeafHome(page, chat.moved.leafId))?.tabId ?? null)
-    .not.toBe(chat.sourceTabId)
-  const home = await readLeafHome(page, chat.moved.leafId)
-  expect(home).toEqual({ tabId: expect.any(String), ptyId: chat.moved.ptyId, leafCount: 1 })
-  expect(await readLeafHome(page, chat.sibling[0])).toEqual({
-    tabId: chat.sourceTabId,
-    ptyId: chat.sibling[1],
-    leafCount: 1
-  })
+  const owner = await expectPaneOwnedByNewTab(page, chat.moved)
   expect(
     await page.evaluate(
       ({ tabId, worktreeId }) =>
         window
           .__store!.getState()
           .unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.entityId === tabId)?.viewMode,
-      { tabId: home!.tabId, worktreeId: chat.before.worktreeId }
+      { tabId: owner.tabId, worktreeId: chat.before.worktreeId }
     )
   ).toBe('chat')
-  const destination = page.locator(`[data-terminal-tab-id="${home!.tabId}"]`)
+  const destination = page.locator(`[data-terminal-tab-id="${owner.tabId}"]`)
   await expect(destination.locator('[data-native-chat-window]').getByText(chat.reply)).toBeVisible({
     timeout: 30_000
   })
-  await expect.poll(() => mountedLeafOwners(page, chat.moved.leafId)).toEqual([home!.tabId])
-  await waitForTerminalOutputForPtyId(page, chat.moved.ptyId, chat.moved.marker, 10_000)
   // The moved conversation takes a fresh draft in its new tab.
   const draft = `MOVE_DRAFT_${Date.now()}`
   const editor = destination
@@ -261,7 +294,7 @@ test.describe('Move a terminal pane to a new tab', () => {
 
     await dragPaneOutToTabStrip(orcaPage, before.worktreeId, moved.leafId, 'end')
 
-    const newTabId = await expectMovedToOwnTab(orcaPage, moved, before.activeTabId!)
+    const newTabId = await expectMovedToOwnTab(orcaPage, moved)
     expect((await readTabs(orcaPage)).order.at(-1)).toBe(newTabId)
   })
 
@@ -347,14 +380,13 @@ test.describe('Move a terminal pane to a new tab', () => {
     })
     await orcaPage.getByRole('menuitem', { name: 'Move to New Tab' }).click()
 
-    const newTabId = await expectMovedToOwnTab(orcaPage, moved, before.activeTabId!)
+    const newTabId = await expectMovedToOwnTab(orcaPage, moved)
     const order = (await readTabs(orcaPage)).order
     expect(order.indexOf(newTabId)).toBe(order.indexOf(before.activeTabId!) + 1)
   })
 
   test('the search palette moves the active pane into a new tab', async ({ orcaPage }) => {
     const moved = await splitWithMarker(orcaPage)
-    const before = await readTabs(orcaPage)
 
     await focusActiveTerminalInput(orcaPage)
     await orcaPage.keyboard.press(SEARCH_EVERYTHING_CHORD)
@@ -365,7 +397,7 @@ test.describe('Move a terminal pane to a new tab', () => {
     await palette.locator('[cmdk-input]').press('Enter')
     await expect(palette).toHaveCount(0)
 
-    await expectMovedToOwnTab(orcaPage, moved, before.activeTabId!)
+    await expectMovedToOwnTab(orcaPage, moved)
   })
 
   test('a shortcut the user binds moves the active pane, and does nothing unbound or alone', async ({
@@ -388,7 +420,7 @@ test.describe('Move a terminal pane to a new tab', () => {
     try {
       await focusActiveTerminalInput(orcaPage)
       await orcaPage.keyboard.press(MOVE_PANE_CHORD)
-      const newTabId = await expectMovedToOwnTab(orcaPage, moved, before.activeTabId!)
+      const newTabId = await expectMovedToOwnTab(orcaPage, moved)
 
       // The moved pane is alone in its tab now: the same chord leaves it there.
       await orcaPage.keyboard.press(MOVE_PANE_CHORD)

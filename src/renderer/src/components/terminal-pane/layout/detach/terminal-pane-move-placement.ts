@@ -52,12 +52,12 @@ export function focusMovedPane(
   sourceTabId: string,
   moved: DetachedTerminalPaneTab
 ): void {
-  if (!moved.followed) {
+  const shouldFocus = (): boolean =>
+    isTerminalTabShown(getState(), worktreeId, moved.tab.id) &&
+    isFocusUnclaimed(sourceTabId, moved.tab.id)
+  // Checked before scheduling, which replaces any focus still pending for a tab the user chose.
+  if (!moved.followed || !shouldFocus()) {
     return
   }
-  focusTerminalTabSurface(moved.tab.id, moved.leafId, {
-    shouldFocus: () =>
-      isTerminalTabShown(getState(), worktreeId, moved.tab.id) &&
-      isFocusUnclaimed(sourceTabId, moved.tab.id)
-  })
+  focusTerminalTabSurface(moved.tab.id, moved.leafId, { shouldFocus })
 }

@@ -279,6 +279,7 @@ export function recoverWebSessionTerminalOrphansBeforeApply(
         timeoutMs: args.timeoutMs,
         expectedEnvironmentPairingRevision: options.expectedEnvironmentPairingRevision
       }) as Promise<RuntimeRpcResponse<unknown>>)
+  const callerIsCurrent = options.isCallerCurrent
   return enqueueLatestTerminalRecovery(key, (isCurrent) =>
     recoverTerminalOrphans(
       state,
@@ -287,7 +288,7 @@ export function recoverWebSessionTerminalOrphansBeforeApply(
       call,
       options.expectedEnvironmentPairingRevision,
       options.expectedRuntimeId,
-      isCurrent,
+      callerIsCurrent ? () => isCurrent() && callerIsCurrent() : isCurrent,
       options.getCurrentState
     )
   )

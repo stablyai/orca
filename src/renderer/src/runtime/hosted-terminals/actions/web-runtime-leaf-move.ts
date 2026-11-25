@@ -3,21 +3,28 @@ import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rp
 import { SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { toHostSessionTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { isRecoverableRemoteRuntimeConnectionError } from '../../../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/workspace/ownership/resolve-owner'
 import { useAppStore } from '../../../store/index'
 import { runtimeEnvironmentCapabilityProof } from '../../rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
+import { RuntimeConnectionChangedBeforeSendError } from '../../rpc/calls/runtime-rpc-result'
 import { isWebRuntimeSessionActive } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
-import { isCurrentSessionTabsRuntimeFrame } from '../../web-session-tabs-sync/tracking/publisher-identity-fences'
 import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
-import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { focusTerminalTabSurface } from '../../../components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import {
   isFocusUnclaimed,
   isTerminalTabShown
 } from '../../../components/terminal-pane/layout/detach/terminal-tab-shown'
+import {
+  answeredByAnotherHost,
+  callHost,
+  isCurrentPaneMoveHost,
+  routedEnvironmentId,
+  type PaneMoveHostAuthority
+} from './web-runtime-leaf-move-authority'
+
+export { isCurrentPaneMoveHost, type PaneMoveHostAuthority }
 
 /**
  * Who commits a pane move for this worktree: its paired host, this window (local, direct SSH and
@@ -30,63 +37,6 @@ export type PaneMoveHostRoute =
   | { kind: 'unavailable' }
 
 /**
- * The host admitted for one move: the runtime that proved the capability, on the pairing it was
- * asked over, serving this worktree. Every call of the move is pinned to that runtime and pairing,
- * and every local effect needs all three to still hold. A restart, re-pair or reroute hands the
- * window to the replacement host's snapshots; nothing from the old move applies.
- */
-export type PaneMoveHostAuthority = {
-  environmentId: string
-  pairingRevision: number | undefined
-  runtimeId: string
-  worktreeId: string
-}
-
-/**
- * The admitted host still serves the worktree: same pairing, the worktree still routes to it, and
- * this window has not seen another runtime publish for it (a restart on the same pairing).
- */
-export function isCurrentPaneMoveHost(authority: PaneMoveHostAuthority): boolean {
-  return (
-    getRuntimeEnvironmentRevision(authority.environmentId) === authority.pairingRevision &&
-    routedEnvironmentId(authority.worktreeId) === authority.environmentId &&
-    isCurrentSessionTabsRuntimeFrame(authority.environmentId, authority.runtimeId)
-  )
-}
-
-function routedEnvironmentId(worktreeId: string): string | null {
-  return runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), worktreeId)
-}
-
-/** Main refuses before sending when the host's runtime or pairing no longer matches. */
-function callHost(
-  authority: PaneMoveHostAuthority,
-  args: { method: string; params: unknown }
-): Promise<RuntimeRpcResponse<unknown>> {
-  return window.api.runtimeEnvironments.call({
-    selector: authority.environmentId,
-    ...args,
-    timeoutMs: 15_000,
-    expectedEnvironmentPairingRevision: authority.pairingRevision,
-    expectedEnvironmentRuntimeId: authority.runtimeId
-  })
-}
-
-/** The answer came from another runtime than the admitted one, or was never sent to it. */
-function answeredByAnotherHost(
-  authority: PaneMoveHostAuthority,
-  response: RuntimeRpcResponse<unknown>
-): boolean {
-  if (!response.ok && response.error.code === 'runtime_environment_changed') {
-    return true
-  }
-  const runtimeId = response._meta?.runtimeId
-  return (
-    typeof runtimeId === 'string' && runtimeId.trim() !== '' && runtimeId !== authority.runtimeId
-  )
-}
-
-/**
  * Ordinary reconciliation with whichever host serves the worktree now, nothing move-specific. Its
  * frame applies only while the worktree still routes to that host.
  */
@@ -95,9 +45,12 @@ async function reconcileWithCurrentHost(worktreeId: string): Promise<void> {
   if (!environmentId) {
     return
   }
+  const stillRouted = (): boolean => routedEnvironmentId(worktreeId) === environmentId
   await refreshWebRuntimeSessionTabsSnapshot(environmentId, worktreeId, {
     acceptCurrentSnapshot: true,
-    isCurrent: () => routedEnvironmentId(worktreeId) === environmentId
+    isCurrent: stillRouted,
+    // A reroute while the list is in flight leaves this move's refresh with no effect at all.
+    ownsEffects: stillRouted
   })
 }
 
@@ -156,6 +109,10 @@ export async function moveWebRuntimeLeafToNewTab(
       }
     })
   } catch (error) {
+    // The web client's bridge refuses before sending with a typed error, as main does with an envelope.
+    if (error instanceof RuntimeConnectionChangedBeforeSendError) {
+      return 'superseded'
+    }
     console.warn(
       '[web-runtime-session] no answer to the pane move:',
       error instanceof Error ? error.message : String(error)
@@ -165,12 +122,14 @@ export async function moveWebRuntimeLeafToNewTab(
   if (answeredByAnotherHost(authority, response)) {
     return 'superseded'
   }
-  // Why: the bridge answers a lost transport as an error envelope, not a throw; the host may have committed.
-  if (!response.ok && isRecoverableRemoteRuntimeConnectionError(response.error)) {
+  // Why: an error envelope after dispatch is not the host's answer (a lost transport, a manual
+  // disconnect masking a reply, a local failure); the host may have committed, so it is asked.
+  // Only the host's own `refused` result is a refusal.
+  if (!response.ok) {
     console.warn('[web-runtime-session] no answer to the pane move:', response.error.code)
     return 'unknown'
   }
-  const answer = response.ok ? response.result : response
+  const answer = response.result
   if (
     typeof answer === 'object' &&
     answer !== null &&
@@ -196,8 +155,8 @@ async function hostHoldsMovedPane(
       method: 'session.tabs.list',
       params: { worktree: toRuntimeWorktreeSelector(request.worktreeId) }
     })
-  } catch {
-    return 'unaskable'
+  } catch (error) {
+    return error instanceof RuntimeConnectionChangedBeforeSendError ? 'superseded' : 'unaskable'
   }
   if (answeredByAnotherHost(authority, response)) {
     return 'superseded'
@@ -270,7 +229,7 @@ export async function settleHostPaneMove(
   recheckDelayMs = LOST_REPLY_RECHECK_MS
 ): Promise<void> {
   const custody: MovedPaneCustody =
-    outcome === 'superseded'
+    outcome === 'superseded' || !isCurrentPaneMoveHost(authority)
       ? 'superseded'
       : outcome === 'unknown'
         ? await hostHoldsMovedPane(authority, request)
@@ -356,10 +315,13 @@ async function revertRefusedPaneMove(
   }
   // The pane is back in its source; the user who was typing in it keeps typing there, unless they
   // have since moved on (another tab, view or focused control) or the host was replaced.
-  focusTerminalTabSurface(request.sourceTabId, request.leafId, {
-    shouldFocus: () =>
-      isCurrentPaneMoveHost(authority) &&
-      isTerminalTabShown(useAppStore.getState(), request.worktreeId, request.sourceTabId) &&
-      isFocusUnclaimed(request.sourceTabId)
-  })
+  const shouldFocus = (): boolean =>
+    isCurrentPaneMoveHost(authority) &&
+    isTerminalTabShown(useAppStore.getState(), request.worktreeId, request.sourceTabId) &&
+    isFocusUnclaimed(request.sourceTabId)
+  // Checked before scheduling: scheduling replaces any focus still pending (a tab the user
+  // activated during the refresh), so a refocus the user no longer wants must not take its place.
+  if (shouldFocus()) {
+    focusTerminalTabSurface(request.sourceTabId, request.leafId, { shouldFocus })
+  }
 }

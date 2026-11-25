@@ -7,4 +7,6 @@ export type TerminalOrphanRecoveryOptions = {
   call?: TerminalOrphanRecoveryCall
   /** Reads live renderer topology so an RPC cannot apply a stale local claim. */
   getCurrentState?: () => TerminalOrphanRecoveryState
+  /** The requesting caller still wants this recovery; once false it sends and applies nothing. */
+  isCallerCurrent?: () => boolean
 }

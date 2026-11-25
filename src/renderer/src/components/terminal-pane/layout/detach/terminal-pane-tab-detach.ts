@@ -4,6 +4,8 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../
 import type { TerminalLeafMoveRequest } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import { commitTerminalSurfaceClose } from '@/store/terminals/retirement/terminal-surface-close-intent'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
+import { sourceAfterCommit } from './terminal-pane-committed-source'
+import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { holdTerminalPaneMount } from '../split/terminal-pane-split-request-routing'
 import { moveLeafThroughLayoutOwner } from './terminal-pane-detach-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
@@ -26,7 +28,6 @@ import {
   newTabIndexNow,
   resolveDestination,
   sampleIfReadyToMove,
-  sampleSourcePane,
   type DetachedTerminalPaneTab,
   type DetachTerminalPaneToTabArgs,
   type SourcePaneSample
@@ -49,19 +50,32 @@ export async function detachTerminalPaneToTab(
   }
   leavesMovingToNewTab.add(leafId)
   // Held for the whole move: parking the source tab mid-move would unmount the pane main may
-  // already have committed.
+  // already have committed. A host move holds it until the host's answer is settled (not through
+  // its one later re-check, which only reconciles), while the drawn tab shows at once.
   const releaseMount = holdTerminalPaneMount(args.sourceTabId, args.worktreeId)
-  try {
-    return await moveLeafToNewTab(args, leafId)
-  } finally {
+  const continuation: { settled?: Promise<unknown> } = {}
+  const release = (): void => {
     releaseMount()
     leavesMovingToNewTab.delete(leafId)
+  }
+  try {
+    return await moveLeafToNewTab(args, leafId, (settled) => {
+      continuation.settled = settled
+    })
+  } finally {
+    if (continuation.settled) {
+      void continuation.settled.finally(release)
+    } else {
+      release()
+    }
   }
 }
 
 async function moveLeafToNewTab(
   args: DetachTerminalPaneToTabArgs,
-  leafId: string
+  leafId: string,
+  /** The move goes on after this returns (host settlement); the move's hold lasts until it ends. */
+  continuesUntil: (settled: Promise<unknown>) => void
 ): Promise<DetachedTerminalPaneTab | null> {
   // The user was looking at the source tab when they asked; the move follows the pane only if they still are.
   const sourceShownAtInvocation = isSourceTabShown(args)
@@ -134,17 +148,19 @@ async function moveLeafToNewTab(
       speculative: true,
       follow: followPane()
     })
-    void hostMove
-      .then((outcome) =>
-        settleHostPaneMove(
-          paneMoveHost,
-          request,
-          outcome,
-          applied !== null,
-          userInitiated ? { onRefused: reportMoveFailed } : {}
+    continuesUntil(
+      hostMove
+        .then((outcome) =>
+          settleHostPaneMove(
+            paneMoveHost,
+            request,
+            outcome,
+            applied !== null,
+            userInitiated ? { onRefused: reportMoveFailed } : {}
+          )
         )
-      )
-      .catch((error: unknown) => console.warn('[terminal-pane-detach] move not settled', error))
+        .catch((error: unknown) => console.warn('[terminal-pane-detach] move not settled', error))
+    )
     return applied
   }
   // Switch point: main moves the pane and names the new tab.
@@ -167,7 +183,7 @@ async function moveLeafToNewTab(
         : request
     // Main holds the pane now; the window rolls forward with the pane as it is after the reply.
     return nameAfterPane(
-      applyMove(args, moved, sampleSourcePane(args, leafId), {
+      applyMove(args, moved, await sourceAfterCommit(args, leafId), {
         mainMoved: true,
         ptyId: answer.ptyId,
         follow: followPane()
@@ -197,11 +213,14 @@ async function moveLeafToNewTab(
   return refuse()
 }
 
-/** Applies the move here, to the pane exactly as `source` read it (no await since). */
+/**
+ * Applies the move here, to the pane exactly as `source` read it (no await since); `unmounted`
+ * applies a committed move to the saved layout only, for a source tab nothing draws right now.
+ */
 function applyMove(
   args: DetachTerminalPaneToTabArgs,
   request: TerminalLeafMoveRequest,
-  source: SourcePaneSample | null,
+  source: SourcePaneSample | 'unmounted' | null,
   options: {
     mainMoved: boolean
     ptyId: string | null
@@ -213,11 +232,15 @@ function applyMove(
 ): DetachedTerminalPaneTab | null {
   const { mainMoved, ptyId } = options
   const { leafId, sourceTabId, targetTabId, worktreeId } = request
+  const live = source !== 'unmounted' ? source : null
   // Read before the pane leaves this layout; an unbound pane's new shell starts in its folder.
-  const startupCwd = source?.sourcePaneCwd?.cwd
+  const startupCwd = live?.sourcePaneCwd?.cwd
   const sourceLayout = args.getStore().terminalLayoutsByTabId[sourceTabId]
   // A sibling closed meanwhile, so the pane takes the whole source layout and the source tab closes.
-  const lastPane = source?.paneCount === 1
+  const lastPane =
+    source === 'unmounted'
+      ? (sourceLayout?.root ? collectLeafIds(sourceLayout.root).length : 0) === 1
+      : source?.paneCount === 1
   const destination = resolveDestination(args, mainMoved)
   // Why: closing the source here is outside what a refusal can undo, and the host keeps its last
   // pane anyway; the host's answer and snapshot settle this window instead.
@@ -227,14 +250,18 @@ function applyMove(
   const split = lastPane ? null : detachTerminalLayoutLeaf(sourceLayout, leafId)
   const movedLayout = lastPane ? sourceLayout : split?.detachedLayout
   // Compute handoff before removing the source pane; its close must detach listeners without killing the PTY.
+  const attachedTarget = mainMoved
+    ? args.getStore().tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === targetTabId)
+    : undefined
   if (
     !source ||
     !destination ||
     !movedLayout ||
-    (!lastPane && !source.manager.detachPaneForExternalMove(source.paneId))
+    (!lastPane && live && !live.manager.detachPaneForExternalMove(live.paneId))
   ) {
-    // If source removal failed or the pane/tab vanished, close main’s otherwise-empty target through normal tab-close routing.
-    if (mainMoved) {
+    // The pane vanished (or would not leave its manager): close main's otherwise-empty target
+    // through normal tab-close routing, unless something already shows that tab.
+    if (mainMoved && !attachedTarget) {
       commitTerminalSurfaceClose(worktreeId, { kind: 'tab', tabId: targetTabId }, 'cleanup')
     }
     return null
@@ -247,11 +274,8 @@ function applyMove(
   const sourceShellOverride = latestStore.tabsByWorktree[worktreeId]?.find(
     (candidate) => candidate.id === sourceTabId
   )?.shellOverride
-  // Switch point: the reply runs after the frame with main's new tab, which may have drawn it.
-  const frameDrawn =
-    ORCA_LAYOUT_OWNER_IS_MAIN && mainMoved
-      ? latestStore.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === targetTabId)
-      : undefined
+  // A committed target can already be drawn (switch point: main's frame runs before its reply).
+  const frameDrawn = attachedTarget
   const tab =
     frameDrawn ??
     latestStore.createTab(worktreeId, destination.groupId, sourceShellOverride, {

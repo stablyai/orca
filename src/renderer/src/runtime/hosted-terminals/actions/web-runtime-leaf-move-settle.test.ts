@@ -18,7 +18,13 @@ const store = vi.hoisted(() => {
     activeGroupIdByWorktree: {},
     unifiedTabsByWorktree: {}
   }
-  return { ...view, transferAgentPaneAuthority: vi.fn(), closeTab: vi.fn() }
+  return {
+    ...view,
+    /** Verified host statuses, as the runtime-status slice keeps them. */
+    runtimeStatusByEnvironmentId: new Map<string, { status: { runtimeId: string } | null }>(),
+    transferAgentPaneAuthority: vi.fn(),
+    closeTab: vi.fn()
+  }
 })
 const refreshSnapshot = vi.hoisted(() =>
   vi.fn(async (_env: string, _worktreeId: string, _options: { isCurrent?: () => boolean }) => {})
@@ -33,6 +39,10 @@ type HostState = {
   inventory: { publicationEpoch: string; tabs: { parentTabId: string; leafId: string }[] }
   moveAnswer: { status: 'moved' } | { status: 'refused'; reason: string }
   unreachable: boolean
+  /** The user disconnected the host locally; main answers for it, masking any host reply. */
+  manuallyDisconnected: boolean
+  /** The web client's bridge: it throws a typed error instead of answering with an envelope. */
+  webBridgeRefusesBeforeSend: boolean
   routedEnvironmentId: string | null
 }
 const host = vi.hoisted(() => {
@@ -42,6 +52,8 @@ const host = vi.hoisted(() => {
     inventory: { publicationEpoch: 'epoch-1', tabs: [] },
     moveAnswer: { status: 'moved' },
     unreachable: false,
+    manuallyDisconnected: false,
+    webBridgeRefusesBeforeSend: false,
     routedEnvironmentId: 'env-1'
   }
   return state
@@ -72,6 +84,8 @@ const { moveWebRuntimeLeafToNewTab, resolvePaneMoveHost, settleHostPaneMove } =
 const { acceptSessionTabsRuntimeId } =
   await import('../../web-session-tabs-sync/tracking/publisher-identity-fences')
 const { sessionTabsRuntimeHistoryByEnvironment } = await import('../../web-session-tabs-sync/state')
+const { RuntimeConnectionChangedBeforeSendError } =
+  await import('../../rpc/calls/runtime-rpc-result')
 
 const WT = 'repo::/wt'
 const REQUEST = {
@@ -100,6 +114,9 @@ const call = vi.fn(
     expectedEnvironmentRuntimeId?: string
     expectedEnvironmentPairingRevision?: number
   }) => {
+    if (host.webBridgeRefusesBeforeSend) {
+      throw new RuntimeConnectionChangedBeforeSendError('The paired Orca server changed.')
+    }
     const meta = { runtimeId: host.runtimeId }
     if (
       (args.expectedEnvironmentRuntimeId !== undefined &&
@@ -111,6 +128,14 @@ const call = vi.fn(
         id: args.method,
         ok: false,
         error: { code: 'runtime_environment_changed', message: 'changed' },
+        _meta: meta
+      }
+    }
+    if (host.manuallyDisconnected) {
+      return {
+        id: 'runtime.manualDisconnect',
+        ok: false,
+        error: { code: 'runtime_manually_disconnected', message: 'Disconnected' },
         _meta: meta
       }
     }
@@ -140,12 +165,15 @@ beforeEach(() => {
     inventory: { publicationEpoch: 'epoch-1', tabs: [] },
     moveAnswer: { status: 'moved' },
     unreachable: false,
+    manuallyDisconnected: false,
+    webBridgeRefusesBeforeSend: false,
     routedEnvironmentId: 'env-1'
   })
   sessionTabsRuntimeHistoryByEnvironment.clear()
   acceptSessionTabsRuntimeId('env-1', 'runtime-1')
   store.activeView = 'terminal'
   store.activeTabId = null
+  store.runtimeStatusByEnvironmentId.clear()
   Object.assign(window, { api: { runtimeEnvironments: { call } } })
 })
 
@@ -187,7 +215,13 @@ describe('sending a pane move to its host', () => {
     ],
     ['the host restarted before it was sent', () => (host.runtimeId = 'runtime-2'), 'superseded'],
     ['the host was re-paired before it was sent', () => (host.pairingRevision = 2), 'superseded'],
-    ['the reply was lost', () => (host.unreachable = true), 'unknown']
+    ['the reply was lost', () => (host.unreachable = true), 'unknown'],
+    ['a local disconnect masked the reply', () => (host.manuallyDisconnected = true), 'unknown'],
+    [
+      "the web client's bridge refused before sending",
+      () => (host.webBridgeRefusesBeforeSend = true),
+      'superseded'
+    ]
   ])('answers when %s', async (_case, arrange, outcome) => {
     arrange()
 
@@ -295,6 +329,51 @@ describe('settling a pane move with its host', () => {
     expect(onRefused).not.toHaveBeenCalled()
   })
 
+  it('applies nothing from a refusal once a verified status names a replacement runtime', async () => {
+    // The replacement is known from its status before any tab frame from it arrives.
+    store.runtimeStatusByEnvironmentId.set('env-1', { status: { runtimeId: 'runtime-2' } })
+    const onRefused = vi.fn()
+
+    await settleHostPaneMove(AUTHORITY, REQUEST, 'refused', true, { onRefused })
+
+    movedHereStays()
+    expect(onRefused).not.toHaveBeenCalled()
+  })
+
+  it('still settles a refusal when the verified status names the admitted runtime', async () => {
+    store.runtimeStatusByEnvironmentId.set('env-1', { status: { runtimeId: 'runtime-1' } })
+    const onRefused = vi.fn()
+
+    await settleHostPaneMove(AUTHORITY, REQUEST, 'refused', true, { onRefused })
+
+    expect(onRefused).toHaveBeenCalledTimes(1)
+    expect(store.closeTab).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not ask an old host about a lost reply once the worktree moved off it', async () => {
+    host.routedEnvironmentId = 'env-2'
+
+    await settleHostPaneMove(AUTHORITY, REQUEST, 'unknown', true, {}, 0)
+
+    expect(call).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'session.tabs.list' }))
+    movedHereStays()
+  })
+
+  it('treats a reply masked by a local disconnect as lost, not refused', async () => {
+    host.manuallyDisconnected = true
+    const onRefused = vi.fn()
+
+    const outcome = await moveWebRuntimeLeafToNewTab(AUTHORITY, REQUEST, PLACEMENT)
+    // The host did commit; once reachable its list shows the pane in the new tab.
+    host.manuallyDisconnected = false
+    host.inventory.tabs = HOLDS_MOVED_PANE
+    await settleHostPaneMove(AUTHORITY, REQUEST, outcome, true, { onRefused }, 0)
+
+    expect(outcome).toBe('unknown')
+    movedHereStays()
+    expect(onRefused).not.toHaveBeenCalled()
+  })
+
   it('reconciles only with the host the worktree routes to, and only while it still does', async () => {
     host.routedEnvironmentId = 'env-2'
 
@@ -320,15 +399,30 @@ describe('settling a pane move with its host', () => {
 
   it('gives the pane back its focus after a refusal only if the user is still on it', async () => {
     store.activeTabId = 'drawn-tab'
+    // Closing the drawn tab leaves the user on its source.
+    store.closeTab.mockImplementationOnce(() => {
+      store.activeTabId = 'source-tab'
+    })
 
     await settleHostPaneMove(AUTHORITY, REQUEST, 'refused', true)
 
     const [tabId, leafId, options] = focusSurface.mock.calls[0]!
     expect([tabId, leafId]).toEqual(['source-tab', REQUEST.leafId])
-    store.activeTabId = 'source-tab'
     expect(options.shouldFocus()).toBe(true)
     store.activeView = 'settings'
     expect(options.shouldFocus()).toBe(false)
+  })
+
+  it('does not refocus after a refusal once a status named a replacement during the refresh', async () => {
+    store.activeTabId = 'drawn-tab'
+    refreshSnapshot.mockImplementationOnce(async () => {
+      store.activeTabId = 'source-tab'
+      store.runtimeStatusByEnvironmentId.set('env-1', { status: { runtimeId: 'runtime-2' } })
+    })
+
+    await settleHostPaneMove(AUTHORITY, REQUEST, 'refused', true)
+
+    expect(focusSurface).not.toHaveBeenCalled()
   })
 
   it('does not refocus after a refusal once the host was seen restarting during the refresh', async () => {
@@ -340,7 +434,6 @@ describe('settling a pane move with its host', () => {
 
     await settleHostPaneMove(AUTHORITY, REQUEST, 'refused', true)
 
-    const [, , options] = focusSurface.mock.calls[0]!
-    expect(options.shouldFocus()).toBe(false)
+    expect(focusSurface).not.toHaveBeenCalled()
   })
 })

@@ -58,6 +58,13 @@ type SnapshotRefreshOptions = {
   reconcileBrowserPage?: WebSessionTabsSnapshotApplyOptions['reconcileBrowserPage']
   errorMode?: 'warn' | 'throw'
   isCurrent?(): boolean
+  /**
+   * For a caller whose own reason to refresh can lapse while the list is in flight (a move that
+   * reconciles the host its worktree routes to): once false, this call has no effect at all, from
+   * receipt and close replay through orphan recovery to the patch. Others sharing the same list
+   * process it themselves.
+   */
+  ownsEffects?(): boolean
 }
 
 export async function refreshWebRuntimeSessionTabsSnapshot(
@@ -138,6 +145,9 @@ async function reconcileWebRuntimeSessionTabs(
           }
         }
       }))
+    if (options.ownsEffects && !options.ownsEffects()) {
+      return false
+    }
     if (options.confirmAgentSessionHandoff) {
       const { confirmWebAgentSessionHandoffAfterCreate } =
         await import('../../hosted-terminals/creation/agent-launch/web-agent-session-handoff')
@@ -167,11 +177,13 @@ async function reconcileWebRuntimeSessionTabs(
       {
         expectedEnvironmentPairingRevision,
         expectedRuntimeId: runtimeId,
-        getCurrentState: () => useAppStore.getState()
+        getCurrentState: () => useAppStore.getState(),
+        ...(options.ownsEffects ? { isCallerCurrent: options.ownsEffects } : {})
       }
     )
     if (
       !recovered ||
+      (options.ownsEffects && !options.ownsEffects()) ||
       getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
     ) {
       return false
@@ -185,14 +197,16 @@ async function reconcileWebRuntimeSessionTabs(
     )
       ? decideWebSessionTabsSnapshot(recovered, environmentId)
       : WEB_SESSION_TABS_FRAME_OUTRANKED
-    if (options.isCurrent && !options.isCurrent()) {
+    const callerIsCurrent = (): boolean =>
+      (!options.isCurrent || options.isCurrent()) && (!options.ownsEffects || options.ownsEffects())
+    if (!callerIsCurrent()) {
       return false
     }
     let applied = false
     const settleMirror = applyWebSessionTabsStorePatch(
       (state, changedAgentPaneKeys) => {
         // Eager refresh can outlive workspace switches; update tabs without taking focus.
-        if (options.isCurrent && !options.isCurrent()) {
+        if (!callerIsCurrent()) {
           return state
         }
         if (decision.apply) {

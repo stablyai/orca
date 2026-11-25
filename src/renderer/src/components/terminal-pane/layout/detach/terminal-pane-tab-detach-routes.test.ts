@@ -615,6 +615,94 @@ describe('moving a pane to a new tab', () => {
       expect(commitTerminalSurfaceClose).not.toHaveBeenCalled()
     })
 
+    it('keeps the move when the old cleanup runs after the replacement registered', async () => {
+      const store = storeFor(SOURCE_TAB_ID, titledLayout())
+      const parked = manager()
+      const unregisterParked = registerTerminalPaneMoveMount(
+        WORKTREE_ID,
+        SOURCE_TAB_ID,
+        mountOf(parked)
+      )
+      const revealed = manager(7)
+      let unregisterRevealed = () => {}
+      vi.mocked(window.api.pty.moveLeafToNewTab).mockImplementationOnce(async () => {
+        // React mounts the replacement before the old component's cleanup runs.
+        unregisterRevealed = registerTerminalPaneMoveMount(
+          WORKTREE_ID,
+          SOURCE_TAB_ID,
+          mountOf(revealed)
+        )
+        unregisterParked()
+        return { status: 'moved', ptyId: 'pty-right' }
+      })
+
+      const moved = await detachThroughRegistry(store)
+      unregisterRevealed()
+
+      expect(moved?.ptyId).toBe('pty-right')
+      expect(revealed.detachPaneForExternalMove).toHaveBeenCalledWith(7)
+      expect(commitTerminalSurfaceClose).not.toHaveBeenCalled()
+    })
+
+    it('waits out a remount that has no manager yet, then moves on the rebuilt one', async () => {
+      const store = storeFor(SOURCE_TAB_ID, titledLayout())
+      const unregisterOld = registerTerminalPaneMoveMount(
+        WORKTREE_ID,
+        SOURCE_TAB_ID,
+        mountOf(manager())
+      )
+      const rebuilt = manager(9)
+      const hydrated = { panes: false }
+      let unregisterRebuilt = () => {}
+      vi.mocked(window.api.pty.moveLeafToNewTab).mockImplementationOnce(async () => {
+        // The answer lands while the tab is between owners: its manager is rebuilding.
+        unregisterOld()
+        unregisterRebuilt = registerTerminalPaneMoveMount(WORKTREE_ID, SOURCE_TAB_ID, () =>
+          hydrated.panes ? mountOf(rebuilt)() : null
+        )
+        setTimeout(() => (hydrated.panes = true), 60)
+        return { status: 'moved', ptyId: 'pty-right' }
+      })
+
+      const moved = await detachThroughRegistry(store)
+      unregisterRebuilt()
+
+      expect(moved?.ptyId).toBe('pty-right')
+      expect(rebuilt.detachPaneForExternalMove).toHaveBeenCalledWith(9)
+      expect(commitTerminalSurfaceClose).not.toHaveBeenCalled()
+    })
+
+    it('applies a committed move to the saved layout when nothing draws the tab', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      try {
+        const store = storeFor(SOURCE_TAB_ID, titledLayout())
+        const unregister = registerTerminalPaneMoveMount(
+          WORKTREE_ID,
+          SOURCE_TAB_ID,
+          mountOf(manager())
+        )
+        vi.mocked(window.api.pty.moveLeafToNewTab).mockImplementationOnce(async () => {
+          unregister()
+          return { status: 'moved', ptyId: 'pty-right' }
+        })
+
+        const pending = detachThroughRegistry(store)
+        await vi.advanceTimersByTimeAsync(3_500)
+        const moved = await pending
+
+        expect(commitTerminalSurfaceClose).not.toHaveBeenCalled()
+        expect(store.terminalLayoutsByTabId[moved!.tab.id]?.ptyIdsByLeafId).toEqual({
+          [LEAF_2]: 'pty-right'
+        })
+        expect(store.terminalLayoutsByTabId[SOURCE_TAB_ID]?.root).toEqual({
+          type: 'leaf',
+          leafId: LEAF_1
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it("closes main's new tab only when the pane is really gone", async () => {
       const store = storeFor(SOURCE_TAB_ID, titledLayout())
       const unregister = registerTerminalPaneMoveMount(
@@ -623,12 +711,83 @@ describe('moving a pane to a new tab', () => {
         mountOf(manager())
       )
       vi.mocked(window.api.pty.moveLeafToNewTab).mockImplementationOnce(async () => {
+        // The pane is gone from the tab itself, not just between mounts.
         unregister()
+        store.terminalLayoutsByTabId[SOURCE_TAB_ID] = {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_1]: 'pty-left' }
+        }
         return { status: 'moved', ptyId: 'pty-right' }
       })
 
       expect(await detachThroughRegistry(store)).toBeNull()
       expect(commitTerminalSurfaceClose).toHaveBeenCalledTimes(1)
+    })
+
+    it('never closes a committed tab that is already drawn', async () => {
+      const store = storeFor(SOURCE_TAB_ID, titledLayout())
+      const unregister = registerTerminalPaneMoveMount(
+        WORKTREE_ID,
+        SOURCE_TAB_ID,
+        mountOf(manager())
+      )
+      vi.mocked(window.api.pty.moveLeafToNewTab).mockImplementationOnce(async (request) => {
+        unregister()
+        store.terminalLayoutsByTabId[SOURCE_TAB_ID] = {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_1]: 'pty-left' }
+        }
+        // Something already drew main's new tab.
+        store.createTab(WORKTREE_ID, TARGET_GROUP_ID, undefined, { id: request.targetTabId })
+        return { status: 'moved', ptyId: 'pty-right' }
+      })
+
+      await detachThroughRegistry(store)
+
+      expect(commitTerminalSurfaceClose).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('a move its host settles later', () => {
+    it('keeps the source mounted and refuses a repeat move until the host has answered', async () => {
+      hostMove.route = HOST_ROUTE
+      const store = storeFor(HOST_SOURCE_TAB_ID, titledLayout())
+      let settle: () => void = () => {}
+      hostMove.settle.mockImplementationOnce(
+        () => new Promise<void>((resolve) => (settle = resolve))
+      )
+
+      const moved = await detach(store, HOST_SOURCE_TAB_ID)
+      await vi.waitFor(() => expect(hostMove.settle).toHaveBeenCalled())
+
+      // The drawn tab shows at once, while the host has not answered yet.
+      expect(moved).not.toBeNull()
+      expect(hasTerminalPaneSplitMountLease(HOST_SOURCE_TAB_ID, WORKTREE_ID)).toBe(true)
+      expect(
+        await detach(storeFor(HOST_SOURCE_TAB_ID, titledLayout()), HOST_SOURCE_TAB_ID)
+      ).toBeNull()
+      settle()
+      await vi.waitFor(() =>
+        expect(hasTerminalPaneSplitMountLease(HOST_SOURCE_TAB_ID, WORKTREE_ID)).toBe(false)
+      )
+    })
+
+    it('releases the source when settling fails', async () => {
+      hostMove.route = HOST_ROUTE
+      const store = storeFor(HOST_SOURCE_TAB_ID, titledLayout())
+      hostMove.settle.mockImplementationOnce(async () => {
+        throw new Error('settle failed')
+      })
+
+      await detach(store, HOST_SOURCE_TAB_ID)
+
+      await vi.waitFor(() =>
+        expect(hasTerminalPaneSplitMountLease(HOST_SOURCE_TAB_ID, WORKTREE_ID)).toBe(false)
+      )
     })
   })
 
