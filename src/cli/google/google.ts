@@ -6,7 +6,11 @@ import { createInterface } from 'node:readline'
 import type { GoogleClientView } from '../../shared/google/google-client-config'
 import { googleEmailKey } from '../../shared/google/google-bot-accounts'
 import { clientLine, formatGoogleAccount, formatGoogleStatus } from './google-status-format'
-import type { GoogleSignInStatus, GoogleStatusView } from '../../shared/google/google-connect-types'
+import {
+  GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY,
+  type GoogleSignInStatus,
+  type GoogleStatusView
+} from '../../shared/google/google-connect-types'
 import { GOOGLE_SERVICE_CHOICES, type GoogleServiceChoice } from '../../shared/google/google-scopes'
 import {
   readInjectedAgentSessionId,
@@ -30,6 +34,19 @@ export function prepare(ctx: HandlerContext, command: string): void {
     ctx.flags,
     `\`${command}\`. Run it in a terminal on the computer whose Google you are setting up.`
   )
+}
+
+/** An older host drops --accounts and grants every account, so the list never goes to one. */
+async function assertGoogleBotAccounts(ctx: HandlerContext): Promise<void> {
+  const status = await ctx.client.call<{ machineName?: string; capabilities?: string[] }>(
+    'status.get'
+  )
+  if (!status.result.capabilities?.includes(GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      `Update Orca on ${status.result.machineName?.trim() || 'this computer'} to choose accounts.`
+    )
+  }
 }
 
 /** A bot run's token, which the host refuses owner-only changes from, and the chat it runs from. */
@@ -242,10 +259,25 @@ export const GOOGLE_HANDLERS: Record<string, CommandHandler> = {
     }
     const on = ctx.flags.get('off') !== true
     const bot = await findBot(ctx.client, getRequiredStringFlag(ctx.flags, 'bot'))
+    if (accounts) {
+      await assertGoogleBotAccounts(ctx)
+    }
+    // --on is every account; without allAccounts the host keeps a list the bot already has.
     const result = await ctx.client.call<{
       bot: { name: string; google: boolean; accounts?: string[] }
       warning?: string
-    }>('google.bot.set', { ...caller(), botId: bot.id, on, ...(accounts ? { accounts } : {}) })
+    }>('google.bot.set', {
+      ...caller(),
+      botId: bot.id,
+      on,
+      ...(accounts ? { accounts } : on ? { allAccounts: true } : {})
+    })
+    if (accounts && result.result.bot.google && !result.result.bot.accounts) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        `This Orca didn't keep the account list: ${result.result.bot.name} now has every Google account. Run \`orca google bot --bot ${bot.id} --off\`, update Orca, then try again.`
+      )
+    }
     printResult(result, ctx.json, ({ bot: saved, warning }) =>
       saved.google
         ? [

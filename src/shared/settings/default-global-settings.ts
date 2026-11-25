@@ -263,7 +263,6 @@ export function buildDefaultSettings(args: {
     minimaxUsageModels: 'general',
     minimaxEndpoint: 'overseas',
     zcodePlanSite: 'zai',
-    geminiCliOAuthEnabled: false,
     claudeOAuthUsageEnabled: true,
     agentCmdOverrides: {},
     // Arguments hold only the user's own text; the permission flag comes from the choice below.

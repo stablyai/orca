@@ -7,24 +7,26 @@ import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-sessio
 import { canonicalOrcaSessionId } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readBotTurn } from '../runtime/rpc/methods/orchestration/messaging/bot-recipient'
-import { turnActsForOwner } from './bot-request-asker'
+import { turnActsForOwner, type BotActingTurn } from './bot-request-asker'
 
 /** Whether two ids name one agent session, however each is spelled. */
 export const sameSession = (a: string, b: string): boolean =>
   (isOrcaSessionId(a) ? canonicalOrcaSessionId(a) : a) ===
   (isOrcaSessionId(b) ? canonicalOrcaSessionId(b) : b)
 
-/** `callerSessionId`: the session the request came from, when Orca knows it. */
+/** `callerSessionId`: the session the request came from, when Orca knows it. `known`: the running
+ *  turn, when the caller already read it. */
 export async function botTurnFor(
   runtime: OrcaRuntimeService,
   sessionId: string,
-  callerSessionId: string | undefined
+  callerSessionId: string | undefined,
+  known?: BotActingTurn
 ): Promise<ConnectorTurnFor> {
   if (callerSessionId !== undefined && !sameSession(callerSessionId, sessionId)) {
     return 'none'
   }
   try {
-    const { turn } = await readBotTurn(runtime, runtime.getOrchestrationDb(), sessionId)
+    const turn = known ?? (await readBotTurn(runtime, runtime.getOrchestrationDb(), sessionId)).turn
     return turnActsForOwner(turn) ? 'owner' : 'someone_else'
   } catch (error) {
     console.warn('[bots] could not read whom a turn acts for', error)

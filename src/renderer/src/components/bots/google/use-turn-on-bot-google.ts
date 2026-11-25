@@ -9,7 +9,7 @@ import {
   googleWhoCanAskWarning
 } from '../../../../../shared/google/google-who-can-ask-warning'
 import { botErrorMessage } from '../bot-presentation'
-import { setBotGoogle } from './set-bot-google'
+import { setBotGoogle, type GoogleBotRead } from './set-bot-google'
 import type { BotOnHost } from '@/lib/bot-hosts'
 
 /**
@@ -19,11 +19,13 @@ import type { BotOnHost } from '@/lib/bot-hosts'
 export function useTurnOnBotGoogle(): (
   bot: Pick<Bot, 'id' | 'name' | 'members'> & BotOnHost,
   /** Only these accounts; absent is every account. */
-  accounts?: readonly string[]
+  accounts?: readonly string[],
+  /** The bot's Google as the caller read it: the host refuses the save if it changed meanwhile. */
+  basedOn?: GoogleBotRead
 ) => Promise<boolean> {
   const confirm = useConfirmationDialog()
   return useCallback(
-    async (bot, accounts) => {
+    async (bot, accounts, basedOn) => {
       const warning = googleWhoCanAskWarning(bot.name, botOtherAskers(bot))
       // The askers the warning named: the host keeps Google off if Who can ask changed meanwhile.
       const confirmedAskers = botAskerKeys(bot)
@@ -42,7 +44,11 @@ export function useTurnOnBotGoogle(): (
         return false
       }
       try {
-        await setBotGoogle(bot, true, { ...(accounts ? { accounts } : {}), confirmedAskers })
+        await setBotGoogle(bot, true, {
+          ...(accounts ? { accounts } : {}),
+          confirmedAskers,
+          ...(basedOn ? { basedOn } : {})
+        })
         return true
       } catch (error) {
         toast.error(botErrorMessage(error))

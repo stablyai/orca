@@ -37,6 +37,7 @@ import type {
 import { journalMailSenderKey } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import { SqlQueuedMessageEditLeases } from './journal-sql-edit-leases'
+import type { JournalReturnedCard } from './journal-domain-queue-reads'
 export type JournalSqlQueuePort = {
   read: <K extends JournalSqlQueueRead['kind']>(
     operation: Extract<JournalSqlQueueRead, { kind: K }>
@@ -116,6 +117,11 @@ export class SqlJournalQueuedMessages {
   /** Whether an editor holds this card now, as the drain's own selection reads it. */
   async editHeld(messageId: string): Promise<boolean> {
     return (await this.read({ kind: 'edit-held', messageId, now: this.now() }, 'edit-held')).held
+  }
+
+  /** The cards failed sends returned, in queue order. */
+  async returned(): Promise<JournalReturnedCard[]> {
+    return (await this.read({ kind: 'returned', now: this.now() }, 'returned')).cards
   }
 
   async list(): Promise<QueuedMessageRow[]> {

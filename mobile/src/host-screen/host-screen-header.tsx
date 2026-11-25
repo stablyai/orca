@@ -8,6 +8,7 @@ import {
   List,
   MoreHorizontal,
   PanelLeftClose,
+  Server,
   SquareTerminal,
   UserCircle
 } from 'lucide-react-native'
@@ -32,6 +33,8 @@ import {
 import type { HostScreenController } from './use-host-screen-controller'
 import { HostSharedLinksSheet } from './host-shared-links-sheet'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
+import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../../src/shared/mcp-servers/mcp-servers'
+import { useRouteCapability } from '../worktree/execution-hosts/use-route-capability'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return isConnectionOutage(v) || v.kind === 'auth-failed'
@@ -108,6 +111,8 @@ export function HostScreenHeader({
   )
   const showRefreshLine = useRefreshHint(controller.catalog.revalidating)
   const disconnected = connState !== 'connected'
+  // Only while the host's MCP servers switch is on; a host that hasn't answered yet lists nothing.
+  const mcpServers = useRouteCapability(MCP_SERVERS_RUNTIME_CAPABILITY)
   const hostPath = `/h/${encodeURIComponent(hostId)}`
 
   const navigationGroup: ActionSheetAction[] = [
@@ -143,6 +148,18 @@ export function HostScreenHeader({
       closeBeforePress: true,
       onPress: () => actions.navigateFromHostList(`${hostPath}/resources`)
     },
+    ...(mcpServers
+      ? [
+          {
+            id: 'mcp-servers',
+            label: t('hostScreen.hostScreenHeader.mcpServers', 'MCP servers'),
+            icon: Server,
+            disabled: disconnected,
+            closeBeforePress: true,
+            onPress: () => actions.navigateFromHostList(`${hostPath}/mcp`)
+          }
+        ]
+      : []),
     ...(listsBots
       ? [
           {

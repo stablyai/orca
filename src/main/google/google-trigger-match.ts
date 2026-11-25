@@ -63,6 +63,16 @@ export function googleRuleTargets(
   })
 }
 
+/** Whether the target's bot may still use its account, read at fire time: a Calendar timer or a slow
+ *  Gmail read can outlast the account's removal from the bot. */
+export function googleTargetStillAllowed(
+  bots: readonly Pick<Bot, 'id' | 'google' | 'googleAccounts'>[],
+  target: Pick<GoogleRuleTarget, 'botId' | 'account'>
+): boolean {
+  const bot = bots.find((entry) => entry.id === target.botId)
+  return bot !== undefined && botMayUseGoogleAccount(botGoogleAccess(bot), target.account)
+}
+
 /** Why rules without an account (on bots with Google on) can't listen now, or null while they can. */
 export function accountlessRulesPausedBy(
   fallback: GoogleDefaultAccount,
