@@ -26,6 +26,7 @@ import {
   mcpAgentFileEntry,
   mcpAgentFileEntryName,
   mcpAgentFileMarkers,
+  mcpHostServerNameOfEntry,
   type McpAgentFileEntry
 } from './mcp-agent-file-entry'
 import { McpAgentFileLedger } from './mcp-agent-file-ledger'
@@ -34,6 +35,7 @@ import {
   isEmptyMcpAgentFile,
   mcpAgentFileServerNames,
   mcpAgentFileValue,
+  otherOrcasServerNames,
   withOrcaEntries,
   withoutOrcaEntries,
   type McpAgentFileEdit
@@ -165,8 +167,18 @@ async function syncFileOnce(
           )
   const created = current === null || (record?.created ?? false)
   const taken = before === null ? new Set<string>() : mcpAgentFileServerNames(edit, before)
-  // A name the user (or another Orca) already uses stays theirs; the agent runs that one.
-  const adding = new Map([...wanted].filter(([name]) => !taken?.has(name)))
+  // A name the user (or another Orca) already uses stays theirs, and so does a server name the user
+  // keeps in the agent itself: that server runs from there, not twice. Another Orca's bridge entry
+  // under the bare name (an older build) doesn't count as the user's; a copy of this Orca's own entry
+  // the user renamed does.
+  const orcaNames =
+    before === null ? new Set<string>() : otherOrcasServerNames(edit, before, deps.userDataPath)
+  const adding = new Map(
+    [...wanted].filter(([name, entry]) => {
+      const serverName = mcpHostServerNameOfEntry(name, entry.env, deps.userDataPath) ?? name
+      return !taken?.has(name) && !(taken?.has(serverName) && !orcaNames.has(serverName))
+    })
+  )
   const added = adding.size > 0 ? withOrcaEntries(edit, before, adding) : before
   if (taken === null || (added !== null && mcpAgentFileServerNames(edit, added) === null)) {
     deps.log(`[mcp-servers] Orca's entries wouldn't fit ${path}, so it's left as it is`)

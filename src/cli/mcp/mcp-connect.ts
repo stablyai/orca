@@ -58,6 +58,7 @@ async function readConnection(
       id: params.id,
       agent: params.agent,
       workspaceId,
+      cwd: params.cwd,
       ...(botToken ? { botToken } : {}),
       ...(callerSessionId ? { callerSessionId } : {})
     })

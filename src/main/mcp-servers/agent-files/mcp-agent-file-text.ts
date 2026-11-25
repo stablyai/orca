@@ -4,6 +4,10 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { McpFileAgent } from '../../../shared/mcp-servers/mcp-servers'
 import {
+  agentMcpConfigEntry,
+  isOrcaOwnedAgentMcpServer
+} from '../../../shared/mcp/agent-mcp-config-entry'
+import {
   findManagedTomlBlocks,
   stripManagedTomlRegions,
   type ManagedTomlMarkers
@@ -48,6 +52,32 @@ export function mcpAgentFileServerNames(edit: McpAgentFileEdit, text: string): S
     typeof servers === 'object' && servers !== null && !Array.isArray(servers)
       ? Object.keys(servers)
       : []
+  )
+}
+
+/** The file's names that hold another Orca's bridge entry (one pinned to another data folder). */
+export function otherOrcasServerNames(
+  edit: McpAgentFileEdit,
+  text: string,
+  userDataPath: string
+): Set<string> {
+  const parsed = parseAgentMcpConfigText(text, edit.format)
+  const servers = valueAtKeyPath(parsed, [SERVERS_KEY[edit.agent]])
+  if (typeof servers !== 'object' || servers === null || Array.isArray(servers)) {
+    return new Set()
+  }
+  const dialect = edit.format === 'toml' ? 'grok-toml' : 'mcp-json'
+  return new Set(
+    Object.entries(servers).flatMap(([name, raw]) => {
+      const entry = agentMcpConfigEntry(name, raw, dialect)
+      const server = entry?.server
+      return server &&
+        isOrcaOwnedAgentMcpServer(server) &&
+        !('url' in server) &&
+        server.env?.ORCA_USER_DATA_PATH !== userDataPath
+        ? [name]
+        : []
+    })
   )
 }
 

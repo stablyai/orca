@@ -13,6 +13,10 @@ import {
   relayToolUrl,
   type BotToolRelay
 } from '../bots/tool-relay/bot-tool-relay'
+import { homedir } from 'node:os'
+import { isAbsolute } from 'node:path'
+import { readAgentMcpServers } from './agent-configs/agent-mcp-config-read'
+import { MCP_CONFIG_AGENTS } from './agent-configs/agent-mcp-config-locations'
 import { mcpServerForLaunch } from './mcp-host-list-launch'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { McpServersError } from './mcp-servers-error'
@@ -21,6 +25,8 @@ export type McpConnectCaller = {
   id: string
   agent: string
   workspaceId: string | null
+  /** The agent's folder; a server its own project files name runs from there instead. */
+  cwd?: string
   botToken?: string
   callerSessionId?: string
   pairedDeviceId?: string
@@ -73,6 +79,22 @@ function callerWorkspace(
   return { key: caller.workspaceId === null ? null : mcpServerWorkspaceKeyOf(caller.workspaceId) }
 }
 
+/** The server names the agent's own project files in `cwd` define (`.cursor/mcp.json` and the like). */
+async function projectNamesIn(agent: string, cwd: string): Promise<Set<string>> {
+  const configAgent = MCP_CONFIG_AGENTS.find((known) => known === agent)
+  if (!configAgent || !isAbsolute(cwd)) {
+    return new Set()
+  }
+  const servers = await readAgentMcpServers(
+    configAgent,
+    { homeDir: homedir(), env: process.env, platform: process.platform },
+    { projectPath: cwd }
+  )
+  return new Set(
+    servers.filter(({ source }) => source.scope === 'project').map(({ configName }) => configName)
+  )
+}
+
 export async function mcpServerConnection(
   runtime: CallerRuntime,
   caller: McpConnectCaller,
@@ -81,7 +103,10 @@ export async function mcpServerConnection(
   const workspace = callerWorkspace(runtime, caller)
   const folder = deps.folder ?? mcpHostListFolder()
   const server = await mcpServerForLaunch(caller.id, caller.agent, workspace, folder)
-  if (!server) {
+  if (
+    !server ||
+    (caller.cwd && (await projectNamesIn(caller.agent, caller.cwd)).has(server.name))
+  ) {
     return { on: false }
   }
   if (!('url' in server)) {
