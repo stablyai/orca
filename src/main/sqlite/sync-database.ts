@@ -4,7 +4,7 @@ import type { backup, BackupOptions, DatabaseSync, SQLInputValue } from 'node:sq
 import { hasNodeSqliteReaderApi } from './node-sqlite-reader-api'
 import { NodeSqliteStatement } from './node-sqlite-statement'
 import type { SqliteStatement } from './sqlite-statement'
-import { enterSyncCall, exitSyncCall } from '../diagnostics/main-sync-call-ring'
+import { enterSyncCall, exitSyncCall } from '../diagnostics/main-sync-calls'
 
 type SqlitePath = ConstructorParameters<typeof DatabaseSync>[0]
 
@@ -93,11 +93,11 @@ class SyncDatabase {
     if (SCHEMA_CHANGING_SQL.test(sql)) {
       this.statementCache.clear()
     }
-    const call = enterSyncCall(this.label, sql)
+    const call = enterSyncCall()
     try {
       this.db.exec(sql)
     } finally {
-      exitSyncCall(call)
+      exitSyncCall(call, this.label, sql)
     }
   }
 

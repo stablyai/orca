@@ -8,7 +8,7 @@ import {
   renameFileWithWindowsRetry,
   renameFileWithWindowsRetryAsync
 } from '../../shared/file-write/windows-retry-file-operations'
-import { enterSyncCall, exitSyncCall } from '../diagnostics/main-sync-call-ring'
+import { enterSyncCall, exitSyncCall } from '../diagnostics/main-sync-calls'
 
 export type DurableFilePayload =
   | string
@@ -32,14 +32,14 @@ export async function syncDirectory(directory: string): Promise<void> {
 /** Best-effort directory fsync after synchronous publication. */
 export function syncDirectoryDurablySync(directory: string): void {
   let fd: number | null = null
-  const call = enterSyncCall('fsync', directory)
+  const call = enterSyncCall()
   try {
     fd = openSync(directory, 'r')
     fsyncSync(fd)
   } catch {
     // Directory fsync may be unsupported.
   } finally {
-    exitSyncCall(call)
+    exitSyncCall(call, 'fsync', directory)
     if (fd !== null) {
       try {
         closeSync(fd)
@@ -173,7 +173,7 @@ export function writeFileDurableSync(
 ): void {
   let renamed = false
   try {
-    const call = enterSyncCall('fsync', finalPath)
+    const call = enterSyncCall()
     try {
       writeFileSync(tmpPath, payload, mode === undefined ? undefined : { mode })
       const fd = openSync(tmpPath, 'r+')
@@ -183,7 +183,7 @@ export function writeFileDurableSync(
         closeSync(fd)
       }
     } finally {
-      exitSyncCall(call)
+      exitSyncCall(call, 'fsync', finalPath)
     }
     renameDurableSync(tmpPath, finalPath)
     renamed = true

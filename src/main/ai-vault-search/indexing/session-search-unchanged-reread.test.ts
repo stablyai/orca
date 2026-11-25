@@ -44,8 +44,12 @@ function indexed(): { session: number; lastMessage: number; messages: number } {
         `SELECT f.session_row_id AS session, max(m.id) AS lastMessage, count(m.id) AS messages
          FROM files f JOIN messages m ON m.session_row_id = f.session_row_id`
       )
-      .get() as { session: number; lastMessage: number; messages: number }
-    return { ...row }
+      .get()
+    return {
+      session: Number(row?.session),
+      lastMessage: Number(row?.lastMessage),
+      messages: Number(row?.messages)
+    }
   })
 }
 

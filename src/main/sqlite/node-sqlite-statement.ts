@@ -1,7 +1,7 @@
 import type { StatementResultingChanges } from 'node:sqlite'
 import { SqliteIntegerReader } from './sqlite-integer-reader'
 import type { SqliteBindings, SqliteRow, SqliteStatement } from './sqlite-statement'
-import { enterSyncCall, exitSyncCall } from '../diagnostics/main-sync-call-ring'
+import { enterSyncCall, exitSyncCall } from '../diagnostics/main-sync-calls'
 
 // SQLite retains bound text/blob values until rebinding or statement finalization.
 const LARGE_BINDING_BYTES = 64 * 1024
@@ -44,12 +44,12 @@ export class NodeSqliteStatement implements SqliteStatement {
   }
 
   all(...parameters: SqliteBindings): SqliteRow[] {
-    const call = enterSyncCall(this.database, this.sql)
+    const call = enterSyncCall()
     let rows: SqliteRow[]
     try {
       rows = this.execution(parameters).all(...parameters)
     } finally {
-      exitSyncCall(call)
+      exitSyncCall(call, this.database, this.sql)
     }
     for (const row of rows) {
       this.integers.row(row)
@@ -58,22 +58,22 @@ export class NodeSqliteStatement implements SqliteStatement {
   }
 
   get(...parameters: SqliteBindings): SqliteRow | undefined {
-    const call = enterSyncCall(this.database, this.sql)
+    const call = enterSyncCall()
     let row: SqliteRow | undefined
     try {
       row = this.execution(parameters).get(...parameters)
     } finally {
-      exitSyncCall(call)
+      exitSyncCall(call, this.database, this.sql)
     }
     return row === undefined ? undefined : this.integers.row(row)
   }
 
   run(...parameters: SqliteBindings): StatementResultingChanges {
-    const call = enterSyncCall(this.database, this.sql)
+    const call = enterSyncCall()
     try {
       return this.integers.result(this.execution(parameters).run(...parameters))
     } finally {
-      exitSyncCall(call)
+      exitSyncCall(call, this.database, this.sql)
     }
   }
 

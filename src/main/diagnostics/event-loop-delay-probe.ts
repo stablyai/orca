@@ -5,10 +5,11 @@ import { monitorEventLoopDelay } from 'node:perf_hooks'
 import { hasActiveTraceSink, startSpan } from '../observability/tracer'
 import { subscribeSystemPowerLifecycle } from '../power/system-power-lifecycle'
 import {
-  longestSyncCallSince,
+  longestSyncCall,
   recordSyncCallsOnThisThread,
+  resetSyncCalls,
   type SyncCallRecord
-} from './main-sync-call-ring'
+} from './main-sync-calls'
 
 export const EVENT_LOOP_DELAY_PROBE_ENV = 'ORCA_EVENT_LOOP_DELAY_PROBE'
 /** Appended in the process's userData directory, one line per window. */
@@ -86,8 +87,8 @@ export type EventLoopStallSummaryOptions = {
   maxCountedGapMs?: number
   /** False keeps a reportable window open, e.g. while startup has no trace sink yet. */
   canReport?: () => boolean
-  /** The longest synchronous call that started at or after the given tick-clock time. */
-  longestSyncCallSince?: (fromMs: number) => SyncCallRecord | null
+  /** The longest synchronous call since the last reset; reset runs on every tick. */
+  syncCalls?: { longest: () => SyncCallRecord | null; reset: () => void }
 }
 
 export function isEventLoopDelayProbeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -121,7 +122,6 @@ export function createEventLoopStallSummary(
   let longGapSyncCall: SyncCallRecord | undefined
   return {
     tick: (now, cpuMs = 0) => {
-      const previousTick = lastTick
       const elapsedMs = now - lastTick
       const gap = elapsedMs - intervalMs
       const tickCpuMs = lastCpuMs === null ? 0 : Math.max(0, cpuMs - lastCpuMs)
@@ -147,11 +147,12 @@ export function createEventLoopStallSummary(
         maxGapMs = gap
         maxGapCpuMs = tickCpuMs
         if (gap >= LONG_GAP_MS) {
-          // Whatever blocked main started after the previous tick ran.
-          longGapSyncCall = options.longestSyncCallSince?.(previousTick) ?? undefined
+          // Whatever blocked main ran after the previous tick, which reset the record.
+          longGapSyncCall = options.syncCalls?.longest() ?? undefined
           longGapStartedAtMs = longGapSyncCall?.startedAtMs ?? now - gap
         }
       }
+      options.syncCalls?.reset()
       if (counted && gap >= STALL_MS) {
         stallsSeen += 1
         stalledMsSeen += gap
@@ -245,9 +246,10 @@ function traceStallWindow(processKind: EventLoopDelayWindow['process']) {
   }
 }
 
-// File names only: support captures must not carry home-directory paths.
+// File names only and no SQL literals (VACUUM INTO, ATTACH): support captures must not carry paths.
 function describeSyncCall(call: SyncCallRecord): string {
-  const label = call.source === 'fsync' ? basename(call.label) : call.label
+  const label =
+    call.source === 'fsync' ? basename(call.label) : call.label.replace(/'(?:[^']|'')*'/g, "'?'")
   return `${call.source}: ${label.slice(0, SYNC_CALL_LABEL_CHARS)}`
 }
 
@@ -308,7 +310,7 @@ export function startEventLoopDelayProbe(
           {
             ...MAIN_STALL_SUMMARY,
             ...(delayReport ? {} : { idle: MAIN_IDLE_TICKS }),
-            longestSyncCallSince
+            syncCalls: { longest: longestSyncCall, reset: resetSyncCalls }
           },
           traceStallWindow(processKind)
         )
