@@ -170,7 +170,7 @@ async function managedCopyFor(
 }
 
 // Launches that start together share the same PATH/install-directory lookup.
-const ownProgramLookups = new Map<string, Promise<string>>()
+const ownProgramLookups = new Map<string, Promise<string | null>>()
 const managedLauncherLookups = new Map<string, Promise<string | null>>()
 
 function validateManagedLauncher(path: string): Promise<string | null> {
@@ -185,15 +185,23 @@ function validateManagedLauncher(path: string): Promise<string | null> {
   return lookup
 }
 
-function lookUpOwnProgram(program: string, pathEnv: string): Promise<string> {
-  const key = `${program}\0${pathEnv}`
+function lookUpOwnProgram(program: string, pathEnv: string): Promise<string>
+function lookUpOwnProgram(program: string, pathEnv: string, pathOnly: true): Promise<string | null>
+function lookUpOwnProgram(
+  program: string,
+  pathEnv: string,
+  pathOnly = false
+): Promise<string | null> {
+  const key = `${pathOnly}\0${program}\0${pathEnv}`
   const pending = ownProgramLookups.get(key)
   if (pending) {
     return pending
   }
-  const lookup = resolveCliCommandAsync(program, { pathEnv })
-    .catch(() => program)
-    .finally(() => ownProgramLookups.delete(key))
+  const lookup = (
+    pathOnly
+      ? runCliFsReadsAsync(cliPathLookup('win32', pathEnv, getExecutableNames('win32', program)))
+      : resolveCliCommandAsync(program, { pathEnv }).catch(() => program)
+  ).finally(() => ownProgramLookups.delete(key))
   ownProgramLookups.set(key, lookup)
   return lookup
 }
@@ -270,21 +278,20 @@ export async function readHostManagedAgentCommands(
   await Promise.all(
     selections.map(async ({ agent, program }) => {
       try {
-        const ownPath = withoutManagedDirectories(agent, pathEnv, options.forDelivery)
+        let ownPath = withoutManagedDirectories(agent, pathEnv, options.forDelivery)
         if (preferUnquotedPath) {
           const entries = ownPath.split(delimiter)
           const unquotedEntries = entries.filter((entry) => !isQuotedWindowsPathEntry(entry))
           if (unquotedEntries.length !== entries.length) {
-            const onUnquotedPath = await runCliFsReadsAsync(
-              cliPathLookup(
-                'win32',
-                unquotedEntries.join(delimiter),
-                getExecutableNames('win32', program)
-              )
+            const onUnquotedPath = await lookUpOwnProgram(
+              program,
+              unquotedEntries.join(delimiter),
+              true
             )
             if (onUnquotedPath !== null) {
               return
             }
+            ownPath = entries.filter(isQuotedWindowsPathEntry).join(delimiter)
           }
         }
         const own = await lookUpOwnProgram(program, ownPath)
