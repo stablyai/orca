@@ -38,6 +38,13 @@ export type NativeChatNotesFrameSource = (
   time: number | undefined
 ) => Promise<{ image: CanvasImageSource; width: number; height: number; release?: () => void }>
 
+/** Media the viewer has read: its kind, natural size, and the frame each note is drawn on. */
+export type NativeChatMediaLoaded = {
+  kind: 'image' | 'video'
+  size: { width: number; height: number }
+  frame: NativeChatNotesFrameSource
+}
+
 // One media-work queue for the whole window: drawing and saving marked images never overlap, across
 // viewers and chats, so at most one full-size canvas and one encoded image are alive at a time.
 let mediaWork: Promise<unknown> = Promise.resolve()

@@ -65,6 +65,14 @@ export type NativeChatReadSessionOptions = {
 }
 
 export type NativeChatApi = {
+  /** PNG bytes of what the window shows inside `rect` (CSS pixels): a paused video's frame.
+   *  Desktop only; absent where the window can't be captured. */
+  captureFrame?: (rect: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }) => Promise<Uint8Array>
   /** Desktop-only appearance snapshot for ordinary chat-created HTML file guests. */
   publishVisualGuestTheme?: (theme: NativeChatVisualTheme) => void
   /** Reads the latest limit turns; the hook-reported transcriptPath takes precedence over ID globbing. */

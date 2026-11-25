@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
+import { useNativeChatVideoSrc } from '../../media/notes/video/use-native-chat-video-src'
 import { NativeChatMediaViewer } from '../../media/notes/NativeChatMediaViewer'
 import { useNativeChatAttachmentNotes } from '../../media/notes/native-chat-attachment-notes'
 import {
@@ -215,7 +216,11 @@ function NativeChatImageThumbnail({
   const thumbnailSrc = attachment.previewUrl ?? localSrc
   const fullSizeSrc = localSrc ?? attachment.previewUrl
   // Reopened, a marked image is edited on its clean original; the viewer waits until that is read.
-  const original = useNativeChatNotesOriginal(notes, isOpen, hostReadContext)
+  // A video frame's notes reopen on the video itself, where each note can move to its frame.
+  const videoNotes = notes?.kind === 'video' ? notes : null
+  const image = useNativeChatNotesOriginal(videoNotes ? null : notes, isOpen, hostReadContext)
+  const video = useNativeChatVideoSrc(isOpen ? (videoNotes?.source.path ?? null) : null)
+  const original = videoNotes ? { src: video.src ?? undefined, failed: video.failed } : image
   // A marked image is named for the media its notes are on, not as a generic pasted image.
   const filename = notes
     ? nativeChatNotesImageName(notes.mediaName, undefined)
@@ -321,6 +326,7 @@ function NativeChatImageThumbnail({
         source={notes?.source ?? { path: attachment.path }}
         opener={thumbnailRef}
         initialNotes={notes && original.src ? notes.notes : undefined}
+        kind={videoNotes && original.src ? 'video' : 'image'}
         // Without its clean original a marked image can only be viewed: new marks would land on old ones.
         annotatable={!notes || Boolean(original.src)}
         replacesAttachmentId={attachment.id}
@@ -330,7 +336,11 @@ function NativeChatImageThumbnail({
         }
         onCleared={
           notes && notesScopeKey
-            ? () => restoreNativeChatCleanImage(notesScopeKey, attachment.id, notes)
+            ? () =>
+                // A frame has no clean image to go back to: it just leaves the message.
+                videoNotes
+                  ? takeNativeChatNotedImage(notesScopeKey, attachment.id)
+                  : restoreNativeChatCleanImage(notesScopeKey, attachment.id, notes)
             : undefined
         }
         onInteractOutside={keepPreviewOpenForChatMenu}

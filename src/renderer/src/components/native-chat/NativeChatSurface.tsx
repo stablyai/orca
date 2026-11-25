@@ -7,6 +7,7 @@ import { NativeChatFindQueryContext } from './viewport/find/native-chat-find-que
 import { NativeChatSessionHistoryScopeContext } from './native-chat-session-history-scope'
 import { NativeChatLinkClickContext } from './links/actions/native-chat-link-click-context'
 import type { NativeChatSurfaceState } from './use-native-chat-surface'
+import { NativeChatVideoNotesHost } from './media/notes/video/NativeChatVideoNotesHost'
 
 /** Every chat screen's root: the surface's handlers, appearance, context menu, link popover, and
  *  the link handler its rows read, and the Session History its composer's `/resume` opens. */
@@ -49,6 +50,7 @@ export function NativeChatSurface({
 
       {surface.menu}
       <LinkActionPopover request={surface.linkActionRequest} onClose={surface.closeLinkActions} />
+      <NativeChatVideoNotesHost root={surface.rootRef} />
     </div>
   )
 }

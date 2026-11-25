@@ -6,6 +6,9 @@ import { isTerminalLinkActionActivation } from '@/components/terminal-pane/links
 import { useAppStore } from '../../../../store/index'
 import { routeNativeChatHref } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { resolveNativeChatFileLink } from './native-chat-file-link'
+import { basename } from '@/lib/path'
+import { filePreviewForPath } from '../../../../../../shared/file-preview/file-preview-kind'
+import { openNativeChatVideoNotes } from '../../media/notes/video/native-chat-video-notes-request'
 import type { NativeChatFileLinkContext } from './native-chat-file-link-context'
 import { nativeChatPlainLinkClickBehavior } from './native-chat-link-click-behavior'
 import { showFileLinkUnresolvedToast } from './native-chat-file-link-toasts'
@@ -43,22 +46,40 @@ export function useNativeChatFileLinkClick(
         showFileLinkUnresolvedToast(route.pathText)
         return
       }
-      if (behavior === 'open' || !request) {
+      const anchor = event.currentTarget
+      const openInEditor = (): void =>
         openDetectedFilePath(target.absolutePath, target.line, target.column, {
           ...nativeChatFileOpenDeps(target, context),
           openWithSystemDefault: event.shiftKey
         })
+      // A video on this computer opens where notes can be made on its frames.
+      const openVideo =
+        !event.shiftKey &&
+        context.runtimeEnvironmentId === null &&
+        filePreviewForPath(target.absolutePath)?.kind === 'video'
+          ? (): void =>
+              openNativeChatVideoNotes({
+                path: target.absolutePath,
+                title: basename(target.absolutePath),
+                opener: anchor,
+                openInEditor
+              })
+          : null
+      if (behavior === 'open' || !request) {
+        const open = openVideo ?? openInEditor
+        open()
         return
       }
-      const anchor = event.currentTarget
       // A keyboard-activated link has no pointer position; anchor under the link instead.
       const keyboardAnchor = event.detail === 0 ? anchor.getBoundingClientRect() : null
+      const actions = nativeChatFileLinkActions(target, context)
       request({
         anchorX: keyboardAnchor?.left ?? event.clientX,
         anchorY: keyboardAnchor?.bottom ?? event.clientY,
         restoreFocus: () =>
           (anchor.isConnected ? anchor : rootRef?.current)?.focus({ preventScroll: true }),
-        ...nativeChatFileLinkActions(target, context)
+        ...actions,
+        ...(openVideo ? { primary: { ...actions.primary, run: openVideo } } : {})
       })
     },
     [context, request, rootRef]
