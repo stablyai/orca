@@ -22,6 +22,7 @@ import type { BotActingTurn } from '../../../bots/bot-request-asker'
 import { botTurnFor } from '../../../bots/bot-turn-for'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import { noteBotRequestPost } from './orchestration/messaging/bot-request-outcome'
+import { connectorPostAttempts } from '../../../external-conversations/connector-post-attempts'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import {
   hostNotSignedIn,
@@ -238,6 +239,15 @@ export async function actAsBot(
     )
   }
   const toSlack = actionGoesToSlack({ verb, ref, title: args.title, conversation })
+  // Only a post into the thread the chat answers is its own answer; one elsewhere is other work,
+  // and a file staged for a later post isn't a post yet.
+  const staging = args.upload !== undefined || args.stage === true
+  const intoThread =
+    !staging &&
+    (verb === 'reply' || ((verb === 'post' || verb === 'attach') && !ref && conversation !== null))
+  const refused = intoThread
+    ? connectorPostAttempts.attempted(chatPaneKey(sessionId), args.postId)
+    : () => {}
   const answer = await postConnectorAction(
     cloud,
     {
@@ -251,6 +261,14 @@ export async function actAsBot(
     },
     signal
   )
+  // Refused outright, by the source or the cloud: nothing reached the thread. An uncertain post
+  // may have, so it stays counted.
+  const certain = answer.ok
+    ? !answer.value.ok && answer.value.refusal !== 'post_uncertain'
+    : answer.status !== null && answer.status < 500 && answer.error !== 'post_uncertain'
+  if (certain) {
+    refused()
+  }
   if (!answer.ok) {
     throw actFailure(verb, ref, answer, {
       server: orcaSignInServer(runtime),

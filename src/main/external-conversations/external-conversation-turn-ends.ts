@@ -8,7 +8,12 @@ import type { ConversationEvent } from './external-conversation-events'
 import { connectorFailure } from './external-conversation-failure'
 import type { SlackMirrorTurn } from './slack-mirror'
 import type { EndedChatTurn } from './external-conversation-ended-turn'
-import type { ConversationReplyFill, FilledTurn } from './external-conversation-reply-fill'
+import type {
+  ConversationReplyFill,
+  EndedTurnReplies,
+  FilledTurn
+} from './external-conversation-reply-fill'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import { connectorReplyWords } from '../../shared/agent-session/journal/journal-connector-reply-turn'
@@ -147,8 +152,13 @@ export async function endRepliedTurn(
     stamps: turn.stamps,
     ...(turn.opener ? { openerItemId: turn.opener.itemId } : {}),
     outcome: end.news.outcome,
-    prose: turn.turnProse ?? '',
+    prose: (link.bot ? turn.turnBotProse : turn.turnProse) ?? '',
+    ...(link.bot && turn.turnProse ? { earlierProse: turn.turnProse } : {}),
     toolsRan: turn.turnToolsRan === true,
+    postsUntil: end.ended.at,
+    // A leave line owed at this end would post before a retry's answer: no retry then.
+    ...(end.leave.owed ? {} : { live: true as const }),
+    ...(turn.turnAnsweredOthers ? {} : retryAskerOf(turn.opener?.body, turn.stamps)),
     bot: Boolean(link.bot),
     links: link.bot ? await links() : [],
     ...turnTimesOf(end.ended),
@@ -257,4 +267,32 @@ function ownerDmAnswer(link: ExternalConversationLink, turn: EndedChatTurn): boo
 export function turnReply(link: ExternalConversationLink, turn: EndedChatTurn): string | undefined {
   const message = turn.lastAssistantMessage
   return link.bot && message && isQuietBotResult(message) ? undefined : message
+}
+
+/** Who a retry of the turn asks for, only when one request opened it and the turn answered no other:
+ *  its opener's asker, or no one named for a continuation of one cut request. A turn that answered
+ *  several requests gets no retry, so none acts for the wrong asker. */
+export function retryAskerOf(
+  body: AgentJournalItemBody | undefined,
+  stamps: readonly { account: string; deliveryId: string }[]
+): Pick<EndedTurnReplies, 'askedBy'> {
+  const opener = body?.kind === 'message' ? body : undefined
+  const claimed = opener?.connectorClaim?.origin
+  const one = opener?.connectorDelivery ?? claimed?.[0]
+  if (
+    !opener ||
+    !one ||
+    !stamps.every((stamp) => stamp.account === one.account && stamp.deliveryId === one.deliveryId)
+  ) {
+    return {}
+  }
+  const { origin, asker, connectorConversation } = opener
+  const own = opener.connectorDelivery !== undefined
+  return {
+    askedBy: {
+      origin: own && origin ? origin : 'connector',
+      ...(own && asker ? { asker } : {}),
+      ...(connectorConversation ? { connectorConversation } : {})
+    }
+  }
 }

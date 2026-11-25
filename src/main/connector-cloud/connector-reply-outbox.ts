@@ -13,6 +13,7 @@ import type {
   JournalConnectorReplyCutRows,
   JournalConnectorReplyFill,
   JournalConnectorReplyKey,
+  JournalConnectorReplyRetryRows,
   JournalConnectorReplyRow
 } from '../../shared/agent-session/journal/journal-connector-reply'
 import { JOURNAL_CONNECTOR_REPLY_PROSE_BYTES } from '../../shared/agent-session/journal/journal-connector-reply'
@@ -42,6 +43,7 @@ export type ConnectorReplyCutJournal = ConnectorReplyJournal & {
     failure?: ConnectorFailure
   ): Promise<boolean>
   releaseClaim(claimMessageId: string): Promise<boolean>
+  holdForRetry(rows: JournalConnectorReplyRetryRows): Promise<boolean>
 }
 
 export type ConnectorReplyEvent = Extract<ConnectorEvent, { kind: 'reply' }>
