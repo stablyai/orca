@@ -49,7 +49,7 @@ import type { BotCreateParams } from '../../../../shared/rpc-contract/bots-param
 import { NewBotProposalFields, NewBotTakesOver } from './NewBotProposalFields'
 import { NewBotPurposeField } from './NewBotPurposeField'
 import { BotCreateButton } from './BotCreateButton'
-import { BARE_HEADING_CLASS, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
+import { BARE_HEADING_CLASS, FIELD_ERROR, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
 import { openBotTemplates } from './templates/bot-templates-open'
 import { pictureTintFor } from './avatar-picture-tint'
 import {
@@ -355,7 +355,7 @@ export function NewBotDialog({
                   onChange={(event) => setName(event.target.value)}
                 />
                 {nameInvalid ? (
-                  <p id={nameErrorId} role="alert" className="mt-1 text-xs text-destructive">
+                  <p id={nameErrorId} role="alert" className={FIELD_ERROR}>
                     {t('bots.new.validation.addName', 'Add a name')}
                   </p>
                 ) : null}

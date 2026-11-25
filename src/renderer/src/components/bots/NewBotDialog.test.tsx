@@ -69,7 +69,7 @@ it.each(['Close', 'Create'])(
   }
 )
 
-it('says Too long when a cleared box would send an over-limit proposal purpose', async () => {
+it('marks a cleared box over an over-limit proposal purpose as the name marks a missing name', async () => {
   vi.stubGlobal('api', {})
   render(
     <TooltipProvider>
@@ -82,11 +82,15 @@ it('says Too long when a cleared box would send an over-limit proposal purpose',
   )
   const identity = await screen.findByRole('textbox', { name: 'Identity' })
   fireEvent.change(identity, { target: { value: '' } })
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } })
   fireEvent.click(screen.getByRole('button', { name: /Create/ }))
 
-  const alert = await screen.findByRole('alert')
-  expect(alert.textContent).toBe('Too long · 1250/1000')
-  expect(identity.getAttribute('aria-describedby')).toBe(alert.id)
+  const [name, tooLong] = await screen.findAllByRole('alert')
+  expect(tooLong.textContent).toBe('Too long · 1250/1000')
+  expect(identity.getAttribute('aria-invalid')).toBe('true')
+  expect(identity.getAttribute('aria-describedby')).toBe(tooLong.id)
+  // Reads as the name's own reason line.
+  expect(tooLong.className).toBe(name.className)
 })
 
 it('shows the count from 80% of the limit', () => {
