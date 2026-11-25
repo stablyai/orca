@@ -20961,9 +20961,20 @@
         "orcaStopRemote": "O Orca em {{machine}} parou enquanto esta resposta estava em andamento.",
         "orcaStopCanContinue": "Você pode continuar nesta conversa.",
         "orcaStopUnnamedServer": "o servidor remoto",
+        "restartContinued": "O Orca pediu a este agente que continuasse após uma reinicialização. Seu próprio prompt não foi reenviado.",
+        "restartContinueRefused": "O Orca não conseguiu continuar este chat após a reinicialização. Envie uma mensagem para continuar.",
+        "restartContinueUnconfirmed": "O Orca pediu a este agente que continuasse após a reinicialização, mas não conseguiu confirmar que ele continuou. Confira a última resposta dele antes de enviar outra mensagem.",
+        "restartNotConnected": "O Orca não conseguiu reconectar este chat após a reinicialização, por isso não pediu ao agente que continuasse.",
         "permissionDenied": "{{agent}} negou a permissão. Ver detalhes.",
         "safetyReviewApproved": "{{agent}} aprovou esta ação. Ver detalhes.",
         "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
+        "autoReviewDenied": "A revisão automática de {{agent}} negou: {{action}}",
+        "autoReviewNoReason": "Nenhum motivo foi informado.",
+        "autoReviewApprove": "Aprovar uma vez",
+        "autoReviewApproved": "Aprovado",
+        "autoReviewApproveNotRunning": "{{agent}} não está em execução. Envie uma mensagem para iniciá-lo e aprove novamente.",
+        "autoReviewApproveFailed": "Não foi possível registrar sua aprovação. Tente novamente.",
+        "autoReviewApproveHint": "{{agent}} pode tentar esta mesma ação mais uma vez. A revisão dele ainda verifica a nova tentativa.",
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
         "forkedFrom": "Ramificado de",
         "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}.",
@@ -21044,6 +21055,14 @@
         "attachmentUnreadable": "Não foi possível ler os arquivos soltos.",
         "loadingFiles": "Carregando arquivos...",
         "noFiles": "Nenhum arquivo correspondente",
+        "noBots": "Nenhum bot",
+        "noBotsMatch": "Nenhum bot corresponde a \"{{query}}\"",
+        "botCount_one": "{{count}} bot",
+        "botCount_other": "{{count}} bots",
+        "botCount_many": "{{count}} bots",
+        "fileCount_one": "{{count}} arquivo",
+        "fileCount_other": "{{count}} arquivos",
+        "fileCount_many": "{{count}} arquivos",
         "filesLoadFailed": "Não foi possível carregar arquivos",
         "clearDescription": "Limpar contexto da conversa",
         "attachFailed": "Não foi possível anexar {{files}}.",
@@ -21095,10 +21114,26 @@
           "xhigh": "Extra alto"
         },
         "imageUnavailable": "Prévia indisponível",
+        "agents": "Agentes",
+        "recent": "Recentes",
         "exitPlanMode": "Sair do modo de planejamento",
         "moreControls": "Mais controles do chat",
         "permissionAppliesNextMessage": "{{saved}} vale para a próxima mensagem; usando {{active}} no momento",
-        "bots": "Bots"
+        "modelAndEffortValue": "{{model}} · {{effort}}",
+        "modelAndEffort": "Modelo e esforço",
+        "modelsLoading": "Carregando modelos…",
+        "signInForModels": "Entre para ver os modelos que você pode usar.",
+        "bots": "Bots",
+        "files": "Arquivos",
+        "skillPillLabel": "Skill: {{name}}",
+        "filePillLabel": "Arquivo: {{name}}",
+        "agentPillLabel": "Agente: {{name}}",
+        "backToBots": "Voltar aos bots",
+        "chatsHint": "Seta para a direita para ver os chats",
+        "loadingBotChats": "Carregando os chats de {{name}}…",
+        "noMatchingChats": "Nenhum chat correspondente",
+        "noOtherChats": "Nenhum outro chat",
+        "retryChats": "Tentar novamente"
       },
       "tool": {
         "exitCode": "saída {{value0}}",
@@ -21351,6 +21386,8 @@
       "scrollMessageToTop": "Rolar esta mensagem para o topo",
       "loadingEarlier": "Carregando…",
       "loadEarlier": "Carregar mensagens anteriores",
+      "loadEarlierFailed": "Não foi possível carregar as mensagens anteriores.",
+      "loadEarlierRetry": "Tentar novamente",
       "railLabel": "Suas mensagens",
       "railImageMessage": "Anexo de imagem",
       "railEmptyMessage": "Mensagem",
@@ -21383,6 +21420,7 @@
         "asked": "Perguntado:",
         "awaitingUnnamed": "Aguardando sua resposta",
         "questionCount_one": "{{count}} pergunta",
+        "questionCount": "{{value0}} perguntas",
         "questionCount_other": "{{count}} perguntas",
         "questionCount_many": "{{count}} perguntas"
       },
@@ -21392,15 +21430,55 @@
         "deny": "Negar",
         "cancel": "Cancelar",
         "reason": "Motivo",
+        "reasonSentAsMessage": "Motivo, enviado como mensagem",
         "plan": {
           "file": "Arquivo do plano",
           "reviewTitle": "Revisar plano proposto",
           "refineHint": "Refinar plano fecha a revisão para que você possa enviar o que deseja alterar."
         },
+        "worker": "Worker · {{name}}",
+        "openWorker": "Abrir worker",
+        "answerFailed": "{{name}}: {{detail}}",
         "answerNotApplied": "{{name}}: a resposta não chegou a esta solicitação",
         "answerWorkerEnded": "{{name}} foi encerrado, então esta solicitação foi fechada",
+        "countdown": "O Claude nega por conta própria em {{time}} se ninguém responder.",
+        "record": {
+          "showLess": "Mostrar menos",
+          "showMore": "Mostrar mais",
+          "cancelled": "Solicitação de <tool>{{tool}}</tool> cancelada",
+          "youAllowed": "Você permitiu <tool>{{tool}}</tool>",
+          "youAllowedForSession": "Você permitiu <tool>{{tool}}</tool> nesta sessão",
+          "youDenied": "Você negou <tool>{{tool}}</tool>",
+          "youAnswered": "Você respondeu a <tool>{{tool}}</tool>: {{answer}}",
+          "youAllowedFor": "Você permitiu <tool>{{tool}}</tool> para <task>{{task}}</task>",
+          "youDeniedFor": "Você negou <tool>{{tool}}</tool> para <task>{{task}}</task>",
+          "coordinatorAllowed": "O coordenador permitiu <tool>{{tool}}</tool> para <task>{{task}}</task>",
+          "coordinatorDenied": "O coordenador negou <tool>{{tool}}</tool> para <task>{{task}}</task>",
+          "allowedInTerminal": "<tool>{{tool}}</tool> para <task>{{task}}</task> permitido no terminal dele",
+          "deniedInTerminal": "<tool>{{tool}}</tool> para <task>{{task}}</task> negado no terminal dele",
+          "allowedInChat": "<tool>{{tool}}</tool> para <task>{{task}}</task> permitido no chat dele",
+          "deniedInChat": "<tool>{{tool}}</tool> para <task>{{task}}</task> negado no chat dele",
+          "autoDenied": "<tool>{{tool}}</tool> para <task>{{task}}</task> negado automaticamente após 2:00",
+          "waitsInTerminal": "<tool>{{tool}}</tool> para <task>{{task}}</task> aguarda no terminal dele",
+          "workerEnded": "<tool>{{tool}}</tool> para <task>{{task}}</task> fechado: o worker foi encerrado",
+          "closedUnnamed": "<tool>{{tool}}</tool> para <task>{{task}}</task> fechado sem uma resposta registrada",
+          "coordinatorReason": "Motivo do coordenador",
+          "coordinatorAllowedHere": "O coordenador permitiu <tool>{{tool}}</tool>",
+          "coordinatorDeniedHere": "O coordenador negou <tool>{{tool}}</tool>",
+          "allowedUnnamed": "<tool>{{tool}}</tool> permitido",
+          "deniedUnnamed": "<tool>{{tool}}</tool> negado"
+        },
         "needsAccess": "Precisa de acesso a",
-        "needsNewerOrca": "Esta solicitação requer uma versão mais recente do Orca."
+        "needsNewerOrca": "Esta solicitação requer uma versão mais recente do Orca.",
+        "folderTrust": {
+          "title": "Confiar nesta pasta?",
+          "hint": "O agente pede permissão antes de ler, editar e executar arquivos nesta pasta.",
+          "trust": "Confiar na pasta",
+          "exit": "Sair"
+        },
+        "startupMenu": {
+          "title": "{{value0}} está aguardando uma escolha no terminal"
+        }
       },
       "launchPromptNotDelivered": "Não entregue — verifique o terminal",
       "subagents": {
@@ -21478,6 +21556,12 @@
       },
       "reasoning": "Raciocínio",
       "failureWords": {
+        "forkOriginalMissing": "{{agent}} não encontrou esta resposta no chat original. Abra-o e faça o fork a partir de lá.",
+        "forkOriginalUnavailable": "{{agent}} não consegue fazer fork desta resposta no chat original. Abra-o e faça o fork a partir de lá.",
+        "forkOriginalMissingNamed": "{{agent}} não encontrou esta resposta em \"{{detail}}\". Abra esse chat e faça o fork a partir de lá.",
+        "forkOriginalUnavailableNamed": "{{agent}} não consegue fazer fork desta resposta em \"{{detail}}\". Abra esse chat e faça o fork a partir de lá.",
+        "forkOriginalLatestOnly": "{{agent}} só consegue fazer fork da resposta mais recente no chat original. Abra esse chat e faça o fork da resposta mais recente quando ela terminar.",
+        "forkOriginalLatestOnlyNamed": "{{agent}} só consegue fazer fork da resposta mais recente em \"{{detail}}\". Abra esse chat e faça o fork da resposta mais recente quando ela terminar.",
         "theAgent": "O agente",
         "providerStartFailed": "{{agent}} parou antes de terminar de iniciar.",
         "savedConversationMissing": "{{agent}} não conseguiu encontrar a conversa salva deste chat.",
@@ -21486,6 +21570,7 @@
         "sendAgainToTryOnceMore": "Envie sua mensagem novamente para fazer outra tentativa.",
         "couldNotStart": "Não foi possível iniciar {{agent}}.",
         "couldNotRestart": "Não foi possível reiniciar {{agent}}.",
+        "cliTooOld": "A CLI do {{agent}} em {{host}} está na versão {{installedVersion}}. Os chats exigem {{minimumVersion}} ou superior.",
         "startTimedOut": "{{agent}} demorou demais para iniciar (sem resposta a {{method}} após {{seconds}}s).",
         "startTimedOutKeepsHappening": "Se isso continuar acontecendo, o computador que executa este chat pode estar sobrecarregado.",
         "notSignedIn": "{{agent}} não está conectado à conta.",
@@ -21494,6 +21579,7 @@
         "codexSystemNotSignedIn": "O Codex não está conectado à conta. Execute `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "Esta conta do Codex não está conectada. Entre novamente nas configurações de Contas do Codex.",
         "antigravityNotSignedIn": "O Antigravity não está conectado à conta. Entre em Configurações → Contas → Antigravity. Depois, envie sua mensagem novamente.",
+        "antigravitySystemNotSignedIn": "O Antigravity não está conectado à conta. Entre executando `agy` no computador que executa este chat e envie sua mensagem novamente.",
         "cliMissing": "{{agent}} não foi encontrado no computador que executa este chat. Instale-o ou verifique seu Comando em Configurações → Agentes.",
         "cliMissingInWslDistro": "{{agent}} não está instalado na distribuição WSL {{distro}}. Instale-o dentro de {{distro}} ou verifique seu Comando em Configurações → Agentes.",
         "signInFirst": "Entre na conta primeiro.",
@@ -21743,6 +21829,25 @@
         "senderAmbiguous": "O Orca não consegue identificar em qual terminal {{name}} está em execução. Abra-o pela barra lateral.",
         "senderNotRunning": "{{name}} não está mais em execução. Inicie um novo agente pela barra lateral para continuar o trabalho.",
         "unnamedSenderSubject": "Um agente",
+        "open": "Abrir {{name}}",
+        "row": {
+          "started": "Iniciado",
+          "forItems": "para",
+          "reopened": "Reaberto",
+          "followedUp": "Acompanhamento enviado a",
+          "handedOff": "Passado para",
+          "task": "Tarefa de",
+          "update": "Atualização de",
+          "message": "Mensagem de",
+          "notSentYet": "ainda não enviada"
+        },
+        "kind": {
+          "started": "Iniciado",
+          "reopened": "Reaberto",
+          "followedUp": "Acompanhamento",
+          "handedOff": "Repassado",
+          "task": "Tarefa"
+        },
         "goToAgent": "Vá para o agente"
       },
       "goal": {
@@ -21769,7 +21874,8 @@
       "fileLinks": {
         "notFound": "Arquivo não encontrado: {{value0}}",
         "unverifiable": "Não foi possível verificar {{value0}}: {{value1}}",
-        "unresolved": "Não foi possível localizar {{value0}} neste espaço de trabalho"
+        "unresolved": "Não foi possível localizar {{value0}} neste espaço de trabalho",
+        "folderUnavailable": "Este computador não consegue abrir a pasta {{value0}}"
       },
       "contextUsage": {
         "label": "Contexto: {{used}} de {{window}} tokens, {{percent}}% usado",
@@ -21892,7 +21998,15 @@
         "linkActions": "Ações do link"
       },
       "imageGallery": {
-        "loadFailed": "Não foi possível carregar {{name}}"
+        "scopeHelp": "Imagens próximas a esta parte do chat quando você abriu a pré-visualização. Imagens mais acima ou mais abaixo não estão incluídas. Feche e abra novamente para atualizar.",
+        "description": "Imagens nesta visualização: {{position}} de {{count}}. {{help}}",
+        "stepAnnouncement": "Imagem {{position}} de {{count}} nesta visualização: {{title}}.",
+        "firstImage": "Primeira imagem.",
+        "lastImage": "Última imagem.",
+        "loading": "Carregando imagem…",
+        "loadFailed": "Não foi possível carregar {{name}}",
+        "closedImageChanged": "A pré-visualização foi fechada porque uma imagem mudou. Abra uma miniatura para capturar o conjunto atual.",
+        "closedChatChanged": "A pré-visualização foi fechada porque o chat mudou. Abra uma miniatura para capturar o conjunto atual."
       },
       "goalControl": {
         "settingsRejected": "O Codex não conseguiu aplicar o modelo e o esforço selecionados. Esta alteração de objetivo não foi enviada. Confira a seleção e tente novamente.",
@@ -21984,7 +22098,23 @@
         "export": "Exportar a sessão para HTML",
         "settings": "Abrir as configurações no terminal",
         "extensions": "Abrir o painel de extensões no terminal",
-        "hotkeys": "Mostrar os atalhos de teclado no terminal"
+        "hotkeys": "Mostrar os atalhos de teclado no terminal",
+        "mcpManage": "Gerenciar servidores MCP",
+        "agentsTerminal": "Escolher o agente no terminal",
+        "sessionsTerminal": "Alternar sessões no terminal",
+        "skillsTerminal": "Explorar skills no terminal",
+        "mcpsTerminal": "Gerenciar servidores MCP no terminal",
+        "connectTerminal": "Conectar um provedor no terminal",
+        "statusTerminal": "Ver o status no terminal",
+        "themesTerminal": "Escolher um tema no terminal",
+        "diffTerminal": "Abrir o visualizador de diff no terminal",
+        "editorTerminal": "Abrir seu editor no terminal",
+        "debugTerminal": "Ver informações de depuração no terminal",
+        "helpTerminal": "Mostrar a ajuda no terminal",
+        "forkSessionTerminal": "Fazer fork da sessão no terminal",
+        "renameSessionTerminal": "Renomear a sessão no terminal",
+        "timelineTerminal": "Explorar a linha do tempo da sessão no terminal",
+        "exportTerminal": "Exportar a sessão no terminal"
       },
       "modelDescriptions": {
         "grok_4_7": "O modelo de ponta mais recente da xAI",
@@ -22099,10 +22229,20 @@
         "unchanged": "Nada em {{app}} foi alterado.",
         "paused": "As automações estão pausadas para que nada seja executado duas vezes. Ative-as depois que o bot antigo for desligado em {{app}}."
       },
+      "botCreateOffer": {
+        "openBot": "Abrir {{name}}"
+      },
       "cardKindHidden": {
         "description": "Você pode alterar isso a qualquer momento em",
         "settingsLink": "Configurações > Interface de chat > Atividade do turno",
         "failed": "Não foi possível salvar. Você pode desativar em Configurações > Interface de chat > Atividade do turno."
+      },
+      "ciResultLine": {
+        "failingLead": "CI falhando em",
+        "greenLead": "CI verde em",
+        "at": "em",
+        "hide": "Não mostrar linhas de resultado de CI",
+        "hidden": "O Orca não mostrará mais linhas de resultado de CI"
       },
       "openedPullRequests": {
         "one": "Pull request criada: {{name}}",
@@ -22385,6 +22525,8 @@
       },
       "editDeliveryNotice": "Editar",
       "explicitChatWslAddHost": "O bate-papo não está disponível em uma pasta WSL aberta no Windows. Adicione a distribuição como um host WSL (Adicionar um projeto → Adicionar host remoto → Adicionar distribuição WSL) para conversar lá ou abra o agente em um terminal.",
+      "explicitChatWslMoveToHost": "O chat não está disponível em uma pasta WSL aberta pelo Windows. Execute o projeto em um host WSL para conversar lá ou abra o agente em um terminal.",
+      "explicitChatWslRunAsHost": "Executar {{distro}} como host",
       "githubPeek": {
         "updated": "atualizado {{time}}",
         "oneComment": "1 comentário",
@@ -22418,7 +22560,36 @@
         "switchAccount": "Trocar de conta",
         "addAccount": "Adicionar conta…",
         "accountUnavailable": "Este chat não pode ser transferido para outra conta. Passe-o para outro agente.",
-        "handOff": "Passar para agente"
+        "copyTruncated": "O texto copiado foi encurtado para caber em {{count}} caracteres.",
+        "copyFailed": "Não foi possível copiar o erro.",
+        "cancelAt": "Não continuar em {{time}}",
+        "wontContinue": "Não continuará automaticamente",
+        "autoContinueSettings": "Configurações de continuação automática",
+        "hideDetails": "Ocultar detalhes",
+        "showDetails": "Mostrar detalhes",
+        "copyError": "Copiar erro",
+        "settingsMenu": "Configurações de continuação automática…",
+        "handOff": "Passar para agente",
+        "more": "Mais ações",
+        "statusUnknown": "Horário de redefinição desconhecido.",
+        "statusCanContinueAtAuto": "Você pode continuar em {{time}}. O Orca continuará este chat em {{autoTime}}.",
+        "statusCanContinueAtNoAuto": "Você pode continuar em {{time}}. O Orca não continuará este chat automaticamente.",
+        "statusCanContinueAt": "Você pode continuar em {{time}}.",
+        "resetUnknown": "Horário de redefinição desconhecido",
+        "continuesAt": "Continua em {{time}}",
+        "autoContinuesAt": "Continua automaticamente em {{time}}",
+        "srSummary": "{{sentence}} {{status}}",
+        "canContinueAt": "Pode continuar em {{time}}",
+        "titleWeeklyReached": "{{agent}} atingiu o limite semanal",
+        "titleExtraUsageReached": "{{agent}} atingiu o limite de uso extra",
+        "titleUsageReached": "{{agent}} atingiu o limite de uso",
+        "statusHasUsageAuto": "{{agent}} tem uso disponível novamente. O Orca continuará este chat em {{time}}.",
+        "statusHasUsage": "{{agent}} tem uso disponível novamente.",
+        "titleHasUsage": "{{agent}} tem uso disponível novamente",
+        "statusCanContinueNowAuto": "{{agent}} já pode continuar. O Orca continuará este chat em {{time}}.",
+        "statusCanContinueNow": "{{agent}} já pode continuar.",
+        "titleCanContinueNow": "{{agent}} já pode continuar",
+        "turnOnAutoContinue": "Continuar automaticamente na redefinição"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Não foi possível cancelar a continuação automática. Tente novamente.",
@@ -22460,6 +22631,7 @@
         "dismiss": "Dispensar",
         "openWorker": "Abrir worker",
         "remoteOwner": "Pare ou limpe isto no computador em que é executado",
+        "workspaceRemoved": "O espaço de trabalho deste worker foi removido",
         "restore": "Mostrar no dock novamente",
         "alreadyStopped": "Já está parado",
         "cantStop": "Não é possível parar agora",
