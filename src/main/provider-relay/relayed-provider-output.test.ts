@@ -172,6 +172,19 @@ describe('relayed provider output', () => {
     expect(acks).toEqual(['12 keep 11 held', '13 keep 13 held', '13 keep undefined'])
   })
 
+  it('saves streamed text before the last ack of a hand-off, so it covers every line handed on', async () => {
+    const { output, acks, releaseDurable, journal } = rig()
+    output.restartAt(0)
+    output.line('relayData', 1, 'one')
+    output.line('relayData', 2, 'two')
+    // A streamed message is still unsaved: an ordinary ack would wait for it.
+    journal.liveText = true
+    const flushed = output.flush()
+    await releaseDurable()
+    await flushed
+    expect(acks).toEqual([2])
+  })
+
   it('keeps a cut the ack floor reported until an ack carrying it succeeds', async () => {
     const sent: string[] = []
     let fail = true
