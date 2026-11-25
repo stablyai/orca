@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { RelayedProviderOutput } from './relayed-provider-output'
-import { cutHeldOutput } from './relayed-provider-held-cap'
+import { cutHeldOutput } from './relayed-provider-held-output'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import { createProviderRecordReader } from '../provider-process/provider-record-reader'
 
@@ -395,6 +395,39 @@ describe('relayed provider output', () => {
     await output.flush()
     output.stop()
     expect(sent).toEqual(['1', '1 cut []'])
+  })
+
+  it('keeps unsaved streamed text spooled, never let go at the daemon memory cap', async () => {
+    const acks: unknown[][] = []
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      durable: async () => false,
+      ackFloor: { observe: () => {}, floor: () => 2 },
+      ack: async (...args) => {
+        acks.push(args)
+      }
+    })
+    output.restartAt(0)
+    for (const seq of [1, 2, 3]) {
+      output.line('relayData', seq, `line-${seq}`)
+    }
+    await output.settle(true, 3)
+    expect(acks).toEqual([[3, 2, { held: true }]])
+  })
+
+  it('asks a held request again after a reconnect drops the hold, and only once', async () => {
+    const { output, seen } = rig(() => false)
+    output.restartAt(0)
+    output.line('relayPending', 2, 'ask')
+    output.line('relayData', 1, 'line-1')
+    // The stream drops before the chat was ready: the reattach replays from the cursor.
+    output.restartAt()
+    output.line('relayPending', 2, 'ask')
+    output.line('relayData', 1, 'line-1')
+    output.line('relayData', 2, 'ask')
+    await output.release()
+    await settle()
+    expect(seen).toEqual(['ask', 'line-1'])
   })
 
   it('keeps held output under its cap: the oldest goes behind one cursor entry, held requests stay', () => {

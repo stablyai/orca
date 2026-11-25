@@ -169,9 +169,17 @@ export class ProviderRelayHost {
     const relay = this.requireRelay(relayId)
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
     try {
-      return await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
+      const attached = await relay.attach(
+        clientId,
+        stream,
+        typeof fromSeq === 'number' ? fromSeq : 0
+      )
+      // Only an attach that held counts: a failed one leaves the detach's deadline in place.
+      if (relay.attachedClientId !== null) {
+        this.cap.forget(relay)
+      }
+      return attached
     } finally {
-      this.cap.forget(relay)
       // An ended relay with nothing left to ack is done once a client has seen its outcome.
       this.removeIfFinished(relay)
     }

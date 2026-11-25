@@ -1,7 +1,7 @@
 import type { Readable } from 'node:stream'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import type { ProviderRelayDataEvent } from '../daemon/protocol/daemon-provider-relay-protocol'
-import { cutHeldOutput } from './relayed-provider-held-cap'
+import { RelayedProviderHeldOutput } from './relayed-provider-held-output'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
 import { boundedCutKeys } from './relayed-provider-cut-keys'
 import type { RelayedProviderContinuation } from './relayed-provider-continuation'
@@ -92,10 +92,8 @@ export class RelayedProviderOutput {
   /** Requests already handed on, so a replay or reattach never asks the user twice. */
   private readonly deliveredPending = new Set<number>()
   private preambleArrived: (() => void) | null = null
-  private held: { seq: number | null; line: string }[] | null
-  /** How far a held replay has been handed on; it stays held until the slices reach the end. */
-  private releasedTo = 0
-  private heldChars = 0
+  /** Until the slices of a held replay reach the end, it stays held. */
+  private held: RelayedProviderHeldOutput | null
   private releasing: Promise<void> | null = null
   /** Set when a replay may start inside an open item: items cut by that move to continuation rows. */
   private continuation: RelayedProviderContinuation | null = null
@@ -111,7 +109,7 @@ export class RelayedProviderOutput {
   private stopped = false
 
   constructor(private readonly options: OutputOptions) {
-    this.held = options.passWhileHeld ? [] : null
+    this.held = options.passWhileHeld ? new RelayedProviderHeldOutput() : null
     options.ackFloor?.wake?.(() => this.scheduleAck())
   }
 
@@ -124,10 +122,8 @@ export class RelayedProviderOutput {
       this.releasedThrough = fromSeq
       this.consumption.reset(fromSeq)
     }
-    if (this.held) {
-      this.held = []
-      this.releasedTo = 0
-      this.heldChars = 0
+    for (const seq of this.held?.reset() ?? []) {
+      this.deliveredPending.delete(seq)
     }
     this.deliveredSeq = this.pushedSeq
     return this.pushedSeq
@@ -145,7 +141,11 @@ export class RelayedProviderOutput {
     if (event === 'relayPending') {
       if (!this.deliveredPending.has(seq)) {
         this.deliveredPending.add(seq)
-        this.deliver(null, line)
+        if (this.held) {
+          this.held.holdRequest(seq, line)
+        } else {
+          this.push(null, line)
+        }
       }
       this.preambleArrived?.()
       return
@@ -197,19 +197,16 @@ export class RelayedProviderOutput {
     }
     this.releasing ??= new Promise<void>((resolve) => {
       const slice = () => {
-        const held = this.held ?? []
         let chars = 0
-        while (this.releasedTo < held.length) {
-          const entry = held[this.releasedTo++]!
+        for (let entry = this.held?.next(); entry; entry = this.held?.next()) {
           this.push(entry.seq, entry.line)
           chars += entry.line.length + 1
-          if (chars >= RELEASE_SLICE_CHARS && this.releasedTo < held.length) {
+          if (chars >= RELEASE_SLICE_CHARS && this.held?.more) {
             setImmediate(slice)
             return
           }
         }
         this.held = null
-        this.releasedTo = 0
         this.releasing = null
         resolve()
       }
@@ -261,14 +258,11 @@ export class RelayedProviderOutput {
     if (line !== null && this.options.passWhileHeld?.(line)) {
       // Handed on now, but the cursor waits behind the held lines before it.
       this.push(null, line)
-      this.held.push({ seq, line: '' })
+      this.held.hold(seq, '', false)
     } else {
-      this.held.push({ seq, line: line ?? '' })
-      this.heldChars += line?.length ?? 0
-      const cut = !this.releasing && cutHeldOutput(this.held, this.heldChars)
-      if (cut) {
-        ;({ held: this.held, chars: this.heldChars } = cut)
-        this.options.onHeldCut?.(cut.through)
+      const cutThrough = this.held.hold(seq, line ?? '', !this.releasing)
+      if (cutThrough !== null) {
+        this.options.onHeldCut?.(cutThrough)
       }
     }
   }
@@ -302,18 +296,6 @@ export class RelayedProviderOutput {
     }
   }
 
-  /** The first spool line still held, not yet handed on to the chat. */
-  private heldFrom(): number | null {
-    const held = this.held ?? []
-    for (let at = this.releasedTo; at < held.length; at++) {
-      const { seq } = held[at]!
-      if (seq !== null && seq > this.releasedThrough) {
-        return seq
-      }
-    }
-    return null
-  }
-
   private scheduleAck(): void {
     if (this.cancelAck || this.stopped) {
       return
@@ -335,7 +317,7 @@ export class RelayedProviderOutput {
       // Only what the chat's reader took: a paused reader's lines are replayed after a crash.
       // Held for an opening chat, lines are received but not taken; the open waits on the agent,
       // which the daemon pauses at its cap until an ack, so its ask is answered by keeping them.
-      const heldFrom = force ? this.heldFrom() : null
+      const heldFrom = force ? (this.held?.firstAfter(this.releasedThrough) ?? null) : null
       const target = Math.max(
         this.consumption.upTo(this.pushedSeq),
         heldFrom === null ? 0 : this.deliveredSeq
@@ -360,7 +342,8 @@ export class RelayedProviderOutput {
       try {
         // Unsaved streamed text is only in a kept item, which a reattach replays whole.
         const owed = force || this.ackedSeq < this.askedThrough
-        if ((await this.options.durable?.(owed)) === false && keepFrom === null) {
+        const unsaved = (await this.options.durable?.(owed)) === false
+        if (unsaved && keepFrom === null) {
           return
         }
         // Giving up an open kept span: the next attach must know its replay starts inside an item.
@@ -372,7 +355,8 @@ export class RelayedProviderOutput {
           : null
         const flags = {
           ...(cut ? { cut: true as const } : {}),
-          ...(heldFrom !== null ? { held: true as const } : {}),
+          // Kept but not yet saved: the daemon spools it rather than let it go at its memory cap.
+          ...(heldFrom !== null || unsaved ? { held: true as const } : {}),
           ...(cutKeys ? { cutKeys } : {})
         }
         const reply = await (keepFrom === null && !cut
