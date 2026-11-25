@@ -88,6 +88,30 @@ describe('relayed provider output', () => {
     expect(acks).toEqual([12])
   })
 
+  it("answers the daemon's ask while a replay is held by keeping it, so the agent the open waits on resumes", async () => {
+    const acks: string[] = []
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      durable: async () => true,
+      passWhileHeld: () => false,
+      ack: async (seq, keepFrom) => {
+        acks.push(keepFrom === undefined ? `${seq}` : `${seq} keep ${keepFrom}`)
+      }
+    })
+    output.restartAt(10)
+    output.line('relayData', 11, 'event-11')
+    output.line('relayData', 12, 'event-12')
+    // Nothing is taken while held, so an ordinary ack has nothing to say.
+    await output.settle()
+    expect(acks).toEqual([])
+    // The daemon's ask (its memory cap): received, but kept for a later attach.
+    await output.settle(true)
+    expect(acks).toEqual(['12 keep 11'])
+    // Its ask while keeping (the file cap) lets them go; the held lines still reach the chat.
+    await output.settle(true)
+    expect(acks).toEqual(['12 keep 11', '12'])
+  })
+
   it('never acks a line whose streamed text is only in memory, unless the ask saved it first', async () => {
     const { output, acks, releaseDurable, journal } = rig()
     output.restartAt(0)

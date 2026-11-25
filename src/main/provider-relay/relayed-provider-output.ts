@@ -241,6 +241,18 @@ export class RelayedProviderOutput {
     this.consumption.pushed(line !== null && /\S/.test(line), this.pushedSeq)
   }
 
+  /** The first spool line still held, not yet handed on to the chat. */
+  private heldFrom(): number | null {
+    const held = this.held ?? []
+    for (let at = this.releasedTo; at < held.length; at++) {
+      const { seq } = held[at]!
+      if (seq !== null && seq > this.releasedThrough) {
+        return seq
+      }
+    }
+    return null
+  }
+
   private scheduleAck(): void {
     if (this.ackTimer || this.stopped) {
       return
@@ -262,13 +274,20 @@ export class RelayedProviderOutput {
   private ack(force = false): Promise<void> {
     this.acking = this.acking.then(async () => {
       // Only what the chat's reader took: a paused reader's lines are replayed after a crash.
-      const target = this.consumption.upTo(this.pushedSeq)
+      // Held for an opening chat, lines are received but not taken; the open waits on the agent,
+      // which the daemon pauses at its cap until an ack, so its ask is answered by keeping them.
+      const heldFrom = force ? this.heldFrom() : null
+      const target = Math.max(
+        this.consumption.upTo(this.pushedSeq),
+        heldFrom === null ? 0 : this.deliveredSeq
+      )
       // Lines from the floor on (a streamed item still open) stay kept, so a reattach rewrites the
       // item whole. The daemon's ask while keeping (its file cap) releases them, and the forced
       // save keeps the text; an ask before any keep (its memory cap) starts keeping instead.
       const floor = this.options.ackFloor?.floor() ?? null
       const usable = floor !== null && floor > this.releasedThrough && floor <= target
-      const keepFrom = usable && !(force && this.keptFrom !== null) ? floor : null
+      const keepAt = usable ? Math.min(floor, heldFrom ?? floor) : heldFrom
+      const keepFrom = keepAt !== null && !(force && this.keptFrom !== null) ? keepAt : null
       if ((target <= this.ackedSeq && keepFrom === this.keptFrom) || this.stopped) {
         return
       }
