@@ -201,7 +201,7 @@ export function createClaudeJournalTranslator(
       return
     }
     // Observe announcements before flushing so buffered rows receive their resolved producer stamp.
-    const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
+    const announced = event.type === 'message' && subagents.observeFrame(event.message)
     // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
     if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {
       flush()
