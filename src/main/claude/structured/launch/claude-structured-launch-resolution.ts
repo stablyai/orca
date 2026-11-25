@@ -6,6 +6,7 @@ import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/age
 import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { keptClaudeAgentAccountHome } from '../../relay/claude-kept-agent-account'
 import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
 import {
   claudeStructuredPermissionOptions,
@@ -156,7 +157,8 @@ export function claudeStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<ClaudeStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
-    const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
+    const accountHome =
+      keptClaudeAgentAccountHome(record) ?? requireLegacyAgentSessionAccountHome(record.accountHome)
     const router = getClaudeProfileRouter()
     const active = activeProviderContext(record)
     const head = active.head?.handle ?? null
