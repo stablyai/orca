@@ -19174,7 +19174,8 @@
         "checking": "正在檢查 {{agent}} 是否已在此主機上準備就緒…",
         "cliInstall": "安裝",
         "cliRecheck": "再次檢查",
-        "openAgentSettings": "開啟設定"
+        "openAgentSettings": "開啟設定",
+        "cliRecheckFailed": "無法檢查此主機上已安裝的代理程式。請再試一次。"
       },
       "reasoning": "推理",
       "failureWords": {
@@ -20022,6 +20023,9 @@
         "failed": "無法繼續此聊天。請重試，或傳送一則訊息。",
         "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。"
       },
+      "signIn": {
+        "title": "登入 {{agent}} 以開始聊天"
+      },
       "claudeSignIn": {
         "signingIn": "正在登入…"
       },
@@ -20184,8 +20188,32 @@
         "modelApplyFailed": "無法套用模型 {{value}}。",
         "effortApplyFailed": "無法套用推理強度 {{value}}。"
       },
+      "githubPeek": {
+        "updated": "更新於 {{time}}",
+        "oneComment": "1 則留言",
+        "comments": "{{count}} 則留言",
+        "unavailable": "無法預覽。",
+        "retry": "重試",
+        "retryKeyHint": "無法預覽。按 {{key}} 重試。"
+      },
+      "webPeek": {
+        "unavailable": "此頁面沒有預覽。"
+      },
       "workers": {
         "stopUnconfirmed": "Orca 無法確認工作者已停止。"
+      },
+      "connectorAsker": {
+        "anApp": "某個應用程式",
+        "directMessage": "{{source}} DM",
+        "earlierMessages": "討論串中有 {{count}} 則較早的訊息",
+        "earlierMessages_other": "討論串中有 {{count}} 則較早的訊息",
+        "groupMessage": "{{source}} 群組 DM",
+        "label": "{{name}}，來自 {{place}}",
+        "noAccess": "無存取權",
+        "open": "在 {{source}} 中開啟",
+        "someone": "某人",
+        "via": "{{name}}（透過 {{bot}}）",
+        "you": "你"
       },
       "settings": "聊天設定",
       "textAttachmentPreview": {
@@ -20282,6 +20310,20 @@
         "questionNotSentDetail": "你的問題仍在此聊天中。請再次傳送 /btw 以重試。",
         "questionUnconfirmed": "{{agent}} 無法確認旁支聊天已收到你的問題",
         "questionUnconfirmedDetail": "再次提問前，請先檢查旁支聊天。你的問題仍在此聊天中。"
+      },
+      "urlRequest": {
+        "title": "已要求登入",
+        "open": "開啟登入頁面",
+        "decline": "拒絕",
+        "opened": "已在你的瀏覽器中開啟登入頁面。",
+        "openAgain": "再次開啟",
+        "finished": "登入完成",
+        "finishedWith": "登入完成 · {{message}}"
+      },
+      "offerCard": {
+        "notNow": "暫時不要",
+        "dismiss": "關閉",
+        "notSent": "無法將此內容傳送給 bot。請再試一次。"
       },
       "memoryUpdated": {
         "added": "已新增",
@@ -20406,6 +20448,44 @@
         "waiting": "等待中",
         "waitsFor": "等待"
       },
+      "slackMirror": {
+        "ownDm": "同時張貼到你與 {{bot}} 的 DM",
+        "theirDm": "同時張貼到 {{name}} 與 {{bot}} 的 DM",
+        "someonesDm": "同時張貼到與 {{bot}} 的 DM",
+        "channel": "同時張貼到 {{channel}} 討論串",
+        "thread": "同時張貼到 Slack 討論串",
+        "offUnavailable": "僅限 Orca · 討論串無法使用",
+        "offNotInChannel": "僅限 Orca · 不在頻道中",
+        "off": "僅限 Orca",
+        "shortDm": "Slack DM",
+        "shortChannel": "{{channel}} 討論串",
+        "shortThread": "Slack 討論串",
+        "headingDm": "Slack DM",
+        "headingChannel": "{{channel}} 中的 Slack 討論串",
+        "headingThread": "Slack 討論串",
+        "detailUnavailable": "此 Slack 討論串已被刪除，或其頻道已封存。",
+        "detailRemovedFrom": "{{bot}} 已從 {{channel}} 中移除。",
+        "detailRemoved": "{{bot}} 已從頻道中移除。",
+        "detailFallback": "以 {{bot}} 的身分並附上你的名字張貼。請在 Slack 中更新，才能以你的名字張貼。",
+        "detailOwnDm": "你的訊息與 {{bot}} 的回覆。只有你看得到此 DM。工具呼叫與工作者會留在 Orca 中。",
+        "detailTheirDm": "你的訊息與 {{bot}} 的回覆。{{name}} 會在他們的 DM 中看到。工具呼叫與工作者會留在 Orca 中。",
+        "detailSomeonesDm": "你的訊息與 {{bot}} 的回覆。此 DM 中的對方會看到。工具呼叫與工作者會留在 Orca 中。",
+        "detailThread": "你的訊息與 {{bot}} 的回覆。頻道中的所有人都看得到。工具呼叫與工作者會留在 Orca 中。",
+        "detailExternal": "你的訊息與 {{bot}} 的回覆。{{channel}} 中的所有人都看得到，包括你工作區以外的人。工具呼叫與工作者會留在 Orca 中。",
+        "detailChannel": "你的訊息與 {{bot}} 的回覆。{{channel}} 中的所有人都看得到。工具呼叫與工作者會留在 Orca 中。",
+        "posting": "正在張貼到 Slack…",
+        "failedFile": "未張貼到 Slack · 檔案過大",
+        "failedEmpty": "未張貼到 Slack · 沒有可張貼的內容",
+        "failedTooLong": "未張貼到 Slack · 訊息過長",
+        "failed": "未張貼到 Slack",
+        "delete": "從 Slack 刪除",
+        "postedFrom": "已從 Orca 張貼到 {{place}}",
+        "retry": "重試",
+        "rewindStays": "已在 Slack 中的訊息會保留。",
+        "switch": "將此聊天張貼到 Slack",
+        "tooltipOff": "你的訊息只會留在 Orca",
+        "tooltipOn": "你的訊息與 {{bot}} 的回覆也會張貼到此 Slack 討論串"
+      },
       "typedBy": {
         "anotherComputer": "另一部電腦",
         "fromVia": "來自 {{name}}，透過 {{computer}}",
@@ -20417,8 +20497,83 @@
         "running": "正在執行",
         "failed": "失敗"
       },
+      "signInNotice": {
+        "signedIn": "已登入。請重新傳送。",
+        "notSent": "未傳送：{{agent}} 尚未登入。",
+        "notSignedIn": "{{agent}} 尚未登入。",
+        "opensAntigravitySettings": "開啟「設定 → 帳戶 → Antigravity」",
+        "signIn": "登入",
+        "signsInClaudeAccount": "登入此 Claude 帳戶",
+        "runsCommand": "在終端機中執行 {{command}}",
+        "thenSlashCommand": "登入後，輸入 {{slashCommand}}。",
+        "signsInAgy": "在你的瀏覽器中以 Google 登入 agy"
+      },
+      "antigravityAuth": {
+        "chipLabel": "Antigravity 以 {{method}} 登入。變更",
+        "chipTitle": "Antigravity 以 {{method}} 登入",
+        "menuTitle": "Antigravity 登入方式",
+        "detected": "已偵測到",
+        "settings": "登入設定…",
+        "switched": "Antigravity 現在使用 {{method}}。",
+        "switchFailed": "Orca 無法變更 Antigravity 的登入方式。請再試一次。",
+        "confirmTitle": "要切換為 {{method}} 嗎？",
+        "confirmBody": "此主機上執行中的 Antigravity 聊天會重新啟動。進行中的回覆會停止，但你的對話會保留。",
+        "cancel": "取消",
+        "confirm": "切換",
+        "otherWays": "你也可以改用 API 金鑰或 gcloud 登入。",
+        "moreOptions": "更多選項…",
+        "useApiKey": "使用你的 Gemini API 金鑰",
+        "useGoogle": "使用你的 Google 登入",
+        "apiKeySaved": "已儲存在 Orca 中",
+        "googleFound": "你先前曾在此主機上以 Google 登入",
+        "askApiKeyEnvironment": "改用在你的環境中找到的 Gemini API 金鑰嗎？",
+        "askApiKeySaved": "改用儲存在 Orca 中的 Gemini API 金鑰嗎？",
+        "askGcloud": "改用你的 gcloud 登入（專案 {{project}}）嗎？",
+        "askGoogle": "改用你的 Google 登入嗎？",
+        "noSubscription": "此 Google 帳戶沒有 Antigravity 訂閱。",
+        "ineligible": "此 Google 帳戶無法使用 Antigravity。",
+        "signedOut": "Antigravity 尚未登入。",
+        "refused": "Google 拒絕了此聊天的憑證。",
+        "usageLimit": "此登入已達用量上限。",
+        "signInGoogle": "使用 Google 登入",
+        "yourAgy": "你的 agy",
+        "yourAgyVersion": "你的 agy · v{{version}}",
+        "orcasAgy": "Orca 的 agy",
+        "orcasAgyVersion": "Orca 的 agy · v{{version}}",
+        "runsOn": "執行於：{{program}}",
+        "keepsOwnLogin": "此聊天會沿用 agy 自己的 Google 登入。新的聊天會使用 {{method}}。",
+        "apiKeyEnvironment": "來自你的環境",
+        "foundGcloud": "你的 gcloud 登入也可使用。",
+        "foundKey": "你的 Gemini API 金鑰也可使用。",
+        "foundKeyAndGcloud": "你的 Gemini API 金鑰與 gcloud 登入也可使用。",
+        "gcloudProject": "專案 {{project}}",
+        "otherWaysMenu": "其他登入方式…",
+        "useGcloudLogin": "使用你的 gcloud 登入",
+        "otherWaysLabel": "其他登入方式"
+      },
+      "pairedServerAsk": {
+        "always": "一律允許 {{server}}",
+        "deny": "拒絕",
+        "once": "允許一次",
+        "thisServer": "此伺服器",
+        "title": "{{from}} 想傳訊息給這台電腦上的 {{to}}",
+        "titlePills": "<from>{{from}}</from> 想傳訊息給這台電腦上的 <to>{{to}}</to>"
+      },
+      "clientAsk": {
+        "declined": "已拒絕",
+        "notConnected": "未連線",
+        "pairedComputer": "已配對的電腦",
+        "waitingForYou": "等待你處理",
+        "waitingOn": "正在等待 {{computer}} 核准"
+      },
       "dock": {
         "label": "訊息框和提示"
+      },
+      "googleOffer": {
+        "useAccount": "將 {{email}} 用於 Google。",
+        "reconnect": "重新連線 {{email}}",
+        "use": "使用 {{email}}",
+        "staysDefault": "{{email}} 仍為預設"
       },
       "workerDock": {
         "commandOutputPending": "目前還無法取得命令輸出。",
@@ -20480,6 +20635,17 @@
         "unreadDetail": "工作者載入後會顯示在這裡",
         "chipLabel": "{{label}}，最新：{{title}}"
       },
+      "webhookSetup": {
+        "heading": "設定 Webhook",
+        "keyAndSecret": "金鑰與簽署密鑰",
+        "copiedReceipt": "✓ 已複製 URL",
+        "signingSecret": "簽署密鑰",
+        "addSecret": "新增…",
+        "noSecret": "無",
+        "sampleCall": "範例呼叫",
+        "sampleNote": "會啟動一次實際執行",
+        "send": "傳送"
+      },
       "automationSaved": {
         "resultsInRuns": "結果顯示於每次執行中",
         "paused": "已暫停",
@@ -20499,6 +20665,22 @@
         "loadFailed": "無法讀取此自動化",
         "openFullPage": "開啟頁面",
         "onAgent": "由 {{name}} 執行"
+      },
+      "connectorOffer": {
+        "heading": "連線服務",
+        "connectService": "連線 {{service}}",
+        "connected": "已連線",
+        "connectedIn": "已連線於 {{places}}",
+        "pausedStatus": "已暫停",
+        "addOrg": "新增組織",
+        "addWorkspace": "新增工作區",
+        "githubAsYou": "它也能透過你的 gh 登入，以你的身分在 GitHub 中運作。",
+        "linearAsYou": "它也能透過你在 Orca 中的 Linear 登入，以你的身分在 Linear 中運作。"
+      },
+      "toolAdded": {
+        "removed": "已移除",
+        "remove": "移除",
+        "added": "已新增"
       },
       "usageLimitActions": {
         "handOff": "交接給代理程式"
@@ -20525,8 +20707,10 @@
           "finish": "完成",
           "openAgain": "再次開啟",
           "addressLabel": "登入頁面網址",
-          "unfinished": "登入尚未完成。請先在開啟的頁面上完成登入，再按下「完成」。"
+          "unfinished": "登入尚未完成。請先在開啟的頁面上完成登入，再按下「完成」。",
+          "pastePlaceholder": "http://localhost:…"
         },
+        "manage": "管理 MCP 伺服器",
         "title": "MCP 伺服器",
         "close": "關閉",
         "loading": "載入中…",
