@@ -62,14 +62,18 @@ export function BotConnectorSection(props: {
   )
 }
 
-/** The owner, as a person icon. */
-export function BotOwnerAvatar(): React.JSX.Element {
+/** The owner, or anyone with no picture, as a person icon. */
+export function BotOwnerAvatar({
+  iconClassName = 'size-3'
+}: {
+  iconClassName?: string
+} = {}): React.JSX.Element {
   return (
     <span
       aria-hidden
       className="flex size-full items-center justify-center rounded-full bg-muted text-muted-foreground"
     >
-      <UserRound className="size-3" />
+      <UserRound className={iconClassName} />
     </span>
   )
 }
