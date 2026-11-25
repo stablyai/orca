@@ -12,6 +12,8 @@ import {
 } from './diff-comment-persistence'
 import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-selector'
 import { readOwnedDiffComments, type DiffCommentOwner } from './diff-comment-owner'
+// Why: on a protected folder copy a no-op can only look like one because of queued actions; it takes their outcome.
+import { awaitProtectedFolderNoteDependency as settledNoop } from './folder-note-protection'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
@@ -138,7 +140,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return false
     }
     if (existing[existingIdx].body === trimmed) {
-      return true
+      return settledNoop(owner, (id) => id === commentId)
     }
 
     const result = mutateDiffComments(set, owner, (current) => {
@@ -156,7 +158,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     })
     if (!result) {
       // Why: comment vanished or the same body was already written between pre-check and set; treat as success so the editor closes.
-      return true
+      return settledNoop(owner, (id) => id === commentId)
     }
     try {
       await enqueueDiffCommentPersist(set, worktreeId, get, result)
@@ -186,7 +188,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return next.length === existing.length ? null : next
     })
     if (!result) {
-      return true
+      return settledNoop(owner, (id) => snapshotsById.has(id))
     }
     try {
       await enqueueDiffCommentPersist(set, worktreeId, get, result)
@@ -219,7 +221,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return changed ? next : null
     })
     if (!result) {
-      return true
+      return settledNoop(owner, (id) => ids.has(id))
     }
     try {
       await enqueueDiffCommentPersist(set, worktreeId, get, result)
@@ -262,7 +264,10 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return next.length === existing.length ? null : next
     })
     if (!result) {
-      return true
+      return settledNoop(
+        owner,
+        (_id, note) => !options?.keepMarkdownNotes || (!!note && !isMarkdownComment(note))
+      )
     }
     try {
       await enqueueDiffCommentPersist(set, worktreeId, get, result)
@@ -286,7 +291,12 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return next.length === existing.length ? null : next
     })
     if (!result) {
-      return true
+      return settledNoop(
+        owner,
+        (_id, note) =>
+          note?.filePath === filePath &&
+          !(options?.keepMarkdownNotes === true && isMarkdownComment(note))
+      )
     }
     try {
       await enqueueDiffCommentPersist(set, worktreeId, get, result)

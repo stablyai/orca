@@ -16,41 +16,9 @@ import {
   settleOrdinaryFolderNoteAction,
   trackFolderNoteAction
 } from './folder-note-protection'
+import { normalizeDiffComment } from './diff-comment-normalize'
 
-export function normalizeDiffComment(comment: DiffComment): DiffComment {
-  const rawSource = (comment as { source?: unknown }).source
-  const source = rawSource === 'markdown' || rawSource === 'diff' ? rawSource : undefined
-  const rawStartLine = (comment as { startLine?: unknown }).startLine
-  const startLine =
-    Number.isInteger(rawStartLine) &&
-    typeof rawStartLine === 'number' &&
-    rawStartLine >= 1 &&
-    rawStartLine <= comment.lineNumber
-      ? rawStartLine
-      : undefined
-  const rawSelectedText = (comment as { selectedText?: unknown }).selectedText
-  const selectedText =
-    typeof rawSelectedText === 'string' && rawSelectedText.trim().length > 0
-      ? rawSelectedText.trim()
-      : undefined
-  const rawSentAt = (comment as { sentAt?: unknown }).sentAt
-  const sentAt =
-    typeof rawSentAt === 'number' && Number.isFinite(rawSentAt) && rawSentAt > 0
-      ? rawSentAt
-      : undefined
-
-  return {
-    ...comment,
-    ...(source !== undefined ? { source } : {}),
-    ...(source === undefined ? { source: undefined } : {}),
-    ...(selectedText !== undefined ? { selectedText } : {}),
-    ...(selectedText === undefined ? { selectedText: undefined } : {}),
-    ...(startLine !== undefined ? { startLine } : {}),
-    ...(startLine === undefined ? { startLine: undefined } : {}),
-    ...(sentAt !== undefined ? { sentAt } : {}),
-    ...(sentAt === undefined ? { sentAt: undefined } : {})
-  }
-}
+export { normalizeDiffComment }
 
 // Why: IPC writes aren't ordered, so serialize per worktree to stop an older snapshot from overwriting a newer one on disk.
 const persistQueueByWorktree = new Map<string, Promise<void>>()
@@ -141,13 +109,7 @@ export function enqueueDiffCommentPersist(
   const run = async (): Promise<void> => {
     // Why: after a failed folder save, every queued write is one merge-only action (see folder-note-protection).
     if (folderAction && isFolderNoteProtectionActive(floorKey)) {
-      return runProtectedFolderNoteAction({
-        copyKey: floorKey,
-        action: folderAction,
-        get,
-        set,
-        enqueueRead
-      })
+      return runProtectedFolderNoteAction({ copyKey: floorKey, action: folderAction, get, set })
     }
     // Capture epoch at dequeue with coalesced stateList; enqueue-time epochs would reject floors spanning chain breaks.
     const seedEpoch = floorSeedEpochByQueue.get(floorKey)
@@ -222,14 +184,15 @@ export function enqueueDiffCommentPersist(
       rollback(set, worktreeId, rollbackFloor, mutation)
       if (folderOwner && folderAction) {
         // The failed write may have landed: later writes of this copy stay merge-only until one is acknowledged.
-        enterFolderNoteProtection(
-          floorKey,
-          folderOwner,
-          folderAction,
-          (rollbackFloor ?? []).map(normalizeDiffComment),
+        enterFolderNoteProtection({
+          copyKey: floorKey,
+          owner: folderOwner,
+          failed: folderAction,
+          floor: (rollbackFloor ?? []).map(normalizeDiffComment),
           get,
-          set
-        )
+          set,
+          enqueueRead
+        })
         throw err
       }
       const own = ownNoteIdsAfterFailure.get(floorKey) ?? new Set<string>()
@@ -369,4 +332,14 @@ function rollback(
     )
     return { worktreesByRepo: { ...s.worktreesByRepo, [repoId]: nextList } }
   })
+}
+
+/** Test seam: forget every queue and floor between cases, since test files can share this module. */
+export function resetDiffCommentPersistenceForTests(): void {
+  persistQueueByWorktree.clear()
+  floorKeysByQueue.clear()
+  lastPersistedByQueue.clear()
+  lastMutationNextByQueue.clear()
+  floorSeedEpochByQueue.clear()
+  ownNoteIdsAfterFailure.clear()
 }

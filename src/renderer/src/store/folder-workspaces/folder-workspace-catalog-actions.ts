@@ -26,6 +26,10 @@ import {
 import { reuseEqualRecordMap } from '../../lib/catalog-reconciliation/catalog-record-reconciliation'
 import { getFolderWorkspaceUpdateCoordinator } from './folder-workspace-mutations'
 import { keepFencedFolderNotes } from '../slices/diff-comments/folder-note-fence'
+import {
+  afterFolderCatalogObserved,
+  observeFolderCatalogInput
+} from '../slices/diff-comments/folder-note-reconcile'
 import { structuralValuesEqualIgnoringUndefined } from '../../../../shared/collections/structural-value-equality'
 
 export function createFolderWorkspaceCatalogActions(
@@ -41,6 +45,7 @@ export function createFolderWorkspaceCatalogActions(
       return false
     }
     let applied = false
+    let observedNoteCopies: string[] = []
     set((current) => {
       if (!isHostCatalogFenceCurrent(get, fence)) {
         return current
@@ -59,13 +64,21 @@ export function createFolderWorkspaceCatalogActions(
         current.folderWorkspaces,
         current.projectGroups
       )
+      const rowHostId = createFolderWorkspaceHostResolver(current.projectGroups)
+      // Why: a protected note copy counts every accepted fetch of its row, even an equal-valued one.
+      observedNoteCopies = observeFolderCatalogInput({
+        catalogHostId: catalog.hostId,
+        fetchGeneration: fence.generation,
+        merged: folderWorkspaces,
+        rowHostId
+      })
       // Why: a fetch sampled before a protected note commit must not roll those notes back.
       const fencedFolderWorkspaces = keepFencedFolderNotes({
         catalogHostId: catalog.hostId,
         fetchGeneration: fence.generation,
         merged: folderWorkspaces,
         current: current.folderWorkspaces,
-        rowHostId: createFolderWorkspaceHostResolver(current.projectGroups)
+        rowHostId
       })
       const { target, identity, sshStateGeneration } = fence
       const catalogIdentity = { target, identity, sshStateGeneration }
@@ -88,6 +101,7 @@ export function createFolderWorkspaceCatalogActions(
         : { folderWorkspaces: fencedFolderWorkspaces, folderWorkspacePathStatuses: {} }
       return catalogPatch || workspacePatch ? { ...catalogPatch, ...workspacePatch } : current
     })
+    afterFolderCatalogObserved(observedNoteCopies, get, set)
     return applied
   }
 

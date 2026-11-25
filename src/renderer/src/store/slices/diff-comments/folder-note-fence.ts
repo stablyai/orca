@@ -26,13 +26,33 @@ function fenceKey(rowHostId: ExecutionHostId, folderWorkspaceId: string): string
   return `${rowHostId}\0${folderWorkspaceId}`
 }
 
-export function recordFolderNotesFence(get: () => AppState, owner: FolderOwner): void {
+export function folderWorkspaceIdOf(owner: FolderOwner): string | null {
   const scope = parseWorkspaceKey(owner.worktreeId)
-  if (scope?.type !== 'folder') {
+  return scope?.type === 'folder' ? scope.folderWorkspaceId : null
+}
+
+/** The host whose folder catalog lists this copy's row. */
+export function folderCatalogHostIdOf(owner: FolderOwner): ExecutionHostId {
+  return getRuntimeTargetHostId(catalogTargetOf(owner))
+}
+
+/** Whether a fetch with this generation may predate notes this copy took from the host. */
+export function isFolderNotesFenceHolding(
+  rowHostId: ExecutionHostId,
+  folderWorkspaceId: string,
+  fetchGeneration: number
+): boolean {
+  const fence = fencedNotes.get(fenceKey(rowHostId, folderWorkspaceId))
+  return fence !== undefined && fetchGeneration <= fence.generation
+}
+
+export function recordFolderNotesFence(get: () => AppState, owner: FolderOwner): void {
+  const folderWorkspaceId = folderWorkspaceIdOf(owner)
+  if (!folderWorkspaceId) {
     return
   }
   const target = catalogTargetOf(owner)
-  fencedNotes.set(fenceKey(owner.executionHostId, scope.folderWorkspaceId), {
+  fencedNotes.set(fenceKey(owner.executionHostId, folderWorkspaceId), {
     catalogHostId: getRuntimeTargetHostId(target),
     generation: peekHostCatalogGeneration(get, 'folder-workspaces', target)
   })

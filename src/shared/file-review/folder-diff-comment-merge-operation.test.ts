@@ -22,7 +22,10 @@ function note(id: string, body: string): DiffComment {
   }
 }
 
-function row(diffComments: DiffComment[], overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
+function row(
+  diffComments: DiffComment[],
+  overrides: Partial<FolderWorkspace> = {}
+): FolderWorkspace {
   return {
     id: 'f1',
     projectGroupId: 'g1',
@@ -57,7 +60,10 @@ function host(rows: FolderWorkspace[], options: { visible?: boolean; fenced?: bo
           throw new Error('fenced')
         }
       },
-      update: (id: string, updates: { diffComments: DiffComment[]; diffCommentsBase: DiffComment[] }) => {
+      update: (
+        id: string,
+        updates: { diffComments: DiffComment[]; diffCommentsBase: DiffComment[] }
+      ) => {
         const target = rows.findLast((entry) => entry.id === id)
         if (!target) {
           return null
@@ -100,7 +106,9 @@ describe('merge-only folder note operation', () => {
       merge([note('x', 'v1')], [note('x', 'v2'), note('y', 'new')])
     )
 
-    expect(h.rows[0].diffComments?.map(({ id, body }) => [id, body.length > 10 ? 'big' : body])).toEqual([
+    expect(
+      h.rows[0].diffComments?.map(({ id, body }) => [id, id === 'big' ? 'big' : body])
+    ).toEqual([
       ['big', 'big'],
       ['x', 'v2'],
       ['peer', 'from another device'],
@@ -116,7 +124,10 @@ describe('merge-only folder note operation', () => {
 
   it('reports an edit of a note another device deleted as absent', () => {
     const h = host([row([])])
-    const receipt = mergeFolderDiffCommentsOnHost(h.api, merge([note('x', 'v1')], [note('x', 'v2')]))
+    const receipt = mergeFolderDiffCommentsOnHost(
+      h.api,
+      merge([note('x', 'v1')], [note('x', 'v2')])
+    )
     expect(receipt.outcome === 'applied' && receipt.verdict).toEqual([
       { id: 'x', version: ABSENT_NOTE_VERSION }
     ])
@@ -124,13 +135,20 @@ describe('merge-only folder note operation', () => {
 
   it.each([
     ['a recreated row', host([row([note('x', 'v1')], { createdAt: 11 })]), 'incarnation_changed'],
-    ['two rows with the id', host([row([note('x', 'v1')]), row([note('x', 'v1')])]), 'duplicate_row'],
+    [
+      'two rows with the id',
+      host([row([note('x', 'v1')]), row([note('x', 'v1')])]),
+      'duplicate_row'
+    ],
     ['a hidden row', host([row([note('x', 'v1')])], { visible: false }), 'not_found'],
     ['a fenced row', host([row([note('x', 'v1')])], { fenced: true }), 'refused'],
     ['a missing row', host([]), 'not_found']
   ])('refuses %s before touching anything', (_name, h, outcome) => {
     const before = JSON.stringify(h.rows)
-    const receipt = mergeFolderDiffCommentsOnHost(h.api, merge([note('x', 'v1')], [note('x', 'v2')]))
+    const receipt = mergeFolderDiffCommentsOnHost(
+      h.api,
+      merge([note('x', 'v1')], [note('x', 'v2')])
+    )
     expect(receipt).toEqual({ outcome, requestId: 'r1', folderWorkspaceId: 'f1' })
     expect(JSON.stringify(h.rows)).toBe(before)
     expect(h.effects).toEqual({ updates: 0, notifies: 0 })

@@ -1,3 +1,4 @@
+// @orca-isolated-worker: stubs `window` at load and shares its mock objects with every importer.
 import { vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
@@ -18,6 +19,10 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { createDiffCommentsSlice } from './create-diff-comments-slice'
+import { resetDiffCommentPersistenceForTests } from './diff-comment-persistence'
+import { resetFolderNoteProtectionForTests } from './folder-note-protection'
+import { resetFolderNotesFenceForTests } from './folder-note-fence'
+import { createFolderWorkspaceCatalogActions } from '../../folder-workspaces/folder-workspace-catalog-actions'
 import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-owner'
 import {
   makeFolderWorkspace,
@@ -25,6 +30,13 @@ import {
 } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 export const WORKSPACE_KEY = folderWorkspaceKey('folder-1')
+
+/** Every module-level queue, protection and fence; test files may share these modules. */
+export function resetFolderNoteTestState(): void {
+  resetDiffCommentPersistenceForTests()
+  resetFolderNoteProtectionForTests()
+  resetFolderNotesFenceForTests()
+}
 
 export function note(id: string, body: string, lineNumber = 1): DiffComment {
   return {
@@ -62,7 +74,10 @@ export function createModelHost(kind: HostKind, saved: DiffComment[]) {
     /** Next merge-method calls, consumed in order. */
     nextMerges: [] as ('ok' | 'drop-ack' | 'refuse')[],
     mergeGate: undefined as Promise<void> | undefined,
+    /** A read samples the row first, then waits here before its reply is delivered. */
     readGate: undefined as Promise<void> | undefined,
+    /** Next reads, consumed in order: 'fail' never reaches the host. */
+    nextReads: [] as ('ok' | 'fail')[],
     requests: [] as FolderDiffCommentMergeRequest[],
     ordinary(updates: OrdinaryUpdates): FolderWorkspace {
       const mode = host.nextOrdinary
@@ -86,7 +101,12 @@ export function createModelHost(kind: HostKind, saved: DiffComment[]) {
     },
     async merge(request: FolderDiffCommentMergeRequest): Promise<FolderDiffCommentReceipt> {
       host.requests.push(request)
-      await (request.mode === 'read' ? host.readGate : host.mergeGate)
+      if (request.mode === 'read' && host.nextReads.shift() === 'fail') {
+        throw new Error('host unreachable')
+      }
+      if (request.mode === 'merge') {
+        await host.mergeGate
+      }
       const mode = request.mode === 'read' ? 'ok' : (host.nextMerges.shift() ?? 'ok')
       const receipt = mergeFolderDiffCommentsOnHost(
         {
@@ -112,6 +132,7 @@ export function createModelHost(kind: HostKind, saved: DiffComment[]) {
       )
       if (request.mode === 'read') {
         host.effects.reads += 1
+        await host.readGate
       }
       if (mode === 'drop-ack') {
         throw new Error('connection lost')
@@ -161,7 +182,12 @@ function reply(result: unknown) {
 }
 
 function refusal(code: string) {
-  return { id: 'rpc', ok: false, error: { code, message: code }, _meta: { runtimeId: 'remote-runtime' } }
+  return {
+    id: 'rpc',
+    ok: false,
+    error: { code, message: code },
+    _meta: { runtimeId: 'remote-runtime' }
+  }
 }
 
 function createTestStore() {
@@ -170,6 +196,9 @@ function createTestStore() {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store with only the fields review-note owners and writes read.
     return {
       ...slice,
+      ...createFolderWorkspaceCatalogActions(args[0], args[1]),
+      folderWorkspaceCatalogByHost: {},
+      folderWorkspacePathStatuses: {},
       settings: null,
       activeWorktreeId: null,
       activeWorkspaceExecutionHostId: null,
@@ -188,6 +217,7 @@ export function setupFolderNotes(kind: HostKind, saved: DiffComment[] = []) {
   const host = createModelHost(kind, saved)
   const hostId = kind === 'local' ? 'local' : 'runtime:env-owner'
   if (kind === 'local') {
+    folderWorkspacesApi.list.mockImplementation(async () => [{ ...host.row }])
     folderWorkspacesApi.update.mockImplementation(async ({ updates }) => host.ordinary(updates))
     folderWorkspacesApi.mergeDiffComments.mockImplementation((request) => host.merge(request))
   } else {
@@ -246,13 +276,39 @@ export function setupFolderNotes(kind: HostKind, saved: DiffComment[] = []) {
       }),
     edit: (id: string, body: string) => store.getState().updateDiffComment(owner(), id, body),
     remove: (id: string) => store.getState().deleteDiffComment(owner(), id),
+    clear: () => store.getState().clearDiffComments(owner()),
     /** A catalog refresh replacing this copy's row with what the host holds now. */
     refresh: () =>
       store.setState((state) => ({
         folderWorkspaces: state.folderWorkspaces.map((row) =>
-          row.id === 'folder-1' ? { ...host.row, diffComments: [...(host.row.diffComments ?? [])] } : row
+          row.id === 'folder-1'
+            ? { ...host.row, diffComments: [...(host.row.diffComments ?? [])] }
+            : row
         )
       })),
+    /**
+     * A local folder catalog fetch through the store's own action. The host is sampled now; the
+     * result lands when `deliver` runs, so a fetch can be delivered after later writes. `sample`
+     * stands in for the host's row, e.g. one equal to what this copy already shows.
+     */
+    startCatalogFetch(sample: FolderWorkspace = host.row) {
+      let release: () => void = () => {}
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const sampled = structuredClone(sample)
+      folderWorkspacesApi.list.mockImplementationOnce(async () => {
+        await gate
+        return [sampled]
+      })
+      const done = store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
+      return {
+        deliver: async () => {
+          release()
+          await done
+        }
+      }
+    },
     /** Makes the next ordinary save fail before reaching the host, so protection starts. */
     async failOnce(): Promise<void> {
       host.nextOrdinary = 'refuse'

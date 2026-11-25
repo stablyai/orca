@@ -41,13 +41,20 @@ export function isDefinitiveFolderNoteRefusal(err: unknown): boolean {
   )
 }
 
+/** The receiver predates the merge-only method; an automatic read there is pointless. */
+export function isUnsupportedFolderNoteMerge(err: unknown): boolean {
+  return err instanceof RuntimeRpcCallError && err.code === 'method_not_found'
+}
+
 /**
  * One merge-only note operation on the host that owns the folder's catalog. A paired host older than
  * this method answers method_not_found, so a recovering write can never become a list replacement.
  */
 export async function mergeFolderDiffComments(
   owner: Extract<DiffCommentOwner, { kind: 'folder' }>,
-  request: FolderDiffCommentMergeRequest
+  request: FolderDiffCommentMergeRequest,
+  // A read nobody asked for: it never wakes a host Orca stopped idle.
+  options: { passive?: boolean } = {}
 ): Promise<FolderDiffCommentReceipt> {
   if (!owner.runtimeEnvironmentId) {
     return window.api.folderWorkspaces.mergeDiffComments(request)
@@ -63,6 +70,6 @@ export async function mergeFolderDiffComments(
     }),
     'folderWorkspace.mergeDiffComments',
     request,
-    { timeoutMs: 15_000 }
+    options.passive ? { timeoutMs: 15_000, background: true, wake: false } : { timeoutMs: 15_000 }
   )
 }

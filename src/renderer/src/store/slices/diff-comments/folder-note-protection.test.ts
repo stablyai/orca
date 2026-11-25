@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearRuntimeCompatibilityCache } from '../../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { clearRuntimeEnvironmentConnectionGenerations } from '../runtime-status/runtime-status-connection-generation'
-import { resetFolderNoteProtectionForTests } from './folder-note-protection'
-import { resetFolderNotesFenceForTests } from './folder-note-fence'
 import {
   folderWorkspacesApi,
   note,
+  resetFolderNoteTestState,
   runtimeEnvironmentCall,
   setupFolderNotes
 } from './folder-note-test-harness'
@@ -17,8 +16,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   clearRuntimeCompatibilityCache()
   clearRuntimeEnvironmentConnectionGenerations()
-  resetFolderNoteProtectionForTests()
-  resetFolderNotesFenceForTests()
+  resetFolderNoteTestState()
   errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -44,7 +42,11 @@ describe('folder notes after a failed save', () => {
         'A2'
       ])
       await vi.waitFor(() =>
-        expect(shown().map((entry) => entry.split('=')[1])).toEqual(['A', 'from another device', 'A2'])
+        expect(shown().map((entry) => entry.split('=')[1])).toEqual([
+          'A',
+          'from another device',
+          'A2'
+        ])
       )
     }
   )
@@ -144,31 +146,38 @@ describe('folder notes after a failed save', () => {
   it('never sends a paired request over the sealed-frame budget, counting escaped UTF-8', async () => {
     const { host, add, failOnce } = setupFolderNotes('paired')
     await failOnce()
-    const merges = host.requests.length
+    const merges = host.requests.filter((request) => request.mode === 'merge').length
     // Three UTF-8 bytes per character: well under the limit in characters, over it in bytes.
     const body = '€'.repeat(Math.ceil(FOLDER_NOTE_MERGE_MAX_PARAMS_BYTES / 3) + 1)
 
     expect(await add(body)).toBeNull()
 
-    expect(host.requests.length).toBe(merges)
+    expect(host.requests.filter((request) => request.mode === 'merge').length).toBe(merges)
     expect(host.effects.merges).toBe(0)
   })
 
-  it('reconciles a contested display with a read that writes nothing', async () => {
+  it('reconciles a contested display with a read that writes nothing, never hiding the saved note', async () => {
     const { host, add, failOnce, refresh, shown } = setupFolderNotes('local', [note('X', 'v0')])
     await failOnce()
-    host.mergeGate = new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.waitFor(() => expect(host.effects.reads).toBe(1))
+    let release: () => void = () => {}
+    host.mergeGate = new Promise((resolve) => {
+      release = resolve
+    })
     const pending = add('Y', 2)
+    await vi.waitFor(() => expect(host.requests.at(-1)?.mode).toBe('merge'))
     host.peer((notes) => [...notes, note('P', 'peer', 3)])
     // A refresh published while the write is in flight: the receipt alone can't say which is newer.
     refresh()
+    release()
     expect(await pending).not.toBeNull()
+    expect(shown().map((entry) => entry.split('=')[1])).toContain('Y')
 
     await vi.waitFor(() =>
       expect(shown().map((entry) => entry.split('=')[1])).toEqual(['v0', 'peer', 'Y'])
     )
     expect(host.requests.at(-1)?.mode).toBe('read')
-    expect(host.effects.reads).toBeGreaterThan(0)
+    expect(host.effects.reads).toBe(2)
   })
 
   it('keeps an ordinary save as before when nothing failed', async () => {

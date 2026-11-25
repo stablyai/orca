@@ -17,7 +17,7 @@ export class HostRouteUnverifiableError extends Error {
 
 type HostRouteCallOptions = Pick<
   NonNullable<Parameters<typeof callRuntimeRpc>[3]>,
-  'timeoutMs' | 'signal' | 'expectedEnvironmentRuntimeId'
+  'timeoutMs' | 'signal' | 'expectedEnvironmentRuntimeId' | 'background' | 'wake'
 >
 
 /**
