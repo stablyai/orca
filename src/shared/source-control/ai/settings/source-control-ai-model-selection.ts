@@ -124,10 +124,18 @@ export function withDiscoveredModels(
   config: SourceControlAiSettings,
   agentId: TuiAgent,
   discovered: CommitMessageAiModelCapability[],
-  hostKey: string
-): Pick<SourceControlAiSettings, 'discoveredModelsByAgent' | 'discoveredModelsByAgentByHost'> {
+  hostKey: string,
+  listedAt = Date.now()
+): Pick<
+  SourceControlAiSettings,
+  'discoveredModelsByAgent' | 'discoveredModelsByAgentByHost' | 'discoveredAtByAgentByHost'
+> {
   const models = savedDiscoveredModels(discovered)
   return {
+    discoveredAtByAgentByHost: {
+      ...config.discoveredAtByAgentByHost,
+      [hostKey]: { ...config.discoveredAtByAgentByHost?.[hostKey], [agentId]: listedAt }
+    },
     discoveredModelsByAgent:
       hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
         ? { ...config.discoveredModelsByAgent, [agentId]: models }
@@ -139,6 +147,27 @@ export function withDiscoveredModels(
   }
 }
 
+/** A recent account listing for the host, or null when none bounds what runs. */
+export function getFreshAccountModelListing(
+  source: SourceControlAiSettings,
+  legacy: CommitMessageAiSettings | null | undefined,
+  hostKey: string,
+  agentId: TuiAgent
+): CommitMessageAiModelCapability[] | null {
+  // Codex's model/list is the signed-in account's own list, so a fresh one bounds what runs; an older
+  // one may be another login's or predate a new model, and Codex's refusal retry covers that case.
+  const listedAt = source.discoveredAtByAgentByHost?.[hostKey]?.[agentId]
+  if (
+    !listsAccountModels(agentId) ||
+    listedAt === undefined ||
+    Date.now() - listedAt >= ACCOUNT_LISTING_FRESH_MS
+  ) {
+    return null
+  }
+  const discovered = getDiscoveredModels(source, legacy, hostKey, agentId)
+  return discovered.length > 0 ? discovered : null
+}
+
 /** The models generation can run for an agent on a host, in its lookup order: spec, then saved discovery. */
 export function getTextGenerationModels<T extends CommitMessageAiModelCapability>(
   specModels: readonly T[],
@@ -147,16 +176,20 @@ export function getTextGenerationModels<T extends CommitMessageAiModelCapability
   hostKey: string,
   agentId: TuiAgent
 ): (T | CommitMessageAiModelCapability)[] {
-  const discovered = getDiscoveredModels(source, legacy, hostKey, agentId)
-  // Codex's model/list is the signed-in account's own list; built-in rows it omits fail on that account.
-  if (discovered.length > 0 && listsAccountModels(agentId)) {
-    return discovered
+  const listing = getFreshAccountModelListing(source, legacy, hostKey, agentId)
+  if (listing) {
+    return listing
   }
+  const discovered = getDiscoveredModels(source, legacy, hostKey, agentId)
   const specIds = new Set(specModels.map((model) => model.id))
   return [...specModels, ...discovered.filter((model) => !specIds.has(model.id))]
 }
 
-function listsAccountModels(agentId: TuiAgent): boolean {
+// The settings picker re-lists on open, so a day bounds how long a login switch can hide a model.
+const ACCOUNT_LISTING_FRESH_MS = 24 * 60 * 60 * 1000
+
+/** Whether the agent lists the signed-in account's models (Codex's app-server `model/list`). */
+export function listsAccountModels(agentId: TuiAgent): boolean {
   const discovery = getCommitMessageAgentSpec(agentId)?.modelDiscovery
   return discovery !== undefined && 'listing' in discovery
 }

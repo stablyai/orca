@@ -17,6 +17,7 @@ function resolveCodexModel(settings: Partial<SourceControlAiSettings>): string |
         ...getDefaultSourceControlAiSettings(),
         agentId: 'codex',
         discoveredModelsByAgentByHost: { local: { codex: ACCOUNT_LISTING } },
+        discoveredAtByAgentByHost: { local: { codex: Date.now() } },
         ...settings
       }
     },
@@ -36,5 +37,23 @@ describe('resolveSourceControlAiForOperation with an account model listing', () 
         modelOverridesByOperation: { branchName: { selectedModelByAgent: { codex: 'gpt-5.5' } } }
       })
     ).toBe('gpt-6.1-terra')
+    // A listing without a default and without Orca's default runs its first model.
+    expect(
+      resolveCodexModel({
+        discoveredModelsByAgentByHost: {
+          local: { codex: ACCOUNT_LISTING.map(({ isDefault: _isDefault, ...model }) => model) }
+        }
+      })
+    ).toBe('gpt-6.1-terra')
+  })
+
+  it('lets an old listing block nothing, so a model added since still runs', () => {
+    const dayAndAMinuteAgo = Date.now() - 24 * 60 * 60 * 1000 - 60_000
+    expect(
+      resolveCodexModel({
+        selectedModelByAgent: { codex: 'gpt-6.2-new' },
+        discoveredAtByAgentByHost: { local: { codex: dayAndAMinuteAgo } }
+      })
+    ).toBe('gpt-6.2-new')
   })
 })

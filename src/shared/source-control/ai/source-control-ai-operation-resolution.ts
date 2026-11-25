@@ -20,7 +20,9 @@ import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 import { projectSourceControlAiToLegacyCommitMessageAi as projectLegacySettings } from './settings/source-control-ai-legacy-projection'
 import {
+  getFreshAccountModelListing,
   getTextGenerationModels,
+  listsAccountModels,
   resolveThinkingLevel,
   selectPersistedModelId
 } from './settings/source-control-ai-model-selection'
@@ -218,7 +220,10 @@ export function resolveSourceControlAiForOperation(
     )
   }
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
+  const listing = getFreshAccountModelListing(source, legacy, hostKey, resolvedAgent)
   const models = getTextGenerationModels(spec.models, source, legacy, hostKey, resolvedAgent)
+  // Without a fresh account listing a pick may be newer than Orca knows; Codex's refusal retry covers a bad one.
+  const runsUnlistedPicks = !listing && listsAccountModels(resolvedAgent)
   const persistedModelId = selectPersistedModelId({
     source,
     legacy,
@@ -226,15 +231,21 @@ export function resolveSourceControlAiForOperation(
     operation: input.operation,
     hostKey,
     agentId: resolvedAgent,
-    isAvailable: (modelId) => models.some((candidate) => candidate.id === modelId)
+    isAvailable: (modelId) =>
+      runsUnlistedPicks || models.some((candidate) => candidate.id === modelId)
   })
-  const pickedModel = models.find((candidate) => candidate.id === persistedModelId)
-  // An account listing without Orca's default runs the listing's own default instead.
+  const pickedModel =
+    models.find((candidate) => candidate.id === persistedModelId) ??
+    (runsUnlistedPicks && persistedModelId
+      ? getCommitMessageModel(resolvedAgent, persistedModelId)
+      : undefined)
+  // An account listing without Orca's default runs the listing's own default, else its first model.
   const model =
     pickedModel ??
     models.find((candidate) => candidate.id === spec.defaultModelId) ??
-    models.find((candidate) => candidate.isDefault) ??
-    getCommitMessageModel(resolvedAgent, spec.defaultModelId)
+    (listing
+      ? (listing.find((candidate) => candidate.isDefault) ?? listing[0])
+      : getCommitMessageModel(resolvedAgent, spec.defaultModelId))
   if (!model) {
     return resolveFailure(textGenerationFailure('noModelForAgent', { label: spec.label }))
   }
