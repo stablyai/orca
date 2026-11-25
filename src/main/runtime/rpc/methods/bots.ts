@@ -11,6 +11,10 @@ import {
   type BotChatResetParams,
   type BotUpdateParams
 } from '../../../../shared/rpc-contract/bots-params'
+import {
+  BotSlackIconUpload,
+  BotSlackIconWanted
+} from '../../../../shared/rpc-contract/bot-avatar-params'
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
 import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
@@ -36,6 +40,7 @@ import { botOwnSkillsView, linkBotOwnSkills } from '../../../bots/bot-own-skills
 import { botHomeFolder } from '../../../bots/bot-home'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
+import { OWNER_ACTS_FOR } from '../../../../shared/bots/bot-acts-for'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
 
@@ -104,6 +109,7 @@ export const BOT_METHODS = [
     // threadReplies: whether it binds an event's run to its thread, for --results-to thread.
     // githubEvents2: whether it sends GitHub's newer events and label=, for trigger-options.
     // githubWorkflows: whether it sends github.workflow_finished, for trigger-options.
+    // githubCiFinished: whether it sends github.ci_finished, for trigger-options and watch-pr.
     // waits: each bot's waits still waiting, for its row; needsYou: its unstale Needs you items, for phones.
     // connectorNeedsSignIn: Orca Cloud refused this host's sign-in, so nothing reaches its bots.
     // connectorStatus: signed out, needs sign-in (the app is signed in but the connector refuses it),
@@ -123,7 +129,8 @@ export const BOT_METHODS = [
         ...(runtime.getConnectorCloud()?.botListFacts() ?? {
           threadReplies: false,
           githubEvents2: false,
-          githubWorkflows: false
+          githubWorkflows: false,
+          githubCiFinished: false
         }),
         signInServer
       }
@@ -199,15 +206,39 @@ export const BOT_METHODS = [
     permission: 'workspace',
     params: BotAvatarUpload,
     handler: async (params, { runtime }) => ({
-      bot: await runtime.bots.setAvatarImage(params.botId, Buffer.from(params.png, 'base64'))
+      bot: await runtime.bots.setAvatarImage(
+        params.botId,
+        Buffer.from(params.png, 'base64'),
+        params.expectedAvatarRevision,
+        params.expectedAvatarEpoch
+      )
     })
   }),
   defineMethod({
     name: 'bots.avatar.read',
     permission: 'workspace',
     params: BotAvatarRead,
+    handler: async (params, { runtime }) =>
+      params.catalogRevision === undefined
+        ? { png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null }
+        : runtime.bots.generationRevision(params.botId, params.catalogRevision, params.catalogEpoch)
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.wanted',
+    permission: 'workspace',
+    params: BotSlackIconWanted,
+    handler: (params, { runtime }) => runtime.bots.slackIcons.wanted(params.botId, params.look)
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.upload',
+    permission: 'workspace',
+    params: BotSlackIconUpload,
     handler: async (params, { runtime }) => ({
-      png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null
+      stored: await runtime.bots.slackIcons.store(
+        params.botId,
+        params.look,
+        Buffer.from(params.png, 'base64')
+      )
     })
   }),
   defineMethod({
@@ -267,7 +298,9 @@ export const BOT_METHODS = [
           return null
         }
       )
-      return { sessionId: empty ?? (await startBotSession(runtime, onAgent)) }
+      // The owner's own chat, as Home Chat is: recorded so a /clear never leaves it unattributed.
+      const actsFor = { actsFor: [...OWNER_ACTS_FOR] }
+      return { sessionId: empty ?? (await startBotSession(runtime, onAgent, { actsFor })) }
     }
   })
 ]

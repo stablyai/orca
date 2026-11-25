@@ -23,18 +23,11 @@ import type { BotShareClient } from '../bots/sharing/bot-share-client'
 import type { BotShareDownloadPolicy } from '../bots/sharing/bot-share-receive'
 import { BotShareService } from '../bots/sharing/bot-share-service'
 import { readBotShareable } from '../bots/sharing/bot-share-sources'
-import {
-  botHomeWorktreeOnBranch,
-  runtimeBotWork,
-  workerGitHubRepo,
-  type BotHomeLineage,
-  type BotWorkRuntime
-} from '../bots/bot-work-runtime'
+import { runtimeBotWork, type BotWorkRuntime } from '../bots/bot-work-runtime'
 import type { WorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
-import type { OwnPullRequest } from '../connector-cloud/own-pr-trigger-guard'
-import { botWorkHasPrBranch, botWorkRowsForRuntime } from '../bots/bot-work-pr-branch'
+import { BotsDbWorkerClient } from '../bots/db-worker/bots-db-worker-client'
 import { profileAccountUserId } from '../orca-profiles/profile-account-user-id'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-commands'
@@ -50,7 +43,7 @@ import type { DispatchRowChange } from './orchestration/db/worker-status-notice'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { isStructuredAttentionMuted } from './agent-session/lifecycle/structured-agent-session-mobile-attention'
 import { backfillInstalledBotBackgroundChats } from '../bots/bot-background-chat-backfill'
-import { runtimeBotItems } from '../bots/bot-items-runtime'
+import { runtimeBotItems } from '../bots/runtime-bot-items'
 import { botItemOfReport } from '../bots/bot-item-report-fact'
 import { listeningClients } from './orchestration/federation/client-asks/client-ask-listeners'
 
@@ -101,6 +94,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       }),
     leaveBotGroups: (botId) => this.leaveBotGroups(botId),
     botsRoot: () => botsRootFolder(),
+    slackIconsRoot: () => join(getProfileUserDataPath(), 'bot-slack-icons'),
     filesystem: localBotHomeFilesystem,
     accountUserId: () =>
       this.servedOrcaProfileId
@@ -111,8 +105,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         .forget(botId)
         .catch(() => undefined)
       this.lookAround.forget(botId)
-      this.botWork.forgetBot(botId)
+      void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
+      void this.bots.slackIcons.forget(botId).catch(() => undefined)
     }
   })
 
@@ -142,17 +137,16 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     if (!this.botShareClient) {
       throw new Error('Sharing a bot needs the Orca desktop app.')
     }
-    const { client, download } = this.botShareClient
     this.botShareService ??= new BotShareService({
-      client,
-      download,
+      ...this.botShareClient,
       candidates: new BotShareCandidates(join(getProfileUserDataPath(), 'bot-share-candidates')),
       picks: this.botSharePicks(),
-      readShareable: (bot) =>
+      readShareable: (bot, skills) =>
         readBotShareable({
           bot,
           automations: this.store?.listAutomations?.() ?? [],
-          repos: this.listRepos()
+          repos: this.listRepos(),
+          ...skills
         })
     })
     return this.botShareService
@@ -198,22 +192,24 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   readonly pairedBotRosters = pairedBotRosterCache(this)
 
   /** What the work record reads: orchestration, worktrees and the conversation store. */
-  private readonly botWorkRuntime: BotWorkRuntime & BotHomeLineage = {
+  private readonly botWorkRuntime: BotWorkRuntime = {
     getOrchestrationDb: () => this.getOrchestrationDb(),
     resolveOrchestrationWorkerServer: (selector) => this.resolveOrchestrationWorkerServer(selector),
     callOrchestrationWorkerServer: (...args) => this.callOrchestrationWorkerServer(...args),
-    getOrchestrationFleetAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
+    getOrchestrationFleetAgentStatusSnapshot: (...args) =>
+      this.getOrchestrationFleetAgentStatusSnapshot(...args),
     ensureStructuredAgentSessionHost: () => this.ensureStructuredAgentSessionHost(),
     // Read per call: the host binds it after this field initializes.
     getAgentStatusSnapshotFn: () => this.getAgentStatusSnapshotFn?.() ?? [],
     showManagedTerminalWorkspace: (...args) => this.showManagedTerminalWorkspace(...args),
-    bots: this.bots,
-    linkStore: () => this.store,
-    listWorkspaceLineage: () => this.listWorkspaceLineage()
+    linkStore: () => this.store
   }
 
+  /** The runtime's one bots DB worker: every bot store's SQL runs in it, off this thread. */
+  private readonly botsDb = new BotsDbWorkerClient()
+
   /** Which worker each bot conversation's code work went to. */
-  readonly botWork = runtimeBotWork(this.botWorkRuntime)
+  readonly botWork = runtimeBotWork(this.botWorkRuntime, this.botsDb)
 
   private readonly botJournal = journaledItemsNotice(this, (scope) =>
     this.botChangeNotices.changed(scope)
@@ -221,6 +217,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** What each bot is doing for its owner and needs from them, on this host. */
   readonly botItems = runtimeBotItems({
+    db: this.botsDb,
     workRuntime: this.botWorkRuntime,
     bots: () => this.bots.list(),
     store: () => this.store,
@@ -231,20 +228,6 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   protected override structuredMailReportItem = botItemOfReport(this.botItems)
 
-  /** Whether a bot's work on this host opened this pull request as its owner: a live worker's, or a
-   *  workspace under a bot's home with its head branch checked out. */
-  async isBotWorkPullRequest(pr: OwnPullRequest): Promise<boolean> {
-    const rows = botWorkRowsForRuntime(
-      this.botWork,
-      (botId) => this.listedBotLookup.hasId(botId),
-      (worker, branch) => workerGitHubRepo(this.botWorkRuntime, worker, branch)
-    )
-    return (
-      (await botWorkHasPrBranch(rows, pr)) ||
-      (await botHomeWorktreeOnBranch(this.botWorkRuntime, pr.head, pr.headRef))
-    )
-  }
-
   abstract deleteAutomation(id: string): Promise<{ removed: boolean; id: string }>
   abstract updateAutomation(id: string, updates: { agentId: Bot['agent'] }): Promise<unknown>
 
@@ -253,7 +236,6 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** A bot session's gate on a queued message; the runtime overrides it. */
   protected assertStructuredQueuedMessageAllowed(_sessionId: string, _messageId: string): void {}
 
-  private readonly listedBotLookup = createBotLookupIndex(() => this.bots.list())
   private readonly wiredBotLookup = createBotLookupIndex(() => this.wiredBots())
 
   /** The bots on this host's store, read per call. */
@@ -274,7 +256,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         requestTurnEnded: (sessionId, turnId, ended) =>
           this.botSessions.turnEnded(sessionId, turnId, ended),
         recentChats: (botId, sessionId) => this.botSessions.recentChats(botId, sessionId),
-        unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
+        unansweredQuestionNote: (sessionId, botId) =>
+          this.botSessions.unansweredQuestionNote(sessionId, botId),
         botChats: (bot, sessionId) => this.botSessions.chatsOf(bot, sessionId),
         pairedBotRosters: this.pairedBotRosters.read,
         clientName: (installationId) => listeningClients(this, installationId)[0]?.name ?? null,
@@ -351,14 +334,16 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     this.botChangeNotices.changed({ kinds: ['access'] })
   }
 
-  /** A group's room, members or latest message changed; windows and phones re-read the groups. */
-  notifyBotGroupsChanged(): void {
-    this.botChangeNotices.changed({ kinds: ['groups'] })
+  /** A group's room, members or latest message changed; windows and phones re-read the groups, and
+   *  open rooms of `groupIds` (every room when absent) re-read their page. */
+  notifyBotGroupsChanged(groupIds?: readonly string[]): void {
+    this.botChangeNotices.changed({ kinds: ['groups'], ...(groupIds ? { groupIds } : {}) })
   }
 
   /** A paired server's worker verdicts changed: their bots re-read (all, if a bot can't be read). */
   protected botFederatedWorkersChanged(dispatchIds: readonly string[]): void {
     this.botChatTreeWorkers.drop(dispatchIds)
+    this.botItems.workersWritten(dispatchIds)
     const botIds = this.botChatTreeIndex?.ownersOf(dispatchIds) ?? null
     if (botIds?.length !== 0) {
       this.botChangeNotices.changed({ ...(botIds ? { botIds } : {}), kinds: ['workers'] })
@@ -367,6 +352,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   protected botDispatchChanged(dispatchId: string | null, change: DispatchRowChange): void {
     this.botChatTreeWorkers.rowChanged(dispatchId, change)
+    this.botItems.workersWritten(dispatchId === null ? [] : [dispatchId], change === 'deleted')
     if (change !== 'deleted') {
       this.botItems.dispatchChanged(dispatchId)
     }

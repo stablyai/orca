@@ -219,6 +219,9 @@ export const hostRepoCatalogQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, H
   }
 })
 
+// A relayed server's repo changes are not signalled to the phone, so its read holds no event stream.
+export const relayedHostRepoCatalogQuery = { ...hostRepoCatalogQuery, signal: undefined }
+
 /** Host badges are read only for mixed-host or SSH catalogs. */
 export function catalogNeedsHostLabels(catalog: readonly HostRepoCatalogRow[]): boolean {
   // Count repos, not an id-keyed map: the same repo id may exist on two hosts.

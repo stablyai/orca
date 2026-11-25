@@ -45,29 +45,6 @@ export const Scroll = ExpectUrlBrowserTarget.extend({
     .optional()
 })
 
-export const Screencast = BrowserTarget.extend({
-  format: z
-    .unknown()
-    .optional()
-    .transform((v) => (v === 'png' ? 'png' : 'jpeg'))
-    .pipe(z.enum(['png', 'jpeg'])),
-  quality: OptionalFiniteNumber,
-  maxWidth: OptionalFiniteNumber,
-  maxHeight: OptionalFiniteNumber,
-  viewportWidth: OptionalFiniteNumber,
-  viewportHeight: OptionalFiniteNumber,
-  deviceScaleFactor: OptionalFiniteNumber,
-  mobile: OptionalBoolean,
-  everyNthFrame: OptionalFiniteNumber,
-  minFrameIntervalMs: OptionalFiniteNumber,
-  // Ask for frame credit; the host echoes `frameAck: true` in `ready`. Old hosts strip it.
-  frameAck: z.literal(1).optional(),
-  // Ask for the page's cursor and hovered link: `ready.pointer`, then `pointer` events. Old hosts strip it.
-  pointerEvents: z.literal(1).optional(),
-  // Ask the page's permission, sign-in and open-app prompts as `pagePrompt` events. Old hosts strip it.
-  pagePrompts: z.literal(1).optional()
-})
-
 export const FullScreenshot = BrowserTarget.extend({
   format: z
     .unknown()
@@ -132,6 +109,8 @@ export const ProfileClearGoogleCookies = ProfileDelete.extend({
   executorRuntimeId: z.string().min(1)
 })
 
+export const ProfileClearCookies = ProfileClearGoogleCookies
+
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),
   browserFamily: requiredString('Missing required --browser-family'),
@@ -189,7 +168,10 @@ export const Highlight = BrowserTarget.extend({
 })
 
 export const Exec = BrowserTarget.extend({
-  command: requiredString('Missing required --command')
+  command: requiredString('Missing required --command'),
+  // A local caller's directory (and legacy WSL distro), so file operands resolve as it typed them.
+  cwd: OptionalString,
+  wslDistro: OptionalString
 })
 
 export const Get = BrowserTarget.extend({

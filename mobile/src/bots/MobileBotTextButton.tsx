@@ -11,6 +11,8 @@ export function MobileBotTextButton(props: {
   onPress: () => void
   disabled?: boolean
   accessibilityLabel?: string
+  /** In the accent, for the one action a line offers (Retry, Undo). */
+  accent?: boolean
 }) {
   useMobileColorScheme()
   return (
@@ -27,7 +29,9 @@ export function MobileBotTextButton(props: {
       accessibilityLabel={props.accessibilityLabel ?? props.label}
       accessibilityState={{ disabled: props.disabled === true }}
     >
-      <Text style={sheetStyles.textButtonLabel}>{props.label}</Text>
+      <Text style={[sheetStyles.textButtonLabel, props.accent && sheetStyles.textButtonAccent]}>
+        {props.label}
+      </Text>
     </Pressable>
   )
 }

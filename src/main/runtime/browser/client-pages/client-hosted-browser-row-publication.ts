@@ -1,9 +1,13 @@
-import type { ClientHostedBrowserRowsEvent } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
+import type {
+  ClientHostedBrowserRow,
+  ClientHostedBrowserRowsEvent
+} from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { projectClientHostedBrowserRows } from './client-hosted-browser-row-projection'
 import type { RuntimeBrowserClientPage } from './runtime-browser-page-registry'
 
 export type ClientHostedBrowserRowPublicationHost = {
   listClientPages(worktreeId?: string): readonly RuntimeBrowserClientPage[]
+  getClientPage(browserPageId: string): RuntimeBrowserClientPage | undefined
   hasLivePlacement(browserPageId: string): boolean
   resolveDeviceName(pairedDeviceId: string): string | null
   /** Null while no host renderer is attached; hydration replays the snapshot when one arrives. */
@@ -81,6 +85,11 @@ export class ClientHostedBrowserRowPublisher {
       worktreeId,
       rows: this.buildRows(pages)
     }))
+  }
+
+  row(browserPageId: string): ClientHostedBrowserRow | undefined {
+    const page = this.host.getClientPage(browserPageId)
+    return page ? this.buildRows([page])[0] : undefined
   }
 
   private buildRows(

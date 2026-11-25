@@ -6,6 +6,7 @@ import {
   type BotItemActor,
   type BotItemCommentImage
 } from '../../shared/bots/bot-items'
+import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import { BotItemError } from './bot-item-error'
 import { BotItemsEdits } from './bot-items-edits'
 import { assertBotItemAttach } from './bot-items-tables'
@@ -18,6 +19,11 @@ import {
   type BotItemLinkInput,
   type BotItemWriteOutcome
 } from './bot-items-input'
+import { eventRecordOf } from './bot-items-rows'
+import type { BotItemRecord } from './bot-items-schema'
+
+/** Orca's own wait: every worker on the item stopped on its agent's usage limit. */
+export const BOT_ITEM_USAGE_LIMIT_WAIT = 'usage-limit'
 
 export class BotItemsWrites extends BotItemsEdits {
   /** `images` were admitted and claimed on the host first; attachments alone make a comment. */
@@ -56,6 +62,8 @@ export class BotItemsWrites extends BotItemsEdits {
     to: 'done' | 'canceled',
     note: string | undefined,
     actor: BotItemBotActor,
+    /** Whom the closing chat acts for, kept on the close. */
+    actsFor?: readonly BotRequestAsker[],
     now = Date.now()
   ): BotItemWriteOutcome {
     assertBotItemText('note', note)
@@ -66,7 +74,12 @@ export class BotItemsWrites extends BotItemsEdits {
       const item = this.requireItem(uid)
       this.requireOwnerWrite(item, actor)
       this.writeStatus(uid, to, null, actor, now, note ?? null)
-      const data = { from: item.status, to, ...(note ? { note } : {}) }
+      const data = {
+        from: item.status,
+        to,
+        ...(note ? { note } : {}),
+        ...(actsFor ? { actsFor } : {})
+      }
       const mail = mailsItemChat(item, actor)
       return { uid, eventId: this.appendEvent(uid, 'status', actor, data, mail, now) }
     })
@@ -90,15 +103,24 @@ export class BotItemsWrites extends BotItemsEdits {
       if (fresh.length === 0) {
         return { uid, eventId: null, unchanged: true }
       }
+      const mail = mailsItemChat(item, actor)
       const data = { links: fresh.map(linkWords) }
-      const eventId = this.appendEvent(uid, 'linked', actor, data, mailsItemChat(item, actor), now)
+      let eventId = this.appendEvent(uid, 'linked', actor, data, mail, now)
       this.insertLinks(uid, fresh, eventId)
+      // A worker its own bot links picks a Waiting item back up.
+      if (
+        item.status === 'waiting' &&
+        actor.botId === item.ownerBotId &&
+        fresh.some((link) => link.kind === 'dispatch')
+      ) {
+        eventId = this.moveToWorking(item, actor, mail, now)
+      }
       return { uid, eventId }
     })
   }
 
   /** A worker started for an item (`worker-start --item`): linked once, and when the item's own agent
-   *  started it, Planned or Needs you moves to In progress; anyone else's worker never moves it. A
+   *  started it, Planned, Waiting or Needs you with no open question moves to In progress; anyone else's never moves it. A
    *  closed item takes no link (a retry keeps its first start's item). `starter`: the starting agent and chat, whose write it is, as
    *  `item link` would be; Orca's own catch-up when that chat is unknown. */
   linkStartedWorker(
@@ -123,12 +145,76 @@ export class BotItemsWrites extends BotItemsEdits {
       const links = { links: [`dispatch:${dispatchId}`] }
       let eventId = this.appendEvent(uid, 'linked', actor, links, mail, now)
       this.insertLinks(uid, [{ kind: 'dispatch', ref: dispatchId }], eventId)
-      if (botId === item.ownerBotId && (item.status === 'planned' || item.status === 'needs_you')) {
-        this.writeStatus(uid, 'working', null, actor, now)
-        const moved = { from: item.status, to: 'working' }
-        eventId = this.appendEvent(uid, 'status', actor, moved, mail, now)
+      // A question still open keeps the item on its owner: the answer moves it on.
+      if (
+        botId === item.ownerBotId &&
+        (item.status === 'planned' ||
+          item.status === 'waiting' ||
+          (item.status === 'needs_you' && this.waitingAsk(item) === null))
+      ) {
+        eventId = this.moveToWorking(item, actor, mail, now)
       }
       return eventId
+    })
+  }
+
+  /** Orca's usage-limit wait: `text` (when it resets) moves an In progress item to Waiting; null moves
+   *  one Orca set Waiting this way back to In progress. Anyone else's status is left alone. */
+  usageLimitWait(uid: string, text: string | null, now = Date.now()): number | null {
+    return this.transaction(() => {
+      const item = this.get(uid)
+      const actor: BotItemActor = { kind: 'orca', why: BOT_ITEM_USAGE_LIMIT_WAIT }
+      if (item?.status === 'working' && text !== null) {
+        return this.moveToWait(item, text, actor, false, now)
+      }
+      if (item?.status !== 'waiting' || item.waitEvent === null) {
+        return null
+      }
+      const row = this.db.prepare('SELECT * FROM item_events WHERE id = ?').get(item.waitEvent)
+      const by = row === undefined ? null : eventRecordOf(row).actor
+      if (by?.kind !== 'orca' || by.why !== BOT_ITEM_USAGE_LIMIT_WAIT) {
+        return null
+      }
+      if (text !== null) {
+        return text === this.waitText(item) ? null : this.moveToWait(item, text, actor, false, now)
+      }
+      return this.moveToWorking(item, actor, false, now)
+    })
+  }
+
+  /** Items Orca set Waiting for a usage limit, linked to a worker or not. */
+  usageLimitWaitUids(): string[] {
+    return this.db
+      .prepare(
+        `SELECT items.uid FROM items JOIN item_events ON item_events.id = items.wait_event
+         WHERE items.status = 'waiting' AND json_extract(item_events.actor, '$.kind') = 'orca'
+           AND json_extract(item_events.actor, '$.why') = ?`
+      )
+      .all(BOT_ITEM_USAGE_LIMIT_WAIT)
+      .map((row) => String(row.uid))
+  }
+
+  private moveToWorking(item: BotItemRecord, actor: BotItemActor, mail: boolean, now: number) {
+    this.writeStatus(item.uid, 'working', null, actor, now)
+    const moved = { from: item.status, to: 'working' }
+    return this.appendEvent(item.uid, 'status', actor, moved, mail, now)
+  }
+
+  /** Orca's own line on an item, such as why a worker started for it had to start in a terminal.
+   *  It mails no chat: the starter already read the same reason in its receipt. */
+  orcaComment(uid: string, text: string, why: string, now = Date.now()): BotItemWriteOutcome {
+    assertBotItemText('text', text)
+    return this.transaction(() => {
+      this.requireItem(uid)
+      const eventId = this.appendEvent(
+        uid,
+        'commented',
+        { kind: 'orca', why },
+        { text },
+        false,
+        now
+      )
+      return { uid, eventId }
     })
   }
 }

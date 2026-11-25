@@ -33,6 +33,8 @@ export const CONNECTOR_CLOUD_FEATURES = [
   'triggers.github2',
   // github.workflow_finished and a rule's `run` (WORKFLOW_EVENT_KINDS in automation-github-triggers.ts).
   'triggers.workflows',
+  // github.ci_finished (CI_FINISHED_EVENT_KINDS in automation-github-triggers.ts).
+  'triggers.ci_finished',
   // A file's bytes go straight between the CLI and the source: reply and attach stage an `upload`
   // and post its `files`; read's `stream` answers a link to the bytes. No Orca size cap.
   'files.direct',
@@ -45,6 +47,10 @@ export type ConnectorCloudFeature = (typeof CONNECTOR_CLOUD_FEATURES)[number]
  *  turns its conversation didn't ask for may go to it. Its own constant, as the cloud's contract
  *  keeps it: without it this Orca sends those prompts nowhere. */
 export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
+
+/** The cloud marks a thread reply that @mentions the bot (`mentioned`), which is what brings back a
+ *  bot that left the thread; without it no bot leaves a thread on that cloud. */
+export const CONNECTOR_CLOUD_MENTIONED_FEATURE = 'sends.mentioned'
 
 /** The cloud takes a turn's answer up to maxLongAnswerBytes; without it this Orca keeps to
  *  maxLastAssistantMessageBytes. Its own constant, as the cloud's contract keeps it. */
@@ -65,6 +71,11 @@ export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'
 /** The cloud takes the `activity` event and shows what a running turn is doing. Its own constant,
  *  as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
+
+/** The cloud keeps a bot's sharedWith, serves the shares routes and sends the share deliveries
+ *  (cloud/packages/connector-contract/src/share-messages.ts); this Orca lists it once it takes them.
+ *  Its own constant, as the cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_BOT_SHARES_FEATURE = 'bots.shares'
 
 /** Listed by this Orca, which keeps a reply outbox, and by a cloud that takes its `reply` events
  *  (design item 125). Its own constant, as the cloud's contract keeps it. */

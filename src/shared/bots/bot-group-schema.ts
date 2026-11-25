@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { BOT_AGENTS, BotNameSchema } from '../bot-types'
+import { BotAgentReadSchema, BotNameSchema } from '../bot-types'
 import { BotAvatarColorSchema } from './bot-avatar-color'
 import { BotStoredOutfitSchema } from './bot-avatar-outfit'
 import { isAdmissibleAgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-schemas'
@@ -46,7 +46,7 @@ export const BotGroupRemoteMemberSchema = z.object({
   avatar: z.string().nullable(),
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
   avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
-  agent: z.enum(BOT_AGENTS)
+  agent: BotAgentReadSchema
 })
 
 /** Bots on paired computers, as the desktop listed them for a create or edit. */
@@ -105,7 +105,7 @@ const BotGroupTurnSchema = z.object({
   avatar: z.string().nullable(),
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
   avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
-  agent: z.enum(BOT_AGENTS),
+  agent: BotAgentReadSchema,
   sessionId: z.string(),
   mailbox: z.literal(true).optional(),
   /** Read from the worker relation, never stored on the message. */
@@ -190,6 +190,9 @@ export const BotGroupMessageSchema = z.object({
   /** A member's line for a change to its items made outside the room, such as the owner's answer: a
    *  request of its own, like a person's post, that hand-offs, peer mail and Stop attach to. */
   fromItems: z.literal(true).optional(),
+  /** A member's line for a worker report that landed after the request it served was stopped: a
+   *  request of its own, as `fromItems` is. */
+  fromReports: z.literal(true).optional(),
   /** On a post an automation's run made, served as its owner's: the run, shown as its run row. */
   automationRun: AutomationRunMessageSchema.optional().catch(undefined),
   /** Beside `automationRun`: where the run's words came from and who did its event, so a hand-off
@@ -237,11 +240,14 @@ export type BotGroupTurn = z.infer<typeof BotGroupTurnSchema>
 export type BotGroupMessageImage = z.infer<typeof BotGroupMessageImageSchema>
 export type BotGroupMessage = z.infer<typeof BotGroupMessageSchema>
 
-/** Whether a line starts a request of its own: a person's post, or an item change made outside the room. */
+/** Whether a line starts a request of its own: a person's post, an item change made outside the
+ *  room, or a worker report that landed after a Stop. */
 export function startsBotGroupRequest(
-  message: Pick<BotGroupMessage, 'author' | 'fromItems'>
+  message: Pick<BotGroupMessage, 'author' | 'fromItems' | 'fromReports'>
 ): boolean {
-  return message.author.kind === 'owner' || message.fromItems === true
+  return (
+    message.author.kind === 'owner' || message.fromItems === true || message.fromReports === true
+  )
 }
 export type BotGroupLatest = z.infer<typeof BotGroupLatestSchema>
 export type BotGroupPeerScope = z.infer<typeof BotGroupPeerScopeSchema>

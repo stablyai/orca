@@ -10,6 +10,10 @@ const outlineButtonClasses =
 const disabledOnAccentButtonClasses =
   'disabled:bg-accent disabled:text-muted-foreground disabled:opacity-100 disabled:hover:bg-accent disabled:hover:text-muted-foreground'
 
+// A focus ring drawn inside the button, for controls at the edge of a clipped list or pane.
+const insetFocusRingClasses =
+  'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
+
 const buttonVariants = cva(
   "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-[color,background-color,opacity] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
@@ -23,15 +27,22 @@ const buttonVariants = cva(
         // An outline that must read as a control on a card: its border reaches 3:1 in both themes.
         'outline-strong': `${outlineButtonClasses} border-muted-foreground/75 hover:border-muted-foreground dark:border-muted-foreground/60 dark:hover:border-muted-foreground`,
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        // A notice's one solid call to action, filled with the theme's accent (its link colour, which
+        // each theme sets) and the label derived for it; the built-in accent when no label reads on
+        // the theme's. Hover moves 12% toward the neutral opposite of that label (see main.css), so
+        // it darkens under a light label and lightens under a dark one.
+        'theme-accent':
+          'bg-theme-accent-fill text-theme-accent-foreground hover:bg-theme-accent-fill-hover',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // A row action over its hovered row's accent fill, where ghost's accent hover would not show.
         'ghost-on-accent': `text-accent-foreground hover:bg-foreground/10 ${disabledOnAccentButtonClasses}`,
+        // `ghost-on-accent` at a clipped list's edge, where an outset ring would lose a side.
+        'ghost-on-accent-inset': `text-accent-foreground hover:bg-foreground/10 ${disabledOnAccentButtonClasses} ${insetFocusRingClasses}`,
         // `ghost-on-accent`'s outlined partner: outline's accent hover would not show on the accent fill.
         'outline-on-accent': `${outlineButtonClasses} hover:bg-foreground/5 ${disabledOnAccentButtonClasses} disabled:border-border disabled:shadow-none disabled:hover:border-border dark:disabled:border-border dark:disabled:bg-accent dark:disabled:hover:bg-accent`,
         disclosure:
           'text-xs focus-visible:ring-inset hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
-        'ghost-inset':
-          'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        'ghost-inset': `hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-colors ${insetFocusRingClasses}`,
         // Keep icon states visible on muted fields, which share accent's light-theme fill.
         'muted-field-icon':
           'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',
@@ -46,6 +57,8 @@ const buttonVariants = cva(
         // A quiet secondary link, such as a dialog footer's "Manual steps".
         'link-muted':
           'text-muted-foreground underline-offset-4 hover:text-foreground hover:underline',
+        // A link-style action on an error line, e.g. "Delete anyway" under a failed row.
+        'destructive-link': 'text-destructive underline-offset-4 hover:underline',
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
         'menu-segment': 'rounded-l-none border-l border-border',
@@ -61,7 +74,11 @@ const buttonVariants = cva(
           'text-chat-foreground-faint hover:bg-accent hover:text-chat-foreground aria-expanded:bg-accent aria-expanded:text-chat-foreground aria-pressed:bg-foreground/10 aria-pressed:text-primary aria-pressed:hover:text-primary dark:aria-pressed:bg-accent',
         // The worktree card's "rename failed" chip, for a failure the user can open.
         'destructive-chip':
-          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive'
+          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive',
+        // An item's way to what is waiting on the owner: the open ask's amber, which means only that. The
+        // faint fill keeps its amber text at 4.5:1 in the light theme.
+        'needs-you':
+          'border border-agent-question/45 bg-agent-question/6 text-agent-question-text hover:bg-agent-question/20 hover:text-foreground'
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
@@ -76,6 +93,9 @@ const buttonVariants = cva(
         // A ghost name inside a row label: `inline`'s height, padded so its hover fill clears the text.
         inlineChip: 'h-6 gap-1 px-1.5',
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',
+        'responsive-sm':
+          'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5 @max-xs:gap-1 @max-xs:px-1.5 @max-xs:text-xs @max-xs:has-[>svg]:px-1.5',
+        pill: "h-7 gap-1.5 rounded-full px-3 text-xs [&_svg:not([class*='size-'])]:size-3",
         menu: 'h-8 gap-2 px-2 py-1.5 text-xs leading-5',
         // A launch-menu row's label segment, matching DropdownMenuItem's `launch` rows.
         'menu-launch': 'h-9 gap-2 px-2 text-[13px] leading-4',

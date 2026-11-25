@@ -14,6 +14,7 @@ import {
 } from '../terminal/key-input/terminal-accessory-layout'
 import type { CustomKey } from '../terminal/key-input/terminal-custom-keys'
 import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
+import type { ClosingTerminalTab } from './tabs/closing-terminal-tab-handles'
 import { useWorktreeSessionTabsLoaded } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import type { DiffComment } from '../../../src/shared/file-review/diff-comment-types'
@@ -40,6 +41,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const appliedSnapshotMarkerRef = useRef<AppliedSnapshotMarker>({ epoch: null, version: -1 })
   const appliedSessionTabsRevisionRef = useRef(0)
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
+  const closingTerminalTabsRef = useRef(new Set<ClosingTerminalTab>())
   const [terminalsLoaded, setTerminalsLoaded] = useWorktreeSessionTabsLoaded(worktreeId)
   const [terminalTextScale, setTerminalTextScale] = useState(1)
   const [terminalFontStyle, setTerminalFontStyle] = useState(DEFAULT_TERMINAL_FONT_STYLE)
@@ -122,6 +124,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
+    closingTerminalTabsRef,
     terminalsLoaded,
     setTerminalsLoaded,
     terminalTextScale,

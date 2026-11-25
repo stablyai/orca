@@ -9,6 +9,7 @@ import {
   type BotItemCommentSkill,
   type BotItemEvent
 } from './bot-items'
+import type { BotItemQuestionShape } from './bot-item-ask'
 
 export type BotItemPendingComment = {
   /** The comment as the host will show it, the owner's; `at` is this machine's send time. */
@@ -27,6 +28,11 @@ export type BotItemPendingComment = {
   plain: boolean
   /** Skills picked in it, each by its file on the bot's host; empty where the host takes none. */
   skills?: readonly BotItemCommentSkill[]
+  /** With `questionId`, the ask's lines this answer skips; empty where the host takes none. */
+  skipped?: readonly number[]
+  /** What it answers, as this device composed it: never posted, kept whatever the host takes, so the
+   *  ask shows its lines as sent, and they can't be sent twice, whatever the comment's words. */
+  intent?: BotItemPendingIntent
   failed: boolean
   /** Failed after it went out, with no request id to dedupe a Retry by: it may be on the host, so it
    *  offers only Discard until the read shows it. */
@@ -37,14 +43,16 @@ export type BotItemPendingComment = {
  *  the host stored with it; on an older host, a refused one whose call ended after the host stored it
  *  (a timeout) by the owner's next comment after it with the same text and image count, never one
  *  another comment's answer named. A comment's event is the floor
- *  only for comments sent after it: `floors` holds that floor for each one still pending. */
+ *  only for comments sent after it: `floors` holds that floor for each one still pending. `confirmed`:
+ *  those the read names by the host's event or request id, not by their words. */
 function botItemPendingCommentsShownByRead(
   entries: readonly BotItemPendingComment[],
   events: readonly BotItemEvent[]
-): { done: Set<string>; floors: Map<string, number> } {
+): { done: Set<string>; confirmed: Set<string>; floors: Map<string, number> } {
   const ids = new Set(events.map((event) => event.id))
   const answered = new Set(entries.flatMap((entry) => (entry.eventId ? [entry.eventId] : [])))
   const done = new Set<string>()
+  const confirmed = new Set<string>()
   const floors = new Map<string, number>()
   let floor = 0
   for (const entry of entries) {
@@ -52,6 +60,7 @@ function botItemPendingCommentsShownByRead(
     if (entry.eventId) {
       if (ids.has(entry.eventId)) {
         done.add(entry.event.id)
+        confirmed.add(entry.event.id)
         floor = Math.max(floor, parseBotItemEventId(entry.eventId) ?? 0)
       } else {
         floors.set(entry.event.id, after)
@@ -75,16 +84,28 @@ function botItemPendingCommentsShownByRead(
         : undefined
     if (match) {
       done.add(entry.event.id)
+      if (entry.requestId) {
+        confirmed.add(entry.event.id)
+      }
       floor = Math.max(floor, parseBotItemEventId(match.id) ?? 0)
     } else {
       floors.set(entry.event.id, after)
     }
   }
-  return { done, floors }
+  return { done, confirmed, floors }
 }
 
 export function botItemPendingCommentText(entry: BotItemPendingComment): string {
   return typeof entry.event.data.text === 'string' ? entry.event.data.text : ''
+}
+
+/** The ask a comment answers and its answer per question line (null: a line it leaves alone). */
+export type BotItemPendingIntent = {
+  askId: string
+  shape: BotItemQuestionShape
+  answers: readonly (string | null)[]
+  /** The comment box's original words when the post quotes them to avoid answering another line. */
+  rideAlongText?: string
 }
 
 /** A post's rejection when the connection dropped after the comment went out. */
@@ -98,6 +119,12 @@ export type BotItemPendingCommentDelivery = {
   /** Says why a comment wasn't sent; it stays with Retry, unless it answered a question the agent
    *  has since replaced (`replaced`): that one goes, as a Retry would fail the same way. */
   failed: (error: unknown, replaced: boolean) => void
+  /** A replaced question's reply, dropped: what `botItemRefusedReplyText` gives back of it goes to
+   *  the comment box. */
+  returnText: (text: string, entry: BotItemPendingComment) => void
+  /** Re-reads the item after a replaced question's refusal, so the box names the ask the host waits
+   *  on (its read's `waitingAsk`) even when the loaded events missed the change. */
+  refresh: () => void
   /** The host dedupes comments by request id, so a Retry never posts twice. */
   requestIds: boolean
   /** The host binds a quick reply to its question. */
@@ -106,20 +133,27 @@ export type BotItemPendingCommentDelivery = {
   plain: boolean
   /** The host takes a comment's picked skills. */
   skills?: boolean
+  /** The host takes an answer's skipped lines. */
+  skipped?: boolean
+  /** The comment is, or may be, on the host: it took it, or one that may have arrived was discarded. */
+  delivered?: (entry: BotItemPendingComment) => void
 }
 
 export type BotItemPendingComments = {
   /** Sent comments the item's read doesn't show yet, oldest first. */
   shown: readonly BotItemPendingComment[]
   /** `after`: the id of the item's newest event as the view shows it; `questionId`: the ask a quick
-   *  reply answers; `plain`: it answers no question; `skills`: the skills picked in it. */
+   *  reply answers; `plain`: it answers no question; `skills`: the skills picked in it; `skipped`: the
+   *  ask's lines it skips. */
   send: (
     text: string,
     paths: readonly string[],
     after: string | null,
     questionId?: string,
     plain?: boolean,
-    skills?: readonly BotItemCommentSkill[]
+    skills?: readonly BotItemCommentSkill[],
+    skipped?: readonly number[],
+    intent?: BotItemPendingIntent
   ) => void
   retry: (id: string) => void
   discard: (id: string) => void
@@ -181,6 +215,7 @@ function deliver(
     .then(
       (result) => {
         const eventId = hostEventId(result)
+        delivery.delivered?.(entry)
         // No event: the host had nothing to add, so nothing waits to show.
         update(key, id, eventId ? { eventId, failed: false } : null)
       },
@@ -189,6 +224,8 @@ function deliver(
         delivery.failed(error, replaced)
         if (replaced) {
           update(key, id, null)
+          delivery.returnText(botItemPendingCommentText(entry), entry)
+          delivery.refresh()
           return
         }
         update(key, id, {
@@ -227,7 +264,7 @@ export function createBotItemPendingCommentsHook({
       },
       () => read(key)
     )
-    const { done, floors } = botItemPendingCommentsShownByRead(entries, events)
+    const { done, confirmed, floors } = botItemPendingCommentsShownByRead(entries, events)
     // Once the read shows them they are the host's: they leave the store, and comments sent after them
     // keep their floor.
     useEffect(() => {
@@ -235,6 +272,12 @@ export function createBotItemPendingCommentsHook({
         write(key, (prev) =>
           prev.flatMap((entry) => {
             if (done.has(entry.event.id)) {
+              // The read names it, as when the post returned (its answer may have been lost): the
+              // same cleanup, which takes only answers still as sent. A match by its words alone
+              // (an older host) isn't proof enough to drop picks that may be unsent.
+              if (confirmed.has(entry.event.id)) {
+                delivery.delivered?.(entry)
+              }
               return []
             }
             const after = floors.get(entry.event.id) ?? entry.after
@@ -246,7 +289,7 @@ export function createBotItemPendingCommentsHook({
 
     return {
       shown: done.size > 0 ? entries.filter((entry) => !done.has(entry.event.id)) : entries,
-      send: (text, paths, after, questionId, plain = false, skills = []) => {
+      send: (text, paths, after, questionId, plain = false, skills = [], skipped = [], intent) => {
         const entry: BotItemPendingComment = {
           event: {
             id: nextPendingId(),
@@ -269,6 +312,11 @@ export function createBotItemPendingCommentsHook({
           questionId: questionId && delivery.questionIds ? questionId : null,
           plain: plain && delivery.plain,
           ...(delivery.skills && skills.length > 0 ? { skills } : {}),
+          // Only with the ask it answers named: skipped lines are that ask's.
+          ...(delivery.skipped && delivery.questionIds && questionId && skipped.length > 0
+            ? { skipped }
+            : {}),
+          ...(intent ? { intent } : {}),
           failed: false
         }
         write(key, (prev) => [...prev, entry])
@@ -281,7 +329,14 @@ export function createBotItemPendingCommentsHook({
           deliver(key, entry, delivery)
         }
       },
-      discard: (id) => update(key, id, null)
+      discard: (id) => {
+        const entry = read(key).find((candidate) => candidate.event.id === id)
+        // It may be on the host: what it answered isn't offered to send again.
+        if (entry?.mayHaveArrived) {
+          delivery.delivered?.(entry)
+        }
+        update(key, id, null)
+      }
     }
   }
 }

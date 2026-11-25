@@ -1,4 +1,5 @@
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import { isWslHostIdleStopped } from './wsl-host-idle-stop'
 import type { WslHostConnector, WslHostReachability } from './wsl-host-connector-contract'
 import {
   wslHostHiddenFromPhoneMessage,
@@ -9,6 +10,11 @@ import {
 import { focusReachability } from './wsl-host-focus-reachability'
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type { WslHostStatus } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+
+/** A phone's call may wake a host Orca stopped idle; its status read only rarely (below). */
+export type PhoneWake = 'never' | 'status' | 'call'
+// Longer than the 5 min idle timeout, so a phone's status probes cannot keep a host awake.
+const PHONE_STATUS_WAKE_INTERVAL_MS = 15 * 60_000
 
 /** What a paired phone may know of a host: `stopped` only once a stop was confirmed. */
 export type WslHostPhoneReach = 'hidden' | 'ready' | 'stopped' | 'unavailable'
@@ -50,6 +56,7 @@ export class WslHostPhoneGate {
   // A stop a phone's check confirmed, tied to the host's own status at the check (undefined: none
   // yet). It holds only while that status is still the host's current one.
   private readonly confirmedStops = new Map<string, GateStatus | undefined>()
+  private readonly statusWakes = new Map<string, number>()
 
   constructor(
     private readonly host: {
@@ -58,17 +65,38 @@ export class WslHostPhoneGate {
       connector: Pick<WslHostConnector, 'get' | 'reachability'>
       isEnabled: () => boolean
       hasServerFiles: () => boolean
+      /** Wakes the host if Orca stopped it idle; false when it did not. */
+      wakeIdleStopped?: (environmentId: string) => Promise<boolean>
     }
   ) {}
 
   /** A paired phone's call: serve a host that already runs, never start its distro for it. */
-  async requireRunningWithoutStart(environmentId: string): Promise<void> {
+  async requireRunningWithoutStart(
+    environmentId: string,
+    wake: PhoneWake = 'never'
+  ): Promise<void> {
     const record = (await this.host.records()).find(
       (entry) => entry.environmentId === environmentId
     )
     if (wslHostRunRefusal(this.host) || !record || record.pendingStop) {
       this.confirmedStops.delete(environmentId)
       throw wslHostPhoneRefusal('hidden', record?.distro ?? environmentId)
+    }
+    if (wake === 'call') {
+      // A phone's own call proves someone is there: its next screen's status read may wake again.
+      this.statusWakes.delete(environmentId)
+    }
+    if (
+      isWslHostIdleStopped(environmentId) &&
+      this.mayWake(environmentId, wake) &&
+      (await this.host.wakeIdleStopped?.(environmentId))
+    ) {
+      // Only a wake that worked uses up the status read's allowance.
+      if (wake === 'status') {
+        this.statusWakes.set(environmentId, Date.now())
+      }
+      this.confirmedStops.delete(environmentId)
+      return
     }
     const before = this.statusOf(environmentId)
     // Why: no bridge in this process means nothing answers, so skip the running-list read.
@@ -91,6 +119,16 @@ export class WslHostPhoneGate {
     throw wslHostPhoneRefusal(reach, record.distro)
   }
 
+  /** A phone opening a screen reads status first, but status also backs its reconnect probes:
+   *  that read may wake an idle-stopped host at most once per interval. */
+  private mayWake(environmentId: string, wake: PhoneWake): boolean {
+    if (wake !== 'status') {
+      return wake === 'call'
+    }
+    const last = this.statusWakes.get(environmentId)
+    return last === undefined || Date.now() - last >= PHONE_STATUS_WAKE_INTERVAL_MS
+  }
+
   /** What a phone is told of this host; never probes or starts the distro. */
   async reach(environmentId: string): Promise<WslHostPhoneReach> {
     return (await this.reachAll()).get(environmentId) ?? 'hidden'
@@ -108,7 +146,8 @@ export class WslHostPhoneGate {
         record.environmentId,
         wslHostPhoneReach({
           mayRun: mayRun && !record.pendingStop,
-          state: status?.state,
+          // Orca's own idle stop is wakeable by a phone's call, so it lists as ready.
+          state: isWslHostIdleStopped(record.environmentId) ? 'ready' : status?.state,
           confirmedStopped: this.isConfirmedStop(record.environmentId, status)
         })
       )

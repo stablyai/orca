@@ -8,10 +8,11 @@ import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   type WorkerDockRead,
   WorkerDockEntry,
-  WorkerDockResultRef,
   WorkerDockResult,
-  compareWorkerDockResultRefs,
   compareWorkerDockEntries,
+  WORKER_DOCK_FAILURE_MS,
+  WORKER_DOCK_UNKNOWN_MS,
+  WORKER_DOCK_UNVERIFIED_READY_MS,
   type WorkerDockSnapshot
 } from '../../../../shared/orchestration/dock/worker-dock'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
@@ -20,8 +21,9 @@ import {
   readProviderFailureIdentities,
   readProviderFailureRows
 } from './worker-dock-provider-failures'
-import { workerDockEligibleSql as eligible } from '../db/worker-dock-eligibility'
+import { workerDockCurrentRowsSql, workerDockEligibleSql } from '../db/worker-dock-eligibility'
 import { readWorkerDockActivity, workerDockActivityRevision } from './worker-dock-activity'
+import { workerDockStoppingIds } from './worker-dock-owner-stop'
 
 const stateSql = `CASE f.state
   WHEN 'ready' THEN 'unavailable' WHEN 'succeeded' THEN CASE WHEN f.result_lost_at IS NOT NULL THEN 'unavailable' ELSE 'saving' END
@@ -68,35 +70,83 @@ export function readWorkerDock(
 ): WorkerDockSnapshot {
   return readWorkerDockSnapshot(db.db, () => {
     const source = workerDockSession(request.party)
-    // Both counters only rise, so their sum moves whenever either does.
+    // The source version also advances when time alone changes roster membership.
     const revision =
       z
         .object({ revision: z.number() })
         .parse(db.db.prepare('SELECT revision FROM worker_dock_revision WHERE id = 1').get())
-        .revision + workerDockActivityRevision(db)
+        .revision +
+      workerDockActivityRevision(db) +
+      db.workerDockSources.version(source)
     const activity = readWorkerDockActivity(db, source)
+    const current = request.currentOnly === true
+    const now = Date.now()
+    const candidates = current
+      ? `(${workerDockCurrentRowsSql}) f`
+      : `worker_dock_facts f INDEXED BY worker_dock_eligible WHERE ${workerDockEligibleSql}`
+    let nextExpiry: number | undefined
+    let hasUnverifiedWorkers = false
+    // Unsettled workers the roster omits can still change state, so their source must stay routable.
+    const omitted: string[] =
+      current && db.workerDockSources.needsSeed(source)
+        ? db.db
+            .prepare(
+              `SELECT dispatch_id FROM worker_dock_facts INDEXED BY worker_dock_source_state_time
+              WHERE source = ? AND state IN ('start_unknown', 'stop_unknown')
+                AND (changed_at IS NULL OR changed_at <= ?)`
+            )
+            .all(source, now - WORKER_DOCK_UNKNOWN_MS)
+            .map((row) => String(row.dispatch_id))
+        : []
+    const stopping = workerDockStoppingIds(db)
     const identities: WorkerDockSnapshot['identities'] = db.db
       .prepare(`SELECT ${identitySql} AS id, f.dispatch_id AS dispatchId,
       ${stateSql} AS state, f.changed_at AS changedAt, f.settlement, (f.model IS NOT NULL AND length(trim(f.model)) > 0) AS hasModel,
       NOT EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS ownerActionsAvailable,
-      f.state = 'ready' AS ready FROM worker_dock_facts f INDEXED BY worker_dock_eligible
-      WHERE ${eligible}
-      ORDER BY CASE WHEN f.state IN ('failed', 'stopped', 'abandoned') THEN 0 ELSE 1 END,
-        changedAt IS NULL, changedAt DESC, ${identitySql} COLLATE BINARY`)
-      .all(source)
-      .map((row) => {
-        const identity = Metadata.parse(row)
-        // A ready worker shows the activity its agent status gives it, kept in memory.
-        const live = row.ready === 1 ? activity?.get(identity.dispatchId) : undefined
-        return live ? { ...identity, state: live.state, changedAt: live.changedAt } : identity
+      f.state AS lifecycleState FROM ${candidates}`)
+      .all(
+        ...(current
+          ? [source, source, now - WORKER_DOCK_UNKNOWN_MS, source, now - WORKER_DOCK_FAILURE_MS]
+          : [source])
+      )
+      .flatMap((row) => {
+        const parsed = Metadata.parse(row)
+        const identity =
+          row.lifecycleState === 'stopped' && stopping?.has(parsed.dispatchId)
+            ? { ...parsed, state: 'stopping' as const }
+            : parsed
+        const ready = row.lifecycleState === 'ready'
+        const live = ready ? activity?.get(identity.dispatchId) : undefined
+        if (current) {
+          // An exited worker's dispatch is still open, so it ages out like an unverifiable one.
+          const unverified =
+            ready &&
+            activity !== undefined &&
+            (!live || live.state === 'unavailable' || live.state === 'unexpected')
+          const window = unverified
+            ? WORKER_DOCK_UNVERIFIED_READY_MS
+            : row.lifecycleState === 'start_unknown' || row.lifecycleState === 'stop_unknown'
+              ? WORKER_DOCK_UNKNOWN_MS
+              : identity.state === 'failed' || identity.state === 'unexpected'
+                ? WORKER_DOCK_FAILURE_MS
+                : undefined
+          if (window !== undefined) {
+            const expires = (identity.changedAt ?? 0) + window
+            if (expires <= now) {
+              hasUnverifiedWorkers ||= unverified
+              omitted.push(identity.dispatchId)
+              return []
+            }
+            nextExpiry = Math.min(nextExpiry ?? expires, expires)
+          }
+        }
+        return [live ? { ...identity, state: live.state, changedAt: live.changedAt } : identity]
       })
-    const providerFailures = readProviderFailureIdentities(db, source)
+    const providerFailures = current ? null : readProviderFailureIdentities(db, source)
     if (providerFailures?.length) {
       identities.push(...providerFailures)
     }
-    if (providerFailures?.length || activity?.size) {
-      identities.sort(compareWorkerDockEntries)
-    }
+    identities.sort(compareWorkerDockEntries)
     const found = request.anchor ? identities.findIndex((row) => row.id === request.anchor) : 0
     const center = Math.max(0, found)
     const start =
@@ -148,17 +198,33 @@ export function readWorkerDock(
         )
       )
     }
-    const snapshot = {
+    const snapshot: WorkerDockSnapshot = {
       revision,
-      results: readWorkerDockResultRefs(db, request.party),
+      currentOnly: current ? true : undefined,
+      nextExpiry,
+      hasUnverifiedWorkers: hasUnverifiedWorkers || undefined,
       expired: request.revision !== undefined && request.revision !== revision,
       identities,
       rows,
       anchor: identities[center]?.id ?? null
     }
-    db.workerDockSources.rememberSnapshot(source, snapshot, Boolean(providerFailures?.length))
+    db.workerDockSources.rememberSnapshot(source, snapshot, omitted)
     return snapshot
   })
+}
+
+/** Each worker's end reason as the strip shows it, for readers outside the strip. */
+export function readWorkerDockReasons(
+  db: OrchestrationDb,
+  dispatchIds: readonly string[]
+): Map<string, string> {
+  const rows = dispatchIds.length
+    ? db.db
+        .prepare(`SELECT f.dispatch_id, f.reason FROM json_each(?) selected
+      CROSS JOIN worker_dock_facts f ON f.dispatch_id = selected.value WHERE f.reason IS NOT NULL`)
+        .all(JSON.stringify(dispatchIds))
+    : []
+  return new Map(rows.map((row) => [String(row.dispatch_id), String(row.reason)]))
 }
 
 export function readWorkerDockResult(
@@ -216,6 +282,7 @@ export function readWorkerDockResult(
     title: row.title,
     outcome,
     body: row.body ?? (row.receipt ? 'Stopped by you.' : failureReason),
+    report: typeof row.body === 'string',
     at: epoch(row.changed_at),
     settlement: row.settlement ?? `worker_report:${String(row.report_id)}`,
     acknowledged: row.acknowledged === 1,
@@ -231,57 +298,4 @@ function reportOutcome(payload: unknown): 'succeeded' | 'failed' | null {
   } catch {
     return null
   }
-}
-
-export function readWorkerDockResultRefs(
-  db: OrchestrationDb,
-  party: string,
-  before?: WorkerDockResultRef
-): WorkerDockResultRef[] {
-  const source = workerDockSession(party)
-  const boundary = before
-    ? `AND (f.changed_at < ? OR (f.changed_at = ? AND f.dispatch_id > ?) OR (f.changed_at IS NULL AND (? IS NOT NULL OR f.dispatch_id > ?)))`
-    : ''
-  const bindings = [
-    source,
-    ...(before ? [before.at, before.at, before.dispatchId, before.at, before.dispatchId] : [])
-  ]
-  const reports = db.db
-    .prepare(`SELECT f.dispatch_id AS dispatchId, f.report_id AS id, f.changed_at AS at,
-    COALESCE(f.settlement, 'worker_report:' || f.report_id) AS settlement,
-    COALESCE(t.display_name, json_extract(w.start_options, '$.name'), json_extract(w.start_options, '$.agent'), 'Worker') AS name,
-    COALESCE(t.task_title, substr(t.spec, 1, 256)) AS title, substr(m.body, 1, 256) AS summary, COALESCE(json_extract(accepted.payload, '$.outcome'), json_extract(m.payload, '$.outcome')) AS outcome
-    FROM (SELECT dispatch_id, report_id, changed_at, settlement FROM worker_dock_facts f INDEXED BY worker_dock_result_time
-      WHERE f.source = ? AND f.report_id IS NOT NULL ${boundary}
-      ORDER BY f.changed_at DESC, f.dispatch_id LIMIT 50) f JOIN messages m ON m.id = f.report_id
-    LEFT JOIN attempt_observation_facts accepted ON accepted.id = 'worker_report:' || f.report_id
-    JOIN worker_dispatches w ON w.dispatch_id = f.dispatch_id
-    JOIN dispatch_contexts d ON d.id = f.dispatch_id JOIN tasks t ON t.id = d.task_id
-    ORDER BY f.changed_at DESC, f.dispatch_id LIMIT 50`)
-    .all(...bindings)
-  const stops = db.db
-    .prepare(`SELECT f.dispatch_id AS dispatchId, f.id, f.changed_at AS at, f.settlement,
-    COALESCE(t.display_name, json_extract(w.start_options, '$.name'), json_extract(w.start_options, '$.agent'), 'Worker') AS name,
-    COALESCE(t.task_title, substr(t.spec, 1, 256)) AS title, 'Stopped by you.' AS summary, 'stopped' AS outcome
-    FROM (SELECT dispatch_id, id, changed_at, settlement FROM worker_dock_stop_results f INDEXED BY worker_dock_stop_result_time
-      WHERE f.source = ? ${boundary} ORDER BY f.changed_at DESC, f.dispatch_id LIMIT 50) f
-    JOIN worker_dispatches w ON w.dispatch_id = f.dispatch_id
-    JOIN dispatch_contexts d ON d.id = f.dispatch_id JOIN tasks t ON t.id = d.task_id
-    ORDER BY f.changed_at DESC, f.dispatch_id LIMIT 50`)
-    .all(...bindings)
-  const failures = db.db
-    .prepare(`SELECT f.dispatch_id AS dispatchId, f.id, f.changed_at AS at, f.settlement,
-    COALESCE(t.display_name, json_extract(w.start_options, '$.name'), json_extract(w.start_options, '$.agent'), 'Worker') AS name,
-    COALESCE(t.task_title, substr(t.spec, 1, 256)) AS title, COALESCE(w.last_error, d.last_failure, '') AS summary,
-    CASE WHEN w.state = 'failed' THEN 'failed' ELSE 'unexpected' END AS outcome
-    FROM (SELECT dispatch_id, id, changed_at, settlement FROM worker_dock_failure_results f INDEXED BY worker_dock_failure_result_time
-      WHERE f.source = ? ${boundary} ORDER BY f.changed_at DESC, f.dispatch_id LIMIT 50) f
-    JOIN worker_dispatches w ON w.dispatch_id = f.dispatch_id
-    JOIN dispatch_contexts d ON d.id = f.dispatch_id JOIN tasks t ON t.id = d.task_id
-    ORDER BY f.changed_at DESC, f.dispatch_id LIMIT 50`)
-    .all(...bindings)
-  return [...reports, ...stops, ...failures]
-    .map((row) => WorkerDockResultRef.parse(row))
-    .sort(compareWorkerDockResultRefs)
-    .slice(0, 50)
 }

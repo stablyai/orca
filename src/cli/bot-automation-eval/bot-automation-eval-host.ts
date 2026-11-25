@@ -1,4 +1,5 @@
 // Runs one benchmark turn: the real agent CLI as a bot, in a scratch home, with the stand-in `orca`.
+import type { LeaveThreadRefusalCode } from '../../shared/connectors/connector-leave-thread-copy'
 import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir, userInfo } from 'node:os'
@@ -76,6 +77,10 @@ export type EvalHostState = {
   }
   /** The owner's own Slack CLI (agent-slack) is on the host and reads as them. */
   ownerSlack?: true
+  /** `bot reply --leave-thread` is refused with this, as the host would refuse it. */
+  leaveRefusal?: LeaveThreadRefusalCode
+  /** The bot already left its thread this turn. */
+  leftThread?: true
   /** This turn is a wake (a worker's mail or pull request events), which answers no one's message. */
   woken?: true
   /** Work the bot started before the run, by the conversation it came from. */

@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useState, useSyncExternalStore } from 'react'
 import { resolveImageAbsolutePath } from '../markdown/link-routing/markdown-preview-links'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { readLocalImagePreview } from './local-image-src-reader'
@@ -13,6 +13,12 @@ import {
   subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated
 } from './local-image-src-cache'
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
+import { decodeLocalImageForCache } from './local-image-blob-decode'
+import {
+  localImageSrcStatus,
+  type LocalImageSrcOutcome,
+  type LocalImageSrcStatus
+} from './local-image-src-status'
 import { readBrowserAttachmentFile } from '@/lib/files/drop/browser-attachment-files'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
@@ -46,18 +52,6 @@ export function getLocalImageCacheKey(
   ].join('\0')
 }
 
-function base64ToBlobUrl(base64: string, mimeType: string): { url: string; byteLength: number } {
-  const binary = atob(base64.replace(/\s/g, ''))
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  return {
-    url: URL.createObjectURL(new Blob([bytes], { type: mimeType })),
-    byteLength: bytes.byteLength
-  }
-}
-
 function isExternalUrl(src: string): boolean {
   return /^(?:https?|data|blob):/i.test(src)
 }
@@ -67,7 +61,7 @@ type LocalImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'connectionId'> &
 }
 
 /** The cache identity of a local image, or null when it is external or has no owner yet. */
-function getLocalImageSrcCacheKey(
+export function getLocalImageSrcCacheKey(
   rawSrc: string | undefined,
   filePath: string,
   connectionId?: string | null,
@@ -95,7 +89,22 @@ export function useLocalImageSrc(
   access?: LocalFileAccess,
   retryKey?: number
 ): string | undefined {
-  const [generation, setGeneration] = useState(getLocalImageCacheGeneration())
+  return useLocalImageSrcResult(rawSrc, filePath, connectionId, runtimeContext, access, retryKey)
+    .src
+}
+
+/** `useLocalImageSrc`, plus whether its source belongs to the current read: `src` can still hold the
+ *  previous generation's URL, which may already be revoked, while a reread is pending. */
+export function useLocalImageSrcResult(
+  rawSrc: string | undefined,
+  filePath: string,
+  connectionId?: string | null,
+  runtimeContext?: LocalImageRuntimeContext | null,
+  access?: LocalFileAccess,
+  retryKey?: number
+): { src: string | undefined; status: LocalImageSrcStatus } {
+  // Read live: a pane hidden by <Activity> drops its listener and would come back on a stale generation.
+  const generation = useSyncExternalStore(onImageCacheInvalidated, getLocalImageCacheGeneration)
   const externalSrc =
     rawSrc && runtimeContext !== null && isExternalUrl(rawSrc) ? rawSrc : undefined
   // Key leases by semantic identity; equal rebuilt context objects must not revoke a still-displayed image URL.
@@ -118,12 +127,13 @@ export function useLocalImageSrc(
     return () => unpinLocalImageCache(cacheKey)
   }, [cacheKey])
 
-  useEffect(() => {
-    return onImageCacheInvalidated(() => setGeneration(getLocalImageCacheGeneration()))
-  }, [])
-
   const [displaySrc, setDisplaySrc] = useState<string | undefined>(
     () => externalSrc ?? (cacheKey ? blobUrlCache.get(cacheKey) : undefined)
+  )
+  const [outcome, setOutcome] = useState<LocalImageSrcOutcome | undefined>(() =>
+    !externalSrc && cacheKey && blobUrlCache.has(cacheKey)
+      ? { key: cacheKey, generation, found: true }
+      : undefined
   )
 
   useEffect(() => {
@@ -134,21 +144,27 @@ export function useLocalImageSrc(
     const cached = blobUrlCache.get(cacheKey)
     if (cached) {
       setDisplaySrc(cached)
+      setOutcome({ key: cacheKey, generation, found: true })
       return
     }
 
     let cancelled = false
     const effectGeneration = generation
+    const settle = (url: string | null): void => {
+      const current = getLocalImageCacheGeneration() === effectGeneration
+      setDisplaySrc(current && url ? url : undefined)
+      // A read from a superseded generation decides nothing; the rerun for the new one does.
+      setOutcome({ key: cacheKey, generation: effectGeneration, found: current && Boolean(url) })
+    }
     readImage()
       .then((url) => {
-        if (cancelled) {
-          return
+        if (!cancelled) {
+          settle(url)
         }
-        setDisplaySrc(getLocalImageCacheGeneration() === effectGeneration && url ? url : undefined)
       })
       .catch(() => {
         if (!cancelled) {
-          setDisplaySrc(undefined)
+          settle(null)
         }
       })
 
@@ -157,7 +173,14 @@ export function useLocalImageSrc(
     }
   }, [cacheKey, externalSrc, generation, retryKey])
 
-  return displaySrc
+  const status = localImageSrcStatus({
+    external: Boolean(externalSrc),
+    cacheKey,
+    outcome,
+    generation,
+    owned: Boolean(cacheKey && displaySrc && blobUrlCache.get(cacheKey) === displaySrc)
+  })
+  return { src: displaySrc, status }
 }
 
 /** Load through the same IPC/blob cache outside React, including ProseMirror node views. */
@@ -251,7 +274,7 @@ export function loadLocalImageAbsolutePath(
   const superseded = () =>
     getLocalImageCacheGeneration() !== readGeneration && !isImmutableLocalImageCacheKey(cacheKey)
   const loadPromise = readLocalImagePreview(absolutePath, connectionId, runtimeContext, access)
-    .then((result) => {
+    .then(async (result) => {
       if (superseded()) {
         return null
       }
@@ -259,7 +282,12 @@ export function loadLocalImageAbsolutePath(
         logLocalImageReadFailure(cacheKey, absolutePath, 'not-an-image')
         return null
       }
-      const { url, byteLength } = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
+      const blob = await decodeLocalImageForCache(cacheKey, result, superseded)
+      if (!blob) {
+        return null
+      }
+      const url = URL.createObjectURL(blob)
+      const byteLength = blob.size
       if (superseded()) {
         URL.revokeObjectURL(url)
         return null

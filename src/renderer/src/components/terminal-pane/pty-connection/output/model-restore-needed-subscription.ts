@@ -93,7 +93,7 @@ export function bindModelRestoreNeededSubscription(
       session.unregisterModelRestoreNeeded = registerPtyModelRestoreNeededHandler(
         ptyId,
         handleModelRestoreNeededMarker,
-        () => session.agentCompletionCoordinator.observeOutputActivity()
+        () => session.agentCompletionCoordinator.observeHiddenOutputActivity()
       )
     }
   }

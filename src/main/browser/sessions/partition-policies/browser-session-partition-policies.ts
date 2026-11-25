@@ -114,6 +114,12 @@ export async function installBrowserSessionPartitionPolicies(
   return proxyReady
 }
 
+export function restoreBrowserSessionPartitionPolicies(profile: BrowserSessionProfile): void {
+  void installBrowserSessionPartitionPolicies(profile).catch(() => {
+    console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)
+  })
+}
+
 export function clearBrowserSessionPartitionPolicies(partition: string, sess: Session): void {
   // Electron Sessions outlive removed partitions; release their callbacks and listeners.
   invalidateBrowserSessionProxyApplication(sess)

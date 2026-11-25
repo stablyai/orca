@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Bot } from '../../shared/bot-types'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -15,8 +16,23 @@ import {
   hostTestOperationId
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED } from '../native-chat/agent-session-journal/queued-messages/queued-message-table'
-import { outcomeSentence, replyEventsOf } from '../connector-cloud/connector-reply-outbox'
+import { replyEventsOf } from '../connector-cloud/connector-reply-outbox'
+import { outcomeSentence } from '../connector-cloud/connector-reply-outcome-sentence'
 import { botChatSessions } from './bot-chat-session'
+import { eventually } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
+import { NO_STRUCTURED_AGENTS } from '../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
+import type { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+
+/** The real host, reading agent declarations from `agents` where the move asks for them. */
+function withAgents(
+  host: StructuredAgentSessionHost,
+  agents: StructuredAgentRegistry
+): StructuredAgentSessionHost {
+  const view: StructuredAgentSessionHost = Object.create(host)
+  Object.defineProperty(view, 'deps', { value: { ...host.deps, agents } })
+  return view
+}
 
 const party = { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null }
 const RESULT_SENDER: AgentMessageSource = {
@@ -47,7 +63,11 @@ describe('replacing a chat carries its unsent queued messages', () => {
     rig = undefined
   })
 
-  async function setup(createChat?: (sessionId: string) => Promise<void>) {
+  async function setup(
+    createChat?: (sessionId: string) => Promise<void>,
+    newChatAgent: 'codex' | 'claude' = 'codex',
+    agents?: StructuredAgentRegistry
+  ) {
     rig = await createQueuedMessageTestRig()
     const current = rig
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replace reads only these fields.
@@ -67,7 +87,14 @@ describe('replacing a chat carries its unsent queued messages', () => {
             expectedRuntimeFence: null,
             payloadFingerprint: ''
           },
-          providerHandle: { kind: 'codex', threadId: `thread-${sessionId}` }
+          ...(newChatAgent === 'claude'
+            ? ({
+                provider: 'claude',
+                agent: 'claude',
+                providerHandle: { kind: 'claude', sessionId: randomUUID(), leafUuid: null },
+                accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/private-fixture/claude' }
+              } as const)
+            : { providerHandle: { kind: 'codex', threadId: `thread-${sessionId}` } })
         })
       )
       expect(attached).toMatchObject({ ok: true })
@@ -80,7 +107,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
           return bot
         }
       },
-      host: async () => current.host,
+      host: async () => (agents ? withAgents(current.host, agents) : current.host),
       createChat: async (_bot, sessionId) => (createChat ?? attach)(sessionId),
       showTab: async () => {},
       closeChat: async (sessionId) => {
@@ -120,6 +147,12 @@ describe('replacing a chat carries its unsent queued messages', () => {
       body: message('maybe sent'),
       holdReason: QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED
     })
+    await queuedMessages.insert({
+      messageId: 'plan',
+      body: message('plan it first'),
+      options: { interactionMode: 'plan', model: 'gpt-fixture', effort: 'high' },
+      deliveryMode: 'steer'
+    })
     await queuedMessages.insert({ messageId: 'editing', body: message('editing') })
     return { chats }
   }
@@ -144,7 +177,13 @@ describe('replacing a chat carries its unsent queued messages', () => {
     const next = await chats.reset('bot-1')
     expect(next).not.toBe(HOST_TEST_SESSION)
     const bodies = await received(next)
-    expect(bodies.map(textOf)).toEqual(['owner text', 'run result', 'look at this', 'maybe sent'])
+    expect(bodies.map(textOf)).toEqual([
+      'owner text',
+      'run result',
+      'look at this',
+      'maybe sent',
+      'plan it first'
+    ])
     expect(bodies[0].from).toBeUndefined()
     expect(bodies[1].from).toEqual(RESULT_SENDER)
     expect(bodies[2].blocks).toContainEqual(IMAGE)
@@ -180,6 +219,45 @@ describe('replacing a chat carries its unsent queued messages', () => {
     })
   })
 
+  /** Replaces the chat with only the Plan card left to move, and resolves to what it sent there. */
+  async function sendsPlanCard(newChatAgent: 'codex' | 'claude', agents?: StructuredAgentRegistry) {
+    const { chats } = await setup(undefined, newChatAgent, agents)
+    const { queuedMessages } = (await rig!.host.conversation(HOST_TEST_SESSION)).journal
+    const others = (await queuedMessages.list()).filter(
+      (card) => card.messageId !== 'plan' && card.messageId !== 'editing'
+    )
+    await queuedMessages.withdraw(others.map((card) => card.messageId))
+    const next = await chats.reset('bot-1')
+    expect(rig!.store.getConversation(next)?.provider).toBe(newChatAgent)
+    const { journal } = await rig!.host.conversation(next)
+    expect((await journal.queuedMessages.get('plan'))?.deliveryMode).not.toBe('steer')
+    let sent: Parameters<QueuedMessageTestRig['dispatch']>[0] | undefined
+    await eventually(() => {
+      sent = rig!.dispatch.mock.calls.find(([input]) => input.sessionId === next)?.[0]
+      expect(sent).toBeDefined()
+    })
+    return sent!.executionOptions
+  }
+
+  it('sends a moved card with the mode, model and effort it was queued with', async () => {
+    expect(await sendsPlanCard('codex')).toMatchObject({
+      interactionMode: 'plan',
+      model: 'gpt-fixture',
+      effort: 'high'
+    })
+  })
+
+  it('keeps only Plan or Build when the new chat runs another agent', async () => {
+    const options = await sendsPlanCard('claude')
+    expect(options?.interactionMode).toBe('plan')
+    expect(options?.model).not.toBe('gpt-fixture')
+    expect(options?.effort).not.toBe('high')
+  })
+
+  it('drops the mode when the new chat runs an agent without one', async () => {
+    expect((await sendsPlanCard('claude', NO_STRUCTURED_AGENTS))?.interactionMode).toBeUndefined()
+  })
+
   it('keeps them in the old chat when the new chat cannot be made', async () => {
     const { chats } = await setup(async () => {
       throw new Error('start failed')
@@ -192,6 +270,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
       'look at this',
       'slack dm',
       'maybe sent',
+      'plan it first',
       'editing'
     ])
   })
