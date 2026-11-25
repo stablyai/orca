@@ -148,7 +148,11 @@ it('Send refuses a message whose line breaks or indents changed during export', 
 })
 
 it('a removed marked chip keeps its words saved until the draft without it is saved', async () => {
-  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'marked', path: '/m.png' }] })
+  // Some text stays, so taking the image out is a refusable write rather than a removal.
+  appendToNativeChatComposerDraft(SCOPE, {
+    text: 'see this',
+    images: [{ id: 'marked', path: '/m.png' }]
+  })
   setNativeChatAttachmentNotes(SCOPE, 'marked', record([note(1, 'keep me')]))
   await nativeChatComposerDraftSaved(SCOPE)
   drafts.refuseWrites = true

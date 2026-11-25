@@ -60,12 +60,11 @@ export function replaceNativeChatNotedImage(scopeKey: string, id: string): (() =
 
 // Marked images reopened in a viewer, per chat, with how many viewers have each open. They stay in
 // the draft, so a reload keeps them, but no message box sends them until every viewer editing them
-// has swapped in its edited copy or closed. Other windows see the edit through a shared marker that
-// the editing window refreshes; one left by a window that went away stops counting soon after.
+// has swapped in its edited copy or closed. Other windows see the edit through a shared marker; one
+// left by a window that went away without ending its edit stops counting after a while.
 const editingImages = new Map<string, Map<string, number>>()
 const EDITING_KEY = 'orca.nativeChat.notesEditing.v1'
-const EDITING_REFRESH_MS = 15_000
-const EDITING_FRESH_MS = 45_000
+const EDITING_FRESH_MS = 10 * 60_000
 const editingItem = (scopeKey: string, id: string): string =>
   `${EDITING_KEY}:${encodeURIComponent(`${scopeKey}\u0000${id}`)}`
 const shareEditing = (scopeKey: string, id: string, editing: boolean): void => {
@@ -94,14 +93,12 @@ export function markNativeChatNotedImageEditing(scopeKey: string, id: string): (
   ids.set(id, (ids.get(id) ?? 0) + 1)
   editingImages.set(scopeKey, ids)
   shareEditing(scopeKey, id, true)
-  const refresh = setInterval(() => shareEditing(scopeKey, id, true), EDITING_REFRESH_MS)
   let ended = false
   return () => {
     if (ended) {
       return
     }
     ended = true
-    clearInterval(refresh)
     const left = (ids.get(id) ?? 1) - 1
     if (left > 0) {
       ids.set(id, left)
