@@ -156,15 +156,20 @@ function importRow(
   }
 }
 
-/** `removals`: whether the rows need what Move would take out (no Copy does). */
+/**
+ * `removals`: whether the rows need what Move would take out (no Copy does), or the only agents it
+ * may take it out of (a Move's confirm), so no other agent's reach is read.
+ */
 async function importRows(
   host: AgentMcpImportHost,
   found: readonly DiscoveredAgentMcpServer[],
-  removals = true
+  removals: boolean | readonly string[] = true
 ): Promise<ImportRow[]> {
   const limits = found.map(limitedTo)
   const workspaceFor = limits.some((paths) => paths !== null) ? await host.workspaceFor() : null
-  const agents = removals ? [...new Set(found.flatMap((server) => agentsOf(server.sources)))] : []
+  const asked = (agent: string): boolean =>
+    removals === true || (removals !== false && removals.includes(agent))
+  const agents = [...new Set(found.flatMap((server) => agentsOf(server.sources)))].filter(asked)
   const reaches = agents.length > 0 ? await host.listReaches(agents) : () => false
   return found.map((server, index) =>
     importRow(
@@ -192,7 +197,7 @@ const oneImportAtATime = <T>(run: () => Promise<T>): Promise<T> =>
 async function movableRow(
   host: AgentMcpImportHost,
   key: string,
-  removals: boolean
+  removals: boolean | readonly string[]
 ): Promise<ImportRow> {
   const server = (await discover(host)).find((candidate) => candidate.key === key)
   if (!server) {
@@ -244,7 +249,7 @@ export async function moveAgentMcpServer<T>(
   confirmed?: readonly string[]
 ): Promise<T> {
   return oneImportAtATime(async () => {
-    const { found, removing: reached, scope } = await movableRow(host, key, true)
+    const { found, removing: reached, scope } = await movableRow(host, key, confirmed ?? true)
     const listed = confirmed
       ? reached.filter((source) => confirmed.includes(source.agent))
       : reached
