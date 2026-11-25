@@ -30,13 +30,17 @@ export type BotWslSetup = {
   state: BotWslSetupState
   start: (distro: WslHostDistro) => void
   retry: () => void
-  /** Stops listening and forgets the add; main has no abort, so a running add finishes in the background. */
+  /** Stops listening and forgets the add (main has no abort, so a running add finishes in the
+   *  background), and gives back the computer picked before; also once the host exists. */
   cancel: () => void
-  /** The host's agents are known: the card folds away. */
+  /** Folds the card away and keeps the computer now picked: its agents are known, the owner picked
+   *  another computer, or the agent check took too long and the usual host or agent states take over. */
   finish: () => void
 }
 
 const IDLE: BotWslSetupState = { phase: 'idle' }
+/** A new host that never answers for its agents hands over to the usual host states after this. */
+export const BOT_WSL_FINDING_AGENTS_TIMEOUT_MS = 30_000
 
 function failure(result: Extract<WslHostAddResult, { ok: false }>): {
   message: string | null
@@ -48,8 +52,11 @@ function failure(result: Extract<WslHostAddResult, { ok: false }>): {
     : { message: null, detail: result.message }
 }
 
-/** `onAdded` must be stable (a state setter): it picks the new host. */
-export function useBotWslSetup(onAdded: (environmentId: string) => void): BotWslSetup {
+/** `onAdded` picks the new host and `onCancelAdded` gives back the earlier pick; both must be stable. */
+export function useBotWslSetup(
+  onAdded: (environmentId: string) => void,
+  onCancelAdded: () => void
+): BotWslSetup {
   const [state, setState] = useState<BotWslSetupState>(IDLE)
   // Bumped by every start and cancel, so a detached add's answer changes nothing.
   const generation = useRef(0)
@@ -75,6 +82,19 @@ export function useBotWslSetup(onAdded: (environmentId: string) => void): BotWsl
       )
     })
   }, [running])
+
+  const finish = useCallback((): void => {
+    generation.current += 1
+    setState(IDLE)
+  }, [])
+  const findingAgents = state.phase === 'finding-agents'
+  useEffect(() => {
+    if (!findingAgents) {
+      return
+    }
+    const timer = window.setTimeout(finish, BOT_WSL_FINDING_AGENTS_TIMEOUT_MS)
+    return () => window.clearTimeout(timer)
+  }, [findingAgents, finish])
 
   const start = useCallback(
     (distro: WslHostDistro): void => {
@@ -106,10 +126,12 @@ export function useBotWslSetup(onAdded: (environmentId: string) => void): BotWsl
     [onAdded]
   )
 
-  const cancel = useCallback((): void => {
-    generation.current += 1
-    setState(IDLE)
-  }, [])
+  const cancel = (): void => {
+    if (state.phase === 'finding-agents') {
+      onCancelAdded()
+    }
+    finish()
+  }
 
   return {
     state,
@@ -120,6 +142,6 @@ export function useBotWslSetup(onAdded: (environmentId: string) => void): BotWsl
       }
     },
     cancel,
-    finish: cancel
+    finish
   }
 }

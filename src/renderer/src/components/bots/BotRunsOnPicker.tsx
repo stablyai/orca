@@ -132,7 +132,10 @@ export function BotRunsOnPicker({
       finish()
     }
   }, [addedHostReady, finish])
-  const wslNoAgent = fields && noAgents && !settingUp && wslDistro !== null && host.environmentId
+  // A sleeping, waking or unreachable host's agents are unknown, not missing.
+  const hostWaking = Boolean(host.sleeping || host.waking)
+  const wslNoAgent =
+    fields && noAgents && !settingUp && !hostWaking && !host.blocked && wslDistro !== null
   const agentInvalid = showSubmitFeedback && !host.blocked && noAgents && !settingUp
   const findingAgents = showSubmitFeedback && !host.blocked && model.state === 'loading'
   const agentLabel = t('bots.new.agent', 'Agent')
@@ -214,7 +217,7 @@ export function BotRunsOnPicker({
               : undefined
           }
         >
-          {fields && (settingUp || noAgents) ? (
+          {fields && (settingUp || noAgents || (hostWaking && wslDistro)) ? (
             <div
               className={cn(
                 COMBOBOX_FIELD_SHELL,
@@ -226,11 +229,13 @@ export function BotRunsOnPicker({
                   ? t('bots.new.wslSetup.waiting', 'Waiting for {{distro}}…', {
                       distro: setupState.distro.name
                     })
-                  : wslDistro
-                    ? t('bots.new.wslNoAgent.field', 'No agent in {{distro}}', {
-                        distro: wslDistro
-                      })
-                    : t('bots.new.validation.noAgents', 'No agents')}
+                  : hostWaking && wslDistro
+                    ? t('bots.new.wslWaking', 'Waking {{distro}}…', { distro: wslDistro })
+                    : wslDistro
+                      ? t('bots.new.wslNoAgent.field', 'No agent in {{distro}}', {
+                          distro: wslDistro
+                        })
+                      : t('bots.new.validation.noAgents', 'No agents')}
               </span>
             </div>
           ) : noAgents ? (

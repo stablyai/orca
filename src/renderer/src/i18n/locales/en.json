@@ -27634,7 +27634,9 @@
         "copy": "Copy",
         "checking": "Checking again…"
       },
-      "hostSleeping": "Sleeping · wakes when used"
+      "hostSleeping": "Sleeping · wakes when used",
+      "wslWaking": "Waking {{distro}}…",
+      "hostWaking": "Waking…"
     },
     "section": {
       "scrollLeft": "Scroll left · {{amount}} hidden",

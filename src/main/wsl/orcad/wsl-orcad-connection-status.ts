@@ -15,7 +15,8 @@ export type WslOrcadConnectionStatus =
       state: 'connecting'
       /** Another install holds this server version's install lock. */
       installLockWait?: InstallLockWait
-      /** Set only while an Add's first connect runs. */
+      /** The step a connect publishing "Connecting" is on (no prior status, no bridge yet); main
+       *  forwards it as add progress only for a distro that is not a host yet. */
       addStage?: WslHostAddStage
     }
   | { state: 'ready'; census: OrcadTerminalCensus | null }

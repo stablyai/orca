@@ -17,6 +17,7 @@ import {
 } from '@/runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { getWslHostsPausedShortLabel } from '@/components/sidebar/host-admission/wsl/wsl-host-row-status'
 import { WslDistroSubmenuRow } from './WslDistroSubmenuRow'
+import { stepSubmenuOptionFocus } from './submenu-option-focus'
 
 const SUBMENU_CONTENT = cn('w-72 p-1', COMBOBOX_POPOVER_SURFACE)
 
@@ -124,8 +125,17 @@ export function AddHostSubmenuRow({
   const wslAcceptsNewWork = useWslHostsAcceptNewWork()
   const wslPaused = useWslHostsPaused()
   const showWsl = Boolean(onAddWslDistro) && wslAcceptsNewWork
-  const wslOpen = open && showWsl && hoveredKey === 'wsl'
+  // Its own state, not the highlight: crossing the gap to the nested list leaves this list's rows.
+  const [wslOpenedBy, setWslOpenedBy] = React.useState<'pointer' | 'keyboard' | null>(null)
+  if (!open && wslOpenedBy !== null) {
+    setWslOpenedBy(null)
+  }
+  const wslOpen = open && showWsl && wslOpenedBy !== null
   const listRef = React.useRef<HTMLDivElement>(null)
+  const armOther = (key: string): void => {
+    setHoveredKey(key)
+    setWslOpenedBy(null)
+  }
   React.useEffect(() => {
     if (open && focusOnOpen) {
       listRef.current?.querySelector<HTMLElement>('[role="option"]')?.focus()
@@ -194,20 +204,27 @@ export function AddHostSubmenuRow({
               backToPicker()
             } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
               event.preventDefault()
-              const items = [
-                ...event.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')
-              ]
-              const next = event.key === 'ArrowDown' ? items.at(-1) : items[0]
-              next?.focus()
+              stepSubmenuOptionFocus(event.currentTarget, event.key === 'ArrowDown' ? 1 : -1)
             }
           }}
         >
           {showWsl && onAddWslDistro ? (
             <WslDistroSubmenuRow
               open={wslOpen}
-              onOpenChange={(next) => setHoveredKey(next ? 'wsl' : null)}
-              armed={hoveredKey === 'wsl'}
+              focusOnOpen={wslOpenedBy === 'keyboard'}
+              onOpenChange={(next) => setWslOpenedBy(next ? (wslOpenedBy ?? 'pointer') : null)}
+              armed={hoveredKey === 'wsl' || wslOpen}
               onArm={() => setHoveredKey('wsl')}
+              onHoverOpen={() => {
+                setHoveredKey('wsl')
+                setWslOpenedBy((current) => current ?? 'pointer')
+              }}
+              onKeyboardOpen={() => setWslOpenedBy('keyboard')}
+              onReturnFocus={() =>
+                listRef.current
+                  ?.querySelector<HTMLElement>('[data-wsl-distro-row] [role="option"]')
+                  ?.focus()
+              }
               onPickDistro={onAddWslDistro}
             />
           ) : null}
@@ -224,7 +241,7 @@ export function AddHostSubmenuRow({
               keyboardFocusable
               stacked
               optionId={undefined}
-              onArm={() => setHoveredKey('ssh')}
+              onArm={() => armOther('ssh')}
               onCommit={onAddSshHost}
             />
           ) : null}
@@ -244,7 +261,7 @@ export function AddHostSubmenuRow({
               keyboardFocusable
               stacked
               optionId={undefined}
-              onArm={() => setHoveredKey('remote')}
+              onArm={() => armOther('remote')}
               onCommit={onAddRemoteServer}
             />
           ) : null}

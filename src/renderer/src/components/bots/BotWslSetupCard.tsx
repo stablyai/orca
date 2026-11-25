@@ -167,7 +167,7 @@ export function BotWslSetupCard({
                   </p>
                   <SetupSteps state={shown} />
                 </div>
-                {shown.phase === 'running' ? (
+                {shown.phase === 'running' || shown.phase === 'finding-agents' ? (
                   <Button type="button" size="xs" variant="ghost" onClick={onCancel}>
                     {t('bots.new.wslSetup.cancel', 'Cancel')}
                   </Button>

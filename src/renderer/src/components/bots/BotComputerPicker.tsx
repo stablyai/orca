@@ -11,7 +11,6 @@ import { botCreateHostRows, type BotCreateHostAction } from './bot-create-host-r
 import { useServerUpdatable, type BotCreateHostChoice } from './bot-create-hosts'
 import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
 import { selectWslHostDistro } from '@/components/wsl-host-mark/WslHostMark'
-import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -99,13 +98,7 @@ export function BotComputerPicker({
     const { host: rowHost, action } = row
     const environmentId = rowHost.environmentId
     const onSelect = !rowHost.blocked
-      ? () => {
-          hostChoice.setHostId(rowHost.hostId)
-          // Picking a sleeping host is the user using it: wake it now, not at Create.
-          if (rowHost.sleeping && environmentId) {
-            void startWslHostAndReloadProjects(environmentId)
-          }
-        }
+      ? () => hostChoice.setHostId(rowHost.hostId)
       : action === 'reconnect' && environmentId
         ? () => reconnect(environmentId)
         : action === 'update'
