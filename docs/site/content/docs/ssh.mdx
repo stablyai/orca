@@ -138,12 +138,14 @@ Installing OpenSSH Server creates and enables an inbound firewall rule named `Op
 Get-NetFirewallRule -Name OpenSSH-Server-In-TCP | Select-Object Name, Enabled, Profile
 ```
 
-- If `Enabled` is `False`, turn it on with `Enable-NetFirewallRule -Name OpenSSH-Server-In-TCP`.
-- If no rule is found, create it. Add `-Profile Private` to allow SSH only on networks Windows treats as private:
+- If `Enabled` is `False` and `Profile` lists only the network types you want SSH on, turn it on with `Enable-NetFirewallRule -Name OpenSSH-Server-In-TCP`.
+- If no rule is found, create one that allows SSH only on networks Windows treats as private:
 
   ```powershell
-  New-NetFirewallRule -Name OpenSSH-Server-In-TCP -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
+  New-NetFirewallRule -Name OpenSSH-Server-In-TCP -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -Profile Private
   ```
+
+For other setups, such as a different port or network profile, see Microsoft's [Windows Firewall overview](https://learn.microsoft.com/windows/security/operating-system-security/network-security/windows-firewall/).
 
 Your laptop still needs a network path to the PC, such as a home network you trust or Tailscale. Don't forward port 22 to the public internet.
 
@@ -152,10 +154,10 @@ Your laptop still needs a network path to the PC, such as a home network you tru
 You don't need a separate Windows user. The account you already use can sign in over SSH once one of the methods below works for it. A separate standard account is optional, for example to limit what agents on that PC can reach.
 
 - **User name:** run `whoami` on the PC. It prints `computer\name` for a local account and `domain\name` for a domain account. For a local account, use the part after the backslash. For a domain account, use the full `domain\name` form.
-- **Password:** password sign-in uses the account's Windows password. If you sign in to Windows with a Microsoft account, that is the Microsoft account password, not your Windows Hello PIN. Some accounts, such as passwordless Microsoft accounts, have no password SSH can use. Use a key for those.
-- **Key:** keys work for local and Active Directory accounts. Microsoft Entra ID accounts can't sign in with a key. Where the public key goes depends on the account:
+- **Password:** password sign-in uses the account's Windows password. If you sign in to Windows with a Microsoft account, that is the Microsoft account password, not your Windows Hello PIN. Some accounts, such as passwordless Microsoft accounts, have no password SSH can use. Try key sign-in for those.
+- **Key:** Microsoft supports key sign-in for local and Active Directory accounts. Where the public key goes depends on the account:
   - **Standard account:** `.ssh\authorized_keys` in the profile folder of the account you sign in as, usually `C:\Users\<name>\.ssh\authorized_keys`.
-  - **Administrator account:** `sshd` ignores the profile file and reads `C:\ProgramData\ssh\administrators_authorized_keys` instead. Only SYSTEM and the Administrators group may have access to that file, each with full control. In PowerShell as an administrator:
+  - **Administrator account:** `sshd` ignores the profile file and reads `C:\ProgramData\ssh\administrators_authorized_keys` instead. By default every administrator account on the PC shares this one file, so a key added there can sign in as any of them. Only SYSTEM and the Administrators group may have access to that file, each with full control. In PowerShell as an administrator:
 
     ```powershell
     Add-Content -Force -Path "$env:ProgramData\ssh\administrators_authorized_keys" -Value '<your public key>'
@@ -163,6 +165,8 @@ You don't need a separate Windows user. The account you already use can sign in 
     ```
 
     `/inheritance:r` removes inherited entries but keeps entries set directly on the file. Run `icacls.exe "$env:ProgramData\ssh\administrators_authorized_keys"` afterwards and remove any entry other than SYSTEM and Administrators.
+
+Windows OpenSSH does not support signing in with a Microsoft Entra ID account, by password or by key. Use a local or Active Directory account on that PC instead.
 
 Microsoft's [key-based authentication guide](https://learn.microsoft.com/windows-server/administration/openssh/openssh_keymanagement) has more detail.
 
