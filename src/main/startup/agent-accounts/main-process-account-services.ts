@@ -84,7 +84,7 @@ export async function initializeMainProcessAccountServices(
       await store.updateSettingsAndFlush({ searchShortcutOptIn: choice })
     },
     getSearchShortcutPluginOwners: () =>
-      toSearchShortcutPluginOwners(state.pluginService?.contentPacks.commands.list() ?? [])
+      toSearchShortcutPluginOwners(core.pluginService?.contentPacks.commands.list() ?? [])
   })
   browserManager.setSettingsResolver(() => ({ keybindings: core.keybindings?.getOverrides() }))
 }

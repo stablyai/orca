@@ -119,8 +119,6 @@ export function registerSettingsHandlers(
     delete sanitizedArgs.activeRuntimeEnvironmentId
     // Only the main-process directory picker may grant trusted floating-workspace paths.
     delete sanitizedArgs.floatingTerminalTrustedCwds
-    // Only KeybindingService may change it, so live shortcut defaults never drift from the saved choice.
-    delete sanitizedArgs.searchShortcutOptIn
     if ('computerAwakeMode' in sanitizedArgs) {
       Object.assign(
         sanitizedArgs,
