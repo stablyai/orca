@@ -1,5 +1,8 @@
 import type { HttpLinkSourceOwner, HttpLinkStoreState } from './http-link-routing'
-import { serverForwardsWorkspacePorts } from '@/lib/workspace-ports/server-port-forward-support'
+import {
+  serverForwardsWorkspacePorts,
+  sshForwardsPorts
+} from '@/lib/workspace-ports/server-port-forward-support'
 import { isLoopbackBrowserUrl } from '../../../../../shared/browser/navigation/loopback-browser-url'
 import {
   isLoopbackHttpUrl,
@@ -24,14 +27,14 @@ export type LocalhostLinkWorktree = {
 }
 
 // Why: a remote process's loopback URL names its own host; only that host's Orca browser reaches it,
-// unless the paired server forwards its ports here, where the system browser opens the forward.
+// unless its SSH host or paired server forwards its ports here, where the system browser opens the forward.
 export function isRemoteLoopbackHttpLink(
   url: string | undefined,
   sourceOwner: HttpLinkSourceOwner | undefined,
   worktreeId?: string | null
 ): boolean {
   return (
-    (sourceOwner?.kind === 'ssh' ||
+    ((sourceOwner?.kind === 'ssh' && !sshForwardsPorts(sourceOwner.connectionId)) ||
       (sourceOwner?.kind === 'runtime' &&
         !serverForwardsWorkspacePorts(sourceOwner.runtimeEnvironmentId, worktreeId))) &&
     url !== undefined &&
@@ -39,28 +42,34 @@ export function isRemoteLoopbackHttpLink(
   )
 }
 
-/** Opens a link in the system browser; a paired server's own localhost opens through a forward of
- *  its port, never as this computer's localhost. Resolves whether an address reached `openSystem`. */
+/** Opens a link in the system browser; an SSH host's or paired server's own localhost opens through
+ *  a forward of its port, never as this computer's localhost. Resolves whether an address reached
+ *  `openSystem`. */
 export async function openOwnedSystemHttpLink(
   url: string,
   sourceOwner: HttpLinkSourceOwner | undefined,
   worktreeId: string | null | undefined,
   openSystem: (url: string) => Promise<unknown>
 ): Promise<boolean> {
-  if (sourceOwner?.kind !== 'runtime' || !isLoopbackBrowserUrl(url)) {
+  if (
+    (sourceOwner?.kind !== 'runtime' && sourceOwner?.kind !== 'ssh') ||
+    !isLoopbackBrowserUrl(url)
+  ) {
     await openSystem(url)
     return true
   }
   try {
     // Loaded on demand: the opener reads the store, which imports link routing.
-    const { openServerLoopbackInSystemBrowser } =
+    const { openServerLoopbackInSystemBrowser, openSshLoopbackInSystemBrowser } =
       await import('@/lib/workspace-ports/server-port-forward-open')
-    return await openServerLoopbackInSystemBrowser(
-      url,
-      sourceOwner.runtimeEnvironmentId,
-      worktreeId,
-      openSystem
-    )
+    return await (sourceOwner.kind === 'ssh'
+      ? openSshLoopbackInSystemBrowser(url, sourceOwner.connectionId, openSystem)
+      : openServerLoopbackInSystemBrowser(
+          url,
+          sourceOwner.runtimeEnvironmentId,
+          worktreeId,
+          openSystem
+        ))
   } catch (error) {
     console.error('Failed to open the server port:', error)
     return false

@@ -99,20 +99,30 @@ export function OrcaCloudSignInDialogBody({
   title,
   reason,
   onCancel,
-  onSignedIn
+  onSignedIn,
+  corner
 }: {
   title: string
   reason: string
   onCancel: () => void
   /** Carries on with what the dialog was opened for; the dialog stays as it is until it settles. */
   onSignedIn?: () => unknown
+  /** A button on the title's line, e.g. a setup's Minimize while it still follows something. */
+  corner?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const { start, busy } = useSignInThen(onSignedIn)
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{title}</DialogTitle>
+        {corner ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <DialogTitle className="min-w-0 flex-1">{title}</DialogTitle>
+            {corner}
+          </div>
+        ) : (
+          <DialogTitle>{title}</DialogTitle>
+        )}
         <DialogDescription>{reason}</DialogDescription>
       </DialogHeader>
       <OrcaSignInWaitNotice />
@@ -139,6 +149,7 @@ export function OrcaCloudSignInGate({
   onCancel,
   resume,
   frame = unframed,
+  corner,
   children
 }: {
   hostId?: ExecutionHostId
@@ -146,6 +157,8 @@ export function OrcaCloudSignInGate({
   reason: string
   onCancel: () => void
   resume?: () => Promise<unknown>
+  /** The ask's button on the title's line (see OrcaCloudSignInDialogBody). */
+  corner?: React.ReactNode
   /** Wraps the ask, for a dialog whose `children` bring their own content frame. */
   frame?: (body: React.JSX.Element) => React.ReactNode
   children: React.ReactNode
@@ -163,6 +176,7 @@ export function OrcaCloudSignInGate({
           reason={reason}
           onCancel={onCancel}
           onSignedIn={() => whileBusy(setResuming, async () => resume?.())}
+          corner={corner}
         />
       )}
     </>

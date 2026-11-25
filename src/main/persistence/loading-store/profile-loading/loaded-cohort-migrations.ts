@@ -134,6 +134,19 @@ export class LoadedCohortMigrationOperations {
     return { ...state, settings: { ...state.settings, experimentalNewWorktreeCardStyle: false } }
   }
 
+  /** App rail defaults on for new profiles; profiles saved before without a choice keep it off. */
+  keepAppRailOffForExistingProfiles(state: PersistedState, savedProfile: unknown): PersistedState {
+    if (!isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)) {
+      return state
+    }
+    const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    if (typeof saved?.experimentalAppRail === 'boolean') {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return { ...state, settings: { ...state.settings, experimentalAppRail: false } }
+  }
+
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     return this.seedMilestoneInstallCohort(
       this.migrateTelemetryIdentity(state, fileExistedOnLoad),

@@ -31,7 +31,8 @@ const usePendingComments = createBotItemPendingCommentsHook({ useEffect, useSync
 export function useBotItemPendingComments(
   bot: BotRef,
   uid: string,
-  events: readonly BotItemEvent[]
+  events: readonly BotItemEvent[],
+  refresh: () => void
 ): BotItemPendingComments {
   const t = useTranslate()
   return usePendingComments(`${botRefKey(bot)}\0${uid}`, events, {
@@ -64,6 +65,7 @@ export function useBotItemPendingComments(
           : text
       )
     },
+    refresh,
     // Its answers leave the ask's held picks: the host has them.
     delivered: ({ intent }) => {
       if (intent && intent.shape.decisions.length > 1) {
