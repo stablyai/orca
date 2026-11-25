@@ -5,6 +5,7 @@ import type {
   AutomationBotTarget
 } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
+import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { Bot } from '../../shared/bot-types'
 import {
   CONNECTOR_CLIENT_LIMITS,
@@ -32,12 +33,12 @@ import {
   type BotOwnerNoticeDeps
 } from './bot-could-not-finish'
 import { chatThatTookIt } from './bot-automation-sessions'
+import { botRunModelFailure } from './bot-run-model-failure'
 import { missedItsThread } from '../automations/bot-automation-launch'
 import { requireStructuredHost, runtimeBotChats } from './bot-chat-session'
 import { runtimeBotRunNotStarted, showBotRunNotStarted } from './bot-run-not-started'
 import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import { structuredAgentSessionRefusalLine } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
-import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import { ANSWERED_TOGETHER_NOTICE } from '../../shared/automations/history/automation-run-answered-together'
 import * as resultNote from './bot-run-result-note'
 import { writeStructuredAgentSessionOrcaNote } from '../native-chat/agent-session-wire/structured-agent-session-orca-note'
@@ -89,6 +90,7 @@ export type BotRunResult = {
   }
   /** The conversation the run went to. */
   sessionId: string
+  launchModel?: string
   ended: BotTurnEnd
 }
 
@@ -165,6 +167,10 @@ export async function deliverBotRunResult(
     )
     const error = COPY.failed(ended.outcome)
     await resultNote.leave(deps, result, 'couldNotFinish', ended.message.trim() || error)
+    const modelFailure = botRunModelFailure(result, ended)
+    if (modelFailure) {
+      return { status: 'dispatch_failed', ...modelFailure }
+    }
     const why =
       ended.error ??
       structuredAgentSessionRefusalLine(ended.refusal, tuiAgentDisplayName(bot.agent) ?? undefined)

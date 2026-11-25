@@ -34,16 +34,21 @@ export function AutomationRunStatusDot({
 export function AutomationRunStatusLabel({
   status,
   pill = false,
+  tracksCompletion = false,
   className
 }: {
   status: AutomationRunStatus
   /** A soft-tinted pill for the run page header. */
   pill?: boolean
+  tracksCompletion?: boolean
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const tone = getToneForAutomationRunStatus(status)
-  const label = getAutomationRunStatusLabel(status, t)
+  const label =
+    tracksCompletion && status === 'dispatched'
+      ? t('automations.runPage.running', 'Running')
+      : getAutomationRunStatusLabel(status, t)
   return (
     <span
       title={label}

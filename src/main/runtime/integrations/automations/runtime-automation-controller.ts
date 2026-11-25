@@ -6,6 +6,8 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import type { AutomationModelRecoveryInput } from '../../../../shared/automations/history/automation-model-recovery'
+import { recoverAutomationModel } from './runtime-automation-model-recovery'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { AutomationRunEvent } from '../../../../shared/automation-event-triggers'
@@ -54,6 +56,7 @@ import {
 
 export class RuntimeAutomationController {
   private service: AutomationService | null = null
+  private readonly modelRecoveries = new Set<string>()
   /** Set once this host can make webhooks. */
   readonly webhooks = new AutomationWebhookSaves()
 
@@ -295,6 +298,11 @@ export class RuntimeAutomationController {
       service: this.service,
       fence: () => this.assertOwner(id, expectedOwner, 'execute')
     })
+  }
+
+  recoverModel(input: AutomationModelRecoveryInput, expectedOwner?: AutomationOwnerPrecondition) {
+    const { modelRecoveries, store, service } = this
+    return recoverAutomationModel(modelRecoveries, this, store, service, input, expectedOwner)
   }
 
   async runForEvent(id: string, event: AutomationRunEvent, gate?: EventRunOptions) {

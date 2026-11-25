@@ -5578,7 +5578,10 @@
       "botsOff": "设置中已关闭机器人，因此 Orca 跳过了这次运行。",
       "botMissing": "运行这个自动化的机器人已不存在。",
       "botFolderMissing": "机器人的文件夹已不可用。",
-      "botPaused": "{{bot}} 已暂停，因此 Orca 跳过了这次运行。"
+      "botPaused": "{{bot}} 已暂停，因此 Orca 跳过了这次运行。",
+      "agentModelUnavailable": "{{agent}} 无法使用 {{model}}。",
+      "theAgent": "智能体",
+      "selectedModel": "所选模型"
     },
     "botTarget": {
       "fieldLabel": "Bot 或项目",

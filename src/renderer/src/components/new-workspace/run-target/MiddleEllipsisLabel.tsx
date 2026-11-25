@@ -5,18 +5,21 @@ import { middleEllipsis } from './middle-ellipsis'
 
 let measureContext: CanvasRenderingContext2D | null | undefined
 
-function textWidth(text: string, font: string): number | null {
+type TextStyle = { font: string; letterSpacing: number }
+
+function textWidth(text: string, style: TextStyle): number | null {
   measureContext ??= document.createElement('canvas').getContext('2d')
   if (!measureContext) {
     return null
   }
-  measureContext.font = font
-  return measureContext.measureText(text).width
+  measureContext.font = style.font
+  // Why: the canvas ignores CSS letter-spacing, which the DOM adds after every character.
+  return measureContext.measureText(text).width + Array.from(text).length * style.letterSpacing
 }
 
 export function MiddleEllipsisLabel({ text }: { text: string }): React.JSX.Element {
   const ref = useRef<HTMLSpanElement>(null)
-  const [box, setBox] = useState<{ width: number; font: string } | null>(null)
+  const [box, setBox] = useState<({ width: number } & TextStyle) | null>(null)
   useLayoutEffect(() => {
     const element = ref.current
     if (!element) {
@@ -24,17 +27,25 @@ export function MiddleEllipsisLabel({ text }: { text: string }): React.JSX.Eleme
     }
     const observer = new ResizeObserver(([entry]) => {
       const width = entry?.contentRect.width ?? 0
-      setBox((previous) =>
-        previous?.width === width ? previous : { width, font: getComputedStyle(element).font }
-      )
+      setBox((previous) => {
+        if (previous?.width === width) {
+          return previous
+        }
+        const style = getComputedStyle(element)
+        return {
+          width,
+          font: style.font,
+          letterSpacing: Number.parseFloat(style.letterSpacing) || 0
+        }
+      })
     })
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
   const shown =
-    box === null || textWidth('', box.font) === null
+    box === null || textWidth('', box) === null
       ? text
-      : middleEllipsis(text, (candidate) => (textWidth(candidate, box.font) ?? 0) <= box.width)
+      : middleEllipsis(text, (candidate) => (textWidth(candidate, box) ?? 0) <= box.width)
   // Plain end truncation stays as the fallback until it is measured.
   return (
     <span ref={ref} className="block min-w-0 flex-1 truncate whitespace-pre">

@@ -63,6 +63,14 @@ export function structuredAgentSessionTurnFailureLine(
   items: readonly AgentJournalRenderItem[],
   turnItemId: string
 ): string | undefined {
+  return structuredAgentSessionTurnFailureReport(items, turnItemId).error
+}
+
+/** The fact and the redacted line from the same status row. */
+export function structuredAgentSessionTurnFailureReport(
+  items: readonly AgentJournalRenderItem[],
+  turnItemId: string
+): { error?: string; failure?: AgentSessionFailureFact } {
   for (const body of turnStatusRows(items, turnItemId)) {
     const fact = readAgentSessionFailureFact(body.failure)
     if (fact?.kind === 'providerRetrying') {
@@ -75,10 +83,10 @@ export function structuredAgentSessionTurnFailureLine(
         : undefined
     const line = text ? failureLine(text) : ''
     if (line) {
-      return line
+      return { error: line, ...(fact ? { failure: fact } : {}) }
     }
   }
-  return undefined
+  return {}
 }
 
 /** One redacted line saying why a send was refused before any turn, such as "Codex couldn't start:

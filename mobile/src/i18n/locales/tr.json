@@ -5732,7 +5732,10 @@
       "botMissing": "Bu otomasyonun adına çalıştığı bot artık yok.",
       "botFolderMissing": "Botun klasörü artık kullanılamıyor.",
       "botPaused": "{{bot}} duraklatıldığı için Orca bu çalıştırmayı atladı.",
-      "agentInterrupted": "Ajan bu çalıştırmayı tamamlayamadan kesintiye uğradı."
+      "agentInterrupted": "Ajan bu çalıştırmayı tamamlayamadan kesintiye uğradı.",
+      "agentModelUnavailable": "{{agent}}, {{model}} modelini kullanamadı.",
+      "theAgent": "Ajan",
+      "selectedModel": "seçilen model"
     },
     "eventsWontFire": "Yalnızca zamanlamasına göre çalışır: {{connectors}} bağlayıcısı gerekiyor",
     "wontFire": "Çalışmayacak: {{connectors}} bağlayıcısı gerekiyor",

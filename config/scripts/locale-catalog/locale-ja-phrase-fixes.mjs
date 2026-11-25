@@ -41,8 +41,12 @@ export const JA_PHRASE_FIXES = [
     pattern: /エージェント/g,
     replacement: 'Agent',
     whenEnIncludes: 'agent',
-    // Skills filters and metadata are Japanese UI labels, not agent product prose.
-    skipKeyPrefixes: ['auto.components.skills.', 'components.native-chat.tool.row.subagent']
+    // Skills filters, metadata and automation failure copy use agent generically.
+    skipKeyPrefixes: [
+      'auto.components.skills.',
+      'components.native-chat.tool.row.subagent',
+      'automations.runFailures.theAgent'
+    ]
   },
   { pattern: /解雇/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
   { pattern: /却下/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },

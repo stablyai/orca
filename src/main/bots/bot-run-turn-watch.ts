@@ -6,7 +6,8 @@ import type {
   AgentJournalTurnLifecycle
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionTurnAssistantMessage } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
-import { structuredAgentSessionTurnFailureLine } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
+import { structuredAgentSessionTurnFailureReport } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
+import type { AgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { structuredAgentSessionSendTurn } from '../../shared/structured-agent-session-send-turn'
 import { readAgentJournalTurnOutcome } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { pendingStructuredAgentSessionPrompt } from '../../shared/agent-session/view/structured-agent-session-projection'
@@ -33,12 +34,19 @@ export type BotTurnEnd =
       error?: string
       /** Why the agent refused the prompt before any turn, such as a failed start. */
       refusal?: AgentJournalSubmission['rejection']
+      /** On failure: the typed reason, when the journal recorded one this build reads. */
+      failure?: AgentSessionFailureFact
     }
   | { unavailable: BotRunUnavailable }
 
 /** The message a run sent, which names the turn it started, and its body's fingerprint, which a
  *  queued card keeps until it is edited. */
-export type BotRunSend = { sessionId: string; clientMessageId: string; fingerprint: string }
+export type BotRunSend = {
+  sessionId: string
+  clientMessageId: string
+  fingerprint: string
+  launchModel?: string
+}
 
 export type BotTurnWatch = {
   /** The end of the turn this send started; the watch ends with it. */
@@ -122,7 +130,7 @@ async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurn
         outcome,
         message: shared ? '' : structuredAgentSessionTurnAssistantMessage(items, sent.itemId),
         ...(outcome === 'failure'
-          ? { error: structuredAgentSessionTurnFailureLine(items, sent.itemId) }
+          ? structuredAgentSessionTurnFailureReport(items, sent.itemId)
           : {})
       }
     : unavailable('unread')

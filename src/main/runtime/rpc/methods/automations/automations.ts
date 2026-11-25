@@ -11,6 +11,11 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from '../../../../../shared/rpc-contract/automations/automation-params'
+import {
+  AutomationRecoverModel,
+  AutomationShow
+} from '../../../../../shared/rpc-contract/automations/automation-model-recovery-param'
+import { readAutomationRecoverySelection } from '../../../integrations/automations/runtime-automation-model-recovery'
 import { recordAutomationSavedCard } from '../../../automation-saved-card'
 import { deleteAutomationRecordingCancelledWait } from '../../../../bots/bot-wait-cancel'
 import { LOOK_AROUND_REFUSAL } from '../../../../bots/bot-look-around-policy'
@@ -92,7 +97,7 @@ export const AUTOMATION_METHODS = [
   defineMethod({
     name: 'automation.show',
     permission: 'workspace',
-    params: AutomationId,
+    params: AutomationShow,
     // Return optional owner metadata for CLI mutations; older hosts omit it and older clients ignore it.
     handler: (params, context) => {
       const { runtime } = context
@@ -101,7 +106,18 @@ export const AUTOMATION_METHODS = [
         context
       )
       const owner = runtime.automationOwnerPrecondition(params.id)
-      return owner ? { automation, owner } : { automation }
+      return {
+        automation,
+        ...(owner ? { owner } : {}),
+        ...(params.modelRecovery
+          ? {
+              recoverySelection: readAutomationRecoverySelection(
+                runtime.requireStore(),
+                automation.bot
+              )
+            }
+          : {})
+      }
     }
   }),
   defineMethod({
@@ -167,6 +183,18 @@ export const AUTOMATION_METHODS = [
         mutationOwner(params.id, params.expectedOwner, context)
       )
     })
+  }),
+  defineMethod({
+    name: 'automation.recoverModel',
+    permission: 'workspace',
+    params: AutomationRecoverModel,
+    handler: (params, context) => {
+      refuseFromLookAround(params.callerSessionId, context)
+      return context.runtime.recoverAutomationModel(
+        params,
+        mutationOwner(params.id, params.expectedOwner, context)
+      )
+    }
   }),
   defineMethod({
     name: 'automation.runs',

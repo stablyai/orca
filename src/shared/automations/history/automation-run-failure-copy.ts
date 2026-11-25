@@ -41,10 +41,16 @@ export const AUTOMATION_RUN_FAILURE_COPY = {
   botsOffByTeam: 'Bots are turned off by your team, so Orca skipped this run.',
   botMissing: 'The bot this automation runs as no longer exists.',
   botFolderMissing: "The bot's folder is no longer available.",
-  botPaused: '{{bot}} is paused, so Orca skipped this run.'
+  botPaused: '{{bot}} is paused, so Orca skipped this run.',
+  agentModelUnavailable: "{{agent}} couldn't use {{model}}.",
+  theAgent: 'The agent',
+  selectedModel: 'the selected model'
 } as const
 
-export type AutomationRunFailureCode = keyof typeof AUTOMATION_RUN_FAILURE_COPY
+export type AutomationRunFailureCode = Exclude<
+  keyof typeof AUTOMATION_RUN_FAILURE_COPY,
+  'theAgent' | 'selectedModel'
+>
 
 /** Optional wire/persisted fields next to the English `error`; absent on older hosts and records. */
 export type AutomationRunFailureCodeFields = {
