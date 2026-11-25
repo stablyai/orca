@@ -297,16 +297,19 @@ describe('a phone asking its own computer for a key', () => {
       origin: () => 'https://cloud.example'
     })
     routeSharedHostsThrough({
-      ready: async () => {},
-      reaches: () => false,
-      views: () => [],
-      call: async () => {
-        throw new Error('unused')
+      hosts: {
+        ready: async () => {},
+        reaches: () => false,
+        views: () => [],
+        call: async () => {
+          throw new Error('unused')
+        },
+        subscribe: async () => {
+          throw new Error('unused')
+        },
+        phones
       },
-      subscribe: async () => {
-        throw new Error('unused')
-      },
-      phones
+      methods: { allows: () => false, streams: () => false }
     })
     const { seal, params } = phoneAsk()
 
