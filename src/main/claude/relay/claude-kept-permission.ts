@@ -130,19 +130,29 @@ export function askKeptBypassLeavingPlan(
     : undefined
 }
 
-/** A kept agent's pick made while a message took it out of Plan was only recorded (the chat still
- *  looked in Plan), so it goes out now rather than leaving the mode that message wrote. */
+/** A kept agent's picks made while a message took it out of Plan were only recorded (the chat
+ *  still looked in Plan), so the latest goes out now, again until no newer pick arrived. */
 export async function sendKeptPickMadeLeavingPlan(
   session: ClaudeSession,
   requested: PermissionMode,
   written: PermissionMode | null,
   timeoutMs: number | undefined
 ): Promise<PermissionMode | null> {
-  const latest = session.launchIntent?.permissionMode
-  if (!keptClaudeAgentRelay(session.connection) || !isBuildMode(latest) || latest === requested) {
-    return written
+  let sent: string = requested
+  let mode = written
+  for (;;) {
+    const latest = session.launchIntent?.permissionMode
+    if (!keptClaudeAgentRelay(session.connection) || !isBuildMode(latest) || latest === sent) {
+      return mode
+    }
+    sent = latest
+    const ask =
+      latest === 'bypassPermissions' ? askKeptBypassLeavingPlan(session, timeoutMs) : undefined
+    if (ask) {
+      await ask
+    }
+    mode = await setClaudeAllowedPermissionMode(session, latest, { timeoutMs })
   }
-  return setClaudeAllowedPermissionMode(session, latest, { timeoutMs })
 }
 
 /** At reattach the agent runs what it had when the last app let go, which a pick made since may

@@ -27,6 +27,7 @@ export class ClaudeTaskInvocations {
       parent: (id: string, run?: string) => string | undefined
       isSubagent?: (id: string) => boolean
       isBackgroundSubagent?: (id: string) => boolean
+      launchOf?: (id: string) => string | undefined
     }
   ) {}
 
@@ -103,6 +104,11 @@ export class ClaudeTaskInvocations {
 
   savedAsSubagent(id: string): boolean {
     return this.saved?.isSubagent?.(id) === true
+  }
+
+  /** The saved tool call that launched a subagent, which its start carried. */
+  savedLaunch(id: string): string | undefined {
+    return this.saved?.launchOf?.(id)
   }
 
   excludeMonitor(id: string, run?: string): void {
