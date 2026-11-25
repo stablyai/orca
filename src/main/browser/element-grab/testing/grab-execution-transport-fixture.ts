@@ -8,6 +8,8 @@ export function attachGrabExecutionTransport<
   T extends EventEmitter & {
     executeJavaScript?: (code: string) => Promise<unknown>
     getURL?: () => string
+    // Supplied by a guest that models loading; otherwise the main frame is always loaded.
+    isLoadingMainFrame?: () => boolean
     executeJavaScriptInIsolatedWorld?: (
       world: number,
       scripts: { code: string }[]
@@ -49,7 +51,7 @@ export function attachGrabExecutionTransport<
   const senderFrame = frame as unknown as Electron.WebFrameMain
   return Object.assign(guest, {
     mainFrame: senderFrame,
-    isLoadingMainFrame: () => false,
+    isLoadingMainFrame: guest.isLoadingMainFrame ?? (() => false),
     getURL: guest.getURL ?? (() => 'https://synthetic.invalid/')
   })
 }
