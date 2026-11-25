@@ -124,7 +124,7 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
     },
     [layerRef, cardKeepsKeyboard]
   )
-  const { filled, critical, used, window } = contextUsageRingReadout(usage)
+  const { filled, critical, used, window, cost } = contextUsageRingReadout(usage)
   const rows = keyContextUsageRows(usage.rows)
   const counted = rows.filter(({ row }) => !row.deferred)
   const deferred = rows.filter(({ row }) => row.deferred)
@@ -206,6 +206,14 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
           <Text style={styles.estimated}>
             {t('chat.contextUsage.estimated', 'Estimated from the last response.')}
           </Text>
+        ) : null}
+        {cost ? (
+          <View style={[styles.rows, styles.deferred]}>
+            <View style={styles.row}>
+              <Text style={styles.rowName}>{t('chat.contextUsage.cost', 'Session cost')}</Text>
+              <Text style={styles.rowValue}>{cost}</Text>
+            </View>
+          </View>
         ) : null}
       </AnchoredDetailCardLayer>
     </>

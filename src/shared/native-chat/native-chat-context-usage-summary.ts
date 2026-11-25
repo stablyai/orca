@@ -1,4 +1,5 @@
 import type { StructuredAgentContextUsage } from '../agent-session/conversation-context/structured-agent-session-context-usage'
+import { formatCurrencyAmount } from '../agent-usage/display/currency-format'
 
 /** Reduce provider context breakdowns to the rows shown by the composer ring. */
 export type NativeChatContextUsageSummary = {
@@ -8,23 +9,26 @@ export type NativeChatContextUsageSummary = {
   estimated: boolean
   /** Largest first, as a share of the window; empty rows are dropped, and deferred rows sit outside the used total. */
   rows: readonly { name: string; tokens: number; percentage: number; deferred?: true }[]
+  cost?: StructuredAgentContextUsage['cost']
 }
 
 /** Past this the window is nearly spent, so the ring turns red to say so. */
 const CRITICAL_PERCENTAGE = 90
 
-/** What a ring draws: its fill clamped to 0-100, the red state, and the token counts as shown. */
+/** What a ring draws: its fill clamped to 0-100, the red state, the token counts and the session cost as shown. */
 export function contextUsageRingReadout(usage: NativeChatContextUsageSummary): {
   filled: number
   critical: boolean
   used: string
   window: string
+  cost: string | null
 } {
   return {
     filled: Math.min(Math.max(usage.percentage, 0), 100),
     critical: usage.percentage >= CRITICAL_PERCENTAGE,
     used: formatContextTokenCount(usage.usedTokens),
-    window: formatContextTokenCount(usage.windowTokens)
+    window: formatContextTokenCount(usage.windowTokens),
+    cost: usage.cost ? formatCurrencyAmount(usage.cost.amount, usage.cost.currency) : null
   }
 }
 
@@ -48,7 +52,8 @@ export function summarizeContextUsage(
         percentage: rowPercentage(row.tokens, usage.windowTokens),
         ...(row.deferred === true ? { deferred: true as const } : {})
       }))
-      .sort((left, right) => right.tokens - left.tokens)
+      .sort((left, right) => right.tokens - left.tokens),
+    ...(usage.cost ? { cost: usage.cost } : {})
   }
 }
 
