@@ -55,6 +55,7 @@ describe("a background subagent's reply streaming past its turn's result", () =>
     const continuation = attachContinuation(CLAUDE_RELAY_ITEM_CONTINUATION, 'r1', 8, {
       ...EMPTY_RELAY_ATTACH,
       replayThroughSeq: 9,
+      truncatedThrough: 8,
       openWork: { turn: [], task: [['t1']] }
     })
     expect(continuation).not.toBeNull()
