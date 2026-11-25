@@ -409,4 +409,5 @@ This guide covers worktrees, terminals, and handoffs on its own. At a gate below
 | Running as a bot that is setting up Google for its owner: paths, step checks, misses, recovery                               | `references/google-setup.md`     |
 | Running as a bot made to take over a bot from another app (OpenClaw, Hermes, OpenBot, an export): what to read, the plan     | `references/bot-import.md`       |
 | Creating, loading, installing, updating, approving, or publishing an Orca plugin, or adding a plugin catalog                 | `references/plugins.md`          |
+| Picking, claiming and finishing local tasks (`ORCA local-tasks`): the next/claim/renew loop                                  | `references/local-tasks.md`      |
 | Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                                      | invoke the `orca-emulator` skill |

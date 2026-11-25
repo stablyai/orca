@@ -4384,7 +4384,14 @@
           "linearViewNotFound": "Saved Linear view was not found.",
           "linearViewRestoreFailed": "Failed to restore saved Linear view."
         },
-        "shownCount_one": "{{count}} shown"
+        "shownCount_one": "{{count}} shown",
+        "localRefresh": "Refresh",
+        "localEmpty": "No task files in this folder yet.",
+        "localSourceLabel": "Local",
+        "localReady": "ready",
+        "localWaiting": "waiting on {{value0}}",
+        "localClaimed": "claimed by {{value0}}",
+        "localFlagged": "flagged: {{value0}}"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -10561,7 +10568,9 @@
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
           "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
-          "30255b39dc": "Task providers"
+          "30255b39dc": "Task providers",
+          "localLabel": "Local",
+          "localDescription": "Browse task files stored on this machine. No account needed."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
