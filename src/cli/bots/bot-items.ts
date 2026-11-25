@@ -1,7 +1,9 @@
 // `orca bot item …`: a bot's items over `bots.items.*`. Writes run from the bot's own chat, which the
 // host checks.
 import type { BotItemStatus } from '../../shared/bots/bot-items'
+import { BOTS_ITEM_SET_VERSION_RUNTIME_CAPABILITY } from '../../shared/bot-runtime-capabilities'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
@@ -99,12 +101,29 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
     })
   },
   'bot item set': async (ctx) => {
-    const { flags, cwd } = ctx
+    const { flags, cwd, client } = ctx
     const status = getOptionalStringFlag(flags, 'status')
+    const expectedVersion = getOptionalPositiveIntegerFlag(flags, 'expected-version')
     const ask = botItemAskFromFlags(ctx, BOT_ITEM_ASK_BOOLEAN_FLAGS)
     const comment = await readTextOrFileFlag(flags, cwd, 'comment', false)
+    if (flags.has('expected-version')) {
+      if (expectedVersion === undefined) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--expected-version needs a positive integer.'
+        )
+      }
+      const { result } = await client.call<RuntimeStatus>('status.get')
+      if (!result.capabilities?.includes(BOTS_ITEM_SET_VERSION_RUNTIME_CAPABILITY)) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca host cannot check an item version before writing. Update Orca on that host.'
+        )
+      }
+    }
     await write(ctx, 'bots.items.set', {
       item: itemId(flags),
+      ...(expectedVersion === undefined ? {} : { expectedVersion }),
       ...optional('title', getOptionalStringFlag(flags, 'title')),
       ...optional('description', await readTextOrFileFlag(flags, cwd, 'description', false)),
       ...optional('doneMeans', await readTextOrFileFlag(flags, cwd, 'done-means', false)),

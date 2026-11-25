@@ -47,6 +47,8 @@ export const BotItemsAdd = z.object({
 export const BotItemsSet = z.object({
   ...Caller,
   item: Item,
+  /** The item version that informed this write. Older hosts drop this field. */
+  expectedVersion: z.number().int().positive().optional(),
   title: OptionalString,
   description: OptionalPlainString,
   doneMeans: OptionalPlainString,

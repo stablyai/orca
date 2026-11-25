@@ -30,6 +30,10 @@ import {
 import { requireStructuredHost } from './bot-chat-session'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
+import {
+  createCanonicalSessionResolver,
+  readAgentSessionRecordStore
+} from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 
 /** A bot session's turn ended: settle the request it answered, and raise its group room. */
 export function botTurnEnded(
@@ -135,7 +139,14 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
         ),
         activeWorkSlot(runtime, botId)
       ])
-      const idle = work?.idle ? botIdleItemsNote(idleSaid, sessionId, work.idle) : null
+      const idle = work?.idle?.length
+        ? botIdleItemsNote(
+            idleSaid,
+            sessionId,
+            work.idle,
+            createCanonicalSessionResolver(readAgentSessionRecordStore())
+          )
+        : null
       const needsYou =
         work?.needsYou && ownerChat(sessionId)
           ? botNeedsYouInChatNote(needsYouSaid, sessionId, work.needsYou)

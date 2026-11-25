@@ -205,6 +205,7 @@ export function formatBotItemShow(view: BotItemShowView, now = Date.now()): stri
   const until = snoozedUntil(item, now)
   const lines = [
     `item ${item.number} · ${STATUS_WORDS[item.status]} · ${titleLine(item)} · ${chatWords(item)} · owner ${item.owner.name ?? item.owner.botId}`,
+    `Version: ${item.version}`,
     ...(until ? [`Snoozed ${snoozedWords(until)}.`] : []),
     ...(item.description ? [item.description] : []),
     ...(item.doneMeans ? [`Done means: ${item.doneMeans}`] : []),

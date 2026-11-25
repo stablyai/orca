@@ -37,6 +37,7 @@ export type BotItemAddInput = {
 }
 
 export type BotItemSetInput = {
+  expectedVersion?: number
   title?: string
   description?: string
   doneMeans?: string
