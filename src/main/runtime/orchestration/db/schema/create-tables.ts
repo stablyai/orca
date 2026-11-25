@@ -38,6 +38,9 @@ export function createTables(this: OrchestrationDb): void {
       'ALTER TABLE remote_dispatches ADD COLUMN task_settled_here INTEGER NOT NULL DEFAULT 0'
     )
   }
+  if (!this.hasColumn('peer_mail_messages', 'group_question')) {
+    this.db.exec('ALTER TABLE peer_mail_messages ADD COLUMN group_question TEXT')
+  }
   this.createMailboxDeliveryIndexesIfPossible()
   this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)
 }

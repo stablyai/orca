@@ -20,11 +20,10 @@ import { admitBotGroupMessageAttachments, botGroupMessageSummary } from './bot-g
 import { requireStructuredHost, type BotRunFields } from './bot-chat-session'
 import { requireGroupBots } from './bot-group-membership'
 import type { BotGroupRuntime } from './bot-group-runtime'
-import { settleDeadGroupMailTurns } from './bot-group-dead-mail-turns'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import { botGroupTurnBody } from './bot-group-turn-body'
-import { deliverRemoteAsks } from './bot-group-remote'
-import { collectRemoteAnswers, presentPageAnswers } from './bot-group-remote-answers'
+import { deliverRemoteAsks } from './bot-group-peer-delivery'
+import { activeGroupSpeaker, groupRouteRoot } from './bot-group-route-scope'
 import { remoteAsksFor } from './bot-group-remote-question'
 
 export type SendBotGroupMessageOptions = {
@@ -37,8 +36,6 @@ export async function sendBotGroupMessage(
   input: z.infer<typeof BotGroupSend>,
   options: SendBotGroupMessageOptions = {}
 ): Promise<BotGroupMessage> {
-  // The remote questions of a post stored by this call; a replayed send dispatches none.
-  let remoteBodies: Map<string, string> | null = null
   const message = await runKeyedSerializedOperation(groups.queues, input.groupId, async () => {
     const existing = groups.store.message(input.messageId)
     if (existing) {
@@ -109,7 +106,8 @@ export async function sendBotGroupMessage(
         turns,
         ...(remote ? { remoteAsks: remote.asks } : {})
       },
-      contexts
+      contexts,
+      remote?.bodies
     )
     groups.store.setLatest(
       group.id,
@@ -119,11 +117,12 @@ export async function sendBotGroupMessage(
     if (input.threadId) {
       titleThread(groups, input.threadId, stored)
     }
-    remoteBodies = remote?.bodies ?? null
     return stored
   })
   // Marks its asks in flight before any reader can see the post.
-  void deliverRemoteAsks(groups, message, remoteBodies)
+  if (message.remoteAsks?.length) {
+    void deliverRemoteAsks(groups, message)
+  }
   groups.changed(message.groupId)
   for (const turn of message.turns) {
     void deliverTurn(groups, message, turn)
@@ -187,6 +186,12 @@ function assertTurnActive(
   ) {
     throw new BotFailureError('groupTurnInactive')
   }
+  if (message.groupRequest) {
+    const root = groupRouteRoot(groups, message)
+    if (!root || !activeGroupSpeaker(groups, group, root, message.groupRequest.from)) {
+      throw new BotFailureError('groupTurnInactive')
+    }
+  }
   const bot = groups.runtime.bots.list().find((bot) => bot.id === turn.botId)
   if (!bot || bot.paused || !groups.runtime.bots.enabled()) {
     throw new BotFailureError('groupBotUnavailable')
@@ -238,7 +243,7 @@ export async function deliverTurn(
     beforeRun()
     // A hand-off serves the person's post it continues, whose words and images it carries.
     const original =
-      (message.mentioned && message.rootRequestId
+      ((message.mentioned || message.continuation) && message.rootRequestId
         ? groups.store.message(message.rootRequestId)
         : null) ?? message
     const body = botGroupTurnBody({
@@ -284,33 +289,20 @@ export function resumePendingGroupDeliveries(groups: BotGroupRuntime): void {
   if (!groups.runtime.bots.enabled()) {
     return
   }
-  for (const { message, turn } of groups.store.pending()) {
-    void deliverTurn(groups, message, turn)
+  for (const { id } of groups.store.pendingRows()) {
+    const message = groups.store.operationMessage(id)
+    const turn = message?.turns.find((candidate) => candidate.operationId === id)
+    if (message && turn) {
+      void deliverTurn(groups, message, turn)
+    }
   }
-}
-
-/** One room's latest page; its `group` carries that room's member sessions. */
-export function readBotGroup(
-  groups: BotGroupRuntime,
-  groupId: string,
-  beforeSequence?: number,
-  threadId?: string
-) {
-  const group = groups.store.room(groupId, threadId)
-  const messages = collectRemoteAnswers(
-    groups,
-    groups.store.roomMessages(groupId, threadId, 40, beforeSequence)
+  const posts = new Set(
+    groups.store.routes.pendingRemoteDeliveries().map(({ messageId }) => messageId)
   )
-  settleDeadGroupMailTurns(groups, messages)
-  return {
-    group,
-    // Saved replies feed later posts' context only; the room renders each turn from its chat.
-    messages: presentPageAnswers(messages).map((message) => ({
-      ...message,
-      turns: message.turns.map(({ reply: _reply, ...turn }) => turn)
-    })),
-    hasEarlier:
-      messages.length > 0 &&
-      groups.store.roomMessages(groupId, threadId, 1, messages[0].sequence).length > 0
+  for (const id of posts) {
+    const message = groups.store.message(id)
+    if (message) {
+      void deliverRemoteAsks(groups, message)
+    }
   }
 }

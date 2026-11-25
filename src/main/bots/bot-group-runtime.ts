@@ -24,11 +24,11 @@ import {
 } from './bot-group-membership'
 import {
   assertGroupQueuedMessageAllowed,
-  readBotGroup,
   resumePendingGroupDeliveries,
   sendBotGroupMessage,
   type SendBotGroupMessageOptions
 } from './bot-group-delivery'
+import { readBotGroup } from './bot-group-reader'
 import { stopBotGroup } from './bot-group-stop'
 import { pausedBotChatHoldsMail } from './bot-paused-mail'
 import {

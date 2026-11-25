@@ -319,6 +319,12 @@ export function BotGroupChat({
                           runtimeContext={roomContext?.runtimeContext ?? null}
                           onScrollMessageToTop={follow.scrollMessageToTop}
                         />
+                      ) : message.remoteAuthor ? (
+                        <BotGroupRemoteAsk
+                          postId={message.id}
+                          author={message.remoteAuthor}
+                          text={message.text}
+                        />
                       ) : (
                         <BotGroupPeerRequestLine message={message} />
                       )}

@@ -9,3 +9,7 @@ for deliberate fan-out.
 To reach an agent on a paired server, use `send --on <server>`; a reply to mail
 from another server needs no flag. See
 [Placement and remote execution](placement-and-remote.md).
+
+For a shared bot group's incoming question, use `reply --id <msg_id>` once. Then from the same
+Home Chat use `group-post --id <msg_id> --body-file <file>` to queue a separate room post.
+See [shared group conversations](../../orca-cli/references/bots.md#shared-groups-with-bots-on-paired-computers).

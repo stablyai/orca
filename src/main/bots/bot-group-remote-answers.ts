@@ -3,7 +3,8 @@ import type { BotGroupMessage } from '../../shared/bots/bot-group'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { botGroupRoomMailAddress } from '../../shared/bots/bot-group-room-mail'
 import type { BotGroupRuntime } from './bot-group-runtime'
-import { isRemoteAskInFlight } from './bot-group-remote'
+import { isRemoteAskInFlight } from './bot-group-peer-delivery'
+import { groupRemoteSpeech, routeRemoteGroupMail } from './bot-group-remote-mail-routing'
 
 // How remote members' answers, which come back by mail, reach their posts and the room's readers.
 
@@ -12,6 +13,7 @@ const SAVED_ANSWER_MAX = 64_000
 /** A room page's answer text, so a page of long answers stays far under the reply limit. */
 const PAGE_ANSWER_BUDGET = 1_000_000
 const PAGE_ANSWER_MAX = 16_000
+const GROUP_POST_PAYLOAD = '{"groupPost":true}'
 
 /** Asks as a reader sees them: a `sending` ask whose handover is no longer running may or may not
  *  have reached its computer; its answer still lands if one comes. Long answers, remote ones and
@@ -29,12 +31,16 @@ export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGro
     const turns = message.turns.some((turn) => turn.answer)
       ? message.turns.map((turn) => (turn.answer ? { ...turn, answer: take(turn.answer) } : turn))
       : message.turns
+    const post =
+      message.remoteAuthor || message.continuation
+        ? { ...message, text: take(message.text) }
+        : message
     if (!message.remoteAsks?.length) {
-      shown.set(message.id, { ...message, turns })
+      shown.set(message.id, { ...post, turns })
       continue
     }
     shown.set(message.id, {
-      ...message,
+      ...post,
       turns,
       remoteAsks: message.remoteAsks.map((ask) => {
         const state =
@@ -85,6 +91,8 @@ export function collectRemoteAnswers(
      JOIN peer_mail_conversations c ON c.conversation_id = p.conversation_id
      WHERE c.role = 'home' AND c.local_party = ? AND c.environment_id = ?
        AND m.to_handle = ? AND m.thread_id = ?
+       AND (?5 IS NULL OR c.conversation_id = ?5)
+       AND m.payload IS NOT ?
      ORDER BY m.sequence`
   )
   const updated = new Map<string, BotGroupMessage>()
@@ -106,11 +114,20 @@ export function collectRemoteAnswers(
           address,
           ask.environmentId,
           address,
-          ask.requestId
+          ask.requestId,
+          ask.conversationId ?? null,
+          GROUP_POST_PAYLOAD
         ) as MessageRow[]
         read.push(...rows.filter((row) => row.read === 0).map((row) => row.id))
-        const answer = rows.find((row) => isBotAnswer(row, ask.requestId))
+        const answer = rows.find(
+          (row) =>
+            isBotAnswer(row, ask.requestId) &&
+            (!ask.interactive || groupRemoteSpeech(groups, current, ask, row))
+        )
         if (answer) {
+          if (ask.interactive) {
+            groups.store.routes.stageMailRoute(answer.id, current.groupId, ask.requestId, false)
+          }
           changed = true
           return {
             ...ask,
@@ -122,7 +139,7 @@ export function collectRemoteAnswers(
             }
           }
         }
-        if (rows.length > 0 && !ask.reply) {
+        if (rows.some((row) => !isBotAnswer(row, ask.requestId)) && !ask.reply) {
           changed = true
           return { ...ask, state: 'sent' as const, reply: { kind: 'notice' as const } }
         }
@@ -191,10 +208,13 @@ export function remoteRoomMailArrived(groups: BotGroupRuntime, groupId: string):
   try {
     const db = groups.runtime.getOrchestrationDb()
     const rows = db.db
-      .prepare('SELECT id, thread_id FROM messages WHERE to_handle = ? AND read = 0')
+      .prepare(
+        'SELECT id, thread_id, payload FROM messages WHERE to_handle = ? AND read = 0 ORDER BY sequence'
+      )
       .all(botGroupRoomMailAddress(groupId))
     if (rows.length === 0) {
       groups.changed(groupId)
+      drainRoomRoutes(groups, groupId)
       return
     }
     if (!db.db.prepare('SELECT 1 FROM bot_groups WHERE id = ?').get(groupId)) {
@@ -211,6 +231,9 @@ export function remoteRoomMailArrived(groups: BotGroupRuntime, groupId: string):
       if (place === 'settle') {
         settled.push(String(row.id))
       } else if (place !== 'wait') {
+        if (row.payload === GROUP_POST_PAYLOAD) {
+          groups.store.routes.stageMailRoute(String(row.id), groupId, String(row.thread_id), true)
+        }
         const entry = posts.get(place.post.id) ?? { post: place.post, mail: [] }
         entry.mail.push(String(row.id))
         posts.set(place.post.id, entry)
@@ -232,6 +255,15 @@ export function remoteRoomMailArrived(groups: BotGroupRuntime, groupId: string):
     console.warn('[bot-groups] could not read a remote member answer', error)
   }
   groups.changed(groupId)
+  drainRoomRoutes(groups, groupId)
+}
+
+function drainRoomRoutes(groups: BotGroupRuntime, groupId: string): void {
+  if (groups.store.routes.pendingMailRoutes(groupId).length > 0) {
+    void routeRemoteGroupMail(groups, groupId).catch((error: unknown) =>
+      console.warn('[bot-groups] could not route a remote group post', error)
+    )
+  }
 }
 
 /** At startup: settle room mail that arrived while this build wasn't running, as if it had just
@@ -244,6 +276,8 @@ export function settleStoredRoomMail(groups: BotGroupRuntime): void {
       const groupId = String(row.id)
       if (unread.get(botGroupRoomMailAddress(groupId))) {
         remoteRoomMailArrived(groups, groupId)
+      } else {
+        drainRoomRoutes(groups, groupId)
       }
     }
   } catch (error) {

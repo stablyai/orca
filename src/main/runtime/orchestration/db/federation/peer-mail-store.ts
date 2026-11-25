@@ -20,6 +20,7 @@ export type PeerMailMessageRow = {
   conversation_id: string
   sender_label: string
   remote_party: string | null
+  group_question: string | null
 }
 
 /** The conversation this Orca opened for one local agent with one paired server's current pairing; reused for every send. */
@@ -178,15 +179,16 @@ export function linkPeerMailMessage(
     messageId: string
     senderLabel: string
     environmentId?: string
+    groupQuestion?: string
   }
 ): void {
   openPeerConversation(this, params.conversationId, params.peerFingerprint, params.environmentId)
   this.db
     .prepare(
-      `INSERT OR IGNORE INTO peer_mail_messages (message_id, conversation_id, sender_label, remote_party)
-       VALUES (?, ?, ?, NULL)`
+      `INSERT OR IGNORE INTO peer_mail_messages (message_id, conversation_id, sender_label, remote_party, group_question)
+       VALUES (?, ?, ?, NULL, ?)`
     )
-    .run(params.messageId, params.conversationId, params.senderLabel)
+    .run(params.messageId, params.conversationId, params.senderLabel, params.groupQuestion ?? null)
 }
 
 /** Stores mail that crossed from a paired Orca once; a replayed id is a duplicate, even after a reset removed its row. */

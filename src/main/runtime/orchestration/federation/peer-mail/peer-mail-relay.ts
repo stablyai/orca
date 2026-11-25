@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { botGroupOfRoomMailAddress } from '../../../../../shared/bots/bot-group-room-mail'
 import {
   PeerMailItem,
   PeerMailRelayPayload
@@ -9,7 +10,11 @@ import type { MessageRow } from '../../db/orchestration-records'
 import { federationRelayRetryDelayMs } from '../relay/federation-relay-scheduler'
 import { HeldPeerConversations } from './held-peer-conversations'
 import { storePeerReply } from './peer-reply-store'
-import type { OrchestrationEnvironmentTransport } from '../environment-transport'
+import { peerMailPairing } from './peer-mail-delivery'
+import type {
+  OrchestrationEnvironmentTransport,
+  OrchestrationWorkerServer
+} from '../environment-transport'
 import { peerMailRelayEnvironments, peerMailRelayWants } from './peer-mail-relay-environments'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
@@ -185,7 +190,9 @@ export class PeerMailRelay {
           ...(holdBack.length > 0 ? { holdBack } : {}),
           ...asksLoop.pairedServerPullParams(loop.asks)
         },
-        PULL_TIMEOUT_MS
+        PULL_TIMEOUT_MS,
+        undefined,
+        { expectedEnvironmentPairingRevision: server.pairingRevision }
       )
       .catch((error: unknown) => {
         if (isRemoteServerUnreachable(error)) {
@@ -226,7 +233,7 @@ export class PeerMailRelay {
       try {
         const stored = (await asksLoop.importAsk(this.runtime, loop.db, loop.asks, item))
           ? undefined
-          : await this.importItem(loop.db, environmentId, item)
+          : await this.importItem(loop.db, server, item)
         // Wake before the ack: a replay after a failed ack finds the row stored and stays quiet.
         if (stored) {
           this.runtime.notifyMessageArrived(stored.to, stored.type)
@@ -253,7 +260,9 @@ export class PeerMailRelay {
             throughSequence
           }))
         },
-        15_000
+        15_000,
+        undefined,
+        { expectedEnvironmentPairingRevision: server.pairingRevision }
       )
     }
     const [failure] = stuck.values()
@@ -287,41 +296,33 @@ export class PeerMailRelay {
   /** A Run this Orca coordinates there owns its conversation's items; any other is a peer-mail reply. */
   private async importItem(
     db: OrchestrationDb,
-    environmentId: string,
+    server: OrchestrationWorkerServer,
     item: z.infer<typeof PulledPeerMail>['items'][number]
   ): Promise<{ to: string; type: MessageRow['type'] } | undefined> {
     if (getRemoteRunLink(db, item.conversationId)) {
-      const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
       return importRemoteOwnedItem(db, remoteServerPin(server), item, {
         name: server.name,
         notify: (handle, type) => this.runtime.notifyMessageArrived(handle, type),
         deletedChat: deletedCoordinatorChat
       })
     }
-    const stored = this.importReply(db, environmentId, item)
-    return stored ? { to: stored.to_handle, type: stored.type } : undefined
-  }
-
-  /** Stores a pulled reply once; a replay after a crash before the ack finds the stored row. */
-  private importReply(
-    db: OrchestrationDb,
-    environmentId: string,
-    item: z.infer<typeof PulledPeerMail>['items'][number]
-  ): MessageRow | undefined {
     const conversation = db.getPeerMailConversation(item.conversationId)
     const payload = PeerMailRelayPayload.safeParse(safeJson(item.payload))
     if (
       conversation?.role !== 'home' ||
-      conversation.environment_id !== environmentId ||
+      conversation.environment_id !== server.environmentId ||
+      (botGroupOfRoomMailAddress(conversation.local_party ?? '') !== null &&
+        conversation.peer_fingerprint !== peerMailPairing(server)) ||
       !payload.success
     ) {
       // Nothing here can read it; acknowledging keeps the server's queue moving.
       console.warn(
-        `[orchestration] Dropped unreadable reply ${item.messageId} from ${environmentId}`
+        `[orchestration] Dropped unreadable reply ${item.messageId} from ${server.environmentId}`
       )
       return undefined
     }
-    return storePeerReply(this.runtime, db, conversation, item.messageId, payload.data)
+    const stored = storePeerReply(this.runtime, db, conversation, item.messageId, payload.data)
+    return stored ? { to: stored.to_handle, type: stored.type } : undefined
   }
 }
 

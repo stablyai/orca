@@ -142,7 +142,8 @@ CREATE TABLE IF NOT EXISTS peer_mail_messages (
   message_id      TEXT PRIMARY KEY,
   conversation_id TEXT NOT NULL,
   sender_label    TEXT NOT NULL,
-  remote_party    TEXT
+  remote_party    TEXT,
+  group_question  TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_peer_mail_messages_sender ON peer_mail_messages(sender_label);

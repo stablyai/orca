@@ -21,29 +21,42 @@ export function stopBotGroup(
     const members = previous.members.map((member) =>
       stopping(member) ? { ...member, stoppedThroughSequence: sequence } : member
     )
-    // Remote members can't be stopped from here: their unanswered asks only say so.
-    for (const message of groups.store.roomMessages(groupId, threadId, 40)) {
-      const stops = (ask: NonNullable<typeof message.remoteAsks>[number]) =>
-        !ask.reply && !ask.stopped && stopping({ botId: botGroupRemoteKey(ask) })
-      if (message.remoteAsks?.some(stops)) {
-        groups.store.update({
-          ...message,
-          remoteAsks: message.remoteAsks.map((ask) =>
-            stops(ask) ? { ...ask, stopped: true as const } : ask
-          )
-        })
-      }
-    }
-    groups.store.put({
-      ...group,
-      revision: group.revision + 1,
-      ...(threadId
-        ? {
-            threads: group.threads?.map((thread) =>
-              thread.id === threadId ? { ...thread, members } : thread
+    groups.store.transaction(() => {
+      // Remote members can't be stopped from here: their unanswered asks only say so.
+      for (const message of groups.store.roomMessages(groupId, threadId, 40)) {
+        const stops = (ask: NonNullable<typeof message.remoteAsks>[number]) =>
+          !ask.reply && !ask.stopped && stopping({ botId: botGroupRemoteKey(ask) })
+        if (message.remoteAsks?.some(stops)) {
+          groups.store.update({
+            ...message,
+            remoteAsks: message.remoteAsks.map((ask) =>
+              stops(ask) ? { ...ask, stopped: true as const } : ask
             )
-          }
-        : { members })
+          })
+        }
+      }
+      groups.store.put({
+        ...group,
+        revision: group.revision + 1,
+        ...(group.remoteMembers?.length
+          ? {
+              remoteStops: {
+                ...group.remoteStops,
+                [threadId ?? '']: {
+                  ...group.remoteStops?.[threadId ?? ''],
+                  [botId ?? '']: sequence
+                }
+              }
+            }
+          : {}),
+        ...(threadId
+          ? {
+              threads: group.threads?.map((thread) =>
+                thread.id === threadId ? { ...thread, members } : thread
+              )
+            }
+          : { members })
+      })
     })
     groups.changed(group.id)
     const host = await requireStructuredHost(groups.runtime)

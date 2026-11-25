@@ -22,6 +22,7 @@ export async function storePeerMailForAgent<R>(
     /** The server this Orca dials that opened the conversation, for mail it pulled. */
     environmentId?: string
     senderSnapshot: string | undefined
+    groupContinuation?: () => string
     /** Whether the resolved recipient may take it; otherwise it is dropped with a warning. */
     admits?: (to: string) => boolean
   },
@@ -46,6 +47,13 @@ export async function storePeerMailForAgent<R>(
     throw new OrchestrationError(
       recipient.code,
       `${recipient.message} Nothing was delivered.`,
+      NOTHING_DELIVERED
+    )
+  }
+  if (params.groupContinuation && recipient.to !== params.groupContinuation()) {
+    throw new OrchestrationError(
+      'request_mismatch',
+      'The group answer’s receiving Home Chat changed. Nothing was delivered.',
       NOTHING_DELIVERED
     )
   }
@@ -81,7 +89,8 @@ export async function storePeerMailForAgent<R>(
       priority: params.priority,
       threadId: params.threadId,
       runId: recipient.runId,
-      answerSenderSnapshot: params.senderSnapshot
+      answerSenderSnapshot: params.senderSnapshot,
+      ...(params.groupContinuation ? { payload: '{"groupContinuation":true}' } : {})
     }
   })
   if (!stored.duplicate) {

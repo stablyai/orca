@@ -7,23 +7,18 @@ import {
 } from '../../shared/bots/bot-group-schema'
 import type Database from '../sqlite/sync-database'
 import { botGroupRoom } from '../../shared/bots/bot-group'
-import type {
-  BotGroup,
-  BotGroupLatest,
-  BotGroupMember,
-  BotGroupMessage,
-  BotGroupTurn
-} from '../../shared/bots/bot-group'
+import type { BotGroup, BotGroupLatest, BotGroupMessage } from '../../shared/bots/bot-group'
 import { createBotGroupTables, withoutClearedRoster } from './bot-group-store-tables'
+import { BotGroupRouteQueue } from './bot-group-route-queue'
+import { findCurrentGroupMember } from './bot-group-route-scope'
 
 // The row's sequence is the message order; the record keeps everything else.
 const MessageRecordSchema = BotGroupMessageSchema.omit({ sequence: true })
 
-export type PendingGroupTurn = { message: BotGroupMessage; turn: BotGroupTurn }
-
 export class BotGroupStore {
   /** False when this open couldn't index older posts' questions, so their mail must wait. */
   readonly remoteAsksIndexed: boolean
+  readonly routes = new BotGroupRouteQueue(this)
 
   constructor(readonly db: Database) {
     this.remoteAsksIndexed = createBotGroupTables(db)
@@ -124,19 +119,8 @@ export class BotGroupStore {
   }
 
   /** The group room whose current member owns this native session, as `botGroupRoom` sees it. */
-  memberOf(
-    sessionId: string
-  ): { group: BotGroup; member: BotGroupMember; threadId: string | undefined } | null {
-    for (const group of this.list()) {
-      for (const threadId of [undefined, ...(group.threads ?? []).map((thread) => thread.id)]) {
-        const room = botGroupRoom(group, threadId)
-        const member = room.members.find((member) => member.sessionId === sessionId)
-        if (member) {
-          return { group: room, member, threadId }
-        }
-      }
-    }
-    return null
+  memberOf(sessionId: string) {
+    return findCurrentGroupMember(this.list(), sessionId)
   }
 
   room(groupId: string, threadId: string | undefined): BotGroup {
@@ -176,13 +160,7 @@ export class BotGroupStore {
     limit = 40,
     beforeSequence = Number.MAX_SAFE_INTEGER
   ): BotGroupMessage[] {
-    return this.db
-      .prepare(
-        'SELECT sequence, record FROM bot_group_messages WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT ?'
-      )
-      .all(groupId, beforeSequence, limit)
-      .toReversed()
-      .map((row) => this.messageRow(row))
+    return this.readMessages(groupId, limit, beforeSequence)
   }
 
   /** One room's messages: a thread's, or the original room's when `threadId` is absent. */
@@ -192,14 +170,24 @@ export class BotGroupStore {
     limit = 40,
     beforeSequence = Number.MAX_SAFE_INTEGER
   ): BotGroupMessage[] {
-    return this.db
-      .prepare(
-        `SELECT sequence, record FROM bot_group_messages WHERE group_id = ? AND sequence < ?
-           AND coalesce(json_extract(record, '$.threadId'), '') = ? ORDER BY sequence DESC LIMIT ?`
-      )
-      .all(groupId, beforeSequence, threadId ?? '', limit)
-      .toReversed()
-      .map((row) => this.messageRow(row))
+    return this.readMessages(groupId, limit, beforeSequence, threadId ?? '')
+  }
+
+  private readMessages(
+    groupId: string,
+    limit: number,
+    beforeSequence: number,
+    thread?: string
+  ): BotGroupMessage[] {
+    const scoped =
+      thread === undefined ? '' : "AND coalesce(json_extract(record, '$.threadId'), '') = ?"
+    const select = this.db.prepare(`SELECT sequence, record FROM bot_group_messages
+      WHERE group_id = ? AND sequence < ? ${scoped} ORDER BY sequence DESC LIMIT ?`)
+    const rows =
+      thread === undefined
+        ? select.all(groupId, beforeSequence, limit)
+        : select.all(groupId, beforeSequence, thread, limit)
+    return rows.toReversed().map((row) => this.messageRow(row))
   }
 
   message(id: string): BotGroupMessage | null {
@@ -225,7 +213,11 @@ export class BotGroupStore {
   }
 
   /** Stores a post with each turn's pending context, owed until native admission. */
-  append(message: Omit<BotGroupMessage, 'sequence'>, contexts = new Map<string, string>()) {
+  append(
+    message: Omit<BotGroupMessage, 'sequence'>,
+    contexts = new Map<string, string>(),
+    remoteBodies?: ReadonlyMap<string, string>
+  ) {
     this.transaction(() => {
       this.db
         .prepare('INSERT INTO bot_group_messages(id, group_id, record) VALUES (?, ?, ?)')
@@ -236,16 +228,16 @@ export class BotGroupStore {
             'INSERT OR IGNORE INTO bot_group_remote_asks(request_id, message_id) VALUES (?, ?)'
           )
           .run(requestId, message.id)
+        const body = remoteBodies?.get(requestId)
+        if (body !== undefined) {
+          this.routes.queueRemoteDelivery(requestId, message.groupId, message.id, body)
+        }
       }
       for (const { operationId } of message.turns) {
         this.link(operationId, message.id)
         const context = contexts.get(operationId)
         if (context !== undefined) {
-          this.db
-            .prepare(
-              'INSERT INTO bot_group_pending(operation_id, group_id, context) VALUES (?, ?, ?)'
-            )
-            .run(operationId, message.groupId, context)
+          this.stagePending(operationId, message.groupId, context)
         }
       }
     })
@@ -293,16 +285,20 @@ export class BotGroupStore {
     return row ? String(row.operation_id) : null
   }
 
-  /** Every turn, in any group, whose native admission is still owed. */
-  pending(): PendingGroupTurn[] {
+  stagePending(id: string, groupId: string, context: string): void {
+    this.db
+      .prepare(
+        'INSERT OR IGNORE INTO bot_group_pending(operation_id, group_id, context) VALUES (?, ?, ?)'
+      )
+      .run(id, groupId, context)
+  }
+
+  pendingRows(groupId?: string, prefix?: string) {
     return this.db
-      .prepare('SELECT operation_id FROM bot_group_pending')
-      .all()
-      .flatMap((row) => {
-        const message = this.operationMessage(String(row.operation_id))
-        const turn = message?.turns.find((turn) => turn.operationId === row.operation_id)
-        return message && turn ? [{ message, turn }] : []
-      })
+      .prepare(`SELECT operation_id${prefix ? ', context' : ''} FROM bot_group_pending
+      WHERE operation_id ${prefix ? 'GLOB' : 'NOT GLOB'} ? AND (?2 IS NULL OR group_id = ?2) ORDER BY rowid`)
+      .all(prefix ? `${prefix}*` : 'remote-*', groupId ?? null)
+      .map((row) => ({ id: String(row.operation_id), context: String(row.context ?? '') }))
   }
 
   pendingContext(operationId: string): string | null {
@@ -312,11 +308,9 @@ export class BotGroupStore {
     return row ? String(row.context) : null
   }
 
-  delivered(operationIds: readonly string[]): void {
+  delivered(operationIds: readonly string[]): number {
     const remove = this.db.prepare('DELETE FROM bot_group_pending WHERE operation_id = ?')
-    for (const operationId of operationIds) {
-      remove.run(operationId)
-    }
+    return operationIds.reduce((count, id) => count + Number(remove.run(id).changes), 0)
   }
 
   transaction(work: () => void): void {

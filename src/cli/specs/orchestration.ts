@@ -124,6 +124,18 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'group-post'],
+    summary: 'Queue a separate follow-up in the group that asked you',
+    usage:
+      'orca orchestration group-post --id <group_question_msg_id> (--body <text> | --body-file <path|->) [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'body', 'body-file', 'retry-request'],
+    notes: [
+      'Run from the receiving bot’s Home Chat after its first orchestration reply. Use the ID of the incoming group question, not the reply ID.',
+      'The group host and that bot’s computer must both support group conversations. Queued does not mean the host posted it.',
+      'Use @Name to ask a current group member; a post without a mention does not wake another bot.'
+    ]
+  },
+  {
     path: ['orchestration', 'inbox'],
     summary: 'Show messages across (or for) recipients',
     usage:

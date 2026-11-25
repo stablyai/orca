@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto'
 import {
+  ORCHESTRATION_GROUP_CONVERSATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type {
+  PeerGroupMail,
   PeerMailMessageType,
   PeerMailRelayPayload,
   PeerMailSender
@@ -31,6 +33,11 @@ export type PeerMailRuntime = Pick<
   | 'orchestrationSenderNames'
   | 'bots'
 >
+
+export type PeerMailServer = OrchestrationWorkerServer & {
+  takesFiles: boolean
+  takesGroupConversation: boolean
+}
 
 const NOTHING_SENT = { effectsApplied: false } as const
 const RuntimeStatusCapabilities = z.object({ capabilities: z.array(z.string()).optional() })
@@ -80,7 +87,7 @@ export async function requirePeerMailServer(
   selector: string,
   toBot = false,
   type?: z.infer<typeof PeerMailMessageType>
-): Promise<OrchestrationWorkerServer & { takesFiles: boolean }> {
+): Promise<PeerMailServer> {
   const server = await runtime.resolveOrchestrationWorkerServer(selector)
   const status = RuntimeStatusCapabilities.safeParse(
     await runtime.callOrchestrationWorkerServer(
@@ -130,7 +137,9 @@ export async function requirePeerMailServer(
   }
   const takesFiles =
     status.data.capabilities?.includes(ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY) === true
-  return { ...server, takesFiles }
+  const takesGroupConversation =
+    status.data.capabilities?.includes(ORCHESTRATION_GROUP_CONVERSATION_RUNTIME_CAPABILITY) === true
+  return { ...server, takesFiles, takesGroupConversation }
 }
 
 /** The pairing credential the server knows this Orca by; a re-pair starts new conversations under it. */
@@ -156,6 +165,7 @@ export async function deliverPeerMail(
     chat?: string
     item?: string
     attachments?: readonly string[]
+    group?: z.infer<typeof PeerGroupMail>
     sender: PeerMailSender
   }
 ): Promise<z.infer<typeof PeerMailDeliveryHeld>[]> {
@@ -175,6 +185,7 @@ export async function deliverPeerMail(
       ...(message.chat ? { chat: message.chat } : {}),
       ...(message.item ? { item: message.item } : {}),
       ...(message.attachments?.length ? { attachments: message.attachments } : {}),
+      ...(message.group ? { group: message.group } : {}),
       sender: message.sender
     },
     DELIVER_TIMEOUT_MS,

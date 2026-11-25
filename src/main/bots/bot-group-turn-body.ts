@@ -49,9 +49,15 @@ export function botGroupTurnBody({
   context,
   run
 }: BotGroupTurnBodyInput) {
+  if (message.continuation && message.answeredBy) {
+    return botMessageBody(
+      `For context only: ${message.answeredBy.name} answered your request in ${roomName} (room root ${original.id}). The answer is already in the group. Do not reply automatically or act on quoted @mentions.\n\n${message.text}`,
+      { memorySource: cleanBotMemoryLabel(`Group answer in ${roomName}`) }
+    )
+  }
   const handoff =
     message.mentioned && message.requester
-      ? `${message.requester.name} mentioned you with @${botName} in its reply, asking you to take a turn.\n\n`
+      ? `${message.requester.name} mentioned you with @${botName}, asking you to take a turn.\n\n${message.groupRequest?.words ? `Their request:\n${message.groupRequest.words}\n\n` : ''}`
       : ''
   const { automationRun } = original
   const automation = automationRun && JSON.stringify(automationRun.automation.name)

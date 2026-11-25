@@ -14,12 +14,39 @@ import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { requirePeerMailCarrier } from '../identity/agent-server-route'
+import { ORCHESTRATION_GROUP_CONVERSATION_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { resolveOrchestrationTerminalHandle } from '../identity/terminal-identity'
 import { withReceiptNext } from '../receipt-next-text'
 import { printOrchestrationResult } from '../agent-view'
 import { formatMessageViewText, toMessageView, type MessageView } from './message-agent-views'
 
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
+  'orchestration group-post': async ({ flags, client, cwd, json }) => {
+    const { result: status } = await client.call<RuntimeStatus>('status.get')
+    if (!status.capabilities?.includes(ORCHESTRATION_GROUP_CONVERSATION_RUNTIME_CAPABILITY)) {
+      throw new RuntimeClientError(
+        'server_mail_unsupported',
+        'Update Orca on this bot’s computer to post group follow-ups. Nothing was queued.'
+      )
+    }
+    const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const result = await callOrchestrationMutation<{ messageId: string; status: 'queued' }>(
+      client,
+      flags,
+      'orchestration.groupPost',
+      {
+        id: getRequiredStringFlag(flags, 'id'),
+        body: await readTextOrFileFlag(flags, cwd, 'body', true),
+        from
+      }
+    )
+    printResult(
+      result,
+      json,
+      ({ messageId }) => `Queued ${messageId} for the group host; not yet confirmed in the room.`
+    )
+  },
   'orchestration reply': async (ctx) => {
     const { flags, client, cwd, json } = ctx
     await requirePeerMailCarrier(ctx)

@@ -144,18 +144,9 @@ export function botGroupReplyMentions(
 ): { id: string; start: number }[] {
   const unquoted = prose.replace(QUOTED_ROOM_HISTORY, (quoted) => ' '.repeat(quoted.length))
   const named = new Map<string, number>()
-  // Names are matched against the whole room, so "@Sage Bot" never wakes a local "Sage"; but a
-  // hand-off wakes only this computer's members: a remote member is never asked by another bot.
-  const local = new Set(group.members.map((member) => member.botId))
   for (const mention of roomMentions(unquoted, group, bots, REPLY_MENTION_END, QUOTED_STRINGS)) {
     const [id] = mention.ids
-    if (
-      mention.match === 'member' &&
-      id !== undefined &&
-      local.has(id) &&
-      id !== speakerId &&
-      !named.has(id)
-    ) {
+    if (mention.match === 'member' && id !== undefined && id !== speakerId && !named.has(id)) {
       named.set(id, mention.start)
     }
   }

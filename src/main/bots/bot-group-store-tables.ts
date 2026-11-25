@@ -11,8 +11,12 @@ import type { BotGroup } from '../../shared/bots/bot-group'
  */
 const KEPT_FIELDS = [
   ['bot_groups', 'remoteMembers'],
+  ['bot_groups', 'remoteStops'],
   ['bot_group_messages', 'images'],
-  ['bot_group_messages', 'remoteAsks']
+  ['bot_group_messages', 'remoteAsks'],
+  ['bot_group_messages', 'remoteAuthor'],
+  ['bot_group_messages', 'groupRequest'],
+  ['bot_group_messages', 'continuation']
 ] as const
 
 function keepFieldTrigger(table: string, field: string): string {

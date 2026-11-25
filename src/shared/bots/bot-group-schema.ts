@@ -42,6 +42,7 @@ export const BotGroupRemoteMemberSchema = z.object({
   computer: z.string().min(1),
   /** The room's newest post when it joined: earlier history is what it may be shown on joining. */
   joinedAfter: z.number().int().nonnegative(),
+  pairing: z.string().optional(),
   name: BotNameSchema,
   avatar: z.string().nullable(),
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
@@ -51,7 +52,7 @@ export const BotGroupRemoteMemberSchema = z.object({
 
 /** Bots on paired computers, as the desktop listed them for a create or edit. */
 export const BotGroupRemoteBotsSchema = z
-  .array(BotGroupRemoteMemberSchema.omit({ computer: true, joinedAfter: true }))
+  .array(BotGroupRemoteMemberSchema.omit({ computer: true, joinedAfter: true, pairing: true }))
   .max(31)
 
 /** Sessions of members that left a room: its history still opens there; they grant no access. */
@@ -88,6 +89,10 @@ export const BotGroupSchema = z.object({
   /** Bots on paired computers, asked in every room of the group. An older or unreadable list is
    *  dropped, never the group. */
   remoteMembers: z.array(BotGroupRemoteMemberSchema).optional().catch(undefined),
+  /** Remote routing cutoff, keyed by thread (empty for the main room) and member (empty for all). */
+  remoteStops: z
+    .record(z.string(), z.record(z.string(), z.number().int().nonnegative()))
+    .optional(),
   formerSessionIds: FormerSessionIds,
   threads: z.array(BotGroupThreadSchema).optional(),
   replyMode: BotGroupReplyMode,
@@ -132,6 +137,8 @@ const BotGroupTurnSchema = z.object({
  *  flight never left this computer. An answer replaces a notice, never the reverse. */
 export const BotGroupRemoteAskSchema = BotGroupRemoteMemberSchema.extend({
   requestId: z.string().min(1),
+  conversationId: z.string().optional(),
+  interactive: z.literal(true).optional(),
   /** `failed`: refused before that computer took it. `unknown`: it may have; an answer still lands. */
   state: z.enum(['sending', 'sent', 'failed', 'unknown']),
   error: z.string().optional(),
@@ -160,6 +167,26 @@ export const BotGroupMessageImageSchema = z.object({
   bytes: z.number().int().nonnegative()
 })
 
+const GroupSpeaker = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('local'),
+    botId: z.string(),
+    name: z.string(),
+    sessionId: z.string()
+  }),
+  z.object({
+    kind: z.literal('remote'),
+    member: BotGroupRemoteMemberSchema,
+    conversationId: z.string(),
+    requestId: z.string()
+  })
+])
+export type BotGroupSpeaker = z.infer<typeof GroupSpeaker>
+
+export type BotGroupRemoteCard =
+  | { ask: BotGroupRemoteAsk }
+  | { postId: string; author: BotGroupRemoteMember; text: string }
+
 export const BotGroupMessageSchema = z.object({
   id: z.string().min(1),
   groupId: z.string().min(1),
@@ -175,6 +202,16 @@ export const BotGroupMessageSchema = z.object({
   createdAt: z.number(),
   rootRequestId: z.string().optional(),
   rootSequence: z.number().optional(),
+  remoteAuthor: BotGroupRemoteMemberSchema.optional(),
+  groupRequest: z
+    .object({
+      from: GroupSpeaker,
+      remoteEdges: z.array(z.string()),
+      returnAnswer: z.literal(true).optional(),
+      words: z.string().optional()
+    })
+    .optional(),
+  continuation: z.literal(true).optional(),
   /** The member whose explicit peer request this mail turn answers; `told` when it was only status. */
   requester: z
     .object({ id: z.string(), name: z.string(), told: z.literal(true).optional() })

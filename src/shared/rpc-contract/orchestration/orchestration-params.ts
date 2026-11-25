@@ -71,6 +71,10 @@ export const ReplyParams = z.object({
   on: OptionalString
 })
 
+export const GroupPostParams = ReplyParams.pick({ id: true, from: true }).extend({
+  body: z.string().trim().min(1).max(64_000)
+})
+
 export const InboxParams = z.object({
   limit: OptionalFiniteNumber,
   // Filter inbox by handle to agree with check --all.

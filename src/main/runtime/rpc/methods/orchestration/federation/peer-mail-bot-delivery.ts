@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type { PeerMailDeliverParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import { peerGroupHome } from '../../../../orchestration/federation/peer-mail/peer-group-question'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { routeBotMail } from '../messaging/bot-chat-address'
@@ -30,6 +31,23 @@ export async function deliverPeerMailToBot(
     orcaSessionId: null
   }
   const named = params.chat !== undefined || params.item !== undefined
+  const group = params.group
+  if (group?.kind === 'question') {
+    if (
+      params.to !== `bot:${group.botId}` ||
+      !params.chat ||
+      params.type !== 'question' ||
+      params.threadId !== undefined ||
+      params.item !== undefined
+    ) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        'A group question must address a pinned Home Chat.',
+        { effectsApplied: false }
+      )
+    }
+    peerGroupHome(runtime, group.botId, params.chat)
+  }
   // A reply carries no type and is stored as a local reply is, never as a new request.
   const reply = params.type === undefined && !named
   const reach = (): boolean =>
@@ -39,11 +57,15 @@ export async function deliverPeerMailToBot(
   }
   db.assertPeerMailConversation(params.conversationId, peerFingerprint)
   const link = () => {
+    if (group?.kind === 'question') {
+      peerGroupHome(runtime, group.botId, params.chat)
+    }
     db.linkPeerMailMessage({
       conversationId: params.conversationId,
       peerFingerprint,
       messageId: params.messageId,
       senderLabel: params.senderLabel,
+      ...(group?.kind === 'question' ? { groupQuestion: JSON.stringify(group) } : {}),
       ...(pulled ? { environmentId: pulled.environmentId } : {})
     })
     pulled?.alsoOnAdmitted()
@@ -98,6 +120,13 @@ export async function deliverPeerMailToBot(
         onAdmitted: link
       }
     )
+    if (group?.kind === 'question' && !('receipt' in routed)) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        'The group question was not admitted by its bot.',
+        { effectsApplied: false }
+      )
+    }
     if (!('receipt' in routed)) {
       return routed
     }

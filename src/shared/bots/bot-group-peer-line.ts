@@ -18,12 +18,20 @@ export function botGroupPeerLine(message: BotGroupMessage): BotGroupPeerLine {
     (message.author.kind === 'bot' ? message.author.name : null) ?? message.turns[0]?.botName ?? ''
   if (message.requester) {
     const kind = message.requester.told ? 'told' : 'asked'
-    return { kind, from: message.requester.name, to: message.turns[0]?.botName ?? name }
+    return {
+      kind,
+      from: message.requester.name,
+      to: message.turns[0]?.botName ?? message.remoteAsks?.[0]?.name ?? name
+    }
   }
   if (message.fromItems) {
     return { kind: 'items', bot: name }
   }
   return message.answeredBy
-    ? { kind: 'read', reader: name, peer: message.answeredBy.name }
+    ? {
+        kind: 'read',
+        reader: message.continuation ? (message.turns[0]?.botName ?? name) : name,
+        peer: message.answeredBy.name
+      }
     : { kind: 'followed', bot: name }
 }
