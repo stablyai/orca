@@ -63,13 +63,11 @@ export function seedNativeChatAppliedSessionOptions(
   scopeKey: string,
   agent: AgentType,
   values: Record<string, SessionOptionValue> | null | undefined
-): boolean {
+): void {
   const record = nativeChatAppliedSessionOptionRecord(agent, values)
-  if (!record) {
-    return false
+  if (record) {
+    writeNativeChatSessionOptionCache(scopeKey, record)
   }
-  writeNativeChatSessionOptionCache(scopeKey, record)
-  return true
 }
 
 // New-tab launches carry saved choices as strings; record booleans as the host applies them.

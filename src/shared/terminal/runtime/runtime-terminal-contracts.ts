@@ -264,7 +264,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   resumeProviderSession?: AgentSessionResume.AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
-  /** Options Orca applied launching launchAgent, so the desktop chip matches a phone launch. */
+  /** Options Orca applied launching launchAgent, published on the tab for paired phones. */
   sessionOptions?: Record<string, SessionOptionValue>
   trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
