@@ -137,7 +137,10 @@ export async function reopenWorkerChat(
   // A `/clear` moved the conversation on; reopen the session that runs it now.
   const running = structuredWorkerSession(identity)
   const sessionId = running.kind === 'here' ? running.sessionId : identity.sessionId
-  const userOpened = host.isSessionTabVisible(sessionId)
+  // A chat Orca's release left asleep stays Orca's; a tab the user brought back or woke is theirs.
+  const userOpened =
+    host.isSessionTabVisible(sessionId) &&
+    host.deps.store.getRecord(sessionId)?.sleptAt === undefined
   await publishChatTabInBackground(runtime, host, sessionId)
   return {
     handle,

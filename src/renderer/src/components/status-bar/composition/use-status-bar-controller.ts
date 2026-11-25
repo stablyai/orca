@@ -19,7 +19,6 @@ import {
 } from '../usage/use-owner-usage-rate-limits'
 import { isOwnerNotSetUpPlaceholder } from '../usage/owner-usage-rate-limits'
 import { useTranslate } from '@/i18n/use-translate'
-import { nativeChatSurfaceVisible } from '@/lib/workspace/ownership/visible-account-surface'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const t = useTranslate()
@@ -39,11 +38,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const statusBarUsageMode = normalizeStatusBarUsageMode(useAppStore((s) => s.statusBarUsageMode))
   const setStatusBarUsageMode = useAppStore((s) => s.setStatusBarUsageMode)
   const [usageMenuOpen, setUsageMenuOpen] = useState(false)
-  // Why: the bar sits right under a chat, where usage reads as part of that chat (owner call).
-  const usageHidden = useAppStore(nativeChatSurfaceVisible)
-  if (usageHidden && usageMenuOpen) {
-    setUsageMenuOpen(false)
-  }
   const usageMenuFocusHandoff = useStatusBarMenuFocusHandoff()
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
@@ -107,8 +101,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode } =
-    rateLimits
+  const { claude, codex, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode } = rateLimits
   const muse = rateLimits.muse
 
   // Antigravity has no saved credential; the checked item and detected CLI establish setup.
@@ -129,7 +122,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
-  const visibleGemini = getVisibleUsageProvider('gemini', gemini, usageSettings)
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
@@ -145,10 +137,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleCodex !== null &&
     statusBarItems.includes('codex') &&
     isStatusBarItemAvailable('codex', detectedAgentIds)
-  const showGemini =
-    visibleGemini !== null &&
-    statusBarItems.includes('gemini') &&
-    isStatusBarItemAvailable('gemini', detectedAgentIds)
   const showKimi =
     visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
@@ -187,7 +175,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const hasVisibleUsageMeters =
     showClaude ||
     showCodex ||
-    showGemini ||
     showOpencodeGo ||
     showKimi ||
     showAntigravity ||
@@ -204,7 +191,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||
-    gemini?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
@@ -223,7 +209,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const rosterProviders = [
     showClaude ? visibleClaude : null,
     showCodex ? visibleCodex : null,
-    showGemini ? visibleGemini : null,
     showAntigravity ? visibleAntigravity : null,
     showOpencodeGo ? visibleOpencodeGo : null,
     showKimi ? visibleKimi : null,
@@ -310,7 +295,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     statusBarItems,
     statusBarUsageMode,
     toggleStatusBarItem,
-    usageHidden,
     usageMenuFocusHandoff,
     usageMenuOpen,
     usagePercentageDisplay

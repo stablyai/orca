@@ -3,16 +3,18 @@
 // an answer a v1.4.265 host recorded answers every line it holds. The host links only the first reply
 // to its question (that reply moves the item to In progress), so the pairing is read from the order of
 // events: the owner's comments after each ask, until its lines are answered, the item closes, or the
-// item leaves Needs you without an answer. A later ask replaces an earlier one's open lines.
+// item leaves Needs you without an answer. A later ask replaces an earlier one's open lines, and an
+// answer sent with the rest skipped ("send anyway") closes its ask's.
 import { botItemNamedAnswers } from './bot-item-answer-lines'
 import {
+  botItemIsQuickReplyText,
+  botItemQuestionLeads,
   botItemQuestionLine,
   botItemQuestionShape,
-  botItemQuickReplyText,
   type BotItemDecision,
   type BotItemQuestionShape
 } from './bot-item-ask'
-import type { BotItem, BotItemEvent } from './bot-items'
+import { parseBotItemEventId, type BotItem, type BotItemEvent } from './bot-items'
 import { IMAGE_PROMPT_MARKER } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 
 export type BotItemQuestionAnswers = {
@@ -24,8 +26,19 @@ export type BotItemQuestionAnswers = {
   byOrder: boolean[]
   /** Lines still open, and the agent still waiting on them. */
   waiting: boolean
-  /** A later ask came while a line was still open: its open lines take no answer. */
-  replaced: boolean
+  /** Why its open lines take no answer: a later ask came, or the owner sent answers skipping them. */
+  ended: BotItemAskEnd | null
+}
+
+export type BotItemAskEnd = 'replaced' | 'skipped'
+
+/** The end an ask's card names: while a line no comment or send answered stays open to nothing, even
+ *  one showing an answer held on this device, which only goes back to the box. */
+export function botItemShownAskEnd(
+  ended: BotItemAskEnd | null,
+  answered: readonly (string | null)[]
+): BotItemAskEnd | null {
+  return ended && answered.some((words) => !words) ? ended : null
 }
 
 export type BotItemQuestionPairing = {
@@ -99,19 +112,21 @@ function answeredLines(
   const picked = shape.decisions.findIndex(
     (decision, index) =>
       isOpen(index) &&
-      decision.replies.some((option) => botItemQuickReplyText(shape, decision, option) === text)
+      decision.replies.some((option) => botItemIsQuickReplyText(shape, index, option, text))
   )
   if (picked !== -1) {
     return { lines: [picked], byOrder: false }
   }
   // Several questions answered in one comment, a line each; or a quick reply edited before sending.
-  const named = botItemNamedAnswers(shape, text).flatMap((words, index) =>
+  const wordsByLine = botItemNamedAnswers(shape, text)
+  const named = wordsByLine.flatMap((words, index) =>
     words !== null && isOpen(index) ? [index] : []
   )
   if (named.length > 0) {
     return { lines: named, byOrder: false }
   }
-  if (answersAskedQuestions(text, asked)) {
+  // If the named lines were answered meanwhile, a late reply can't take another line by order.
+  if (wordsByLine.some((words) => words !== null) || answersAskedQuestions(text, asked)) {
     return none
   }
   const next = answers.indexOf(null)
@@ -153,15 +168,17 @@ export function botItemQuestionPairing(
           answers: shape.decisions.map(() => null),
           byOrder: shape.decisions.map(() => false),
           waiting: false,
-          replaced: false
+          ended: null
         }
         questions.set(event.id, entry)
         for (const decision of shape.decisions) {
-          asked.add(botItemQuestionLine(decision.question))
+          for (const lead of botItemQuestionLeads(decision.question)) {
+            asked.add(lead)
+          }
         }
         if (open?.entry.answers.includes(null)) {
           // A new ask replaces the earlier one's open lines; its answers so far stand.
-          open.entry.replaced = true
+          open.entry.ended = 'replaced'
         }
         open = { id: event.id, entry }
       }
@@ -187,12 +204,27 @@ export function botItemQuestionPairing(
     if (quoted !== undefined) {
       replies.set(event.id, { questionId: open.id, decision: shape.decisions[quoted]! })
     }
+    if (skipsRest(open, event)) {
+      if (answers.includes(null)) {
+        open.entry.ended = 'skipped'
+      }
+      open = null
+    }
   }
   // Only the latest ask waits, so each answer has one question to go to.
   if (open?.entry.answers.includes(null) && item.status !== 'done' && item.status !== 'canceled') {
     open.entry.waiting = true
   }
   return { questions, replies }
+}
+
+/** An answer sent with the ask's other lines skipped: the host lists them in `skipped`. */
+function skipsRest(open: OpenAsk, reply: BotItemEvent): boolean {
+  return (
+    reply.data.answers === open.id &&
+    Array.isArray(reply.data.skipped) &&
+    reply.data.skipped.length > 0
+  )
 }
 
 /** The line a reply quotes: the one its image is on, else the last it answers (answers held for
@@ -209,21 +241,57 @@ function quotedLine(
   return lines.find((line) => IMAGE_PROMPT_MARKER.test(named[line] ?? '')) ?? lines.at(-1)
 }
 
-/** The ask the agent waits on, by its event id, with its lines' answers so far. */
+/** The ask the host's item read says waits: its `waitingAsk`, else its Needs you question. */
+function hostWaitingAsk(item: BotItemWaitingView): string | null {
+  return item.waitingAsk ?? (item.status === 'needs_you' ? (item.question?.eventId ?? null) : null)
+}
+
+/** An item as a client reads it: the host's own waiting ask and question, where it sent them. */
+type BotItemWaitingView = Pick<BotItem, 'status'> &
+  Partial<Pick<BotItem, 'question' | 'waitingAsk'>>
+
+/** The ask the agent waits on, by its event id, with its lines' answers so far. When the host's read
+ *  names a newer ask than the loaded events pair (a replaced question still on screen), the host's
+ *  wins: its own entry when loaded, else none, so the box falls back to the host's question. Replies
+ *  then name the ask the host waits on, and one meant for another is refused, never moved to it. */
 export function botItemWaitingAsk(
-  item: Pick<BotItem, 'status'>,
+  item: BotItemWaitingView,
   events: readonly BotItemEvent[]
 ): ({ askId: string } & BotItemQuestionAnswers) | null {
-  for (const [askId, entry] of botItemQuestionPairing(item, events).questions) {
-    if (entry.waiting) {
-      return { askId, ...entry }
-    }
+  const { questions } = botItemQuestionPairing(item, events)
+  const paired = [...questions].find(([, entry]) => entry.waiting)
+  if (!paired) {
+    return null
   }
-  return null
+  const host = hostWaitingAsk(item)
+  if (
+    host === null ||
+    host === paired[0] ||
+    (parseBotItemEventId(host) ?? 0) <= (parseBotItemEventId(paired[0]) ?? 0)
+  ) {
+    return { askId: paired[0], ...paired[1] }
+  }
+  const own = questions.get(host)
+  return own ? { askId: host, ...own, waiting: true } : null
 }
 
 /** A line the comment box replies to; `eventId` is the comment that asks it. */
 export type BotItemWaitingLine = { id: string; eventId: string; line: string; replies: boolean }
+
+/** Line `index` of the ask `askId`, as the comment box names it. */
+export function botItemAskLine(
+  askId: string,
+  shape: BotItemQuestionShape,
+  index: number
+): BotItemWaitingLine {
+  const decision = shape.decisions[index]!
+  return {
+    id: `${askId}:${index}`,
+    eventId: askId,
+    line: botItemQuestionLine(decision.question),
+    replies: decision.replies.length > 0
+  }
+}
 
 /** What the comment box replies to while the agent waits: the first open line of its ask, with
  *  `replies` when that line has quick replies. The item's own question stands in until its event is
@@ -232,17 +300,10 @@ export function botItemWaitingLine(
   item: Pick<BotItem, 'question' | 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemWaitingLine | null {
-  for (const [questionId, entry] of botItemQuestionPairing(item, events).questions) {
-    const index = entry.answers.indexOf(null)
-    const decision = entry.shape.decisions[index]
-    if (entry.waiting && decision) {
-      return {
-        id: `${questionId}:${index}`,
-        eventId: questionId,
-        line: botItemQuestionLine(decision.question),
-        replies: decision.replies.length > 0
-      }
-    }
+  const waiting = botItemWaitingAsk(item, events)
+  const open = waiting?.answers.indexOf(null) ?? -1
+  if (waiting && waiting.shape.decisions[open]) {
+    return botItemAskLine(waiting.askId, waiting.shape, open)
   }
   const { question } = item
   if (item.status !== 'needs_you' || !question) {
@@ -256,9 +317,10 @@ export function botItemWaitingLine(
   const decision = events.some((event) => event.id === question.eventId)
     ? undefined
     : question.decisions?.[0]
+  // Its first line, named as it is once the event is read, so a draft bound to it keeps it then.
   return decision
     ? {
-        id: question.eventId,
+        id: `${question.eventId}:0`,
         eventId: question.eventId,
         line: botItemQuestionLine(decision.question),
         replies: decision.replies.length > 0

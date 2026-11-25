@@ -23,6 +23,7 @@ import { BRIDGE_STORE_VERB, storeParamsSchema, storeResultSchema } from './bridg
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../../page-storage/page-storage-keys'
 import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../../files/media/mobile-file-media'
 import { BRIDGE_MAX_EXTERNAL_LINK_CHARS } from '../protocol/bridge-caps'
+import { BRIDGE_DEFERRED_CODE_VERB } from '../protocol/bridge-frame-fields'
 
 // Fence native-prefixed requests on-device; desktop allowlist refusal alone would hide leaked forwarding and depend on desktop version.
 // Native replies use existing frames/in-flight caps without runtime _meta; adding a verb needs a table row and handler, never a new frame kind.
@@ -44,7 +45,8 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   BRIDGE_SPEECH_VERB,
   BRIDGE_STORE_VERB,
   'native.a11y.announce',
-  'native.link.open'
+  'native.link.open',
+  BRIDGE_DEFERRED_CODE_VERB
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -106,6 +108,10 @@ export const linkOpenParamsSchema = z.strictObject({
   url: z.string().min(1).max(BRIDGE_MAX_EXTERNAL_LINK_CHARS)
 })
 export const linkOpenResultSchema = z.strictObject({ opened: z.boolean() })
+
+// No params: the shell fetches exactly the deferred code its own verified manifest lists.
+export const deferredCodeParamsSchema = z.strictObject({})
+export const deferredCodeResultSchema = z.strictObject({})
 
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {
@@ -172,6 +178,11 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.link.open': {
     params: linkOpenParamsSchema,
     result: linkOpenResultSchema
+  },
+  // Not desktop-bound: its fetch is the shell's own bundle read, and code already on disk must answer while the connection handshakes.
+  [BRIDGE_DEFERRED_CODE_VERB]: {
+    params: deferredCodeParamsSchema,
+    result: deferredCodeResultSchema
   }
 }
 

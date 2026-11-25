@@ -32,7 +32,7 @@ import { getEditorFileTabModeIcon } from './editor-file-tab-mode-icon'
 import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from '../strip/tab-width-rules'
 import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
-import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
+import { EditorFileTabCloseSlot } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
 import { editorTabDocumentFolderAccess } from '@/lib/files/access/local-file-access'
@@ -186,6 +186,15 @@ export default function EditorFileTab({
   )
 
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
+  const tabStatusStyle = tabStatusColor
+    ? { color: `var(--tab-status-ink, ${tabStatusColor})` }
+    : undefined
+  const tabStatusVariables:
+    | (React.CSSProperties & { '--tab-status-mixed-ink': string })
+    | undefined =
+    tabStatus && tabStatusColor
+      ? { '--tab-status-mixed-ink': `var(--tab-decoration-${tabStatus}, ${tabStatusColor})` }
+      : undefined
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -220,6 +229,7 @@ export default function EditorFileTab({
       {...attributes}
       {...dragListeners}
       className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      style={tabStatusVariables}
       onPointerDown={(e) => {
         onPointerDown(
           e,
@@ -260,7 +270,13 @@ export default function EditorFileTab({
       ) : (
         tabIcon(`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`)
       )}
-      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
+      {isPinned && (
+        <Pin
+          className="mr-1 size-3 shrink-0 text-muted-foreground"
+          aria-hidden
+          data-tab-compact-hide=""
+        />
+      )}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
         {isRenaming ? (
           <Input
@@ -300,7 +316,7 @@ export default function EditorFileTab({
         ) : (
           <span
             className={`${TAB_LABEL_WIDTH_CLASSES}${isPreviewTab ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
-            style={tabStatusColor ? { color: tabStatusColor } : undefined}
+            style={tabStatusStyle}
             onDoubleClick={(e) => {
               if (isPreviewTab && onMakePermanent) {
                 e.stopPropagation()
@@ -320,32 +336,33 @@ export default function EditorFileTab({
           </span>
         )}
         {isMissingFileMutation && !isRenaming && (
-          <span className="shrink-0 text-[10px] leading-none font-semibold tracking-wide text-muted-foreground">
+          <span
+            className={`shrink-0 text-[10px] leading-none font-semibold tracking-wide text-muted-foreground${
+              isActive
+                ? ''
+                : ' [.light_[data-unfocused-split-group]_&]:text-tab-inactive-foreground'
+            }`}
+            data-tab-compact-hide=""
+          >
             {file.externalMutation}
           </span>
         )}
         {tabStatus && !isRenaming && !isMissingFileMutation && (
           <span
             className="shrink-0 text-[10px] leading-none font-semibold tracking-wide"
-            style={{ color: tabStatusColor }}
+            style={tabStatusStyle}
+            data-tab-compact-hide=""
           >
             {STATUS_LABELS[tabStatus]}
           </span>
         )}
       </span>
-      {/* Share one dot/close slot so autosave cannot change tab width. */}
-      <div className="relative flex items-center justify-center w-4 h-4 shrink-0">
-        {file.isDirty && (
-          <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />
-        )}
-        {!isPinned && (
-          <EditorFileTabCloseButton
-            fileIsDirty={file.isDirty}
-            showsSelectionChrome={isActive}
-            onClose={onClose}
-          />
-        )}
-      </div>
+      <EditorFileTabCloseSlot
+        fileIsDirty={file.isDirty}
+        isPinned={isPinned}
+        showsSelectionChrome={isActive}
+        onClose={onClose}
+      />
     </div>
   )
 
