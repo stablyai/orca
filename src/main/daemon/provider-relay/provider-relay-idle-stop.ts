@@ -111,6 +111,11 @@ export class ProviderRelayIdleStop {
     )
   }
 
+  /** An approval the agent asked for is still unanswered. */
+  get waiting(): boolean {
+    return this.host.pendingCount() > 0
+  }
+
   get unread(): boolean {
     return this.host.unread?.() === true
   }

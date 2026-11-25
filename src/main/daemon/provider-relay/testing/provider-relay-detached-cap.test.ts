@@ -15,13 +15,13 @@ const HOUR = 60 * 60_000
 
 function relay(
   id: string,
-  state: { tracking: boolean; unread: boolean; finished?: boolean }
+  state: { tracking: boolean; unread: boolean; finished?: boolean; waiting?: boolean }
 ): CappableRelay {
   return {
     relayId: id,
     live: true,
     attachedClientId: null,
-    idleStopPolicy: { finished: false, unaccounted: false, ...state },
+    idleStopPolicy: { finished: false, unaccounted: false, waiting: false, ...state },
     stoppedBy: null,
     close: vi.fn(async () => {})
   }
@@ -65,6 +65,8 @@ describe('a detached agent with output no app took', () => {
     )
     const unread = relay('unread', { tracking: true, unread: true, finished: true })
     const unknown = relay('unknown', { tracking: false, unread: false })
+    // Work unknown, but an approval is waiting: that is work, so it is never stopped.
+    const asking = relay('asking', { tracking: false, unread: false, waiting: true })
     const busyRead = relay('busy-read', { tracking: true, unread: false })
     const busyAgain = relay('busy-again', { tracking: true, unread: true, finished: true })
     cap.detached(unread)
@@ -76,6 +78,7 @@ describe('a detached agent with output no app took', () => {
     cap.idleUnread(busyAgain)
     now = 2 * HOUR
     cap.detached(unknown)
+    cap.detached(asking)
     // Every deadline shares one timer, at the earliest.
     expect(vi.getTimerCount()).toBe(1)
     Object.assign(busyAgain.idleStopPolicy, { finished: false })
@@ -91,6 +94,7 @@ describe('a detached agent with output no app took', () => {
     now = RELAY_DETACHED_CAP_MS + 2 * HOUR
     await vi.advanceTimersByTimeAsync(2 * HOUR)
     expect(unknown.stoppedBy).toBe('cap')
+    expect(asking.close).not.toHaveBeenCalled()
     // Nothing counted is left: no recheck wakes the daemon for busy work.
     expect(vi.getTimerCount()).toBe(0)
     expect(busyRead.close).not.toHaveBeenCalled()
