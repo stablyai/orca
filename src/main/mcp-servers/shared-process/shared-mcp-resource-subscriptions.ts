@@ -83,6 +83,11 @@ export class SharedMcpResourceSubscriptions {
   private unsubscribe(uri: string, session: string, send: () => Promise<Result>): Promise<Result> {
     const token = {}
     this.leaving.set(uri, token)
+    // Its first subscribe may still be answered: the child holds nothing if that fails.
+    const subscribed = this.pending.get(uri)?.then(
+      () => true,
+      () => false
+    )
     const current = (): boolean => {
       const ours = this.leaving.get(uri) === token
       if (ours) {
@@ -95,9 +100,10 @@ export class SharedMcpResourceSubscriptions {
         current()
         return result
       },
-      (error: unknown) => {
+      async (error: unknown) => {
         // The child still watches it, so the session holds it again: a retry or its end asks again.
-        if (current() && refused(error) && this.live(session)) {
+        const held = (await subscribed) ?? true
+        if (current() && held && refused(error) && this.live(session)) {
           this.byUri.set(uri, new Set([session]))
         }
         throw error

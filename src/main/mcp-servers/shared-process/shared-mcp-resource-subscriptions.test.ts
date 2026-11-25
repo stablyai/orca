@@ -58,4 +58,20 @@ describe('SharedMcpResourceSubscriptions', () => {
     expect([...subscriptions.subscribers(URI)]).toEqual(['c'])
     expect(watching()).toBe(true)
   })
+
+  it('gives nothing back after a refusal when the first subscribe it followed failed', async () => {
+    const { subscriptions, request, watching } = harness()
+    let fail!: () => void
+    const failing = new Promise<void>((resolve) => (fail = resolve)).then(refusal)
+    const joins = request('resources/subscribe', 'a', () => failing)
+    const leaves = request('resources/unsubscribe', 'a', refusal)
+    await Promise.resolve()
+    fail()
+    await expect(leaves).rejects.toThrow('busy')
+    await expect(joins).rejects.toThrow('busy')
+    await request('resources/subscribe', 'b')
+
+    expect([...subscriptions.subscribers(URI)]).toEqual(['b'])
+    expect(watching()).toBe(true)
+  })
 })
