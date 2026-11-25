@@ -4,6 +4,7 @@ export type PairingNetworkInterface = {
   name: string
   address: string
   hasDefaultRoute?: boolean
+  isUsbTether?: boolean
 }
 
 // Why: known bridge labels are host-local, while vEthernet needs positive route evidence because
@@ -24,13 +25,13 @@ export function isVirtualBridgeInterface(name: string, hasDefaultRoute?: boolean
   return VIRTUAL_BRIDGE_INTERFACE_PATTERN.test(name)
 }
 
-// Share QR and picker selection to avoid advertising a different address. Bridges remain manually selectable.
+// Share QR and picker selection to avoid advertising a different address. Bridges and USB tethers remain manually selectable.
 // Undefined omits direct addressing: Relay carries its own invite, while LAN-only pairing refuses.
 export function selectAutoAdvertisedPairingAddress(
   interfaces: readonly PairingNetworkInterface[]
 ): string | undefined {
   const advertisable = interfaces.filter(
-    (iface) => !isVirtualBridgeInterface(iface.name, iface.hasDefaultRoute)
+    (iface) => !iface.isUsbTether && !isVirtualBridgeInterface(iface.name, iface.hasDefaultRoute)
   )
   return (
     advertisable.find((iface) => isTailnetIPv4Address(iface.address))?.address ??
