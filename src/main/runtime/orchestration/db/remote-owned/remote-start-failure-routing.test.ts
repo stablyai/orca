@@ -17,6 +17,7 @@ import {
   START_BLOCKED_FENCE
 } from '../../workers/turn-stops/awaiting-worker-start-report'
 import { observeWorker } from '../../workers/turn-stops/worker-presence-report'
+import { reportFailedWorkerStart } from '../../workers/turn-stops/failed-worker-start-report'
 import { structuredMailSource } from '../../mailbox/structured-mail/structured-mail-source'
 import { isConversationReport } from '../../../../external-conversations/external-conversation-turn-opener'
 
@@ -36,7 +37,7 @@ const THREAD_TURN: DispatchCreator = {
 }
 const ORCA_TURN: DispatchCreator = { kind: 'terminal', handle: COORDINATOR }
 
-type Failure = 'never-ready' | 'start-blocked'
+type Failure = 'start-failed' | 'never-ready' | 'never-ready-in-terminal' | 'start-blocked'
 const open: OrchestrationDb[] = []
 afterEach(() => {
   for (const db of open.splice(0)) {
@@ -73,17 +74,27 @@ function answersThread(
   }
 }
 
-/** The real report each failure's edge sends, on whichever Orca runs the worker. */
+/** The real report each failure's edge sends, on whichever Orca runs the worker, in production order:
+ *  a start fails or blocks before its terminal is bound as the Dispatch's assignee. */
 function fail(db: OrchestrationDb, dispatchId: string, failure: Failure): void {
-  if (failure === 'never-ready') {
+  if (failure === 'start-failed') {
+    const failed = db.failWorkerStart(dispatchId, 'worktree_create', 'worktree create timed out')
+    reportFailedWorkerStart(db, failed, () => {})
+    return
+  }
+  if (failure !== 'never-ready') {
+    // Its terminal opened and holds the start, unbound.
+    db.db
+      .prepare(
+        `UPDATE worker_dispatches SET agent_terminal_handle = 'term_worker' WHERE dispatch_id = ?`
+      )
+      .run(dispatchId)
+  }
+  if (failure === 'never-ready' || failure === 'never-ready-in-terminal') {
     const failed = db.failWorkerStart(dispatchId, 'agent_readiness', 'terminal never ready')
     reportNeverReadyWorkerStart(db, failed, undefined, () => {})
     return
   }
-  // A start blocks once its terminal is bound, which makes that terminal the Dispatch's assignee.
-  db.db
-    .prepare(`UPDATE dispatch_contexts SET assignee_handle = 'term_worker' WHERE id = ?`)
-    .run(dispatchId)
   observeWorker(
     db,
     { kind: 'local', dispatch: db.getDispatchContextById(dispatchId)! },
@@ -216,20 +227,31 @@ function failOnServer(creator: DispatchCreator, failure: Failure, answer: 'start
 }
 
 describe("a paired server's failed or stalled start reaches its coordinator as a local one does", () => {
-  const cases = (['never-ready', 'start-blocked'] as const).flatMap((failure) =>
+  const failures = [
+    'start-failed',
+    'never-ready',
+    'never-ready-in-terminal',
+    'start-blocked'
+  ] as const
+  const cases = failures.flatMap((failure) =>
     (['starting', 'lost'] as const).map((answer) => [failure, answer] as const)
   )
 
   it.each(cases)('%s after a %s answer, asked from a thread', (failure, answer) => {
-    const local = failLocally(THREAD_TURN, failure)
-    expect(local.toThread).toBe(true)
-    expect(failOnServer(THREAD_TURN, failure, answer)).toEqual(local)
+    expect(failOnServer(THREAD_TURN, failure, answer)).toEqual(failLocally(THREAD_TURN, failure))
   })
 
   it.each(cases)('%s after a %s answer, asked in Orca, stays in Orca', (failure, answer) => {
     const local = failLocally(ORCA_TURN, failure)
     expect(local.toThread).toBe(false)
     expect(failOnServer(ORCA_TURN, failure, answer)).toEqual(local)
+  })
+
+  it('answers in the thread for the results Orca reports as the Dispatch', () => {
+    for (const failure of ['start-failed', 'never-ready'] as const) {
+      expect(failLocally(THREAD_TURN, failure).toThread).toBe(true)
+      expect(failOnServer(THREAD_TURN, failure, 'lost').toThread).toBe(true)
+    }
   })
 
   it('stays in Orca when someone other than the coordinator started it from a thread', () => {

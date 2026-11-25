@@ -5,7 +5,7 @@ import type { DispatchContextRow } from '../../db/orchestration-records'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { resolveOrchestrationParty } from '../../addressing/orchestration-party'
 import { runCoordinatorKey } from '../../addressing/orchestration-caller-identity'
-import { reportedRemoteDispatch } from './sender-reported-dispatch'
+import { getRemoteDispatch } from '../../db/remote-owned/remote-dispatch-records'
 
 type Party = Pick<AgentMessageSender['party'], 'terminalHandle' | 'orcaSessionId'>
 
@@ -49,7 +49,7 @@ function dispatchWorkerLineage(
     (db.getFederatedDispatch(dispatchId) ||
       (localDispatch(dispatch) && LOCAL_DISPATCH_RESULTS.has(args.messageType ?? '')))
   if (!dispatch) {
-    return remoteWorkerLineage(db, undefined, `dispatch:${dispatchId}`, args, recipient) ?? UNKNOWN
+    return remoteWorkerLineage(db, dispatchId, args, recipient)
   }
   const creator = known && dispatch.run_id === runId ? dispatch : null
   return creator &&
@@ -61,30 +61,22 @@ function dispatchWorkerLineage(
     : UNKNOWN
 }
 
-/** A paired server's worker for this Run (worker-start --on), which only this Orca's record of its
- *  start knows: 'worker' when that start's creator is the recipient, as a local Dispatch's is. Its
- *  `dispatch:` mail is Orca's there, so as for a local one only its results count. */
+/** A paired server's worker for this Run (worker-start --on), named by the `dispatch:` address Orca
+ *  writes its results under there: 'worker' when the start this Orca recorded was the recipient's, as
+ *  a local Dispatch's is. Its worker's own mail stays unknown: only the server knows its assignee. */
 function remoteWorkerLineage(
   db: OrchestrationDb,
-  dispatchId: string | undefined,
-  senderAddress: string,
+  dispatchId: string,
   args: Pick<RelationArgs, 'runId' | 'messageType'>,
   recipient: Party
-): Lineage | undefined {
-  const record = reportedRemoteDispatch(db, dispatchId, senderAddress)
-  if (!record || record.run_id !== args.runId) {
-    return undefined
-  }
-  if (
-    senderAddress.startsWith('dispatch:') &&
-    !LOCAL_DISPATCH_RESULTS.has(args.messageType ?? '')
-  ) {
-    return UNKNOWN
-  }
-  return sameParty(
-    { terminalHandle: record.creator_handle, orcaSessionId: record.creator_orca_session_id },
-    recipient
-  )
+): Lineage {
+  const record = getRemoteDispatch(db, dispatchId)
+  return record?.run_id === args.runId &&
+    LOCAL_DISPATCH_RESULTS.has(args.messageType ?? '') &&
+    sameParty(
+      { terminalHandle: record.creator_handle, orcaSessionId: record.creator_orca_session_id },
+      recipient
+    )
     ? { relation: 'worker', workerDispatch: { creator_turn_source: record.creator_turn_source } }
     : UNKNOWN
 }
@@ -173,13 +165,6 @@ export function agentMessageLineage(args: RelationArgs): Lineage {
       return undefined
     }
     const senderDispatch = dispatchFor(sender, args.reportedDispatchId)
-    const remote =
-      !senderDispatch && !sameParty(sender, recipient)
-        ? remoteWorkerLineage(db, args.reportedDispatchId, sender.address, args, recipient)
-        : undefined
-    if (remote) {
-      return remote
-    }
     const recipientDispatch = dispatchFor(recipient, args.recipientDispatchId)
     const senderParent = parentOf(senderDispatch)
     const recipientParent = parentOf(recipientDispatch)
