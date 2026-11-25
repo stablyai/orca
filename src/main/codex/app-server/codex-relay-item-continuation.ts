@@ -55,6 +55,11 @@ const itemId = ({ params }: Message): string => String(params.itemId ?? params.i
 export const CODEX_RELAY_CONTINUATION_RETIRED = 'orca/relayContinuationRetired'
 const continuationId = (tag: string, id: string): string => `${tag}:${id}`
 
+/** The item a continuation row continues (`relay:<relay>:<seq>:<item id>`), or null for any other id. */
+export function codexRelayContinuedItemId(id: string): string | null {
+  return /^relay:[^:]+:\d+:(.+)$/.exec(id)?.[1] ?? null
+}
+
 /** Codex keys rows by item id, so a cut item continues under `<tag>:<item id>` in the same thread. */
 export const CODEX_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
   item: (line) => {

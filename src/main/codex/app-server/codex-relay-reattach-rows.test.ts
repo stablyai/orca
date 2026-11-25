@@ -18,7 +18,10 @@ import {
 } from '../structured/threads/codex-kept-turn-ordinals'
 import { CodexBackgroundTaskTracker } from '../structured/background-work/codex-background-task-tracker'
 import { CodexTurnOrdinals } from '../structured/journal/codex-turn-ordinals'
-import { readCodexThreadItem } from '../structured/items/codex-thread-item-identity'
+import {
+  codexItemIdentity,
+  readCodexThreadItem
+} from '../structured/items/codex-thread-item-identity'
 
 const item = (method: string, id: string, status = 'inProgress') =>
   JSON.stringify({ method, params: { threadId: 't', item: { type: 'agentMessage', id, status } } })
@@ -475,5 +478,21 @@ describe('codex rows across a reattach', () => {
       ['main', 'c1'],
       ['main', 'c0']
     ])
+  })
+
+  it("numbers a cut message's continuation after the message itself, so it never takes the saved row", () => {
+    const ordinals = new CodexTurnOrdinals()
+    // History at reattach has the user's message only: the message still streaming isn't in it.
+    ordinals.ordinalFor('t', 'turn-a', 'user-1')
+    const identity = (id: string) =>
+      codexItemIdentity({
+        threadId: 't',
+        turnId: 'turn-a',
+        item: { type: 'agentMessage', id },
+        ordinals
+      })
+    const continuation = identity('relay:r-1-abc:6872:msg-a')
+    expect(identity('msg-a')).toEqual({ ...continuation, ordinal: 1 })
+    expect(continuation).toMatchObject({ ordinal: 2 })
   })
 })
