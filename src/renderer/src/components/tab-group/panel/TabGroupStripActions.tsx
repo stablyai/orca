@@ -57,6 +57,7 @@ export function TabGroupStripActions({
     >
       {/* Why: drop an action whole (and from Tab order) once it can't fit beside the tab floor and "+", never leave a clipped focus target.
           163 = 40 tab + 36 "+" + 8 padding + 47 widest collapsed quick-command trigger + 2 gap + 28 pane actions + 2 sub-pixel slack; 114 = 40 + 36 + 8 + 28 + 2.
+          A pinned bot Home beside other tabs adds a second 40px floor, so the threshold moves up 40 to 203.
           A dropped trigger parks invisible at the pane's top-right edge, not display:none, so the shortcut menu keeps an anchor rect.
           Folded titlebar: the active tab's title outranks quick commands, so they always move into ⋯ (which offers a hidden slot's commands). */}
       <div
@@ -64,7 +65,7 @@ export function TabGroupStripActions({
         className={
           foldLevel > 0
             ? 'invisible absolute end-0 top-0 block'
-            : 'contents @max-[163px]/tab-strip:invisible @max-[163px]/tab-strip:absolute @max-[163px]/tab-strip:end-0 @max-[163px]/tab-strip:top-0 @max-[163px]/tab-strip:block'
+            : 'contents @max-[163px]/tab-strip:invisible @max-[163px]/tab-strip:absolute @max-[163px]/tab-strip:end-0 @max-[163px]/tab-strip:top-0 @max-[163px]/tab-strip:block group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:invisible group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:absolute group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:end-0 group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:top-0 group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:block'
         }
       >
         <TabBarQuickCommandsButton

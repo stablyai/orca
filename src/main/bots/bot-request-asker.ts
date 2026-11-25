@@ -15,6 +15,7 @@ import {
   type BotRequestAsker
 } from '../../shared/bots/bot-acts-for'
 import { originOf, requestsOriginPlace } from './bot-request-origin-place'
+import { carriedAskersOf, stampedPerson } from './bot-stamped-askers'
 import { typedInOrcaByOwner } from './bot-typed-in-orca'
 import { isRootTurnRecord, isRootUserMessage, turnMessages } from './bot-turn-messages'
 
@@ -156,16 +157,7 @@ function stampedAsker(
   workspaceId: string | null
 ): { asker: BotRequestAsker; wokenAt: BotWakingPlace } {
   return {
-    asker: {
-      kind: 'person',
-      source: asker.source,
-      userId: asker.userId,
-      ...(asker.name ? { name: asker.name } : {}),
-      workspaceId,
-      // Another Slack app is no person: never the owner, nor a member with their rights.
-      role: asker.app ? null : asker.role,
-      placeKind: asker.place.kind
-    },
+    asker: stampedPerson(asker, workspaceId),
     wokenAt: {
       source: asker.source,
       placeId: asker.place.id,
@@ -201,13 +193,13 @@ export function firstMessageActsFor(
         : []
     return requested.length > 0 ? distinctAskers(requested) : [...OWNER_ACTS_FOR]
   }
-  if (body.asker) {
-    return [stampedAsker(body.asker, lookups.conversationWorkspaceId).asker]
-  }
-  if (body.origin === 'connector' && !body.memorySource) {
-    return [{ kind: 'unknown' }]
-  }
-  return [...OWNER_ACTS_FOR]
+  const carried = carriedAskersOf(body, lookups.conversationWorkspaceId)
+  const own: BotRequestAsker[] = body.asker
+    ? [stampedAsker(body.asker, lookups.conversationWorkspaceId).asker]
+    : body.origin === 'connector' && !body.memorySource
+      ? [{ kind: 'unknown' }]
+      : [...OWNER_ACTS_FOR]
+  return carried.length > 0 ? distinctAskers([...own, ...carried]) : own
 }
 
 /** Each turn's messages, newest turn first: the one that opened it and those steered into it. A
@@ -258,6 +250,9 @@ export function readBotActingTurnWithin(
   // A turn only worker mail woke reads an older turn's askers, never its place: its work is no thread's.
   for (const [index, window] of turnWindows(items, submissions, newestTurns).entries()) {
     const readings = window.map((item) => ({ item, reading: readItem(item.body, lookups) }))
+    const carried = window.flatMap((item) =>
+      carriedAskersOf(item.body, lookups.conversationWorkspaceId)
+    )
     const requestIds = readings.flatMap((entry) =>
       entry.reading.kind === 'request' ? entry.reading.messageIds : []
     )
@@ -282,7 +277,12 @@ export function readBotActingTurnWithin(
       )
       return {
         rootItemId: first.item.itemId,
-        askers: distinctAskers([...lookups.conversationActsFor, ...fromRequests, ...stamped]),
+        askers: distinctAskers([
+          ...lookups.conversationActsFor,
+          ...fromRequests,
+          ...stamped,
+          ...carried
+        ]),
         askedBy: distinctAskers(
           records.flatMap((record) => record?.askedBy ?? record?.askers ?? [{ kind: 'unknown' }])
         ),
@@ -332,7 +332,8 @@ export function readBotActingTurnWithin(
         // Anyone stamped in the same turn still holds a mixed turn to the least trusted.
         askers: distinctAskers([
           ...(ran ? OWNER_ACTS_FOR : lookups.conversationActsFor),
-          ...stamped
+          ...stamped,
+          ...carried
         ]),
         askedBy: distinctAskers(askedBy),
         request: textOf(opener.item.body),

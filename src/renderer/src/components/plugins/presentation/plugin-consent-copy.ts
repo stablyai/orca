@@ -8,6 +8,9 @@ export function pluginTrustLabel(trust: PluginTrust, t: Translate = translate): 
     return t('auto.components.settings.pluginConsentCopy.fullAccess', 'Full access')
   }
   if (trust.declarative) {
+    if (trust.serversOnly) {
+      return t('auto.components.settings.pluginConsentCopy.addsMcpServers', 'Adds MCP servers')
+    }
     return trust.recipesOnly
       ? t('auto.components.settings.pluginConsentCopy.addsVmRecipes', 'Adds VM recipes')
       : t('auto.components.settings.pluginConsentCopy.addsCommands', 'Adds commands')
@@ -35,10 +38,15 @@ export function pluginTrustWarnings(trust: PluginTrust, t: Translate = translate
   }
   if (trust.declarative) {
     warnings.push(
-      t(
-        'auto.components.settings.PluginConsentDialog.instructionalWarning',
-        'Its commands can act for you or your agents'
-      )
+      trust.serversOnly
+        ? t(
+            'auto.components.settings.PluginConsentDialog.mcpServersWarning',
+            'Gives your agents its MCP servers, which can start programs and act for them'
+          )
+        : t(
+            'auto.components.settings.PluginConsentDialog.instructionalWarning',
+            'Its commands can act for you or your agents'
+          )
     )
   }
   if (trust.panel && !trust.worker) {

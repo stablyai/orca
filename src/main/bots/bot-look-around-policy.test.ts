@@ -35,6 +35,27 @@ const BASH: readonly (readonly [string, string])[] = [
   ["/tmp/evil/bash -c 'git status'", '"/tmp/evil/bash" isn\'t a read'],
   ["sh\n-c 'git status'", 'a second line'],
   ["/usr/bin/zsh -lc 'git status; rm x'", '"rm x" isn\'t a read'],
+  // Codex joins argv with shlex: a script with a ' is double-quoted, or split into runs.
+  [`/bin/zsh -lc "orca bot suggest --title 'Follow up' --why 'Needs review' --ask 'Do it'"`, ALLOW],
+  [`/bin/zsh -lc '"\${ORCA_CLI_COMMAND:-orca}" bot suggest --title '"'A b' --why 'c d'"`, ALLOW],
+  [`/bin/zsh -lc 'gh pr list --search '"'"'a b'"'"''`, ALLOW],
+  [`/bin/zsh -lc 'gh pr list --search '\\''a b'"'"' --json '"'"'c, d'\\'`, ALLOW],
+  [
+    `/bin/zsh -lc '"\${ORCA_CLI_COMMAND:-orca}" bot suggest --title '"'A b' && \\""'\${ORCA_CLI_COMMAND:-orca}" bot list'`,
+    ALLOW
+  ],
+  [`/bin/zsh -lc "orca bot suggest --title 'Ship it"'!'"' --why 'a\\\\b'"`, ALLOW],
+  [`/bin/zsh -lc "git log; rm x"`, '"rm x" isn\'t a read'],
+  [`/bin/zsh -lc 'gh pr list --search '"'"'a'"'"'; rm x'`, '"rm x" isn\'t a read'],
+  [`/bin/zsh -lc 'gh pr list --search '"'"'a'"'"' $(id)'`, 'expansion ("$(")'],
+  [`/bin/zsh -lc 'orca bot suggest --title '"'"'a b'`, '"\'a"'],
+  [`/bin/zsh -lc 'git status'"'`, 'double quotes'],
+  [`/bin/zsh -lc "gh pr list --search '$(id)'"`, 'double quotes'],
+  [`/bin/zsh -lc "gh pr list --search \\"x\\""`, 'double quotes'],
+  [`/bin/zsh -lc "gh pr list --search '\`id\`'"`, 'double quotes'],
+  [`/bin/zsh -lc "gh pr list --search 'a!b'"`, 'double quotes'],
+  // zsh's RC_QUOTES reads '' inside single quotes as ', so adjacent single-quoted runs stay wrapped.
+  [`/bin/zsh -lc 'gh pr list --search '"'"'a'';rm y;'"'"''`, 'double quotes'],
   // Control and invisible characters, and newlines a trim would drop.
   ["gh pr view 'a\u0000b'", 'a control or invisible character'],
   ['﻿git status', 'a control or invisible character'],

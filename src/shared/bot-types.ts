@@ -18,6 +18,12 @@ export {
   BotItemsStaleSchema,
   type BotItemsStale
 } from './bots/bot-items-stale'
+import {
+  BOT_AGENT_SUCCESSORS,
+  BOT_RETIRED_AGENTS,
+  isBotRetiredAgent,
+  migrateRetiredBotAgent
+} from './bots/bot-retired-agents'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
 export const BOT_HELD_BACK_AGENTS = [] as const
@@ -41,13 +47,17 @@ export const BOT_AGENTS = [
   'goose',
   'kilo',
   'mimo-code',
-  'gemini',
   'droid',
   'qwen-code',
   'cline',
   'devin',
   'codebuddy'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
+
+/** A bot agent as old records and peers name it: a retired agent reads as its successor. */
+export const BotAgentReadSchema = z
+  .enum([...BOT_AGENTS, ...BOT_RETIRED_AGENTS])
+  .transform((agent): BotAgent => (isBotRetiredAgent(agent) ? BOT_AGENT_SUCCESSORS[agent] : agent))
 
 /** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
 const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
@@ -385,7 +395,7 @@ export function normalizePersistedBots(value: unknown): Bot[] {
   const bots: Bot[] = []
   const seen = new Set<string>()
   for (const candidate of value) {
-    const parsed = BotSchema.safeParse(candidate)
+    const parsed = BotSchema.safeParse(migrateRetiredBotAgent(candidate))
     if (parsed.success && !seen.has(parsed.data.id)) {
       seen.add(parsed.data.id)
       bots.push(withSlackMembersTagged(parsed.data))
