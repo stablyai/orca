@@ -63,6 +63,25 @@ export function botNewChatAgents(
   return enabled.length > 0 ? enabled : [botAgentOnHost(bot.agent, model)]
 }
 
+/** What a bot's home offers to start from its + menu. A shared agent's Home Chat and computer are its
+ *  owner's, and its host starts this account's chats on its own agent whatever is asked: it offers one
+ *  new chat with it, and no Home Chat, terminal, browser or other agent here. */
+export type BotHomeOffers = {
+  homeChat: boolean
+  agents: BotNewChatAgent[]
+  workspaceTabs: boolean
+}
+
+export function botHomeOffers(
+  bot: Pick<Bot, 'agent'>,
+  model: BotAgentMenuModel,
+  shared: boolean
+): BotHomeOffers {
+  return shared
+    ? { homeChat: false, agents: [{ agent: bot.agent }], workspaceTabs: false }
+    : { homeChat: true, agents: botNewChatAgents(bot, model), workspaceTabs: true }
+}
+
 /** The agents a bot can be set to here: the installed ones, and `current` always; empty while the
  *  menu is still learning the host. */
 export function botAgentChoices(model: BotAgentMenuModel, current?: BotAgent): BotAgent[] {

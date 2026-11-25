@@ -3,7 +3,7 @@ import {
   buildNewTabAgentMenuRows,
   type NewTabAgentMenuRow
 } from '../agent-launch/picker/agent-launch-picker-rows'
-import { botNewChatAgents, type BotAgentMenuModel } from './bot-agent-choices'
+import { botHomeOffers, botNewChatAgents, type BotAgentMenuModel } from './bot-agent-choices'
 
 const settled = (
   rows: NewTabAgentMenuRow[],
@@ -53,5 +53,18 @@ describe('botNewChatAgents', () => {
     expect(botNewChatAgents({ agent: 'claude' }, settled([], null))).toEqual([
       { agent: 'claude', unavailable: 'check-failed' }
     ])
+  })
+})
+
+it('offers a shared agent one new chat on its own agent: no Home Chat, terminal or other agent', () => {
+  // This computer has other agents, but the owner's host runs the chat on the agent's own.
+  const model = settled([
+    { kind: 'chat', agent: 'claude' },
+    { kind: 'chat', agent: 'codex' }
+  ])
+  expect(botHomeOffers({ agent: 'codex' }, model, true)).toEqual({
+    homeChat: false,
+    agents: [{ agent: 'codex' }],
+    workspaceTabs: false
   })
 })

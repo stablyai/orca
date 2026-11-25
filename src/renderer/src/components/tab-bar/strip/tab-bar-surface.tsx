@@ -28,6 +28,7 @@ import type { TabStripSegment } from './tab-strip-window'
 import { TabBarStaticCreateMenu } from '../create-menu/tab-bar-static-create-menu'
 import { NewTabMenuContent } from '../menu-fit/NewTabMenuContent'
 import ClientHostedBrowserTabRows from '../browser-tabs/ClientHostedBrowserTabRows'
+import { botHomeOffers } from '../../../../../shared/bots/bot-agent-choices'
 import { BotNewChatMenuItems } from '../../bots/BotNewChatMenuItems'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotGroup } from '../../../../../shared/bots/bot-group'
@@ -49,6 +50,7 @@ export function renderTabBarSurface(
     itemActions,
     surfaceRef,
     bot,
+    sharedBot,
     botGroup
   }: {
     props: TabBarProps
@@ -62,6 +64,8 @@ export function renderTabBarSurface(
     surfaceRef: (node: HTMLDivElement | null) => void
     /** Set in a bot's home, where the menu leads with a new chat with the bot. */
     bot: Bot | null
+    /** The bot is an agent shared with this account, whose home here holds only its chats. */
+    sharedBot: boolean
     /** Set in a group's home, where the menu leads with a new thread. */
     botGroup: BotGroup | null
   },
@@ -126,6 +130,8 @@ export function renderTabBarSurface(
     })
 
   const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0
+  const botOffers = bot ? botHomeOffers(bot, agentMenu, sharedBot) : null
+  const workspaceTabs = botOffers?.workspaceTabs !== false
   return (
     <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
       {tabStripOverflowState.hasOverflow ? (
@@ -259,7 +265,7 @@ export function renderTabBarSurface(
             advanceAgentSessionsTourPastNewTab()
           }}
         >
-          {!terminalOnly && onOpenEntry ? (
+          {!terminalOnly && onOpenEntry && workspaceTabs ? (
             <>
               <TabBarAgentPickerEntry
                 inventory={agentPickerInventory}
@@ -287,14 +293,16 @@ export function renderTabBarSurface(
               {showStaticCreateMenuItems ? <DropdownMenuSeparator className="my-0 mb-1.5" /> : null}
             </>
           ) : null}
-          {bot && !terminalOnly ? <BotNewChatMenuItems bot={bot} model={agentMenu} /> : null}
+          {bot && botOffers && !terminalOnly ? (
+            <BotNewChatMenuItems bot={bot} offers={botOffers} />
+          ) : null}
           {botGroup && !terminalOnly ? (
             <>
               <BotGroupNewThreadMenuItems group={botGroup} />
               {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
             </>
           ) : null}
-          {showStaticCreateMenuItems ? (
+          {showStaticCreateMenuItems && workspaceTabs ? (
             <TabBarStaticCreateMenu
               props={props}
               groupId={resolvedGroupId}
@@ -312,7 +320,7 @@ export function renderTabBarSurface(
               }
             />
           ) : null}
-          {showStaticCreateMenuItems && showAgentLaunchItems && !botGroup ? (
+          {showStaticCreateMenuItems && showAgentLaunchItems && !botGroup && workspaceTabs ? (
             <>
               <DropdownMenuSeparator />
               {bot ? (

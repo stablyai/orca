@@ -12,6 +12,10 @@ import { useTabBarItemActions } from './model/use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
 import { useBotForWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
+import {
+  sharedBotHostOf,
+  useSharedBotHosts
+} from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
@@ -31,6 +35,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
   const bot = useBotForWorkspace(worktreeId)
   const botGroup = useBotGroupForWorkspace(worktreeId)
+  useSharedBotHosts()
+  const sharedBot = bot !== null && sharedBotHostOf(bot.hostId) !== null
   const baseCreateMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
@@ -144,6 +150,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       itemActions,
       surfaceRef,
       bot,
+      sharedBot,
       botGroup
     },
     t
