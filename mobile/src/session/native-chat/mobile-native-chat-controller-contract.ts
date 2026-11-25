@@ -3,7 +3,7 @@ import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/na
 import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { StructuredMobileSendAttachment } from './composer/delivery/use-mobile-structured-send-with-outcome'
-import type { MobileSessionView } from '../../storage/session-view-preferences'
+import type { MobileSessionViewModeController } from '../use-mobile-session-view-mode'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   AskAnswerSelection,
@@ -44,7 +44,7 @@ import type { MobileNativeChatUsageLimit } from './status/use-mobile-native-chat
 export type MobileNativeChatController = {
   sessionViewReady: boolean
   isTabChatView: (tabId: string) => boolean
-  setTabView: (tabId: string, view: MobileSessionView) => void
+  setTabView: MobileSessionViewModeController['setTabView']
   toggleTabChatView: (tabId: string) => void
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>

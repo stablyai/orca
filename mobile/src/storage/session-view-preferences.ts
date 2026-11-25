@@ -2,8 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
 import type { AgentLaunchSurface } from '../../../src/shared/agent-launch/contracts/agent-launch-surface'
 import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/native-chat-agent-support'
+import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../mobile-web-shell/page-storage/page-storage-keys'
 
 export type MobileSessionView = 'terminal' | 'chat'
+export type MobileSessionViewOverride = MobileSessionView | 'launch-terminal'
 
 const DEFAULT_SESSION_VIEW_KEY = 'orca:defaultSessionView'
 const NATIVE_CHAT_TABS_PREFIX = 'orca:nativeChatTabs:'
@@ -86,7 +88,7 @@ export function saveNewAgentSurface(surface: AgentLaunchSurface | null): Promise
 }
 
 export type SessionViewOverridesPreference = {
-  overrides: Map<string, MobileSessionView>
+  overrides: Map<string, MobileSessionViewOverride>
   loaded: boolean
 }
 
@@ -120,8 +122,8 @@ async function readSessionViewOverridesStorage(
   }
   if (parsed && typeof parsed === 'object') {
     const entries = Object.entries(parsed as Record<string, unknown>).filter(
-      (entry): entry is [string, MobileSessionView] =>
-        entry[1] === 'terminal' || entry[1] === 'chat'
+      (entry): entry is [string, MobileSessionViewOverride] =>
+        entry[1] === 'terminal' || entry[1] === 'chat' || entry[1] === 'launch-terminal'
     )
     return { overrides: new Map(entries), loaded: true }
   }
@@ -132,7 +134,7 @@ async function readSessionViewOverridesStorage(
 export async function loadSessionViewOverrides(
   hostId: string,
   worktreeId: string
-): Promise<Map<string, MobileSessionView>> {
+): Promise<Map<string, MobileSessionViewOverride>> {
   return (await readSessionViewOverridesPreference(hostId, worktreeId)).overrides
 }
 
@@ -151,7 +153,7 @@ export async function updateSessionViewOverride(
   hostId: string,
   worktreeId: string,
   tabId: string,
-  view: MobileSessionView
+  view: MobileSessionViewOverride
 ): Promise<void> {
   const key = sessionViewOverridesKey(hostId, worktreeId)
   const previous = overrideUpdateBarriers.get(key) ?? Promise.resolve()
@@ -161,8 +163,21 @@ export async function updateSessionViewOverride(
     if (!current.loaded) {
       throw new Error('Session view overrides could not be read')
     }
+    if (view === 'launch-terminal' && current.overrides.has(tabId)) {
+      return
+    }
     current.overrides.set(tabId, view)
-    const value = JSON.stringify(Object.fromEntries(current.overrides))
+    let value = JSON.stringify(Object.fromEntries(current.overrides))
+    // Prefer manual view choices when accumulated launch preferences reach the bridge's storage limit.
+    for (const [id, stored] of current.overrides) {
+      if (value.length <= PAGE_STORAGE_MAX_VALUE_CHARS) {
+        break
+      }
+      if (stored === 'launch-terminal') {
+        current.overrides.delete(id)
+        value = JSON.stringify(Object.fromEntries(current.overrides))
+      }
+    }
     await persistMirrored(key, value)
   })
   const barrier = update.catch(() => undefined)

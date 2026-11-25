@@ -9,6 +9,13 @@ export type StablePaneId = string & { readonly [stablePaneIdBrand]: true }
 export type TerminalLeafId = StablePaneId & { readonly [terminalLeafIdBrand]: true }
 export type PaneKey = string & { readonly [paneKeyBrand]: true }
 
+export const TERMINAL_ROW_SEPARATOR = '::'
+
+/** Session tab snapshots publish one row per pane. */
+export function terminalRowId(tabId: string, leafId: string): string {
+  return `${tabId}${TERMINAL_ROW_SEPARATOR}${leafId}`
+}
+
 export function isStablePaneId(value: string): value is StablePaneId {
   return UUID_RE.test(value)
 }

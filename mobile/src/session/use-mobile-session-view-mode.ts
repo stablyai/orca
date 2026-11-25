@@ -6,13 +6,14 @@ import {
   readSessionViewOverridesPreference,
   updateSessionViewOverride,
   type MobileSessionView,
+  type MobileSessionViewOverride,
   type SessionViewOverridesPreference
 } from '../storage/session-view-preferences'
 
 type ViewOverridesState = {
   hostId: string
   worktreeId: string
-  overrides: Map<string, MobileSessionView>
+  overrides: Map<string, MobileSessionViewOverride>
   loaded: boolean
 }
 
@@ -20,7 +21,7 @@ type ViewOverridesRuntime = {
   hostId: string
   worktreeId: string
   loadPromise: Promise<SessionViewOverridesPreference>
-  currentOverrides: Map<string, MobileSessionView>
+  currentOverrides: Map<string, MobileSessionViewOverride>
   mutationRevisions: Map<string, number>
 }
 
@@ -29,12 +30,14 @@ function isOverrideScope(state: ViewOverridesState, hostId: string, worktreeId: 
 }
 
 function mergeOverrides(
-  persisted: ReadonlyMap<string, MobileSessionView>,
-  current: ReadonlyMap<string, MobileSessionView>
-): Map<string, MobileSessionView> {
+  persisted: ReadonlyMap<string, MobileSessionViewOverride>,
+  current: ReadonlyMap<string, MobileSessionViewOverride>
+): Map<string, MobileSessionViewOverride> {
   const merged = new Map(persisted)
   for (const [tabId, view] of current) {
-    merged.set(tabId, view)
+    if (view !== 'launch-terminal' || !merged.has(tabId)) {
+      merged.set(tabId, view)
+    }
   }
   return merged
 }
@@ -42,7 +45,7 @@ function mergeOverrides(
 export type MobileSessionViewModeController = {
   ready: boolean
   isTabChatView: (tabId: string) => boolean
-  setTabView: (tabId: string, view: MobileSessionView) => void
+  setTabView: (tabId: string, view: MobileSessionViewOverride) => void
   toggleTabChatView: (tabId: string) => void
 }
 
@@ -144,17 +147,20 @@ export function useMobileSessionViewMode(args: {
   )
 
   const setTabView = useCallback(
-    (tabId: string, nextView: MobileSessionView) => {
+    (tabId: string, nextView: MobileSessionViewOverride) => {
       const current = viewOverridesStateRef.current
       const currentScope = isOverrideScope(current, hostId, worktreeId)
         ? current
         : {
             hostId,
             worktreeId,
-            overrides: new Map<string, MobileSessionView>(),
+            overrides: new Map<string, MobileSessionViewOverride>(),
             loaded: false
           }
       const overrides = new Map(currentScope.overrides)
+      if (nextView === 'launch-terminal' && overrides.has(tabId)) {
+        return
+      }
       overrides.set(tabId, nextView)
       const next = { ...currentScope, overrides }
       viewOverridesStateRef.current = next

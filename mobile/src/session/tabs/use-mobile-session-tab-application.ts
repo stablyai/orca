@@ -78,7 +78,6 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
   const terminalRowHandlesRef = useRef<TerminalRowHandles>(new Map())
   const applySessionTabs = useCallback(
     (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
-      const diagnostics = terminalDiagnosticsRef.current
       if (!acceptSessionSnapshot(result, appliedSnapshotMarkerRef.current)) {
         return { accepted: false }
       }
@@ -175,24 +174,27 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
 
       const followsHost = result.navigationIntent === 'follow'
+      const pending = pendingSelectionRef.current
+      const { selection, landedTab } = resolveLaunchedSelection(pending, nextTabs)
+      if (landedTab?.type === 'terminal' && pending?.kind === 'launched') {
+        pending.onTerminalLanded?.(landedTab.id)
+      }
       if (followsHost) {
         pendingSelectionRef.current = withoutPendingHandle(
-          pendingSelectionRef.current?.kind === 'launched' ? null : pendingSelectionRef.current
+          pending?.kind === 'launched' ? null : pending
         )
         pendingBrowserFocusPageIdRef.current = null
       } else {
-        const pending = pendingSelectionRef.current
-        const launch = resolveLaunchedSelection(pending, nextTabs)
-        pendingSelectionRef.current = launch.selection
-        if (launch.landedTabId && pending?.kind === 'launched') {
+        pendingSelectionRef.current = selection
+        if (landedTab && pending?.kind === 'launched') {
           // Release creation when its tab lands; prompt delivery can delay the reply by a minute.
           releaseTerminalCreateLock({ creatingTerminalRef, setCreating }, pending.lock)
         }
-        if (launch.landedTabId && clientRef.current) {
+        if (landedTab && clientRef.current) {
           // Launches carry no navigation; persist the pick or this device stays on its old host tab.
           void activateMobileSessionTab(clientRef.current, {
             worktree: `id:${result.worktree}`,
-            tabId: launch.landedTabId,
+            tabId: landedTab.id,
             notifyClients: false,
             navigation: 'caller',
             intent: 'user'
@@ -255,7 +257,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
           pendingSelectionRef.current = withoutPendingHandle(pendingSelectionRef.current)
         }
       }
-      diagnostics.tabsApplied(result, nextTabs, active, selectionSource)
+      terminalDiagnosticsRef.current.tabsApplied(result, nextTabs, active, selectionSource)
       if (!resolved.retainSelectedSessionTabId || active !== resolved.activeTab) {
         selectedSessionTabIdRef.current = active?.id ?? null
       }
