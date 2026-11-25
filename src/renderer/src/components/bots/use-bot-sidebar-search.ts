@@ -14,6 +14,7 @@ import { pruneBotAutoUnfoldMemory } from './bot-auto-unfold-memory'
 import { botErrorMessage } from './bot-presentation'
 import { pruneBotSidebarChildren } from './bot-sidebar-child-presence'
 import { pruneBotSidebarPaging } from './bot-sidebar-paging'
+import { pruneBotSidebarChatChanges } from './use-bot-sidebar-older-chats'
 import { revealBotSidebarRow } from './reveal-bot-sidebar-row'
 
 export type BotSidebarSearchState = {
@@ -168,6 +169,7 @@ export function useBotSidebarSearch({
     const liveKeys = new Set(savedEntries.map((entry) => entry.id))
     pruneBotSidebarChildren(liveKeys)
     pruneBotSidebarPaging(liveKeys)
+    pruneBotSidebarChatChanges(liveKeys)
     pruneBotAutoUnfoldMemory(
       new Set(
         savedEntries.flatMap((entry) =>

@@ -37,6 +37,8 @@ export type BotChatTree = {
   loadMore: (chatId: string) => void
   /** Whether the chats have been read. */
   state: BotHostReadState
+  /** The chats are the last good read after a refresh failed. */
+  refreshFailed: boolean
   retry: () => void
 }
 
@@ -50,7 +52,7 @@ const NO_PAGES: LoadedPages['byChat'] = {}
  *  Pass null to read nothing, for a surface that shows no chats (a folded bot, say). */
 export function useBotChatTree(bot: Bot | null): BotChatTree {
   const read = useBotHostRead(chatTreeRead, bot)
-  const { state, retry } = useBotHostReadState(chatTreeRead, bot)
+  const { state, refreshFailed, retry } = useBotHostReadState(chatTreeRead, bot)
   // Only this bot's finished turns' acks, so focusing a pane elsewhere doesn't re-render it.
   const turnPanes = useMemo(
     () => (read?.chats ?? []).flatMap((chat) => (chat.turnDone ? [chat.turnDone.paneKey] : [])),
@@ -124,6 +126,7 @@ export function useBotChatTree(bot: Bot | null): BotChatTree {
     workspaceChats: read?.workspaceChats ?? NO_WORKSPACES,
     loadMore,
     state,
+    refreshFailed,
     retry
   }
 }

@@ -1,13 +1,11 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
-import { useNow } from '@/lib/window-activity/use-now'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
-import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   botChatFoldKey,
@@ -18,7 +16,6 @@ import {
   botLiveWorkspaceIds,
   botSidebarListedChats
 } from '../../../../shared/bots/bot-sidebar-chat-groups'
-import { splitOlderBotSidebarChats } from '../../../../shared/bots/bot-sidebar-older-chats'
 import {
   botSidebarWorkerPagingLabel,
   buildBotSidebarTree,
@@ -26,7 +23,6 @@ import {
   type BotSidebarChatView
 } from '../../../../shared/bots/bot-sidebar-tree'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
 import { BotChatPaging, BotChatRowEnd, useBotChatPress } from './BotChatRowControls'
 import type { BotChatTree } from './use-bot-chat-tree'
@@ -34,9 +30,7 @@ import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChat
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
-
-/** How often a chat's age is re-read, so one a day old folds without a new chat read. */
-const OLDER_CHATS_CLOCK_MS = 5 * 60_000
+import { useBotSidebarOlderChats, useFocusWithin } from './use-bot-sidebar-older-chats'
 
 /** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by
  *  indent; settled ones a day old fold under one "Show N older" link. */
@@ -85,31 +79,6 @@ export function BotSidebarChats({
       activeLineId: activeLine?.id ?? null
     })
   }, [chats, listed, workspaceChats, workspaces, folds, steps, activeLine])
-  const homeKey = useMemo(() => folderWorkspaceKey(bot.folderWorkspaceId), [bot.folderWorkspaceId])
-  const homeTabs = useAppStore((s) => s.unifiedTabsByWorktree[homeKey])
-  const activeChatId = useAppStore((s) => {
-    if ((s.activeWorkspaceKey ?? s.activeWorktreeId) !== homeKey) {
-      return null
-    }
-    const tab = selectFrontTab(s)
-    return tab?.contentType === 'agent-session' ? tab.entityId : null
-  })
-  const now = useNow(OLDER_CHATS_CLOCK_MS)
-  const { recent, older } = useMemo(() => {
-    const focusedAt = new Map<string, number>()
-    for (const tab of homeTabs ?? []) {
-      if (tab.contentType === 'agent-session' && tab.lastFocusedAt !== undefined) {
-        focusedAt.set(tab.entityId, Math.max(tab.lastFocusedAt, focusedAt.get(tab.entityId) ?? 0))
-      }
-    }
-    return splitOlderBotSidebarChats(view.chats, {
-      now,
-      focusedAt,
-      activeChatId,
-      liveLineIds: botLiveWorkspaceIds(chats),
-      activeLineId: activeLine?.id ?? null
-    })
-  }, [view.chats, homeTabs, activeChatId, now, chats, activeLine])
   // A reveal of a worker line under a folded chat opens that chat, once per request.
   const reveal = useBotsRevealRequest(botSidebarEntryKey(bot))
   const revealWorker = reveal?.target.hostDown ? undefined : reveal?.target.worker
@@ -129,6 +98,50 @@ export function BotSidebarChats({
       setBotChatFold(bot.hostId, bot.id, foldedHolder, 'open')
     }
   }, [revealNonce, foldedHolder, setBotChatFold, bot.hostId, bot.id])
+  const focus = useFocusWithin()
+  const liveLineIds = useMemo(() => botLiveWorkspaceIds(chats), [chats])
+  const revealHeld = useMemo(
+    () =>
+      reveal && !reveal.target.hostDown
+        ? {
+            chatId: reveal.target.chatId,
+            lineIds: revealWorker
+              ? [revealWorker.id, ...revealWorker.ancestors.map((line) => line.id)]
+              : []
+          }
+        : null,
+    [reveal, revealWorker]
+  )
+  const { recent, older } = useBotSidebarOlderChats({
+    entryKey: botSidebarEntryKey(bot),
+    folderWorkspaceId: bot.folderWorkspaceId,
+    chats,
+    views: view.chats,
+    workspaces,
+    workspaceChats,
+    lineageChildrenByParentIdentity,
+    liveLineIds,
+    activeLineId: activeLine?.id ?? null,
+    reveal: revealHeld,
+    stale: tree.state !== 'ready' || tree.refreshFailed,
+    interacting: focus.focused
+  })
+  // The link going away under focus (its last older chat listed again) hands focus to the last chat row;
+  // focus anywhere else is left alone.
+  const listRef = useRef<HTMLDivElement>(null)
+  const pagingFocused = useRef(false)
+  useLayoutEffect(() => {
+    if (older.length > 0 || !pagingFocused.current) {
+      return
+    }
+    pagingFocused.current = false
+    if (document.activeElement === null || document.activeElement === document.body) {
+      const rows = [
+        ...(listRef.current?.querySelectorAll<HTMLElement>('[data-bot-sidebar-chat]') ?? [])
+      ]
+      rows.at(-1)?.focus()
+    }
+  }, [older.length])
   const notes = useMemo(() => {
     const labels = new Map<string, string>()
     for (const [worktreeId, note] of view.notes) {
@@ -155,23 +168,37 @@ export function BotSidebarChats({
   )
 
   return (
-    <>
+    // `contents`, so the rows stay the parent's flex children; it only watches focus (menus too).
+    <div ref={listRef} className="contents" {...focus.handlers}>
       {recent.map(chatRow)}
       {showOlder ? older.map(chatRow) : null}
-      <BotChatPaging
-        more={
-          older.length > 0 && !showOlder
-            ? [
-                {
-                  label: t('bots.chats.older', 'Show {{count}} older', { count: older.length }),
-                  onClick: onToggleOlder
-                }
-              ]
-            : []
-        }
-        onFewer={older.length > 0 && showOlder ? onToggleOlder : null}
-        className="pr-2 pb-1 pl-1"
-      />
+      {/* A blur with nowhere to go (the link removed) keeps the mark for the effect above. */}
+      <div
+        className="contents"
+        onFocus={() => {
+          pagingFocused.current = true
+        }}
+        onBlur={(event) => {
+          if (event.relatedTarget !== null) {
+            pagingFocused.current = false
+          }
+        }}
+      >
+        <BotChatPaging
+          more={
+            older.length > 0 && !showOlder
+              ? [
+                  {
+                    label: t('bots.chats.older', 'Show {{count}} older', { count: older.length }),
+                    onClick: onToggleOlder
+                  }
+                ]
+              : []
+          }
+          onFewer={older.length > 0 && showOlder ? onToggleOlder : null}
+          className="pr-2 pb-1 pl-1"
+        />
+      </div>
       {view.stray.length > 0 ? (
         <AttachedWorktreeCards
           roots={view.stray}
@@ -182,7 +209,7 @@ export function BotSidebarChats({
           onOpen={onOpen}
         />
       ) : null}
-    </>
+    </div>
   )
 }
 

@@ -3,8 +3,9 @@ import type { BotChatTreeChat, BotChatTreeWorker } from './bot-chat-tree'
 import { splitOlderBotSidebarChats } from './bot-sidebar-older-chats'
 import { buildBotSidebarTree } from './bot-sidebar-tree'
 
-const NOW = 10 * 24 * 3_600_000
-const DAYS_AGO_4 = NOW - 4 * 24 * 3_600_000
+const HOUR = 3_600_000
+const NOW = 240 * HOUR
+const DAYS_AGO_4 = NOW - 96 * HOUR
 
 const worker = (name: string, state: BotChatTreeWorker['state']): BotChatTreeWorker => ({
   key: name,
@@ -34,12 +35,28 @@ function chat(chatId: string, extra: Partial<BotChatTreeChat> = {}): BotChatTree
   }
 }
 
-function split(chats: BotChatTreeChat[], workspaceChats: Record<string, string> = {}) {
-  const workspaces = Object.keys(workspaceChats).map((id) => ({ id }))
+// Workspaces in list order, by the chat each sits under; children nest under 'parent-line'.
+const WORKSPACE_CHATS: Record<string, string> = {
+  'old-done-line': 'failed-1',
+  'host-live-line': 'holds-host-live-line',
+  'open-line': 'holds-open-line',
+  'parent-line': 'holds-asking-descendant',
+  'quiet-1': 'holds-paged-out-line',
+  'quiet-2': 'holds-paged-out-line',
+  'quiet-3': 'holds-paged-out-line',
+  'asking-paged-out': 'holds-paged-out-line'
+}
+const CHILDREN: Record<string, { id: string }[]> = {
+  'parent-line': [{ id: 'quiet-child' }, { id: 'middle' }],
+  middle: [{ id: 'asking-grandchild' }, { id: 'parent-line' }]
+}
+
+function split(chats: BotChatTreeChat[], keepFoldedOnly: ReadonlySet<string> | null = null) {
+  const workspaces = Object.keys(WORKSPACE_CHATS).map((id) => ({ id }))
   const view = buildBotSidebarTree({
     chats,
     workspaces,
-    workspaceChats,
+    workspaceChats: WORKSPACE_CHATS,
     foldOf: () => undefined,
     stepsOf: () => 0,
     activeLineId: 'open-line'
@@ -47,12 +64,20 @@ function split(chats: BotChatTreeChat[], workspaceChats: Record<string, string> 
   const result = splitOlderBotSidebarChats(view.chats, {
     now: NOW,
     focusedAt: new Map([
-      ['focused-today', NOW - 3_600_000],
-      ['focused-long-ago', DAYS_AGO_4]
+      ['focused-today', NOW - HOUR],
+      ['focused-long-ago', DAYS_AGO_4],
+      ['cleared-into-session', NOW - HOUR]
     ]),
-    activeChatId: 'in-front',
-    liveLineIds: new Set(['live-line']),
-    activeLineId: 'open-line'
+    heldSessionIds: new Set(['front-session', 'revealed']),
+    changedAt: new Map([
+      ['changed-today', NOW - HOUR],
+      ['changed-long-ago', DAYS_AGO_4]
+    ]),
+    heldLineIds: new Set(['host-live-line', 'open-line', 'asking-grandchild', 'asking-paged-out']),
+    workspaces,
+    workspaceChats: WORKSPACE_CHATS,
+    childrenOf: (line) => CHILDREN[line.id] ?? [],
+    keepFoldedOnly
   })
   return {
     recent: result.recent.map((each) => each.chat.chatId),
@@ -60,54 +85,68 @@ function split(chats: BotChatTreeChat[], workspaceChats: Record<string, string> 
   }
 }
 
+const CHATS = [
+  chat('home', { origin: 'home' }),
+  chat('failed-1'),
+  chat('needs-you', { live: 'needs-you' }),
+  chat('replying', { live: 'replying' }),
+  chat('running-worker', { running: [worker('w-run', 'running')] }),
+  chat('asking-worker', { running: [worker('w-ask', 'asking-bot')] }),
+  chat('unreachable-worker', { running: [worker('w-gone', 'unreachable')] }),
+  chat('fresh-failure', { lastActiveAt: NOW - HOUR }),
+  chat('unknown-age', { lastActiveAt: 0 }),
+  chat('in-front', { liveSessionId: 'front-session' }),
+  chat('revealed'),
+  chat('focused-today'),
+  chat('focused-long-ago'),
+  chat('focused-after-clear', { liveSessionId: 'cleared-into-session' }),
+  chat('holds-host-live-line'),
+  chat('holds-open-line'),
+  chat('holds-asking-descendant'),
+  chat('holds-paged-out-line'),
+  chat('turn-failed-today', { turnDone: { paneKey: 'p', at: NOW - 60_000 } }),
+  chat('worker-failed-today', {
+    finished: [{ ...worker('w-failed', 'failed'), settledAt: NOW - 60_000 }]
+  }),
+  chat('changed-today'),
+  chat('changed-long-ago'),
+  chat('failed-2', { unseen: true })
+]
+
+const HELD = [
+  'home',
+  'needs-you',
+  'replying',
+  'running-worker',
+  'asking-worker',
+  'unreachable-worker',
+  'fresh-failure',
+  'unknown-age',
+  'in-front',
+  'revealed',
+  'focused-today',
+  'focused-after-clear',
+  'holds-host-live-line',
+  'holds-open-line',
+  'holds-asking-descendant',
+  'holds-paged-out-line',
+  'turn-failed-today',
+  'worker-failed-today',
+  'changed-today'
+]
+
 describe('splitOlderBotSidebarChats', () => {
   it('folds only settled chats a day old that nothing holds, keeping order', () => {
-    const chats = [
-      chat('home', { origin: 'home' }),
-      chat('failed-1'),
-      chat('needs-you', { live: 'needs-you' }),
-      chat('replying', { live: 'replying' }),
-      chat('running-worker', { running: [worker('w-run', 'running')] }),
-      chat('asking-worker', { running: [worker('w-ask', 'asking-bot')] }),
-      chat('unreachable-worker', { running: [worker('w-gone', 'unreachable')] }),
-      chat('fresh-failure', { lastActiveAt: NOW - 3_600_000 }),
-      chat('unknown-age', { lastActiveAt: 0 }),
-      chat('in-front'),
-      chat('focused-today'),
-      chat('focused-long-ago'),
-      chat('holds-live-line'),
-      chat('holds-open-line'),
-      chat('failed-2', { unseen: true })
-    ]
-    expect(
-      split(chats, {
-        'live-line': 'holds-live-line',
-        'open-line': 'holds-open-line',
-        'old-done-line': 'failed-1'
-      })
-    ).toEqual({
-      recent: [
-        'home',
-        'needs-you',
-        'replying',
-        'running-worker',
-        'asking-worker',
-        'unreachable-worker',
-        'fresh-failure',
-        'unknown-age',
-        'in-front',
-        'focused-today',
-        'holds-live-line',
-        'holds-open-line'
-      ],
-      older: ['failed-1', 'focused-long-ago', 'failed-2']
+    expect(split(CHATS)).toEqual({
+      recent: HELD,
+      older: ['failed-1', 'focused-long-ago', 'changed-long-ago', 'failed-2']
     })
   })
 
-  it('folds nothing when only one chat qualifies', () => {
-    expect(split([chat('home', { origin: 'home' }), chat('failed-1')])).toEqual({
-      recent: ['home', 'failed-1'],
-      older: []
+  it('folds nothing new while held to the folds already shown', () => {
+    expect(split(CHATS, new Set(['failed-1', 'needs-you']))).toEqual({
+      recent: CHATS.map((each) => each.chatId).filter((id) => id !== 'failed-1'),
+      older: ['failed-1']
     })
   })
 })
