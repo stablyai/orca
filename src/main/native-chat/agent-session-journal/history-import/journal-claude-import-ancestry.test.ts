@@ -58,6 +58,37 @@ it.each([
   ).resolves.toEqual(['u1', 'a1', 'u2', 'a2'])
 })
 
+const preservedSegment = {
+  preservedSegment: { anchorUuid: 'b', headUuid: 'keep', tailUuid: 'keep' }
+}
+const preservedMessages = { preservedMessages: { anchorUuid: 'b', uuids: ['keep'] } }
+it.each([
+  ['sidechain segment', { isSidechain: true }, preservedSegment],
+  ['sidechain list', { isSidechain: true }, preservedMessages],
+  ['team segment', { teamName: 'team-name' }, preservedSegment],
+  ['team list', { teamName: 'team-name' }, preservedMessages]
+])(
+  'rewires history through a hidden compact boundary with a %s',
+  async (_case, hidden, compactMetadata) => {
+    await expect(
+      importedUuids([
+        turn('old', null, 'user'),
+        turn('keep', 'old'),
+        {
+          type: 'system',
+          subtype: 'compact_boundary',
+          uuid: 'b',
+          parentUuid: null,
+          ...hidden,
+          compactMetadata
+        },
+        turn('u2', 'b', 'user'),
+        turn('a2', 'u2')
+      ])
+    ).resolves.toEqual(['keep', 'u2', 'a2'])
+  }
+)
+
 it('resolves compressed links through exact IDs, later duplicates, and forward parents', async () => {
   // These equal-length IDs collide under the index's hash.
   const duplicate = 'progress-0xp47bn'

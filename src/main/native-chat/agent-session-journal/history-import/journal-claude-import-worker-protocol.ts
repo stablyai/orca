@@ -14,7 +14,9 @@ export type ClaudeImportHeader = {
   identity?: AdoptedSourceIdentity
 }
 export type ClaudeImportPage = { kind: 'page'; bytes: Uint8Array }
-export type ClaudeImportWorkerRequest = { kind: 'pull' | 'verify' | 'close' }
+export type ClaudeImportWorkerRequest =
+  | { kind: 'pull' | 'close' }
+  | { kind: 'verify'; refresh: boolean }
 export type ClaudeImportWorkerResponse =
   | { kind: 'imported'; header: ClaudeImportHeader }
   | ClaudeImportPage

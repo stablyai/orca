@@ -7,6 +7,7 @@ import { MAX_LEGACY_IMPORT_RECORD_BYTES as RECORD_BYTES } from './journal-legacy
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
 
 const SLAB_BYTES = 512 * 1024
+const MAX_PROOF_ATTEMPTS = 3
 
 function changed(): never {
   throw new ClaudeImportResourceError('Claude transcript changed during history import.')
@@ -170,29 +171,43 @@ export class ClaudeImportSource {
     return { bytes, start, ranges }
   }
 
-  async verify(): Promise<ClaudeSourceVersion> {
-    const before = await this.version()
-    // A matching stat can reuse a completed content proof on this handle.
-    if (!this.verified || !sameVersion(before, this.verified)) {
-      await this.verifyPrefix(before)
-      this.verified = before
+  async verify(refresh = false): Promise<ClaudeSourceVersion> {
+    for (let attempt = 0; attempt < MAX_PROOF_ATTEMPTS; attempt++) {
+      this.signal?.throwIfAborted()
+      const before = await this.version()
+      if (!before) {
+        continue
+      }
+      // A matching stat can reuse a completed content proof on this handle.
+      if (refresh || !this.verified || !sameVersion(before, this.verified)) {
+        const matches = await this.verifyPrefix(before)
+        const after = await this.version()
+        if (!after || !sameVersion(before, after)) {
+          continue
+        }
+        if (!matches) {
+          changed()
+        }
+        this.verified = before
+      }
+      return {
+        path: this.path,
+        size: before.size,
+        device: before.dev,
+        inode: before.ino,
+        modified: before.mtimeNs,
+        changed: before.ctimeNs
+      }
     }
-    return {
-      path: this.path,
-      size: before.size,
-      device: before.dev,
-      inode: before.ino,
-      modified: before.mtimeNs,
-      changed: before.ctimeNs
-    }
+    changed()
   }
 
-  private async verifyPrefix(before: BigIntStats): Promise<void> {
+  private async verifyPrefix(before: BigIntStats): Promise<boolean> {
     if (!this.terminatedLine && before.size > this.size) {
       const delimiter = Buffer.allocUnsafe(1)
       await this.read(delimiter, this.size)
       if (delimiter[0] !== 10) {
-        changed()
+        return false
       }
     }
     const hash = createHash('sha256')
@@ -202,18 +217,16 @@ export class ClaudeImportSource {
       await this.read(chunk, offset)
       hash.update(chunk)
     }
-    if (!this.digest?.equals(hash.digest()) || !sameVersion(before, await this.version())) {
-      changed()
-    }
+    return this.digest?.equals(hash.digest()) ?? false
   }
 
-  private async version(): Promise<BigIntStats> {
+  private async version(): Promise<BigIntStats | undefined> {
     const descriptor = await this.file.stat({ bigint: true })
     const path = await stat(this.path, { bigint: true }).catch(changed)
-    if (!sameVersion(descriptor, path) || descriptor.size < this.size) {
+    if (!sameFile(descriptor, path) || descriptor.size < this.size || path.size < this.size) {
       changed()
     }
-    return descriptor
+    return sameVersion(descriptor, path) ? descriptor : undefined
   }
 
   private async readPrefix(visit: (buffer: Buffer) => void): Promise<void> {

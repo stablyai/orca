@@ -20,8 +20,14 @@ export class IndexBudget {
   }
 }
 
+function releaseStorage(buffer: ArrayBuffer, budget: IndexBudget): void {
+  const bytes = buffer.byteLength
+  buffer.transfer(0)
+  budget.release(bytes)
+}
+
 export class Table {
-  private readonly slabs: (Uint32Array | Float64Array)[] = []
+  private readonly slabs: (Uint32Array<ArrayBuffer> | Float64Array<ArrayBuffer>)[] = []
   length = 0
 
   constructor(
@@ -54,6 +60,14 @@ export class Table {
     this.slabs[Math.floor((row - 1) / SLAB_ROWS)][((row - 1) % SLAB_ROWS) * this.columns + column] =
       value
   }
+
+  dispose(): void {
+    for (const slab of this.slabs) {
+      releaseStorage(slab.buffer, this.budget)
+    }
+    this.slabs.length = 0
+    this.length = 0
+  }
 }
 
 export const enum Key {
@@ -76,7 +90,7 @@ export const enum Key {
 
 export class Keys {
   readonly table: Table
-  private readonly slabs: Buffer[] = []
+  private readonly slabs: Buffer<ArrayBuffer>[] = []
   private offset = 0
   private slots = new Uint32Array()
 
@@ -97,9 +111,6 @@ export class Keys {
       hash = Math.imul(hash ^ bytes[index], 16777619)
     }
     hash >>>= 0
-    if (this.table.length * 4 >= this.slots.length * 3) {
-      this.grow()
-    }
     const slotMask = this.slots.length - 1
     let slot = hash & slotMask
     for (let key = this.slots[slot]; key; key = this.slots[slot]) {
@@ -115,12 +126,20 @@ export class Keys {
       }
       slot = (slot + 1) & slotMask
     }
+    if (this.table.length * 4 >= this.slots.length * 3) {
+      this.grow()
+      const mask = this.slots.length - 1
+      slot = hash & mask
+      while (this.slots[slot]) {
+        slot = (slot + 1) & mask
+      }
+    }
     if (bytes.length > KEY_SLAB_BYTES) {
       this.budget.reserve(bytes.length)
       const slab = Buffer.allocUnsafeSlow(bytes.length)
       bytes.copy(slab)
-      const key = this.table.append(this.slabs.length, 0, slab.length, hash)
       this.slabs.push(slab)
+      const key = this.table.append(this.slabs.length - 1, 0, slab.length, hash)
       this.offset = bytes.length
       this.slots[slot] = key
       return key
@@ -149,8 +168,19 @@ export class Keys {
       }
       next[slot] = key
     }
-    this.budget.release(this.slots.byteLength)
+    releaseStorage(this.slots.buffer, this.budget)
     this.slots = next
+  }
+
+  dispose(): void {
+    for (const slab of this.slabs) {
+      releaseStorage(slab.buffer, this.budget)
+    }
+    this.slabs.length = 0
+    this.offset = 0
+    releaseStorage(this.slots.buffer, this.budget)
+    this.slots = new Uint32Array()
+    this.table.dispose()
   }
 }
 

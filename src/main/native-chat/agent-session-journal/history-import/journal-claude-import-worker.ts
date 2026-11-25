@@ -19,7 +19,7 @@ import type {
 } from './journal-claude-import-worker-protocol'
 
 type Slots = { limit: number; active: number; waiting: (() => void)[] }
-// At most 384 MiB of charged index storage across the two worker slots.
+// Two preparations cap attached index buffers at 384 MiB. RSS also includes runtime, decoding and allocator retention.
 const importSlots: Slots = { limit: 2, active: 0, waiting: [] }
 // Reserve the verifier before starting work so completed preparation never waits with an import slot.
 const verifierSlots: Slots = { limit: 4, active: 0, waiting: [] }
@@ -64,7 +64,7 @@ async function takeSlot(pool: Slots, signal?: AbortSignal): Promise<() => void> 
 }
 
 export type ClaudeImportWorker = Omit<ClaudeImportHeader, 'identity'> & {
-  verify(): Promise<ClaudeSourceVersion>
+  verify(refresh?: boolean): Promise<ClaudeSourceVersion>
   close(): Promise<void>
 }
 
@@ -215,9 +215,9 @@ export async function importClaudeTranscriptInWorker(
         }
       }
     }
-    const verify = async () => {
+    const verify = async (refresh = false) => {
       check()
-      const result = await request({ kind: 'verify' })
+      const result = await request({ kind: 'verify', refresh })
       check()
       if (result.kind !== 'verified') {
         failImport(result)

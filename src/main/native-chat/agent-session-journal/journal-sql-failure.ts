@@ -1,4 +1,5 @@
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
+import { ClaudeImportVersionChangedError } from './history-import/journal-claude-import-resource-error'
 import { storageCapacityErrorCode } from '../../../shared/errors/storage-capacity-error'
 import { AgentSessionJournalError, JournalOutcomeDecodeError } from './writing/journal-write-guards'
 import { JournalDamageError, JournalUnreleasedSchemaError } from './replay/journal-open-failure'
@@ -109,7 +110,9 @@ function restoreFailure(error: JournalSqlFailure): Error {
     return new CommandReceiptExistsError(error.receipt)
   }
   if (error.refusal) {
-    return new AgentSessionRefusalError(error.refusal)
+    return error.name === 'ClaudeImportVersionChangedError'
+      ? new ClaudeImportVersionChangedError()
+      : new AgentSessionRefusalError(error.refusal)
   }
   if (error.needs) {
     return new JournalHostFactsNeededError(error.needs)

@@ -48,7 +48,7 @@ port.on('message', (request: ClaudeImportWorkerRequest) => {
         if (!source) {
           throw new ClaudeImportResourceError('Claude history source is unavailable.')
         }
-        send({ kind: 'verified', version: await source.verify() })
+        send({ kind: 'verified', version: await source.verify(request.refresh) })
       } else {
         const next = pages?.next()
         if (next?.done === false) {

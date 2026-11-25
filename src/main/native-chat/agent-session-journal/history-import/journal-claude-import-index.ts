@@ -24,6 +24,15 @@ export class ClaudeImportIndex {
   private hasQueuedPrompts = false
   private previousUuid: { value: string; key: number } | undefined
 
+  dispose(): void {
+    this.ids.dispose()
+    this.rows.dispose()
+    this.positions.dispose()
+    this.rangeData.dispose()
+    this.links.dispose()
+    this.previousUuid = undefined
+  }
+
   record(record: Record<string, unknown>, range: ClaudeRange): void {
     const { type, subtype } = record
     if (
@@ -38,10 +47,16 @@ export class ClaudeImportIndex {
     const hidden = record.isSidechain === true || Boolean(record.teamName)
     const progress = type === 'progress'
     const uuid = this.ids.intern(record.uuid)
+    // A boundary with a null physical parent ends the chain unless its preserved segment rejoins it.
+    const compact =
+      uuid && type === 'system' && subtype === 'compact_boundary' ? this.compact(record) : 0
     if (hidden || progress) {
       if (uuid) {
         const parent = this.parentKey(record, uuid)
-        this.register(uuid, this.rows.appendLink(uuid, parent, 0, progress))
+        const row = compact
+          ? this.rows.appendRecord(uuid, parent, 0, 0, 0, 0, 0, 0, compact)
+          : this.rows.appendLink(uuid, parent, 0, progress)
+        this.register(uuid, row)
       }
       return
     }
@@ -88,10 +103,7 @@ export class ClaudeImportIndex {
       (!(type === 'attachment' && attachment?.type === 'fork_briefing') ? Flag.Leaf : 0) |
       (record.isMeta ? Flag.Meta : 0) |
       (result ? Flag.ToolResult : 0)
-    // A boundary with a null physical parent ends the chain unless its preserved segment rejoins it.
     const parent = this.parentKey(record, uuid)
-    const compact =
-      uuid && type === 'system' && subtype === 'compact_boundary' ? this.compact(record) : 0
     const position = decode
       ? this.positions.append(range.offset, range.legacyOffset, range.line)
       : 0

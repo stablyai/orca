@@ -1,13 +1,19 @@
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFileSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
-import { stageClaudeImport } from './history-import/journal-claude-import-stage'
+import {
+  stageClaudeImport,
+  type ClaudeImportStage
+} from './history-import/journal-claude-import-stage'
 import { useClaudeImportWorker } from './history-import/journal-claude-import-worker.test-fixture'
 import { JournalForkStages } from './journal-fork-stages'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
+import * as commandDispatch from './journal-sql-command-dispatch'
+import { journalSqlFailure, restoreJournalSqlFailure } from './journal-sql-failure'
 import { message, messageFixture, target } from './journal-sql-message.test-fixture'
 import type { JournalSqlMaintenance } from './journal-sql-maintenance'
 import {
@@ -17,6 +23,22 @@ import {
 import type { JournalWriterCommand } from './journal-writer-command'
 
 const authority = { sessionId: target.sessionId, operationId: 'adopt', fingerprint: 'source' }
+const suffix =
+  '\n{"type":"user","uuid":"later","parentUuid":"source","message":{"content":"later"}}\n'
+const appendDuringProof = `
+  const { Hash } = require('node:crypto')
+  const { appendFileSync } = require('node:fs')
+  const { workerData } = require('node:worker_threads')
+  const update = Hash.prototype.update
+  let sourceHashes = 0
+  Hash.prototype.update = function (bytes, ...args) {
+    const result = update.call(this, bytes, ...args)
+    if (Buffer.isBuffer(bytes) && bytes.includes('"uuid":"source"') && ++sourceHashes === 2) {
+      appendFileSync(workerData.filePath, ${JSON.stringify(suffix)})
+    }
+    return result
+  }
+`
 const stagedItem = (clientMessageId: string): JournalReplacementItem => ({
   identity: { provider: 'orca', clientMessageId },
   body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: clientMessageId }] },
@@ -67,7 +89,7 @@ async function fixture() {
     )
     const result = batchResult.outcomes[0]
     if (!result.committed) {
-      throw result.error
+      throw restoreJournalSqlFailure(journalSqlFailure(result.error))
     }
     forks.acknowledge()
     return result.value
@@ -122,7 +144,36 @@ async function fixture() {
       })
     return { proof: claudeImport, write }
   }
-  return { db, filePath, begin, page, maintain, install, visible, cursor }
+  const journal: Parameters<ClaudeImportStage['install']>[0] = {
+    physicalCursor: cursor,
+    async write(operation, prepare) {
+      const preparation = await prepare?.({ savedAt: 100 })
+      const result = await dispatch({
+        type: 'write',
+        command: {
+          target,
+          operation,
+          claudeImport: preparation?.claudeImport,
+          facts: {
+            identity: {
+              sessionId: target.sessionId,
+              workspaceId: 'workspace',
+              hostId: 'local',
+              agent: 'claude',
+              providerHandle: { transport: 'claude-sdk', agent: 'claude', nativeId: 'source' }
+            }
+          }
+        }
+      })
+      if (result.type !== 'committed') {
+        throw new Error('Expected committed response')
+      }
+      return result.commit
+    }
+  }
+  const prepare = () =>
+    stageClaudeImport({ maintain }, { filePath, agent: 'claude', sessionId: 'source' }, authority)
+  return { db, filePath, begin, page, maintain, install, visible, cursor, journal, prepare }
 }
 
 it('accepts only ordered bounded pages and installs split items in order once', async () => {
@@ -221,6 +272,89 @@ it('discards the private stage when forwarding a page fails', async () => {
     )
     expect(writer.visible()).toEqual(['orca:prior'])
   } finally {
+    restore()
+  }
+})
+
+it('installs only the captured history when a complete record arrives during prefix hashing', async () => {
+  const writer = await fixture()
+  const restore = useClaudeImportWorker(undefined, appendDuringProof)
+  let prepared: ClaudeImportStage | undefined
+  try {
+    prepared = await writer.prepare()
+    await prepared.install(writer.journal, 1)
+    expect(await readFile(writer.filePath, 'utf8')).toContain(suffix)
+    expect(writer.visible()).toEqual(['claude:source:source'])
+  } finally {
+    await prepared?.close()
+    restore()
+  }
+})
+
+it('refuses a same-size edit of an unselected link with restored mtime followed by an append', async () => {
+  const writer = await fixture()
+  await writeFile(
+    writer.filePath,
+    [
+      '{"type":"user","uuid":"root","message":{"content":"root"}}',
+      '{"type":"assistant","uuid":"lost","parentUuid":"root","message":{"content":"lost"}}',
+      '{"type":"assistant","uuid":"source","parentUuid":"root","message":{"content":"source"}}'
+    ].join('\n')
+  )
+  const restore = useClaudeImportWorker(undefined, appendDuringProof)
+  writer.db.function('rewrite_and_append', () => {
+    const { atime, mtime } = statSync(writer.filePath)
+    const captured = readFileSync(writer.filePath, 'utf8')
+    writeFileSync(
+      writer.filePath,
+      captured.replace('"uuid":"lost","parentUuid":"root"', '"uuid":"lost","parentUuid":"gone"')
+    )
+    utimesSync(writer.filePath, atime, mtime)
+    appendFileSync(writer.filePath, suffix)
+    return null
+  })
+  writer.db.exec(`CREATE TRIGGER mutate_after_install AFTER INSERT ON journal_items
+    WHEN NEW.item_id = 'claude:source:source' BEGIN SELECT rewrite_and_append(); END`)
+  let prepared: ClaudeImportStage | undefined
+  try {
+    prepared = await writer.prepare()
+    const before = writer.cursor()
+    await expect(prepared.install(writer.journal, 1)).rejects.toThrow(
+      'Claude transcript changed during history import.'
+    )
+    expect(await readFile(writer.filePath, 'utf8')).toContain('"uuid":"lost","parentUuid":"gone"')
+    expect(writer.visible()).toEqual(['orca:prior'])
+    expect(writer.cursor()).toEqual(before)
+  } finally {
+    await prepared?.close()
+    restore()
+  }
+})
+
+it('rolls back the first write and installs the same stage after an append after SQL', async () => {
+  const writer = await fixture()
+  const restore = useClaudeImportWorker()
+  let appended = false
+  const run = commandDispatch.runJournalSqlCommand
+  const append = vi
+    .spyOn(commandDispatch, 'runJournalSqlCommand')
+    .mockImplementation(async (...args) => {
+      const result = await run(...args)
+      if (args[2].claudeImport && !appended) {
+        appended = true
+        appendFileSync(writer.filePath, suffix)
+      }
+      return result
+    })
+  let prepared: ClaudeImportStage | undefined
+  try {
+    prepared = await writer.prepare()
+    await prepared.install(writer.journal, 1)
+    expect(appended).toBe(true)
+    expect(writer.visible()).toEqual(['claude:source:source'])
+  } finally {
+    await prepared?.close()
+    append.mockRestore()
     restore()
   }
 })

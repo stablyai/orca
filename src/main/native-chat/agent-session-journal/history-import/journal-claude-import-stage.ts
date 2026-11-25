@@ -13,7 +13,12 @@ import {
   MAX_LEGACY_IMPORT_RETAINED_BYTES
 } from './journal-transcript-import-limits'
 import type { ClaudeImportWork } from './journal-claude-import-worker-protocol'
-import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
+import {
+  ClaudeImportResourceError,
+  ClaudeImportVersionChangedError
+} from './journal-claude-import-resource-error'
+
+const MAX_INSTALL_ATTEMPTS = 3
 
 export type ClaudeImportAuthority = {
   sessionId: string
@@ -31,7 +36,7 @@ export type ClaudeImportStage = {
   count: number
   sourceEmpty: boolean
   install(
-    journal: SqlAgentSessionJournal,
+    journal: Pick<SqlAgentSessionJournal, 'physicalCursor' | 'write'>,
     fence: number,
     receipt?: JournalOperationReceipt
   ): ReturnType<SqlAgentSessionJournal['write']>
@@ -116,27 +121,38 @@ export async function stageClaudeImport(
         const cancel = () => Atomics.store(cancelled, 0, 1)
         input.signal?.addEventListener('abort', cancel, { once: true })
         try {
-          input.signal?.throwIfAborted()
-          const commit = await journal.write(
-            { kind: 'epoch-replace', reason: 'legacy_import', fence, items: [] },
-            async () => {
-              const version = await prepared.verify()
-              input.signal?.throwIfAborted()
-              return {
-                claudeImport: {
-                  ...authority,
-                  token: stageToken,
-                  count: prepared.count,
-                  cursor,
-                  version,
-                  cancelled
-                },
-                receipt
+          for (let attempt = 1; ; attempt++) {
+            input.signal?.throwIfAborted()
+            try {
+              const commit = await journal.write(
+                { kind: 'epoch-replace', reason: 'legacy_import', fence, items: [] },
+                async () => {
+                  const version = await prepared.verify(attempt > 1)
+                  input.signal?.throwIfAborted()
+                  return {
+                    claudeImport: {
+                      ...authority,
+                      token: stageToken,
+                      count: prepared.count,
+                      cursor,
+                      version,
+                      cancelled
+                    },
+                    receipt
+                  }
+                }
+              )
+              token = undefined
+              return commit
+            } catch (error) {
+              if (
+                !(error instanceof ClaudeImportVersionChangedError) ||
+                attempt >= MAX_INSTALL_ATTEMPTS
+              ) {
+                throw error
               }
             }
-          )
-          token = undefined
-          return commit
+          }
         } finally {
           input.signal?.removeEventListener('abort', cancel)
           await finish()

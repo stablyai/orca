@@ -36,7 +36,7 @@ export async function importClaudeTranscript(input: ClaudeImportInput) {
     const prepared = await collectClaudeItems(file, input)
     return {
       ...prepared,
-      verify: () => file.verify(),
+      verify: (refresh?: boolean) => file.verify(refresh),
       close: () => file.close()
     }
   } catch (error) {
@@ -59,41 +59,46 @@ async function collectClaudeItems(file: ClaudeImportSource, input: ClaudeImportI
     : null
   const index = new ClaudeImportIndex()
   let conversation = false
-  await file.scan((bytes, range) => {
-    const row = readClaudeImportLinks(bytes)
-    conversation ||= mayBeClaudeConversationEntry(row)
-    if (row) {
-      observer?.observeRecord(row)
-      index.record(row, range)
-    }
-  })
-  await index.select(check)
   const items: Buffer[] = []
-  let retained = 0
-  window: for await (const batch of file.reread(index.ranges())) {
-    for (const range of batch.ranges) {
-      check()
-      const offset = range.offset - batch.start
-      const row = parseJsonObject(batch.bytes.toString('utf8', offset, offset + range.length))
-      const message =
-        row && decodeClaudeTranscriptRecord(row, transcriptFallbackId(filePath, range.legacyOffset))
-      if (message) {
-        const identity = input.decodedMessageIdentities
-          ? { provider: 'legacy' as const, agent, sessionId, recordId: message.id }
-          : claudeLegacyIdentity(row, range.line, agent, sessionId)
-        const item = Buffer.from(JSON.stringify(replacementItem(message, identity, input.limits)))
-        retained += item.length
-        if (retained > input.retainedBytes) {
-          if (!items.length) {
-            throw new ClaudeImportResourceError(
-              'The newest Claude history item exceeds the import window.'
-            )
+  try {
+    await file.scan((bytes, range) => {
+      const row = readClaudeImportLinks(bytes)
+      conversation ||= mayBeClaudeConversationEntry(row)
+      if (row) {
+        observer?.observeRecord(row)
+        index.record(row, range)
+      }
+    })
+    await index.select(check)
+    let retained = 0
+    window: for await (const batch of file.reread(index.ranges())) {
+      for (const range of batch.ranges) {
+        check()
+        const offset = range.offset - batch.start
+        const row = parseJsonObject(batch.bytes.toString('utf8', offset, offset + range.length))
+        const message =
+          row &&
+          decodeClaudeTranscriptRecord(row, transcriptFallbackId(filePath, range.legacyOffset))
+        if (message) {
+          const identity = input.decodedMessageIdentities
+            ? { provider: 'legacy' as const, agent, sessionId, recordId: message.id }
+            : claudeLegacyIdentity(row, range.line, agent, sessionId)
+          const item = Buffer.from(JSON.stringify(replacementItem(message, identity, input.limits)))
+          retained += item.length
+          if (retained > input.retainedBytes) {
+            if (!items.length) {
+              throw new ClaudeImportResourceError(
+                'The newest Claude history item exceeds the import window.'
+              )
+            }
+            break window
           }
-          break window
+          items.push(item)
         }
-        items.push(item)
       }
     }
+  } finally {
+    index.dispose()
   }
   const sourceEmpty = !conversation && !items.length
   return {

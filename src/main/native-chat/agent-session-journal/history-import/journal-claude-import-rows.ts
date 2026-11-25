@@ -33,6 +33,11 @@ export class ClaudeImportRows {
     return this.chain.length
   }
 
+  dispose(): void {
+    this.chain.dispose()
+    this.details.dispose()
+  }
+
   appendLink(uuid: number, parent: number, flags: number, progress: boolean): number {
     // Keep the preceding physical UUID so later duplicates still resolve through the key table.
     const link =

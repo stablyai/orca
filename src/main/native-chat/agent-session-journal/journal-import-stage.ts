@@ -1,5 +1,6 @@
 import { statSync } from 'node:fs'
 import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { ClaudeImportVersionChangedError } from './history-import/journal-claude-import-resource-error'
 import type {
   ClaudeImportAuthority,
   ClaudeImportInstall
@@ -91,11 +92,7 @@ export function assertJournalImportCurrent(install: ClaudeImportInstall): void {
     path.mtimeNs !== version.modified ||
     path.ctimeNs !== version.changed
   ) {
-    throw agentSessionRefusalError(
-      'agent_session_identity_required',
-      { reason: 'transcriptUnreadable' },
-      'Claude transcript changed during history import.'
-    )
+    throw new ClaudeImportVersionChangedError()
   }
 }
 
