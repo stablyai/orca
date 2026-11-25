@@ -358,6 +358,19 @@
       "title": "Browserseite wurde beendet",
       "failed": "Die Browserseite wurde unerwartet beendet. Erneut versuchen, um sie wiederherzustellen."
     },
+    "serverPage": {
+      "download": {
+        "started": "Wird nach {{path}} auf {{host}} heruntergeladen",
+        "saveHere": "Auf diesem Computer speichern",
+        "copying": "{{filename}} wird auf diesen Computer heruntergeladen…",
+        "copied": "Unter {{path}} gespeichert",
+        "copyFailed": "{{filename}} konnte nicht auf diesem Computer gespeichert werden.",
+        "showInFolder": "Im Ordner anzeigen"
+      },
+      "print": {
+        "failed": "Die Seite konnte nicht als PDF gespeichert werden"
+      }
+    },
     "clientHosted": {
       "preparationFailed": "Der entfernte Browser konnte auf diesem Desktop nicht gestartet werden. Die gekoppelte Verbindung prüfen und erneut versuchen.",
       "unavailableTitle": "Auf dem Client gehosteter Browser nicht verfügbar",
@@ -575,6 +588,25 @@
         "title": "Gespeicherte Anmeldungen",
         "otherLogins": "Weitere Anmeldungen auf dieser Website"
       }
+    },
+    "profileCookieClear": {
+      "label": "Cookies",
+      "action": "Cookies löschen…",
+      "rowLocal": "Meldet dich auf diesem Computer von allen Websites in {{profile}} ab.",
+      "rowServer": "Meldet dich auf {{host}} von allen Websites in {{profile}} ab, sowohl in Seiten auf diesem Computer als auch in gestreamten Seiten.",
+      "rowSsh": "Meldet dich für {{host}} von allen Websites in {{profile}} ab.",
+      "unavailable": "Für dieses Profil auf dem ausgewählten Host nicht verfügbar.",
+      "confirmTitle": "Cookies in {{profile}} auf {{host}} löschen?",
+      "confirmTitleLocal": "Cookies in {{profile}} auf diesem Computer löschen?",
+      "confirmDescriptionServer": "Dadurch erfolgt eine Abmeldung von allen Websites in diesem Profil, sowohl in Seiten auf diesem Computer als auch in gestreamten Seiten. Andere Profile und Hosts behalten ihre Cookies.",
+      "confirmDescription": "Dadurch erfolgt eine Abmeldung von allen Websites in diesem Profil. Andere Profile und Hosts behalten ihre Cookies.",
+      "clear": "Löschen",
+      "cancel": "Abbrechen",
+      "cleared": "Cookies in {{profile}} auf {{host}} gelöscht.",
+      "clearedLocal": "Cookies in {{profile}} auf diesem Computer gelöscht.",
+      "failed": "Cookies in {{profile}} auf {{host}} konnten nicht gelöscht werden. Erneut versuchen.",
+      "failedLocal": "Cookies in {{profile}} auf diesem Computer konnten nicht gelöscht werden. Erneut versuchen.",
+      "sshHostOption": "{{host}} (SSH)"
     }
   },
   "editor": {
@@ -889,6 +921,9 @@
           "browse": "Chrome Web Store",
           "openFailed": "Einen Arbeitsbereich öffnen, um den Chrome Web Store zu durchsuchen."
         }
+      },
+      "sessionHost": {
+        "sshDetail": "Seiten für diesen SSH-Host werden auf diesem Computer geöffnet."
       }
     },
     "agents": {
@@ -1168,10 +1203,30 @@
       "info": "Über automatische Updates",
       "saveFailed": "Die Einstellung für automatische Updates konnte nicht gespeichert werden."
     },
+    "cloudConsole": {
+      "manageInBrowser": "Im Browser verwalten",
+      "openFailed": "Der Browser konnte nicht geöffnet werden. Erneut versuchen.",
+      "teamAdmin": {
+        "title": "Team & Admins",
+        "description": "Das Team im Browser verwalten."
+      },
+      "signInFailed": "Anmeldung an der Konsole fehlgeschlagen",
+      "signInFailedDetail": "Der Browser hat sie trotzdem geöffnet. Dort anmelden, um fortzufahren."
+    },
+    "mobile": {
+      "teamDisabledRelay": "Orca Relay ist vom Team ausgeschaltet. LAN verwenden."
+    },
+    "computerUse": {
+      "teamDisabled": "Computer Use ist vom Team ausgeschaltet."
+    },
+    "artifacts": {
+      "teamDisabled": "Das Teilen von Artefakten ist vom Team ausgeschaltet."
+    },
     "updateDelay": {
       "1b4d825e0e": "Update-Verzögerung",
       "ab7e864374": "Info zur Update-Verzögerung",
       "ee1d96f74a": "Verzögerung einmal überspringen",
+      "teamManaged": "Vom Team festgelegt",
       "description": "Nach Veröffentlichung einer Version wartet Orca so viele Tage, bevor es sie anbietet.",
       "none": "Keine",
       "availableSoon": "Für dich verfügbar {{relative}}",
@@ -1833,8 +1888,26 @@
           "tab": {
             "open": {
               "urlFailed": "Die URL konnte nicht geöffnet werden.",
-              "searchFailed": "Die Suche mit {{value0}} konnte nicht ausgeführt werden."
+              "searchFailed": "Die Suche mit {{value0}} konnte nicht ausgeführt werden.",
+              "failure": {
+                "stageError": "Fehler · {{value0}} · {{value1}}",
+                "hostNotFound": "Der Computer des Arbeitsbereichs wurde nicht gefunden.",
+                "linkBlocked": "Das Öffnen des Links wurde blockiert.",
+                "notWebLink": "Kein Weblink."
+              }
             }
+          }
+        },
+        "ports": {
+          "serverPortForward": {
+            "updateServer": "Port {{port}} von {{host}} konnte nicht weitergeleitet werden. Orca auf {{host}} aktualisieren und erneut versuchen.",
+            "failed": "Port {{port}} von {{host}} konnte nicht weitergeleitet werden. Die Verbindung prüfen und erneut versuchen.",
+            "forwarded": "Port {{port}} von {{host}} weitergeleitet",
+            "opened": "{{address}} im Standardbrowser geöffnet.",
+            "otherMachine": "Port {{port}} konnte nicht weitergeleitet werden: Dieser Arbeitsbereich läuft nicht auf {{host}} selbst.",
+            "useSshPorts": "Port {{port}} von {{host}} konnte nicht weitergeleitet werden. Unter „Ports“ weiterleiten und dann erneut versuchen.",
+            "restoredMoved": "Port {{port}} von {{host}} an localhost:{{localPort}} weitergeleitet",
+            "restoredMovedReason": "localhost:{{previousPort}} wird auf diesem Computer bereits verwendet."
           }
         }
       },
@@ -4194,6 +4267,7 @@
             "copyFilePathFailed": "Kopieren des Dateipfads fehlgeschlagen",
             "downloadOpenWithDefaultApp": "Herunterladen und mit Standard-App öffnen",
             "downloadOpenFailed": "„{{value0}}“ konnte nicht heruntergeladen werden.",
+            "openLinkInThisGroupRefused": "Der Link konnte nicht in dieser Gruppe geöffnet werden",
             "openInNewTab": "In neuem Tab öffnen",
             "openInThisGroupRefused": "{{value0}} konnte nicht in dieser Gruppe geöffnet werden"
           },
@@ -4785,6 +4859,8 @@
             "cursorUsageMenu": "Cursor-Nutzung",
             "hiddenUsageProviders": "Außerdem: {{value0}}",
             "zcodeUsageMenu": "ZCode-Nutzung",
+            "rateLimitResetsUnsupportedWsl_one": "{{count}} Ratenlimit-Zurücksetzung verfügbar · noch nicht in WSL",
+            "rateLimitResetsUnsupportedWsl_other": "{{count}} Ratenlimit-Zurücksetzungen verfügbar · noch nicht in WSL",
             "rateLimitResetsAvailable_one": "{{count}} Ratenlimit-Zurücksetzung verfügbar",
             "rateLimitResetsAvailable_other": "{{count}} Ratenlimit-Zurücksetzungen verfügbar",
             "staleCodexSessions_one": "{{count}} Codex-Sitzung verwendet noch das alte Konto.",
@@ -5008,7 +5084,8 @@
             "updatedAgo": "Aktualisiert {{time}}",
             "notYetUpdated": "Noch nicht aktualisiert",
             "rateLimitResetsAvailable_one": "{{count}} Ratenlimit-Zurücksetzung verfügbar",
-            "rateLimitResetsAvailable_other": "{{count}} Ratenlimit-Zurücksetzungen verfügbar"
+            "rateLimitResetsAvailable_other": "{{count}} Ratenlimit-Zurücksetzungen verfügbar",
+            "unsupportedOwner": "Nutzung für {{server}} nicht verfügbar"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH-Host"
@@ -5026,6 +5103,7 @@
             "gotIt": "Verstanden"
           },
           "UsageRosterPanel": {
+            "wslUsageNotShown": "WSL-Nutzung wird noch nicht angezeigt",
             "title": "Nutzung",
             "openDetails": "Nutzungsdetails öffnen",
             "notSignedIn": "nicht angemeldet",
@@ -8148,6 +8226,12 @@
           },
           "worktreeCardStyle": {
             "title": "Kartenstil"
+          },
+          "sharedCodexServers": {
+            "title": "Gemeinsame Codex-Server",
+            "description": "Codex-Chats mit derselben Einrichtung teilen sich einen Hintergrundprozess, statt pro Chat einen zu starten.",
+            "copy": "Verbraucht weniger Speicher und startet neue Chats schneller. Stürzt ein gemeinsamer Prozess ab, verbinden sich alle seine Chats neu. Gilt für Chats auf diesem Computer, die nach der Änderung gestartet werden; Remote- und WSL-Hosts behalten einen Prozess pro Chat.",
+            "toggleLabel": "Gemeinsame Codex-Server umschalten"
           }
         },
         "FloatingWorkspacePane": {
@@ -10309,6 +10393,12 @@
               "inWindow": "im Fenster",
               "worktrees": "Worktrees",
               "eaf17a7214": "Agenten-Dashboard"
+            },
+            "sharedCodexServers": {
+              "title": "Gemeinsame Codex-Server",
+              "description": "Codex-Chats mit derselben Einrichtung teilen sich einen Hintergrundprozess, statt pro Chat einen zu starten.",
+              "codex": "codex",
+              "memory": "Speicher"
             }
           }
         },
@@ -12098,6 +12188,7 @@
           "placeholder": "/Users/you/plugins/my-plugin oder C:\\Users\\you\\plugins\\my-plugin",
           "add": "Pfad hinzufügen",
           "dialogTitle": "Entwicklungsordner",
+          "teamDisabled": "Entwicklungsordner sind vom Team ausgeschaltet.",
           "reviewHelp": "Einmal geprüft. Spätere Codeänderungen laufen ohne Nachfrage."
         },
         "PluginInstallDialog": {
@@ -12460,6 +12551,11 @@
           "title": "Orca-Konto",
           "description": "Arbeit sofort teilen und von überall über Orca Mobile auf den Desktop zugreifen.",
           "searchDescription": "Beim Konto für Artefakte und Orca Relay anmelden oder abmelden.",
+          "managed": "Das Team verwaltet einige Orca-Einstellungen.",
+          "deviceReportNamedViewers": "Inhaber und Administratoren von {{teams}} können Berichte dieses Geräts einsehen.",
+          "deviceReportViewers": "Team-Inhaber und -Administratoren können Berichte dieses Geräts einsehen.",
+          "reportingDetails": "Details zur Gerätemeldung",
+          "reportingDisclosure": "Die Geräteansicht zeigt Orca-Version, Update-Kanal, Gerätename, Plattform, Update-Status, erforderliche Plugins, die Orca nicht installieren konnte, und den Zeitpunkt der letzten Meldung des Geräts.",
           "benefitsTitle": "Im Konto enthalten",
           "artifactsTitle": "Teilen von Artefakten",
           "artifactsDescription": "HTML- und Markdown-Dateien veröffentlichen und alle geteilten Links in Orca verwalten.",
@@ -13069,6 +13165,10 @@
           "defaultHostWebHelp": "Dieser Browser öffnet neue Projekte auf dem ausgewählten Server.",
           "updateAll": "Alle aktualisieren",
           "updatesCount_other": "{{count}} Aktualisierungen verfügbar",
+          "shareRowHint": "Einem anderen Orca die Verbindung hierher ermöglichen.",
+          "manageShare": "Verwalten",
+          "share": "Teilen",
+          "serversCaption": "Server",
           "updatesCount_one": "{{count}} Aktualisierungen verfügbar",
           "addServer": "Server hinzufügen",
           "moreWaysToAdd": "Weitere Möglichkeiten zum Hinzufügen eines Servers",
@@ -13390,6 +13490,7 @@
           "shownOf": "{{value0}} von {{value1}}"
         },
         "PluginManagerRows": {
+          "requiredByTeam": "Vom Team vorgeschrieben",
           "reinstall": "Neu installieren",
           "crashedCount": "{{value0}}-mal in Folge abgestürzt",
           "crashed": "Beim Start abgestürzt",
@@ -21465,7 +21566,10 @@
         "keepOpen": "Offen halten",
         "bannerRunning": "Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
         "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
-        "bannerFinishedStatus": "Orchestrierungs-Worker abgeschlossen · Wird bald geschlossen"
+        "bannerFinishedStatus": "Orchestrierungs-Worker abgeschlossen · Wird bald geschlossen",
+        "boundRunning": "Schließt mit {{worker}}",
+        "boundFinished": "{{worker}} abgeschlossen · Schließt in {{countdown}}",
+        "boundFallbackName": "Worker"
       }
     },
     "wslHostMark": {
@@ -22575,7 +22679,8 @@
       "noEmailNotSaved": "agy hat keine E-Mail-Adresse gemeldet · nicht gespeichert",
       "saveShort": "Speichern",
       "readAt": "Ausgelesen {{time}}",
-      "active": "Aktiv"
+      "active": "Aktiv",
+      "chatDescriptionKeyOnAgy": "Neue Chats laufen auf agy mit der unten stehenden Anmeldung, getrennt von agy im Terminal."
     },
     "claude": {
       "added": "Konto hinzugefügt. Das Konto auswählen, um es beim nächsten Start von Claude zu verwenden.",
@@ -22649,7 +22754,14 @@
         "title": "Claude-Nutzungsabfrage",
         "description": "Verwendet deine Claude-Code-Anmeldung, um Nutzung, Guthaben und inaktive Konten abzufragen. Deaktiviere diese Option, um nur Live-Daten aus Terminalsitzungen zu verwenden.",
         "about": "Über die Claude-Nutzungsabfrage"
-      }
+      },
+      "organizationSuffix": "Organisation ···{{suffix}}",
+      "personalOrganization": "Persönlich"
+    },
+    "codex": {
+      "usageSignInLabel": "Abgemeldet",
+      "usageSignInMessage": "Anmelden, um die Nutzung zu sehen.",
+      "usageSignInSettingsMessage": "Zum Anmelden Einstellungen → Konten öffnen."
     },
     "managedData": {
       "description": "Zum Hinzufügen von Konten diesen Befehl in einem Terminal auf dem Orca-Host ausführen. Die Auswahl gilt für neue explizite Agentenstarts auf diesem Host; direkte SSH-Weiterleitungen und WSL-Starts auf Windows-Hosts verwenden eigene Anmeldedaten.",
@@ -22792,7 +22904,8 @@
       "detailsFailed": "Laden der Details fehlgeschlagen",
       "listFailed": "Auflisten der Projekte fehlgeschlagen",
       "organizations": "Organisationen",
-      "viewFailed": "Abrufen der Projektansicht fehlgeschlagen"
+      "viewFailed": "Abrufen der Projektansicht fehlgeschlagen",
+      "chooseProject": "Projekt auswählen"
     },
     "error": {
       "notFoundState": "Dieses Projekt oder diese Ansicht konnte nicht gefunden werden.",
@@ -22970,6 +23083,12 @@
     }
   },
   "updates": {
+    "installOnQuit": {
+      "title": "Update bereit zur Installation",
+      "summary": "Orca beenden. Nach der Installation erneut öffnen.",
+      "quit": "Orca beenden",
+      "later": "Später"
+    },
     "installBlock": {
       "instancesLabel": "Instanzen, die Orca verwenden",
       "browserLabel": "Browser im Hintergrund",
@@ -23032,9 +23151,25 @@
       "rateLimitedInMinutes_other": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minuten erneut versuchen.",
       "rateLimitedInMinutesSignedOut_one": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minute erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann.",
       "rateLimitedInMinutesSignedOut_other": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minuten erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann.",
+      "teamUpdatePolicy": "Das Team verwaltet Orca-Updates.",
       "automaticInstallCheckpointFailed": "Orca konnte das aktuelle Fenster vor dem Neustart nicht sichern. Versuche erneut, das Update zu installieren.",
       "automaticInstallTerminalBusy": "Einige Terminals würden beim Neustart beendet. Orca versucht es bei einer späteren Update-Prüfung erneut.",
       "macStagingTimeout": "macOS bereitet das Update noch vor. Falls es dabei bleibt, beende Orca und öffne es erneut."
+    },
+    "emergencyRequired": {
+      "title": "Orca {{version}} ist erforderlich",
+      "summary": "Orca {{version}} ist erforderlich. Zum Aktualisieren neu starten."
+    },
+    "teamRequired": {
+      "summary": "Das Team verlangt Orca {{version}}. Zum Aktualisieren neu starten.",
+      "title": "Das Team verlangt Orca {{version}}",
+      "restartNow": "Jetzt neu starten",
+      "countdown": "Orca speichert die Sitzungen und startet nach dem Countdown neu. Aktive Agenten können den Neustart verzögern.",
+      "waiting": "Orca wartet vor dem Neustart auf aktive Agenten.",
+      "retry": "Orca versucht dieses Update beim nächsten Start erneut.",
+      "manual": "Die automatische Installation ist fehlgeschlagen. Dieses Update manuell installieren.",
+      "deadline": "Neustart bis {{deadline}}. Orca speichert die Sitzungen vor dem Neustart.",
+      "download": "Downloads öffnen"
     }
   },
   "jira": {
@@ -23411,7 +23546,11 @@
     "refresh": "Aktualisieren",
     "restartLocal": "Lokalen Daemon neu starten",
     "killAllLocal": "Alle lokalen Sitzungen beenden",
-    "killFailed": "Das Terminal konnte nicht beendet werden. Die zuletzt beobachteten Sitzungen bleiben erhalten."
+    "killFailed": "Das Terminal konnte nicht beendet werden. Die zuletzt beobachteten Sitzungen bleiben erhalten.",
+    "chatRow": {
+      "tooltip": "{{agent}}-Chat einschließlich der darunter laufenden Prozesse"
+    },
+    "sharedAgentProcesses": "Gemeinsame Agentenprozesse"
   },
   "browserExtensions": {
     "permission": {
@@ -23959,6 +24098,7 @@
       },
       "botProviderErrorNotSaved": "Der Durchgang des Bots ist fehlgeschlagen, aber diese Ausführung hat den Fehler des Anbieters nicht gespeichert. Der ursprüngliche Chat enthält möglicherweise weitere Details.",
       "botsOff": "Bots sind in den Einstellungen ausgeschaltet, daher hat Orca diesen Lauf übersprungen.",
+      "botsOffByTeam": "Bots sind vom Team ausgeschaltet, daher hat Orca diese Ausführung übersprungen.",
       "botMissing": "Der Bot, als der diese Automatisierung läuft, existiert nicht mehr.",
       "botFolderMissing": "Der Ordner des Bots ist nicht mehr verfügbar.",
       "botPaused": "{{bot}} ist pausiert, daher hat Orca diesen Lauf übersprungen."
@@ -23991,7 +24131,8 @@
     },
     "botTarget": {
       "hostNeedsUpdate": "Aktualisiere den Orca-Server auf {host}, damit seine Bots Automatisierungen nutzen können."
-    }
+    },
+    "hostUnreachable": "{{host}} konnte nicht erreicht werden. Erneut versuchen, sobald der Host wieder verfügbar ist."
   },
   "codeHost": {
     "errors": {
@@ -24891,6 +25032,13 @@
     }
   },
   "plugins": {
+    "blockedByTeam": "Vom Team blockiert.",
+    "requiredFailures": {
+      "toast": "Ein erforderliches Plugin konnte nicht installiert werden",
+      "open": "Plugins öffnen",
+      "label": "Vom Team vorgeschrieben",
+      "body": "Orca konnte {{plugin}} nicht installieren."
+    },
     "actionConfirmation": {
       "cancel": "Abbrechen",
       "deleteAutomation": "{{plugin}} möchte die Automatisierung „{{automation}}“ löschen",
@@ -24904,6 +25052,19 @@
       "unknownProject": "einem unbekannten Projekt",
       "automationNewWorkspaces": "Automatisierung {{id}}: bei jedem Lauf in einem neuen Arbeitsbereich von {{project}}, nach Zeitplan {{schedule}}.",
       "automationInWorkspace": "Automatisierung {{id}}: in {{project}} / {{workspace}}, nach Zeitplan {{schedule}}."
+    },
+    "catalog": {
+      "managedByTeam": "Vom Team verwaltet",
+      "managedByNamedTeams": "Verwaltet von {{teams}}",
+      "teamPublisher": "Team"
+    },
+    "displayText": {
+      "tb0b38488": "GitHub-Themes für Orca",
+      "tb8aa98fc": "Standard-Themes von VS Code für Orca",
+      "tfc425a57": "Multipass-VM-Rezepte",
+      "t0f9f5503": "Die eigenen VS-Code-Themes von GitHub: Light Default, Dark Default, Dark Dimmed und die Varianten mit hohem Kontrast.",
+      "t0b4f7e19": "Inoffizielle Portierungen der Standard-Farbthemes von VS Code: Dark Modern, Light Modern, Dark+ und Light+.",
+      "tc86eed7d": "Ein geprüfter Starter-Lebenszyklus für Wegwerf-Multipass-Arbeitsbereiche."
     }
   },
   "agentPicker": {
@@ -25068,6 +25229,21 @@
     "sendReport": "Bericht senden"
   },
   "agentCliUpdate": {
+    "devinProduct": "Devin CLI",
+    "codebuddyProduct": "CodeBuddy Code",
     "thisComputer": "Dieser Computer"
+  },
+  "activityBar": {
+    "moveUp": "Nach oben verschieben",
+    "moveDown": "Nach unten verschieben",
+    "hide": "Ausblenden",
+    "show": "{{name}} anzeigen",
+    "dragStart": "{{name}} aufgenommen",
+    "dragOver": "{{name}} über {{target}}",
+    "dragEnd": "{{name}} abgelegt",
+    "dragCancel": "Verschieben von {{name}} abgebrochen",
+    "moveLeft": "Nach links verschieben",
+    "moveRight": "Nach rechts verschieben",
+    "reset": "Tab-Reihenfolge zurücksetzen"
   }
 }
