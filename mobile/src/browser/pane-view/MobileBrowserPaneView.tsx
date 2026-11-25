@@ -2,31 +2,29 @@ import type { Dispatch, ReactNode, RefObject, SetStateAction } from 'react'
 import {
   ActivityIndicator,
   Image,
-  Pressable,
   Text,
+  TextInput,
   View,
   type PanResponderInstance,
   type StyleProp,
   type ViewStyle,
   type HostInstance
 } from 'react-native'
-import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, pressedStyle } from '../../theme/mobile-theme'
+import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { MobileBrowserAddressField } from './MobileBrowserAddressField'
+import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
+import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
+import { MobileStateButton } from '../../components/feedback/MobileStateView'
+import { MobileBrowserBottomBar } from './MobileBrowserBottomBar'
 import { MobileBrowserJavaScriptDialog } from './MobileBrowserJavaScriptDialog'
 import { MobileBrowserPagePrompt } from './MobileBrowserPagePrompt'
 import type { MobileBrowserPagePromptState } from '../page-interaction/use-mobile-browser-page-prompts'
-import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
-import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
-import {
-  MobileBrowserPointerModifiers,
-  type BrowserPointerModifier
-} from './MobileBrowserPointerModifiers'
-import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
-import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
-import { buttonColor } from '../screencast/mobile-browser-frame-state'
+import { MobileBrowserPageKeys } from './MobileBrowserPageKeys'
+import { MobileBrowserLoadFailure, useMobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
+import { useMobileBrowserPageMenu } from './use-mobile-browser-page-menu'
+import { useMobileBrowserLiveTyping } from '../page-interaction/use-mobile-browser-live-typing'
+import type { MobileBrowserPageInput } from '../page-interaction/use-mobile-browser-page-input-queue'
 import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
 import type { BrowserFrameLayerBinding } from '../screencast/browser-frame-pacer'
 import type {
@@ -37,7 +35,6 @@ import type {
 import type { MobileBrowserViewMode } from '../screencast/browser-screencast-request-parameters'
 import type { MobileBrowserTab } from '../../session/tabs/mobile-session-tabs'
 import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
-import { FieldTextInput } from '../../components/composer-input/FieldTextInput'
 import type { MobileCertificateProceedFailure } from '../certificate/mobile-browser-certificate-proceed'
 
 // Why: seeds layer 0 as the visible one; the pacer owns opacity after mount, so a render must not.
@@ -47,7 +44,7 @@ const FRAME_LAYER_STYLES: [StyleProp<ViewStyle>, StyleProp<ViewStyle>] = [
 ]
 
 type MobileBrowserPaneViewProps = {
-  /** Just the page and typing, for a sign-in: no address bar, page buttons or modifier keys. */
+  /** Just the page and typing, for a sign-in: no address, page buttons or ⋯. */
   bare?: boolean
   /** Drawn over the page's foot, e.g. a sheet's own toast where the screen's would sit under it. */
   pageOverlay?: ReactNode
@@ -67,12 +64,10 @@ type MobileBrowserPaneViewProps = {
   goBack: () => void
   goForward: () => void
   keyboardLift: number
-  keyboardValue: string
   layoutRef: RefObject<BrowserTouchLayout | null>
   navigateToAddress: () => Promise<void>
   panResponder: PanResponderInstance
   proceedCertificate: (challengeId: string) => Promise<MobileCertificateProceedFailure | null>
-  pointerModifiers: BrowserPointerModifier[]
   reconnectStream: () => void
   reloadPage: () => void
   retryFailedLoad: () => void
@@ -82,11 +77,10 @@ type MobileBrowserPaneViewProps = {
     method: 'browser.dialogDismiss' | 'browser.dialogAccept',
     promptText?: string
   ) => Promise<void>
-  sendKeyboardText: () => Promise<void>
-  sendKeypress: (key: string) => Promise<void>
+  pageInput: MobileBrowserPageInput
+  onToast: (message: string, durationMs?: number) => void
   setAddressFocused: Dispatch<SetStateAction<boolean>>
   setAddressValue: Dispatch<SetStateAction<string>>
-  setKeyboardValue: Dispatch<SetStateAction<string>>
   setLayout: Dispatch<SetStateAction<BrowserTouchLayout | null>>
   setRootViewRef: (view: HostInstance | null) => void
   showStop: boolean
@@ -94,7 +88,6 @@ type MobileBrowserPaneViewProps = {
   /** Why the host stopped the stream; the frame on screen is the last one it sent. */
   streamStopped: string | null
   tab: MobileBrowserTab
-  togglePointerModifier: (modifier: BrowserPointerModifier) => void
   zoom: BrowserZoomState
 }
 
@@ -122,11 +115,9 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     goBack,
     goForward,
     keyboardLift,
-    keyboardValue,
     layoutRef,
     navigateToAddress,
     panResponder,
-    pointerModifiers,
     proceedCertificate,
     reconnectStream,
     reloadPage,
@@ -134,71 +125,43 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     renderedFrameSource,
     selectBrowserViewMode,
     sendDialogCommand,
-    sendKeyboardText,
-    sendKeypress,
+    pageInput,
+    onToast,
     setAddressFocused,
     setAddressValue,
-    setKeyboardValue,
     setLayout,
     setRootViewRef,
     showStop,
     stopPage,
     streamStopped,
     tab,
-    togglePointerModifier,
     zoom
   } = props
+  const hostPlatform = useOptionalHostProtocolGates()?.hostPlatform
+  const typing = useMobileBrowserLiveTyping({ disabled: controlsDisabled, pageInput })
+  // While typing, a tap on the page (the next field, say) keeps the keyboard up.
+  const keepsKeyboard = useKeyboardPersistingTaps('always')
+  const loadFailure = useMobileBrowserLoadFailure({
+    loadError: tab.loadError,
+    certificateFailure: tab.certificateFailure,
+    browserPageId: tab.browserPageId,
+    certificateTrustSupported,
+    onProceedCertificate: proceedCertificate
+  })
+  const menuGroups = useMobileBrowserPageMenu({
+    url: tab.url,
+    canGoForward: tab.canGoForward,
+    controlsDisabled,
+    browserViewMode,
+    selectBrowserViewMode,
+    goForward,
+    proceedUnsafe: loadFailure?.proceedUnsafe ?? null,
+    onToast
+  })
   return (
     <View ref={setRootViewRef} style={styles.root}>
-      {bare ? null : (
-        <View style={styles.toolbar}>
-          <MobileBrowserToolbarIconButton
-            disabled={controlsDisabled || !tab.canGoBack}
-            label={t('common.back', 'Back')}
-            onPress={goBack}
-          >
-            <ChevronLeft size={15} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
-          </MobileBrowserToolbarIconButton>
-          <MobileBrowserToolbarIconButton
-            disabled={controlsDisabled || !tab.canGoForward}
-            label={t('browser.paneView.forward', 'Forward')}
-            onPress={goForward}
-          >
-            <ChevronRight size={15} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
-          </MobileBrowserToolbarIconButton>
-          <MobileBrowserToolbarIconButton
-            disabled={controlsDisabled}
-            label={
-              showStop ? t('browser.paneView.stop', 'Stop') : t('browser.paneView.reload', 'Reload')
-            }
-            onPress={showStop ? stopPage : reloadPage}
-          >
-            {showStop ? (
-              <X size={15} color={buttonColor(!controlsDisabled)} />
-            ) : (
-              <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
-            )}
-          </MobileBrowserToolbarIconButton>
-          <MobileBrowserAddressField
-            value={addressValue}
-            onChangeText={setAddressValue}
-            onFocus={() => setAddressFocused(true)}
-            onBlur={() => setAddressFocused(false)}
-            onSubmit={() => void navigateToAddress()}
-            focused={addressFocused}
-            disabled={controlsDisabled}
-            loading={tab.loading}
-            loadFailed={tab.loadError != null}
-          />
-          <MobileBrowserViewModeSwitch
-            disabled={controlsDisabled}
-            value={browserViewMode}
-            onChange={selectBrowserViewMode}
-          />
-        </View>
-      )}
-
       <View
+        ref={typing.focused ? keepsKeyboard : undefined}
         style={styles.viewport}
         onLayout={(event) => {
           const next = {
@@ -286,15 +249,13 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             )}
           </View>
         ) : null}
-        {tab.loadError ? (
+        {loadFailure ? (
           <MobileBrowserLoadFailure
-            loadError={tab.loadError}
-            certificateFailure={tab.certificateFailure}
-            browserPageId={tab.browserPageId}
-            certificateTrustSupported={certificateTrustSupported}
+            failure={loadFailure}
             retryDisabled={controlsDisabled}
             onRetry={retryFailedLoad}
-            onProceedCertificate={proceedCertificate}
+            // The sign-in sheet has no ⋯, so its way past a certificate warning stays beside Retry.
+            showProceedUnsafe={bare}
           />
         ) : null}
         {!renderedFrameSource || busy || error || streamStopped ? (
@@ -306,92 +267,64 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             {streamStopped ? (
               <View style={styles.streamStopped}>
                 <Text style={styles.streamStoppedText}>{streamStopped}</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  style={({ pressed }) => [
-                    styles.dialogButton,
-                    styles.dialogButtonPrimary,
-                    styles.streamStoppedButton,
-                    pressed && styles.dialogButtonPressed
-                  ]}
+                <MobileStateButton
+                  inRow
+                  label={t('browser.paneView.reconnect', 'Reconnect')}
                   onPress={reconnectStream}
-                >
-                  <Text
-                    style={[
-                      styles.dialogButtonText,
-                      styles.dialogButtonPrimaryText,
-                      styles.streamStoppedButtonText
-                    ]}
-                  >
-                    {t('browser.paneView.reconnect', 'Reconnect')}
-                  </Text>
-                </Pressable>
+                />
               </View>
             ) : error ? (
               <Text style={styles.errorText}>{error}</Text>
             ) : null}
           </View>
         ) : null}
-        {dialog ? (
-          <MobileBrowserJavaScriptDialog
-            key={dialog.occurrence}
-            dialog={dialog}
-            keyboardLift={keyboardLift}
-            sendDialogCommand={sendDialogCommand}
-          />
-        ) : pagePrompt ? (
-          <MobileBrowserPagePrompt
-            key={pagePrompt.request.requestId}
-            prompt={pagePrompt}
-            keyboardLift={keyboardLift}
-            answer={answerPagePrompt}
-          />
-        ) : null}
         {pageOverlay}
       </View>
 
-      <View
-        style={[
-          styles.keyboardDock,
-          { paddingBottom: bottomInset, transform: [{ translateY: -keyboardLift }] }
-        ]}
-      >
-        {bare ? null : (
-          <MobileBrowserPointerModifiers
-            disabled={controlsDisabled}
-            selectedModifiers={pointerModifiers}
-            onToggle={togglePointerModifier}
-          />
-        )}
-        <MobileBrowserKeyRow
-          disabled={controlsDisabled}
-          onKeypress={(key) => void sendKeypress(key)}
+      <MobileBrowserBottomBar
+        bare={bare}
+        url={tab.url}
+        canGoBack={tab.canGoBack}
+        loading={tab.loading}
+        loadFailed={tab.loadError != null}
+        bottomInset={bottomInset}
+        keyboardLift={keyboardLift}
+        controlsDisabled={controlsDisabled}
+        addressValue={addressValue}
+        addressFocused={addressFocused}
+        setAddressValue={setAddressValue}
+        setAddressFocused={setAddressFocused}
+        navigateToAddress={() => void navigateToAddress()}
+        showStop={showStop}
+        stopPage={stopPage}
+        reloadPage={reloadPage}
+        goBack={goBack}
+        onKeyboard={typing.focus}
+        menuGroups={menuGroups}
+      />
+      <TextInput
+        {...typing.inputProps}
+        style={styles.liveInput}
+        accessibilityLabel={t('browser.bottomBar.typeOnPage', 'Type on page')}
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="off"
+        spellCheck={false}
+        caretHidden
+        blurOnSubmit={false}
+        editable={!controlsDisabled}
+      />
+      {typing.focused ? (
+        <MobileBrowserPageKeys
+          bottomInset={bottomInset}
+          keyboardLift={keyboardLift}
+          hostPlatform={hostPlatform}
+          onKey={typing.pressKey}
+          onDone={typing.blur}
         />
-        <View style={styles.inputRow}>
-          <FieldTextInput
-            style={styles.keyboardInput}
-            value={keyboardValue}
-            onChangeText={setKeyboardValue}
-            placeholder={t('browser.paneView.keyboardPlaceholder', 'Type on page…')}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!controlsDisabled}
-            onSubmitEditing={() => void sendKeyboardText()}
-          />
-          <Pressable
-            style={({ pressed }) => [
-              styles.sendButton,
-              (controlsDisabled || !keyboardValue) && styles.disabled,
-              pressed && pressedStyle
-            ]}
-            disabled={controlsDisabled || !keyboardValue}
-            onPress={() => void sendKeyboardText()}
-            accessibilityLabel={t('browser.paneView.sendText', 'Send text to browser')}
-          >
-            <ArrowUp size={18} color={buttonColor(!controlsDisabled && !!keyboardValue)} />
-          </Pressable>
-        </View>
-      </View>
+      ) : null}
+      <MobileBrowserJavaScriptDialog dialog={dialog} sendDialogCommand={sendDialogCommand} />
+      <MobileBrowserPagePrompt prompt={dialog ? null : pagePrompt} answer={answerPagePrompt} />
     </View>
   )
 }

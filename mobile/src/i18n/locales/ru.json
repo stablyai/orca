@@ -257,26 +257,15 @@
     },
     "paneView": {
       "forward": "Вперёд",
-      "keyboardPlaceholder": "Введите текст для страницы…",
       "reload": "Перезагрузить",
-      "sendText": "Отправить текст в браузер",
       "dialogTitleWithOrigin": "{{origin}} сообщает",
       "dialogTitleNoOrigin": "Эта страница сообщает",
-      "dialogAnswer": "Ответ",
       "stop": "Остановить",
       "reconnect": "Подключиться снова"
     },
-    "pointerModifiers": {
-      "clickModifier": "Модификатор {{key}} для щелчка"
-    },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "Отправка не подтверждена — проверьте страницу перед повторной попыткой",
-      "dialogAnswerFailed": "Не удалось передать ответ странице.",
-      "sent": "Отправлено"
-    },
-    "viewModeSwitch": {
-      "mobileView": "Показать мобильную версию сайта",
-      "webView": "Показать версию сайта для компьютера"
+      "dialogAnswerFailed": "Не удалось передать ответ странице."
     },
     "loadFailure": {
       "retry": "Повторить",

@@ -2170,31 +2170,34 @@
     "addressField": {
       "urlPlaceholder": "URL"
     },
+    "bottomBar": {
+      "typeOnPage": "Type on page",
+      "more": "More",
+      "address": "Address",
+      "addressPlaceholder": "Search or enter address"
+    },
+    "pageMenu": {
+      "desktopSite": "Desktop site"
+    },
+    "pageKeys": {
+      "modified": "{{modifier}} {{key}}",
+      "hideKeyboard": "Hide keyboard"
+    },
     "pane": {
       "invalidUrl": "Enter a valid URL."
     },
     "paneView": {
       "forward": "Forward",
       "reload": "Reload",
-      "keyboardPlaceholder": "Type on page…",
-      "sendText": "Send text to browser",
       "dialogTitleWithOrigin": "{{origin}} says",
       "dialogTitleNoOrigin": "This page says",
-      "dialogAnswer": "Answer",
       "stop": "Stop",
       "reconnect": "Reconnect"
     },
-    "pointerModifiers": {
-      "clickModifier": "{{key}} click modifier"
-    },
-    "viewModeSwitch": {
-      "webView": "Show web website view",
-      "mobileView": "Show mobile website view"
-    },
     "useBrowserCommands": {
-      "sent": "Sent",
       "deliveryUnconfirmed": "Delivery unconfirmed — check page before retrying",
-      "dialogAnswerFailed": "That answer did not reach the page."
+      "dialogAnswerFailed": "That answer did not reach the page.",
+      "typingFailed": "Typing didn't reach the page"
     },
     "stream": {
       "updateApp": "Update the Orca app to stream browser tabs here.",

@@ -167,24 +167,13 @@
     },
     "paneView": {
       "forward": "前進",
-      "keyboardPlaceholder": "在網頁上輸入…",
       "reload": "重新載入",
-      "sendText": "傳送文字至瀏覽器",
       "dialogTitleWithOrigin": "{{origin}} 顯示",
-      "dialogTitleNoOrigin": "此網頁顯示",
-      "dialogAnswer": "回答"
-    },
-    "pointerModifiers": {
-      "clickModifier": "{{key}} 點擊修飾鍵"
+      "dialogTitleNoOrigin": "此網頁顯示"
     },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "尚未確認是否送達，重試前請先檢查頁面",
-      "dialogAnswerFailed": "回覆未能送達網頁。",
-      "sent": "已傳送"
-    },
-    "viewModeSwitch": {
-      "mobileView": "顯示行動版網站",
-      "webView": "顯示桌面版網站"
+      "dialogAnswerFailed": "回覆未能送達網頁。"
     },
     "loadFailure": {
       "retry": "重試",

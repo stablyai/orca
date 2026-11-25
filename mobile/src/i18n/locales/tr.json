@@ -249,26 +249,15 @@
     },
     "paneView": {
       "forward": "İleri",
-      "keyboardPlaceholder": "Sayfaya yazın…",
       "reload": "Yenile",
-      "sendText": "Tarayıcıya metin gönder",
       "dialogTitleWithOrigin": "{{origin}} diyor ki",
       "dialogTitleNoOrigin": "Bu sayfa diyor ki",
-      "dialogAnswer": "Yanıt",
       "stop": "Durdur",
       "reconnect": "Yeniden bağlan"
     },
-    "pointerModifiers": {
-      "clickModifier": "Tıklamalarda {{key}} tuşunu kullan"
-    },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "Gönderim doğrulanamadı — yeniden denemeden önce sayfayı kontrol edin",
-      "dialogAnswerFailed": "Yanıt sayfaya ulaşmadı.",
-      "sent": "Gönderildi"
-    },
-    "viewModeSwitch": {
-      "mobileView": "Web sitesinin mobil görünümünü göster",
-      "webView": "Web sitesinin masaüstü görünümünü göster"
+      "dialogAnswerFailed": "Yanıt sayfaya ulaşmadı."
     },
     "loadFailure": {
       "retry": "Yeniden dene",

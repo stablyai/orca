@@ -181,24 +181,13 @@
     },
     "paneView": {
       "forward": "Avançar",
-      "keyboardPlaceholder": "Digite na página…",
       "reload": "Recarregar",
-      "sendText": "Enviar texto ao navegador",
       "dialogTitleWithOrigin": "{{origin}} diz",
-      "dialogTitleNoOrigin": "Esta página diz",
-      "dialogAnswer": "Resposta"
-    },
-    "pointerModifiers": {
-      "clickModifier": "Modificador de clique {{key}}"
+      "dialogTitleNoOrigin": "Esta página diz"
     },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "Envio não confirmado — verifique a página antes de tentar novamente",
-      "dialogAnswerFailed": "A resposta não chegou à página.",
-      "sent": "Enviado"
-    },
-    "viewModeSwitch": {
-      "mobileView": "Mostrar versão do site para celular",
-      "webView": "Mostrar versão do site para computador"
+      "dialogAnswerFailed": "A resposta não chegou à página."
     },
     "stream": {
       "updateApp": "Atualize o aplicativo Orca para transmitir as guias do navegador aqui.",

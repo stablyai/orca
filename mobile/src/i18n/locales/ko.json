@@ -167,24 +167,13 @@
     },
     "paneView": {
       "forward": "앞으로",
-      "keyboardPlaceholder": "페이지에 입력…",
       "reload": "새로고침",
-      "sendText": "브라우저로 텍스트 전송",
       "dialogTitleWithOrigin": "{{origin}} 내용:",
-      "dialogTitleNoOrigin": "이 페이지 내용:",
-      "dialogAnswer": "답변"
-    },
-    "pointerModifiers": {
-      "clickModifier": "{{key}} 클릭 보조 키"
+      "dialogTitleNoOrigin": "이 페이지 내용:"
     },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "전달 여부 미확인 — 다시 시도하기 전에 페이지를 확인하세요",
-      "dialogAnswerFailed": "응답이 페이지에 전달되지 않았습니다.",
-      "sent": "전송됨"
-    },
-    "viewModeSwitch": {
-      "mobileView": "웹사이트를 모바일 화면으로 보기",
-      "webView": "웹사이트를 데스크톱 화면으로 보기"
+      "dialogAnswerFailed": "응답이 페이지에 전달되지 않았습니다."
     },
     "loadFailure": {
       "retry": "다시 시도",

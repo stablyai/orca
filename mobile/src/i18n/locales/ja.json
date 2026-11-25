@@ -167,24 +167,13 @@
     },
     "paneView": {
       "forward": "進む",
-      "keyboardPlaceholder": "ページに入力…",
       "reload": "リロード",
-      "sendText": "ブラウザにテキストを送信",
       "dialogTitleWithOrigin": "{{origin}} の内容",
-      "dialogTitleNoOrigin": "このページの内容",
-      "dialogAnswer": "回答"
-    },
-    "pointerModifiers": {
-      "clickModifier": "クリック時の修飾キー {{key}}"
+      "dialogTitleNoOrigin": "このページの内容"
     },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "送信を確認できません。再試行する前にページを確認してください。",
-      "dialogAnswerFailed": "回答をページに送信できませんでした。",
-      "sent": "送信済み"
-    },
-    "viewModeSwitch": {
-      "mobileView": "ウェブサイトのモバイル表示に切り替え",
-      "webView": "ウェブサイトのデスクトップ表示に切り替え"
+      "dialogAnswerFailed": "回答をページに送信できませんでした。"
     },
     "loadFailure": {
       "retry": "再試行",

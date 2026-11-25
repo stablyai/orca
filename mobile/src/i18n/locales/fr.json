@@ -171,24 +171,13 @@
     },
     "paneView": {
       "forward": "Suivant",
-      "keyboardPlaceholder": "Saisir du texte sur la page…",
       "reload": "Recharger",
-      "sendText": "Envoyer le texte au navigateur",
       "dialogTitleWithOrigin": "{{origin}} indique",
-      "dialogTitleNoOrigin": "Cette page indique",
-      "dialogAnswer": "Réponse"
-    },
-    "pointerModifiers": {
-      "clickModifier": "Modificateur de clic {{key}}"
+      "dialogTitleNoOrigin": "Cette page indique"
     },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "Envoi non confirmé — vérifiez la page avant de réessayer",
-      "dialogAnswerFailed": "Cette réponse n'est pas parvenue à la page.",
-      "sent": "Envoyé"
-    },
-    "viewModeSwitch": {
-      "mobileView": "Afficher la version mobile du site",
-      "webView": "Afficher la version pour ordinateur du site"
+      "dialogAnswerFailed": "Cette réponse n'est pas parvenue à la page."
     },
     "loadFailure": {
       "retry": "Réessayer",

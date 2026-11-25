@@ -167,24 +167,13 @@
     },
     "paneView": {
       "forward": "Vorwärts",
-      "keyboardPlaceholder": "Text auf der Seite eingeben…",
       "reload": "Neu laden",
-      "sendText": "Text an den Browser senden",
       "dialogTitleWithOrigin": "{{origin}} meldet",
-      "dialogTitleNoOrigin": "Diese Seite meldet",
-      "dialogAnswer": "Antwort"
-    },
-    "pointerModifiers": {
-      "clickModifier": "{{key}} als Klick-Modifikator"
+      "dialogTitleNoOrigin": "Diese Seite meldet"
     },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "Übertragung nicht bestätigt – vor erneutem Versuch Seite prüfen",
-      "dialogAnswerFailed": "Die Antwort hat die Seite nicht erreicht.",
-      "sent": "Gesendet"
-    },
-    "viewModeSwitch": {
-      "mobileView": "Mobile Ansicht der Website anzeigen",
-      "webView": "Desktop-Ansicht der Website anzeigen"
+      "dialogAnswerFailed": "Die Antwort hat die Seite nicht erreicht."
     },
     "loadFailure": {
       "retry": "Erneut versuchen",

@@ -240,20 +240,13 @@
     },
     "paneView": {
       "forward": "前进",
-      "keyboardPlaceholder": "在网页中输入…",
       "reload": "重新加载",
-      "sendText": "将文本发送到浏览器",
       "dialogTitleWithOrigin": "{{origin}} 显示",
-      "dialogTitleNoOrigin": "此网页显示",
-      "dialogAnswer": "回答"
-    },
-    "pointerModifiers": {
-      "clickModifier": "{{key}} 点击修饰键"
+      "dialogTitleNoOrigin": "此网页显示"
     },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "尚未确认是否送达，请先检查页面再重试",
-      "dialogAnswerFailed": "未能将回答发送到网页",
-      "sent": "已发送"
+      "dialogAnswerFailed": "未能将回答发送到网页"
     },
     "stream": {
       "updateApp": "请更新 Orca 应用，以便在这里串流浏览器标签页",
@@ -261,10 +254,6 @@
       "checking": "正在检查桌面是否支持浏览器串流",
       "pageUnavailable": "浏览器页面暂不可用",
       "timedOut": "浏览器串流超时"
-    },
-    "viewModeSwitch": {
-      "mobileView": "显示移动版网站",
-      "webView": "显示电脑版网站"
     },
     "loadFailure": {
       "retry": "重试",

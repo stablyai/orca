@@ -14,6 +14,9 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { describeLoadError } from './load-error-description'
 
+// (44 - 32) / 2: the button's real touch target reaches 44 pt.
+const ACTION_TARGET_PADDING = 6
+
 export type MobileStateAction = { label: string; onPress: () => void }
 
 type MobileStateViewProps = {
@@ -83,22 +86,44 @@ export function MobileStateButton({
   accessibilityLabel
 }: MobileStateAction & { disabled?: boolean; inRow?: boolean; accessibilityLabel?: string }) {
   useMobileColorScheme()
+  const a11y = {
+    onPress,
+    disabled,
+    accessibilityRole: 'button',
+    accessibilityLabel,
+    accessibilityState: { disabled }
+  } as const
+  if (inRow) {
+    return (
+      <Pressable
+        {...a11y}
+        style={({ pressed }) => [
+          styles.action,
+          styles.actionInRow,
+          pressed && styles.actionPressed,
+          disabled && styles.actionDisabled
+        ]}
+        hitSlop={8}
+      >
+        <Text style={styles.actionText}>{label}</Text>
+      </Pressable>
+    )
+  }
+  // The page ignores hitSlop, so the 44 pt target is real padding around the 32 pt button.
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.action,
-        inRow && styles.actionInRow,
-        pressed && styles.actionPressed,
-        disabled && styles.actionDisabled
-      ]}
-      onPress={onPress}
-      disabled={disabled}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
-    >
-      <Text style={styles.actionText}>{label}</Text>
+    <Pressable {...a11y} style={styles.actionTarget}>
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.action,
+            styles.actionInTarget,
+            pressed && styles.actionPressed,
+            disabled && styles.actionDisabled
+          ]}
+        >
+          <Text style={styles.actionText}>{label}</Text>
+        </View>
+      )}
     </Pressable>
   )
 }
@@ -270,6 +295,11 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
   },
+  actionTarget: {
+    marginTop: spacing.sm - ACTION_TARGET_PADDING,
+    paddingVertical: ACTION_TARGET_PADDING
+  },
+  actionInTarget: { marginTop: 0 },
   // bgRaised is a dark group's own fill, so the edge alone draws it there, as a line button.
   actionInRow: { marginTop: 0, borderColor: colors.floatingCardBorder },
   actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.sm },

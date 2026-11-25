@@ -24,11 +24,15 @@ type ContentProps = {
   onCancel: () => void
 }
 
-type Props = ContentProps & { visible: boolean }
+type Props = ContentProps & {
+  visible: boolean
+  /** False when only an answer may close it, e.g. a page blocked until it gets one. */
+  dismissible?: boolean
+}
 
-export function ConfirmModal({ visible, ...content }: Props) {
+export function ConfirmModal({ visible, dismissible, ...content }: Props) {
   return (
-    <BottomDrawer visible={visible} onClose={content.onCancel}>
+    <BottomDrawer visible={visible} onClose={content.onCancel} dismissible={dismissible}>
       <ConfirmContent {...content} />
     </BottomDrawer>
   )
