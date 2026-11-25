@@ -89,7 +89,7 @@ export type CommitMessageAgentSpec = {
       }
     | {
         binary: string
-        /** Read from the dima daemon already running; main never starts one. */
+        /** Read from dima's daemon; a cold read starts it with dima's own `runtime list`. */
         listing: 'dima-app-server'
       }
   models: CommitMessageModel[]
