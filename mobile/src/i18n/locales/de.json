@@ -4395,13 +4395,6 @@
       "behind": "{{count}} zurück",
       "upToDate": "Aktuell",
       "switchBranch": "Von {{branch}} auf anderen Branch wechseln",
-      "mergeInProgress": "Merge läuft",
-      "rebaseInProgress": "Rebase läuft",
-      "cherryPickInProgress": "Cherry-Pick läuft",
-      "filesNeedDecision_one": "Vor dem Abschließen ist für {{count}} Datei eine Entscheidung nötig.",
-      "filesNeedDecision_other": "Vor dem Abschließen ist für {{count}} Dateien eine Entscheidung nötig.",
-      "conflictsResolved": "Alle Konflikte sind gelöst. Über die Leiste unten abschließen.",
-      "continueOnComputer": "Alle Konflikte sind gelöst. Zum Abschließen auf dem Computer fortfahren.",
       "commits_one": "{{count}} Commit",
       "commits_other": "{{count}} Commits",
       "conflictsMayRemain": "Nicht alle Dateien werden aufgelistet, daher können noch Konflikte bestehen. Auf dem Computer prüfen."

@@ -4714,13 +4714,6 @@
       "behind": "落後 {{count}} 筆",
       "upToDate": "已是最新",
       "switchBranch": "切換分支（目前為 {{branch}}）",
-      "mergeInProgress": "合併正在進行中",
-      "rebaseInProgress": "變基正在進行中",
-      "cherryPickInProgress": "揀選正在進行中",
-      "filesNeedDecision_one": "{{count}} 個檔案需要你決定如何處理，才能完成。",
-      "filesNeedDecision_other": "{{count}} 個檔案需要你決定如何處理，才能完成。",
-      "conflictsResolved": "所有衝突皆已解決。請從下方列完成。",
-      "continueOnComputer": "所有衝突皆已解決。請在電腦上繼續以完成。",
       "commits_one": "{{count}} 筆提交",
       "commits_other": "{{count}} 筆提交",
       "conflictsMayRemain": "未列出所有檔案，因此可能仍有衝突。請在電腦上檢查。"

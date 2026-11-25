@@ -75,6 +75,11 @@ const baseStyles = themedStyleSheet(() => ({
   },
   feedbackError: {
     color: colors.statusRed
+  },
+  // About six lines; a long hook log scrolls here instead of pushing the files away.
+  feedbackScroll: {
+    maxHeight: 116,
+    flexGrow: 0
   }
 }))
 

@@ -165,7 +165,10 @@ export function ChangeFileRow({
       : null
   const trailing = (guard: (onPress: () => void) => () => void) =>
     rowBusy ? (
-      <ActivityIndicator size="small" color={colors.textSecondary} />
+      // In the button's box, so the row keeps its height while the action runs.
+      <View style={styles.iconButton}>
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      </View>
     ) : !hasConflictActions && (item.canUnstage || item.canStage) ? (
       <Pressable
         style={({ pressed }) => [

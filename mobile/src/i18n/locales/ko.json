@@ -4723,13 +4723,6 @@
       "behind": "{{count}}개 뒤처짐",
       "upToDate": "최신 상태",
       "switchBranch": "{{branch}}에서 다른 브랜치로 전환",
-      "mergeInProgress": "병합 진행 중",
-      "rebaseInProgress": "리베이스 진행 중",
-      "cherryPickInProgress": "체리픽 진행 중",
-      "filesNeedDecision_one": "완료하려면 파일 {{count}}개의 처리 방법을 정해야 합니다.",
-      "filesNeedDecision_other": "완료하려면 파일 {{count}}개의 처리 방법을 정해야 합니다.",
-      "conflictsResolved": "모든 충돌이 해결되었습니다. 하단 바에서 완료하세요.",
-      "continueOnComputer": "모든 충돌이 해결되었습니다. 완료하려면 컴퓨터에서 계속하세요.",
       "commits_one": "커밋 {{count}}개",
       "commits_other": "커밋 {{count}}개",
       "conflictsMayRemain": "일부 파일만 표시되어 충돌이 남아 있을 수 있습니다. 컴퓨터에서 확인하세요."

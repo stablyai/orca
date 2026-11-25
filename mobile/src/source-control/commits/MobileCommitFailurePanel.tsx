@@ -26,11 +26,14 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
   return (
     <View style={styles.commitFailure}>
       <Text style={[styles.feedbackText, styles.feedbackError]}>
-        {summary
-          ? t('sourceControl.commitFailurePanel.failedWith', 'Commit failed: {{reason}}', {
-              reason: summary
-            })
-          : t('sourceControl.commitFailurePanel.title', 'Commit failed')}
+        {!summary
+          ? t('sourceControl.commitFailurePanel.title', 'Commit failed')
+          : // Most summaries already say the commit failed ("Commit failed.", "Lint failed during commit.").
+            /commit/i.test(summary)
+            ? summary
+            : t('sourceControl.commitFailurePanel.failedWith', 'Commit failed: {{reason}}', {
+                reason: summary
+              })}
       </Text>
       <View style={styles.commitFailureLinks}>
         <PrTextLink

@@ -4390,13 +4390,6 @@
       "behind": "{{count}} コミット遅れ",
       "upToDate": "最新",
       "switchBranch": "{{branch}} からブランチを切り替え",
-      "mergeInProgress": "マージ進行中",
-      "rebaseInProgress": "リベース進行中",
-      "cherryPickInProgress": "チェリーピック進行中",
-      "filesNeedDecision_one": "完了するには、{{count}} 件のファイルについて選択が必要です。",
-      "filesNeedDecision_other": "完了するには、{{count}} 件のファイルについて選択が必要です。",
-      "conflictsResolved": "すべての競合が解決されました。下のバーから完了してください。",
-      "continueOnComputer": "すべての競合が解決されました。完了するには、コンピュータで続行してください。",
       "commits_one": "{{count}} 件のコミット",
       "commits_other": "{{count}} 件のコミット",
       "conflictsMayRemain": "一部のファイルが表示されていないため、競合が残っている可能性があります。コンピュータで確認してください。"
