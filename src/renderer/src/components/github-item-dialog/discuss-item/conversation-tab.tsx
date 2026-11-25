@@ -43,7 +43,6 @@ import type { PRCheckDetail } from '../../../../../shared/github/checks/check-ty
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
-import { useGitHubWorkItemMarkdownRepo } from '@/components/github/use-github-work-item-markdown-repo'
 import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../../shared/github/work-items/work-item-target'
 import {
   addIssueCommentForRepo,
@@ -147,9 +146,9 @@ export function ConversationTab({
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const prRepo = useMemo(() => resolvePullRequestRepo(item, projectOrigin), [item, projectOrigin])
-  const markdownGitHubRepo = useGitHubWorkItemMarkdownRepo(
-    { repoId: repoId ?? item.repoId, repoHostId: sourceContext?.hostId ?? item.repoHostId },
-    projectOrigin ?? bodySlug
+  const markdownGitHubRepo = useMemo(
+    () => (projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : bodySlug),
+    [bodySlug, projectOrigin]
   )
   const canEditBody =
     item.type === 'pr'
@@ -295,7 +294,7 @@ export function ConversationTab({
       <div className="flex min-w-0 flex-col gap-4">
         <ConversationTabDescription
           imageUploadAddress={() => {
-            const slug = prRepo ?? bodySlug
+            const slug = prRepo ?? markdownGitHubRepo
             return (item.type === 'pr' || projectOrigin) && slug
               ? {
                   runtime:
