@@ -1,9 +1,14 @@
 import { appendFile } from 'node:fs/promises'
 import { loadavg } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import { hasActiveTraceSink, startSpan } from '../observability/tracer'
 import { subscribeSystemPowerLifecycle } from '../power/system-power-lifecycle'
+import {
+  longestSyncCallSince,
+  recordSyncCallsOnThisThread,
+  type SyncCallRecord
+} from './main-sync-call-ring'
 
 export const EVENT_LOOP_DELAY_PROBE_ENV = 'ORCA_EVENT_LOOP_DELAY_PROBE'
 /** Appended in the process's userData directory, one line per window. */
@@ -27,6 +32,10 @@ const MAIN_STALL_SUMMARY: EventLoopStallSummaryOptions = {
 }
 /** Input, IPC and browser page loads all wait on a gap this long. */
 const STALL_MS = 250
+/** A gap this long is a beachball: name when it began and the sync disk call that held main. */
+const LONG_GAP_MS = 1_000
+/** Long enough to fit a SQL statement's leading clause, short enough to keep the span small. */
+const SYNC_CALL_LABEL_CHARS = 160
 
 export type EventLoopDelayWindow = {
   process: 'main' | 'orcad'
@@ -55,6 +64,10 @@ export type EventLoopStallWindow = {
   uncountedMaxGapMs: number
   /** Most main-thread CPU within one idle tick: a stall there shows up only here unless it overlapped the tick. */
   idleTickMaxCpuMs: number
+  /** For a worst gap of LONG_GAP_MS or more: when it began, on the tick clock. */
+  longGapStartedAtMs?: number
+  /** The longest synchronous disk call main entered during that gap, when one was recorded. */
+  longGapSyncCall?: SyncCallRecord
 }
 
 export type EventLoopIdleTicks = {
@@ -73,6 +86,8 @@ export type EventLoopStallSummaryOptions = {
   maxCountedGapMs?: number
   /** False keeps a reportable window open, e.g. while startup has no trace sink yet. */
   canReport?: () => boolean
+  /** The longest synchronous call that started at or after the given tick-clock time. */
+  longestSyncCallSince?: (fromMs: number) => SyncCallRecord | null
 }
 
 export function isEventLoopDelayProbeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -102,8 +117,11 @@ export function createEventLoopStallSummary(
   let stalledMsSeen = 0
   let uncountedMaxGapMs = 0
   let idleTickMaxCpuMs = 0
+  let longGapStartedAtMs: number | undefined
+  let longGapSyncCall: SyncCallRecord | undefined
   return {
     tick: (now, cpuMs = 0) => {
+      const previousTick = lastTick
       const elapsedMs = now - lastTick
       const gap = elapsedMs - intervalMs
       const tickCpuMs = lastCpuMs === null ? 0 : Math.max(0, cpuMs - lastCpuMs)
@@ -128,6 +146,11 @@ export function createEventLoopStallSummary(
       if (counted && gap > maxGapMs) {
         maxGapMs = gap
         maxGapCpuMs = tickCpuMs
+        if (gap >= LONG_GAP_MS) {
+          // Whatever blocked main started after the previous tick ran.
+          longGapSyncCall = options.longestSyncCallSince?.(previousTick) ?? undefined
+          longGapStartedAtMs = longGapSyncCall?.startedAtMs ?? now - gap
+        }
       }
       if (counted && gap >= STALL_MS) {
         stallsSeen += 1
@@ -153,7 +176,9 @@ export function createEventLoopStallSummary(
             stalledMsSeen: Math.round(stalledMsSeen),
             cpuMs: Math.round(windowCpuMs),
             uncountedMaxGapMs: Math.round(uncountedMaxGapMs),
-            idleTickMaxCpuMs: Math.round(idleTickMaxCpuMs)
+            idleTickMaxCpuMs: Math.round(idleTickMaxCpuMs),
+            ...(longGapStartedAtMs === undefined ? {} : { longGapStartedAtMs }),
+            ...(longGapSyncCall ? { longGapSyncCall } : {})
           },
           now
         )
@@ -166,6 +191,8 @@ export function createEventLoopStallSummary(
       stalledMsSeen = 0
       uncountedMaxGapMs = 0
       idleTickMaxCpuMs = 0
+      longGapStartedAtMs = undefined
+      longGapSyncCall = undefined
       return intervalMs
     },
     // System sleep stops timers without blocking the loop; never count it as a stall.
@@ -198,11 +225,30 @@ function traceStallWindow(processKind: EventLoopDelayWindow['process']) {
         'eventLoop.cpuMs': window.cpuMs,
         'eventLoop.uncountedMaxGapMs': window.uncountedMaxGapMs,
         'eventLoop.idleTickMaxCpuMs': window.idleTickMaxCpuMs,
+        ...(window.longGapStartedAtMs === undefined
+          ? {}
+          : {
+              'eventLoop.longGapStartedAt': Math.round(
+                performance.timeOrigin + window.longGapStartedAtMs
+              )
+            }),
+        ...(window.longGapSyncCall
+          ? {
+              'eventLoop.longGapSyncCall': describeSyncCall(window.longGapSyncCall),
+              'eventLoop.longGapSyncCallMs': Math.round(window.longGapSyncCall.durationMs)
+            }
+          : {}),
         // A busy machine starves main without main doing anything; Windows reports no load average.
         ...(process.platform === 'win32' ? {} : { 'host.loadAvg1m': loadavg()[0] })
       }
     }).end()
   }
+}
+
+// File names only: support captures must not carry home-directory paths.
+function describeSyncCall(call: SyncCallRecord): string {
+  const label = call.source === 'fsync' ? basename(call.label) : call.label
+  return `${call.source}: ${label.slice(0, SYNC_CALL_LABEL_CHARS)}`
 }
 
 function createDelayReport(
@@ -259,7 +305,11 @@ export function startEventLoopDelayProbe(
     processKind === 'main'
       ? createEventLoopStallSummary(
           startedAt,
-          delayReport ? MAIN_STALL_SUMMARY : { ...MAIN_STALL_SUMMARY, idle: MAIN_IDLE_TICKS },
+          {
+            ...MAIN_STALL_SUMMARY,
+            ...(delayReport ? {} : { idle: MAIN_IDLE_TICKS }),
+            longestSyncCallSince
+          },
           traceStallWindow(processKind)
         )
       : null
@@ -267,6 +317,7 @@ export function startEventLoopDelayProbe(
     return
   }
   if (stallSummary) {
+    recordSyncCallsOnThisThread(true)
     subscribeSystemPowerLifecycle({
       onSuspend: stallSummary.pause,
       onResume: () => stallSummary.resume(performance.now(), mainThreadCpuMs())

@@ -3,6 +3,7 @@ import { readFileSync, statSync } from 'node:fs'
 import { parseLinuxStartTicks } from '../../agent-hooks/installation/locking/managed-hook-owner-identity'
 import {
   getProcessStartedAtMs,
+  getProcessStartedAtMsAsync,
   START_TIME_TOLERANCE_MS,
   startTimesWithinTolerance
 } from '../../daemon/endpoint/identity/daemon-process-start-time'
@@ -33,6 +34,12 @@ export function readOrcadProcessStartedAtMs(pid: number): number | null {
   return process.platform === 'win32'
     ? readWindowsProcessCreationTime(pid)
     : getProcessStartedAtMs(pid)
+}
+
+export async function readOrcadProcessStartedAtMsAsync(pid: number): Promise<number | null> {
+  return process.platform === 'win32'
+    ? readWindowsProcessCreationTime(pid)
+    : getProcessStartedAtMsAsync(pid)
 }
 
 /** Linux start ticks and boot ID are independent of wall-clock adjustments. */

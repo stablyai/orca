@@ -4,7 +4,7 @@ import {
   getProcessOutputFields,
   iterateProcessOutputLines
 } from '../../../../shared/process-observation/process-output-field-scanner'
-import { getPsProcessIdentity } from './daemon-process-identity-query'
+import { getPsProcessIdentity, getPsProcessIdentityAsync } from './daemon-process-identity-query'
 
 export const START_TIME_TOLERANCE_MS = 1_500
 
@@ -77,6 +77,14 @@ export function getProcessStartedAtMs(pid: number): number | null {
   }
 
   return getPsProcessIdentity(pid)?.startedAtMs ?? null
+}
+
+/** Same answer without blocking the caller's event loop on a forked ps (setuid, so syspolicyd vets each exec). */
+export async function getProcessStartedAtMsAsync(pid: number): Promise<number | null> {
+  if (process.platform === 'linux' || process.platform === 'win32') {
+    return getProcessStartedAtMs(pid)
+  }
+  return (await getPsProcessIdentityAsync(pid))?.startedAtMs ?? null
 }
 
 export function startTimeMatches(pid: number, expectedStartedAtMs: number | null): boolean {

@@ -1,6 +1,7 @@
 import type { StatementResultingChanges } from 'node:sqlite'
 import { SqliteIntegerReader } from './sqlite-integer-reader'
 import type { SqliteBindings, SqliteRow, SqliteStatement } from './sqlite-statement'
+import { enterSyncCall, exitSyncCall } from '../diagnostics/main-sync-call-ring'
 
 // SQLite retains bound text/blob values until rebinding or statement finalization.
 const LARGE_BINDING_BYTES = 64 * 1024
@@ -22,7 +23,12 @@ export class NodeSqliteStatement implements SqliteStatement {
 
   private readonly statement: SqliteStatement
 
-  constructor(private readonly prepare: () => SqliteStatement) {
+  constructor(
+    private readonly prepare: () => SqliteStatement,
+    /** Database and SQL named in main-thread stall reports. */
+    private readonly database = '',
+    private readonly sql = ''
+  ) {
     this.statement = this.prepareStatement()
   }
 
@@ -38,7 +44,13 @@ export class NodeSqliteStatement implements SqliteStatement {
   }
 
   all(...parameters: SqliteBindings): SqliteRow[] {
-    const rows = this.execution(parameters).all(...parameters)
+    const call = enterSyncCall(this.database, this.sql)
+    let rows: SqliteRow[]
+    try {
+      rows = this.execution(parameters).all(...parameters)
+    } finally {
+      exitSyncCall(call)
+    }
     for (const row of rows) {
       this.integers.row(row)
     }
@@ -46,12 +58,23 @@ export class NodeSqliteStatement implements SqliteStatement {
   }
 
   get(...parameters: SqliteBindings): SqliteRow | undefined {
-    const row = this.execution(parameters).get(...parameters)
+    const call = enterSyncCall(this.database, this.sql)
+    let row: SqliteRow | undefined
+    try {
+      row = this.execution(parameters).get(...parameters)
+    } finally {
+      exitSyncCall(call)
+    }
     return row === undefined ? undefined : this.integers.row(row)
   }
 
   run(...parameters: SqliteBindings): StatementResultingChanges {
-    return this.integers.result(this.execution(parameters).run(...parameters))
+    const call = enterSyncCall(this.database, this.sql)
+    try {
+      return this.integers.result(this.execution(parameters).run(...parameters))
+    } finally {
+      exitSyncCall(call)
+    }
   }
 
   *iterate(...parameters: SqliteBindings): IterableIterator<SqliteRow> {
