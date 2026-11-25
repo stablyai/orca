@@ -1,3 +1,5 @@
+import { sharedBotHostFor } from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
+
 const revisionByEnvironmentId = new Map<string, number>()
 // Pairings proven to continue the same machine: old revision → the revision that replaced it.
 const continuedRevisionsByEnvironmentId = new Map<string, Map<number, number>>()
@@ -81,8 +83,17 @@ export function onRuntimeEnvironmentRevisionsChanged(
   return () => revisionChangeListeners.delete(listener)
 }
 
+// A shared agent's host has no saved pairing to fence: main routes it over its share, whatever the
+// revision, and it is gone when the share is.
+const SHARED_BOT_HOST_REVISION = 0
+
 export function getRuntimeEnvironmentRevision(environmentId: string): number | undefined {
-  return revisionByEnvironmentId.get(environmentId)
+  return (
+    revisionByEnvironmentId.get(environmentId) ??
+    (sharedBotHostFor({ kind: 'environment', environmentId })
+      ? SHARED_BOT_HOST_REVISION
+      : undefined)
+  )
 }
 
 /** Selected catalog projection also changes when a pending host key is proved at the same revision. */

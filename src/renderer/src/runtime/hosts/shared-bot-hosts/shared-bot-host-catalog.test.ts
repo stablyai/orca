@@ -14,6 +14,7 @@ import {
 import { selectExecutionHostDisplayLabel } from '../display/execution-host-display-label'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store'
+import { resolveNativeChatRuntimeSessionAttachmentOwner } from '@/components/native-chat/attachments/uploads/native-chat-attachment-owner'
 
 const HOST: SharedBotHostView = {
   environmentId: 'shared-env',
@@ -106,4 +107,16 @@ describe('sharing offered only where the account’s Orca Cloud takes shares', (
     expect(readTeamSharingOffered()).toBe(false)
     expect(readSharedBotHosts()).toEqual([HOST])
   })
+})
+
+it('gives a shared agent’s host a pairing revision while it is shared, so its chats take attachments', () => {
+  const session = { sessionId: 'chat-1', runtimeEnvironmentId: HOST.environmentId }
+  expect(resolveNativeChatRuntimeSessionAttachmentOwner(session)).toEqual({
+    kind: 'runtime-session',
+    environmentId: HOST.environmentId,
+    pairingRevision: 0,
+    sessionId: 'chat-1'
+  })
+  changed({ hosts: [], sharing: true })
+  expect(resolveNativeChatRuntimeSessionAttachmentOwner(session)).toEqual({ kind: 'not-ready' })
 })
