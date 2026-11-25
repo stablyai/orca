@@ -1,6 +1,6 @@
 import type { ComposerModalData } from './composer-modal-data'
 import { toast } from 'sonner'
-import { agentPickerChatLaunchRefusal } from '@/components/agent/agent-launch-picker-chat-model-refusal'
+import { useAgentPickerChatPick } from '@/components/agent/use-agent-picker-chat-pick'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
@@ -218,6 +218,11 @@ function QuickTabBody({
   const quickAgentSurface = quickAgentPick.agent === quickAgent ? quickAgentPick.surface : undefined
   const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
   const createDisabled = formDisabled || !launchSelection.ready
+  const chatPick = useAgentPickerChatPick(
+    observation.model,
+    { entry: quickAgentPick.entry, draft: pickerDraft },
+    active && pickerDraft?.surface === 'chat'
+  )
 
   const handleQuickAgentChange = useCallback(
     (
@@ -236,12 +241,8 @@ function QuickTabBody({
     if (createDisabled) {
       return
     }
-    const refusal =
-      pickerDraft?.surface === 'chat' && quickAgentPick.entry
-        ? agentPickerChatLaunchRefusal(quickAgentPick.entry, pickerDraft)
-        : null
-    if (refusal) {
-      toast.error(refusal)
+    if (chatPick.refusal) {
+      toast.error(chatPick.refusal)
       return
     }
     await submitQuick(quickAgent, {
@@ -281,7 +282,7 @@ function QuickTabBody({
       },
       ...quickWorkspacePickerInputs(
         pickerDraft,
-        quickAgentPick.entry,
+        chatPick.entry,
         launchSelection.choice?.executionHostId
       )
     })
@@ -292,6 +293,7 @@ function QuickTabBody({
     submitQuick,
     pickerDraft,
     quickAgentPick,
+    chatPick,
     isSubmissionCancelled,
     modalData,
     cardProps

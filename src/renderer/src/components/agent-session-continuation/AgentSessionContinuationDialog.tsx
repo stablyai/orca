@@ -4,7 +4,7 @@ import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agen
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
-import { agentPickerChatLaunchRefusal } from '@/components/agent/agent-launch-picker-chat-model-refusal'
+import { useAgentPickerChatPick } from '@/components/agent/use-agent-picker-chat-pick'
 import {
   agentPickerFreshLaunchInputs,
   type AgentPickerDraft,
@@ -179,10 +179,13 @@ export function AgentSessionContinuationDialog({
       defaultAgent: settings?.defaultTuiAgent
     })
   const selection = observation.selectionFor(selectedAgent, currentPick?.surface)
-  const chatModelRefusal =
-    currentPick?.draft && currentPick.entry && selection.choice?.route !== 'terminal-tui'
-      ? agentPickerChatLaunchRefusal(currentPick.entry, currentPick.draft)
-      : null
+  const chatPick = useAgentPickerChatPick(
+    destinationModel,
+    currentPick,
+    open && selection.choice?.route !== 'terminal-tui',
+    request?.worktreeId
+  )
+  const chatModelRefusal = chatPick.refusal
 
   useEffect(() => {
     if (!starting) {
@@ -228,7 +231,7 @@ export function AgentSessionContinuationDialog({
               surface: selection.choice.route === 'terminal-tui' ? 'terminal' : 'chat',
               executionHostId: selection.choice.executionHostId
             },
-            currentPick.entry
+            chatPick.entry
           )
         : {}),
       launchSource: request.launchSource,
