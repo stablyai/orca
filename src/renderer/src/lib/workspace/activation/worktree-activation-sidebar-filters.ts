@@ -9,6 +9,7 @@ import {
 import { revealRepoInProjectFilter } from '@/components/sidebar/worktree-list/controls/project-filter-reveal'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { buildVisibleWorktreeOptionsFromState } from '@/components/sidebar/worktree-list/listing/visible-worktree-options-from-state'
+import { markWorktreeFilterExemptWhileActive } from '@/components/sidebar/worktree-list/listing/active-filter-exempt-worktree'
 
 /** Hiding is no filter: opening such a workspace leaves the sidebar's filters and the project hidden. */
 export function isWorktreeInHiddenProject(wt: Pick<Worktree, 'repoId' | 'hostId'>): boolean {
@@ -38,4 +39,21 @@ export function liftSidebarFiltersHidingWorktree(wt: Worktree): void {
   if (state.hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(wt)) {
     state.setHideDetachedHeadWorkspaces(false)
   }
+}
+
+export function applyActivationSidebarFilterVisibility(
+  wt: Worktree,
+  opts?: { clearSidebarFilters?: boolean; revealInSidebar?: boolean }
+): boolean {
+  // No sidebar card to reveal; lifting filters for it would only discard the user's.
+  const inHiddenProject = isWorktreeInHiddenProject(wt)
+  if (opts?.clearSidebarFilters !== false && !inHiddenProject) {
+    liftSidebarFiltersHidingWorktree(wt)
+  }
+  if (opts?.clearSidebarFilters !== false && opts?.revealInSidebar !== false && !inHiddenProject) {
+    markWorktreeFilterExemptWhileActive(wt.id)
+  } else if (opts?.clearSidebarFilters === false) {
+    markWorktreeFilterExemptWhileActive(null)
+  }
+  return inHiddenProject
 }

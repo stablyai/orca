@@ -55,6 +55,7 @@ import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
 import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
+import { useForcedVisibleWorktreeIds } from './active-filter-exempt-worktree'
 
 // The window renders its own collapse, so planning never re-runs on a toggle.
 const PLANNED_UNCOLLAPSED: ReadonlySet<string> = new Set()
@@ -174,12 +175,11 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const { importedWorktreesByRepo, newExternalWorktreesInboxByRepo } = externalWorktreeCards
   // The window-model list leaves these out too (compute-visible-worktrees.ts).
   const botListedWorktreeIdentities = useBotListedWorktreeIdentities()
+  const forcedVisibleWorktreeIds = useForcedVisibleWorktreeIds(args.agentSendTargetWorktreeId)
   const planned = useMemo(
     () =>
       planSidebarFeedRows(domains, index, catalog, view, rankedIds, {
-        forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
-          ? [args.agentSendTargetWorktreeId]
-          : undefined,
+        forcedVisibleWorktreeIds,
         botListedWorktreeIdentities,
         importedWorktreesByRepo,
         newExternalWorktreesInboxByRepo
@@ -190,7 +190,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       catalog,
       view,
       rankedIds,
-      args.agentSendTargetWorktreeId,
+      forcedVisibleWorktreeIds,
       botListedWorktreeIdentities,
       importedWorktreesByRepo,
       newExternalWorktreesInboxByRepo

@@ -30,10 +30,7 @@ import {
   type WorktreeActivationOptions
 } from './worktree-activation-surface-selection'
 import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
-import {
-  isWorktreeInHiddenProject,
-  liftSidebarFiltersHidingWorktree
-} from './worktree-activation-sidebar-filters'
+import { applyActivationSidebarFilterVisibility } from './worktree-activation-sidebar-filters'
 import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from '../../../components/floating-terminal/workspace/floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from '../creation/pending-worktree-creation'
@@ -263,11 +260,7 @@ export function activateAndRevealWorktreeWithOutcome(
   if (opts?.showWorkspaceList) {
     state.setSidebarBody('workspaces')
   }
-  // No sidebar card to reveal; lifting filters for it would only discard the user's.
-  const inHiddenProject = isWorktreeInHiddenProject(wt)
-  if (opts?.clearSidebarFilters !== false && !inHiddenProject) {
-    liftSidebarFiltersHidingWorktree(wt)
-  }
+  const inHiddenProject = applyActivationSidebarFilterVisibility(wt, opts)
 
   if (opts?.revealInSidebar !== false && !inHiddenProject) {
     if (opts?.sidebarRevealBehavior || opts?.executionHostId) {

@@ -25,6 +25,7 @@ import {
 import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import type { SidebarWorktreeFilters } from './use-filters'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
+import { useForcedVisibleWorktreeIds } from './active-filter-exempt-worktree'
 import { useSleepingSweepRetention } from './use-sleeping-sweep-retention'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useBotListedWorktreeIdentities } from '@/components/bots/use-bot-listed-worktree-identities'
@@ -126,6 +127,7 @@ export function useVisibleSidebarWorktrees(args: {
     worktreeIdsWithStructuredChat
   })
 
+  const forcedVisibleWorktreeIds = useForcedVisibleWorktreeIds(args.agentSendTargetWorktreeId)
   const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
   const recomputedVisibleWorktrees = useMemo(() => {
     const visible = computeVisibleWorktrees(worktreesByRepo, sortedIds, {
@@ -155,14 +157,12 @@ export function useVisibleSidebarWorktrees(args: {
       preserveLineageParentOrder: sortBy === 'manual',
       // Both sorts rank by host identity (use-sort-order.ts).
       sortedByHostIdentity: true,
-      forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
-        ? [args.agentSendTargetWorktreeId]
-        : undefined
+      forcedVisibleWorktreeIds
     })
     return withoutHiddenVmWorktrees(visible, hiddenVmCheckouts)
   }, [
     hiddenVmCheckouts,
-    args.agentSendTargetWorktreeId,
+    forcedVisibleWorktreeIds,
     worktreeIdsWithLiveAgent,
     sleepingSweepExemptWorktreeIds,
     botListedWorktreeIdentities,
