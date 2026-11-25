@@ -102,6 +102,29 @@ export function findLatestRemoteAttachmentForTerminal(
     .get(terminalHandle) as RemoteDispatchAttachmentRow | undefined
 }
 
+/**
+ * The Dispatches still working for this exact terminal handle, local and federated. Two per store are
+ * enough to tell one working owner from several.
+ */
+export function findWorkingDispatchesForTerminal(
+  this: OrchestrationDb,
+  terminalHandle: string
+): { local: string[]; remote: string[] } {
+  const ids = (sql: string): string[] =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both statements select only the id column.
+    (this.db.prepare(sql).all(terminalHandle) as { id: string }[]).map((row) => row.id)
+  return {
+    local: ids(
+      `SELECT id FROM dispatch_contexts
+       WHERE assignee_handle = ? AND status IN ('pending', 'dispatched') LIMIT 2`
+    ),
+    remote: ids(
+      `SELECT dispatch_id AS id FROM remote_dispatch_attachments
+       WHERE terminal_handle = ? AND ${potentiallyLiveRemoteAttachmentSql()} LIMIT 2`
+    )
+  }
+}
+
 function findRemoteAttachmentForPane(
   db: OrchestrationDb,
   paneKey: string,
@@ -136,6 +159,7 @@ export type RemoteDispatchAttachmentStopMethods = {
   findActiveRemoteAttachmentForPane: typeof findActiveRemoteAttachmentForPane
   findLatestRemoteAttachmentForPane: typeof findLatestRemoteAttachmentForPane
   findLatestRemoteAttachmentForTerminal: typeof findLatestRemoteAttachmentForTerminal
+  findWorkingDispatchesForTerminal: typeof findWorkingDispatchesForTerminal
 }
 
 export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }): void {
@@ -145,6 +169,7 @@ export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }):
     markRemoteAttachmentStopUnknown,
     findActiveRemoteAttachmentForPane,
     findLatestRemoteAttachmentForPane,
-    findLatestRemoteAttachmentForTerminal
+    findLatestRemoteAttachmentForTerminal,
+    findWorkingDispatchesForTerminal
   })
 }

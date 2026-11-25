@@ -14,6 +14,7 @@ const STALE_HANDLE = 'term_exported-before-restart'
 const REMINTED_HANDLE = 'term_reissued-after-restart'
 const WORKER_PANE = 'tab_worker:33333333-3333-4333-8333-333333333333'
 const OTHER_PANE = 'tab_other:55555555-5555-4555-8555-555555555555'
+const THIRD_PANE = 'tab_third:66666666-6666-4666-8666-666666666666'
 const PTY_ID = 'wt::/repo/worker@@restored2'
 const INCARNATION = `${PTY_ID}:inc-original`
 const REPLACEMENT = `${PTY_ID}:inc-replacement`
@@ -67,23 +68,27 @@ describe('restart-recovered worker fences after entry', () => {
   }
 
   /** This host runs a worker for another computer's Run; no local Dispatch row exists here. */
-  function setupFederatedWorker(handle = STALE_HANDLE, paneKey = WORKER_PANE): void {
+  function setupFederatedWorker(
+    handle = STALE_HANDLE,
+    paneKey = WORKER_PANE,
+    dispatchId = REMOTE_DISPATCH
+  ): void {
     db.createRemoteDispatchAttachment({
       runId: 'run-home',
-      dispatchId: REMOTE_DISPATCH,
+      dispatchId,
       taskId: 'task_remote_fences',
       homePeerFingerprint: 'home_peer',
       protocolVersion: 1,
       runtimeEpoch: runtime.getRuntimeId(),
       mutationReceipt: {
         callerFingerprint: 'home_peer',
-        requestId: 'attach_request',
+        requestId: `attach_request_${dispatchId}`,
         method: 'orchestration.federationAttachStart',
         payloadHash: 'attach_payload'
       }
     })
     db.prepareRemoteAttachmentAuthority({
-      dispatchId: REMOTE_DISPATCH,
+      dispatchId,
       paneKey,
       processIncarnation: INCARNATION,
       worktreeId: 'repo::remote-worktree',
@@ -93,7 +98,7 @@ describe('restart-recovered worker fences after entry', () => {
       hostScope: HOST_SCOPE,
       terminalOwnership: 'created'
     })
-    db.markRemoteAttachmentReady(REMOTE_DISPATCH)
+    db.markRemoteAttachmentReady(dispatchId)
   }
 
   const workerEnv = (): RpcContext => ({
@@ -257,6 +262,8 @@ describe('restart-recovered worker fences after entry', () => {
 
     expect(reporter.recovered).toBeNull()
     await expect(ask({ question: 'Proceed?', timeoutMs: 1 })).rejects.toBeDefined()
+    // No question reached the coordinator on behalf of the finished local Dispatch.
+    expect(askedQuestionId(dispatchId)).toBe('')
   })
 
   it('recovers nothing when the handle has two working Dispatches, even named by a question', () => {
@@ -274,6 +281,55 @@ describe('restart-recovered worker fences after entry', () => {
     })
 
     expect(reporter.recovered).toBeNull()
+  })
+
+  it('recovers nothing when a newer finished attachment hides an older working one', () => {
+    setupRuntime()
+    const { dispatchId } = setupLocalWorker()
+    // An older federated Dispatch of the same handle still works in another pane; a newer one finished.
+    setupFederatedWorker(STALE_HANDLE, OTHER_PANE)
+    setupFederatedWorker(STALE_HANDLE, THIRD_PANE, 'ctx_remote_newer_finished')
+    db.settleRemoteAttachmentInRelayTransaction('ctx_remote_newer_finished', 'succeeded')
+    expect(db.findLatestRemoteAttachmentForTerminal(STALE_HANDLE)?.dispatch_id).toBe(
+      'ctx_remote_newer_finished'
+    )
+
+    const reporter = resolveWorkerReporterIdentity(runtime, db, {
+      from: STALE_HANDLE,
+      authority: undefined,
+      hasSessionCaller: false,
+      evidence: workerEnv().orchestrationCompatibilityEvidence,
+      candidateDispatchId: dispatchId
+    })
+
+    expect(reporter.recovered).toBeNull()
+  })
+
+  it('refuses a re-read that finds the recorded process under another terminal handle', () => {
+    setupRuntime()
+    setupLocalWorker()
+    const reporter = resolveWorkerReporterIdentity(runtime, db, {
+      from: STALE_HANDLE,
+      authority: undefined,
+      hasSessionCaller: false,
+      evidence: workerEnv().orchestrationCompatibilityEvidence
+    })
+    expect(reporter.processIncarnation()).toBe(INCARNATION)
+
+    // Same pane, host and process, but the runtime now answers with yet another terminal handle.
+    const reissuedAgain = 'term_reissued-again'
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === reissuedAgain ? WORKER_PANE : null
+    )
+    vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
+      handle === reissuedAgain ? paneIncarnation : null
+    )
+    vi.spyOn(runtime, 'resolveTerminalHandleByProcessIncarnation').mockImplementation(
+      (incarnation, hostScope) =>
+        incarnation === paneIncarnation && hostScope === HOST_SCOPE ? reissuedAgain : null
+    )
+
+    expect(reporter.processIncarnation()).toBeNull()
   })
 
   it('refuses a re-read that finds the recorded process on another host', () => {

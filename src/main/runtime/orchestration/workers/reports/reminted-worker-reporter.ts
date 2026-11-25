@@ -50,6 +50,12 @@ function recordedReporter(
   handle: string,
   candidateDispatchId: string | undefined
 ): RecordedReporter | null {
+  // Two working owners, in either store, are never unambiguous, whatever newer finished records hide
+  // them. A request naming a server-owned record selects only between finished histories.
+  const working = db.findWorkingDispatchesForTerminal(handle)
+  if (working.local.length + working.remote.length > 1) {
+    return null
+  }
   // Same order as admission: the handle's working Dispatch, else the last one it finished.
   const dispatch =
     db.getActiveDispatchForIdentity(handle) ?? db.getLatestDispatchForTerminal(handle)
@@ -64,16 +70,16 @@ function recordedReporter(
         createdAt: dispatch.created_at
       }
     : null
-  const attachment = db.findLatestRemoteAttachmentForTerminal(handle)
+  const workingRemote = working.remote[0]
+  const attachment = workingRemote
+    ? db.getRemoteDispatchAttachment(workingRemote)
+    : db.findLatestRemoteAttachmentForTerminal(handle)
   const remote: RecordedReporter | null = attachment
     ? {
         dispatchId: attachment.dispatch_id,
         store: 'remote',
-        active: Boolean(
-          attachment.pane_key &&
-          db.findActiveRemoteAttachmentForPane(attachment.pane_key)?.dispatch_id ===
-            attachment.dispatch_id
-        ),
+        // Still potentially live: custody below then requires it to be its pane's working owner.
+        active: attachment.dispatch_id === workingRemote,
         paneKey: attachment.pane_key,
         processIncarnation: attachment.process_incarnation,
         // The attachment records no host; its terminal resource records the one it attached on.
@@ -82,15 +88,13 @@ function recordedReporter(
       }
     : null
   if (local && remote) {
-    // One handle recorded in both stores: only a single working owner is unambiguous. Two working
-    // owners never are. When both finished, a request naming a server-owned record of this handle's own
-    // local Dispatch selects it; every identity and custody check below still decides.
-    if (local.active !== remote.active) {
+    // One handle recorded in both stores: the single working owner, if any. When both finished, a
+    // request naming a server-owned record of this handle's own local Dispatch selects it; every
+    // identity and custody check below still decides.
+    if (local.active || remote.active) {
       return local.active ? local : remote
     }
-    return !local.active && candidateDispatchId && candidateDispatchId === local.dispatchId
-      ? local
-      : null
+    return candidateDispatchId && candidateDispatchId === local.dispatchId ? local : null
   }
   return local ?? remote
 }
