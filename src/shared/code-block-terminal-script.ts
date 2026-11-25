@@ -6,6 +6,8 @@ const SHELL_LANGUAGES = new Set(['bash', 'sh', 'shell', 'zsh'])
 // C0/C1 controls but tab and newline, bidi and zero-width marks, line separators and blank-rendering fillers.
 // oxlint-disable-next-line no-control-regex -- Why: these are exactly the characters a script must not carry.
 const HIDDEN_CHARACTERS = /[\x00-\x08\x0b-\x1f\x7f-\x9f\p{Cf}\p{Zl}\p{Zp}\u115f\u1160\u3164\uffa0]/u
+// Spaces other than the ASCII one render as blanks but can hide padding.
+const NON_ASCII_SPACE = /[^\P{Zs} ]/u
 // A long blank run can push a command past the block's visible edge.
 const PADDING_RUN = /[ \t]{40}/
 
@@ -17,7 +19,10 @@ export function codeBlockTerminalScript(code: string, language: string | undefin
   }
   const script = code.replace(/\r\n?/g, '\n').trim()
   // Tabs become spaces so a pasted tab can't trigger completion.
-  return script && !HIDDEN_CHARACTERS.test(script) && !PADDING_RUN.test(script)
+  return script &&
+    !HIDDEN_CHARACTERS.test(script) &&
+    !NON_ASCII_SPACE.test(script) &&
+    !PADDING_RUN.test(script)
     ? script.replaceAll('\t', ' ')
     : null
 }
