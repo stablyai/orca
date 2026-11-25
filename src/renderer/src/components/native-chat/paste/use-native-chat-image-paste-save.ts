@@ -6,7 +6,10 @@ import {
   hasNativeChatPendingAttachment,
   nativeChatPendingAttachmentScope
 } from '../attachments/chips/native-chat-pending-attachment-scopes'
-import { flushNativeChatWaitingPasteReferences } from '../attachments/chips/native-chat-pending-attachment-cache'
+import {
+  flushNativeChatWaitingPasteReferences,
+  nativeChatPendingAttachmentOwner
+} from '../attachments/chips/native-chat-pending-attachment-cache'
 import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { currentDraftScope } from '../drafts/native-chat-launch-draft-source'
 import {
@@ -28,6 +31,10 @@ import type { useNativeChatPasteLifetime } from './use-native-chat-paste-lifetim
 
 type PasteLifetime = ReturnType<typeof useNativeChatPasteLifetime>
 type PasteNotice = { text: string; errorText?: string; route?: NativeChatComposerNoticeRoute }
+
+/** A route for a failure in this draft, carrying the draft's owner while its chip still has one. */
+const openRoute = (scopeKey: string): NativeChatComposerNoticeRoute =>
+  openNativeChatComposerNoticeRoute(scopeKey, nativeChatPendingAttachmentOwner(scopeKey))
 
 /** Save a pasted image and settle it into its chip's draft; every loss is reported or traced. */
 export function useNativeChatImagePasteSave({
@@ -111,7 +118,7 @@ export function useNativeChatImagePasteSave({
         scope !== undefined &&
         (!lifetime.active || scope !== currentDraftScope(attachmentScopeKey ?? scope))
       ) {
-        deferNativeChatComposerNotice(scope, text, errorText)
+        deferNativeChatComposerNotice(scope, text, errorText, route?.owner)
       } else if (errorText) {
         setNotice(text, errorText)
       } else {
@@ -132,9 +139,7 @@ export function useNativeChatImagePasteSave({
         (lifetime.active || canComplete() || attachmentScopeKey !== undefined)
       const route =
         reportable && attachmentScopeKey !== undefined
-          ? openNativeChatComposerNoticeRoute(
-              nativeChatPendingAttachmentScope(attachmentScopeKey, remaining[0])
-            )
+          ? openRoute(nativeChatPendingAttachmentScope(attachmentScopeKey, remaining[0]))
           : undefined
       chipIds.forEach(dropImagePaste)
       recordNativeChatImagePasteDropped(remaining.length > 0 ? 'save-failed' : 'chip-removed')
@@ -200,7 +205,7 @@ export function useNativeChatImagePasteSave({
         notice = {
           text,
           errorText,
-          route: liveScope === undefined ? undefined : openNativeChatComposerNoticeRoute(liveScope)
+          route: liveScope === undefined ? undefined : openRoute(liveScope)
         }
       }
       const { stagingScope } = owner.kind === 'local' ? owner : { stagingScope: undefined }
@@ -223,13 +228,15 @@ export function useNativeChatImagePasteSave({
         if (lostTo) {
           recordNativeChatImagePasteDropped(lostTo)
         }
+        // Report while the chip is still in its draft: its route then has the draft's owner and
+        // follows any move or deletion the drop itself sets off.
+        if (lostTo === 'clipboard-empty' && reportable) {
+          report(nativeChatImagePasteFailedNotice())
+        }
         const kept = keepStoreUploadAfterUnmount(pendingId, saved, { stagingScope })
         if (saved.status !== 'saved') {
           if (!kept) {
             dropImagePaste(pendingId)
-          }
-          if (lostTo === 'clipboard-empty' && reportable) {
-            report(nativeChatImagePasteFailedNotice())
           }
           return false
         }
@@ -240,11 +247,11 @@ export function useNativeChatImagePasteSave({
         if (canComplete() || (pendingId !== null && attachmentScopeKey !== undefined)) {
           return settleImagePaste(pendingId, saved.tempPath, owner, report)
         }
-        dropImagePaste(pendingId)
-        recordNativeChatImagePasteDropped('composer-closed')
         if (reportable) {
           report(nativeChatImagePasteFailedNotice())
         }
+        dropImagePaste(pendingId)
+        recordNativeChatImagePasteDropped('composer-closed')
         return false
       }
       const flushAndNotify = (): void => {

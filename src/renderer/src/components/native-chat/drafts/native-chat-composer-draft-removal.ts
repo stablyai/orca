@@ -12,6 +12,7 @@ import {
 } from './native-chat-composer-draft-persistence'
 import { releaseNativeChatStagedFiles } from './native-chat-draft-attachment-staging'
 import {
+  deferredNativeChatComposerNoticeOwner,
   deferredNativeChatComposerNoticeScopes,
   retireDeferredNativeChatComposerNotices
 } from '../composer/controls/native-chat-deferred-composer-notice'
@@ -26,8 +27,15 @@ export function deleteNativeChatComposerDraftsWhere(
   deleteLoadingNativeChatComposerDraftsWhere(matches)
   retireNativeChatComposerSubmissionsWhere(matches)
   // A paste failure waiting for this draft's next composer has no reader once the draft is gone.
+  // Match its owner as the notice kept it: the draft record may have none once its last chip is gone.
   for (const scope of deferredNativeChatComposerNoticeScopes()) {
-    if (matches(scope, records.get(scope))) {
+    const record = records.get(scope)
+    const owner = deferredNativeChatComposerNoticeOwner(scope)
+    const draft =
+      record?.owner || !owner
+        ? record
+        : { ...(record ?? { text: '', images: [], savedAt: 0 }), owner }
+    if (matches(scope, draft)) {
       retireDeferredNativeChatComposerNotices(scope)
     }
   }

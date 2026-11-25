@@ -101,6 +101,14 @@ export function useNativeChatPendingAttachments(
   return useSyncExternalStore(subscribe, () => nativeChatPendingAttachmentSnapshot(scopeKey))
 }
 
+/** The workspace a draft with pending chips belongs to, whether or not it has a stored record yet. */
+export function nativeChatPendingAttachmentOwner(
+  scopeKey: string
+): NativeChatComposerDraftOwner | undefined {
+  scopeKey = currentDraftScope(scopeKey)
+  return resolveNativeChatComposerDraftOwner(scopeKey) ?? pendingOwners.get(scopeKey)
+}
+
 /** Keep preview URLs with the composer that minted them. */
 export function addNativeChatPendingAttachment(
   scopeKey: string,
@@ -161,7 +169,7 @@ export function moveNativeChatPendingAttachments(from: string, to: string): void
     ...pending.filter(({ id }) => !held.has(id))
   ])
   writePending(from, [])
-  moveDeferredNativeChatComposerNotice(from, to)
+  moveDeferredNativeChatComposerNotice(from, to, owner)
 }
 
 /** Only continuing setup views follow association; ordinary closing editors remain keyed. */
