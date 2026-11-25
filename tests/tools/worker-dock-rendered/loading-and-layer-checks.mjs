@@ -252,7 +252,7 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
 
   for (const [label, options] of [
     ['normal height', {}],
-    ['a 300 x 250 pane', { width: 340, height: 250 }]
+    ['a 340 x 250 pane', { width: 340, height: 250 }]
   ]) {
     await check(`a full click on Jump to latest over the open card jumps (${String(label)})`, () =>
       scene(options.height ? 'jumpFolded300' : 'jumpFolded720', options, async (page) => {

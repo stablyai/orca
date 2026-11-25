@@ -35,4 +35,16 @@ export async function runChipNameChecks({ check, scene, assert }) {
       })
     )
   }
+
+  await check('a failed-only chip is named by its own text first', () =>
+    scene('lastFailedDetails720', {}, async (page) => {
+      if (await expanded(page)) {
+        await toggle(page).click()
+      }
+      const text = await toggle(page).textContent()
+      const name = await toggle(page).getAttribute('aria-label')
+      assert(text === '1 failed', `chip shows "${text}"`)
+      assert(name?.startsWith('1 failed, latest: '), `chip named "${name}"`)
+    })
+  )
 }

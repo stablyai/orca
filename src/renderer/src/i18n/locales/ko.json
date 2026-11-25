@@ -21875,7 +21875,8 @@
         "unlisted": "백그라운드 작업 실행 중",
         "unlistedDetail": "일부 백그라운드 작업은 여기에 표시되지 않습니다",
         "unread": "워커를 불러오지 못했습니다",
-        "unreadDetail": "워커를 불러오면 여기에 표시됩니다"
+        "unreadDetail": "워커를 불러오면 여기에 표시됩니다",
+        "chipLabel": "{{label}}, 최근: {{title}}"
       },
       "webhookSetup": {
         "heading": "웹훅 설정",

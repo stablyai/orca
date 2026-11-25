@@ -20465,12 +20465,7 @@
         "workflow": "工作流程",
         "monitor": "監控項目",
         "task": "任務",
-        "taskCount_other": "{{count}} 個任務",
         "workerCount_other": "{{count}} 個工作者",
-        "commandCount_other": "{{count}} 個命令",
-        "workflowCount_other": "{{count}} 個工作流程",
-        "monitorCount_other": "{{count}} 個監控項目",
-        "agentCount_other": "{{count}} 個代理程式",
         "stoppedByYou": "已由你停止",
         "finished": "已完成",
         "failedCount": "{{count}} 個失敗",
@@ -20486,11 +20481,11 @@
         "cleared_other": "已清除 {{count}} 個工作者",
         "stopAll": "全部停止",
         "clearFailed": "清除失敗的項目",
-        "pillLabel_other": "{{count}} 個工作者，最新：{{title}}",
         "unlistedDetail": "部分背景工作未列於此處",
         "unlisted": "背景工作執行中",
         "unread": "無法載入工作者",
-        "unreadDetail": "工作者載入後會顯示在這裡"
+        "unreadDetail": "工作者載入後會顯示在這裡",
+        "chipLabel": "{{label}}，最新：{{title}}"
       },
       "automationSaved": {
         "resultsInRuns": "結果顯示於每次執行中",
