@@ -259,3 +259,10 @@ export function CommandCodeAccountsSection({
     </SettingsGroup>
   )
 }
+
+export function renderCommandCodeAccountsSection(
+  ownerKey: string,
+  host: UsageCredentialHost
+): React.JSX.Element {
+  return <CommandCodeAccountsSection key={`command-code:${ownerKey}`} host={host} />
+}

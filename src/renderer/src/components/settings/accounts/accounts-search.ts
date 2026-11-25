@@ -275,7 +275,8 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGrokSearchEntries(),
   ...getAccountsAntigravitySearchEntries(),
   ...getAccountsCursorSearchEntries(),
-  ...getAccountsZcodePlanSearchEntries()
+  ...getAccountsZcodePlanSearchEntries(),
+  ...getAccountsCommandCodeSearchEntries()
 ])
 
 export const getAccountsCommandCodeSearchEntries = createLocalizedCatalog(() => [

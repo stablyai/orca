@@ -2043,7 +2043,7 @@
     },
     "navigation": {
       "accounts": {
-        "description": "Optional account switching and usage setup for Claude, Codex, Antigravity, OpenCode Go, MiniMax, and Grok."
+        "description": "Optional account switching and usage setup for Claude, Codex, Antigravity, OpenCode Go, Command Code, MiniMax, and Grok."
       }
     },
     "mcpServers": {

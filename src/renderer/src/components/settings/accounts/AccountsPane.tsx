@@ -46,7 +46,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
-import { CommandCodeAccountsSection } from './usage/CommandCodeAccountsSection'
+import { renderCommandCodeAccountsSection } from './usage/CommandCodeAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -400,9 +400,9 @@ export function AccountsPane({
     readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
     ) : null,
-    matchesSettingsSearch(searchQuery, getAccountsCommandCodeSearchEntries()) ? (
-      <CommandCodeAccountsSection key={accountOwnerKey} host={usageCredentialHost} />
-    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsCommandCodeSearchEntries())
+      ? renderCommandCodeAccountsSection(accountOwnerKey, usageCredentialHost)
+      : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
       <ZcodePlanAccountsSection
         key={`zcode:${accountOwnerKey}`}
