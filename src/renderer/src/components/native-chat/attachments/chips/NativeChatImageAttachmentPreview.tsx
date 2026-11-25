@@ -272,7 +272,8 @@ function NativeChatImageThumbnail({
       onRemove(attachment.id)
       return
     }
-    const putBack = takeNativeChatNotedImage(notesScopeKey, attachment.id)
+    // Its words stay saved until the draft without it is, so a restart never finds it without them.
+    const putBack = takeNativeChatNotedImage(notesScopeKey, attachment.id, true)
     showNativeChatNotesNotice(notesScopeKey, {
       text: t('components.native-chat.notes.notesRemoved', '{{count}} notes removed', {
         defaultValue_one: '{{count}} note removed',

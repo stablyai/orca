@@ -14,6 +14,7 @@ import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-d
 import { currentDraftScope } from '../../drafts/native-chat-launch-draft-source'
 import { load as draftLoad } from '../../drafts/native-chat-composer-draft-memory'
 import {
+  captureNativeChatNotesEntries,
   createNativeChatNotesStorage,
   moveNativeChatNotesEntries
 } from './native-chat-notes-storage'
@@ -136,6 +137,11 @@ export function moveNativeChatAttachmentNotes(
   return storage.update((entries) =>
     moveNativeChatNotesEntries(entries, from, to, undefined, keepSource)
   )
+}
+
+/** This scope's notes as they are now, and what removes exactly those later (see the draft move). */
+export function captureNativeChatAttachmentNotes(scopeKey: string): () => void {
+  return captureNativeChatNotesEntries(storage, scopeKey)
 }
 
 /** Retries notes writes storage refused; true once storage holds them all. */

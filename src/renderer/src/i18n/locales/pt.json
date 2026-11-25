@@ -22873,7 +22873,8 @@
         "keptWhileGoal": "Notas mantidas com {{name}}. Sua caixa de mensagem está definindo uma meta.",
         "annotateTooLarge": "Esta imagem é grande demais para desenhar notas (mais de 33 megapixels).",
         "sendWhileEditing": "Feche a imagem cujas notas você está editando e depois envie.",
-        "undoUnsaved": "Não foi possível desfazer: as notas anteriores não puderam ser salvas. Estas continuam na sua mensagem."
+        "undoUnsaved": "Não foi possível desfazer: as notas anteriores não puderam ser salvas. Estas continuam na sua mensagem.",
+        "alreadyAdded": "Estas notas já foram adicionadas à sua mensagem a partir de outra janela."
       }
     },
     "tab": {

@@ -45,6 +45,18 @@ export function createNativeChatNotesStorage<T>(
   // This window's changes storage refused, per key (undefined: removed). Every read replays them and
   // every write retries them, so they are never lost to another window's write.
   const unsaved = new Map<string, T | undefined>()
+  // For a refused removal: the entry it meant to remove. Once another window writes a newer entry
+  // there, the removal no longer applies and is dropped rather than erase that newer entry.
+  const removing = new Map<string, string | null>()
+  const storedItem = (key: string): string | null => {
+    try {
+      return globalThis.localStorage?.getItem(itemKey(key)) ?? null
+    } catch {
+      return null
+    }
+  }
+  const outdatedRemoval = (key: string): boolean =>
+    removing.has(key) && storedItem(key) !== removing.get(key)
   const listeners = new Set<() => void>()
 
   // Later than every stamp this window gave, so a rewritten entry moves to the end.
@@ -53,16 +65,25 @@ export function createNativeChatNotesStorage<T>(
     return clock
   }
   const write = (key: string, value: T | undefined): boolean => {
+    const meant = removing.has(key) ? removing.get(key) : storedItem(key)
     try {
       if (value === undefined) {
-        globalThis.localStorage?.removeItem(itemKey(key))
+        if (!outdatedRemoval(key)) {
+          globalThis.localStorage?.removeItem(itemKey(key))
+        }
       } else {
         globalThis.localStorage?.setItem(itemKey(key), JSON.stringify({ t: stamp(), v: value }))
       }
       unsaved.delete(key)
+      removing.delete(key)
       return true
     } catch {
       unsaved.set(key, value)
+      if (value === undefined) {
+        removing.set(key, meant ?? null)
+      } else {
+        removing.delete(key)
+      }
       return false
     }
   }
@@ -93,6 +114,11 @@ export function createNativeChatNotesStorage<T>(
       next.set(key, value)
     }
     for (const [key, value] of unsaved) {
+      if (value === undefined && outdatedRemoval(key)) {
+        unsaved.delete(key)
+        removing.delete(key)
+        continue
+      }
       next.delete(key)
       if (value !== undefined) {
         next.set(key, value)
@@ -176,8 +202,35 @@ export function createNativeChatNotesStorage<T>(
       entries = new Map()
       loaded = false
       unsaved.clear()
+      removing.clear()
       listeners.clear()
     }
+  }
+}
+
+/** The entries keyed `${scope}\0…` as they are now, and what removes exactly those later, each only
+ *  while it is unchanged (a newer entry under the same key stays). */
+export function captureNativeChatNotesEntries<T>(
+  storage: NativeChatNotesStorage<T>,
+  scope: string
+): () => void {
+  const captured = storage
+    .keys()
+    .filter((key) => key.startsWith(`${scope}\0`))
+    .map((key) => [key, JSON.stringify(storage.get(key))] as const)
+  return () => {
+    if (captured.length === 0) {
+      return
+    }
+    storage.update((entries) => {
+      let removed = false
+      for (const [key, value] of captured) {
+        if (entries.has(key) && JSON.stringify(entries.get(key)) === value) {
+          removed = entries.delete(key) || removed
+        }
+      }
+      return removed
+    })
   }
 }
 

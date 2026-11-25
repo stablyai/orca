@@ -21334,7 +21334,8 @@
         "keptWhileGoal": "Notizen bei {{name}} behalten. Dein Nachrichtenfeld legt gerade ein Ziel fest.",
         "annotateTooLarge": "Dieses Bild ist zu groß, um Notizen darauf zu zeichnen (über 33 Megapixel).",
         "sendWhileEditing": "Schließe das Bild, dessen Notizen du bearbeitest, und sende dann.",
-        "undoUnsaved": "Rückgängig nicht möglich: Die früheren Notizen konnten nicht gespeichert werden. Diese bleiben in deiner Nachricht."
+        "undoUnsaved": "Rückgängig nicht möglich: Die früheren Notizen konnten nicht gespeichert werden. Diese bleiben in deiner Nachricht.",
+        "alreadyAdded": "Diese Notizen wurden bereits aus einem anderen Fenster zu deiner Nachricht hinzugefügt."
       }
     },
     "tab": {

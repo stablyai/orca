@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { showNativeChatNotesNotice } from './native-chat-notes-notice'
+import { useNativeChatNotesKeptOnUnmount } from './use-native-chat-notes-kept-on-unmount'
 import {
   nativeChatNotesBlockedReason,
   nativeChatNotesKeptText,
@@ -20,7 +21,10 @@ import {
   nativeChatNotesScopeKey,
   nativeChatNotesStillInDraft,
   NativeChatNotesSupersededError,
+  settleNativeChatHeldHandOff,
   settleNativeChatNotesReplacement,
+  NativeChatNotesAlreadyAddedError,
+  NativeChatNotesTooLargeError,
   captureNativeChatNotesSend,
   submitNativeChatNotesIfApproved,
   NativeChatNotesUnsavedError,
@@ -32,7 +36,6 @@ import {
   claimHeldNativeChatNotes,
   readHeldNativeChatNotes,
   releaseHeldNativeChatNotes,
-  handOffHeldNativeChatNotes,
   type NativeChatHeldNotesClaim
 } from './native-chat-held-notes'
 
@@ -169,12 +172,12 @@ export function useNativeChatNotesDelivery({
           frame: async () => ({ image: loaded.image, ...loaded.size })
         })
         const restore = settleNativeChatNotesReplacement(composer.scopeKey, ids, onAttached?.(ids))
+        // One marked copy per hold; the hold ends once the draft holding it is saved, not before.
+        // Claimed once: refused here, a deliberate retry hands these words off as new notes.
+        const claim = heldIn.current
+        heldIn.current = null
+        settleNativeChatHeldHandOff(composer.scopeKey, ids, claim)
         handed = true
-        if (heldIn.current) {
-          // The hold ends once the draft holding the marked image is saved, not before.
-          void handOffHeldNativeChatNotes(heldIn.current, ids)
-          heldIn.current = null
-        }
         if (approved) {
           await afterComposerRender()
           submitNativeChatNotesIfApproved(approved, ids, replacesAttachmentId)
@@ -210,15 +213,25 @@ export function useNativeChatNotesDelivery({
         showError(
           error instanceof NativeChatNotesUnsavedError
             ? unsavedMessage
-            : error instanceof NativeChatNotesSupersededError
+            : error instanceof NativeChatNotesAlreadyAddedError
               ? t(
-                  'components.native-chat.notes.imageChanged',
-                  'This image left the message box. Your notes are still here.'
+                  'components.native-chat.notes.alreadyAdded',
+                  'These notes were already added to your message from another window.'
                 )
-              : t(
-                  'components.native-chat.notes.prepareFailed',
-                  'Couldn’t prepare the marked image. Your notes are still here.'
-                )
+              : error instanceof NativeChatNotesTooLargeError
+                ? t(
+                    'components.native-chat.notes.annotateTooLarge',
+                    'This image is too large to draw notes on (over 33 megapixels).'
+                  )
+                : error instanceof NativeChatNotesSupersededError
+                  ? t(
+                      'components.native-chat.notes.imageChanged',
+                      'This image left the message box. Your notes are still here.'
+                    )
+                  : t(
+                      'components.native-chat.notes.prepareFailed',
+                      'Couldn’t prepare the marked image. Your notes are still here.'
+                    )
         )
       }
       busyRef.current = false
@@ -244,6 +257,17 @@ export function useNativeChatNotesDelivery({
     ]
   )
 
+  // Ordinary closing and hand-off settle the viewer; going away without them keeps new notes.
+  const kept = useNativeChatNotesKeptOnUnmount({
+    notes,
+    keep: !initialNotes,
+    scopeKey: composer?.scopeKey,
+    mediaKey
+  })
+  const finish = (): void => {
+    kept.settle()
+    onOpenChange(false)
+  }
   const close = async (): Promise<void> => {
     if (busyRef.current) {
       return
@@ -263,7 +287,7 @@ export function useNativeChatNotesDelivery({
         }),
         undo: putBack
       })
-      onOpenChange(false)
+      finish()
       return
     }
     if (notes.length > 0 && !initialNotes && (!admitted || !loaded) && scopeKey) {
@@ -283,11 +307,11 @@ export function useNativeChatNotesDelivery({
     } else if (notes.length > 0 && loaded && !(await handOff(false))) {
       return
     }
-    onOpenChange(false)
+    finish()
   }
   const send = async (): Promise<void> => {
     if (canSend && (await handOff(true))) {
-      onOpenChange(false)
+      finish()
     }
   }
   return { busy, canSend, sendReason, close, send }

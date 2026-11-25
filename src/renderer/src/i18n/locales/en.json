@@ -23176,7 +23176,8 @@
         "keptWhileGoal": "Notes kept with {{name}}. Your message box is setting a goal.",
         "annotateTooLarge": "This image is too large to draw notes on (over 33 megapixels).",
         "sendWhileEditing": "Close the image you’re editing notes on, then send.",
-        "undoUnsaved": "Couldn’t undo: the earlier notes couldn’t be saved. These stay in your message."
+        "undoUnsaved": "Couldn’t undo: the earlier notes couldn’t be saved. These stay in your message.",
+        "alreadyAdded": "These notes were already added to your message from another window."
       }
     },
     "tab": {

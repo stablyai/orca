@@ -5,7 +5,7 @@ import {
 } from '@/components/editor/document-images/useLocalImageSrc'
 import { chatImageAccess } from '@/lib/files/access/local-file-access'
 import { removeImageWithReferences } from '../../composer/editor/native-chat-composer-image-references'
-import { nativeChatComposerDraftSaved } from '../../drafts/native-chat-composer-draft-saved'
+import { whenNativeChatComposerDraftSaved } from '../../drafts/native-chat-composer-draft-saved'
 import {
   appendToNativeChatComposerDraft,
   readNativeChatComposerDraft
@@ -32,8 +32,9 @@ export function takeNativeChatNotedImage(
   const notes = readNativeChatAttachmentNotes(scopeKey, id)
   removeImageWithReferences(scopeKey, null, id)
   if (keepNotesUntilSaved) {
-    void nativeChatComposerDraftSaved(scopeKey).then((saved) => {
-      if (saved && !inDraft(scopeKey, id)) {
+    // Retried at later saves while this one is refused; Undo putting the image back ends the wait.
+    whenNativeChatComposerDraftSaved(scopeKey, () => {
+      if (!inDraft(scopeKey, id)) {
         clearNativeChatAttachmentNotes(scopeKey, [id], false)
       }
     })
@@ -41,10 +42,13 @@ export function takeNativeChatNotedImage(
     clearNativeChatAttachmentNotes(scopeKey, [id])
   }
   return () => {
-    if (image && !inDraft(scopeKey, id)) {
+    // Back in the draft durably (saved or journaled) and its notes saved, or this reports false.
+    const appended =
+      !image ||
+      inDraft(scopeKey, id) ||
       appendToNativeChatComposerDraft(scopeKey, { text: '', images: [image] })
-    }
-    return notes ? setNativeChatAttachmentNotes(scopeKey, id, notes) : true
+    const saved = notes ? setNativeChatAttachmentNotes(scopeKey, id, notes) : true
+    return appended && saved
   }
 }
 
@@ -55,26 +59,55 @@ export function replaceNativeChatNotedImage(scopeKey: string, id: string): (() =
 }
 
 // Marked images reopened in a viewer, per chat, with how many viewers have each open. They stay in
-// the draft, so a reload keeps them, but the message box doesn't send them until every viewer
-// editing them has swapped in its edited copy or closed.
+// the draft, so a reload keeps them, but no message box sends them until every viewer editing them
+// has swapped in its edited copy or closed. Other windows see the edit through a shared marker that
+// the editing window refreshes; one left by a window that went away stops counting soon after.
 const editingImages = new Map<string, Map<string, number>>()
+const EDITING_KEY = 'orca.nativeChat.notesEditing.v1'
+const EDITING_REFRESH_MS = 15_000
+const EDITING_FRESH_MS = 45_000
+const editingItem = (scopeKey: string, id: string): string =>
+  `${EDITING_KEY}:${encodeURIComponent(`${scopeKey}\u0000${id}`)}`
+const shareEditing = (scopeKey: string, id: string, editing: boolean): void => {
+  try {
+    if (editing) {
+      globalThis.localStorage?.setItem(editingItem(scopeKey, id), String(Date.now()))
+    } else {
+      globalThis.localStorage?.removeItem(editingItem(scopeKey, id))
+    }
+  } catch {
+    // Without shared storage the edit is still held back in this window.
+  }
+}
+const editedElsewhere = (scopeKey: string, id: string): boolean => {
+  try {
+    const at = Number(globalThis.localStorage?.getItem(editingItem(scopeKey, id)) ?? 0)
+    return at > Date.now() - EDITING_FRESH_MS
+  } catch {
+    return false
+  }
+}
 
 /** Flags a reopened marked image as being edited; the returned function ends this viewer's edit. */
 export function markNativeChatNotedImageEditing(scopeKey: string, id: string): () => void {
   const ids = editingImages.get(scopeKey) ?? new Map<string, number>()
   ids.set(id, (ids.get(id) ?? 0) + 1)
   editingImages.set(scopeKey, ids)
+  shareEditing(scopeKey, id, true)
+  const refresh = setInterval(() => shareEditing(scopeKey, id, true), EDITING_REFRESH_MS)
   let ended = false
   return () => {
     if (ended) {
       return
     }
     ended = true
+    clearInterval(refresh)
     const left = (ids.get(id) ?? 1) - 1
     if (left > 0) {
       ids.set(id, left)
     } else {
       ids.delete(id)
+      shareEditing(scopeKey, id, false)
     }
     if (ids.size === 0 && editingImages.get(scopeKey) === ids) {
       editingImages.delete(scopeKey)
@@ -82,13 +115,12 @@ export function markNativeChatNotedImageEditing(scopeKey: string, id: string): (
   }
 }
 
-/** Whether the draft holds a marked image whose notes are open for editing. */
+/** Whether the draft holds a marked image whose notes are open for editing, here or in another
+ *  window. */
 export function nativeChatDraftHasEditingImage(scopeKey: string): boolean {
   const ids = editingImages.get(scopeKey)
-  return (
-    ids !== undefined &&
-    ids.size > 0 &&
-    readNativeChatComposerDraft(scopeKey).images.some(({ id }) => ids.has(id))
+  return readNativeChatComposerDraft(scopeKey).images.some(
+    ({ id }) => ids?.has(id) === true || editedElsewhere(scopeKey, id)
   )
 }
 
@@ -100,7 +132,7 @@ export function restoreNativeChatCleanImage(
   id: string,
   notes: NativeChatAttachmentNotes
 ): () => void {
-  const putBack = takeNativeChatNotedImage(scopeKey, id)
+  const putBack = takeNativeChatNotedImage(scopeKey, id, true)
   const path = notes.source.path
   if (!path) {
     return putBack
@@ -112,9 +144,11 @@ export function restoreNativeChatCleanImage(
     text: '',
     images: [{ id: cleanId, path, ...(connectionId ? { connectionId } : {}) }]
   })
+  // Undo puts the marked image back first; the clean one goes only once that is durable.
   return () => {
-    removeImageWithReferences(scopeKey, null, cleanId)
-    putBack()
+    if (putBack()) {
+      removeImageWithReferences(scopeKey, null, cleanId)
+    }
   }
 }
 

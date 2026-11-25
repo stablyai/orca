@@ -19,26 +19,32 @@ import {
   reconcileNativeChatStagedDraft
 } from './native-chat-draft-attachment-staging'
 import {
-  clearNativeChatAttachmentNotesWhere,
+  captureNativeChatAttachmentNotes,
   moveNativeChatAttachmentNotes,
   saveNativeChatAttachmentNotes
 } from '../media/notes/native-chat-attachment-notes'
 import {
-  clearNativeChatHeldNotesWhere,
+  captureNativeChatHeldNotes,
   moveNativeChatHeldNotes,
   saveNativeChatHeldNotes
 } from '../media/notes/native-chat-held-notes'
 import {
+  captureMovedNativeChatDraftCopies,
   redirectMovedNativeChatDraftSources,
   retireMovedNativeChatDraftSource,
   setMovedNativeChatDraftSourceRelease
 } from './native-chat-moved-draft-release'
 
-// A moved draft's source keeps its copy of the notes until its removal is confirmed; then they go.
+// A moved draft's source keeps its copy of the notes until its removal is confirmed; then exactly
+// those copies go.
 setMovedNativeChatDraftSourceRelease({
-  release: (sourceScope) => {
-    clearNativeChatAttachmentNotesWhere((scope) => scope === sourceScope)
-    clearNativeChatHeldNotesWhere((scope) => scope === sourceScope)
+  capture: (sourceScope) => {
+    const attachments = captureNativeChatAttachmentNotes(sourceScope)
+    const held = captureNativeChatHeldNotes(sourceScope)
+    return () => {
+      attachments()
+      held()
+    }
   },
   // Both run: each retries its own refused writes.
   save: () => [saveNativeChatAttachmentNotes(), saveNativeChatHeldNotes()].every(Boolean)
@@ -60,6 +66,7 @@ export function moveNativeChatComposerDraft(
   // Notes on the draft's marked images, and notes held for its chat, go where the draft goes. The
   // source keeps its copy until its draft's removal is final, so whichever draft a restart
   // recovers still has its notes.
+  captureMovedNativeChatDraftCopies(sourceScope)
   const notesSaved = [
     moveNativeChatAttachmentNotes(sourceScope, destinationScope, true),
     moveNativeChatHeldNotes(sourceScope, destinationScope, true)

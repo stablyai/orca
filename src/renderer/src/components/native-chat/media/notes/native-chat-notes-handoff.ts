@@ -7,7 +7,10 @@ import {
   subscribeToNativeChatComposerDraft
 } from '../../drafts/native-chat-composer-draft-store'
 import { removeImageWithReferences } from '../../composer/editor/native-chat-composer-image-references'
-import { withoutImageReference } from '../../../../../../shared/native-chat/attachments/native-chat-image-reference'
+import { records } from '../../drafts/native-chat-composer-draft-memory'
+import { imageReferenceToken } from '../../../../../../shared/native-chat/attachments/native-chat-image-reference'
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import {
   clearNativeChatAttachmentNotes,
@@ -15,6 +18,12 @@ import {
   type NativeChatNotesSource
 } from './native-chat-attachment-notes'
 import { drawNativeChatNotesImage } from './native-chat-media-notes-draw'
+import { NATIVE_CHAT_NOTES_MAX_SOURCE_PIXELS } from './native-chat-notes-reasons'
+import {
+  handOffHeldNativeChatNotes,
+  heldNativeChatNotesAlreadyHanded,
+  type NativeChatHeldNotesClaim
+} from './native-chat-held-notes'
 import { showNativeChatNotesNotice } from './native-chat-notes-notice'
 import { translate } from '@/i18n/i18n'
 import { groupNativeChatNotesByFrame, type NativeChatMediaNote } from './native-chat-media-notes'
@@ -42,6 +51,38 @@ export class NativeChatNotesUnsavedError extends Error {
   constructor() {
     super('The notes could not be saved.')
   }
+}
+
+/** Another viewer of the same held notes already added them to the message. */
+export class NativeChatNotesAlreadyAddedError extends Error {
+  constructor() {
+    super('These held notes were already added from another viewer.')
+  }
+}
+
+/** The media grew past what notes are drawn on since they were made (a held image changed). */
+export class NativeChatNotesTooLargeError extends Error {
+  constructor() {
+    super('The image is too large to draw notes on.')
+  }
+}
+
+/** Held notes brought back by this viewer went into these marked images. When another viewer already
+ *  added the same hold, this copy comes back out (one marked copy per hold); otherwise the hold ends
+ *  once the draft holding them is saved. */
+export function settleNativeChatHeldHandOff(
+  scopeKey: string,
+  ids: readonly string[],
+  claim: NativeChatHeldNotesClaim | null
+): void {
+  if (!claim) {
+    return
+  }
+  if (heldNativeChatNotesAlreadyHanded(claim)) {
+    detachNativeChatNotes(scopeKey, ids)
+    throw new NativeChatNotesAlreadyAddedError()
+  }
+  void handOffHeldNativeChatNotes(claim, ids)
 }
 
 /** What the notes replace left the draft while they were prepared. */
@@ -101,13 +142,15 @@ export function submitNativeChatNotesIfApproved(
   const draft = readNativeChatComposerDraft(scopeKey)
   const kept = approved.imageIds.filter((id) => id !== replacedId)
   const expected = new Set([...kept, ...ids])
-  // The editor writes a chip token into the text for each image it adds or removes; those are this
-  // hand-off's own changes, so only the words around them must match.
+  // The editor writes a chip token for each image it adds or removes, with a space on either side;
+  // those are this hand-off's own changes. Everything else, line breaks and indents included, must
+  // be exactly as it was.
   const words = (text: string, tokens: readonly (string | undefined)[]): string =>
-    tokens
-      .reduce<string>((rest, id) => (id ? withoutImageReference(rest, id) : rest), text)
-      .replace(/\s+/g, ' ')
-      .trim()
+    tokens.reduce<string>(
+      (rest, id) =>
+        id ? rest.split(new RegExp(` ?${escapeRegExp(imageReferenceToken(id))} ?`)).join('') : rest,
+      text
+    )
   if (
     now?.scopeKey !== scopeKey ||
     now.handle !== approved.composer.handle ||
@@ -163,6 +206,10 @@ export async function attachNativeChatNotes(args: {
         const drawable = await args.frame(group[0]?.time)
         let blob: Blob
         try {
+          // Checked again here: held notes can come back to a source that has since grown.
+          if (drawable.width * drawable.height > NATIVE_CHAT_NOTES_MAX_SOURCE_PIXELS) {
+            throw new NativeChatNotesTooLargeError()
+          }
           blob = await drawNativeChatNotesImage(drawable.image, drawable, group)
         } finally {
           drawable.release?.()
@@ -170,8 +217,12 @@ export async function attachNativeChatNotes(args: {
         return attach(blob)
       })
       // A chat that can't take images keeps no image: no notes either. A draft that moved to its
-      // session meanwhile is read (and its notes are keyed) where it is now.
+      // session meanwhile is read (and its notes are keyed) where it is now. One the image settled
+      // in elsewhere (its draft moved to another chat) gives it back, so a retry adds one copy.
       if (!id || !nativeChatNotesStillInDraft(composer.scopeKey, [id])) {
+        if (id) {
+          takeBackStrayNativeChatImage(id)
+        }
         throw new Error('The marked image could not be attached.')
       }
       ids.push(id)
@@ -194,6 +245,15 @@ export async function attachNativeChatNotes(args: {
     throw error
   }
   return ids
+}
+
+/** Takes an image out of whichever draft holds it. */
+function takeBackStrayNativeChatImage(id: string): void {
+  for (const [scopeKey, record] of records) {
+    if (record.images.some((image) => image.id === id)) {
+      removeImageWithReferences(scopeKey, null, id)
+    }
+  }
 }
 
 /** Removes marked images (and their notes) that are still in the draft. */

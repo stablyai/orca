@@ -9,6 +9,7 @@ import {
 import { load as draftLoad } from '../../drafts/native-chat-composer-draft-memory'
 import { currentDraftScope } from '../../drafts/native-chat-launch-draft-source'
 import {
+  captureNativeChatNotesEntries,
   createNativeChatNotesStorage,
   moveNativeChatNotesEntries
 } from './native-chat-notes-storage'
@@ -184,12 +185,20 @@ export function handOffHeldNativeChatNotes(
       }
       return done
     })
-  return attempt(true).then((ended) => {
-    if (!ended) {
-      stop = subscribeToNativeChatComposerDraft(claim.scopeKey, () => void attempt(false))
-    }
-    return ended
-  })
+  // Watching before the first attempt, so a save that lands in between isn't missed.
+  stop = subscribeToNativeChatComposerDraft(claim.scopeKey, () => void attempt(false))
+  return attempt(true)
+}
+
+/** Whether another viewer already handed this hold's notes to a marked image the draft still holds:
+ *  a second marked copy from the same hold would offer the same words twice. */
+export function heldNativeChatNotesAlreadyHanded(claim: NativeChatHeldNotesClaim): boolean {
+  const entry = storage.get(keyOf(claim.scopeKey, claim.mediaKey))
+  // Gone altogether: another viewer already handed it off (or emptied it) and the hold ended.
+  if (entry === undefined) {
+    return claim.hold !== ''
+  }
+  return (entry.hold ?? '') === claim.hold && spent(entry)
 }
 
 /** These marked images were sent or taken out of the chat's draft: holds handed to them are spent. */
@@ -207,6 +216,11 @@ export function releaseHeldNativeChatNotesHandedTo(scopeKey: string, ids: readon
     }
     return changed
   })
+}
+
+/** This scope's notes as they are now, and what removes exactly those later (see the draft move). */
+export function captureNativeChatHeldNotes(scopeKey: string): () => void {
+  return captureNativeChatNotesEntries(storage, scopeKey)
 }
 
 /** Retries held-notes writes storage refused; true once storage holds them all. */
@@ -244,6 +258,11 @@ export function moveNativeChatHeldNotes(from: string, to: string, keepSource = f
 }
 
 function combineHeldNotes(existing: HeldEntry, moved: HeldEntry): HeldEntry {
+  // Notes already handed to a marked image the draft holds are delivered: only the moved ones stay
+  // held, as a hold of their own that the delivered image leaving can't end.
+  if (spent(existing)) {
+    return { scopeKey: existing.scopeKey, notes: moved.notes, hold: nextHold() }
+  }
   const kept = new Set(existing.notes.map(({ id }) => id))
   // A copy moved again brings nothing new.
   const added = moved.notes.filter(({ id }) => !kept.has(id))
@@ -251,9 +270,10 @@ function combineHeldNotes(existing: HeldEntry, moved: HeldEntry): HeldEntry {
     return existing
   }
   const last = existing.notes.reduce((max, note) => Math.max(max, note.number), 0)
-  // A new hold: a viewer that read the destination's own notes must not end the merged set.
+  // A new hold: a viewer that read the destination's own notes must not end the merged set, and the
+  // moved notes were never handed anywhere.
   return {
-    ...existing,
+    scopeKey: existing.scopeKey,
     hold: nextHold(),
     notes: [
       ...existing.notes,
