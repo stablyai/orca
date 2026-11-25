@@ -6,6 +6,7 @@ import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getPresentStringFlag,
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
@@ -94,7 +95,8 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...optional('doneMeans', await readTextOrFileFlag(flags, cwd, 'done-means', false)),
       ...(status ? { status: statusFlag(status) } : {}),
       ...(links.length > 0 ? { links } : {}),
-      ...optional('request', getOptionalStringFlag(flags, 'request')),
+      // An empty --request is refused, never read as none: none would take the turn's own place.
+      ...optional('request', getPresentStringFlag(flags, 'request')),
       ...optional('forBot', getOptionalStringFlag(flags, 'for')),
       ...optional('chat', getOptionalStringFlag(flags, 'chat'))
     })

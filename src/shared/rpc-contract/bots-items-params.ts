@@ -40,7 +40,8 @@ export const BotItemsAdd = z.object({
   links: z.array(z.string()).optional(),
   /** `--request <msg_id>`: the bot request whose job the item is; a handoff's place is then where
    *  the item's result goes. */
-  request: OptionalString,
+  // Present means a request is named: an empty one is refused rather than read as none.
+  request: z.string().min(1, 'Missing value for --request').max(256).optional(),
   /** `--for bot:<name>`: the item is made for that bot, through its request mail. */
   forBot: OptionalString,
   /** With `--for`, that bot's chat; alone, another chat of the caller's bot. */
