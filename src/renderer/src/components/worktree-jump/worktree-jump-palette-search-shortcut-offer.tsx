@@ -179,9 +179,9 @@ function showUnconfirmedToast(t: ReturnType<typeof useTranslate>): void {
   })
 }
 
-// The palette root treats Enter/Space as "open the highlighted result"; a focused footer button must activate itself.
+// The palette root treats Enter as "open the highlighted result"; a focused footer button must activate itself.
 function keepButtonKeysFromPalette(event: React.KeyboardEvent): void {
-  if (event.key === 'Enter' || event.key === ' ') {
+  if (event.key === 'Enter') {
     event.stopPropagation()
   }
 }
