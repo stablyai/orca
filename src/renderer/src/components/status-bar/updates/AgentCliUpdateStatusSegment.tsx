@@ -93,7 +93,8 @@ export function AgentCliUpdateStatusSegment(): React.JSX.Element | null {
         }
       : {
           icon: <Download className="size-3 text-muted-foreground" />,
-          label: t('agentCliUpdate.statusCount', '{{count}} CLI updates', {
+          label: String(rows.length),
+          ariaLabel: t('agentCliUpdate.statusCount', '{{count}} CLI updates', {
             count: rows.length,
             defaultValue_one: '{{count}} CLI update'
           }),
@@ -108,6 +109,7 @@ export function AgentCliUpdateStatusSegment(): React.JSX.Element | null {
             <button
               type="button"
               className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
+              aria-label={'ariaLabel' in segment ? segment.ariaLabel : undefined}
             >
               {segment.icon}
               <span className="text-2xs tabular-nums">{segment.label}</span>
