@@ -2214,6 +2214,9 @@
           "wslCodexHomeUnavailable": "{{distro}}의 WSL Codex 홈을 사용할 수 없습니다",
           "wslKimiHomeUnavailable": "{{distro}}의 WSL Kimi 홈을 사용할 수 없습니다"
         }
+      },
+      "terminalOrchestrationNoticeMask": {
+        "label": "Orca가 오케스트레이션 메시지를 전달함"
       }
     },
     "hooks": {
@@ -8789,7 +8792,12 @@
           "coordinatorApprovalsDescription": "코디네이터 에이전트가 이유와 함께 워커의 권한 요청을 허용할 수 있습니다. 허용과 거부는 계속 표시되며, 먼저 입력한 응답이 적용됩니다. 이 컴퓨터에서 실행 중인 워커에 적용됩니다.",
           "coordinatorApprovalsKeywordApprove": "승인",
           "coordinatorApprovalsKeywordPermission": "권한",
-          "8a94078d05": "에이전트 오케스트레이션"
+          "8a94078d05": "에이전트 오케스트레이션",
+          "orchestrationNoticesTitle": "오케스트레이션 메시지 표시",
+          "orchestrationNoticesDescription": "Orca가 에이전트 사이에 전달하는 메시지를 표시합니다. 채팅에서는 메일 카드, 터미널 에이전트에서는 Orca가 입력하는 \"You have N orchestration messages\" 줄입니다. 끄면 에이전트는 메시지를 그대로 받고, 이 화면에서만 숨겨집니다.",
+          "orchestrationNoticesKeywordMessages": "메시지",
+          "orchestrationNoticesKeywordHide": "숨기기",
+          "orchestrationNoticesKeywordMail": "메일"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "에이전트가 Orca를 통해 컨텍스트를 인계하고 작업을 조율할 수 있습니다.",

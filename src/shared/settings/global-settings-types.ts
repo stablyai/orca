@@ -254,6 +254,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   orchestrationWorkerAutoReleaseEnabled?: boolean
   /** Coordinator agents may allow workers' permission prompts on this machine; absent means off. Not in any agent-writable settings RPC. */
   orchestrationCoordinatorApprovalsEnabled?: boolean
+  /** Display only: hides Orca's mail notices in chats and covers their typed pointer in terminals; agents still receive them. Absent means shown. */
+  showOrchestrationNotices?: boolean
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */

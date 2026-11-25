@@ -181,6 +181,7 @@ export type ManagedPaneInternal = {
   linkifierMouseLeaveResetDisposable?: IDisposable | null
   // Window blur can strand an active link without another mouse event.
   linkifierWindowBlurResetDisposable?: IDisposable | null
+  orchestrationNoticeMaskDisposable?: IDisposable | null
   // Deregister explicitly: terminal.dispose() leaves character joiners registered.
   arabicShapingJoinerCleanup?: (() => void) | null
   // Split reparent’s delayed scroll restore owns the settle window; intermediate fits must not compete.

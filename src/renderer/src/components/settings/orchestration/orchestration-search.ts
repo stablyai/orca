@@ -16,6 +16,11 @@ import {
   getCoordinatorApprovalsSearchKeywords,
   getCoordinatorApprovalsTitle
 } from './coordinator-approvals-copy'
+import {
+  getOrchestrationNoticesDescription,
+  getOrchestrationNoticesSearchKeywords,
+  getOrchestrationNoticesTitle
+} from './orchestration-notices-copy'
 
 type OrchestrationPaneSearchOptions = {
   includeLocalRuntimeSettings?: boolean
@@ -114,6 +119,12 @@ const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
     title: getCoordinatorApprovalsTitle(),
     description: getCoordinatorApprovalsDescription(),
     keywords: getCoordinatorApprovalsSearchKeywords()
+  },
+  {
+    id: 'orchestration-notices',
+    title: getOrchestrationNoticesTitle(),
+    description: getOrchestrationNoticesDescription(),
+    keywords: getOrchestrationNoticesSearchKeywords()
   }
 ])
 

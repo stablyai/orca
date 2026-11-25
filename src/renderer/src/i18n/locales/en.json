@@ -3165,6 +3165,9 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Linked issue",
         "listeningPort": "Listening port"
+      },
+      "terminalOrchestrationNoticeMask": {
+        "label": "Orca delivered an orchestration message"
       }
     },
     "hooks": {
@@ -9824,7 +9827,12 @@
           "coordinatorApprovalsKeywordApprove": "approve",
           "coordinatorApprovalsKeywordPermission": "permission",
           "7bc082f4de": "Copy install command",
-          "8a94078d05": "Agent orchestration"
+          "8a94078d05": "Agent orchestration",
+          "orchestrationNoticesTitle": "Show orchestration messages",
+          "orchestrationNoticesDescription": "Shows the messages Orca passes between agents: mail cards in chats, and the \"You have N orchestration messages\" line Orca types into terminal agents. When off, agents still get every message; Orca only hides them from view here.",
+          "orchestrationNoticesKeywordMessages": "messages",
+          "orchestrationNoticesKeywordHide": "hide",
+          "orchestrationNoticesKeywordMail": "mail"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "Enables agents to hand off context and coordinate work through Orca.",

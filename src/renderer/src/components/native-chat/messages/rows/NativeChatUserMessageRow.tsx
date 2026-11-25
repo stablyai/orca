@@ -18,6 +18,8 @@ import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { NativeChatCopyButton } from '../actions/NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { useFoldedIntoBotRequest } from '../../bot-request-folded-mail'
+import { useAppStore } from '@/store'
+import { orchestrationMailNotice } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatConnectorAskerTag } from '../../NativeChatConnectorAskerTag'
 import { NativeChatTypedByTag } from '../../NativeChatTypedByTag'
@@ -101,9 +103,11 @@ export function NativeChatUserMessageRow({
   const slackPost = useNativeChatSlackMirrorPost(message.id)
   // A bot request's answer shows on its card, not as a mailbox pointer.
   const folded = useFoldedIntoBotRequest(from)
+  // Display only: the agent was still handed this mail.
+  const noticesHidden = useAppStore((s) => s.settings?.showOrchestrationNotices === false)
   // A Slack message draws its markup; copy keeps `markdown`, its readable form.
   const drawn = message.drawnMarkdown
-  if (folded) {
+  if (folded || (noticesHidden && orchestrationMailNotice(from))) {
     return <div ref={rowRef} hidden />
   }
   return (
