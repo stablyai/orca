@@ -58,6 +58,8 @@ export async function main(
 ): Promise<void> {
   // `--profile <id>` before the command selects an app profile, before any parse or check.
   // `orca profiles create` is a hidden local command.
+  // Recovery commands repeat these args, so a retry selects the same profile.
+  const invokedArgv = argv
   try {
     argv = selectAppProfile(argv)
     if (argv[0] === 'profiles' && argv[1] === 'create') {
@@ -213,7 +215,7 @@ export async function main(
           remotePairingCode,
           remoteEnvironment,
           resolveOrchestrationCliExecutable(),
-          argv
+          invokedArgv
         )
         return client
       },

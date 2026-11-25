@@ -273,6 +273,7 @@ describe('paths into the home folder', () => {
 
   it('are not built when a module loads, before the profile folders are set', () => {
     const helpers = new Set([
+      'appProfileAgentHomeDir',
       'defaultAgentHomeDir',
       'orcaHomeDir',
       'defaultClaudeJsonPath',

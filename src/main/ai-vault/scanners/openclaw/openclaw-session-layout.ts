@@ -1,5 +1,8 @@
 import { homedir } from 'node:os'
-import { defaultAgentHomeDir } from '../../../../shared/app-profiles/app-profile-homes'
+import {
+  appProfileAgentHomeDir,
+  defaultAgentHomeDir
+} from '../../../../shared/app-profiles/app-profile-homes'
 import { basename, join } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../../../shared/file-access/absolute-dir-override'
 import type { AiVaultAgentSource } from '../../discovery/session-scanner-agent-sources'
@@ -21,10 +24,14 @@ export const OPENCLAW_AGENT_SOURCE: AiVaultAgentSource = {
   rootDirs: (options, wslHomeDirs) =>
     [
       options.openclawStateDir ?? openClawStateDir(),
-      options.openclawLegacyStateDir ?? join(homedir(), '.clawdbot'),
+      // The legacy folder in the real home belongs to the default app, not to a profile.
+      options.openclawLegacyStateDir ??
+        (appProfileAgentHomeDir('OPENCLAW_STATE_DIR') ? null : join(homedir(), '.clawdbot')),
       ...wslHomeDirs.map((homeDir) => join(homeDir, '.openclaw')),
       ...wslHomeDirs.map((homeDir) => join(homeDir, '.clawdbot'))
-    ].map((stateDir) => (basename(stateDir) === 'agents' ? stateDir : join(stateDir, 'agents'))),
+    ]
+      .filter((stateDir) => stateDir !== null)
+      .map((stateDir) => (basename(stateDir) === 'agents' ? stateDir : join(stateDir, 'agents'))),
   extensions: ['.jsonl'],
   filePredicate: (filePath) => pathSegments(filePath).includes('sessions'),
   directoryPredicate: openClawSessionDirectoryPredicate,

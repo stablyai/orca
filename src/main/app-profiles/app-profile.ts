@@ -74,8 +74,9 @@ function readOwnInfoPlist(): string | null {
 let resolved: AppProfile | null = null
 
 // No electron import: orcad bundles this module too. Electron takes switches only as --name=value.
-function userDataDirArg(): string | null {
-  const arg = process.argv.find((value) => value.startsWith('--user-data-dir='))
+// Chromium uses the last value of a repeated switch.
+export function userDataDirArg(argv: readonly string[] = process.argv): string | null {
+  const arg = argv.findLast((value) => value.startsWith('--user-data-dir='))
   return arg ? arg.slice('--user-data-dir='.length) || null : null
 }
 

@@ -17,7 +17,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createAppProfile, type RunTool } from './app-profile-create'
+import { createAppProfile, runProfilesCreate, type RunTool } from './app-profile-create'
 
 const DEFAULT_PLIST = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -205,6 +205,16 @@ describe.skipIf(process.platform !== 'darwin')('createAppProfile refusals and fa
     )
   })
 
+  it('keeps a profiles.json that it cannot read', () => {
+    const registry = join(dir, 'data', 'profiles.json')
+    file(registry, '{"version": 1, "profiles": [')
+    expect(() => createAppProfile({ name: 'Work', defaultAppPath: app, env: env(), run })).toThrow(
+      `${registry} is not a profile list.`
+    )
+    expect(readFileSync(registry, 'utf8')).toBe('{"version": 1, "profiles": [')
+    expect(existsSync(join(dir, 'apps', 'Work.app'))).toBe(false)
+  })
+
   it('writes the marker before the app is in place', () => {
     const checking: RunTool = (program, args) => {
       if (program.endsWith('lsregister')) {
@@ -278,5 +288,22 @@ describe.skipIf(process.platform !== 'darwin')('createAppProfile from a profile 
       const plist = join(entry.appPath, 'Contents', 'Info.plist')
       expect(plistValue(plist, 'OrcaAppProfilesRoot')).toBeNull()
     }
+  })
+})
+
+describe('orca profiles create --help', () => {
+  it('prints the usage and makes no profile', () => {
+    vi.stubEnv('ORCA_PROFILES_ROOT', join(dir, 'data'))
+    const out = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    for (const flag of ['--help', '-h']) {
+      runProfilesCreate([flag])
+    }
+    expect(out.mock.calls).toEqual([
+      ['Usage: orca profiles create <name>\n'],
+      ['Usage: orca profiles create <name>\n']
+    ])
+    out.mockRestore()
+    expect(existsSync(join(dir, 'data'))).toBe(false)
+    expect(() => runProfilesCreate(['--name'])).toThrow('Usage: orca profiles create <name>')
   })
 })

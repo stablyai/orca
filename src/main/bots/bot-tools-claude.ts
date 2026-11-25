@@ -4,7 +4,10 @@
 // folder of its own, made a git repo so Claude keys it to itself, mirroring the bot's servers; Claude
 // keeps a token by server name and URL, so the chats' launch config finds it.
 import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
-import { defaultAgentHomeDir } from '../../shared/app-profiles/app-profile-homes'
+import {
+  appProfileAgentHomeDir,
+  defaultAgentHomeDir
+} from '../../shared/app-profiles/app-profile-homes'
 import type { McpHttpServerConfig, McpStdioServerConfig } from '@anthropic-ai/claude-agent-sdk'
 import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -39,8 +42,10 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
 
 /** Claude's global config file for the account whose config dir is `configDir` (null: the default). */
 export function claudeAccountConfigFile(configDir: string | null): string {
+  // The default account of a profile app is the profile's Claude folder.
+  const dir = configDir ?? appProfileAgentHomeDir('CLAUDE_CONFIG_DIR')
   return resolveClaudeGlobalConfigFile({
-    env: configDir ? { CLAUDE_CONFIG_DIR: configDir } : {},
+    env: dir ? { CLAUDE_CONFIG_DIR: dir } : {},
     homeDir: homedir(),
     style,
     exists: existsSync

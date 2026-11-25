@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isAppProfileRuntime, resolveAppProfile } from './app-profile'
+import { isAppProfileRuntime, resolveAppProfile, userDataDirArg } from './app-profile'
 
 const plist = (entries: Record<string, string>): string =>
   `<plist><dict>${Object.entries(entries)
@@ -99,5 +99,13 @@ describe('isAppProfileRuntime', () => {
   it('follows ORCA_HOME_DIR only, which each Orca entry point sets or clears', () => {
     expect(isAppProfileRuntime({ ORCA_HOME_DIR: '/profiles/work/orca-home' })).toBe(true)
     expect(isAppProfileRuntime({ ORCA_USER_DATA_PATH: '/profiles/work' })).toBe(false)
+  })
+})
+
+describe('userDataDirArg', () => {
+  it('takes the last --user-data-dir, as Chromium does', () => {
+    expect(userDataDirArg(['Orca', '--user-data-dir=/a', '--user-data-dir=/b'])).toBe('/b')
+    expect(userDataDirArg(['Orca', '--user-data-dir='])).toBeNull()
+    expect(userDataDirArg(['Orca'])).toBeNull()
   })
 })

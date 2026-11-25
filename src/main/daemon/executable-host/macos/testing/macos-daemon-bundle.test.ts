@@ -67,15 +67,21 @@ async function materializeForProfile(): Promise<{ copies: string; cdhash: string
   return { copies: join(root, 'profile', 'daemon-host', 'macos'), cdhash }
 }
 
-it("gives a profile app the default app's host, checked against the host's own signature", async () => {
-  verifyPasses = true
-  const { copies, cdhash } = await materializeForProfile()
-  const copy = await materializeMacDaemonBundle(copies, new AbortController().signal)
-  expect(await readFile(copy.execPath, 'utf8')).toBe('signed-node')
-  expect(copy.directory).toBe(join(copies, `terminal-host-${cdhash}`))
-})
+// Windows makes symlinks only with admin rights or Developer Mode.
+const itWithSymlinks = it.skipIf(process.platform === 'win32')
 
-it("refuses a host copy that does not match the host's own signature", async () => {
+itWithSymlinks(
+  "gives a profile app the default app's host, checked against the host's own signature",
+  async () => {
+    verifyPasses = true
+    const { copies, cdhash } = await materializeForProfile()
+    const copy = await materializeMacDaemonBundle(copies, new AbortController().signal)
+    expect(await readFile(copy.execPath, 'utf8')).toBe('signed-node')
+    expect(copy.directory).toBe(join(copies, `terminal-host-${cdhash}`))
+  }
+)
+
+itWithSymlinks("refuses a host copy that does not match the host's own signature", async () => {
   verifyPasses = false
   const { copies } = await materializeForProfile()
   await expect(materializeMacDaemonBundle(copies, new AbortController().signal)).rejects.toThrow(

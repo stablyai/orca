@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto'
-import { defaultAgentHomeDir } from '../../../shared/app-profiles/app-profile-homes'
+import {
+  appProfileAgentHomeDir,
+  defaultAgentHomeDir
+} from '../../../shared/app-profiles/app-profile-homes'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -55,7 +58,10 @@ export async function readClaudeDiffPanelPreference(
   // Older releases saved the preference globally; the plugin migrates it only without a store value.
   const globalConfig = resolveClaudeGlobalConfigFile({
     env: {
-      CLAUDE_CONFIG_DIR: input.configDirEnv,
+      // A profile's Claude folder holds its own legacy file.
+      CLAUDE_CONFIG_DIR:
+        input.configDirEnv ??
+        (input.home ? undefined : appProfileAgentHomeDir('CLAUDE_CONFIG_DIR')),
       CLAUDE_CODE_CUSTOM_OAUTH_URL: process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL
     },
     homeDir: home,

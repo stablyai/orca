@@ -89,7 +89,13 @@ export function createAppProfile(options: CreateAppProfileOptions): AppProfileEn
   mkdirSync(appsDir, { recursive: true })
 
   return withRegistryLock(root, () => {
-    const registry: AppProfileRegistry = readAppProfileRegistry(root) ?? {
+    const registryPath = join(root, APP_PROFILES_REGISTRY)
+    const existing = readAppProfileRegistry(root)
+    // A list that does not read must stay: a new list would drop its profiles.
+    if (!existing && existsSync(registryPath)) {
+      throw new RuntimeClientError('invalid_argument', `${registryPath} is not a profile list.`)
+    }
+    const registry: AppProfileRegistry = existing ?? {
       version: 1,
       defaultAppPath: defaultApp,
       profiles: []
@@ -263,13 +269,20 @@ function withRegistryLock<T>(root: string, body: () => T): T {
   }
 }
 
+const CREATE_USAGE = 'Usage: orca profiles create <name>'
+
 /** The CLI entry: `orca profiles create <name>`. */
 export function runProfilesCreate(argv: string[]): void {
   // --pin-root: test runs with ORCA_PROFILES_ROOT; an inherited root must not stick in a bundle.
   const pinRoot = argv.includes('--pin-root')
   const rest = argv.filter((arg) => arg !== '--pin-root')
-  if (rest.length !== 1) {
-    throw new RuntimeClientError('invalid_argument', 'Usage: orca profiles create <name>')
+  if (rest.length === 1 && (rest[0] === '--help' || rest[0] === '-h')) {
+    process.stdout.write(`${CREATE_USAGE}\n`)
+    return
+  }
+  // A name never starts with `-`: that is an option.
+  if (rest.length !== 1 || rest[0].startsWith('-')) {
+    throw new RuntimeClientError('invalid_argument', CREATE_USAGE)
   }
   if (process.platform !== 'darwin') {
     throw new RuntimeClientError('unsupported_platform', 'Profiles are only on macOS.')

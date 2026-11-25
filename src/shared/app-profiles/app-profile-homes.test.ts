@@ -152,6 +152,48 @@ describe('app profile homes', () => {
     expect(paths.filter((path) => !underProfile(path))).toEqual([])
   })
 
+  it("read only the profile's Claude config, OpenClaw sessions and Codex lock", async () => {
+    const { AI_VAULT_AGENT_SOURCES } =
+      await import('../../main/ai-vault/discovery/session-scanner-agent-sources')
+    const { readClaudeInheritedTools } = await import('../../main/bots/bot-tools-claude')
+    const { readClaudeDiffPanelPreference } =
+      await import('../../main/claude/configuration/claude-diff-panel-auto-open')
+    const { resolveCodexHomeProcessLockKeyForSpawnEnv: lockKey } =
+      await import('../../main/codex-cli/codex-home-process-lock')
+    const read = async (): Promise<unknown> => ({
+      openclaw: AI_VAULT_AGENT_SOURCES.openclaw!.rootDirs({}, []),
+      tools: await readClaudeInheritedTools(null),
+      diffPanel: await readClaudeDiffPanelPreference({ configDirEnv: undefined })
+    })
+    const claude = join(work, 'orca-home', 'agents', 'claude')
+    mkdirSync(claude, { recursive: true })
+    writeFileSync(
+      join(home, '.claude.json'),
+      JSON.stringify({ mcpServers: { user: {} }, diffSidebarOpen: true })
+    )
+    writeFileSync(
+      join(claude, '.claude.json'),
+      JSON.stringify({ mcpServers: { work: {} }, diffSidebarOpen: false })
+    )
+    const openclaw = (root: string): string => join(root, 'agents')
+    expect(await read()).toEqual({
+      openclaw: [openclaw(join(home, '.openclaw')), openclaw(join(home, '.clawdbot'))],
+      tools: [{ name: 'user' }],
+      diffPanel: true
+    })
+    applyAppProfileHomes(work, process.env)
+    expect(await read()).toEqual({
+      openclaw: [openclaw(join(work, 'orca-home', 'agents', 'openclaw'))],
+      tools: [{ name: 'work' }],
+      diffPanel: false
+    })
+    // A Codex child env without CODEX_HOME runs Codex in ~/.codex.
+    expect(lockKey({})).toBe(lockKey({ CODEX_HOME: join(home, '.codex') }))
+    expect(lockKey(undefined)).toBe(
+      lockKey({ CODEX_HOME: join(work, 'orca-home', 'agents', 'codex') })
+    )
+  })
+
   it('write workspace trust into the profile folders, not the user home', async () => {
     const { applyWorkspaceTrustOnThisHost } =
       await import('../../main/agent-launch/trust/execution-host-workspace-trust')

@@ -69,6 +69,14 @@ describe('selectAppProfile', () => {
     expect(env.ORCA_APP_EXECUTABLE).toBe(join(root, 'Default.app', 'Contents', 'MacOS', 'Orca'))
   })
 
+  it('refuses an empty --profile=, also with ORCA_PROFILE set', () => {
+    const env: NodeJS.ProcessEnv = { ORCA_PROFILES_ROOT: root, ORCA_PROFILE: 'work' }
+    expect(() => selectAppProfile(['--profile=', 'status'], env)).toThrow(
+      '--profile needs a profile id'
+    )
+    expect(env.ORCA_USER_DATA_PATH).toBeUndefined()
+  })
+
   it("never runs a profile's bundle for another folder", () => {
     const workExecutable = join(root, 'Work.app', 'Contents', 'MacOS', 'Orca')
     // `orca --profile default serve` in a Work terminal serves the default folder with the default app.

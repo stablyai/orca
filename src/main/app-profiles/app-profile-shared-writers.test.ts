@@ -22,6 +22,7 @@ let home: string
 beforeAll(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-profile-writers-'))
   vi.stubEnv('HOME', home)
+  vi.stubEnv('USERPROFILE', home)
   vi.stubEnv('ORCA_HOME_DIR', join(home, 'profile', 'orca-home'))
 })
 

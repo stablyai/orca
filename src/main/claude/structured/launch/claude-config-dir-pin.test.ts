@@ -13,6 +13,7 @@ let profileHome: string
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-claude-pin-'))
   vi.stubEnv('HOME', home)
+  vi.stubEnv('USERPROFILE', home)
   vi.stubEnv('CLAUDE_CONFIG_DIR', undefined)
   profileHome = join(home, 'Orca Profiles', 'work', 'orca-home', 'agents', 'claude')
 })

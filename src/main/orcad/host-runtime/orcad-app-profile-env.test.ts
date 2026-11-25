@@ -10,6 +10,7 @@ let home: string
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-orcad-profile-env-'))
   vi.stubEnv('HOME', home)
+  vi.stubEnv('USERPROFILE', home)
   for (const key of APP_PROFILE_HOME_ENV_KEYS) {
     vi.stubEnv(key, undefined)
   }

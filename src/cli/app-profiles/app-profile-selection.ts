@@ -19,15 +19,13 @@ import { RuntimeClientError } from '../runtime/connection/types'
 export function selectAppProfile(argv: string[], env: NodeJS.ProcessEnv = process.env): string[] {
   let id: string | undefined
   let rest = argv
-  if (argv[0] === '--profile') {
-    id = argv[1]
-    rest = argv.slice(2)
+  const inline = argv[0]?.startsWith('--profile=')
+  if (argv[0] === '--profile' || inline) {
+    id = inline ? argv[0].slice('--profile='.length) : argv[1]
+    rest = argv.slice(inline ? 1 : 2)
     if (!id) {
       throw new RuntimeClientError('invalid_argument', '--profile needs a profile id')
     }
-  } else if (argv[0]?.startsWith('--profile=')) {
-    id = argv[0].slice('--profile='.length)
-    rest = argv.slice(1)
   }
   id ||= env.ORCA_PROFILE || undefined
   const root = appProfilesRoot(env)

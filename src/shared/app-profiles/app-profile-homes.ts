@@ -73,14 +73,22 @@ export function orcaHomeDir(
   return override && isLocalHome(home) ? override : join(home, '.orca')
 }
 
+/** An agent's folder that a profile set, or undefined in the default app. */
+export function appProfileAgentHomeDir(
+  variable: AppProfileAgentHomeVariable,
+  env: NodeJS.ProcessEnv = process.env
+): string | undefined {
+  const value = env[variable]?.trim()
+  return isAppProfileHomeValue(value, env) ? value : undefined
+}
+
 /** An agent's folder that a profile set; else the folder in the user's home. */
 export function defaultAgentHomeDir(
   variable: AppProfileAgentHomeVariable,
   homeRelative: string,
   env: NodeJS.ProcessEnv = process.env
 ): string {
-  const value = env[variable]?.trim()
-  return isAppProfileHomeValue(value, env) ? value : join(homedir(), homeRelative)
+  return appProfileAgentHomeDir(variable, env) ?? join(homedir(), homeRelative)
 }
 
 /** An agent's folder in `home`: the profile's when `home` is this user's home, else `home`'s own. */
