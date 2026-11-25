@@ -15,7 +15,7 @@ const delta = (uuid: string, text: string) =>
 describe('a Claude reply a cut replay starts inside', () => {
   it('streams under a stable continuation row, and its final lands on the saved row', () => {
     // Seq 1..4 were dropped at the daemon's cap: message_start of msg_1 is gone.
-    const continuation = new RelayedProviderContinuation(CLAUDE_RELAY_ITEM_CONTINUATION, 'r1', 4)
+    const continuation = new RelayedProviderContinuation(CLAUDE_RELAY_ITEM_CONTINUATION, 'r1', 4, 6)
     const blocks = createClaudeStreamedBlockRegistry()
     const replayed = [delta('u5', 'lo'), delta('u6', ' world')].flatMap((line, at) =>
       continuation.lines(5 + at, line, undefined)

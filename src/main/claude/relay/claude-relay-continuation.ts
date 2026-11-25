@@ -24,6 +24,15 @@ function isRecord(value: unknown): value is StreamLine {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function streamLineAny(line: string): StreamLine | null {
+  try {
+    const frame: unknown = JSON.parse(line)
+    return isRecord(frame) ? frame : null
+  } catch {
+    return null
+  }
+}
+
 /** A streamed message's lines: its stream events and its per-block final frames. */
 function streamLine(line: string): StreamLine | null {
   if (!line.startsWith('{"type":"stream_event"') && !line.startsWith('{"type":"assistant"')) {
@@ -59,6 +68,20 @@ export const CLAUDE_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
       start: event === 'message_start',
       end: event === 'message_stop'
     }
+  },
+  // Keys as CLAUDE_RELAY_WORK_MARKERS' `turn` group: [session_id], ended by a result or idle state.
+  openGroup: 'turn',
+  settles: (line) => {
+    const ends =
+      line.startsWith('{"type":"result"') ||
+      (line.startsWith('{"type":"system"') &&
+        line.includes('"session_state_changed"') &&
+        line.includes('"idle"'))
+    if (!ends) {
+      return null
+    }
+    const frame = streamLineAny(line)
+    return frame && typeof frame.session_id === 'string' ? JSON.stringify([frame.session_id]) : null
   },
   rekey: (line, tag) => {
     const frame = streamLine(line)

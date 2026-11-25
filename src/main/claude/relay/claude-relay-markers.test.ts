@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   ProviderRelayOpenWork,
-  ProviderRelayWorkReader,
-  readProviderRelayDetachPolicy
+  ProviderRelayWorkReader
 } from '../../daemon/provider-relay/provider-relay-work-markers'
+import { readProviderRelayDetachPolicy } from '../../daemon/provider-relay/provider-relay-detach-policy'
 import { CLAUDE_RELAY_WORK_MARKERS, claudeRelayOpenWork } from './claude-relay-markers'
 
 const line = (frame: Record<string, unknown>) => JSON.stringify({ session_id: 's1', ...frame })
