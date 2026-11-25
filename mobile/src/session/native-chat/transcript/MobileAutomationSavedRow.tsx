@@ -111,7 +111,9 @@ export function MobileAutomationSavedMessage({
         {waitState?.kind === 'waiting' ? (
           <>
             <Text style={[styles.heading, meta]}>{say('thenLine')}</Text>
-            <Text style={[styles.meta, meta]}>{waitRowThen(waitState.once, wording)}</Text>
+            <Text style={[styles.meta, meta]}>
+              {waitRowThen(automation, waitState.once, wording)}
+            </Text>
           </>
         ) : null}
       </MobileAutomationRowFrame>

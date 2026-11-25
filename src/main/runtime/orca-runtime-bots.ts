@@ -94,6 +94,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       }),
     leaveBotGroups: (botId) => this.leaveBotGroups(botId),
     botsRoot: () => botsRootFolder(),
+    slackIconsRoot: () => join(getProfileUserDataPath(), 'bot-slack-icons'),
     filesystem: localBotHomeFilesystem,
     accountUserId: () =>
       this.servedOrcaProfileId
@@ -106,6 +107,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       this.lookAround.forget(botId)
       void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
+      void this.bots.slackIcons.forget(botId).catch(() => undefined)
     }
   })
 

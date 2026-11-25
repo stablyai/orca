@@ -9,7 +9,6 @@ const AGENT_NAME_GROUPS = [
   'codex',
   'opencode',
   'mimo',
-  'gemini',
   'droid',
   'grok',
   'cursor'
@@ -27,7 +26,6 @@ const GROUP_AGENT_IDS: Record<AgentNameGroup, TuiAgent> = {
   codex: 'codex',
   opencode: 'opencode',
   mimo: 'mimo-code',
-  gemini: 'gemini',
   droid: 'droid',
   grok: 'grok',
   cursor: 'cursor'

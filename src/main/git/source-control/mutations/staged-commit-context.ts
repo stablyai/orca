@@ -18,10 +18,13 @@ export async function getStagedCommitContext(
   const branchPromise = gitExecFileAsync(['branch', '--show-current'], {
     ...gitOptionsForWorktree(worktreePath, options)
   }).catch(() => ({ stdout: '' }))
-  const summaryPromise = gitExecFileAsync(['diff', '--cached', '--name-status'], {
-    ...gitOptionsForWorktree(worktreePath, options),
-    maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
-  })
+  const summaryPromise = gitExecFileAsync(
+    ['-c', 'core.quotePath=false', 'diff', '--cached', '--name-status'],
+    {
+      ...gitOptionsForWorktree(worktreePath, options),
+      maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
+    }
+  )
 
   const [branchResult, summaryResult] = await Promise.all([branchPromise, summaryPromise])
   const stagedSummary = summaryResult.stdout.trim()
@@ -32,7 +35,16 @@ export async function getStagedCommitContext(
   let stagedPatch = ''
   try {
     const patchResult = await gitExecFileAsync(
-      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+      [
+        '-c',
+        'core.quotePath=false',
+        'diff',
+        '--cached',
+        '--patch',
+        '--minimal',
+        '--no-color',
+        '--no-ext-diff'
+      ],
       {
         ...gitOptionsForWorktree(worktreePath, options),
         maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
