@@ -47,10 +47,10 @@ export function claudeBuildPermissionMode(
 }
 
 /** Sessions whose approved plan's exit is in flight: Plan is being left already. */
-const exitingPlan = new WeakSet<object>()
+const exitingPlan = new WeakSet<Pick<ClaudeSession, 'launchIntent'>>()
 
 /** A live pick made now goes out behind the exit instead of waiting for Plan to be left. */
-export function claudeLeavingPlanOnApproval(session: object): boolean {
+export function claudeLeavingPlanOnApproval(session: Pick<ClaudeSession, 'launchIntent'>): boolean {
   return exitingPlan.has(session)
 }
 
