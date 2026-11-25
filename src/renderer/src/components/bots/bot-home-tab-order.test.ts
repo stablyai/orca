@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import { displayedTabOrder } from './bot-home-tab-order'
+import type { Bot } from '../../../../shared/bot-types'
+import { displayedTabOrder, homeBotLookupFor } from './bot-home-tab-order'
 import { storedIndexForDisplayedDrop } from '../tab-group/drag/tab-drop-displayed-order'
 
 function chatTab(id: string, entityId: string): Tab {
@@ -46,5 +47,22 @@ describe('displayedTabOrder', () => {
       'b',
       'home'
     ])
+  })
+})
+
+describe('homeBotLookupFor', () => {
+  const bot = (id: string, folderWorkspaceId: string, hostId: string): Bot =>
+    ({ id, folderWorkspaceId, hostId, chatSessionId: `${id}-chat` }) as unknown as Bot
+
+  it('has no lookup for a strip no bot calls home, so the tab bar skips the Home search', () => {
+    expect(homeBotLookupFor([], 'repo-a::/path/worktree')).toBeNull()
+    expect(homeBotLookupFor([bot('b1', 'other-home', 'local')], 'folder:bot-home')).toBeNull()
+  })
+
+  it("asks each tab's own host on a bot's home, even when the bot lives on another host", () => {
+    const remote = bot('b1', 'bot-home', 'runtime:other')
+    const lookup = homeBotLookupFor([remote], 'folder:bot-home')
+    expect(lookup?.('runtime:other')).toBe(remote)
+    expect(lookup?.('local')).toBeNull()
   })
 })
