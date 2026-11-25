@@ -53,6 +53,7 @@ export async function catchUpPiSession(input: {
   assertCurrent: () => void
   timeoutMs?: number
   logger: StructuredAgentSessionLogger
+  agent?: string
 }): Promise<PiHistoryCatchUp> {
   const carried: PiHistoryCatchUp = { claim: input.claim, current: false }
   if (!input.sink) {
@@ -68,7 +69,7 @@ export async function catchUpPiSession(input: {
     assertCurrent: input.assertCurrent,
     timeoutMs: input.timeoutMs ?? PI_HISTORY_CATCH_UP_TIMEOUT_MS,
     logger: input.logger,
-    readView: (history) => readPiHistoryJournalView(history, input.lineage),
+    readView: (history) => readPiHistoryJournalView(history, input.lineage, input.agent),
     prepare: async ({ view: readView, history, signal, deadline, check, warn }) => {
       const view = await readView()
       const read = async (since: string | null) => {
@@ -106,6 +107,7 @@ export async function catchUpPiSession(input: {
       leaf = { entry: answer.leafId }
       return createPiHistoryImportPlan({
         sessionFile: input.sessionFile,
+        agent: input.agent,
         epoch: history.cursor().epoch,
         reads: history.reads,
         path: branch.path.filter((entry) => !view.accounted.has(entry.id)),

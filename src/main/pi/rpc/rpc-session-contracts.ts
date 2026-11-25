@@ -10,6 +10,7 @@ import type {
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import type { PiHistoryCaptureDeps } from './history/rpc-history-capture'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { PiRpcFamily } from './pi-rpc-family'
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 
 export type PiRpcConnection = Pick<
@@ -29,6 +30,8 @@ export type PiRpcConnection = Pick<
 > &
   Partial<Pick<JsonlRpcAgentConnection, 'spawned' | 'outcomeLost'>>
 export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
+  /** Protocol and flag differences between Pi-family agents; defaults to Pi. */
+  family?: PiRpcFamily
   openConnection?: (
     launch: ProviderProcessLaunch,
     handlers: JsonlRpcAgentConnectionOptions

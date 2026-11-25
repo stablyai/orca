@@ -208,8 +208,11 @@ export async function applyPiRpcSessionOption(
   }
 }
 
-export async function readPiRpcCommands(rpc: PiRpcRequester): Promise<AgentSessionCommandsResult> {
-  const { commands } = commandsSchema.parse(await rpc.request('get_commands'))
+export async function readPiRpcCommands(
+  rpc: PiRpcRequester,
+  command: 'get_commands' | 'get_available_commands' = 'get_commands'
+): Promise<AgentSessionCommandsResult> {
+  const { commands } = commandsSchema.parse(await rpc.request(command))
   return {
     commands: commands.map((command) => ({
       name: command.name,

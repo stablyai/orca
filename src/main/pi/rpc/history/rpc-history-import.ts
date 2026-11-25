@@ -80,14 +80,17 @@ function walkFromLeaf(
 /** Match adoption identities so both import paths deduplicate. */
 export function piHistoryEntryIdentity(
   sessionFile: string,
-  entryId: string
+  entryId: string,
+  agent: string = 'pi'
 ): AgentJournalItemIdentity {
-  return { provider: 'legacy', agent: 'pi', sessionId: sessionFile, recordId: entryId }
+  return { provider: 'legacy', agent, sessionId: sessionFile, recordId: entryId }
 }
 
 /** Stage all outside rows before writing; exclude journaled entries so prior imports cannot veto newer ones. */
 export async function createPiHistoryImportPlan(input: {
   sessionFile: string
+  /** Imported entries dedupe against this agent's other imports. */
+  agent?: string
   epoch: string
   reads: Pick<AgentSessionJournalReads, 'historyItems'>
   path: readonly PiSessionEntry[]
@@ -100,7 +103,7 @@ export async function createPiHistoryImportPlan(input: {
     (
       await input.reads.historyItems(
         input.path.map((entry) =>
-          agentJournalItemKey(piHistoryEntryIdentity(input.sessionFile, entry.id))
+          agentJournalItemKey(piHistoryEntryIdentity(input.sessionFile, entry.id, input.agent))
         )
       )
     )
@@ -110,7 +113,7 @@ export async function createPiHistoryImportPlan(input: {
   const entryIds: string[] = []
   for (const entry of input.path) {
     input.check()
-    const identity = piHistoryEntryIdentity(input.sessionFile, entry.id)
+    const identity = piHistoryEntryIdentity(input.sessionFile, entry.id, input.agent)
     if (saved.has(agentJournalItemKey(identity))) {
       continue
     }
@@ -123,7 +126,11 @@ export async function createPiHistoryImportPlan(input: {
       batch.push(
         journalLifecycleItemMutation(
           { turnScope: AGENT_JOURNAL_THREAD_SCOPE },
-          piHistoryEntryIdentity(input.sessionFile, continuedOutsideRecordId(entry.id)),
+          piHistoryEntryIdentity(
+            input.sessionFile,
+            continuedOutsideRecordId(entry.id),
+            input.agent
+          ),
           continuedOutsideNotice(input.rewound)
         )
       )
