@@ -22,13 +22,7 @@ import type { HostScreenController } from '../use-host-screen-controller'
 import { useWorkspaceNotificationMutes } from './use-workspace-notification-mutes'
 
 // worktree.set resolves git worktrees only, so these refuse a folder workspace's id.
-const GIT_WORKTREE_ONLY_ACTIONS = new Set([
-  'rename',
-  'toggleRead',
-  'togglePin',
-  'moveToStatus',
-  'handOff'
-])
+const GIT_WORKTREE_ONLY_ACTIONS = new Set(['rename', 'toggleRead', 'togglePin', 'moveToStatus'])
 
 /** The workspace's long-press sheet: go somewhere, quick toggles, changes, then endings. Actions
  *  that can't run here are left out rather than greyed. */
@@ -79,8 +73,9 @@ export function useWorkspaceRowMenuActions(args: {
         label: t('hostScreen.hostScreenOverlays.handOffToAgent', 'To an agent'),
         group: undefined
       })),
-    // A server's workspace would move under a bot on another computer, which only the desktop builds.
-    ...(onHandToBot && !server.server
+    // A server's workspace would move under a bot on another computer, which only the desktop
+    // builds; a folder workspace can't be handed to a bot (worktree.set refuses its id).
+    ...(onHandToBot && !server.server && !isFolder
       ? [
           {
             id: 'handToBot',
