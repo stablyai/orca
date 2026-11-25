@@ -244,3 +244,18 @@ export const homeOverflowListOpen = defineFixture({
   render: () => <BotHomeTabsFixture sideChats={12} homeIndex={2} homeActive />,
   interact: openListWithHomeActive
 })
+
+// The narrowest pane headers, by tab-strip width (the frame adds 32px of padding and the header 4px): Home is a 32px icon
+// at <=86px so the +N chip stays whole, and beside two or more tabs it hides at <=78px, reached through the +N list.
+function narrowestHeader(stripWidth: number): ReturnType<typeof defineFixture> {
+  return defineFixture({
+    width: stripWidth + 36,
+    store: STORE,
+    setup,
+    render: () => <BotHomeTabsFixture sideChats={12} paneHeader />
+  })
+}
+
+export const homeStrip90 = narrowestHeader(90)
+export const homeStrip82 = narrowestHeader(82)
+export const homeStrip74 = narrowestHeader(74)

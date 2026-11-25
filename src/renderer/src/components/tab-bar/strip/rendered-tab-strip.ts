@@ -19,6 +19,8 @@ export type RenderedTabStrip = {
   pinnedHomeId: string | null
   /** Other tabs share the bar beside a pinned Home, hidden ones included. */
   stripHasTabs: boolean
+  /** Two or more other tabs: the narrowest plans always fold them into the +N chip. */
+  stripHasSeveralTabs: boolean
   /** The strip itself renders a tab, so it keeps its 40px floor. */
   stripRendersTabs: boolean
   /** The selected entry: a client-hosted browser row that owns selection, else the active tab. */
@@ -67,6 +69,7 @@ export function resolveRenderedTabStrip({
     pinnedCount,
     pinnedHomeId,
     stripHasTabs: allItems.length + allClientHostedBrowserRows.length > pinnedCount,
+    stripHasSeveralTabs: allItems.length + allClientHostedBrowserRows.length - pinnedCount >= 2,
     stripRendersTabs: orderedItems.length + clientHostedBrowserRows.length > pinnedCount,
     activeId
   }

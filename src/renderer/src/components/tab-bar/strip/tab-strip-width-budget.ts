@@ -34,6 +34,12 @@ export const PINNED_HOME_LABEL_MIN_PX = 114
 export const PINNED_HOME_COLOR_DOT_MIN_PX = 74
 /** Home's pin hides below this: 44 + 16. */
 export const PINNED_HOME_PIN_MIN_PX = 60
+/** At or below this tab-strip width Home is a fixed icon-only tab (TAB_ICON_ONLY_WIDTH_PX), so the "+N" chip stays whole:
+ * 32 + 38 chip + 1 border + 8 action padding + slack. */
+export const PINNED_HOME_ICON_BELOW_PX = 86
+/** At or below this, beside two or more other tabs, Home's slot hides; the plan is then always the "+N" chip, whose list
+ * leads with Home. */
+export const PINNED_HOME_HIDE_BELOW_PX = 78
 /** Home beside other tabs adds a second tab floor, so each strip threshold above moves up by this:
  * "+" 126, pane ⋯ 154 (118 folded), quick commands 203, drag handle 243. */
 export const PINNED_HOME_EXTRA_FLOOR_PX = TAB_STRIP_FLOOR_PX

@@ -8,12 +8,15 @@ export function PinnedHomeTabSlot({
   sortableIds,
   singleTab,
   withStrip,
+  hidesWhenNarrowest,
   children
 }: {
   sortableIds: string[]
   singleTab: boolean
   /** Other tabs share the bar, hidden ones included. */
   withStrip: boolean
+  /** Two or more other tabs: at the narrowest widths the plan is always the +N chip, whose list leads with Home. */
+  hidesWhenNarrowest: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   return (
@@ -29,9 +32,9 @@ export function PinnedHomeTabSlot({
         // Why: Home keeps its usual 144px while the strip condenses; once only the +N chip is left, Home narrows to its icons (label hidden once it no longer fits whole), then to its avatar on the usual 40px tab floor.
         // The tab fills this box, so the drop marker on its right edge is never clipped; sr-only keeps "Home" as the accessible name when it hides.
         // Widths and thresholds: PINNED_HOME_* in tab-strip-width-budget.ts (Tailwind needs the literals).
-        // Home keeps its 40px floor in the narrowest panes: the pane actions give way first, so the +N chip stays whole. A floor that
-        // yielded would feed Home's width back into the condense plan and flip the chip between "+N" and the tab count.
-        className="@container/pinned-home group/tab-strip flex min-h-0 min-w-10 shrink grow-0 basis-[144px] overflow-hidden [&>[data-tab-strip-slot]]:w-full [&>[data-tab-strip-slot]]:max-w-none [&>[data-tab-strip-slot]]:min-w-0 @max-[114px]/pinned-home:[&_.tab-label]:sr-only @max-[74px]/pinned-home:[&_[data-tab-color-dot]]:hidden @max-[60px]/pinned-home:[&_.lucide-pin]:hidden"
+        // Narrowest panes: Home's width follows the pane width, never the flex result, so it can't feed back into the condense plan.
+        // At <=86px Home is a fixed 32px icon so the +N chip stays whole; at <=78px, beside two or more tabs, it hides and the +N list (which leads with Home) reaches every tab.
+        className={`@container/pinned-home group/tab-strip flex min-h-0 min-w-10 @max-[86px]/tab-strip:min-w-8 @max-[86px]/tab-strip:basis-8 @max-[86px]/tab-strip:shrink-0 shrink grow-0 basis-[144px] overflow-hidden [&>[data-tab-strip-slot]]:w-full [&>[data-tab-strip-slot]]:max-w-none [&>[data-tab-strip-slot]]:min-w-0 @max-[114px]/pinned-home:[&_.tab-label]:sr-only @max-[74px]/pinned-home:[&_[data-tab-color-dot]]:hidden @max-[60px]/pinned-home:[&_.lucide-pin]:hidden ${hidesWhenNarrowest ? '@max-[78px]/tab-strip:hidden' : ''}`}
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         {/* Titled whatever the strip's plan: Home is never iconified by it or sized to its active width. */}
