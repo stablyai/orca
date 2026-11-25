@@ -198,6 +198,8 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
       track(launch.chatKey, child, launch.markers)
       return { managed: relayedManagedProcess(child), child, reattached: true }
     }
+    // Nothing takes this attach's held output: it goes, so the channel keeps none of it.
+    channel.release(info.relayId)
   }
   const verdict =
     info.exit === null && !endedSince

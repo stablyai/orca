@@ -82,6 +82,16 @@ export class ProviderRelayChannel {
     }
   }
 
+  /** Forgets an attach nobody took (it failed, or its agent had ended): its child and held output
+   *  are no longer reachable from here. */
+  release(relayId: string): void {
+    this.sinks.delete(relayId)
+    this.partial.delete(relayId)
+    if (this.sinks.size === 0) {
+      this.stopListening()
+    }
+  }
+
   spawn(
     spec: ProviderRelaySpawnSpec,
     chatKey: string,
