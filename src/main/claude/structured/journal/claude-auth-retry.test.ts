@@ -144,3 +144,23 @@ it("words a later turn's own sign-in failure, not an earlier turn's denial", () 
   })
   expect(failureKinds(items)).toEqual(['notSignedIn'])
 })
+
+it('fails an interrupted turn whose sign-in notice Claude wrote before the result', () => {
+  const { items, send } = claudeChat()
+  send(retry(401))
+  send({
+    type: 'assistant',
+    error: 'authentication_failed',
+    api_error_status: 401,
+    uuid: 'assistant-1',
+    message: {
+      id: 'msg_1',
+      role: 'assistant',
+      model: '<synthetic>',
+      content: [{ type: 'text', text: 'Failed to authenticate. API Error: 401' }]
+    }
+  })
+  send(interrupted)
+  expect(failureKinds(items)).toEqual(['notSignedIn'])
+  expect(turnOutcome(items)).toBe('failure')
+})

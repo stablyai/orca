@@ -130,7 +130,8 @@ export function journalClaudeResult(
   const authRetry = settlesTurn && !command ? assistantFailures.takeAuthFailure(turnId) : null
   // A retry that got through before the interrupt landed is no failure.
   const authFailure = claudeResultOutcome(message) === 'success' ? null : authRetry
-  const terminalFailure = notice || usageLimit || authFailure
+  const terminalFailure =
+    notice || usageLimit || (authFailure && !authFailure.shown ? authFailure.row : null)
   if (command && commandResult?.row && !terminalFailure) {
     sink.appendItem(command.resultIdentity, commandResult.row, { turnScope: endedTurnScope })
   } else if (command && commandResult?.row && stopCheck) {
