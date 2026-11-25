@@ -2,10 +2,15 @@ import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesy
 import { JsonTextStructureCapacityError } from '../../../../shared/json-stream/json-text-structure-limit'
 import { NodeFileReadTooLargeError } from '../../../../shared/file-content/node-bounded-file-reader'
 import { join } from 'node:path'
-import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
+import {
+  MAX_AGENT_STATE_FILE_BYTES,
+  readAgentStateFileSync,
+  readAgentStateJsonFileSync
+} from '../agent-state-file-reader'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import {
   EMPTY_GUEST_CARRY_FORWARD,
+  isGuestCarryForwardEmpty,
   type CodexGuestCarriedRegistration,
   type CodexGuestCarryForward
 } from './codex-config-guest-carry-forward'
@@ -30,6 +35,8 @@ export type CodexSettingsBaseline = {
   tracksRegistrations?: boolean
   /** Set once a WSL distro config regenerated this home; absent on homes an older Orca mirrored. */
   guestCarryForward?: CodexGuestCarryForward
+  /** Set once a pass found ~/.codex outside any WSL distro, so clean passes need not resolve it again. */
+  nativeSource?: boolean
 }
 
 type StoredGuestCarryForward = {
@@ -45,6 +52,7 @@ type StoredSettingsBaseline = {
   mcpServers?: string[]
   mcpServerRoot?: boolean
   guestCarryForward?: StoredGuestCarryForward
+  nativeSource?: boolean
 }
 
 /** Unreadable baselines stall the mirror; absent or invalid baselines can be rebuilt. */
@@ -102,6 +110,7 @@ function readParsedCodexSettingsBaseline(
       mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true,
       // Version 3 came with registration tracking.
       tracksRegistrations: parsed.version === 3,
+      nativeSource: parsed.nativeSource === true,
       ...(parsed.guestCarryForward !== undefined && {
         guestCarryForward: readStoredGuestCarryForward(parsed.guestCarryForward)
       })
@@ -210,8 +219,19 @@ export function writeCodexSettingsBaseline(
       registrations: [...baseline.guestCarryForward.registrations]
     }
   }
+  if (baseline.nativeSource) {
+    file.nativeSource = true
+  }
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
   const serialized = `${JSON.stringify(file, null, 2)}\n`
+  // Kept values live only here; keep the last readable file rather than write one the reader drops.
+  if (
+    baseline.guestCarryForward &&
+    !isGuestCarryForwardEmpty(baseline.guestCarryForward) &&
+    Buffer.byteLength(serialized) > MAX_AGENT_STATE_FILE_BYTES
+  ) {
+    throw new Error('Codex settings baseline with kept values exceeds the readable size')
+  }
   let existing: string | null = null
   try {
     existing = readAgentStateFileSync(baselinePath)

@@ -42,6 +42,7 @@ export type CodexSettingsBaselineSnapshotOptions = {
   mirroredMcpServers?: ReadonlySet<string>
   mirroredMcpServerRoot?: boolean
   guestCarryForward?: CodexGuestCarryForward
+  nativeSource?: boolean
 }
 
 /** Snapshot only after a successful mirror so pending runtime changes remain promotable. */
@@ -75,7 +76,8 @@ export function snapshotCodexRuntimeSettingsBaseline(
         : new Map(),
       mcpServers: options.mirroredMcpServers ?? new Set(),
       mcpServerRoot: options.mirroredMcpServerRoot ?? false,
-      guestCarryForward: options.guestCarryForward
+      guestCarryForward: options.guestCarryForward,
+      nativeSource: options.nativeSource
     })
     return true
   } catch (error) {
@@ -101,6 +103,8 @@ export type CodexSettingsPromotionPlan = {
   guestRegeneration?: CodexGuestRegeneration
   /** The mirror replaces this with its plan; empty until then, which a starter baseline records. */
   guestCarryForward?: CodexGuestCarryForward
+  /** A pass found ~/.codex outside any WSL distro; the baseline records it to skip that check later. */
+  nativeSource?: boolean
 }
 
 function getHostPromotionHomes(): CodexSettingsPromotionHomes {
@@ -144,32 +148,37 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   }
   // A drvfs source (a distro home under /mnt/c) is the distro's own config too.
   const sourceInGuest = homes.systemConfigDir !== undefined || isWslSharePath(systemTomlPath)
-  // So is a host ~/.codex linked into a distro; resolve it before any pass can skip ahead.
-  let writeTarget: { path: string } | { error: unknown } | null = null
-  try {
-    writeTarget = sourceInGuest ? null : resolvePromotionWriteTarget(systemTomlPath)
-  } catch (error) {
-    writeTarget = { error }
-  }
-  const guestSource =
-    sourceInGuest ||
-    (writeTarget !== null && 'path' in writeTarget && resolvesIntoWslShare(writeTarget.path))
   const runtimeTomlObservation = observeAgentStateFile(runtimeTomlPath)
-  if (runtimeTomlObservation.kind === 'absent') {
-    // A fresh guest copy has no tab edits of its own, but values kept earlier still apply.
-    return guestSource
-      ? regenerateFromGuestPlan(observeCodexSettingsBaseline(runtimeHomePath))
-      : emptyPromotionPlan()
-  }
   if (runtimeTomlObservation.kind === 'indeterminate') {
     // Throw to stall the mirror rather than overwrite unreadable runtime changes.
     throw runtimeTomlObservation.error
   }
-  if (guestSource) {
+  if (sourceInGuest) {
+    // A fresh guest copy has no tab edits of its own, but values kept earlier still apply.
     return regenerateFromGuestPlan(observeCodexSettingsBaseline(runtimeHomePath))
   }
   // Scalars need a baseline to distinguish stale copies from new Codex edits.
   const baselineObservation = observeCodexSettingsBaseline(runtimeHomePath)
+  const knownNative =
+    baselineObservation.kind === 'present' && baselineObservation.baseline.nativeSource === true
+  // So is a host ~/.codex linked into a distro; resolved only when this pass can need it.
+  const resolveHostSource = (): HostSource => {
+    try {
+      const target = resolvePromotionWriteTarget(systemTomlPath)
+      return { writeTarget: target, guest: resolvesIntoWslShare(target.path) }
+    } catch (error) {
+      return { writeTarget: { error }, guest: false }
+    }
+  }
+  if (runtimeTomlObservation.kind === 'absent') {
+    if (knownNative) {
+      return { ...emptyPromotionPlan(), nativeSource: true }
+    }
+    const hostSource = resolveHostSource()
+    return hostSource.guest
+      ? regenerateFromGuestPlan(baselineObservation)
+      : { ...emptyPromotionPlan(), nativeSource: 'path' in hostSource.writeTarget }
+  }
   if (baselineObservation.kind === 'indeterminate') {
     // An unreadable baseline cannot authorize mirroring over possible runtime edits.
     throw new Error('Codex settings baseline could not be read')
@@ -193,15 +202,43 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   // Registrations can promote before the first mirror because untracked tables are additions.
   const nothingToWrite =
     updates.size === 0 && !hasCodexRegistrationEntries(runtimeTomlObservation.value)
-  if (nothingToWrite && conflicts.size === 0 && runtimeValuesToPreserve.size === 0) {
-    return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
+  const clean = nothingToWrite && conflicts.size === 0 && runtimeValuesToPreserve.size === 0
+  if (clean && knownNative) {
+    return {
+      conflicts,
+      runtimeValuesToPreserve,
+      mirroredMcpServers,
+      mirroredMcpServerRoot,
+      nativeSource: true
+    }
+  }
+  const { writeTarget, guest } = resolveHostSource()
+  if (guest) {
+    return regenerateFromGuestPlan(baselineObservation)
+  }
+  const resolved = 'path' in writeTarget
+  if (clean) {
+    return {
+      conflicts,
+      runtimeValuesToPreserve,
+      mirroredMcpServers,
+      mirroredMcpServerRoot,
+      nativeSource: resolved
+    }
   }
   // An unresolvable ~/.codex link could lead into a distro; stall rather than write through it.
-  if (!writeTarget || !('path' in writeTarget)) {
-    throw writeTarget?.error ?? new Error('Codex config write target was not resolved')
+  if (!resolved) {
+    throw writeTarget.error
+  }
+  const plan = {
+    conflicts,
+    runtimeValuesToPreserve,
+    mirroredMcpServers,
+    mirroredMcpServerRoot,
+    nativeSource: true
   }
   if (nothingToWrite) {
-    return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
+    return plan
   }
   // A new home may later hold auth.json, so create it owner-only.
   mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
@@ -229,7 +266,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     )
   )
   if (nextContent === systemContent) {
-    return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
+    return plan
   }
   const computedFrom = targetExists ? writeTargetObservation.value : null
   // Promotion never rotated the user's config.toml.bak; keep it that way.
@@ -241,8 +278,10 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   ) {
     return null
   }
-  return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
+  return plan
 }
+
+type HostSource = { writeTarget: { path: string } | { error: unknown }; guest: boolean }
 
 /**
  * Orca never writes a WSL distro's own config, so nothing in the managed copy is kept back:
@@ -260,7 +299,8 @@ function regenerateFromGuestPlan(
     mirroredMcpServers: baseline?.mcpServers ?? new Set(),
     mirroredMcpServerRoot: baseline?.mcpServerRoot ?? false,
     guestRegeneration: { baseline },
-    guestCarryForward: EMPTY_GUEST_CARRY_FORWARD
+    // The mirror replans this from its own read; a pass that never reads a source keeps it as is.
+    guestCarryForward: baseline?.guestCarryForward ?? EMPTY_GUEST_CARRY_FORWARD
   }
 }
 

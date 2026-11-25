@@ -18,8 +18,9 @@ import { join } from 'node:path'
 import { parse as parseToml } from 'smol-toml'
 import type * as WslPaths from '../../../../shared/file-access/wsl-paths'
 import type * as Promotion from './config-settings-promotion'
+import type * as WriteTarget from './config-settings-promotion-write-target'
 
-const { homedirMock, wslTestState } = vi.hoisted(() => {
+const { homedirMock, resolveWriteTargetSpy, wslTestState } = vi.hoisted(() => {
   const state: {
     wslPath: string | null
     daemonGuard: boolean
@@ -35,7 +36,21 @@ const { homedirMock, wslTestState } = vi.hoisted(() => {
     unresolvablePath: null,
     afterPromotion: null
   }
-  return { homedirMock: vi.fn<() => string>(), wslTestState: state }
+  return {
+    homedirMock: vi.fn<() => string>(),
+    resolveWriteTargetSpy: vi.fn(),
+    wslTestState: state
+  }
+})
+
+vi.mock('./config-settings-promotion-write-target', async (importOriginal) => {
+  const actual = await importOriginal<typeof WriteTarget>()
+  return {
+    resolvePromotionWriteTarget: (path: string) => {
+      resolveWriteTargetSpy(path)
+      return actual.resolvePromotionWriteTarget(path)
+    }
+  }
 })
 
 vi.mock('../shared-server/codex-daemon-socket-path-guard', async (importOriginal) => ({
@@ -473,4 +488,68 @@ describe('managed Codex config for a WSL distro config', () => {
       expect(readRuntimeConfig()).toContain('model = "o5"')
     }
   )
+
+  it('resolves a native ~/.codex only once, then skips it on clean passes', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+    resolveWriteTargetSpy.mockClear()
+
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(resolveWriteTargetSpy).not.toHaveBeenCalled()
+    simulateCodexSettingWrite('model', '"o4"')
+    syncSystemConfigIntoManagedCodexHome()
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe('model = "o4"\n')
+  })
+
+  it('keeps a kept plugin when the distro adds a sibling under a bare [plugins] table', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    writeFileSync(
+      runtimeConfigPath(),
+      `${readRuntimeConfig()}\n[plugins."lint@market"]\nenabled = true\n`,
+      'utf-8'
+    )
+    wslTestState.wslPath = systemConfigPath()
+    syncSystemConfigIntoManagedCodexHome()
+    writeSystemConfig('model = "gpt-5"\n\n[plugins]\n"docs@market" = { enabled = true }\n')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(parseToml(readRuntimeConfig()).plugins).toEqual({
+      'docs@market': { enabled: true },
+      'lint@market': { enabled: true }
+    })
+  })
+
+  it('keeps kept values when their baseline would be too large to read back', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    const huge = `"${'x'.repeat(2_300_000)}"`
+    simulateCodexSettingWrite('model', huge)
+    wslTestState.wslPath = systemConfigPath()
+
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).toContain(`model = ${huge} # orca: `)
+  })
+
+  it('keeps kept values through a blank distro config while the managed copy is missing', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    simulateCodexSettingWrite('model', '"o4"')
+    wslTestState.wslPath = systemConfigPath()
+    syncSystemConfigIntoManagedCodexHome()
+    rmSync(runtimeConfigPath())
+    writeSystemConfig('')
+    syncSystemConfigIntoManagedCodexHome()
+
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).toMatch(/^model = "o4" # orca: /m)
+  })
 })
