@@ -77,6 +77,44 @@ function ExternalMenuItem({
 
 export type SetupMilestones = { done: number; total: number }
 
+/** Help's Milestones row (opens the setup guide). `badge` shows done/total as text (the rail's account menu). */
+export function MilestonesMenuItem({
+  milestones,
+  progress = 'ring'
+}: {
+  milestones: SetupMilestones
+  progress?: 'ring' | 'badge'
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <DropdownMenuItem
+      onSelect={() =>
+        useAppStore.getState().openModal('setup-guide', { telemetrySource: 'help_menu' })
+      }
+    >
+      <img
+        src={logo}
+        alt=""
+        aria-hidden="true"
+        className="size-3.5 object-contain invert opacity-55 dark:invert-0"
+      />
+      {t('auto.components.sidebar.SidebarSettingsHelpMenu.f8a2c91d4e', 'Milestones')}
+      {progress === 'badge' ? (
+        <span className="ml-auto rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground tabular-nums">
+          {milestones.done}/{milestones.total}
+        </span>
+      ) : (
+        <SetupGuideProgressRing
+          done={milestones.done}
+          total={milestones.total}
+          sizeClassName="size-4"
+          className="ml-auto"
+        />
+      )}
+    </DropdownMenuItem>
+  )
+}
+
 /** Help's menu rows and feedback dialog, so the same Help can open from its own button or as a More submenu. */
 export type HelpMenuController = {
   items: React.ReactNode
@@ -86,7 +124,6 @@ export type HelpMenuController = {
 
 export function useHelpMenuController(milestones: SetupMilestones | null): HelpMenuController {
   const t = useTranslate()
-  const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -160,10 +197,6 @@ export function useHelpMenuController(milestones: SetupMilestones | null): HelpM
     void window.api.updater.check(getUpdateCheckClickOptions(modifiers))
   }
 
-  const openMilestones = (): void => {
-    openModal('setup-guide', { telemetrySource: 'help_menu' })
-  }
-
   return {
     items: (
       <>
@@ -176,23 +209,7 @@ export function useHelpMenuController(milestones: SetupMilestones | null): HelpM
           <MessageSquareText className="size-3.5" />
           {t('auto.components.sidebar.SidebarSettingsHelpMenu.4cf5b868d7', 'Send Feedback')}
         </DropdownMenuItem>
-        {milestones ? (
-          <DropdownMenuItem onSelect={openMilestones}>
-            <img
-              src={logo}
-              alt=""
-              aria-hidden="true"
-              className="size-3.5 object-contain invert opacity-55 dark:invert-0"
-            />
-            {t('auto.components.sidebar.SidebarSettingsHelpMenu.f8a2c91d4e', 'Milestones')}
-            <SetupGuideProgressRing
-              done={milestones.done}
-              total={milestones.total}
-              sizeClassName="size-4"
-              className="ml-auto"
-            />
-          </DropdownMenuItem>
-        ) : null}
+        {milestones ? <MilestonesMenuItem milestones={milestones} /> : null}
         <DropdownMenuItem
           className="whitespace-nowrap"
           onClick={handleShowOnboarding}
