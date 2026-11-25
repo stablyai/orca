@@ -29,16 +29,33 @@ describe('a Claude reply a cut replay starts inside', () => {
     )
     const streamed = replayed.map((line) => blocks.observe(JSON.parse(line), 0))
     expect(streamed.map((each) => each?.identity)).toEqual([
-      { provider: 'claude', sessionId: 's', uuid: 'block:relay:r1:5:0' },
-      { provider: 'claude', sessionId: 's', uuid: 'block:relay:r1:5:0' }
+      { provider: 'claude', sessionId: 's', uuid: 'block:relay:r1:s|:0' },
+      { provider: 'claude', sessionId: 's', uuid: 'block:relay:r1:s|:0' }
     ])
     const final = blocks.reconcile({ sessionId: 's', parentToolUseId: null, messageId: 'msg_1' })
     expect(final?.identity).toEqual({ provider: 'claude', sessionId: 's', uuid: 'block:msg_1:0' })
     expect(final?.retired).toEqual({
       provider: 'claude',
       sessionId: 's',
-      uuid: 'block:relay:r1:5:0'
+      uuid: 'block:relay:r1:s|:0'
     })
+  })
+})
+
+describe('a Claude reply cut at two reattaches', () => {
+  it('continues on one row both times, which its final retires', () => {
+    const blocks = createClaudeStreamedBlockRegistry()
+    const first = new RelayedProviderContinuation(CLAUDE_RELAY_ITEM_CONTINUATION, 'r1', 4, 6)
+    const second = new RelayedProviderContinuation(CLAUDE_RELAY_ITEM_CONTINUATION, 'r1', 40, 41)
+    const rows = [
+      first.lines(5, delta('u5', 'a'), undefined),
+      second.lines(41, delta('u41', 'b'), undefined)
+    ]
+      .flat()
+      .map((line) => blocks.observe(JSON.parse(line), 0)?.identity.uuid)
+    expect(rows).toEqual(['block:relay:r1:s|:0', 'block:relay:r1:s|:0'])
+    const final = blocks.reconcile({ sessionId: 's', parentToolUseId: null, messageId: 'msg_1' })
+    expect(final?.retired?.uuid).toBe('block:relay:r1:s|:0')
   })
 })
 
@@ -59,7 +76,7 @@ describe("a background subagent's reply streaming past its turn's result", () =>
     })
     expect(continuation).not.toBeNull()
     const [tagged] = continuation!.lines(9, child('u9'), undefined)
-    expect(JSON.parse(tagged)).toHaveProperty(CLAUDE_RELAY_CONTINUATION_KEY, 'relay:r1:9')
+    expect(JSON.parse(tagged)).toHaveProperty(CLAUDE_RELAY_CONTINUATION_KEY, 'relay:r1:s|call_1')
     continuation!.lines(
       10,
       JSON.stringify({
