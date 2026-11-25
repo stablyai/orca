@@ -281,17 +281,11 @@ describe('session menu workspace deletion', () => {
       )
       await sheet.openConfirmation()
       await sheet.press(sheet.button('Delete'))
-      if (transition === 'workspace-change') {
-        await sheet.switchWorkspace('another-workspace')
-      } else {
-        await act(async () => {
-          if (transition === 'blur') {
-            blur?.()
-          } else {
-            renderer?.unmount()
-          }
-        })
-      }
+      await (transition === 'workspace-change'
+        ? sheet.switchWorkspace('another-workspace')
+        : act(async () => {
+            transition === 'blur' ? blur?.() : renderer?.unmount()
+          }))
       await act(async () => accept?.({ id: 'rm', ok: true, result: { removed: true } }))
       expect(sheet.leaveSession).not.toHaveBeenCalled()
       expect(sheet.showToast).not.toHaveBeenCalled()
