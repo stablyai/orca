@@ -7,6 +7,7 @@ import { closeTestStores, createSqliteTestStore } from '../../persistence/persis
 import { chatWorkspaceNameUpdate } from './chat-workspace-name'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
 import { listRuntimeFolderWorkspaces } from '../workspaces/catalog/runtime-worktree-filesystem'
+import { listFolderWorkspaces } from '../../ipc/worktrees/listing/folder-workspace-catalog'
 import { hostWorktreeTargetForRepo } from '../../persistence/host-qualified-worktree-meta'
 
 const roots: string[] = []
@@ -56,11 +57,13 @@ it('allocates one folder per creation and persists only the first submitted chat
   expect(saved.displayName).toBe('Plan a release')
   const workspace = listRuntimeFolderWorkspaces(reopened, saved)[0]!
   expect(workspace.displayName).toBe('Plan a release')
+  expect(listFolderWorkspaces(reopened, saved)[0]!.displayName).toBe('Plan a release')
   reopened.setWorktreeMeta(hostWorktreeTargetForRepo(workspace.id, saved), {
     displayName: 'My workspace',
     displayNameIsPinned: true
   })
   expect(listRuntimeFolderWorkspaces(reopened, saved)[0]!.displayName).toBe('My workspace')
+  expect(listFolderWorkspaces(reopened, saved)[0]!.displayName).toBe('My workspace')
   expect(saved.chatWorkspace?.autoName).toBe(false)
   expect(chatWorkspaceNameUpdate(saved, later, submissions)).toBeNull()
   reopened.updateRepo(saved, { chatWorkspace: { initialName: saved.displayName, autoName: true } })

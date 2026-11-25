@@ -2,11 +2,7 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../../../../shared/worktree/creation/launch-types'
-import {
-  getRepoExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host/execution-host'
-import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { shouldAutoCreateInitialTerminal } from '@/lib/workspace/activation/initial-surface/initial-terminal'
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
@@ -31,8 +27,7 @@ import { applyDefaultTerminalTabs } from '@/lib/workspace/activation/initial-sur
 import { openDefaultAgentChatInEmptyWorkspace } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-agent-chat'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 import { findPendingWorktreeCreationId } from '../../creation/pending-worktree-creation'
-import { resolveWorktreeExecutionHost } from '../../../../../../shared/execution-host/worktree-execution-host-resolution'
-import { getIndexedRepoExecutionHostLookup } from '../../ownership/repo-owner-index'
+import { isChatWorkspace } from '../../ownership/chat-workspace-owner'
 
 function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
   return getSetupRunnerCommandPlatformForPath(
@@ -93,10 +88,6 @@ export function ensureWorktreeHasInitialTerminal(
     store.settings !== undefined || store.repos !== undefined || store.worktreesByRepo !== undefined
       ? store
       : useAppStore.getState()
-  const owner = resolveWorktreeExecutionHost(getIndexedRepoExecutionHostLookup(ownerState.repos), {
-    repoId: getRepoIdFromWorktreeId(worktreeId),
-    hostId: opts?.executionHostId ?? ownerState.activeWorkspaceExecutionHostId
-  })
   let sequencedStartup = startup
   if (
     renderableTabCount === 0 &&
@@ -104,13 +95,7 @@ export function ensureWorktreeHasInitialTerminal(
     !setup &&
     !issueCommand &&
     !defaultTabs?.tabs.length &&
-    ownerState.repos?.some(
-      (repo) =>
-        repo.id === getRepoIdFromWorktreeId(worktreeId) &&
-        repo.chatWorkspace &&
-        owner.kind === 'resolved' &&
-        getRepoExecutionHostId(repo) === owner.hostId
-    )
+    isChatWorkspace(ownerState, worktreeId, opts?.executionHostId)
   ) {
     return null
   }

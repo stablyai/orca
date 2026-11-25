@@ -1,12 +1,8 @@
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace/status/workspace-statuses'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { Worktree } from '../../../../shared/worktree/types'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   getRepoMainWorktreeId
 } from '../../../../shared/worktree/id'
-import { normalizeWorkspaceCreatorProvenance } from '../../../../shared/workspace/identity/workspace-creator-provenance'
 
 export function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
   return getRepoMainWorktreeId(repo)
@@ -24,63 +20,4 @@ export function isRuntimeFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string
   )
 }
 
-export function mergeRuntimeFolderWorkspace(
-  repo: Repo,
-  worktreeId: string,
-  meta: Partial<WorktreeMeta>
-): Worktree {
-  const creatorProvenance = normalizeWorkspaceCreatorProvenance(meta.creatorProvenance)
-  const isMainWorktree = worktreeId === getRuntimeFolderWorkspaceRootId(repo)
-  const followsChatName =
-    isMainWorktree &&
-    repo.chatWorkspace &&
-    !meta.displayNameIsPinned &&
-    meta.displayName === repo.chatWorkspace.initialName
-  return {
-    id: worktreeId,
-    ...(meta.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
-    repoId: repo.id,
-    ...(meta.projectId !== undefined ? { projectId: meta.projectId } : {}),
-    ...(meta.hostId !== undefined ? { hostId: meta.hostId } : {}),
-    ...(meta.projectHostSetupId !== undefined
-      ? { projectHostSetupId: meta.projectHostSetupId }
-      : {}),
-    ...(creatorProvenance ? { creatorProvenance } : {}),
-    path: repo.path,
-    head: '',
-    branch: '',
-    isBare: false,
-    isMainWorktree,
-    displayName: followsChatName ? repo.displayName : meta.displayName || repo.displayName,
-    comment: meta.comment || '',
-    linkedIssue: meta.linkedIssue ?? null,
-    linkedPR: meta.linkedPR ?? null,
-    linkedLinearIssue: meta.linkedLinearIssue ?? null,
-    linkedLinearIssueWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? null,
-    linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
-    linkedGitLabMR: meta.linkedGitLabMR ?? null,
-    linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
-    linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: meta.linkedGiteaPR ?? null,
-    linkedWorkItem: meta.linkedWorkItem ?? null,
-    ...(meta.linkedItems !== undefined ? { linkedItems: meta.linkedItems } : {}),
-    linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
-    isArchived: meta.isArchived ?? false,
-    isUnread: meta.isUnread ?? false,
-    isPinned: meta.isPinned ?? false,
-    sortOrder: meta.sortOrder ?? 0,
-    ...(meta.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
-    lastActivityAt: meta.lastActivityAt ?? 0,
-    ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
-    ...(meta.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
-    ...(meta.automationProvenance !== undefined
-      ? { automationProvenance: meta.automationProvenance }
-      : {}),
-    ...(meta.cliProvenance !== undefined ? { cliProvenance: meta.cliProvenance } : {}),
-    ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
-    workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-    diffComments: meta.diffComments,
-    mobileDiffReview: meta.mobileDiffReview
-  }
-}
+export { mergeFolderRepoWorkspace as mergeRuntimeFolderWorkspace } from '../../../../shared/folder-workspaces/folder-repo-workspace-row'
