@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { LOCAL_PATH_LINE_MAX, LOCAL_PATH_SCAN_MAX, localPathWarning } from './peer-mail-local-paths'
 
@@ -100,8 +100,9 @@ describe('local paths in mail to another computer', () => {
       (await localPathWarning(body, 'bot:Docs', 'm4', onlyFile(exists)))?.message ?? null
 
     it('at the end of the scanned region, is read to where the body ends it', async () => {
-      const path = '/tmp/orca-c2-report'
-      const earlier = '/tmp/orca-c2-earlier'
+      // This host's own paths under the temp folder, so the scan admits them on any OS.
+      const path = join(dir, 'orca-c2-report')
+      const earlier = join(dir, 'orca-c2-earlier')
       // The path ends exactly at the region's end.
       const lead = `${'x'.repeat(LOCAL_PATH_SCAN_MAX - path.length - 1)} `
       expect(await warned(`${lead}${path}-archive`, path)).toBeNull()
@@ -115,13 +116,19 @@ describe('local paths in mail to another computer', () => {
     })
 
     it('at the line cap, is never read as the shorter path the cap leaves', async () => {
-      // A real multi-folder path exactly as long as the line cap.
-      const path = `/tmp${'/a'.repeat((LOCAL_PATH_LINE_MAX - 4) / 2)}`
+      // A multi-folder path under this host's temp folder, in its own separators, exactly as long as
+      // the line cap. Its lookups are stubbed, so it needn't exist (or fit the OS's path limit).
+      let path = dir
+      while (LOCAL_PATH_LINE_MAX - path.length > 16) {
+        path += `${sep}a`
+      }
+      path += `${sep}${'b'.repeat(LOCAL_PATH_LINE_MAX - path.length - 1)}`
       expect(path).toHaveLength(LOCAL_PATH_LINE_MAX)
       expect(await warned(`${path}-archive`, path)).toBeNull()
       expect(await warned(path, path)).toContain(`names ${path} on`)
-      expect(await warned(`${path} x`, path)).toContain(`names ${path} on`)
-      expect(await warned(`${path}\nnext`, path)).toContain(`names ${path} on`)
+      for (const after of [' x', '\tx', '\nnext', '\r\nnext']) {
+        expect(await warned(`${path}${after}`, path)).toContain(`names ${path} on`)
+      }
     })
   })
 })
