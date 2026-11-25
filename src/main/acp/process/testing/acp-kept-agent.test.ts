@@ -78,6 +78,18 @@ function keptAgent(exits: boolean) {
 }
 
 describe('kept ACP agent reattach', () => {
+  it('never closes a kept agent while quit hands it to the daemon', async () => {
+    const { child, closes } = keptAgent(false)
+    await child.start(1)
+    const managed = relayedManagedProcess(child)
+    // Quit's own detach is still saving and acking when an abandoned start closes the agent.
+    const detaching = child.detach(policy())
+    await managed.close()
+    await detaching
+    expect(child.handedOff).toBe(true)
+    expect(closes).not.toHaveBeenCalled()
+  })
+
   it('hands a kept agent to the daemon on every close during quit, never closing it', async () => {
     const { child, closes } = keptAgent(false)
     await child.start(1)

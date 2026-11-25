@@ -77,8 +77,10 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
   /** Messages of agent-started turns the app ended: a late chunk of one is dropped, as live. */
   private endedByTurn = new Set<string>()
   private wakeAck: (() => void) | null = null
-  /** The latest prompt answer read: its turn ends only after later lines were read. */
+  /** The running prompt's answer, where it was read: its turn ends only after later lines were. */
   private answeredAt: number | null = null
+  /** The running prompt's request id, whose answer line ends its turn (ids never repeat). */
+  promptId: number | null = null
   /** An earlier cut named fewer than it split: this attach's cuts say so too. */
   private carriedOverflow = false
   /** Child sessions open at that cut: their unnamed messages may resume past the prompt's end. */
@@ -100,9 +102,10 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
     const update = acpSessionUpdateFields(line)
     const kind = update?.sessionUpdate
     if (!update || !kind) {
-      // A prompt's answer, the only one that says why its turn stopped.
-      const prompted = !update && line.includes('"stopReason"') && jsonRpcAnswerId(line) !== null
-      this.answeredAt = prompted ? seq : this.answeredAt
+      // The running prompt's own answer, a result or an error.
+      const prompt = this.promptId
+      this.answeredAt =
+        prompt !== null && !update && jsonRpcAnswerId(line) === prompt ? seq : this.answeredAt
       return
     }
     const session = update.sessionId

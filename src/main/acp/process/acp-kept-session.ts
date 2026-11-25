@@ -126,10 +126,10 @@ export class AcpKeptSession {
       return Promise.reject(new Error('The message did not reach the agent before Orca restarted'))
     }
     const settle = settleAcpSessionCall('session/prompt', PromptResponseSchema, undefined)
-    return this.relayed.turns.track(
-      () => this.calls.adoptEarlier(id, 'session/prompt', settle),
-      true
-    )
+    return this.relayed.turns.track((onId) => {
+      onId(id)
+      return this.calls.adoptEarlier(id, 'session/prompt', settle)
+    }, true)
   }
 
   /** Background work the daemon still counted open at this attach, or saw end while no app was

@@ -151,12 +151,21 @@ class Agent {
   answer(): void {
     if (this.prompt && this.prompt.answeredAt === null) {
       this.openCalls = []
-      this.emit(
-        JSON.stringify({ jsonrpc: '2.0', id: this.prompt.id, result: { stopReason: 'end_turn' } })
-      )
+      // A prompt fails as often as an agent's rate limit would: an error reply ends it too.
+      const reply =
+        this.rand() < 0.3
+          ? { error: { code: -32000, message: 'rate limited' } }
+          : { result: { stopReason: 'end_turn' } }
+      this.emit(JSON.stringify({ jsonrpc: '2.0', id: this.prompt.id, ...reply }))
       this.prompt.answeredAt = this.lines.length
       // An answered prompt's messages never resume.
       this.root.recent = []
+      if (this.rand() < 0.3) {
+        // In the same read: the agent starts its own turn, then answers another request of the app's.
+        this.agentTurn = true
+        this.chunk(this.root)
+        this.emit(JSON.stringify({ jsonrpc: '2.0', id: 9000 + this.nextId++, result: {} }))
+      }
     }
   }
 
@@ -278,7 +287,11 @@ async function run(
         if (line.includes(AGENT_TURN_QUIET)) {
           turns.agentTurnEnded()
         }
-        if (typeof parsed === 'object' && parsed !== null && 'result' in parsed) {
+        if (
+          typeof parsed === 'object' &&
+          parsed !== null &&
+          ('result' in parsed || 'error' in parsed)
+        ) {
           answerPrompt?.('id' in parsed ? parsed.id : null)
         }
       }
@@ -329,18 +342,18 @@ async function run(
     journal.reattach()
     let answerPrompt: ((id: unknown) => void) | null = null
     const track = (id: number, adopted: boolean) =>
-      void turns.track(
-        () =>
-          new Promise<void>((resolve) => {
-            answerPrompt = (answered) => {
-              if (answered === id) {
-                answerPrompt = null
-                resolve()
-              }
+      void turns.track((onId) => {
+        // As the connection does: the prompt's request id, as it is assigned.
+        onId(id)
+        return new Promise<void>((resolve) => {
+          answerPrompt = (answered) => {
+            if (answered === id) {
+              answerPrompt = null
+              resolve()
             }
-          }),
-        adopted
-      )
+          }
+        })
+      }, adopted)
     // An earlier prompt still owed, or answered in the replay, is adopted.
     if (prompt && owed.length > 0) {
       track(prompt.id, true)

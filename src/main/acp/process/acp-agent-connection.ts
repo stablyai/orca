@@ -247,9 +247,9 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     received?: (response: T) => void,
     timeoutMs: number | null = null
   ): Promise<T> {
-    const send = (): Promise<T> =>
+    const send = (onId?: (id: number) => void): Promise<T> =>
       this.kept?.answerStart(method, params, schema, received) ??
-      super.call(method, params, schema, received, timeoutMs)
+      super.call(method, params, schema, received, timeoutMs, onId)
     return method === 'session/prompt' && this.relayTurns ? this.relayTurns.track(send) : send()
   }
 

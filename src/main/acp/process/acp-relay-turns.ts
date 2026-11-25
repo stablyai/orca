@@ -14,17 +14,23 @@ export class AcpRelayTurns {
   private running = false
   private serial = 0
   private current: AcpRelayAckFloor | null = null
+  /** The running prompt's request id. */
+  private promptId: number | null = null
   /** Told when no turn running at an attach can resume: an agent turn's end, a send, an answer. */
   onAgentTurnOver: (() => void) | null = null
 
   /** A fresh floor for each attach, holding a prompt that runs across it. */
   readonly ackFloor = (): ProviderRelayAckFloor => {
     this.current = new AcpRelayAckFloor(this.running)
+    if (this.running && this.promptId !== null) {
+      this.current.promptId = this.promptId
+    }
     return this.current
   }
 
-  /** A prompt sent by `send` (or an earlier app's one, `adopted`) runs until its answer or failure. */
-  track<T>(send: () => Promise<T>, adopted = false): Promise<T> {
+  /** A prompt sent by `send` (or an earlier app's one, `adopted`) runs until its answer or failure;
+   *  `send` names its request id, so the floor knows the answer line that ends it. */
+  track<T>(send: (onId: (id: number) => void) => Promise<T>, adopted = false): Promise<T> {
     const serial = ++this.serial
     this.running = true
     this.current?.startTurn(adopted)
@@ -38,7 +44,14 @@ export class AcpRelayTurns {
         this.onAgentTurnOver?.()
       }
     }
-    const answered = send()
+    const answered = send((id) => {
+      if (serial === this.serial) {
+        this.promptId = id
+        if (this.current) {
+          this.current.promptId = id
+        }
+      }
+    })
     void answered.then(end, end)
     return answered
   }
