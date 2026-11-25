@@ -1,5 +1,9 @@
 // Compute the active tick after scrolling settles to avoid expensive, flickering position reports mid-scroll.
 
+import {
+  projectionBesideStreamedText,
+  stageBesideStreamedText
+} from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { findActiveNativeChatRailItem } from './native-chat-active-rail-item'
@@ -8,7 +12,8 @@ import {
   buildNativeChatRailItems,
   mergeNativeChatRailOutline,
   NATIVE_CHAT_RAIL_MAX_TICKS,
-  nativeChatRailReplyPreview,
+  nativeChatRailPreviewTurn,
+  nativeChatRailTurnReply,
   type NativeChatRailItem,
   type NativeChatRailOutlineEntry,
   type NativeChatRailTurnRows
@@ -60,10 +65,12 @@ export function useNativeChatMessageRail({
   const [wideEnough, setWideEnough] = useState(true)
 
   const previousItemsRef = useRef<readonly NativeChatRailItem[]>([])
+  // Rail rows are the user's prompts, which streamed reply text never changes.
+  const laidOut = stageBesideStreamedText(slots)
   // Rebuilt only when the slots change: scroll and range renders reuse the last build.
   const loadedItems = useMemo(
-    () => buildNativeChatRailItems(slots, previousItemsRef.current),
-    [slots]
+    () => buildNativeChatRailItems(laidOut, previousItemsRef.current),
+    [laidOut]
   )
   // Written after commit so a discarded render cannot become the next one's baseline.
   useEffect(() => {
@@ -176,8 +183,20 @@ export function useNativeChatMessageRail({
     },
     [scheduleRead]
   )
-  const previewReply =
-    previewId === null ? '' : nativeChatRailReplyPreview(turnRows, items, previewId)
+  // The hovered turn is found on the saved rows, then its reply read from the newest rows within it.
+  const savedRows = projectionBesideStreamedText(turnRows.messages)
+  const { turnKeys } = turnRows
+  const previewTurn = useMemo(
+    () =>
+      previewId === null
+        ? null
+        : nativeChatRailPreviewTurn({ messages: savedRows, turnKeys }, items, previewId),
+    [previewId, savedRows, turnKeys, items]
+  )
+  const previewReply = useMemo(
+    () => (previewTurn === null ? '' : nativeChatRailTurnReply(turnRows, previewTurn)),
+    [previewTurn, turnRows]
+  )
 
   return useMemo(
     () => ({
