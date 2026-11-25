@@ -10,10 +10,7 @@ import { routeAllMailboxPages } from './mailbox-page-routing'
  */
 export async function routeSettledDispatchMail(
   runtime: Pick<OrcaRuntimeService, 'notifyMessageArrived'>,
-  db: Pick<
-    OrchestrationDb,
-    'getLatestUnreadMessageSequence' | 'routeUnreadDispatchMailboxToRunMailbox'
-  >,
+  db: OrchestrationDb,
   target: { dispatchId: string; runId: string; signal: AbortSignal | undefined }
 ): Promise<void> {
   const { dispatchId, runId, signal } = target
