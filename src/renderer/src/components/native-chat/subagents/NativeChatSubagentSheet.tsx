@@ -49,15 +49,17 @@ export function NativeChatSubagentSheet({
   }, [agentId, element])
   // An answered prompt disables or removes the control that had focus, which drops focus to the body
   // (a removed node may not even fire focusout); the sheet takes it back so Esc and Tab still reach it.
+  // Only the prompt's controls: a Stop that ends hands its focus to Close itself.
   useEffect(() => {
     const sheet = sheetRef.current
-    if (!sheet) {
+    if (!sheet || !promptSlot) {
       return undefined
     }
     let last: Element | null = null
     let frame = 0
     const onFocusIn = (event: FocusEvent): void => {
-      last = event.target instanceof Element ? event.target : null
+      last =
+        event.target instanceof Element && promptSlot.contains(event.target) ? event.target : null
     }
     const reclaim = (): void => {
       cancelAnimationFrame(frame)
@@ -79,13 +81,7 @@ export function NativeChatSubagentSheet({
     sheet.addEventListener('focusin', onFocusIn)
     sheet.addEventListener('focusout', onFocusOut)
     const observer = new MutationObserver(reclaim)
-    if (promptSlot) {
-      observer.observe(promptSlot, {
-        childList: true,
-        subtree: true,
-        attributeFilter: ['disabled']
-      })
-    }
+    observer.observe(promptSlot, { childList: true, subtree: true, attributeFilter: ['disabled'] })
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
