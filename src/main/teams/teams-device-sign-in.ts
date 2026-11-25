@@ -204,10 +204,9 @@ export async function runTeamsDeviceSignIn(
     status: 'connected',
     connectedAt: now
   }
-  // A disconnect or cancel while Graph answered wins: the grant is never saved.
-  if (signal.aborted) {
-    throw new Error('The Microsoft sign-in was cancelled.')
-  }
-  await saveTeamsAccount(record)
+  // A disconnect or cancel before the save finishes wins: the grant is not kept.
+  await saveTeamsAccount(record, { signal }).catch((error: unknown) => {
+    throw signal.aborted ? new Error('The Microsoft sign-in was cancelled.') : error
+  })
   return record
 }

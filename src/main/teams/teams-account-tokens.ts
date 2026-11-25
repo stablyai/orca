@@ -31,8 +31,9 @@ function refresherFor(tenantId: string): HostOAuthRefresher {
       tokenUrl: teamsTokenUrl(tenantId),
       refreshAheadMs: 5 * 60_000,
       rotates: false,
-      // Not invalid_client: an admin fixes that in the app's settings, and the grant still works after.
-      endedErrors: ['interaction_required', 'unauthorized_client'],
+      // Not invalid_client or unauthorized_client: an admin fixes those in the app or tenant settings,
+      // and the grant may still work after.
+      endedErrors: ['interaction_required'],
       read: () => readTeamsAccount(),
       grantOf: (record) =>
         record.status === 'connected' && record.refreshToken && record.tenantId === tenantId
@@ -52,7 +53,7 @@ function refresherFor(tenantId: string): HostOAuthRefresher {
             expiresAt: refreshed.expiresAt,
             ...(refreshed.scope ? { grantedScopes: refreshed.scope.split(' ') } : {})
           },
-          record.refreshToken ?? undefined
+          { expectedRefreshToken: record.refreshToken ?? undefined }
         ),
       ended: (_id, record) =>
         saveTeamsAccount(
@@ -63,7 +64,7 @@ function refresherFor(tenantId: string): HostOAuthRefresher {
             refreshToken: null,
             accessToken: null
           },
-          record.refreshToken ?? undefined
+          { expectedRefreshToken: record.refreshToken ?? undefined }
         )
     })
     refreshers.set(tenantId, refresher)

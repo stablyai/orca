@@ -55,12 +55,16 @@ export function readTeamsAccount(): Promise<TeamsAccountRecord | null> {
   })
 }
 
-/** With `expectedRefreshToken`, saves only over the grant a refresh started from. */
+/**
+ * With `expectedRefreshToken`, saves only over the grant a refresh started from. With `signal`, a
+ * sign-in cancelled before or during the write leaves nothing on disk.
+ */
 export function saveTeamsAccount(
   record: TeamsAccountRecord,
-  expectedRefreshToken?: string
+  { expectedRefreshToken, signal }: { expectedRefreshToken?: string; signal?: AbortSignal } = {}
 ): Promise<void> {
   return inCredentialFileOrder(lock(), async () => {
+    signal?.throwIfAborted()
     if (expectedRefreshToken !== undefined) {
       const raw = await readFile(accountPath()).catch(() => null)
       const text = raw ? readStoredCredentialToken('Microsoft Teams', raw) : null
@@ -71,16 +75,21 @@ export function saveTeamsAccount(
     }
     await mkdir(teamsDir(), { recursive: true, mode: 0o700 })
     await writeEncryptedCredential('Microsoft Teams', accountPath(), JSON.stringify(record))
+    if (signal?.aborted) {
+      await unlinkAccount()
+      signal.throwIfAborted()
+    }
   })
 }
 
-export function removeTeamsAccount(): Promise<void> {
-  return inCredentialFileOrder(lock(), async () => {
-    // Gone already is removed; any other failure leaves the grant on disk, so it is reported.
-    await unlink(accountPath()).catch((error: unknown) => {
-      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
-        throw error
-      }
-    })
+// Gone already is removed; any other failure leaves the grant on disk, so it is reported.
+const unlinkAccount = () =>
+  unlink(accountPath()).catch((error: unknown) => {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+      throw error
+    }
   })
+
+export function removeTeamsAccount(): Promise<void> {
+  return inCredentialFileOrder(lock(), unlinkAccount)
 }
