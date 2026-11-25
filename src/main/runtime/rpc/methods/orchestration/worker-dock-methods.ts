@@ -83,7 +83,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
       rule: requireOwner
     },
     params: WorkerDockStop,
-    handler: async ({ party, dispatch, requestId }, { runtime, orchestrationMutation }) => {
+    handler: async ({ party, dispatch }, { runtime, orchestrationMutation }) => {
       const db = runtime.getOrchestrationDb()
       const source = workerDockSession(party)
       if (db.getFederatedDispatch(dispatch)) {
@@ -93,7 +93,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
         )
       }
       const fact = db.db
-        .prepare('SELECT source, settlement FROM worker_dock_facts WHERE dispatch_id = ?')
+        .prepare('SELECT source FROM worker_dock_facts WHERE dispatch_id = ?')
         .get(dispatch)
       if (!fact || fact.source !== source) {
         throw new OrchestrationError(
@@ -101,31 +101,8 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
           'This worker is not part of this source session.'
         )
       }
-      db.db
-        .prepare(
-          'INSERT OR IGNORE INTO worker_dock_owner_stops(request_id, source, dispatch_id) VALUES(?, ?, ?)'
-        )
-        .run(requestId, source, dispatch)
-      const request = db.db
-        .prepare(
-          'SELECT source, dispatch_id, receipt FROM worker_dock_owner_stops WHERE request_id = ?'
-        )
-        .get(requestId)
-      if (request?.source !== source || request.dispatch_id !== dispatch) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          'Stop request identity was already used for another worker.'
-        )
-      }
-      if (typeof request.receipt === 'string') {
-        return JSON.parse(request.receipt)
-      }
-      const receipt = await stopWorkerAndHelpers(runtime, dispatch, orchestrationMutation)
-      // Kept only so a retried request replays its receipt instead of stopping again.
-      db.db
-        .prepare('UPDATE worker_dock_owner_stops SET receipt = ? WHERE request_id = ?')
-        .run(JSON.stringify(receipt), requestId)
-      return receipt
+      // The worker-stop owner: a repeat joins the stop in flight or finds the worker settled.
+      return stopWorkerAndHelpers(runtime, dispatch, orchestrationMutation)
     }
   }),
   defineOrchestrationStreamingMethod({

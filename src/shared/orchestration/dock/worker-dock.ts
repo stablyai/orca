@@ -123,4 +123,7 @@ export function compareWorkerDockEntries(
 }
 
 export const WorkerDockResultRead = WorkerDockSource.extend({ dispatch: z.string() })
-export const WorkerDockStop = WorkerDockResultRead.extend({ requestId: z.string().min(1) })
+/** `requestId` is unread here; clients keep sending it because older hosts still require it. */
+export const WorkerDockStop = WorkerDockResultRead.extend({
+  requestId: z.string().min(1).optional()
+})
