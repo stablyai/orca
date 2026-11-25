@@ -1193,8 +1193,6 @@
       "unchangedLines_many": "{{count}} linhas inalteradas"
     },
     "diffReviewDrawers": {
-      "addNote": "Adicionar nota",
-      "cancelNote": "Cancelar nota",
       "clearSentNotes": "Limpar notas enviadas",
       "copyNotes": "Copiar notas",
       "deleteNote": "Excluir nota",
@@ -1203,12 +1201,10 @@
       "discardTitle": "Descartar arquivo",
       "editNote": "Editar nota",
       "fileNote": "Nota do arquivo",
-      "lineNumber": "Linha {{lineNumber}}",
       "loadingSessions": "Carregando sessões de agentes…",
       "newAgentSession": "Nova sessão de agente",
       "openInSession": "Abrir na sessão",
       "reviewNote": "Nota de revisão",
-      "saveLineNote": "Salvar nota na linha {{lineNumber}}",
       "sendNotes": "Enviar notas",
       "sendNotesLabel": "Enviar notas ao agente",
       "sendUnsentNotes": "Enviar notas não enviadas",
@@ -1230,10 +1226,7 @@
       "discardChanges": "Descartar alterações",
       "rangeLine": "Linha {{line}}",
       "rangeLines": "Linhas {{startLine}}–{{line}}",
-      "sendToAnAgent": "Enviar para agente",
       "rangePlaceholder": "O que deve mudar aqui?",
-      "commentOnGitHub": "Comente no GitHub",
-      "sendToAgent": "Enviar para {{agent}}",
       "viewedFiles_many": "{{count}} arquivos visualizados",
       "notes_many": "{{count}} notas"
     },
@@ -1262,7 +1255,6 @@
       "jumpToFile": "{{fileName}}, pule para outro arquivo"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Adicionar nota na linha {{number}}",
       "addedLine": "Linha adicionada",
       "addedLineNumber": "Linha {{number}} adicionada",
       "contextLine": "Linha de contexto",
@@ -2425,15 +2417,7 @@
       "unresolve": "Reabrir",
       "yearsAgo_many": "há {{count}} anos",
       "yearsAgo_one": "há {{count}} ano",
-      "yearsAgo_other": "há {{count}} anos",
-      "resolved": "resolvido",
-      "openOnGitHub": "Abrir comentário no GitHub",
-      "replyToComment": "Responder ao comentário",
-      "editComment": "Editar comentário",
-      "deleteComment": "Excluir comentário",
-      "unresolveThread": "Reabrir discussão",
-      "resolveThread": "Resolver thread",
-      "replyPlaceholder": "Escreva uma resposta…"
+      "yearsAgo_other": "há {{count}} anos"
     },
     "commentsSection": {
       "comment": "Comentar",
@@ -2443,18 +2427,8 @@
       "noDescription": "Nenhuma descrição fornecida.",
       "showMore": "Mostrar mais {{count}}",
       "title": "Comentários",
-      "all": "Todos",
-      "humans": "Humanos",
-      "bots": "Robôs",
-      "noBotComments": "Nenhum comentário de bot.",
-      "noHumanComments": "Nenhum comentário humano.",
-      "commentsLoadFailed": "Não foi possível carregar os comentários. Toque em atualizar para tentar novamente.",
-      "showMoreOf": "Mostrar {{count}} mais de {{remaining}}",
-      "addCommentPlaceholder": "Adicione um comentário…",
       "resolvedThreadSingle": "Thread resolvida de {{author}}",
       "resolvedThreadCount": "Tópico resolvido por {{author}} ({{count}})",
-      "resolvedCommentSingle": "Comentário resolvido de {{author}}",
-      "resolvedCommentCount": "Comentário resolvido por {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Não foi possível carregar os comentários."
     },
     "linkPrForm": {
@@ -2566,14 +2540,6 @@
       "stateMerged": "Mergeado",
       "stateOpen": "Aberto",
       "unavailable": "Verificações indisponíveis"
-    },
-    "prCommentAudienceLabels": {
-      "all": "Todos",
-      "bots": "Bots",
-      "humans": "Humanos",
-      "noBotComments": "Nenhum comentário de bot.",
-      "noComments": "Ainda não há comentários.",
-      "noHumanComments": "Nenhum comentário humano."
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} não está vinculada a um PR aberto.",
@@ -5802,7 +5768,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",

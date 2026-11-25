@@ -30,6 +30,7 @@ import { mobileDiffReviewNotesForItem } from './review-notes/mobile-diff-comment
 import { useMobileDiffReviewNoteDraft } from './review-notes/use-mobile-diff-review-note-draft'
 import { workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
+import type { LineRange } from './diff-screen/MobileDiffReviewLines'
 
 const NO_COMMENTS: readonly DiffComment[] = []
 
@@ -147,6 +148,15 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const filteredQueue = useMemo(() => filterMobileDiffReviewQueue(queue, filter), [filter, queue])
   const { currentIndex, currentItem, selectIndex, selectKey, moveSelection } =
     useMobileDiffReviewSelection(filteredQueue, initialTarget)
+  // Lines picked on the open file; another file starts with none.
+  const [selection, setSelection] = useState<{ key: string; range: LineRange } | null>(null)
+  const lineSelection =
+    selection !== null && selection.key === currentItem?.key ? selection.range : null
+  const selectLines = useCallback(
+    (range: LineRange | null) =>
+      setSelection(range && currentItem ? { key: currentItem.key, range } : null),
+    [currentItem]
+  )
   const reviewedCount = useMemo(
     () => filteredQueue.filter((item) => item.isReviewed).length,
     [filteredQueue]
@@ -237,6 +247,8 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     currentItem,
     diffState,
     fileNotes: commentsByLine.get(0) ?? [],
+    lineSelection,
+    selectLines,
     filter,
     filteredQueue,
     queue,
