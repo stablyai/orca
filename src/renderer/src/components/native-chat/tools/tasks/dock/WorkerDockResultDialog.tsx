@@ -42,7 +42,7 @@ function resultGlyph(outcome: WorkerDockResult['outcome'] | undefined): Glyph | 
   if (outcome === 'failed' || outcome === 'unexpected') {
     return 'failed'
   }
-  // Stopped by you is neither a success nor a failure: the label alone says it.
+  // A requested stop is neither a success nor a failure: the label alone says it.
   return outcome === 'stopped' ? null : 'done'
 }
 

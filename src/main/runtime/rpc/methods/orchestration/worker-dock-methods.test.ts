@@ -12,6 +12,8 @@ import { RUNTIME_CAPABILITIES } from '../../../../../shared/remote-runtime/proto
 // The worker's own process is the only fake: fence and settle run on the real database, and each
 // stop that got past the fence counts one kill.
 const kills = vi.hoisted(() => vi.fn<(dispatchId: string) => void>())
+// Holds a stop between its kill and its settle, so a second press arrives while it is in flight.
+const processExit = vi.hoisted(() => ({ wait: (): Promise<void> => Promise.resolve() }))
 vi.mock('./worker/stop/single-worker-stop', () => ({
   stopSingleWorker: async (
     runtime: { getOrchestrationDb: () => OrchestrationDb },
@@ -23,7 +25,7 @@ vi.mock('./worker/stop/single-worker-stop', () => ({
       return { dispatchId, state: 'stopped', alreadySettled: true, processAction: 'none' }
     }
     kills(dispatchId)
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await processExit.wait()
     db.settleWorkerStop(dispatchId)
     return {
       dispatchId,
@@ -39,6 +41,7 @@ vi.mock('./worker/release/worker-bound-terminal-close', () => ({
 
 const databases: OrchestrationDb[] = []
 afterEach(() => {
+  processExit.wait = () => Promise.resolve()
   for (const db of databases.splice(0)) {
     db.close()
   }
@@ -225,7 +228,12 @@ it('stops a worker once for a double-clicked and then retried dock Stop', async 
       requestId
     })
 
-  const [first, second] = await Promise.all([press('click-1'), press('click-2')])
+  let exit!: () => void
+  processExit.wait = () => new Promise<void>((resolve) => (exit = resolve))
+  const presses = Promise.all([press('click-1'), press('click-2')])
+  await vi.waitFor(() => expect(kills).toHaveBeenCalled())
+  exit()
+  const [first, second] = await presses
   const retried = await press('click-1')
 
   expect(kills).toHaveBeenCalledTimes(1)
