@@ -21,6 +21,7 @@
     "cli",
     "---Mobile---",
     "mobile",
+    "mobile-public-relay",
     "android-apk",
     "---Notifications & Inbox---",
     "notifications",

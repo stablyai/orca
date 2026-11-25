@@ -1,0 +1,165 @@
+---
+title: Self-host a mobile relay
+description: Connect Orca mobile to a roaming desktop through your own TLS reverse proxy and an SSH reverse tunnel.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+Use this setup when you want your phone to reach Orca on a desktop that changes networks, and you can run a public relay server you control. For a managed connection, use [Orca Relay](/docs/mobile#pairing). For a private connection, use the same LAN or a tailnet.
+
+```text
+Phone connects to wss://relay.example.com:443
+    NGINX terminates TLS on the relay
+    NGINX proxies to 127.0.0.1:18445 on the relay
+    SSH reverse tunnel carries traffic to 127.0.0.1:6768 on the desktop
+```
+
+The desktop opens SSH outbound to the relay. It can change networks without changing the address saved on the phone. Keep Orca current on both devices, and keep the desktop awake and Orca running while you need access.
+
+<Callout title="Keep the Orca ports private">
+  Publish the relay's TLS proxy on TCP `443` and keep its SSH service reachable from the desktop.
+  Leave the SSH forward bound to the relay's loopback address. Keep the raw Orca listener and the
+  forwarded port out of public firewall rules, cloud security groups, and router port forwards.
+</Callout>
+
+## 1. Configure the relay's SSH server
+
+Use a Linux relay with OpenSSH, NGINX, a DNS name pointed at it, and a publicly trusted TLS certificate for that name. If the server is behind a router, forward HTTPS to the proxy and make SSH reachable from the desktop. Use an unused loopback port on the relay. This example uses `18445` and assumes the desktop uses Orca's default port `6768`. If your desktop uses another port, substitute it in the tunnel destination.
+
+On the desktop, create a dedicated key:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/orca-relay-ed25519
+```
+
+On the relay, create a dedicated, unprivileged account named `orca-tunnel`. In its `~/.ssh/authorized_keys`, put this prefix on the public key you just generated, replacing the placeholder with the key's base64 field. Keep the account's `.ssh` directory and key file private to that account.
+
+```text
+restrict,port-forwarding,permitlisten="127.0.0.1:18445" ssh-ed25519 PUBLIC_KEY_BASE64
+```
+
+Add this block at the end of `/etc/ssh/sshd_config` (or use an equivalent per-account configuration):
+
+```text
+Match User orca-tunnel
+    AuthenticationMethods publickey
+    AllowTcpForwarding remote
+    AllowStreamLocalForwarding no
+    GatewayPorts no
+    PermitListen 127.0.0.1:18445
+    MaxSessions 0
+    ClientAliveInterval 15
+    ClientAliveCountMax 3
+```
+
+`restrict` disables forwarding unless `port-forwarding` re-enables it. `AllowTcpForwarding remote` limits that permission to reverse TCP forwards. `MaxSessions 0` blocks shells, commands, and subsystems while allowing the tunnel. The server keepalives release a stale forward after SSH stops responding.
+
+Keep your current admin session open, validate the file, then reload SSH. On Debian and Ubuntu:
+
+```bash
+sudo sshd -t && sudo systemctl reload ssh
+```
+
+Use `sshd` as the systemd unit name on Fedora and RHEL. If a change appears to have no effect, check the unit status and SSH logs. Open a new SSH connection to test the new settings.
+
+## 2. Open the tunnel from the desktop
+
+Add this entry near the top of the desktop user's `~/.ssh/config`. If the relay uses a separate hostname or port for SSH, set `HostName` or add `Port` accordingly.
+
+```ssh-config
+Host orca-public-relay
+    HostName relay.example.com
+    User orca-tunnel
+    IdentityFile ~/.ssh/orca-relay-ed25519
+    IdentitiesOnly yes
+    ExitOnForwardFailure yes
+    ServerAliveInterval 15
+    ServerAliveCountMax 3
+    RemoteForward 127.0.0.1:18445 127.0.0.1:6768
+```
+
+Start Orca, then run this on the desktop. Verify the relay's SSH host key against a trusted copy when connecting for the first time. Leave the command running while you test the proxy and pair the phone.
+
+```bash
+ssh -N orca-public-relay
+```
+
+From a separate admin shell **on the relay**, check the local socket and test HTTP through the tunnel:
+
+```bash
+ss -ltn 'sport = :18445'
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18445/
+```
+
+The listener should be `127.0.0.1:18445`. A `200` from the desktop's web client confirms that HTTP reached Orca through SSH. The public WebSocket path and pairing still need their own checks.
+
+## 3. Serve secure WebSockets through the relay
+
+Put the following in NGINX's `http` context, for example in a site file included from that context. Replace the example hostname and certificate paths. The certificate must cover the hostname and include its chain. Arrange automatic renewal and an NGINX reload after renewal. If DNS also advertises IPv6, add `listen [::]:443 ssl;` and allow TCP `443` over IPv6.
+
+```nginx
+map $http_upgrade $orca_connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 443 ssl;
+    server_name relay.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/relay.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/relay.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:18445;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $orca_connection_upgrade;
+        proxy_read_timeout 1h;
+    }
+}
+```
+
+On a systemd relay, validate and reload NGINX:
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Check `https://relay.example.com/` from outside the relay's network for DNS, TLS, and HTTP reachability. For a WebSocket-only check, use the following command from the same external network. Expect `101 Switching Protocols`. The probe can time out or be closed after the upgrade because it sends no Orca handshake.
+
+```bash
+curl --http1.1 -sS -D - -o /dev/null --max-time 5 \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  https://relay.example.com/
+```
+
+## 4. Pair or update the phone
+
+1. On the desktop, open **Settings → Mobile → Pair a phone** and choose **LAN** under **Connection**. This mode uses the custom address directly.
+2. Under **This computer’s address**, open the picker, select **Add custom address…**, enter `wss://relay.example.com:443`, and click **Use address**. The address tells the phone where to connect.
+3. Click **Generate QR code** if a code has not already appeared. In Orca Mobile, tap **Pair desktop** (or **Pair a desktop** in the Desktops list) and scan the code. Test from cellular and check that the host connects and loads a worktree.
+
+To move an existing direct pairing to a new relay address for the **same** desktop, open the phone's host card **⋯** menu, select **Edit host**, replace **Address** with the full `wss://` address, and tap the checkmark (**Save host**). The phone reconnects with the existing token and desktop identity. Include the scheme and port to make both explicit. See [Edit a paired host](/docs/mobile#edit-a-paired-host).
+
+Treat the QR code and copied pairing link as secrets. The direct pairing offer gives the phone a per-device token and the desktop's public key. The TLS proxy terminates the phone's TLS connection and can see HTTP headers, WebSocket handshake metadata, and the application handshake's public fields. Orca authenticates the phone and encrypts its RPC traffic between the paired endpoints at the application layer. The phone sends its device token inside that encrypted exchange. The public proxy still offers a path to Orca's HTTP and WebSocket endpoints, so keep the relay patched and under your control. See [Access and trust](/docs/mobile#access-and-trust) for paired-device permissions and revocation.
+
+## Keep the tunnel connected
+
+After the manual test succeeds, use your desktop's service manager to run `ssh -N -o BatchMode=yes -o StrictHostKeyChecking=yes orca-public-relay` and restart it on exit. Run it as the desktop user with access to the configured key and verified host key. The process must be able to use the key without a prompt.
+
+- **macOS** — use a `launchd` LaunchAgent with `KeepAlive` and a restart delay such as `ThrottleInterval` of 15 seconds.
+- **Linux** — use a systemd user service with `Restart=always` and `RestartSec=15s`.
+- **Windows** — use a Scheduled Task at logon with `ssh.exe` and restart on failure enabled.
+
+The client's `ServerAlive` settings make SSH exit when the relay stops responding, so the service manager can reconnect. `ExitOnForwardFailure` makes SSH exit if the relay refuses the listening port. If you share a relay among several desktops, give each desktop its own hostname, proxy upstream port, and SSH account and key restricted to that port.
+
+## Troubleshooting
+
+- **`remote port forwarding failed`** — check whether another relay process already listens on the port, and make sure the bind address and port match in `RemoteForward`, `PermitListen`, and `authorized_keys`. After a network change, allow the relay's SSH keepalives to release the stale forwarding socket.
+- **The proxy returns `502`** — repeat the loopback socket and HTTP checks on the relay. If the socket is present but HTTP fails, confirm Orca is running and the tunnel targets the desktop's actual listening port.
+- **HTTPS works but the WebSocket upgrade fails** — check the proxy's HTTP/1.1 and Upgrade settings. If TLS fails first, check DNS, certificate hostname, the full certificate chain, and any firewall between the phone and relay.
+- **The upgrade works but the phone cannot connect** — verify the saved `wss://` address, keep Orca running, and generate a fresh code if the offer expired. A later authentication error can mean the device was revoked or the address now points to a different Orca desktop.
