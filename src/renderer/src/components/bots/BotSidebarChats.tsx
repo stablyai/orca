@@ -6,10 +6,15 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { selectActiveBotGroupRoomId } from '@/lib/bot-group-catalog'
 import { useBotGroups } from '@/lib/bot-group-list'
+import { isSameBot } from '@/lib/bot-hosts'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
+import {
+  isLocalExecutionHost,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import {
   botChatFoldKey,
   chatFoldSummary,
@@ -148,18 +153,33 @@ export function BotSidebarGroupReplies({
   const t = useTranslate()
   const groups = useBotGroups()
   const activeRoom = useAppStore(selectActiveBotGroupRoomId)
+  const { id, hostId } = bot
   const previews = useMemo(
     () =>
       groups
         .flatMap((group) => {
-          const reply =
-            group.hostId === bot.hostId
-              ? group.replyPreviews?.find((candidate) => candidate.botId === bot.id)
-              : undefined
+          const reply = group.replyPreviews?.find((candidate) => {
+            if (candidate.source === 'mail' && !isLocalExecutionHost(group.hostId)) {
+              return false
+            }
+            return isSameBot(
+              { id, hostId },
+              {
+                id: candidate.botId,
+                hostId:
+                  candidate.source === 'mail'
+                    ? toRuntimeExecutionHostId(candidate.environmentId)
+                    : group.hostId
+              }
+            )
+          })
           return reply ? [{ group, reply }] : []
         })
-        .sort((left, right) => right.reply.at - left.reply.at),
-    [bot.hostId, bot.id, groups]
+        .sort(
+          (left, right) =>
+            (right.reply.at ?? Number.MIN_SAFE_INTEGER) - (left.reply.at ?? Number.MIN_SAFE_INTEGER)
+        ),
+    [hostId, id, groups]
   )
   return (
     <>

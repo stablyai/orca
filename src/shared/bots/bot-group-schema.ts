@@ -74,13 +74,26 @@ export const BotGroupLatestSchema = z.object({
   at: z.number()
 })
 
-const BotGroupReplyPreviewSchema = BotGroupLatestSchema.pick({ text: true, at: true }).extend({
+const BotGroupReplyPreviewBase = BotGroupLatestSchema.pick({ text: true }).extend({
+  at: z.number().nullable(),
   botId: z.string(),
   messageId: z.string(),
-  sequence: z.number().int().positive(),
-  operationId: z.string(),
-  replyMessageId: z.string().optional()
+  sequence: z.number().int().positive()
 })
+const BotGroupReplyPreviewSchema = z.union([
+  BotGroupReplyPreviewBase.extend({
+    source: z.literal('turn').optional(),
+    operationId: z.string(),
+    replyMessageId: z.string().optional()
+  }),
+  BotGroupReplyPreviewBase.extend({
+    source: z.literal('mail'),
+    environmentId: z.string(),
+    requestId: z.string(),
+    receivedSequence: z.number().optional(),
+    replyMessageId: z.string().optional()
+  })
+])
 
 export const BotGroupSchema = z.object({
   id: z.string().min(1),
@@ -155,6 +168,9 @@ export const BotGroupRemoteAskSchema = BotGroupRemoteMemberSchema.extend({
       z.object({
         kind: z.literal('answer'),
         text: z.string(),
+        messageId: z.string().optional(),
+        receivedAt: z.number().nullable().optional(),
+        receivedSequence: z.number().optional(),
         /** Shortened here; the whole answer is in this computer's mail. */
         truncated: z.literal(true).optional()
       }),

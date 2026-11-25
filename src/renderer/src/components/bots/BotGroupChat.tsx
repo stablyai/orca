@@ -317,7 +317,7 @@ export function BotGroupChat({
                   </div>
                 ) : (
                   messages.map((message) => (
-                    <div key={message.id} className="space-y-5">
+                    <div key={message.id} data-group-post={message.id} className="space-y-5">
                       {ownerRows.has(message.id) ? (
                         <MessageRow
                           message={ownerRows.get(message.id)!}

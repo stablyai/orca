@@ -10,6 +10,9 @@ import {
   BotGroupReorder
 } from '../../../../shared/bots/bot-group'
 import { runtimeBotGroups } from '../../../bots/bot-group-runtime'
+import { botChatReads } from '../../../bots/bot-chat-reads'
+import { recoverBotGroupReplies } from '../../../bots/bot-group-completed-replies'
+import { collectRemoteAnswers } from '../../../bots/bot-group-remote-answers'
 import { defineMethod, type RpcContext } from '../core'
 
 /** Rooms are run by their human owner, on the desktop or a paired device. */
@@ -39,14 +42,21 @@ export const BOT_GROUP_METHODS = [
     name: 'bots.groups.list',
     permission: 'workspace',
     params: BotGroupList,
-    handler: (params, { runtime, caller }) => {
+    handler: async (params, { runtime, caller }) => {
       const includeReplyPreviews =
         params.includeReplyPreviews === true &&
         (caller?.kind === 'desktop' || (caller?.kind === 'paired-device' && !caller.agent))
+      if (!runtime.bots.enabled()) {
+        return { groups: [] }
+      }
+      const groups = runtimeBotGroups(runtime)
       return {
-        groups: runtime.bots.enabled()
-          ? runtimeBotGroups(runtime).store.listing(includeReplyPreviews)
-          : []
+        groups: await groups.store.listing(includeReplyPreviews, (messages) =>
+          recoverBotGroupReplies(
+            collectRemoteAnswers(groups, messages, true),
+            botChatReads(runtime)
+          )
+        )
       }
     }
   }),

@@ -26,6 +26,7 @@ export function BotGroupRemoteAsk({ ask }: { ask: RemoteAsk }): React.JSX.Elemen
   return (
     <section
       data-group-remote-ask={ask.requestId}
+      data-group-remote-reply={ask.reply?.kind === 'answer' ? ask.reply.messageId : undefined}
       data-group-bot={`${ask.environmentId}:${ask.botId}`}
       className="space-y-2"
     >

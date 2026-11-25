@@ -14,7 +14,11 @@ import type {
   BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { createBotGroupTables, withoutClearedRoster } from './bot-group-store-tables'
-import { BOT_GROUP_LISTING_SQL, BotGroupListing } from './bot-group-listing'
+import {
+  BOT_GROUP_LISTING_SQL,
+  BotGroupListing,
+  type RecoverGroupReplies
+} from './bot-group-listing'
 
 // The row's sequence is the message order; the record keeps everything else.
 const MessageRecordSchema = BotGroupMessageSchema.omit({ sequence: true })
@@ -39,11 +43,11 @@ export class BotGroupStore {
   }
 
   /** The groups as the sidebar lists them: each with its saved place and newest post. */
-  listing(includeReplyPreviews = false): BotGroup[] {
+  listing(includeReplyPreviews = false, recover?: RecoverGroupReplies): Promise<BotGroup[]> {
     const groups = this.list()
     const missing = includeReplyPreviews ? this.sidebar.missingPreviews(groups) : []
     const rows = this.db.prepare(BOT_GROUP_LISTING_SQL).all(JSON.stringify(missing))
-    return this.sidebar.decorate(groups, rows, missing, includeReplyPreviews)
+    return this.sidebar.decorate(groups, rows, missing, includeReplyPreviews, recover)
   }
 
   // Kept beside the record, so a membership edit that writes the record back keeps them.
