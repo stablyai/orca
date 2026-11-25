@@ -125,7 +125,8 @@ export function ConnectionDiagnosticsView({
         }
         onBack={onBack}
         trailing={
-          hasHost ? (
+          // The app's own log copies even before a computer is paired, when it matters most.
+          hasHost || entries.length > 0 ? (
             <NavBarButton
               ref={menuAnchor}
               icon={Ellipsis}
@@ -148,7 +149,13 @@ export function ConnectionDiagnosticsView({
             <SettingsSection first>
               <ListRow
                 key="status"
-                title={hasHost ? (canPickHost ? status : hostName) : status}
+                title={
+                  !hasHost
+                    ? t('diagnostics.connectionDiagnosticsView.noHosts', 'No paired hosts.')
+                    : canPickHost
+                      ? status
+                      : hostName
+                }
                 subtitle={hasHost && !canPickHost ? status : undefined}
               />
               {diagnosis ? (
