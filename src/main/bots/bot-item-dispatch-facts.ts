@@ -42,6 +42,9 @@ export function linksOutsideLinkedChains(
   linked: readonly BotItemLinkInput[],
   links: readonly BotItemLinkInput[]
 ): BotItemLinkInput[] {
+  if (!links.some((link) => link.kind === 'dispatch')) {
+    return [...links]
+  }
   const chains = new Set(
     linked.flatMap((link) => (link.kind === 'dispatch' ? [dispatchChainRoot(db, link.ref)] : []))
   )
