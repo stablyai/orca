@@ -61,7 +61,7 @@ async function openCursorChat(resumeSessionId: string | null) {
       : undefined
   }
   const lane = { dispose: () => {}, translator: { finishLoad: () => {} } }
-  const started = initializeAcpStructuredSession({
+  const input = {
     acquire: { identity: { sessionId: 'chat-1' }, fence: 1 },
     signal: new AbortController().signal,
     deps: {},
@@ -77,8 +77,11 @@ async function openCursorChat(resumeSessionId: string | null) {
     },
     abandoned: () => false,
     lanes: { create: () => lane, clear: () => {}, finishLoad: () => null }
+  }
+  const started = initializeAcpStructuredSession(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start ends right after the open, so only the members above are read.
-  } as unknown as Parameters<typeof initializeAcpStructuredSession>[0])
+    input as unknown as Parameters<typeof initializeAcpStructuredSession>[0]
+  )
   await expect(started).rejects.toThrow('closed while starting')
   return { opens, rulesAfter: await readRules(cwd), dotCursor: await readdir(cwd) }
 }
