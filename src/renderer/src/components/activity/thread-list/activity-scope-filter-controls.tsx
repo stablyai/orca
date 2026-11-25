@@ -1,17 +1,11 @@
 import React from 'react'
 import { useAppStore } from '@/store'
-import {
-  DropdownMenuCheckboxItem,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenuCheckboxItem, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import SidebarRepositoryFilterSection from '@/components/sidebar/worktree-list/controls/SidebarRepositoryFilterSection'
+import { SidebarScopeFilterMenu } from '@/components/sidebar/worktree-list/controls/SidebarScopeFilterMenu'
 import { SidebarHostScopeMenuSection } from '@/components/sidebar/worktree-list/controls/SidebarHostScopeMenuSection'
 import {
   getSidebarHostVisibilityLabel,
@@ -141,45 +135,37 @@ function ActivityAgentFilterMenu(): React.JSX.Element {
           })
 
   return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger>
-        <span className="flex flex-1 items-center justify-between gap-3">
-          <span>{t('auto.components.activity.ActivityScopeFilterControls.agents', 'Agents')}</span>
-          <span className="min-w-0 truncate text-2xs font-medium text-muted-foreground">
-            {visibilityLabel}
-          </span>
+    <SidebarScopeFilterMenu
+      title={t('auto.components.activity.ActivityScopeFilterControls.agents', 'Agents')}
+      visibilityLabel={visibilityLabel}
+      options={activityAgents}
+      selectedIds={agentTypes}
+      onChange={setAgentTypes}
+      placeholders={{
+        filter: t(
+          'auto.components.activity.ActivityScopeFilterControls.filterAgents',
+          'Filter agents...'
+        ),
+        add: t('auto.components.activity.ActivityScopeFilterControls.addAgent', 'Add agent...')
+      }}
+      emptyMessages={{
+        unfiltered: t(
+          'auto.components.activity.ActivityScopeFilterControls.noAgentsMatch',
+          'No agents match'
+        ),
+        filtered: t(
+          'auto.components.activity.ActivityScopeFilterControls.noUnselectedAgentsMatch',
+          'No unselected agents match'
+        )
+      }}
+      getLabel={(agent) => agent.label}
+      renderOption={({ id, label }) => (
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <AgentIcon agent={id} size={13} />
+          <span className="truncate">{label}</span>
         </span>
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="w-56" scrollable>
-        <DropdownMenuCheckboxItem
-          checked={agentTypes.length === 0}
-          onCheckedChange={() => setAgentTypes([])}
-          onSelect={(event) => event.preventDefault()}
-        >
-          {allAgentsLabel}
-        </DropdownMenuCheckboxItem>
-        {activityAgents.length > 0 ? <DropdownMenuSeparator /> : null}
-        {activityAgents.map(({ id, label }) => {
-          const checked = agentTypes.includes(id)
-          return (
-            <DropdownMenuCheckboxItem
-              key={id}
-              checked={checked}
-              disabled={checked && agentTypes.length === 1}
-              onCheckedChange={() =>
-                setAgentTypes(
-                  checked ? agentTypes.filter((type) => type !== id) : [...agentTypes, id]
-                )
-              }
-              onSelect={(event) => event.preventDefault()}
-            >
-              <AgentIcon agent={id} size={13} />
-              <span className="truncate">{label}</span>
-            </DropdownMenuCheckboxItem>
-          )
-        })}
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
+      )}
+    />
   )
 }
 

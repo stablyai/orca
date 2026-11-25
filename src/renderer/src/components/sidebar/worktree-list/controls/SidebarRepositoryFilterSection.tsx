@@ -1,11 +1,9 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useMemo } from 'react'
+import { Server } from 'lucide-react'
 import { useAppStore } from '@/store'
-import {
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger
-} from '@/components/ui/dropdown-menu'
-import { SidebarProjectFilterPanel } from './SidebarProjectFilterPanel'
+import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
+import { searchRepos } from '@/lib/workspace/catalog/repo-search'
+import { SidebarScopeFilterMenu } from './SidebarScopeFilterMenu'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
 import { translate } from '@/i18n/i18n'
@@ -62,77 +60,72 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   const filterRepoIds = filterRepoIdsProp ?? workspaceFilterRepoIds
   const setFilterRepoIds = setFilterRepoIdsProp ?? setWorkspaceFilterRepoIds
 
-  const canFilterRepos = repos.length > 1
   // Ignore removed repo IDs so counts cannot imply a stale active filter.
-  const selectedRepoIdSet = useMemo(() => {
-    const set = new Set<string>()
-    for (const repo of repos) {
-      if (filterRepoIds.includes(repo.id)) {
-        set.add(repo.id)
-      }
-    }
-    return set
-  }, [repos, filterRepoIds])
-  const selectedCount = selectedRepoIdSet.size
-  const hasRepoFilter = selectedCount > 0
-  const selectedRepos = useMemo(
-    () => repos.filter((repo) => selectedRepoIdSet.has(repo.id)),
-    [repos, selectedRepoIdSet]
-  )
-  const availableRepos = useMemo(
-    () => repos.filter((repo) => !selectedRepoIdSet.has(repo.id)),
-    [repos, selectedRepoIdSet]
-  )
-  const visibilityLabel = getProjectFilterVisibilityLabel({ selectedCount, selectedRepos }, t)
-
-  const clearRepos = useCallback(() => setFilterRepoIds([]), [setFilterRepoIds])
-
-  if (!canFilterRepos) {
+  const selectedRepos = repos.filter((repo) => filterRepoIds.includes(repo.id))
+  if (repos.length < 2) {
     return null
   }
 
   return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger>
-        <span className="flex flex-1 items-center justify-between gap-3">
-          <span>
-            {t('auto.components.sidebar.SidebarRepositoryFilterSection.7679f0c268', 'Projects')}
-          </span>
-          <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground">
-            {visibilityLabel}
-          </span>
-        </span>
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent
-        className="w-64"
-        data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
-      >
-        <div className="flex items-center justify-between px-2 py-1">
-          <span className="text-[11px] font-semibold text-muted-foreground">
-            {t('auto.components.sidebar.SidebarRepositoryFilterSection.7679f0c268', 'Projects')}
-            {hasRepoFilter && (
-              <span className="ml-1.5 font-medium text-foreground">· {selectedCount}</span>
+    <SidebarScopeFilterMenu
+      title={t('auto.components.sidebar.SidebarRepositoryFilterSection.7679f0c268', 'Projects')}
+      visibilityLabel={getProjectFilterVisibilityLabel(
+        { selectedCount: selectedRepos.length, selectedRepos },
+        t
+      )}
+      options={repos}
+      selectedIds={filterRepoIds}
+      onChange={setFilterRepoIds}
+      placeholders={{
+        filter: t(
+          'auto.components.sidebar.SidebarRepositoryFilterSection.83a820fa71',
+          'Filter projects...'
+        ),
+        add: t(
+          'auto.components.sidebar.SidebarRepositoryFilterSection.5a273fbfce',
+          'Add project...'
+        )
+      }}
+      emptyMessages={{
+        unfiltered: t(
+          'auto.components.sidebar.SidebarRepositoryFilterSection.4815c70605',
+          'No projects match'
+        ),
+        filtered: t(
+          'auto.components.sidebar.SidebarRepositoryFilterSection.bbbc6e8e3b',
+          'No unselected projects match'
+        )
+      }}
+      getLabel={(repo) => repo.displayName}
+      getSearchDetail={(repo) => repo.path}
+      findFirstMatch={(available, query) => searchRepos(available, query)[0]}
+      renderOption={(repo, selected) =>
+        selected ? (
+          <RepoBadgeLabel
+            name={repo.displayName}
+            color={repo.badgeColor}
+            repo={repo}
+            className="max-w-[8rem]"
+          />
+        ) : (
+          <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
+            <RepoBadgeLabel
+              name={repo.displayName}
+              color={repo.badgeColor}
+              repo={repo}
+              className="max-w-full"
+            />
+            {repo.connectionId && (
+              <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
+                <Server className="size-2.5" />
+                {t('auto.components.sidebar.SidebarRepositoryFilterSection.2656053db4', 'SSH')}
+              </span>
             )}
           </span>
-          <button
-            type="button"
-            onClick={clearRepos}
-            className="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent"
-            disabled={!hasRepoFilter}
-          >
-            {t('auto.components.sidebar.SidebarRepositoryFilterSection.d3a9c4cea1', 'Clear')}
-          </button>
-        </div>
-
-        <SidebarProjectFilterPanel
-          availableRepos={availableRepos}
-          selectedRepos={selectedRepos}
-          hasRepoFilter={hasRepoFilter}
-          filterRepoIds={filterRepoIds}
-          setFilterRepoIds={setFilterRepoIds}
-        />
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
+        )
+      }
+      preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+    />
   )
 })
 
