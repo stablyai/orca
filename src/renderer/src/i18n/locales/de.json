@@ -291,6 +291,10 @@
     }
   },
   "app": {
+    "saving": {
+      "delayedTitle": "Das Speichern des Profils dauert länger als üblich",
+      "delayedDescription": "Weitere Speichervorgänge können sich verzögern, bis dieser Vorgang abgeschlossen ist."
+    },
     "recoverableError": {
       "rootTitle": "In Orca ist ein Renderer-Fehler aufgetreten.",
       "rootDescription": "Die App-Oberfläche konnte nicht vollständig dargestellt werden. Erneut versuchen, um sie neu aufzubauen, oder Orca neu starten, falls der Fehler weiterhin auftritt.",

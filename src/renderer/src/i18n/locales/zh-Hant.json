@@ -265,6 +265,10 @@
     }
   },
   "app": {
+    "saving": {
+      "delayedTitle": "設定檔儲存操作耗時比平時更長",
+      "delayedDescription": "在此操作完成前，後續儲存可能會延遲。"
+    },
     "recoverableError": {
       "rootTitle": "Orca 遇到渲染器錯誤。",
       "rootDescription": "應用程式介面無法完成畫面呈現。請重試以重新掛載介面；若錯誤持續發生，請重新啟動 Orca。",

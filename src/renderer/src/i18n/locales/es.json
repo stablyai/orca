@@ -15,6 +15,10 @@
     "terminalPromptFailed": "Orca abrió un terminal para {{value0}}, pero no pudo pasarle tu instrucción. Envíala en ese terminal."
   },
   "app": {
+    "saving": {
+      "delayedTitle": "El almacenamiento del perfil está tardando más de lo habitual",
+      "delayedDescription": "Los siguientes guardados pueden retrasarse hasta que termine esta operación."
+    },
     "recoverableError": {
       "rootTitle": "Orca tuvo un error de renderizado.",
       "rootDescription": "El shell de la aplicación no pudo terminar de renderizarse. Vuelva a intentar volver a montarlo o reinicie Orca si el error persiste.",

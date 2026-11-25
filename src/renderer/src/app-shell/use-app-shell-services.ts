@@ -24,6 +24,7 @@ import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pa
 import { useClaudeThemeSyncOffer } from '../components/terminal-pane/provider-notices/claude-theme-sync/claude-theme-sync-offer'
 import { usePerfNotices } from '../components/perf-notices/use-perf-notices'
 import { useVisibleHostedReviewRefresh } from '../store/slices/hosted-review/refresh/use-visible-hosted-review-refresh'
+import { useProfileStateSaveDelayNotice } from './storage/use-profile-state-save-delay-notice'
 import { useBotHomeTabPlacement } from '../components/bots/bot-home-tab-placement'
 import { useRemoteUnsavedEditorReport } from '../runtime/workspace-cleanup/remote-unsaved-editor-report'
 
@@ -43,6 +44,7 @@ export function useAppShellServices(): void {
   useLegacyChatRenameMigration()
   useHostModelCatalogSnapshotsSync()
   useIpcEvents()
+  useProfileStateSaveDelayNotice()
   useRemoteRuntimeRecoveryTriggers()
   useRemoteUnsavedEditorReport()
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })

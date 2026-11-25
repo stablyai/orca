@@ -15,6 +15,10 @@
     "terminalPromptFailed": "Orca は {{value0}} のターミナルを開きましたが、プロンプトを渡せませんでした。そのターミナルでプロンプトを送信してください。"
   },
   "app": {
+    "saving": {
+      "delayedTitle": "プロファイルのストレージ処理に通常より時間がかかっています",
+      "delayedDescription": "この処理が完了するまで、その後の保存が遅れる場合があります。"
+    },
     "recoverableError": {
       "rootTitle": "Orca でレンダラーエラーが発生しました。",
       "rootDescription": "アプリシェルのレンダリングを完了できませんでした。再マウントを試すか、エラーが解決しない場合は Orca を再起動してください。",
