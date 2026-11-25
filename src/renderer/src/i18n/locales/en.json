@@ -120,6 +120,7 @@
       "archived": "Archived workspaces aren’t listed in the sidebar",
       "botsOff": "Bots are turned off, so this bot isn’t listed",
       "botHidden": "This bot is paused and hidden by Bot options",
+      "botHiddenGroupsOnly": "Groups only in Bot options hides this bot",
       "renameBotPage": "A bot’s or group’s page isn’t a worktree. To rename it, use Rename in its row’s menu.",
       "renameUnlisted": "This workspace isn’t listed in the sidebar right now, so it can’t be renamed there."
     },
@@ -29592,7 +29593,10 @@
       "hidePaused": "Hide paused bots",
       "hideSleepingWorkers": "Hide sleeping workers",
       "hideSleepingWorkersAria": "Hide a bot's worker workspaces that have nothing running",
-      "allHidden": "All bots are paused and hidden."
+      "groupsOnly": "Groups only",
+      "groupsOnlyAria": "Show only bot groups and hide standalone bots",
+      "allHidden": "All bots are paused and hidden.",
+      "noGroups": "No groups yet. Groups only hides your bots."
     },
     "share": {
       "shareBot": "Share bot…",

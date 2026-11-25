@@ -104,11 +104,18 @@ export function SidebarBotsSection({
   // unfolded header, so a search always starts unfolded.
   const search = useBotSidebarSearch({ listRef, savedEntries, onOpenBot })
   const searchOpen = search.open
-  // Only the saved order can be dragged, as for workspaces.
-  const draggable = useAppStore((s) => s.botSidebarView.sortBy === 'manual') && !searchOpen
+  const view = useAppStore((s) => s.botSidebarView)
+  const groupsOnly = view.showGroupsOnly
+  // Only the saved order can be dragged, as for workspaces; a drop renumbers only the listed rows,
+  // so with every bot hidden it would stack the groups on top of them.
+  const draggable = view.sortBy === 'manual' && !searchOpen && !groupsOnly
+  // The folded header keeps the bots Groups only hides, so one that needs you still shows there.
   const rows = useMemo(
-    () => entries.flatMap((entry) => (entry.kind === 'bot' ? [entry] : [])),
-    [entries]
+    () =>
+      (groupsOnly ? savedEntries : entries).flatMap((entry) =>
+        entry.kind === 'bot' && !(view.hidePausedBots && entry.bot.paused) ? [entry] : []
+      ),
+    [entries, savedEntries, groupsOnly, view.hidePausedBots]
   )
   const hasEntries = savedEntries.length > 0
   // Folds even while empty, so the onboarding card can be put away. A fold landing mid-search
@@ -332,7 +339,10 @@ export function SidebarBotsSection({
             {savedEntries.length > 0 && entries.length === 0 ? (
               collapsed ? null : (
                 <div className="px-4 text-xs text-muted-foreground">
-                  {t('bots.options.allHidden', 'All bots are paused and hidden.')}
+                  {/* Groups always list, so an empty Groups only list means there are none. */}
+                  {groupsOnly
+                    ? t('bots.options.noGroups', 'No groups yet. Groups only hides your bots.')
+                    : t('bots.options.allHidden', 'All bots are paused and hidden.')}
                 </div>
               )
             ) : entries.length === 0 ? (

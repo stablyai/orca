@@ -11,6 +11,7 @@ import { refreshBotPurposes } from './use-bot-purposes'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
+import { DEFAULT_BOT_SIDEBAR_VIEW } from '../../../../shared/bots/bot-sidebar-view'
 import WorktreeJumpPalette from '../worktree-jump/WorktreeJumpPalette'
 import { registerNativeChatComposerReclaim } from '../native-chat/composer/focus/native-chat-composer-focus-intent'
 import { publishBotGroups } from '@/lib/bot-group-catalog-snapshot'
@@ -211,7 +212,7 @@ export const groupReveal = defineFixture({
     sidebarOpen: true,
     sidebarBody: 'workspaces',
     collapsedGroups: new Set(),
-    botSidebarView: { sortBy: 'manual', hidePausedBots: false, hideSleepingWorkers: false },
+    botSidebarView: DEFAULT_BOT_SIDEBAR_VIEW,
     folderWorkspaces: [...sidebarBots, council].map((owner) =>
       makeFolderWorkspace({
         id: owner.folderWorkspaceId,

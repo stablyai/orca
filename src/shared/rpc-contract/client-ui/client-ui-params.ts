@@ -141,7 +141,9 @@ export const UiUpdateFields = z
       .object({
         sortBy: z.enum(['manual', 'smart', 'recent', 'name']),
         hidePausedBots: z.boolean(),
-        hideSleepingWorkers: z.boolean()
+        hideSleepingWorkers: z.boolean(),
+        // Optional so an older client's update, which never sends it, still validates.
+        showGroupsOnly: z.boolean().optional()
       })
       .optional(),
     botChatFolds: z.record(z.string(), z.enum(['open', 'folded'])).optional(),
