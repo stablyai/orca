@@ -156,7 +156,13 @@ class Agent {
         this.rand() < 0.3
           ? { error: { code: -32000, message: 'rate limited' } }
           : { result: { stopReason: 'end_turn' } }
-      this.emit(JSON.stringify({ jsonrpc: '2.0', id: this.prompt.id, ...reply }))
+      // Either field order is valid JSON-RPC.
+      const { id } = this.prompt
+      this.emit(
+        JSON.stringify(
+          this.rand() < 0.5 ? { jsonrpc: '2.0', id, ...reply } : { jsonrpc: '2.0', ...reply, id }
+        )
+      )
       this.prompt.answeredAt = this.lines.length
       // An answered prompt's messages never resume.
       this.root.recent = []

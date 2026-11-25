@@ -17,9 +17,10 @@ export function jsonRpcAnswerId(line: string): number | string | null {
     maxFields: ENVELOPE_MAX_FIELDS
   })
   const keys = new Set(properties.map((property) => property.key))
-  if (complete && keys.size === properties.length) {
-    const id = properties.find((property) => property.key === 'id')?.value
-    return !keys.has('method') && (keys.has('result') || keys.has('error')) ? answerId(id) : null
+  const answer = !keys.has('method') && (keys.has('result') || keys.has('error'))
+  // An id after the answer's body (valid JSON-RPC) is past the scan: it's read whole below.
+  if (complete && keys.size === properties.length && (!answer || keys.has('id'))) {
+    return answer ? answerId(properties.find((property) => property.key === 'id')?.value) : null
   }
   // A request or notification names its method first; only an answer cut off is scanned whole.
   if (keys.has('method')) {
