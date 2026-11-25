@@ -55,7 +55,8 @@ export type ProviderRelayRequest =
    * a restart, such as the start of an open streamed item: memory is freed through `seq`, lines from
    * `keepFrom` on are kept in the spool file, and a later attach replays from there. A kept span
    * longer than the file cap is released through `seq` rather than stalling the agent. `cut` says
-   * this ack gives up a kept span still open, so a later attach reports `truncatedThrough`.
+   * this ack gives up a kept span still open (through `seq`, or before `keepFrom` when it keeps
+   * from a later line), so a later attach reports `truncatedThrough`.
    */
   | {
       id: string

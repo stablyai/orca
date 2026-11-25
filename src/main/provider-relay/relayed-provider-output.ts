@@ -23,6 +23,8 @@ const RELEASE_SLICE_CHARS = 64 * 1024
 export type ProviderRelayAckFloor = {
   observe: (seq: number, line: string) => void
   floor: () => number | null
+  /** True once after the floor rose past an open item's start on purpose (its replay will be cut). */
+  tookCut?: () => boolean
   /** A forced ack (the daemon's file cap) released everything through `seq`: items it held that
    *  started there can't be kept whole any more, so they hold nothing from now on. */
   released?: (seq: number) => void
@@ -336,11 +338,12 @@ export class RelayedProviderOutput {
           return
         }
         // Giving up an open kept span: the next attach must know its replay starts inside an item.
-        const cut = force && keepFrom === null && this.keptFrom !== null
-        await (keepFrom !== null
-          ? this.options.ack(target, keepFrom)
-          : cut
-            ? this.options.ack(target, undefined, true)
+        const floorCut = this.options.ackFloor?.tookCut?.() === true
+        const cut = floorCut || (force && keepFrom === null && this.keptFrom !== null)
+        await (cut
+          ? this.options.ack(target, keepFrom ?? undefined, true)
+          : keepFrom !== null
+            ? this.options.ack(target, keepFrom)
             : this.options.ack(target))
         this.ackedSeq = Math.max(this.ackedSeq, target)
         this.keptFrom = keepFrom
