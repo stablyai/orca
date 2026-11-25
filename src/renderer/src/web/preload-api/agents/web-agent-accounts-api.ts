@@ -165,6 +165,7 @@ export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
     // Host browser owns login; web has no pending URL or changes to publish.
     getPendingLoginUrl: () => Promise.resolve(null),
     onPendingLoginUrlChanged: () => () => {},
+    chatSignInAccount: async () => null,
     reauthenticate: rejectHostOnlySignIn,
     remove: ({ accountId }) =>
       callRuntimeResult<CodexRateLimitAccountsState>(

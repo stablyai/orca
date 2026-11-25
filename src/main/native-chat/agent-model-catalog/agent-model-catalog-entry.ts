@@ -23,6 +23,8 @@ export type AgentModelCatalogSuccess = {
   fastModeSupport?: AgentSessionFastModeSupport
   origin: 'live-session' | 'probe'
   complete?: boolean
+  /** A positive authentication verdict from the provider for this invocation. */
+  signedIn?: true
   configured?: { model?: string; effort?: string }
   /** Launch-injected rows require independent account-catalog membership. */
   launchOnlyModelId?: string

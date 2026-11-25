@@ -21,6 +21,8 @@ export type CodexAccountAddTarget = {
 export type CodexAccountReauthenticateOptions = {
   /** Local-only: activate after sign-in if this runtime had no selection before login. */
   activateIfSelectionWasEmpty?: boolean
+  preserveSelection?: boolean
+  beforeLogin?: (managedHomePath?: string) => Promise<void>
 }
 
 export type CodexAccountServiceLifecycle = {

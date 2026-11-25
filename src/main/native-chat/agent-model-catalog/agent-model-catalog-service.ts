@@ -116,17 +116,24 @@ export function createAgentModelCatalogService(
       live.providerStarted(record, source)
     },
     async read(params) {
-      const waits = !params.savedOnly && params.waitForListing
+      const waits = !params.savedOnly && (params.waitForListing || params.confirmSignIn)
       const deadline = params.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
+      let signInConfirmed = false
       if (waits) {
         const operation = params.operation ?? captureRead({ ...params, deadline })
-        await waitForAgentModelCatalogRead({
-          params,
-          reader: { deadline, signal: operation.signal },
-          store: deps.store,
-          refresh: () => lookup.request(params, operation),
-          binding: () => bindings.get(requestKey(params))
-        })
+        if (params.confirmSignIn) {
+          const refresh = lookup.request(params, operation)
+          await waitWithinAgentModelCatalogRead(operation, refresh?.done)
+          signInConfirmed = operation.current() && refresh?.confirmedSignIn() === true
+        } else {
+          await waitForAgentModelCatalogRead({
+            params,
+            reader: { deadline, signal: operation.signal },
+            store: deps.store,
+            refresh: () => lookup.request(params, operation),
+            binding: () => bindings.get(requestKey(params))
+          })
+        }
       }
       const expired = waits && Date.now() >= deadline
       // Expiry ends the wait, but a still-current scope can describe the listing left behind.
@@ -144,11 +151,11 @@ export function createAgentModelCatalogService(
             result,
             () => memoryBinding({ agent: params.agent })?.base
           )
-      if (!expired || !answer.listingInProgress) {
-        return answer
+      if (expired && answer.listingInProgress) {
+        // Expiring a reader cannot settle the listing, including for clients predating waitExpired.
+        return { ...answer, waitExpired: true }
       }
-      // Expiring a reader cannot settle the listing, including for clients predating waitExpired.
-      return { ...answer, waitExpired: true }
+      return signInConfirmed ? { ...answer, signInConfirmed: true } : answer
     },
     recordLiveListing: live.recordLiveListing,
     async prewarm() {

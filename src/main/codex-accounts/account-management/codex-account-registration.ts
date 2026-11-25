@@ -103,6 +103,7 @@ export class CodexAccountRegistration {
     options?: CodexAccountReauthenticateOptions,
     login: (managedHomePath: string) => Promise<void> = this.dependencies.login
   ): Promise<CodexRateLimitAccountsState> {
+    await options?.beforeLogin?.()
     const account = this.dependencies.selection.requireAccount(accountId)
     const managedHomePath =
       await this.dependencies.managedHomePaths.ensureForReauthentication(account)
@@ -120,7 +121,10 @@ export class CodexAccountRegistration {
       undefined,
       account.id
     )
-    await this.loginThroughStagingHome(managedHomePath, account.id, login)
+    await this.loginThroughStagingHome(managedHomePath, account.id, async (stagingHomePath) => {
+      await options?.beforeLogin?.(managedHomePath)
+      await login(stagingHomePath)
+    })
     const identity = await this.dependencies.readIdentityFromHome(managedHomePath, account.id)
     if (!identity.email) {
       throw new Error('Codex login completed, but Orca could not resolve the account email.')
@@ -143,7 +147,11 @@ export class CodexAccountRegistration {
     )
     const activeSelection = setSelectedCodexAccountIdForTarget(
       normalizeCodexRuntimeSelection(settings),
-      activateAfterLogin ? accountId : selectedAccountId,
+      options?.preserveSelection
+        ? getSelectedCodexAccountIdForTarget(settings, accountTarget)
+        : activateAfterLogin
+          ? accountId
+          : selectedAccountId,
       accountTarget
     )
 

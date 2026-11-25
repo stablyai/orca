@@ -19,9 +19,10 @@ import { agentSessionRefusalNamesTooOldCli } from '../../../../../../shared/agen
 import { joinSentences } from '../../../../../../shared/text/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
+  isNativeChatSignInFailureKind,
   nativeChatSetupAction,
   type NativeChatHostSetup
-} from '../../host-access/native-chat-host-setup'
+} from '../../host-access/native-chat-host-setup-view'
 import { nativeChatCliUpdateAction } from '../../host-access/native-chat-cli-update'
 import type {
   NativeChatComposerNotice,
@@ -71,7 +72,20 @@ function nativeChatLaunchNotice(
       action: wslHostChatOfferAction(wslHostOffer, t, wslHostOfferSettingUp)
     }
   }
+  // No retry continues a conversation saved in another folder.
+  const retryable = !(
+    failure?.code === 'agent_session_identity_required' && failure.details?.otherFolder
+  )
+  const retry = retryable
+    ? {
+        label: t('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry'),
+        onClick: onRetry
+      }
+    : undefined
   const details = failure?.details
+  const signedIn =
+    isNativeChatSignInFailureKind(details?.reason, setup?.signIn) &&
+    (setup?.resolved || setup?.signIn?.signedIn)
   const signIn = nativeChatSignInNoticeView(
     {
       kind: details?.reason,
@@ -81,7 +95,7 @@ function nativeChatLaunchNotice(
     },
     t
   )
-  if (signIn) {
+  if (signIn?.button && !signedIn) {
     // The host words the failure, with any provider diagnostic; keep what the short line leaves out.
     const signInDetails = nativeChatSignInHostWords(
       failure?.causeText,
@@ -99,27 +113,26 @@ function nativeChatLaunchNotice(
         t
       ),
       signIn,
+      // The user may have signed in where nothing could confirm it; starting again stays theirs.
+      ...(setup?.signIn?.unconfirmed && retry ? { action: retry } : {}),
       ...(signInDetails ? { signInDetails } : {})
     }
   }
-  const cause = failure
-    ? (failure.causeText ??
-      agentSessionWriteNoticeText(
-        agentSessionRefusalCauseParts(failure, {
-          ...(agentLabel ? { agentName: agentLabel } : {}),
-          ...(hostName ? { hostName } : {})
-        })
-      ))
-    : ''
+  const cause =
+    failure && !signedIn
+      ? (failure.causeText ??
+        agentSessionWriteNoticeText(
+          agentSessionRefusalCauseParts(failure, {
+            ...(agentLabel ? { agentName: agentLabel } : {}),
+            ...(hostName ? { hostName } : {})
+          })
+        ))
+      : ''
   const cliTooOld = agentSessionRefusalNamesTooOldCli(failure ?? undefined)
   // An argument problem already says the start failed; a too-old CLI says what chats need.
   const saysStartFailure =
     cliTooOld ||
     (failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem)
-  // No retry continues a conversation saved in another folder.
-  const retryable = !(
-    failure?.code === 'agent_session_identity_required' && failure.details?.otherFolder
-  )
   return {
     key: 'launch',
     kind: 'error',
@@ -127,12 +140,7 @@ function nativeChatLaunchNotice(
     action:
       nativeChatSetupAction(failure?.details?.reason, setup, t) ??
       nativeChatCliUpdateAction(cliTooOld, setup, t) ??
-      (!retryable
-        ? undefined
-        : {
-            label: t('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry'),
-            onClick: onRetry
-          })
+      retry
   }
 }
 

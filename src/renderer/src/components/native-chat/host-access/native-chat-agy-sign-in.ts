@@ -8,7 +8,7 @@ import {
 } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { NativeChatSignIn } from './native-chat-host-setup'
+import type { NativeChatSignIn } from './native-chat-host-setup-view'
 
 /** Signs agy in from the chat where its own login serves it: on agy's home (`system`), or on a
  *  Google method. The sign-in strip then shows Google's link and takes the code. */

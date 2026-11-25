@@ -414,6 +414,8 @@ export type AgentSessionFastModeSupport = {
 
 /** Read the host catalog store outside session queues. unknown keeps the static seed; older hosts lack this additive read method. */
 export type AgentSessionModelCatalogResult = {
+  /** This request's completed probe positively identified authentication for the scoped account. */
+  signInConfirmed?: true
   /** The host is running the listing this answer is waiting on (its first for the account, or
    *  the probe re-checking `unavailable`); a `waitForListing` read answers when it lands. Absent
    *  from a host that predates it; such a host sends it only with `unknown`. */

@@ -1,5 +1,9 @@
 @import '../../../src/renderer/src/assets/main.css';
 @source './fixture.tsx';
+@source './sign-in-fixture.tsx';
+@source '../../../src/renderer/src/components/native-chat/host-access';
+@source '../../../src/renderer/src/components/native-chat/composer/controls';
+@source '../../../src/renderer/src/components/native-chat/queue';
 @source '../../../src/renderer/src/components/native-chat/pane/actions/NativeChatPaneHeader.tsx';
 @source '../../../src/renderer/src/components/native-chat/viewport/find/NativeChatFindBar.tsx';
 @source '../../../src/renderer/src/components/native-chat/conversation/projection/NativeChatContextClearFade.tsx';

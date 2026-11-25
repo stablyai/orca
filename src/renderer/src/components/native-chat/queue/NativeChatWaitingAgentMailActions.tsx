@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
-import { queuedMessageCardSendNow } from './NativeChatQueuedMessageCard'
+import { queuedMessageCardSendNow } from './native-chat-queued-message-presentation'
 import { refocusAfterQueueAction } from './native-chat-queue-refocus'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 

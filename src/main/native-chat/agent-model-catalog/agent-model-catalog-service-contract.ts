@@ -84,8 +84,24 @@ export type AgentModelCatalogReadParams = {
   savedOnly?: boolean
   /** A user's Refresh: the catalog this read resolves to lists again first. */
   relist?: true
+  /** Wait for positive authentication evidence from this chat's own new probe. */
+  confirmSignIn?: true
   verifiedOnly?: boolean
   legacy?: boolean
   /** Old options readers need account-default presentation, never launch or admission proof. */
   legacyOptionsDisplay?: true
+}
+
+/** Scope inputs captured when a refresh starts, independent of its readers' deadlines. */
+export type AgentModelCatalogLaunch = {
+  agent: string
+  records: AgentModelCatalogReadRecords
+  workspacePath?: string | null
+  inSessionWorkspace?: true
+  legacy?: boolean
+  /** Saved-only reads and deleted chats resolve scope without listing. */
+  passive: boolean
+  confirmSignIn?: true
+  bindingKey: string
+  identity: string
 }

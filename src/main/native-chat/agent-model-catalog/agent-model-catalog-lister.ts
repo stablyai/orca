@@ -40,6 +40,8 @@ export type AgentModelCatalogListingBudget = {
   /** Service shutdown retires the listing immediately, without the holder release grace. */
   lifetime?: AbortSignal
   admission?: AgentModelCatalogListingAdmission
+  /** Only receives evidence from a new listing started with this budget. */
+  confirmSignIn?: () => void
 }
 
 export type InFlightListing = {
@@ -245,6 +247,7 @@ export function refreshAgentModelCatalogListing(input: {
       }
       let targets = flight.targets.size > 0 ? [...flight.targets] : undefined
       const tried = new Set<string>()
+      let signedIn = false
       do {
         for (const target of targets ?? []) {
           tried.add(target)
@@ -256,6 +259,12 @@ export function refreshAgentModelCatalogListing(input: {
         deferred = undefined
         span.setAttribute('models', success.models.length)
         publish(success, lastSuccess ? lastAccountKnown : true, true)
+        signedIn =
+          success.origin === 'probe' &&
+          success.complete === true &&
+          success.signedIn === true &&
+          success.models.length > 0 &&
+          !success.unavailable
         const attempted = new Set(success.attemptedModels ?? targets ?? [])
         for (const target of attempted) {
           tried.add(target)
@@ -271,6 +280,9 @@ export function refreshAgentModelCatalogListing(input: {
         )
       } while (targets.length > 0 && current() && !stopped.signal.aborted)
       if (current()) {
+        if (signedIn) {
+          input.budget?.confirmSignIn?.()
+        }
         flight.finish(entry)
       }
       span.end()

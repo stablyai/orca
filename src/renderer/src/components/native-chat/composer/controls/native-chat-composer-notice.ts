@@ -15,6 +15,7 @@ export type NativeChatComposerNoticeContent = {
 
 export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
   key: string
+  hidden?: boolean
   action?: {
     label: string
     onClick: () => void

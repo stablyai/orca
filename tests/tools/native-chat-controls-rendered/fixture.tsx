@@ -40,5 +40,10 @@ function Fixture() {
 }
 const root = document.getElementById('root')
 if (root) {
-  createRoot(root).render(<Fixture />)
+  const renderer = createRoot(root)
+  if (new URLSearchParams(location.search).has('sign-in')) {
+    void import('./sign-in-fixture').then(({ SignInFixture }) => renderer.render(<SignInFixture />))
+  } else {
+    renderer.render(<Fixture />)
+  }
 }

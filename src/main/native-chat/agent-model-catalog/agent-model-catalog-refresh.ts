@@ -3,10 +3,10 @@ import type { AgentModelCatalogAdmission } from './agent-model-catalog-admission
 import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
 import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type {
+  AgentModelCatalogLaunch,
   AgentModelCatalogReadParams,
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
-import type { AgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
 import {
   agentModelCatalogDefaultFollowsAccount,
   agentModelCatalogListedDefault
@@ -21,19 +21,8 @@ import {
   type AgentModelCatalogBinding
 } from './agent-model-catalog-snapshot'
 import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
-
-/** What a refresh resolves, captured when it starts; no reader's session, deadline or callback. */
-export type AgentModelCatalogLaunch = {
-  agent: string
-  records: AgentModelCatalogReadRecords
-  workspacePath?: string | null
-  inSessionWorkspace?: true
-  legacy?: boolean
-  /** Resolves saved scope only and lists nothing (a saved-only read, or a deleted chat's). */
-  passive: boolean
-  bindingKey: string
-  identity: string
-}
+import { isNativeLocalLocation } from '../../../shared/execution-host/execution-host'
+import { holdAgentModelCatalogRefresh } from './agent-model-catalog-listing-waiters'
 
 export type AgentModelCatalogRefresh = {
   current: () => boolean
@@ -43,6 +32,7 @@ export type AgentModelCatalogRefresh = {
   defaults: Promise<void>
   /** Its listing ingested and the account's list seeded, or it ended. */
   done: Promise<void>
+  confirmedSignIn: () => boolean
   hold: (reader: AgentModelCatalogReadOperation) => void
   /** Also lists efforts for a reader's selected model. */
   want: (model: string | undefined) => void
@@ -64,8 +54,8 @@ export function createAgentModelCatalogRefreshes(context: {
   tasks: Set<Promise<unknown>>
 }) {
   const { deps, lifetime, admission, bindings, requestKey, tasks } = context
-  const refreshes = new Map<string, Held>()
-  const start = (key: string, launch: AgentModelCatalogLaunch): Held => {
+  const refreshes = new Map<string | symbol, Held>()
+  const start = (key: string | symbol, launch: AgentModelCatalogLaunch): Held => {
     const { agent } = launch
     const retirement = deps.store.retirementRevision(agent)
     const ended = new AbortController()
@@ -93,6 +83,12 @@ export function createAgentModelCatalogRefreshes(context: {
     let demand: ((model: string) => void) | undefined
     let projecting: Promise<void> | undefined
     let relisting = false
+    let signedIn = false
+    const confirmSignIn = launch.confirmSignIn
+      ? () => {
+          signedIn = current()
+        }
+      : undefined
     let resolvedFingerprint: string | undefined
     const run = async (): Promise<void> => {
       const facts = await bounded(resolveAgentModelCatalogAccount(deps, launch, current))
@@ -152,6 +148,22 @@ export function createAgentModelCatalogRefreshes(context: {
         return
       }
       const { fingerprint, exact, resolved, cwd, unavailable } = scope
+      if (launch.confirmSignIn) {
+        if (!scoped || !isNativeLocalLocation(scoped.location) || !exact) {
+          return
+        }
+        const holder = holders.values().next().value
+        if (!holder) {
+          return
+        }
+        // An older listing may have read credentials before this sign-in completed.
+        while (!holder.aborted && deps.store.isListing(fingerprint)) {
+          await deps.store.pendingListing(fingerprint, false, true, holder)
+        }
+        if (holder.aborted) {
+          return
+        }
+      }
       resolvedFingerprint = fingerprint
       Object.assign(bound, { fingerprint, exact, cwd })
       bindAgentModelCatalogScope(bindings, launch.bindingKey, bound, requestKey)
@@ -193,7 +205,7 @@ export function createAgentModelCatalogRefreshes(context: {
               void task.finally(() => tasks.delete(task)).catch(() => {})
               return task
             },
-            { signal: holder, lifetime, admission: accountAdmission }
+            { signal: holder, lifetime, admission: accountAdmission, confirmSignIn }
           )
         }
         register = (holder) => {
@@ -246,26 +258,15 @@ export function createAgentModelCatalogRefreshes(context: {
     const held: Held = {
       current: () => current() && refreshes.get(key) === held,
       hold: (reader) => {
-        if (reader.signal.aborted) {
-          return
+        const holder = holdAgentModelCatalogRefresh(holders, signal, reader)
+        if (holder) {
+          register?.(holder)
         }
-        const released = new AbortController()
-        const timer =
-          reader.deadline === undefined
-            ? undefined
-            : setTimeout(() => released.abort(), Math.max(0, reader.deadline - Date.now()))
-        const holder = AbortSignal.any([signal, reader.signal, released.signal])
-        const leave = () => {
-          clearTimeout(timer)
-          holders.delete(holder)
-        }
-        holders.add(holder)
-        holder.addEventListener('abort', leave, { once: true })
-        register?.(holder)
       },
       listing: listing.promise,
       defaults: defaults.promise,
       done: Promise.resolve(),
+      confirmedSignIn: () => signedIn,
       want: (model) => {
         if (model && !targets.has(model)) {
           targets.add(model)
@@ -303,6 +304,9 @@ export function createAgentModelCatalogRefreshes(context: {
   return {
     /** Joins the running refresh for this request, or starts one; joining changes nothing. */
     join(key: string, launch: AgentModelCatalogLaunch): AgentModelCatalogRefresh {
+      if (launch.confirmSignIn) {
+        return start(Symbol(), launch)
+      }
       const running = refreshes.get(key)
       return running?.current() ? running : start(key, launch)
     },

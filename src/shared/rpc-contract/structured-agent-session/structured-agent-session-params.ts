@@ -255,6 +255,7 @@ export const ModelCatalogParams = z.strictObject({
   savedOnly: z.boolean().optional(),
   // Lists the agent's catalog again first; gate on the relist capability for the same reason.
   relist: z.literal(true).optional(),
+  confirmSignIn: z.literal(true).optional(),
   selectedModel: Identifier('Invalid selected model').optional()
 })
 

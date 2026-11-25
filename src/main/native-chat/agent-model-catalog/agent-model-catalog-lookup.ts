@@ -1,4 +1,5 @@
 import type {
+  AgentModelCatalogLaunch,
   AgentModelCatalogReadParams,
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
@@ -6,7 +7,6 @@ import type { AgentModelCatalogReadOperation } from './agent-model-catalog-opera
 import { agentModelCatalogReadRecords } from './agent-model-catalog-read-scope'
 import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type {
-  AgentModelCatalogLaunch,
   AgentModelCatalogRefresh,
   createAgentModelCatalogRefreshes
 } from './agent-model-catalog-refresh'
@@ -38,6 +38,7 @@ export function createAgentModelCatalogLookup(
         inSessionWorkspace: params.inSessionWorkspace,
         legacy: params.legacy,
         passive,
+        confirmSignIn: params.confirmSignIn,
         bindingKey,
         identity
       }
@@ -54,7 +55,7 @@ export function createAgentModelCatalogLookup(
         return undefined
       }
       const refresh = refreshes.join(found.key, found.launch)
-      if (params.relist && !params.savedOnly) {
+      if ((params.relist || params.confirmSignIn) && !params.savedOnly) {
         refresh.relist()
       }
       refresh.hold(operation)

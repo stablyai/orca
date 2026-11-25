@@ -3208,6 +3208,10 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
+      },
+      "signIn": {
+        "succeeded": "Signed in.",
+        "cancelled": "Sign-in cancelled or failed. Try again."
       }
     },
     "onboarding": {

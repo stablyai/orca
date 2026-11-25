@@ -15,8 +15,13 @@ export const codexAccountsApi = {
     ipcRenderer.on(CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL, listener)
     return () => ipcRenderer.removeListener(CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL, listener)
   },
-  reauthenticate: (args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
-    ipcRenderer.invoke('codexAccounts:reauthenticate', args),
+  chatSignInAccount: (args: { sessionId: string }): Promise<string | null> =>
+    ipcRenderer.invoke('codexAccounts:chatSignInAccount', args),
+  reauthenticate: (args: {
+    accountId: string
+    sessionId?: string
+    activateIfSelectionWasEmpty?: boolean
+  }) => ipcRenderer.invoke('codexAccounts:reauthenticate', args),
   remove: (args: { accountId: string }) => ipcRenderer.invoke('codexAccounts:remove', args),
   rename: (args: { accountId: string; displayName: string | null }) =>
     ipcRenderer.invoke('codexAccounts:rename', args),
