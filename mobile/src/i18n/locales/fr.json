@@ -5388,7 +5388,6 @@
       "keepEditing": "Continuer la modification",
       "on": "Activée",
       "repeats": "Répétition",
-      "newOnePerRun": "Nouveau à chaque exécution",
       "moreActions": "Plus d'actions",
       "noRunsYet": "Aucune exécution pour l'instant",
       "nextRunToday": "Prochaine exécution aujourd'hui à {{time}}",
@@ -5750,7 +5749,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",

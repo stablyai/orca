@@ -5388,7 +5388,6 @@
       "keepEditing": "Seguir editando",
       "on": "Activada",
       "repeats": "Se repite",
-      "newOnePerRun": "Uno nuevo por ejecución",
       "moreActions": "Más acciones",
       "noRunsYet": "Aún no hay ejecuciones",
       "nextRunToday": "Próxima ejecución hoy a las {{time}}",
@@ -5750,7 +5749,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",

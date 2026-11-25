@@ -5239,7 +5239,6 @@
       "keepEditing": "編集を続ける",
       "on": "オン",
       "repeats": "繰り返し",
-      "newOnePerRun": "実行ごとに新規作成",
       "moreActions": "その他の操作",
       "noRunsYet": "実行はまだありません",
       "nextRunToday": "次回：今日 {{time}}",
@@ -5598,7 +5597,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",

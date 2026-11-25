@@ -5563,7 +5563,6 @@
       "keepEditing": "繼續編輯",
       "on": "開啟",
       "repeats": "重複",
-      "newOnePerRun": "每次執行都新建",
       "moreActions": "更多操作",
       "noRunsYet": "尚無執行記錄",
       "nextRunToday": "下次執行：今天 {{time}}",

@@ -5638,7 +5638,6 @@
       "keepEditing": "继续编辑",
       "on": "开启",
       "repeats": "重复",
-      "newOnePerRun": "每次运行新建一个",
       "moreActions": "更多操作",
       "noRunsYet": "尚无运行记录",
       "nextRunToday": "下次运行：今天 {{time}}",

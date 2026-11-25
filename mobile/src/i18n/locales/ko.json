@@ -5572,7 +5572,6 @@
       "keepEditing": "계속 편집",
       "on": "사용",
       "repeats": "반복",
-      "newOnePerRun": "실행마다 새 워크스페이스",
       "moreActions": "추가 작업",
       "noRunsYet": "아직 실행이 없습니다",
       "nextRunToday": "다음 실행: 오늘 {{time}}",

@@ -387,7 +387,7 @@ export function AutomationManager(props: {
         leaveGuard={props.leaveGuard}
         onDraftChange={createAttempt.observeDraft}
         onClose={() => setEditorOpen(false)}
-        onAfterClose={() => setEditor(null)}
+        onAfterClose={(key) => setEditor((current) => (current?.key === key ? null : current))}
         onSave={save}
         onBotSaved={(saved) => {
           catalog.setRows((rows) =>

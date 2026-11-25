@@ -5388,7 +5388,6 @@
       "keepEditing": "Continuar editando",
       "on": "Ativado",
       "repeats": "Repetição",
-      "newOnePerRun": "Um novo por execução",
       "moreActions": "Mais ações",
       "noRunsYet": "Ainda não há execuções",
       "nextRunToday": "Próxima execução hoje às {{time}}",
@@ -5751,7 +5750,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",
