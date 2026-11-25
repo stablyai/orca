@@ -41,7 +41,7 @@ describe('rollout read slots', () => {
     })
     open = false
     settleRetiredRolloutReads()
-    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(settled).toBe(false)
   })
 })
