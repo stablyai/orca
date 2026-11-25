@@ -99,7 +99,7 @@ export async function readHostEntries(folder: string): Promise<HostList> {
 }
 
 /** The file's `agentFiles`: which agents' own MCP file the user let Orca keep its servers in. */
-function agentFilesOf(file: Readonly<Record<string, unknown>>): McpAgentFiles {
+export function agentFilesOf(file: Readonly<Record<string, unknown>>): McpAgentFiles {
   const stored = AgentFilesSchema.safeParse(file.agentFiles).data ?? {}
   const allowed = (agent: McpFileAgent): boolean => stored[agent] === true
   return { grok: allowed('grok'), cursor: allowed('cursor'), droid: allowed('droid') }

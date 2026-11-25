@@ -166,6 +166,8 @@ const DiscoveredSchema = z.looseObject({
   detail: z.string(),
   transport: z.enum(['http', 'command']).catch('http'),
   agents: z.array(z.string()).catch([]),
+  // Absent from older hosts, which take it out of every agent.
+  removesFrom: z.array(z.string()).optional().catch(undefined),
   files: z.array(z.string()).catch([]),
   projectNames: z.array(z.string()).catch([]),
   movable: z.boolean().catch(false)

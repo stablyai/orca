@@ -104,12 +104,25 @@ export type DiscoveredMcpServer = {
   detail: string
   transport: 'http' | 'command'
   agents: string[]
+  /**
+   * The agents Move takes it out of: those whose sessions on the host get Orca's list. The others
+   * keep their copy. Absent from older hosts, which take it out of every agent.
+   */
+  removesFrom?: string[]
   /** The absolute config paths it came from. */
   files: string[]
   /** Empty for a user-level server; for a local-scope one, the repos or folders it's limited to. */
   projectNames: string[]
   /** False for a repo's own files (shared with the team): listed, never moved. */
   movable: boolean
+}
+
+/** The agents Move takes a discovered server out of. */
+export function mcpMoveRemovesFrom(server: {
+  agents: readonly string[]
+  removesFrom?: readonly string[] | undefined
+}): readonly string[] {
+  return server.removesFrom ?? server.agents
 }
 
 export type McpServerTypedFailureCode =
