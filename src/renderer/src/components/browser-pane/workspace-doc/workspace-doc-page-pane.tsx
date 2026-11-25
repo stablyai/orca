@@ -26,10 +26,13 @@ export function WorkspaceDocPagePane({
     [filePath, worktreeRoot]
   )
   // Retained previews can sit behind terminals/editors; only the reader’s active surface may take guest focus.
+  // Why the page's workspace: a folder pane can show an attached worktree's file, and the
+  // selection is recorded where the tab lives, not where the document is read from.
+  const placementWorkspaceId = page.worktreeId
   const isReaderSurface = useAppStore(
     (store) =>
-      store.activeTabTypeByWorktree[worktreeId] === 'browser' &&
-      store.activeBrowserTabIdByWorktree[worktreeId] === page.workspaceId
+      store.activeTabTypeByWorktree[placementWorkspaceId] === 'browser' &&
+      store.activeBrowserTabIdByWorktree[placementWorkspaceId] === page.workspaceId
   )
 
   if (!docLocation) {
