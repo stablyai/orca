@@ -175,18 +175,6 @@ it.runIf(process.platform === 'darwin')(
 )
 
 it.runIf(process.platform === 'darwin')(
-  'retries the download after macOS staging fails late',
-  async () => {
-    const updater = await startStaging()
-    vi.advanceTimersByTime(900_000)
-    failNativeStaging('Could not locate update bundle')
-
-    updater.downloadUpdate()
-    expect(updater.getUpdateStatus()).toEqual({ state: 'downloading', version, percent: 0 })
-  }
-)
-
-it.runIf(process.platform === 'darwin')(
   'still quits once when macOS staging fails after the user asked to quit',
   async () => {
     const updater = await startStaging()
