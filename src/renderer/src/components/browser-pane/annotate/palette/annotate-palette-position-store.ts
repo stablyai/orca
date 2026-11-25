@@ -35,10 +35,9 @@ export function parseAnnotatePalettePosition(raw: string | null): AnnotatePalett
   if (typeof parsed !== 'object' || parsed === null) {
     return DEFAULT_ANNOTATE_PALETTE_POSITION
   }
-  const { x, y } = parsed as { x?: unknown; y?: unknown }
   return {
-    x: clampUnit(x, DEFAULT_ANNOTATE_PALETTE_POSITION.x),
-    y: clampUnit(y, DEFAULT_ANNOTATE_PALETTE_POSITION.y)
+    x: clampUnit('x' in parsed ? parsed.x : undefined, DEFAULT_ANNOTATE_PALETTE_POSITION.x),
+    y: clampUnit('y' in parsed ? parsed.y : undefined, DEFAULT_ANNOTATE_PALETTE_POSITION.y)
   }
 }
 

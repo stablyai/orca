@@ -29,6 +29,18 @@ type Layout = {
   topMin: number
 }
 
+const LAYOUT_KEYS: readonly (keyof Layout)[] = [
+  'boundsWidth',
+  'boundsHeight',
+  'paletteWidth',
+  'paletteHeight',
+  'left',
+  'top',
+  'x',
+  'y',
+  'topMin'
+]
+
 /**
  * Placement and drag for a palette inside a bounds element, on both axes.
  * Why the edges are anchored: switching tools changes the palette's size, and a palette that slides on every
@@ -137,7 +149,7 @@ export function usePaletteDrag({
           paletteHeight,
           topMin
         )
-        const next = {
+        const next: Layout = {
           boundsWidth,
           boundsHeight,
           paletteWidth,
@@ -148,9 +160,7 @@ export function usePaletteDrag({
           y,
           topMin
         }
-        return prev && (Object.keys(next) as (keyof Layout)[]).every((k) => prev[k] === next[k])
-          ? prev
-          : next
+        return prev && LAYOUT_KEYS.every((k) => prev[k] === next[k]) ? prev : next
       })
     }
     measure()
