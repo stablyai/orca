@@ -266,7 +266,9 @@ export function resolveCliCommands(
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
   const pathDirectories = splitPath(pathEnv, platform)
   const homePath = options.homePath ?? homedir()
-  const installDirectories = getCliInstallDirectories(platform, homePath)
+  const installDirectories = getCliInstallDirectories(platform, homePath).filter(
+    options.installDirAllowed ?? (() => true)
+  )
   const resolved = new Map<string, string>()
 
   for (const commandName of new Set(commandNames)) {
