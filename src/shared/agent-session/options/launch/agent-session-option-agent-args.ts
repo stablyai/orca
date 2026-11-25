@@ -108,12 +108,24 @@ const AGENT_REQUIRED_VALUE_OPTIONS: Partial<Record<AgentType, readonly string[]>
     '--model',
     '-output-format',
     '--output-format',
+    '-p',
+    '--p',
+    '-print',
+    '--print',
     '-print-timeout',
     '--print-timeout',
     '-project',
     '--project',
+    '-prompt',
+    '--prompt',
     '-prompt-interactive',
-    '--prompt-interactive'
+    '--prompt-interactive',
+    '-r',
+    '--r',
+    '-resume',
+    '--resume',
+    '-settings',
+    '--settings'
   ]
 }
 

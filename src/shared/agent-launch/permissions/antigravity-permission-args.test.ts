@@ -56,6 +56,20 @@ describe('Antigravity Approve-for-Me permission boundary', () => {
       value: 'auto'
     })
     expect(agentPermissionArgsForLaunch('antigravity', 'auto', '--i --mode')).toBe('--mode auto')
+    expect(agentPermissionArgsForLaunch('antigravity', 'auto', '-p --mode')).toBe('--mode auto')
+    expect(agentPermissionArgsForLaunch('antigravity', 'auto', '--print --mode')).toBe(
+      '--mode auto'
+    )
+    expect(agentPermissionArgsForLaunch('antigravity', 'auto', '--prompt --mode')).toBe(
+      '--mode auto'
+    )
+    expect(agentPermissionArgsForLaunch('antigravity', 'auto', '-r --mode')).toBe('--mode auto')
+    expect(agentPermissionArgsForLaunch('antigravity', 'auto', '--resume --mode')).toBe(
+      '--mode auto'
+    )
+    expect(agentPermissionArgsForLaunch('antigravity', 'auto', '--settings --mode')).toBe(
+      '--mode auto'
+    )
   })
 
   it('retains --mode auto in resumeLaunch configuration', () => {
