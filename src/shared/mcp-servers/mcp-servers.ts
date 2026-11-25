@@ -40,6 +40,12 @@ export type McpServerWorkspaces = z.infer<typeof McpServerWorkspacesSchema>
 
 export const ALL_MCP_SERVER_WORKSPACES: McpServerWorkspaces = { later: true, on: [], off: [] }
 
+/** The agents whose terminal CLI reads only its own MCP file, so Orca keeps its servers there. */
+export const MCP_FILE_AGENTS = ['grok', 'cursor', 'droid'] as const
+export type McpFileAgent = (typeof MCP_FILE_AGENTS)[number]
+/** Per agent, whether the user let Orca keep its servers in that agent's file. */
+export type McpAgentFiles = Record<McpFileAgent, boolean>
+
 /** One server in a host's list, as a client shows it. */
 export type McpServer = {
   /** Stable across renames. */

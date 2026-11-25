@@ -8,6 +8,8 @@ import {
   ALL_MCP_SERVER_WORKSPACES,
   MCP_SERVER_AGENT_PATTERN,
   McpServerWorkspacesSchema,
+  type McpAgentFiles,
+  type McpFileAgent,
   type McpServer,
   type McpServerWorkspaces
 } from '../../shared/mcp-servers/mcp-servers'
@@ -104,15 +106,25 @@ function changeHostEntries(
   return changeBotToolEntries(folder, (entries) => change(withIds(entries).entries), options)
 }
 
-async function readHostEntries(folder: string): Promise<{ entries: HostEntry[]; version: string }> {
+type HostList = { entries: HostEntry[]; file: Readonly<Record<string, unknown>> }
+
+async function readHostEntries(folder: string): Promise<HostList> {
   const snapshot = await readBotToolsSnapshot(folder)
   const read = withIds(botToolEntries(snapshot))
   if (!read.assigned) {
-    return { entries: read.entries, version: snapshot.version }
+    return { entries: read.entries, file: snapshot.file }
   }
   await changeHostEntries(folder, (entries) => entries)
   const saved = await readBotToolsSnapshot(folder)
-  return { entries: withIds(botToolEntries(saved)).entries, version: saved.version }
+  return { entries: withIds(botToolEntries(saved)).entries, file: saved.file }
+}
+
+/** The file's `agentFiles`: which agents' own MCP file the user let Orca keep its servers in. */
+function agentFilesOf(file: Readonly<Record<string, unknown>>): McpAgentFiles {
+  const stored: unknown = file.agentFiles
+  const allowed = (agent: McpFileAgent): boolean =>
+    typeof stored === 'object' && stored !== null && Reflect.get(stored, agent) === true
+  return { grok: allowed('grok'), cursor: allowed('cursor'), droid: allowed('droid') }
 }
 
 async function entryById(folder: string, id: string): Promise<HostEntry> {
@@ -138,7 +150,27 @@ function serverVersion(folder: string, server: BotToolServer): string {
 }
 
 export async function listMcpServers(folder = mcpHostListFolder()): Promise<McpServer[]> {
-  return (await readHostEntries(folder)).entries.map((entry) => viewOf(entry, folder))
+  return (await readMcpHostList(folder)).servers
+}
+
+/** What mcpServers.list answers: the servers, and the agents whose own file Orca may keep them in. */
+export async function readMcpHostList(
+  folder = mcpHostListFolder()
+): Promise<{ servers: McpServer[]; agentFiles: McpAgentFiles }> {
+  const { entries, file } = await readHostEntries(folder)
+  return { servers: entries.map((entry) => viewOf(entry, folder)), agentFiles: agentFilesOf(file) }
+}
+
+/** The user's consent, or its withdrawal, for Orca to keep its servers in `agent`'s own MCP file. */
+export async function setMcpAgentFileAllowed(
+  agent: McpFileAgent,
+  allowed: boolean,
+  folder = mcpHostListFolder()
+): Promise<McpAgentFiles> {
+  await changeHostEntries(folder, (entries) => entries, {
+    topLevel: (file) => ({ ...file, agentFiles: { ...agentFilesOf(file), [agent]: allowed } })
+  })
+  return (await readMcpHostList(folder)).agentFiles
 }
 
 /**

@@ -10,6 +10,8 @@ import {
   addMcpServer,
   listMcpServers,
   mcpServerDetails,
+  readMcpHostList,
+  setMcpAgentFileAllowed,
   setMcpServerAgentEnabled,
   setMcpServerWorkspaces,
   updateMcpServer
@@ -49,7 +51,7 @@ afterEach(() => {
 })
 
 describe("a host's MCP server list", () => {
-  it('keeps each server’s id, agents and workspaces through edits, and its header value sealed', async () => {
+  it('keeps each server’s id, agents and workspaces and the agent-file consent through edits, and header values sealed', async () => {
     const folder = tempDir('mcp-host-list-')
     const added = await addMcpServer(
       {
@@ -62,6 +64,7 @@ describe("a host's MCP server list", () => {
       folder
     )
     await setMcpServerAgentEnabled(added.id, 'grok', false, folder)
+    await setMcpAgentFileAllowed('cursor', true, folder)
     const { version } = await mcpServerDetails(added.id, folder)
     // A switch flipped while the editor is open doesn't make its save stale.
     const workspaces = { later: false, on: ['repo-1', 'folder:notes'], off: ['repo-2'] }
@@ -92,6 +95,11 @@ describe("a host's MCP server list", () => {
         sharedProcess: false
       })
     ])
+    expect((await readMcpHostList(folder)).agentFiles).toEqual({
+      grok: false,
+      cursor: true,
+      droid: false
+    })
     const [entry] = stored(folder).servers
     expect(JSON.stringify(stored(folder))).not.toContain(SECRET)
     expect(readBotToolCredential(folder, entry.credential)?.headers).toEqual({

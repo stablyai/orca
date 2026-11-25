@@ -9,6 +9,7 @@ import {
   McpServerDiscover,
   McpServerImport,
   McpServerProblems,
+  McpServerSessions,
   McpServerSetAgentEnabled,
   McpServerSetSharedProcess,
   McpServerSetWorkspaces,
@@ -35,7 +36,8 @@ import {
 import { MCP_HOST_LIST_RELAY_OWNER } from '../../../bots/tool-relay/bot-tool-relay'
 import {
   addMcpServer,
-  listMcpServers,
+  readMcpHostList,
+  setMcpAgentFileAllowed,
   mcpHostListFolder,
   mcpServerDetails,
   mcpServerIdsByName,
@@ -84,8 +86,7 @@ export const MCP_SERVER_METHODS = [
     name: 'mcpServers.list',
     permission: 'workspace',
     params: McpServersList,
-    handler: (_params, context) =>
-      onHost(context, async () => ({ servers: await listMcpServers() }))
+    handler: (_params, context) => onHost(context, () => readMcpHostList())
   }),
   defineMethod({
     name: 'mcpServers.add',
@@ -287,6 +288,23 @@ export const MCP_SERVER_METHODS = [
     name: 'mcpServers.agentFiles.allow',
     permission: 'workspace',
     params: McpServerAgentFilesAllow,
-    handler: () => notYet('mcpServers.agentFiles.allow')
+    handler: (params, context) =>
+      onHost(
+        context,
+        async () => ({ agentFiles: await setMcpAgentFileAllowed(params.agent, params.allowed) }),
+        true
+      )
+  }),
+  defineMethod({
+    name: 'mcpServers.sessions.stale',
+    permission: 'workspace',
+    params: McpServerSessions,
+    handler: () => notYet('mcpServers.sessions.stale')
+  }),
+  defineMethod({
+    name: 'mcpServers.sessions.restart',
+    permission: 'workspace',
+    params: McpServerSessions,
+    handler: () => notYet('mcpServers.sessions.restart')
   })
 ]

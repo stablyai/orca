@@ -11,6 +11,8 @@ export const MOBILE_MCP_SERVER_RPC_METHODS = [
   'mcpServers.move',
   'mcpServers.problems',
   'mcpServers.remove',
+  'mcpServers.sessions.restart',
+  'mcpServers.sessions.stale',
   'mcpServers.setAgentEnabled',
   'mcpServers.setSharedProcess',
   'mcpServers.setWorkspaces',

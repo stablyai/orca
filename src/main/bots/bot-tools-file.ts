@@ -246,18 +246,21 @@ export function changeBotToolServers(
 /** A server to write; with `extras`, they replace the ones its entry kept. */
 type BotToolChange = { server: BotToolServer; extras?: Record<string, unknown> }
 
-/** As `changeBotToolServers`, and the change can also set each server's extra keys. */
+/** As `changeBotToolServers`; the change can also set each server's extra keys, and `topLevel`
+ *  the file's own keys beside `servers`. */
 export function changeBotToolEntries(
   folder: string,
   change: (entries: BotToolEntry[]) => BotToolChange[],
   {
     expectedVersion,
     rename,
-    credentials
+    credentials,
+    topLevel
   }: {
     expectedVersion?: string
     rename?: { from: string; to: string }
     credentials?: ReadonlyMap<string, BotToolNewCredential>
+    topLevel?: (file: Readonly<Record<string, unknown>>) => Record<string, unknown>
   } = {}
 ): Promise<void> {
   return botToolCredentialsTransaction(folder, async () => {
@@ -266,8 +269,9 @@ export function changeBotToolEntries(
       throw stale()
     }
     const entries = change(botToolEntries(snapshot))
+    const file = topLevel ? { ...topLevel(snapshot.file), servers: snapshot.file.servers } : null
     await mkdir(dirname(botToolsPath(folder)), { recursive: true })
-    writeServers(folder, snapshot, entries, rename, credentials)
+    writeServers(folder, file ? { ...snapshot, file } : snapshot, entries, rename, credentials)
     advanceBotToolsEpoch(folder)
   })
 }

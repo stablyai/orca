@@ -1,6 +1,10 @@
 import * as z from 'zod'
 import { BOT_TOOL_NAME_PATTERN, BotToolInputSchema } from '../bot-tools'
-import { MCP_SERVER_AGENT_PATTERN, McpServerWorkspacesSchema } from '../mcp-servers/mcp-servers'
+import {
+  MCP_FILE_AGENTS,
+  MCP_SERVER_AGENT_PATTERN,
+  McpServerWorkspacesSchema
+} from '../mcp-servers/mcp-servers'
 
 const ServerId = z.string().regex(/^[A-Za-z0-9_-]{8,64}$/, 'Name a server by its id')
 const Agent = z.string().regex(MCP_SERVER_AGENT_PATTERN, 'Name an agent by its id')
@@ -56,7 +60,7 @@ export const McpServerImport = z.object({ key: z.string().min(1).max(512) })
 
 // The agents whose own MCP file Orca keeps its servers in, with the user's consent.
 export const McpServerAgentFilesAllow = z.object({
-  agent: z.enum(['grok', 'cursor', 'droid']),
+  agent: z.enum(MCP_FILE_AGENTS),
   allowed: z.boolean()
 })
 
@@ -72,5 +76,8 @@ export const McpServerSetWorkspaces = z.object({
 })
 
 export const McpServerSetSharedProcess = z.object({ id: ServerId, enabled: z.boolean() })
+
+// Sessions still on an older list: how many, and how many Orca can restart in place.
+export const McpServerSessions = z.object({})
 
 export type McpServerAddParams = z.infer<typeof McpServerAdd>
