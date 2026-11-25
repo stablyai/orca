@@ -10,6 +10,7 @@ export const AUTOMATION_RUN_COPY = {
   webhook: 'Webhook',
   gmail: 'Gmail',
   calendar: 'Calendar',
+  teams: 'Teams',
   instructions: 'Instructions',
   event: 'Event',
   startError: 'Error',
@@ -103,6 +104,7 @@ export const AUTOMATION_RUN_COPY = {
   'what.linear.issue_moved': 'Issue moved',
   'what.gmail.new_email': 'New email',
   'what.calendar.starting_soon': 'Meeting starting soon',
+  'what.teams.mentioned': 'Mention',
   'what.other': 'Event'
 } as const
 

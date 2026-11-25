@@ -12,7 +12,8 @@ export const AUTOMATION_EVENT_SOURCE_NAMES: Record<AutomationRunEvent['source'],
   linear: 'Linear',
   webhook: 'Webhook',
   gmail: 'Gmail',
-  calendar: 'Google Calendar'
+  calendar: 'Google Calendar',
+  teams: 'Microsoft Teams'
 }
 
 /** The Google account and Orca's ref for the mail or event, so the run reads it as the owner. */
@@ -24,6 +25,21 @@ function googleLines(event: AutomationRunEvent): string[] {
   const read = event.source === 'gmail' ? 'orca gmail read' : 'orca calendar get'
   return [
     `Google account ${google.account}: \`${read} ${google.ref} --account ${google.account}\` reads it in full.`
+  ]
+}
+
+// The host builds it from Graph ids it checked; checked again here, since it sits outside the fence.
+const TEAMS_MESSAGE_REF = /^teams:chat\/19:[\w.@=-]+\/\d{1,20}$/
+
+/** Orca's ref for the Teams message, and the verbs that read and answer it as the owner. */
+function teamsLines(event: AutomationRunEvent): string[] {
+  const ref = event.teams?.ref
+  if (!ref || !TEAMS_MESSAGE_REF.test(ref)) {
+    return []
+  }
+  const chat = ref.replace(/\/\d+$/, '')
+  return [
+    `Teams message ${ref}: \`orca teams read ${chat}\` reads the chat, and \`orca teams post ${chat} <text>\` answers there as your owner.`
   ]
 }
 
@@ -112,6 +128,7 @@ export function automationRunPrompt(
     ...(event.source === 'slack' ? slackLines(event) : []),
     ...(event.webhook ? webhookLines(event.webhook) : []),
     ...googleLines(event),
+    ...teamsLines(event),
     ...(asker ? [ASKER_LINES[asker]] : [])
   ].join('\n')
   // Anyone in the place may start a run, so the text says whose it is.

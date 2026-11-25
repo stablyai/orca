@@ -55,7 +55,8 @@ export const EVENT_WORDS: EventWords = {
   },
   webhook: { call: "the automation's webhook URL is called" },
   gmail: { new_email: 'a new email arrives' },
-  calendar: { starting_soon: 'an event on your calendar starts soon' }
+  calendar: { starting_soon: 'an event on your calendar starts soon' },
+  teams: { mentioned: 'your owner is @mentioned in a Teams chat' }
 }
 
 // What a source never starts on, so the bot can say so when it confirms a trigger.

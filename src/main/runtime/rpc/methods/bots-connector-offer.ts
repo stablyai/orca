@@ -1,5 +1,5 @@
 // `orca bot connectors --offer`: a bot that needs Slack, Linear, GitHub or Google asks Orca to put a
-// Connect card in its chat, instead of telling its owner where to click.
+// Connect card in its chat, instead of telling its owner where to click. Teams gets a line instead.
 import { noWindowAnswersGoogleCards } from '../../../google/google-card-reach'
 import { randomUUID } from 'node:crypto'
 import type { Bot } from '../../../../shared/bot-types'
@@ -10,7 +10,10 @@ import {
   signInOfferReply,
   type ConnectorOffer
 } from '../../../../shared/bots/bot-connector-offer'
+import type { AgentJournalPlainStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { BotConnectorOffer } from '../../../../shared/rpc-contract/bots-look-around-params'
+import { teamsOfferLine, teamsOfferReply } from '../../../../shared/teams/teams-bot-offer'
+import { getTeamsConnect } from '../../../teams/teams-connect'
 import { hostGoogleBotState } from '../../../bots/bot-google-access'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-around-policy'
@@ -37,12 +40,9 @@ function offeringBot(
   return bot
 }
 
-/** Puts the Connect card in the asking chat. */
-export async function postConnectorOffer(
+async function postInAskingChat(
   callerSessionId: string,
-  bot: Pick<Bot, 'name'>,
-  offer: ConnectorOffer,
-  runtime: Pick<OrcaRuntimeService, 'servesWithoutWindow'>
+  body: AgentJournalPlainStatusItem
 ): Promise<void> {
   refuseBotGroupRoomCard(callerSessionId)
   const host = getStructuredAgentSessionHost()
@@ -53,11 +53,21 @@ export async function postConnectorOffer(
   }
   await host.appendAgentStart(
     destination,
-    {
-      body: connectorOfferBody(offer, bot.name, orcaSignInServer(runtime)),
-      messageId: `connector-offer:${randomUUID()}`
-    },
+    { body, messageId: `connector-offer:${randomUUID()}` },
     Date.now()
+  )
+}
+
+/** Puts the Connect card in the asking chat. */
+export async function postConnectorOffer(
+  callerSessionId: string,
+  bot: Pick<Bot, 'name'>,
+  offer: ConnectorOffer,
+  runtime: Pick<OrcaRuntimeService, 'servesWithoutWindow'>
+): Promise<void> {
+  await postInAskingChat(
+    callerSessionId,
+    connectorOfferBody(offer, bot.name, orcaSignInServer(runtime))
   )
 }
 
@@ -68,6 +78,15 @@ export const BOT_CONNECTOR_OFFER_METHOD = defineMethod({
   handler: async ({ callerSessionId, source, workspace }, { runtime, pairedDeviceId }) => {
     runtime.bots.assertEnabled()
     const bot = offeringBot(runtime, callerSessionId, pairedDeviceId)
+    if (source === 'teams') {
+      const account = await getTeamsConnect().account()
+      const state = { account, botOn: bot.teams === true }
+      const line = teamsOfferLine(state, bot.name)
+      if (line) {
+        await postInAskingChat(callerSessionId, { kind: 'status', text: line })
+      }
+      return teamsOfferReply(state, bot.name)
+    }
     const signIn = signInOfferReply(
       bot,
       source,

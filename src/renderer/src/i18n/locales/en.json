@@ -22790,6 +22790,7 @@
         "webhook": "Webhook",
         "gmail": "Gmail",
         "calendar": "Calendar",
+        "teams": "Teams",
         "instructions": "Instructions",
         "event": "Event",
         "startError": "Error",
@@ -22871,6 +22872,9 @@
           },
           "calendar": {
             "starting_soon": "Meeting starting soon"
+          },
+          "teams": {
+            "mentioned": "Mention"
           },
           "other": "Event"
         },
@@ -28411,7 +28415,8 @@
         "linearIssueMoved": "When a Linear issue moves",
         "webhookCall": "When its webhook is called",
         "gmailNewEmail": "On a new email",
-        "calendarStartingSoon": "Before a meeting starts"
+        "calendarStartingSoon": "Before a meeting starts",
+        "teamsMentioned": "When you are @mentioned in Teams"
       },
       "google": {
         "minutesBefore": "{{count}} min before",

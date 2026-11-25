@@ -461,6 +461,17 @@ orca teams react teams:chat/<chat-id>/<message-id> 👍 --json
 
 Every command prints refs (`teams:chat/…`, `teams:channel/…`) to pass to the next one. A link from Teams' **Copy link** works anywhere a ref does. Reading a channel lists the threads with the latest activity, as Teams orders them. Posting to a channel message replies in its thread. Text is posted exactly as typed, with no formatting and no @mentions.
 
+### Wake a bot on an @mention
+
+```bash
+orca automations create --bot Scout --name "Answer Teams" --on "teams.mentioned" --prompt "Answer the question."
+orca automations create --bot Scout --name "Release pings" --on "teams.mentioned in=teams:chat/<chat-id> contains=release" --prompt "..."
+```
+
+`teams.mentioned` starts the bot when someone else @mentions you in one of your Teams chats (1:1, group or meeting chat). The Orca host that holds the Teams sign-in checks for new messages about once a minute while a bot with Teams on has such a rule, and only then. It never sends the rule to Orca Cloud. After the host was off for a while, only the last hour's mentions count. Channel mentions don't wake a bot yet. The run answers with `orca teams post`.
+
+In a bot's chat, `orca bot connectors` shows whether Teams is connected for it, and `orca bot connectors --offer teams` shows its owner the commands to run when it isn't.
+
 ## Skills (local, no runtime required)
 
 List bundled guides, print a version-matched guide, or install/update hybrid skill packages without the desktop Settings UI:

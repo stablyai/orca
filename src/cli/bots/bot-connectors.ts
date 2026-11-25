@@ -1,5 +1,6 @@
 // `orca bot connectors [--offer <source>]`: what a bot can use where, or a Connect card for its owner.
 import { OFFER_SOURCES } from '../../shared/bots/bot-connector-offer'
+import { TEAMS_OFFER_SOURCE } from '../../shared/teams/teams-bot-offer'
 import { formatBotConnectors, type BotConnectorsView } from '../../shared/bots/bot-connectors-view'
 import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { CommandHandler } from '../dispatch/dispatch'
@@ -26,9 +27,10 @@ export const BOT_CONNECTORS_HANDLERS: Record<string, CommandHandler> = {
       printResult(view, json, formatBotConnectors)
       return
     }
-    const source = OFFER_SOURCES.find((entry) => entry === offer)
+    const sources = [...OFFER_SOURCES, TEAMS_OFFER_SOURCE]
+    const source = sources.find((entry) => entry === offer)
     if (!source) {
-      throw new RuntimeClientError('invalid_argument', `Offer one of: ${OFFER_SOURCES.join(', ')}`)
+      throw new RuntimeClientError('invalid_argument', `Offer one of: ${sources.join(', ')}`)
     }
     const result = await callBots<{ offered: boolean; message: string }>(
       client,

@@ -25,7 +25,9 @@ const SOURCE_MARKS = {
   linear: 'linear',
   gmail: 'google',
   calendar: 'google',
-  webhook: 'webhook'
+  webhook: 'webhook',
+  // No Teams logo ships with Orca; the plain event mark stands in.
+  teams: 'event'
 } as const satisfies Record<AutomationEventSource, AutomationRowMark>
 
 /** A saved automation's mark: the connector of its first event, else a wait's hourglass or a clock. */

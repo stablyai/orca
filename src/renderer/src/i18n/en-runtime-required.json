@@ -2558,6 +2558,7 @@
         "someMemberAccess": "Someone on Who can ask sent this when it ran.",
         "someoneWrote": "Someone wrote",
         "startError": "Error",
+        "teams": "Teams",
         "thenAt": "Runs once at {{time}}",
         "thenLine": "Then",
         "thenOnce": "Runs once, when it happens",
@@ -2610,6 +2611,9 @@
             "mentioned": "Mention",
             "message": "Message",
             "reaction": "Reaction"
+          },
+          "teams": {
+            "mentioned": "Mention"
           }
         },
         "whatAt": "{{what}} · {{where}}",

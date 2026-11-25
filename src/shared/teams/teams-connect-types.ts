@@ -2,6 +2,9 @@
 // Entra app, and what Teams allowed. Tokens never leave the host.
 import type { HostAccountSignInPhase } from '../agent-accounts/host-account-sign-in-types'
 
+/** A host that checks teams.mentioned rules itself, or a client that reads them without crashing. */
+export const TEAMS_TRIGGERS_RUNTIME_CAPABILITY = 'teams.triggers.v1' as const
+
 /** The code the person types at Microsoft's device sign-in page, on any device. */
 export type TeamsSignInPrompt = {
   verificationUri: string

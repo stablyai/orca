@@ -116,6 +116,8 @@ export function eventLabel(trigger: AutomationEventKind): string {
       return translate('bots.automations.on.gmailNewEmail', 'On a new email')
     case 'calendar':
       return translate('bots.automations.on.calendarStartingSoon', 'Before a meeting starts')
+    case 'teams':
+      return translate('bots.automations.on.teamsMentioned', 'When you are @mentioned in Teams')
   }
 }
 

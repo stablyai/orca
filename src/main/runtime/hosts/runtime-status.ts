@@ -19,6 +19,7 @@ import {
 } from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import { orcaAccountRuntimeCapabilities } from '../../orca-profiles/orca-server-sign-in'
 import { googleRuntimeCapabilities } from '../../google/google-connect'
+import { TEAMS_TRIGGERS_RUNTIME_CAPABILITY } from '../../../shared/teams/teams-connect-types'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserCommandsFactorySupportsEngineCapability,
@@ -145,7 +146,7 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
       capabilities.push(BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY)
     }
     capabilities.push(...orcaAccountRuntimeCapabilities())
-    capabilities.push(...googleRuntimeCapabilities())
+    capabilities.push(...googleRuntimeCapabilities(), TEAMS_TRIGGERS_RUNTIME_CAPABILITY)
     if (getManagedServerActions()) {
       capabilities.push(MANAGED_SERVER_RUNTIME_CAPABILITY)
     }

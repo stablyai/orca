@@ -3,6 +3,8 @@
 import { botLinearWorkspaces, botSlackApps, type Bot } from '../bot-types'
 import { CONNECTOR_OFFER_NAMES, type ConnectorOfferSource } from './bot-connector-offer'
 import type { GoogleAccountView, GoogleServiceReadiness } from '../google/google-connect-types'
+import { TEAMS_OFFER_SOURCE } from '../teams/teams-bot-offer'
+import type { TeamsAccountView } from '../teams/teams-connect-types'
 import { GOOGLE_SERVICE_INFO } from '../google/google-scopes'
 import { googleBotConnectState, type GoogleHostConnect } from '../google/google-bot-connect-state'
 import {
@@ -14,7 +16,7 @@ import {
 } from '../google/google-bot-accounts'
 
 export type BotConnectorService = {
-  source: ConnectorOfferSource
+  source: ConnectorOfferSource | typeof TEAMS_OFFER_SOURCE
   tool: string
   /** Who what the tool does shows as: the bot's owner, or the bot itself. */
   actsAs: 'owner' | 'bot'
@@ -49,12 +51,14 @@ export const LINEAR_NO_KEY =
 // google: the Google accounts connected on this computer; absent from hosts that report none.
 // googleApp: whether this computer has a Google app (client) to sign in with.
 // googleDefault: this computer's default as the host reads it: an account, none, or unreadable.
+// teams: the Teams sign-in on this computer, null for none; absent from hosts without Teams.
 export type LocalSignIns = {
   gh: 'signed-in' | 'signed-out' | 'missing'
   linear: boolean
   google?: readonly GoogleAccountView[]
   googleApp?: boolean
   googleDefault?: GoogleDefaultRead
+  teams?: TeamsAccountView | null
 }
 
 const OFFER_GOOGLE = '`orca bot connectors --offer google`'
@@ -129,6 +133,37 @@ function googleService(
   }
 }
 
+const OFFER_TEAMS = '`orca bot connectors --offer teams`'
+
+/** Teams' row: the owner's sign-in on this computer, once the owner turned Teams on for this bot. */
+function teamsService(
+  bot: Pick<Bot, 'teams'>,
+  account: TeamsAccountView | null
+): BotConnectorService {
+  const gap =
+    account?.status === 'connected' && bot.teams === true
+      ? undefined
+      : !account
+        ? `Nobody is signed in to Teams on this computer; ${OFFER_TEAMS} asks your owner to connect it.`
+        : account.status !== 'connected'
+          ? `The Teams sign-in ended; ${OFFER_TEAMS} asks your owner to reconnect.`
+          : `Teams is off for you; ${OFFER_TEAMS} asks your owner to turn it on.`
+  const who = account ? (account.email ?? account.name) : null
+  return {
+    source: TEAMS_OFFER_SOURCE,
+    tool: 'orca teams',
+    actsAs: 'owner',
+    signedIn: gap === undefined,
+    ...(gap ? { gap } : {}),
+    wakes: false,
+    ...(who && !gap
+      ? {
+          detail: `${who}: ${account?.channels ? 'chats and channels' : 'chats only'}. \`--on teams.mentioned\` wakes you on @mentions in chats.`
+        }
+      : {})
+  }
+}
+
 const SLACK_NO_APP = 'Run `orca bot connectors --offer slack` to show your owner a Connect card.'
 const SLACK_NOT_INSTALLED =
   "Your Slack app isn't installed. Ask your owner to finish its setup, or remove it, under Slack on your page in Orca."
@@ -143,7 +178,14 @@ export type CloudSource = { source: string; approveUrl?: string }
 export function botConnectorServices(
   bot: Pick<
     Bot,
-    'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'google' | 'googleAccounts'
+    | 'slack'
+    | 'slackApps'
+    | 'linear'
+    | 'linearWorkspaces'
+    | 'github'
+    | 'google'
+    | 'googleAccounts'
+    | 'teams'
   >,
   local: LocalSignIns,
   cloud?: readonly CloudSource[]
@@ -189,12 +231,16 @@ export function botConnectorServices(
             local.googleDefault ?? { email: null }
           )
         ]
-      : [])
+      : []),
+    ...(local.teams !== undefined ? [teamsService(bot, local.teams)] : [])
   ]
 }
 
 function serviceLines(service: BotConnectorService, botName: string): string[] {
-  const name = CONNECTOR_OFFER_NAMES[service.source]
+  const name =
+    service.source === TEAMS_OFFER_SOURCE
+      ? 'Microsoft Teams'
+      : CONNECTOR_OFFER_NAMES[service.source]
   const as = service.actsAs === 'owner' ? 'as your owner' : `as ${botName}`
   const state = service.signedIn
     ? service.actsAs === 'bot'
@@ -202,7 +248,9 @@ function serviceLines(service: BotConnectorService, botName: string): string[] {
       : 'Signed in.'
     : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
   const wakes =
-    service.source === 'slack' || service.source === 'google'
+    service.source === 'slack' ||
+    service.source === 'google' ||
+    service.source === TEAMS_OFFER_SOURCE
       ? null
       : service.wakes
         ? `  Connected: Orca wakes ${botName} on @mentions and watched events here.`

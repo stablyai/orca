@@ -14,7 +14,7 @@ import {
 import { recordAutomationSavedCard } from '../../../automation-saved-card'
 import { deleteAutomationRecordingCancelledWait } from '../../../../bots/bot-wait-cancel'
 import { LOOK_AROUND_REFUSAL } from '../../../../bots/bot-look-around-policy'
-import { automationForClient, readsGoogleRules } from '../../google-rules-for-client'
+import { automationForClient, readsHostCheckedRules } from '../../host-checked-rules-for-client'
 import { targetInCallerChat } from './runs-in-caller-chat'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import { onceClaimed } from '../../../../../shared/automation-once'
@@ -80,7 +80,7 @@ export const AUTOMATION_METHODS = [
       const fired = firedWaits(context.runtime, listed.automations)
       return {
         ...listed,
-        ...(readsGoogleRules(context)
+        ...(readsHostCheckedRules(context)
           ? {}
           : {
               automations: listed.automations.map((entry) => automationForClient(entry, context))

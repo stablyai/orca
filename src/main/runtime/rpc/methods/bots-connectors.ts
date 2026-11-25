@@ -8,6 +8,7 @@ import { BotConnectors } from '../../../../shared/rpc-contract/bots-look-around-
 import { readGhSignIn } from '../../../bots/bot-local-sign-ins'
 import { getGoogleConnect } from '../../../google/google-connect'
 import { readGoogleDefaultAccount } from '../../../google/google-credential-store'
+import { getTeamsConnect } from '../../../teams/teams-connect'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { CONNECTOR_ACT_METHOD } from './connector-act'
@@ -73,7 +74,8 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
           linear: (await runtime.linearStatus()).connected,
           google: (await getGoogleConnect()?.accounts()) ?? [],
           googleApp: Boolean(await getGoogleConnect()?.client()),
-          googleDefault: getGoogleConnect() ? await readGoogleDefaultAccount() : { email: null }
+          googleDefault: getGoogleConnect() ? await readGoogleDefaultAccount() : { email: null },
+          teams: await getTeamsConnect().account()
         },
         sources
       ),

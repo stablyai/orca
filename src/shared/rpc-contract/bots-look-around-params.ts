@@ -5,6 +5,7 @@ import {
   SUGGESTION_LIMITS
 } from '../bots/bot-look-around'
 import { OFFER_SOURCES } from '../bots/bot-connector-offer'
+import { TEAMS_OFFER_SOURCE } from '../teams/teams-bot-offer'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 
 const text = (max: number, missing: string) => z.string().trim().min(1, missing).max(max)
@@ -53,13 +54,18 @@ export type BotLookAroundSetParams = z.infer<typeof BotLookAroundSet>
 export const BotConnectorOffer = z
   .object({
     callerSessionId: requiredString('Run this from your chat.'),
-    source: z.enum(OFFER_SOURCES),
+    // Teams is a line in the chat, not a card, so the card's sources stay as older clients read them.
+    source: z.enum([...OFFER_SOURCES, TEAMS_OFFER_SOURCE]),
     workspace: z.string().trim().min(1).max(200).optional()
   })
-  .refine((offer) => offer.source !== 'google' || offer.workspace === undefined, {
-    message: 'Google takes no --workspace.',
-    path: ['workspace']
-  })
+  .refine(
+    (offer) =>
+      (offer.source !== 'google' && offer.source !== 'teams') || offer.workspace === undefined,
+    {
+      message: 'Google and Teams take no --workspace.',
+      path: ['workspace']
+    }
+  )
 
 export type BotConnectorOfferParams = z.infer<typeof BotConnectorOffer>
 

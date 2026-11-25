@@ -4,6 +4,7 @@ import { readdir, readFile, realpath } from 'node:fs/promises'
 import { basename, relative, sep } from 'node:path'
 import { isConnectorTrigger } from '../../../shared/automation-event-triggers'
 import { isGoogleTrigger } from '../../../shared/automation-google-triggers'
+import { isTeamsTrigger } from '../../../shared/automation-teams-triggers'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import {
   BOT_AVATAR_FILE,
@@ -116,7 +117,9 @@ function readAutomations(
     }
     for (const trigger of automation.on) {
       if (!isConnectorTrigger(trigger) && !isGoogleTrigger(trigger)) {
-        leftOut.push({ kind: 'automation', name: automation.name, why: 'webhook' })
+        // A package has no Teams events yet, and a Teams rule names the owner's own chats.
+        const why = isTeamsTrigger(trigger) ? 'teams' : 'webhook'
+        leftOut.push({ kind: 'automation', name: automation.name, why })
         continue
       }
       const textContains = 'textContains' in trigger ? trigger.textContains : undefined
