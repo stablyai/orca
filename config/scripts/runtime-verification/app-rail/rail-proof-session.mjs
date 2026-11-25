@@ -67,6 +67,24 @@ function childPids(pid) {
   }
 }
 
+/** Stops a process: SIGTERM, then SIGKILL, waiting for each; true once it is gone. */
+async function terminate(pid, graceMs) {
+  if (await waitForExit(pid, graceMs)) {
+    return true
+  }
+  for (const signal of ['SIGTERM', 'SIGKILL']) {
+    try {
+      process.kill(pid, signal)
+    } catch {
+      return true
+    }
+    if (await waitForExit(pid, 10_000)) {
+      return true
+    }
+  }
+  return !isAlive(pid)
+}
+
 function sha256(text) {
   return createHash('sha256').update(text).digest('hex')
 }
@@ -92,10 +110,8 @@ export async function runRailProof(name, body) {
     if (owned.driver) {
       const pid = owned.driver.process()?.pid
       await owned.driver.close().catch(() => {})
-      if (pid && !(await waitForExit(pid, 5000))) {
-        process.kill(pid, 'SIGKILL')
-      }
-      log(`teardown: driver browser pid ${pid} ${isAlive(pid) ? 'STILL RUNNING' : 'exited'}`)
+      const gone = pid ? await terminate(pid, 5000) : true
+      log(`teardown: driver browser pid ${pid} ${gone ? 'exited' : 'STILL RUNNING'}`)
     }
     if (!owned.server && startRequested) {
       const state = readServerState()
@@ -106,21 +122,14 @@ export async function runRailProof(name, body) {
     if (owned.server) {
       const { pid, url, children } = owned.server
       await callFixtureServer(url, 'stop', {}).catch(() => {})
-      if (!(await waitForExit(pid, 10_000))) {
-        // The server stops its own browser on stop; a hung one is signalled so nothing outlives this run.
-        process.kill(pid, 'SIGTERM')
-        await waitForExit(pid, 5000)
-      }
-      for (const child of children) {
-        if (!(await waitForExit(child, 5000))) {
-          process.kill(child, 'SIGKILL')
-        }
-      }
+      // The server stops its own browser on stop; an unresponsive one is signalled so nothing outlives this run.
+      const serverGone = await terminate(pid, 10_000)
+      const childrenGone = await Promise.all(children.map((child) => terminate(child, 5000)))
       log(
-        `teardown: fixture server children [${children.join(', ')}] ${children.some(isAlive) ? 'STILL RUNNING' : 'exited'}`
+        `teardown: fixture server children [${children.join(', ')}] ${childrenGone.every(Boolean) ? 'exited' : 'STILL RUNNING'}`
       )
       log(
-        `teardown: fixture server pid ${pid} (started by this run) ${isAlive(pid) ? 'STILL RUNNING' : 'stopped'}`
+        `teardown: fixture server pid ${pid} (started by this run) ${serverGone ? 'stopped' : 'STILL RUNNING'}`
       )
     }
   }
@@ -173,6 +182,20 @@ export async function runRailProof(name, body) {
   }
 }
 
+// A loaded host can drop a connection while Vite transforms; a few retries tell that apart from a dead server.
+async function fetchWithRetry(target) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(target, { signal: AbortSignal.timeout(60_000) })
+    } catch (error) {
+      if (attempt === 4) {
+        throw error
+      }
+      await delay(2000 * attempt)
+    }
+  }
+}
+
 /**
  * What the fixture server actually serves for these sources, so a result is bound to the code under test rather than
  * to a checkout: the hash of each on-disk file and of the module the server transforms from it, plus marker checks.
@@ -182,7 +205,7 @@ async function servedSources(url, paths) {
   const modules = {}
   for (const relativePath of paths) {
     const disk = readFileSync(path.join(repoRoot, 'src/renderer', relativePath), 'utf8')
-    const response = await fetch(`${url}/${relativePath}`)
+    const response = await fetchWithRetry(`${url}/${relativePath}`)
     const served = await response.text()
     if (!response.ok) {
       throw new Error(`fixture server could not serve ${relativePath}: ${response.status}`)
