@@ -9,6 +9,7 @@ import { parseCodexCliVersion } from '../../shared/agent-launch/startup/codex-cl
 import { agentSessionInstallCommand } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentCliReleaseSource } from './agent-cli-latest-release'
 import type { OwnAgentCli } from './agent-cli-own-install'
+import { homebrewInstallTap } from './homebrew-install-tap'
 
 /** Runs `args` on the found CLI, or names a command the user runs themselves. */
 export type AgentCliUpdatePlan =
@@ -21,8 +22,8 @@ type AgentCliUpdateDefinition = {
   updatesOutsideLauncher?: true
   latest: (
     installed: string,
-    install: Pick<OwnAgentCli, 'realPath' | 'homebrewTap'>
-  ) => AgentCliReleaseSource
+    install: Pick<OwnAgentCli, 'realPath'>
+  ) => AgentCliReleaseSource | Promise<AgentCliReleaseSource>
   plan: (installed: string, realPath: string) => AgentCliUpdatePlan
 }
 
@@ -93,9 +94,13 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
   // `opencode upgrade` stays on the installed major: 1.x ships as opencode-ai, 2.x as @opencode/cli.
   // A homebrew/core install only gets what the formula carries, which trails npm by hours to days.
   opencode: {
-    latest: (installed, { realPath, homebrewTap }) => {
+    latest: async (installed, { realPath }) => {
       const owner = homebrewOwner(realPath)
-      if (homebrewTap === 'homebrew/core' && owner && !owner.cask && owner.keg === 'opencode') {
+      if (
+        owner?.keg === 'opencode' &&
+        !owner.cask &&
+        (await homebrewInstallTap(realPath)) === 'homebrew/core'
+      ) {
         return { kind: 'homebrew', formula: 'opencode' }
       }
       return npm(compareAppVersions(installed, '2.0.0') >= 0 ? '@opencode/cli' : 'opencode-ai')

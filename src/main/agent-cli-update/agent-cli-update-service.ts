@@ -91,12 +91,12 @@ function planCommand(cli: OwnAgentCli, plan: AgentCliUpdatePlan): string {
   return plan.runnable ? [cli.command, ...plan.args].join(' ') : plan.command
 }
 
-function latestRelease(
+async function latestRelease(
   agent: AgentCliUpdateAgent,
   installed: string,
   cli: OwnAgentCli
 ): Promise<string | null> {
-  return latestAgentCliRelease(agentCliUpdateDefinition(agent).latest(installed, cli))
+  return latestAgentCliRelease(await agentCliUpdateDefinition(agent).latest(installed, cli))
 }
 
 async function behindRelease(

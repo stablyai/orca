@@ -4,12 +4,15 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { homebrewInstallTap } from './homebrew-install-tap'
 
-let prefix = ''
+const prefixes: string[] = []
 
-afterEach(() => rm(prefix, { recursive: true, force: true }))
+afterEach(async () => {
+  await Promise.all(prefixes.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+})
 
 async function install(keg: string, receipt?: string): Promise<string> {
-  prefix = await mkdtemp(join(tmpdir(), 'brew-'))
+  const prefix = await mkdtemp(join(tmpdir(), 'brew-'))
+  prefixes.push(prefix)
   const bin = join(prefix, 'Cellar', keg, '2.4.0', 'bin')
   await mkdir(bin, { recursive: true })
   if (receipt) {
