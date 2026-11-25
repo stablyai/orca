@@ -60,7 +60,7 @@ import { MobileNativeChatQueueAbovePromptContext } from './lower-region/mobile-n
 import { MobileNativeChatPromptStrip } from './input/prompts/MobileNativeChatPromptStrip'
 import { MobileNativeChatOfflineQueue } from './input/queued-messages/MobileNativeChatOfflineQueue'
 import { useMobileNativeChatOfflineQueue } from './composer/delivery/use-mobile-native-chat-offline-sends'
-import { StructuredAgentSendingScope } from '../../../../src/shared/agent-session/view/use-structured-agent-sending'
+import { StructuredAgentSendingScope } from './transcript/sending/structured-agent-sending-scope'
 
 export type { MobileNativeChatInputLockReason } from './mobile-native-chat-view-props'
 

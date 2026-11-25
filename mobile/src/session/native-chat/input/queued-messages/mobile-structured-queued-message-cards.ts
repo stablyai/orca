@@ -65,7 +65,10 @@ export function mobileQueuedMessageCards(
     order?: readonly AgentSessionQueuedMessage[] | null
   } = {}
 ): MobileQueuedMessageCard[] {
-  const cards = projectQueuedMessageCards(queuedMessages, submissions, facts)
+  const cards = projectQueuedMessageCards(queuedMessages, submissions, {
+    ...facts,
+    steersInTranscript: true
+  })
   // Reorder preview changes positions without making a hidden handoff visible again.
   const byId = new Map(cards.map((card) => [card.messageId, card]))
   const ordered = facts.order

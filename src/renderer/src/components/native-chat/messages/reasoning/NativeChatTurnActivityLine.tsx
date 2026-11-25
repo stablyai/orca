@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { StructuredAgentWorkingGate } from '../../../../../../shared/agent-session/view/use-structured-agent-sending'
+import { StructuredAgentWorkingGate } from '../../session/structured/delivery/structured-agent-sending-scope'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

@@ -2,10 +2,7 @@
 
 import { act, render, renderHook } from '@testing-library/react'
 import { createElement, useMemo } from 'react'
-import {
-  createStructuredAgentSendingSource,
-  StructuredAgentSendingScope
-} from '../use-structured-agent-sending'
+import { createStructuredAgentSendingSource } from '../structured-agent-sending-source'
 import { structuredAgentSessionSendingItemIds } from '../structured-agent-session-sending'
 import { expect, it, vi } from 'vitest'
 import type {
@@ -24,6 +21,7 @@ import type {
 } from './structured-agent-session-reducer'
 import type { SubmissionReceipts } from '../structured-agent-session-submissions'
 import type { NativeChatTurnJournal } from '../../../native-chat/transcript/turns/native-chat-turn-membership'
+import type { StructuredAgentSendingScope as DesktopSendingScope } from '../../../../renderer/src/components/native-chat/session/structured/delivery/structured-agent-sending-scope'
 
 type DeliveryOwner = {
   subscribeDelivery: (listener: () => void) => () => void
@@ -347,6 +345,11 @@ it.each([
   }
 )
 
+const { StructuredAgentSendingScope } = await vi.importActual<{
+  StructuredAgentSendingScope: typeof DesktopSendingScope
+}>(
+  '../../../../renderer/src/components/native-chat/session/structured/delivery/structured-agent-sending-scope'
+)
 const { NativeChatTurnActivityLine } = await vi.importActual<{
   NativeChatTurnActivityLine: React.ComponentType<{
     line: { thinking: boolean; stopping: boolean; activityText: null; reasoning: null }

@@ -5,7 +5,7 @@ import { colors, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { scaledType } from './mobile-native-chat-message-styles'
-import { useStructuredAgentItemSending } from '../../../../../../src/shared/agent-session/view/use-structured-agent-sending'
+import { useStructuredAgentItemSending } from '../sending/structured-agent-sending-scope'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 
 /** A message's time as drawn ("2:10 PM", or with its day once it is older) and in full. */

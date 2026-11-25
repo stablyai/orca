@@ -30,7 +30,7 @@ import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/nativ
 import {
   StructuredAgentWorkingGate,
   useStructuredAgentItemSending
-} from '../../../../../../shared/agent-session/view/use-structured-agent-sending'
+} from '../../session/structured/delivery/structured-agent-sending-scope'
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
 export type NativeChatTranscriptRowContext = {

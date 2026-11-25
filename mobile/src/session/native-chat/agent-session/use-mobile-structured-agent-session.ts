@@ -125,8 +125,8 @@ export function useMobileStructuredAgentSession(
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
   const { clearing, messages, receipts, timing, onClearSent, sending, sendingCards } =
     useMobileStructuredTranscript(
-      { agent, read, optimistic: sends.optimistic, sessionKey, turnId },
-      isWorking || queueSendsNext
+      { agent, read, optimistic: sends.optimistic, sessionKey, turnId, queueSendsNext },
+      isWorking
     )
   const backgroundTasks = useMobileStructuredBackgroundTasks({
     sessionKey,

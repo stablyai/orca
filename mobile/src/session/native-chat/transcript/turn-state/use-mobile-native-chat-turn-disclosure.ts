@@ -216,7 +216,6 @@ export function useMobileNativeChatTurnDisclosure({
       return {
         turnDiff: summaries.get(message.id),
         turnStatus,
-        ...(turnStatus && turnKey === activeTurnKey ? { gateWorking: true as const } : {}),
         ...(bar?.above === true && turnStatus !== null ? { turnStatusAbove: true } : {}),
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
         // Pass row keys to one stable handler; per-row closures defeat memoization and render-time ref caches can leak discarded state.

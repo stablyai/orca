@@ -1,4 +1,4 @@
-import { StructuredAgentWorkingGate } from '../../../../../../src/shared/agent-session/view/use-structured-agent-sending'
+import { StructuredAgentWorkingGate } from '../sending/structured-agent-sending-scope'
 import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
 import { mobileNativeChatMemberId } from '../viewport/mobile-native-chat-reading-place'
 import { useState } from 'react'

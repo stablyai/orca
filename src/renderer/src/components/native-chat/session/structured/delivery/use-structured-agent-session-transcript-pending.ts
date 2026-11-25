@@ -3,7 +3,7 @@ import type { StructuredAgentSubmission } from '../../../../../../../shared/agen
 import type { AgentSessionQueuedMessage } from '../../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { pendingSendsOutsideQueuedCards } from '../../../../../../../shared/agent-session/view/structured-agent-session-sending'
-import { steeringQueuedMessageEchoes } from '../../../queue/structured-agent-session-sending-queued-cards'
+import { steeringQueuedMessageEchoes } from '../../../../../../../shared/agent-session/view/structured-agent-session-sending-queued-cards'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 /** The sends the transcript draws before the host records them: queued ones stay in their cards. */

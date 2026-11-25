@@ -18,8 +18,9 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from '../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { StructuredAgentSessionAction } from '../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
-import type { StructuredAgentSendingSource } from '../../../../src/shared/agent-session/view/use-structured-agent-sending'
+import type { StructuredAgentSendingSource } from '../../../../src/shared/agent-session/view/structured-agent-sending-source'
 import type { OrchestrationWorkerApprovalEntry } from '../../../../src/shared/orchestration/orchestration-crew'
 import { MobileNativeChatView } from './MobileNativeChatView'
 import { useMobileStructuredAgentState } from './agent-session/use-mobile-structured-agent-state'
@@ -71,7 +72,8 @@ function batch(
   sequence: number,
   submissions: AgentJournalSubmission[],
   items: AgentJournalRenderItem[] = [],
-  latestTurn?: AgentSessionLatestTurn | null
+  latestTurn?: AgentSessionLatestTurn | null,
+  queuedMessages?: AgentSessionQueuedMessage[]
 ): StructuredAgentSessionAction {
   return {
     type: 'event',
@@ -81,6 +83,7 @@ function batch(
       latestTurn,
       actionablePromptIds: [],
       working: latestTurn != null,
+      ...(queuedMessages ? { queuedMessages } : {}),
       batch: { cursor: { epoch: EPOCH, sequence }, items, removedItemIds: [], submissions }
     }
   }
@@ -316,6 +319,54 @@ it.each([4096, 40960])(
       expect(sendingSource?.getSnapshot().size).toBe(0)
       expect(activityRenders).toHaveBeenLastCalledWith(true, false)
       expect(activityRenders).not.toHaveBeenCalledWith(true, true)
+
+      act(() => mounted.update(createElement(Session)))
+      const card: AgentSessionQueuedMessage = {
+        messageId: 'held-draft',
+        position: 1,
+        state: 'waiting',
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Steer' }] }
+      }
+      await deliverBatch(batch(sequence + 4, [], [], latestTurn, [card]))
+      expect(sendingSource?.getSnapshot().size).toBe(0)
+      expect(activityRenders).toHaveBeenLastCalledWith(false, false)
+
+      activityRenders.mockClear()
+      await deliverBatch(batch(sequence + 5, [], [], latestTurn, [{ ...card, steers: true }]))
+      expect(activityRenders).not.toHaveBeenCalled()
+      expect(sendingSource?.getSnapshot()).toEqual(new Set(['orca:held-draft']))
+
+      const steer: AgentJournalSubmission = {
+        ...SEND,
+        clientMessageId: 'steer-attempt',
+        queuedMessageId: card.messageId,
+        handoverRecorded: true,
+        handedOverAt: 2900
+      }
+      activityRenders.mockClear()
+      await deliverBatch(
+        batch(
+          sequence + 6,
+          [steer],
+          [
+            {
+              itemId: 'orca:steer-attempt',
+              revision: 0,
+              sequence: sequence + 6,
+              observedAt: 2900,
+              body: card.body
+            }
+          ],
+          latestTurn,
+          []
+        )
+      )
+      expect(sendingSource?.getSnapshot()).toEqual(new Set(['orca:steer-attempt']))
+      expect(activityRenders).not.toHaveBeenCalled()
+
+      await deliverBatch(batch(sequence + 7, [{ ...steer, writtenAt: 3000 }], [], latestTurn))
+      expect(sendingSource?.getSnapshot().size).toBe(0)
+      expect(activityRenders).toHaveBeenCalledExactlyOnceWith(false, false)
     } finally {
       act(() => mounted.unmount())
       vi.useRealTimers()

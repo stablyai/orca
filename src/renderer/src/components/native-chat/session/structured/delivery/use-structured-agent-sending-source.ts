@@ -5,7 +5,7 @@ import type {
   SubmissionReceipts
 } from '../../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { StructuredAgentSessionReadOwner } from '../read/structured-agent-session-read-owner-contract'
-import { createStructuredAgentSendingSource } from '../../../../../../../shared/agent-session/view/use-structured-agent-sending'
+import { createStructuredAgentSendingSource } from '../../../../../../../shared/agent-session/view/structured-agent-sending-source'
 
 const NO_RECEIPTS: SubmissionReceipts = new Map()
 const noSubscription = () => () => {}

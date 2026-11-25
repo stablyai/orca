@@ -2,7 +2,7 @@ import { createElement, Fragment, type ReactNode } from 'react'
 import type { ImageStyle, TextStyle, ViewStyle } from 'react-native'
 import { vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
-import { useStructuredAgentDisplayedSendPending } from '../../../../src/shared/agent-session/view/use-structured-agent-sending'
+import { useStructuredAgentDisplayedSendPending } from './transcript/sending/structured-agent-sending-scope'
 
 const { viewRenders, listRenders, messageRenders, activityRenders, translate } = vi.hoisted(() => ({
   viewRenders: vi.fn(() => ({ bottom: 0 })),

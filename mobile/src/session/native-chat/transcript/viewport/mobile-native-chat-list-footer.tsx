@@ -1,7 +1,7 @@
 import { Fragment, type ReactElement } from 'react'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatAwaitingInput } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-terminal-turn'
-import { StructuredAgentWorkingGate } from '../../../../../../src/shared/agent-session/view/use-structured-agent-sending'
+import { StructuredAgentWorkingGate } from '../sending/structured-agent-sending-scope'
 import { MobileNativeChatLiveLine } from '../messages/MobileNativeChatLiveLine'
 import { MobileNativeChatAwaitingInputRow } from '../messages/MobileNativeChatAwaitingInputRow'
 import type { useMobileNativeChatTurnDisclosure } from '../turn-state/use-mobile-native-chat-turn-disclosure'

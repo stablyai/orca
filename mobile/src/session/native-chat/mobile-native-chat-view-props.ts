@@ -21,7 +21,7 @@ import type { MobileNativeChatPromptCard } from './input/prompts/MobileNativeCha
 import type { MobileNativeChatInputLockStatus } from './composer/field/MobileNativeChatInputLockStatus'
 import type { MobileNativeChatPendingItem } from './transcript/projection/mobile-native-chat-render-data'
 import type { MobileWorkerApprovals } from './input/prompts/use-mobile-worker-approvals'
-import type { StructuredAgentSendingSource } from '../../../../src/shared/agent-session/view/use-structured-agent-sending'
+import type { StructuredAgentSendingSource } from '../../../../src/shared/agent-session/view/structured-agent-sending-source'
 
 export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 

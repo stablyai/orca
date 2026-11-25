@@ -10,7 +10,7 @@ import { useStructuredAgentSendingSource } from './session/structured/delivery/u
 import {
   StructuredAgentSendingScope,
   StructuredAgentWorkingGate
-} from '../../../../shared/agent-session/view/use-structured-agent-sending'
+} from './session/structured/delivery/structured-agent-sending-scope'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import {

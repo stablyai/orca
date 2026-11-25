@@ -64,7 +64,6 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   turnStatus,
   turnStatusAbove = false,
-  gateWorking,
   turnExpanded,
   turnKey,
   rewindable,
@@ -97,7 +96,6 @@ function MobileNativeChatMessageImpl({
   fontScale?: number
   turnStatus?: NativeChatTurnStatus | null
   turnStatusAbove?: boolean
-  gateWorking?: true
   turnExpanded?: boolean
   turnKey?: string
   /** The chat may rewind to this row, by desktop's `nativeChatRowOffersRewind`. */
@@ -186,7 +184,6 @@ function MobileNativeChatMessageImpl({
       : undefined
 
   const statusRow = mobileNativeChatMessageTurnBar(turnStatus, {
-    gateWorking,
     turnExpanded,
     turnKey,
     onToggleTurn

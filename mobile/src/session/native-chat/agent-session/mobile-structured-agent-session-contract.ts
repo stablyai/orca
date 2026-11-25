@@ -36,7 +36,7 @@ import type { MobileNativeChatUsageLimit } from '../status/use-mobile-native-cha
 import type { MobileStructuredMcpPanel } from '../mcp/use-mobile-structured-mcp-panel'
 import type { MobileStructuredAccountUsage } from '../usage/use-mobile-structured-account-usage'
 import type { MobileStructuredAsyncQuestionSkip } from './use-mobile-structured-async-questions'
-import type { StructuredAgentSendingSource } from '../../../../../src/shared/agent-session/view/use-structured-agent-sending'
+import type { StructuredAgentSendingSource } from '../../../../../src/shared/agent-session/view/structured-agent-sending-source'
 
 export type StructuredMobileSession = Omit<
   ReturnType<typeof useMobileStructuredAgentOptions>,

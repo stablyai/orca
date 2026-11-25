@@ -48,7 +48,7 @@ import {
   unconfirmedStructuredStateSavedAt
 } from '../transcript/persistence/mobile-native-chat-transcript-writer'
 import { useStoredChatTranscript } from '../transcript/persistence/use-stored-chat-transcript'
-import type { SubmissionReceiptSource } from '../../../../../src/shared/agent-session/view/use-structured-agent-sending'
+import type { SubmissionReceiptSource } from '../../../../../src/shared/agent-session/view/structured-agent-sending-source'
 
 import { createMobileStructuredChatStateCache } from './mobile-structured-chat-state-cache'
 

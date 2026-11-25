@@ -8,7 +8,7 @@ import type {
   StructuredAgentSubmission,
   SubmissionReceipts
 } from '../../../../../src/shared/agent-session/view/structured-agent-session-submissions'
-import type { SubmissionReceiptSource } from '../../../../../src/shared/agent-session/view/use-structured-agent-sending'
+import type { SubmissionReceiptSource } from '../../../../../src/shared/agent-session/view/structured-agent-sending-source'
 import { reduceStructuredChatState } from '../transcript/persistence/mobile-native-chat-transcript-writer'
 
 const MAX_RETAINED_SESSION_STATES = 32

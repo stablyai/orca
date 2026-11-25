@@ -7,7 +7,7 @@ import {
   nativeChatElapsedSeconds,
   type NativeChatTurnStatus
 } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
-import { StructuredAgentWorkingGate } from '../../../../../../src/shared/agent-session/view/use-structured-agent-sending'
+import { StructuredAgentWorkingGate } from '../sending/structured-agent-sending-scope'
 import {
   formatMobileNativeChatTurnStatusLabel,
   nativeChatTurnStatusCopy
@@ -30,12 +30,10 @@ function useElapsedSeconds(startedAt: number | null, counting: boolean): number 
 export function mobileNativeChatMessageTurnBar(
   status: NativeChatTurnStatus | null | undefined,
   {
-    gateWorking,
     turnExpanded,
     turnKey,
     onToggleTurn
   }: {
-    gateWorking?: true
     turnExpanded?: boolean
     turnKey?: string
     onToggleTurn?: (turnKey: string) => void
@@ -51,7 +49,11 @@ export function mobileNativeChatMessageTurnBar(
       onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
     />
   )
-  return gateWorking ? <StructuredAgentWorkingGate>{bar}</StructuredAgentWorkingGate> : bar
+  return status.workedSeconds == null ? (
+    <StructuredAgentWorkingGate>{bar}</StructuredAgentWorkingGate>
+  ) : (
+    bar
+  )
 }
 
 export function MobileNativeChatTurnStatus({

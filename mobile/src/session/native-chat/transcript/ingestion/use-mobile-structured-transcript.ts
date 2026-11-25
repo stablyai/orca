@@ -2,7 +2,7 @@ import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agen
 import {
   createStructuredAgentSendingSource,
   type SubmissionReceiptSource
-} from '../../../../../../src/shared/agent-session/view/use-structured-agent-sending'
+} from '../../../../../../src/shared/agent-session/view/structured-agent-sending-source'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   agentSessionContextClearOutstanding,
@@ -12,7 +12,10 @@ import {
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import { pendingSendsOutsideQueuedCards } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending'
-import { sendingQueuedMessageCards } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending-queued-cards'
+import {
+  sendingQueuedMessageCards,
+  steeringQueuedMessageEchoes
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending-queued-cards'
 import { createStructuredAgentSessionMessageProjection } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-stream'
 import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { withNativeChatCutTurnNotices } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
@@ -42,7 +45,8 @@ export function useMobileStructuredTranscript(
     read: { state, submissionReceipts },
     optimistic,
     sessionKey,
-    turnId
+    turnId,
+    queueSendsNext = false
   }: {
     agent: string | null
     read: {
@@ -55,12 +59,14 @@ export function useMobileStructuredTranscript(
         | 'working'
         | 'hostClock'
         | 'queuedMessages'
+        | 'queuePause'
       >
       submissionReceipts: SubmissionReceiptSource
     }
     optimistic: readonly StructuredAgentSessionOptimisticMessage[]
     sessionKey: string
     turnId: string | null
+    queueSendsNext?: boolean
   },
   isWorking: boolean
 ) {
@@ -112,13 +118,20 @@ export function useMobileStructuredTranscript(
     () => (state.queuedMessages ?? []).map((message) => message.messageId),
     [state.queuedMessages]
   )
-  const transcriptPending = useMemo(
-    () => pendingSendsOutsideQueuedCards(optimistic, heldIds, isWorking),
-    [optimistic, heldIds, isWorking]
-  )
+  const { queuedMessages, submissions, queuePause } = state
+  const queuePaused = queuePause != null
+  const queueSendsAsCards = isWorking || queueSendsNext
+  const transcriptPending = useMemo(() => {
+    const outside = pendingSendsOutsideQueuedCards(optimistic, heldIds, queueSendsAsCards)
+    const steering = steeringQueuedMessageEchoes(queuedMessages, submissions, optimistic, {
+      agentWorking: isWorking,
+      queuePaused
+    })
+    return steering.length > 0 ? [...outside, ...steering] : outside
+  }, [optimistic, heldIds, queueSendsAsCards, queuedMessages, submissions, isWorking, queuePaused])
   const sendingCards = useMemo(
-    () => sendingQueuedMessageCards(optimistic, heldIds, isWorking, state.submissions),
-    [optimistic, heldIds, isWorking, state.submissions]
+    () => sendingQueuedMessageCards(optimistic, heldIds, queueSendsAsCards, submissions),
+    [optimistic, heldIds, queueSendsAsCards, submissions]
   )
   const projectedMessages = useMemo(
     () => projectMessages(transcriptItems, transcriptPending, state.submissions),
