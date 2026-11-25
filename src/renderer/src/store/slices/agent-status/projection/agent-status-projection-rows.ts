@@ -15,12 +15,8 @@ import {
   IDLE
 } from '../../../../../../shared/sidebar-list/sorting/smart-attention'
 import { classifyPaneKeyLiveness } from '../live-status/agent-status-capacity-eviction'
-import {
-  parsePaneKey,
-  makePaneKey,
-  parseLegacyNumericPaneKey
-} from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
+import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { legacyStatusTitleRowKey } from '@/components/sidebar/workspace-card/activity/legacy-status-title-row-key'
 import {
   FLAGS,
   emptySummary,
@@ -35,7 +31,16 @@ export function stageProjectionRows(
   state: AppState,
   topology: ProjectionTopology
 ) {
-  const { changedKeys, nextTabs, represented, now, nextFallback, ownerOf, sourceEntry } = topology
+  const {
+    changedKeys,
+    nextTabs,
+    represented,
+    now,
+    nextFallback,
+    nextFallbackTabs,
+    ownerOf,
+    sourceEntry
+  } = topology
   const nextSuppressions = new Map<string, readonly string[]>(),
     suppressionDeltas = new Map<string, number>()
   const delta = (key: string, sign: number) =>
@@ -49,15 +54,13 @@ export function stageProjectionRows(
     const identity = parseAgentStatusPaneIdentity(key, represented.get(key))
     if (entry && identity) {
       keys.push(key)
-      const legacy = parseLegacyNumericPaneKey(key),
-        leaf = legacy
-          ? resolveRuntimePaneTitleLeafId(
-              state.terminalLayoutsByTabId[legacy.tabId],
-              legacy.numericPaneId
-            )
-          : null
-      if (leaf) {
-        keys.push(makePaneKey(legacy!.tabId, leaf))
+      const titleRowKey = legacyStatusTitleRowKey(key, state.terminalLayoutsByTabId, (tabId) =>
+        Array.from(nextFallbackTabs.get(tabId) ?? data.fallbackByTab.get(tabId) ?? [], (rowKey) =>
+          nextFallback.has(rowKey) ? nextFallback.get(rowKey) : data.fallbackRows.get(rowKey)
+        )
+      )
+      if (titleRowKey) {
+        keys.push(titleRowKey)
       }
       const orchestration = mergeAgentStatusOrchestration(
         entry,
