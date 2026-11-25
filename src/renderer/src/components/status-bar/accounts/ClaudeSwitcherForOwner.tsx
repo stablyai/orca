@@ -47,6 +47,7 @@ import { AccountSwitchSection, AccountSwitchSignedOutHeading } from './AccountSw
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from '../usage/ProviderDetailsMenu'
 import { claudeInactiveUsageId } from '../../../../../shared/agent-accounts/claude/claude-system-default-usage'
+import { claudeSwitcherScope } from './claude-switcher-scope'
 import { getOwnerAccountRows } from './owner-account-rows'
 import {
   claudeAccountCardSignIn,
@@ -77,9 +78,8 @@ export function ClaudeSwitcherForOwner({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const refreshClaudeRateLimitsForTarget = useAppStore((s) => s.refreshClaudeRateLimitsForTarget)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
-  const runtimeTarget = chatAction?.target ?? owner.target
+  const { runtimeTarget, wslHostDistro, chatOnHost } = claudeSwitcherScope(chatAction, owner)
   const openAccountSettings = useOpenClaudeAccountSettings(runtimeTarget, Boolean(chatAction))
-  const wslHostDistro = chatAction ? null : owner.wslHostDistro
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
   const { settings, ownHostName, accountSettings, claudeAccountSyncKey } = useClaudeSwitcherState(
@@ -114,7 +114,7 @@ export function ClaudeSwitcherForOwner({
     ? { runtime: 'wsl' as const, wslDistro: wslHostDistro }
     : usageTarget
   // Why: a chat's local list loads on its own; a remote roster rides the owner's stream.
-  const rosterLoaded = ownerUsage.remoteOwner ? rosterKnown : accountsLoaded
+  const rosterLoaded = ownerUsage.remoteOwner && !wslHostDistro ? rosterKnown : accountsLoaded
   const accountState = resolveClaudeStatusAccountState(
     accountSettings,
     roster,
@@ -225,7 +225,7 @@ export function ClaudeSwitcherForOwner({
       hostLabel: providerAccountHostLabel
     }
   )
-  const selectedGroup = chatAction
+  const selectedGroup = chatOnHost
     ? switchGroups.find((group) => group.runtimeTarget.runtime === 'host')
     : (switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0])
   const activeTarget = selectedGroup?.targets.find((target) => target.active)

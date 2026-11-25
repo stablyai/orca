@@ -181,12 +181,12 @@ describe('useOwnerUsageRateLimits', () => {
     const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
     // Pending: no host-runtime number may stand in for the distro's.
     expect(result.current.rateLimits.claude?.session).toBeNull()
-    expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledWith({
-      runtime: 'wsl',
-      wslDistro: 'Alpine'
-    })
-    const rateLimits = createEmptyRateLimitState({ claude: provider('claude', 77) })
-    await act(async () => resolveRead({ accounts: { claude: null, codex: null }, rateLimits }))
+    expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledWith(
+      { runtime: 'wsl', wslDistro: 'Alpine' },
+      ['claude', 'codex']
+    )
+    const reading = provider('claude', 77)
+    await act(async () => resolveRead({ claude: { accountId: null, reading } }))
     expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(77)
     mocks.distro = null
     rerender()
@@ -198,10 +198,9 @@ describe('useOwnerUsageRateLimits', () => {
     mocks.settings = {
       activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: { Arch: 'current' } }
     }
-    const rateLimits = createEmptyRateLimitState({ claude: provider('claude', 66) })
+    const reading = provider('claude', 66)
     mocks.readUsageForRuntimeTarget.mockResolvedValue({
-      accounts: { claude: 'previous', codex: null },
-      rateLimits
+      claude: { accountId: 'previous', reading }
     })
     const { result } = renderHook(() => useOwnerUsageRateLimits(local))
     await act(async () => {})
@@ -216,6 +215,41 @@ describe('useOwnerUsageRateLimits', () => {
     await act(async () => {})
     expect(result.current.rateLimits.claude?.usageMetadata?.unverifiableOwner).toBe(true)
     expect(result.current.rateLimits.claude?.session).toBeNull()
+  })
+
+  it('keeps a forced refresh from re-reading inside a Retry-After window', async () => {
+    mocks.distro = 'Gentoo'
+    const reading = {
+      ...provider('claude', 50),
+      // A fixed far-future deadline: the window is still active whenever this runs.
+      usageMetadata: { retryAtMs: 4_102_444_800_000 }
+    }
+    mocks.readUsageForRuntimeTarget.mockResolvedValue({ claude: { accountId: null, reading } })
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.refreshRemote?.()
+    })
+    // Only Codex, which carries no Retry-After, is read again.
+    expect(mocks.readUsageForRuntimeTarget).toHaveBeenLastCalledWith(
+      { runtime: 'wsl', wslDistro: 'Gentoo' },
+      ['codex']
+    )
+  })
+
+  it('keeps a provider the desktop already fetches for the distro live while the other reads', () => {
+    mocks.distro = 'Kali'
+    const liveLocal = createEmptyRateLimitState({
+      claude: provider('claude', 33),
+      claudeTarget: { runtime: 'wsl', wslDistro: 'Kali' }
+    })
+    const { result } = renderHook(() => useOwnerUsageRateLimits(liveLocal))
+    expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledWith(
+      { runtime: 'wsl', wslDistro: 'Kali' },
+      ['codex']
+    )
+    expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(33)
+    expect(result.current.rateLimits.codex?.status).toBe('fetching')
   })
 
   it('never retains a paired snapshot when a WSL chat becomes visible', () => {

@@ -41,6 +41,9 @@ const preparation: ClaudeRuntimeAuthPreparation = {
   provenance: 'wsl:Ubuntu'
 }
 
+const ubuntu = { runtime: 'wsl', wslDistro: 'Ubuntu' } as const
+const both = ['claude', 'codex'] as const
+
 it('reads a WSL distro usage without switching the desktop fetch target or publishing state', async () => {
   claudeFetch.mockResolvedValue(ok('claude', 42))
   codexFetch.mockResolvedValue(ok('codex', 24))
@@ -56,13 +59,14 @@ it('reads a WSL distro usage without switching the desktop fetch target or publi
     return { kind: 'ready', codexHomePath: '/home/u/.codex' }
   })
 
-  const read = await service.readUsageForRuntimeTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-  expect(read.claude?.session?.usedPercent).toBe(42)
-  expect(read.codex?.session?.usedPercent).toBe(24)
-  expect(read.claudeTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-  expect(read.codexTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-  expect(claudeTargets).toEqual([{ runtime: 'wsl', wslDistro: 'Ubuntu' }])
-  expect(codexTargets).toEqual([{ runtime: 'wsl', wslDistro: 'Ubuntu' }])
+  const read = await service.readUsageForRuntimeTarget(ubuntu, both, () => ({
+    claude: 'a',
+    codex: null
+  }))
+  expect(read.claude).toEqual({ accountId: 'a', reading: ok('claude', 42) })
+  expect(read.codex).toEqual({ accountId: null, reading: ok('codex', 24) })
+  expect(claudeTargets).toEqual([ubuntu])
+  expect(codexTargets).toEqual([ubuntu])
 
   // The desktop's own fetch target and published state stay untouched by the read.
   const state = await service.getState()
@@ -70,4 +74,25 @@ it('reads a WSL distro usage without switching the desktop fetch target or publi
   expect(state.codex).toBeNull()
   expect(state.claudeTarget).toEqual({ runtime: 'host', wslDistro: null })
   expect(state.codexTarget).toEqual({ runtime: 'host', wslDistro: null })
+})
+
+it('labels a reading taken across a switch with the account actually read, or drops it', async () => {
+  claudeFetch.mockResolvedValue(ok('claude', 42))
+  codexFetch.mockResolvedValue(ok('codex', 24))
+  const service = new RateLimitService()
+  // The resolvers re-read settings after the switch, so they read account B.
+  service.setClaudeAuthPreparationResolver(async () => ({
+    ...preparation,
+    readingAccount: { accountId: 'b', ...ubuntu }
+  }))
+  service.setCodexHomePathResolver(async () => ({ kind: 'ready', codexHomePath: '/shared' }))
+  const selections = [
+    { claude: 'a', codex: 'a' },
+    { claude: 'b', codex: 'b' }
+  ]
+
+  const read = await service.readUsageForRuntimeTarget(ubuntu, both, () => selections.shift()!)
+  expect(read.claude?.accountId).toBe('b')
+  // Codex names no reading account, so a reading across the switch belongs to nobody.
+  expect(read.codex).toBeUndefined()
 })

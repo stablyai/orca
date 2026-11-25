@@ -22,6 +22,7 @@ import type {
   CodexRateLimitResetResult,
   RateLimitRuntimeTarget,
   RateLimitState,
+  RuntimeTargetUsageProvider,
   RuntimeTargetUsageRead
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
@@ -77,7 +78,8 @@ export type RateLimitsApi = {
   refreshGrok: () => Promise<RateLimitState>
   /** Null when this client cannot read another runtime's accounts (web). */
   readUsageForRuntimeTarget: (
-    target: RateLimitRuntimeTarget
+    target: RateLimitRuntimeTarget,
+    providers: RuntimeTargetUsageProvider[]
   ) => Promise<RuntimeTargetUsageRead | null>
   onUpdate: (callback: (state: RateLimitState) => void) => () => void
 }

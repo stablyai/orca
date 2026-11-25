@@ -3,6 +3,7 @@ import type {
   CodexRateLimitResetResult,
   RateLimitRuntimeTarget,
   RateLimitState,
+  RuntimeTargetUsageProvider,
   RuntimeTargetUsageRead
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { PreloadApi } from '../../api-types'
@@ -23,9 +24,10 @@ export const rateLimitsApi = {
     ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
   refreshGrok: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshGrok'),
   readUsageForRuntimeTarget: (
-    target: RateLimitRuntimeTarget
+    target: RateLimitRuntimeTarget,
+    providers: RuntimeTargetUsageProvider[]
   ): Promise<RuntimeTargetUsageRead | null> =>
-    ipcRenderer.invoke('rateLimits:readUsageForRuntimeTarget', target),
+    ipcRenderer.invoke('rateLimits:readUsageForRuntimeTarget', target, providers),
   onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
     ipcRenderer.on('rateLimits:update', listener)

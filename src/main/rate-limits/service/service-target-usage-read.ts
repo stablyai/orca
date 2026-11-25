@@ -1,6 +1,5 @@
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
-import { createEmptyRateLimitState } from '../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import { toErrorMessage } from './service-types'
 import {
   normalizeCodexAccountSelectionTarget,
@@ -13,55 +12,69 @@ import {
 import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget,
-  RateLimitState
+  RuntimeTargetUsageProvider,
+  RuntimeTargetUsageRead
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 
 // Why: a hung WSL probe must not pin the renderer's owner usage read forever.
 const TARGET_USAGE_READ_TIMEOUT_MS = 30_000
 
+type ProviderRead = { reading: ProviderRateLimits | null; readingAccountId?: string }
+
 export abstract class RateLimitServiceTargetUsageRead extends RateLimitServiceAccountRefresh {
-  /** One runtime target's selected Claude and Codex readings, for a focused WSL host's distro.
-   *  The read never switches this desktop's own fetch target or publishes state, so the host
-   *  runtime's numbers stay untouched (#42644 follow-up). */
-  async readUsageForRuntimeTarget(target: RateLimitRuntimeTarget): Promise<RateLimitState> {
-    const claudeTarget = normalizeClaudeAccountSelectionTarget(target)
-    const codexTarget = normalizeCodexAccountSelectionTarget(target)
+  /** A WSL distro's selected-account readings; never switches this desktop's fetch target or publishes state (#42644). */
+  async readUsageForRuntimeTarget(
+    target: RateLimitRuntimeTarget,
+    providers: readonly RuntimeTargetUsageProvider[],
+    readSelection: () => Record<RuntimeTargetUsageProvider, string | null>
+  ): Promise<RuntimeTargetUsageRead> {
+    const before = readSelection()
     const signal = AbortSignal.timeout(TARGET_USAGE_READ_TIMEOUT_MS)
+    const readOne = (provider: RuntimeTargetUsageProvider): Promise<ProviderRead> =>
+      (provider === 'claude'
+        ? this.readClaudeUsageForTarget(normalizeClaudeAccountSelectionTarget(target), signal)
+        : this.readCodexUsageForTarget(normalizeCodexAccountSelectionTarget(target), signal)
+      ).catch((error): ProviderRead => ({ reading: usageReadError(provider, error) }))
     // Each provider fails alone: one resolver's rejection must not discard the other's reading.
-    const [claude, codex] = await Promise.all([
-      this.readClaudeUsageForTarget(claudeTarget, signal).catch((error): ProviderRateLimits =>
-        usageReadError('claude', error)
-      ),
-      this.readCodexUsageForTarget(codexTarget, signal).catch((error): ProviderRateLimits =>
-        usageReadError('codex', error)
-      )
-    ])
-    return createEmptyRateLimitState({ claude, codex, claudeTarget, codexTarget })
+    const reads = await Promise.all(providers.map(readOne))
+    const after = readSelection()
+    const result: RuntimeTargetUsageRead = {}
+    providers.forEach((provider, index) => {
+      const { reading, readingAccountId } = reads[index]
+      // Why: the resolver's own account wins; otherwise only an unchanged selection proves whose reading it is.
+      const accountId =
+        readingAccountId ?? (before[provider] === after[provider] ? after[provider] : undefined)
+      if (accountId !== undefined) {
+        result[provider] = { accountId, reading }
+      }
+    })
+    return result
   }
 
   private async readClaudeUsageForTarget(
     target: NormalizedClaudeAccountSelectionTarget,
     signal: AbortSignal
-  ): Promise<ProviderRateLimits | null> {
+  ): Promise<ProviderRead> {
     // Why null: live statusline data belongs to the desktop's own fetch target, not this read's.
     if (!this.isClaudeOAuthUsageEnabled()) {
-      return null
+      return { reading: null }
     }
     const preparation = await raceDeadline(this.claudeAuthPreparationResolver?.(target), signal)
-    return fetchActiveClaudeRateLimits({
+    const reading = await fetchActiveClaudeRateLimits({
       authPreparation: preparation,
       allowPtyFallback: this.shouldAllowClaudePtyFallback(preparation),
       allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
       networkProxySettings: this.networkProxySettingsResolver?.(),
       signal
     })
+    return { reading, readingAccountId: preparation?.readingAccount?.accountId }
   }
 
   private async readCodexUsageForTarget(
     target: NormalizedCodexAccountSelectionTarget,
     signal: AbortSignal
-  ): Promise<ProviderRateLimits | null> {
+  ): Promise<ProviderRead> {
     // The deadline must cover the WSL probes, not just the fetch: raceDeadline rejects a hung one.
     const home = await raceDeadline(this.resolveCodexHome(target), signal)
     if (!home) {
@@ -69,18 +82,20 @@ export abstract class RateLimitServiceTargetUsageRead extends RateLimitServiceAc
     }
     // Why null: a stopped distro must not be booted by an owner usage read.
     if (home.skip) {
-      return null
+      return { reading: null }
     }
+    const readingAccountId = home.readingAccount?.accountId
     const missingWslHome = home.homePath ? null : this.getMissingWslCodexHomeResult(target)
     if (missingWslHome) {
-      return missingWslHome
+      return { reading: missingWslHome, readingAccountId }
     }
-    return fetchCodexRateLimits({
+    const reading = await fetchCodexRateLimits({
       codexHomePath: home.homePath,
       readingAccount: home.readingAccount,
       networkProxySettings: this.networkProxySettingsResolver?.(),
       signal
     })
+    return { reading, readingAccountId }
   }
 }
 

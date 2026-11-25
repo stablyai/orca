@@ -1,6 +1,9 @@
 import { ipcMain } from 'electron'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
-import type { RateLimitRuntimeTarget } from '../../shared/agent-usage/rate-limits/rate-limit-types'
+import type {
+  RateLimitRuntimeTarget,
+  RuntimeTargetUsageProvider
+} from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { getSelectedClaudeAccountIdForTarget } from '../claude-accounts/selection/runtime-selection'
@@ -34,14 +37,13 @@ export function registerRateLimitHandlers(
   // Why: a focused WSL host's distro usage is read without switching the desktop's own target.
   ipcMain.handle(
     'rateLimits:readUsageForRuntimeTarget',
-    async (_event, target: RateLimitRuntimeTarget) => {
-      // Why before the read: a switch mid-read then shows as a mismatch the renderer discards.
-      const settings = getSettings()
-      const accounts = {
-        claude: getSelectedClaudeAccountIdForTarget(settings, target),
-        codex: getSelectedCodexAccountIdForTarget(settings, target)
-      }
-      return { accounts, rateLimits: await rateLimits.readUsageForRuntimeTarget(target) }
-    }
+    (_event, target: RateLimitRuntimeTarget, providers: RuntimeTargetUsageProvider[]) =>
+      rateLimits.readUsageForRuntimeTarget(target, providers, () => {
+        const settings = getSettings()
+        return {
+          claude: getSelectedClaudeAccountIdForTarget(settings, target),
+          codex: getSelectedCodexAccountIdForTarget(settings, target)
+        }
+      })
   )
 }

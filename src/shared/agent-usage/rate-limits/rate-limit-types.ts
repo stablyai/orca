@@ -224,9 +224,15 @@ export type RateLimitState = {
   antigravityAccounts: AntigravityAccountUsage[]
 }
 
-/** One runtime target's selected-account usage, read without switching the desktop's fetch target. */
-export type RuntimeTargetUsageRead = {
-  /** The account each reading was taken for, so a caller can drop one that no longer matches. */
-  accounts: { claude: string | null; codex: string | null }
-  rateLimits: RateLimitState
+export type RuntimeTargetUsageProvider = 'claude' | 'codex'
+
+/** A reading and the account it was taken for; null is the target's System default. */
+export type AttributedProviderUsage = {
+  accountId: string | null
+  reading: ProviderRateLimits | null
 }
+
+/** One runtime target's selected-account usage; a provider is absent when its account is unknown. */
+export type RuntimeTargetUsageRead = Partial<
+  Record<RuntimeTargetUsageProvider, AttributedProviderUsage>
+>

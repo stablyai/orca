@@ -56,7 +56,7 @@ const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider'
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the keys of a Record<UsageProviderKey, …>.
 const USAGE_PROVIDER_KEYS = Object.keys(USAGE_PROVIDER_IDS) as UsageProviderKey[]
 
-function mapProviders(
+export function mapProviders(
   build: (key: UsageProviderKey) => ProviderRateLimits | null
 ): Pick<RateLimitState, UsageProviderKey> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: one entry per UsageProviderKey.
@@ -66,7 +66,7 @@ function mapProviders(
   >
 }
 
-function describeUnverifiableOwner(
+export function describeUnverifiableOwner(
   ownerLabel: string,
   reason: OwnerUsageFailureReason,
   t: Translate = translate
@@ -199,7 +199,7 @@ function describePlaceholder(
     : null
 }
 
-function ownerPlaceholderSnapshot(
+export function ownerPlaceholderSnapshot(
   key: UsageProviderKey,
   error: string,
   usageMetadata: UsageRateLimitMetadata
@@ -234,25 +234,6 @@ function addNotSetUpPlaceholders(
 
 // Why: an older host publishes no usage at all; its account services always cover these.
 const ACCOUNT_OWNED_PROVIDERS: ReadonlySet<UsageProviderKey> = new Set(['claude', 'codex'])
-
-/** A WSL distro read covers only Claude and Codex; other slots fail closed, never showing this device's numbers. */
-export function keepAccountOwnedProviders(
-  local: RateLimitState,
-  remote: RateLimitState,
-  notShown: string
-): RateLimitState {
-  return {
-    ...remote,
-    ...mapProviders((key) => {
-      if (ACCOUNT_OWNED_PROVIDERS.has(key)) {
-        return remote[key]
-      }
-      return local[key]
-        ? ownerPlaceholderSnapshot(key, notShown, { unverifiableOwner: true })
-        : null
-    })
-  }
-}
 
 export function resolveOwnerUsageRateLimits(
   local: RateLimitState,
