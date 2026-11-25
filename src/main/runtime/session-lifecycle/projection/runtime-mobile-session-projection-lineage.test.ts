@@ -108,6 +108,7 @@ function hostWithFinishedHookRow(now: number): RuntimeMobileSessionProjectionHos
     findPty: () => null,
     getRetainedStatus: () => null,
     getTrackedTitle: () => null,
+    hasUserInput: () => false,
     getTitleDisplayClear: () => null,
     issuePtyHandle: () => {
       throw new Error('no live pty in this fixture')

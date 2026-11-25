@@ -147,6 +147,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       getRetainedStatus: (paneKey, pty, tab, getRows) =>
         this.getFreshRetainedAgentStatusForMobileTab(paneKey, pty, tab, getRows),
       getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId),
+      hasUserInput: (ptyId) => this.terminalRunFacts.readLastDrivingInputAt(ptyId) !== null,
       getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
       issuePtyHandle: (pty) => this.issuePtyHandle(pty),
       recordPty: (ptyId, worktreeId, state) => this.recordPtyWorktree(ptyId, worktreeId, state),

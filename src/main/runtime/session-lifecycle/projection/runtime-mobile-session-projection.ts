@@ -306,7 +306,10 @@ export function projectRuntimeMobileSessionTabs(
       ...(tab.launchDraftCreatedAt !== undefined
         ? { launchDraftCreatedAt: tab.launchDraftCreatedAt }
         : {}),
-      ...(tab.appliedSessionOptions ? { appliedSessionOptions: tab.appliedSessionOptions } : {}),
+      // Options change only through input, so the launch values hold until someone types.
+      ...(tab.appliedSessionOptions && terminalPty && !host.hasUserInput(terminalPty.ptyId)
+        ? { appliedSessionOptions: tab.appliedSessionOptions }
+        : {}),
       isActive: tab.isActive,
       ...(terminalHandle
         ? { status: 'ready' as const, terminal: terminalHandle }
