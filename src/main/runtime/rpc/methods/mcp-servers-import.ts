@@ -22,12 +22,7 @@ import {
 import { AgentMcpConfigEditError } from '../../../mcp-servers/agent-configs/agent-mcp-config-removal'
 import { hasMcpAgentProblem } from '../../../mcp-servers/mcp-agent-problems'
 import { terminalMcpAdapterFor } from '../../../mcp-servers/terminal/terminal-mcp-adapters'
-import {
-  addMcpServer,
-  removeMcpServer,
-  setMcpServerAgentEnabled,
-  setMcpServerWorkspaces
-} from '../../../mcp-servers/mcp-host-list'
+import { addMcpServers } from '../../../mcp-servers/mcp-host-list-add'
 import { findOwnMcpServer, readMcpAgentFiles } from '../../../mcp-servers/mcp-host-list-file-reads'
 import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -117,21 +112,15 @@ export async function importAgentMcpServer(
     if (existing) {
       return existing
     }
-    let saved = await addMcpServer(server, { nameGiven: false, signal: context.signal })
-    try {
-      if (workspaces) {
-        saved = await setMcpServerWorkspaces(saved.id, workspaces)
-      }
-      for (const agent of agentsOff) {
-        saved = await setMcpServerAgentEnabled(saved.id, agent, false)
-      }
-    } catch (error) {
-      // Never leave it on wider than its agent copy was: take the half-made row back out.
-      await removeMcpServer(saved.id).catch(() => {})
-      throw error
-    }
+    // Its scope goes in with it, so it's never on wider than its agent copy was.
+    const [saved] = await addMcpServers([server], {
+      nameGiven: false,
+      signal: context.signal,
+      ...(workspaces ? { workspaces } : {}),
+      agentsOff
+    })
     added = true
-    return saved
+    return saved!
   }
   try {
     return { server: await importer(agentMcpImportHost(context.runtime), key, add) }
@@ -142,8 +131,7 @@ export async function importAgentMcpServer(
     if (!added) {
       throw error
     }
-    // It's in Orca's list now even though an agent file kept its copy: every client re-reads.
-    context.runtime.notifyMcpServersChanged()
+    // It's in Orca's list now even though an agent file kept its copy (onHost tells every client).
     throw error instanceof AgentMcpConfigEditError ? new Error(editFailure(error)) : error
   }
 }

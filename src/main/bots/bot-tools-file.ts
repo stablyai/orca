@@ -118,7 +118,7 @@ function writeServers(
   entries: readonly BotToolChange[],
   rename?: { from: string; to: string },
   credentials: ReadonlyMap<string, BotToolNewCredential> = new Map()
-): void {
+): boolean {
   const added = new Map<string, BotToolCredential>()
   // New sign-ins start signed out, created with the file write and rolled back with it.
   const signIns = new Map<string, string>()
@@ -160,6 +160,11 @@ function writeServers(
     stored.flatMap((server) => (typeof server.credential === 'string' ? [server.credential] : []))
   )
   const removed = new Set([...credentialsOf(snapshot.servers)].filter((id) => !kept.has(id)))
+  const text = `${JSON.stringify({ ...snapshot.file, servers: stored }, null, 2)}\n`
+  // A change that changes nothing (a switch already where it's set) writes nothing.
+  if (text === snapshot.text && added.size === 0 && signIns.size === 0 && removed.size === 0) {
+    return false
+  }
   const replaced = new Map(
     [...added.keys()].flatMap((id) => {
       const values = saved.credential(id)
@@ -195,7 +200,7 @@ function writeServers(
     written = writeFileAtomicallyIfUnchanged(
       botToolsPath(folder),
       snapshot.text,
-      `${JSON.stringify({ ...snapshot.file, servers: stored }, null, 2)}\n`,
+      text,
       // Older files hold header values inline: an earlier copy is never kept beside it.
       { mode: 0o600, credential: true }
     )
@@ -208,6 +213,7 @@ function writeServers(
     throw stale()
   }
   revokeBotToolSignIns(changeBotToolCredentials(folder, new Map(), removed))
+  return true
 }
 
 /** The file as it stands; header values an older Orca left inline move to the credential store first. */
@@ -279,8 +285,11 @@ function changeSnapshot(
     const entries = change(snapshot)
     const file = topLevel ? { ...topLevel(snapshot.file), servers: snapshot.file.servers } : null
     await mkdir(dirname(botToolsPath(folder)), { recursive: true })
-    writeServers(folder, file ? { ...snapshot, file } : snapshot, entries, rename, credentials)
-    advanceBotToolsEpoch(folder)
+    if (
+      writeServers(folder, file ? { ...snapshot, file } : snapshot, entries, rename, credentials)
+    ) {
+      advanceBotToolsEpoch(folder)
+    }
   })
 }
 

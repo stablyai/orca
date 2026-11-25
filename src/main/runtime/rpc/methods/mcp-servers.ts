@@ -26,7 +26,6 @@ import {
 import { resolveBotToolInput } from '../../../bots/bot-tool-details'
 import { MCP_HOST_LIST_RELAY_OWNER } from '../../../bots/tool-relay/bot-tool-relay'
 import {
-  addMcpServer,
   readMcpHostList,
   setMcpAgentFileAllowed,
   mcpServerDetails,
@@ -37,6 +36,7 @@ import {
   setMcpServerWorkspaces,
   updateMcpServer
 } from '../../../mcp-servers/mcp-host-list'
+import { addMcpServers } from '../../../mcp-servers/mcp-host-list-add'
 import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
 import { mcpHostListFolder } from '../../../mcp-servers/mcp-host-list-folder'
 import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
@@ -54,20 +54,30 @@ import {
   moveAgentMcpServer
 } from './mcp-servers-import'
 
-/** Runs `work` with the switch on; a change also tells every other client to re-read the list. */
+/**
+ * Runs `work` with the switch on. A change (`true`) also tells every other client to re-read the
+ * list; `'written'` does only when the list's file was written, even by work that then failed.
+ */
 export async function onHost<T>(
   context: RpcContext,
   work: () => Promise<T>,
-  changes = false
+  changes: boolean | 'written' = false
 ): Promise<T> {
   assertMcpServersFeatureEnabled()
-  const result = await work()
-  if (changes) {
-    context.runtime.notifyMcpServersChanged()
-    // A shared server removed, unshared or edited stops now, not on its next request.
-    void sharedMcpProcesses.reconcile(mcpHostListFolder()).catch(() => {})
+  const folder = mcpHostListFolder()
+  const epoch = botToolsEpoch(folder)
+  let done = false
+  try {
+    const result = await work()
+    done = true
+    return result
+  } finally {
+    if (changes === 'written' ? botToolsEpoch(folder) !== epoch : changes && done) {
+      context.runtime.notifyMcpServersChanged()
+      // A shared server removed, unshared or edited stops now, not on its next request.
+      void sharedMcpProcesses.reconcile(folder).catch(() => {})
+    }
   }
-  return result
 }
 
 export const changed = (server: McpServer) => ({ server })
@@ -102,28 +112,14 @@ export const MCP_SERVER_METHODS = [
               : mcpServersOfPaste(params.source, params.name)
           // A name the user gave is refused when taken; a paste's own names move to a free one.
           const nameGiven = 'config' in params || (params.name !== undefined && given.length === 1)
-          // Each in turn: a later one refused leaves the earlier ones added, as separate adds would.
-          const servers: McpServer[] = []
-          try {
-            for (const server of given) {
-              servers.push(
-                await addMcpServer(server, {
-                  nameGiven,
-                  signal: context.signal,
-                  workspaces: params.workspaces
-                })
-              )
-            }
-          } catch (error) {
-            // The ones added before the refusal are on the list: other clients re-read it.
-            if (servers.length > 0) {
-              context.runtime.notifyMcpServersChanged()
-            }
-            throw error
-          }
+          const servers = await addMcpServers(given, {
+            nameGiven,
+            signal: context.signal,
+            workspaces: params.workspaces
+          })
           return { ...changed(servers[0]), servers }
         },
-        true
+        'written'
       )
   }),
   defineMethod({
@@ -145,7 +141,7 @@ export const MCP_SERVER_METHODS = [
               signal: context.signal
             })
           ),
-        true
+        'written'
       )
   }),
   defineMethod({
@@ -159,7 +155,7 @@ export const MCP_SERVER_METHODS = [
           await removeMcpServer(params.id)
           return { removed: params.id }
         },
-        true
+        'written'
       )
   }),
   defineMethod({
@@ -219,7 +215,7 @@ export const MCP_SERVER_METHODS = [
         context,
         async () =>
           changed(await setMcpServerAgentEnabled(params.id, params.agent, params.enabled)),
-        true
+        'written'
       )
   }),
   defineMethod({
@@ -233,7 +229,7 @@ export const MCP_SERVER_METHODS = [
           changed(
             await setMcpServerWorkspaces(params.id, params.workspaces, { base: params.base })
           ),
-        true
+        'written'
       )
   }),
   defineMethod({
@@ -244,7 +240,7 @@ export const MCP_SERVER_METHODS = [
       onHost(
         context,
         async () => changed(await setMcpServerSharedProcess(params.id, params.enabled)),
-        true
+        'written'
       )
   }),
   defineMethod({
@@ -261,14 +257,22 @@ export const MCP_SERVER_METHODS = [
     permission: 'workspace',
     params: McpServerImport,
     handler: (params, context) =>
-      onHost(context, () => importAgentMcpServer(context, params.key, moveAgentMcpServer), true)
+      onHost(
+        context,
+        () => importAgentMcpServer(context, params.key, moveAgentMcpServer),
+        'written'
+      )
   }),
   defineMethod({
     name: 'mcpServers.copy',
     permission: 'workspace',
     params: McpServerImport,
     handler: (params, context) =>
-      onHost(context, () => importAgentMcpServer(context, params.key, copyAgentMcpServer), true)
+      onHost(
+        context,
+        () => importAgentMcpServer(context, params.key, copyAgentMcpServer),
+        'written'
+      )
   }),
   defineMethod({
     name: 'mcpServers.agentFiles.allow',
@@ -278,7 +282,7 @@ export const MCP_SERVER_METHODS = [
       onHost(
         context,
         async () => ({ agentFiles: await setMcpAgentFileAllowed(params.agent, params.allowed) }),
-        true
+        'written'
       )
   }),
   defineMethod({

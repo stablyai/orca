@@ -1,5 +1,6 @@
 // Guards PR #49123: listing or checking a host's MCP servers or a bot's tools, or flipping one server's
-// switch, opens each saved credential a fixed number of times, not once per credentialed server.
+// switch, opens each saved credential a fixed number of times, not once per credentialed server. A
+// switch already where it's set writes nothing, and a paste of many servers is one write.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +9,10 @@ import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-s
 import { useBotToolCredentialsRoot } from '../bots/bot-tool-credentials'
 import { botToolProblems, listBotTools } from '../bots/bot-tools-host'
 import { writeBotToolServers } from '../bots/bot-tools-file'
-import { listMcpServers, setMcpServerAgentEnabled } from './mcp-host-list'
+import { botToolsEpoch } from '../bots/bot-tools-revision'
+import { ALL_MCP_SERVER_WORKSPACES } from '../../shared/mcp-servers/mcp-servers'
+import { listMcpServers, setMcpServerAgentEnabled, setMcpServerWorkspaces } from './mcp-host-list'
+import { addMcpServers } from './mcp-host-list-add'
 
 let opened = 0
 const dirs: string[] = []
@@ -78,6 +82,43 @@ it('opens each credential three times per switch, plus the switched one', async 
   }
   expect(await opensFor(10, flip)).toBe(31)
   expect(await opensFor(100, flip)).toBe(301)
+})
+
+// Each write moves the list's epoch, which tells every client to re-read it; these move it 0 times.
+// Each call still opens each credential four times: the write's read and sign-in check, and its answer.
+it('writes nothing for a switch already where it is set', async () => {
+  const writes = new Map<number, number>()
+  const again = (count: number) => async (folder: string) => {
+    const [first] = await listMcpServers(folder)
+    await setMcpServerAgentEnabled(first!.id, 'claude', false, folder)
+    const epoch = botToolsEpoch(folder)
+    opened = 0
+    await setMcpServerAgentEnabled(first!.id, 'claude', false, folder)
+    await setMcpServerAgentEnabled(first!.id, 'codex', true, folder)
+    await setMcpServerWorkspaces(first!.id, ALL_MCP_SERVER_WORKSPACES, { folder })
+    writes.set(count, botToolsEpoch(folder) - epoch)
+  }
+  expect(await opensFor(10, again(10))).toBe(120)
+  expect(await opensFor(100, again(100))).toBe(1200)
+  expect(Object.fromEntries(writes)).toEqual({ 10: 0, 100: 0 })
+})
+
+// The write's read and sign-in check, and one read and sign-in for every server it answers.
+it('adds a paste of many servers in one write and one read back', async () => {
+  const writes = new Map<number, number>()
+  const paste = (count: number) => async (folder: string) => {
+    const epoch = botToolsEpoch(folder)
+    const servers = Array.from({ length: count }, (_, i) => ({
+      name: `command-${i}`,
+      command: 'echo',
+      args: []
+    }))
+    expect(await addMcpServers(servers, { nameGiven: false }, folder)).toHaveLength(count)
+    writes.set(count, botToolsEpoch(folder) - epoch)
+  }
+  expect(await opensFor(10, paste(10))).toBe(40)
+  expect(await opensFor(100, paste(100))).toBe(400)
+  expect(Object.fromEntries(writes)).toEqual({ 10: 1, 100: 1 })
 })
 
 // A bot with no agent CLI of its own, so nothing outside the test folders is read or started.

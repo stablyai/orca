@@ -3,12 +3,7 @@
 // workspaces and shared-process choice ride on the entry's extra keys, which bot tools keep as they are.
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import {
-  freeBotToolName,
-  type BotOwnTool,
-  type BotToolInput,
-  type BotToolServer
-} from '../../shared/bot-tools'
+import type { BotOwnTool, BotToolInput, BotToolServer } from '../../shared/bot-tools'
 import {
   McpServerWorkspacesSchema,
   mergeMcpServerWorkspaces,
@@ -41,9 +36,9 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 
 export type HostEntry = BotToolEntry & { id: string }
 
-const gone = (): McpServersError =>
+export const gone = (): McpServersError =>
   new McpServersError('mcp_server_gone', 'This server is no longer on this host.')
-const nameTaken = (name: string): McpServersError =>
+export const nameTaken = (name: string): McpServersError =>
   new McpServersError('mcp_server_name_taken', `This host already has a server named ${name}.`)
 
 function viewOf(entry: HostEntry, { signIn, ...tool }: BotOwnTool): McpServer {
@@ -160,36 +155,6 @@ export async function setMcpAgentFileAllowed(
 }
 
 /**
- * Adds `given`, as a server Orca signs in to when its address asks for a sign-in. A name from a
- * paste that's taken gets a free one (`linear-2`); a name the user gave is refused instead.
- */
-export async function addMcpServer(
-  given: BotToolServer,
-  {
-    nameGiven,
-    signal,
-    workspaces
-  }: { nameGiven: boolean; signal?: AbortSignal; workspaces?: McpServerWorkspaces },
-  folder = mcpHostListFolder()
-): Promise<McpServer> {
-  const { server, signIn } = await classifyAddedBotTool(given, signal)
-  const id = randomUUID()
-  await changeHostEntries(
-    folder,
-    (entries) => {
-      const taken = new Set(entries.map((entry) => entry.server.name))
-      if (nameGiven && taken.has(server.name)) {
-        throw nameTaken(server.name)
-      }
-      const named = { ...server, name: freeBotToolName(server.name, taken) }
-      return [...entries, { server: named, extras: workspaces ? { id, workspaces } : { id }, id }]
-    },
-    { credentials: signIn }
-  )
-  return storedView(folder, id)
-}
-
-/**
  * The editor's save; `version` is the one `mcpServerDetails` gave, so an edit to this server since
  * refuses. It covers only the server's own settings: a switch flipped meanwhile doesn't.
  */
@@ -280,7 +245,11 @@ export function setMcpServerAgentEnabled(
   return changeMcpServerExtras(
     id,
     (entry) => {
-      const off = settingsOf(entry.extras).agentsOff.filter((other) => other !== agent)
+      const { agentsOff } = settingsOf(entry.extras)
+      if (agentsOff.includes(agent) !== enabled) {
+        return entry.extras
+      }
+      const off = agentsOff.filter((other) => other !== agent)
       return { ...entry.extras, agentsOff: enabled ? off : [...off, agent] }
     },
     folder
@@ -298,15 +267,16 @@ export function setMcpServerWorkspaces(
 ): Promise<McpServer> {
   return changeMcpServerExtras(
     id,
-    (entry) => ({
-      ...entry.extras,
+    (entry) => {
+      const stored = settingsOf(entry.extras).workspaces
       // Parsed again: a merge past the schema's caps would read back as on nowhere.
-      workspaces: base
-        ? McpServerWorkspacesSchema.parse(
-            mergeMcpServerWorkspaces(settingsOf(entry.extras).workspaces, base, workspaces)
-          )
+      const next = base
+        ? McpServerWorkspacesSchema.parse(mergeMcpServerWorkspaces(stored, base, workspaces))
         : workspaces
-    }),
+      return JSON.stringify(next) === JSON.stringify(stored)
+        ? entry.extras
+        : { ...entry.extras, workspaces: next }
+    },
     folder
   )
 }
@@ -325,7 +295,9 @@ export function setMcpServerSharedProcess(
           'Only a server Orca starts with a command can share one process.'
         )
       }
-      return { ...entry.extras, sharedProcess: enabled }
+      return settingsOf(entry.extras).sharedProcess === enabled
+        ? entry.extras
+        : { ...entry.extras, sharedProcess: enabled }
     },
     folder
   )
