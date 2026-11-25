@@ -103,6 +103,7 @@ export async function importAgentMcpServer(
   { key, agents }: { key: string; agents?: readonly string[] },
   importer: AgentMcpImport
 ): Promise<{ server: McpServer }> {
+  let added = false
   const add: AddImportedMcpServer<McpServer> = async (
     server,
     { workspaces, agentsOff },
@@ -124,6 +125,7 @@ export async function importAgentMcpServer(
       ...(workspaces ? { workspaces } : {}),
       agentsOff
     })
+    added = true
     return saved!
   }
   try {
@@ -132,7 +134,11 @@ export async function importAgentMcpServer(
     if (error instanceof AgentMcpServerImportError) {
       throw error.reason === 'gone' ? new McpServersError('mcp_server_gone', error.message) : error
     }
-    // An add that went in before this failed is announced by the caller's write check.
+    if (!added) {
+      throw error
+    }
+    // It's in Orca's list now even though an agent file kept its copy: every client re-reads.
+    context.runtime.notifyMcpServersChanged()
     throw error instanceof AgentMcpConfigEditError ? new Error(editFailure(error)) : error
   }
 }
