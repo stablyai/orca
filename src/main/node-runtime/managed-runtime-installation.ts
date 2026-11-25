@@ -25,6 +25,8 @@ export type ManagedRuntimeInstallationDeps = {
   dataDirectory: string
   program: ManagedRuntimeProgram
   findExternal: () => Promise<boolean>
+  /** Whether this host has a build to download, known without asking the release server. */
+  hostHasBuild?: () => boolean
   /** Told the release launches resolve to each time this reads the disk; null when none is whole. */
   onRelease?: (folder: string | null) => void
   /** False while Orca shouldn't keep this copy current; absent means it should. */
@@ -93,7 +95,9 @@ export class ManagedRuntimeInstallation {
     const { value: operation, revision } = this.state.get()
     const phase = `${operation?.id}:${operation?.phase}`
     let facts = this.facts
-    if (fresh && this.runtime.refreshPin) {
+    // Why: a status read must not contact the release server for an agent nobody installed;
+    // Install looks the release up itself.
+    if (fresh && this.runtime.refreshPin && (await runtimeReleaseMayBePublished(this.root))) {
       await this.runtime.refreshPin().catch((error: unknown) => {
         console.warn(`[managed-runtime] ${this.agent} latest release unknown:`, error)
       })
@@ -137,7 +141,10 @@ export class ManagedRuntimeInstallation {
     // A pinned update this process will still run needs no Update; otherwise it does.
     const pinPending = await this.autoUpdater.pending({ source, ...installed })
     return {
-      available: pin !== null,
+      // A runtime that follows its latest release has no pin until something installed asks.
+      available:
+        pin !== null ||
+        (this.runtime.refreshPin !== undefined && this.deps.hostHasBuild?.() !== false),
       version: pin?.version ?? null,
       ...(pin && { downloadBytes: pin.archiveBytes }),
       ...installed,
