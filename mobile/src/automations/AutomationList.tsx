@@ -1,5 +1,6 @@
 import { automationOrphanIssueText } from './automation-orphan-issue-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { translate } from '../i18n/mobile-i18n'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { CalendarClock } from 'lucide-react-native'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
@@ -33,14 +34,8 @@ export function AutomationList(props: {
     return (
       <MobileStateView
         icon={CalendarClock}
-        title={t(
-          'automations.mobile.letYourAgentsWorkOnASchedule',
-          'Let your agents work on a schedule'
-        )}
-        message={t(
-          'automations.mobile.createAnAutomationToRunATaskOnThisHost',
-          'Create an automation to run a task on this host.'
-        )}
+        title={automationsEmptyTitle()}
+        message={automationsEmptyMessage()}
         action={
           props.disabled
             ? null
@@ -55,12 +50,8 @@ export function AutomationList(props: {
   return (
     <ListGroup>
       {props.rows.map((row) => {
-        const { automation, item } = row
-        const orphan = item.selector.kind === 'orphan' ? item.selector.issue : null
-        const project = props.projectName(automation)
-        const subtitle = orphan
-          ? automationOrphanIssueText(orphan)
-          : [automationScheduleText(automation), project].filter(Boolean).join(' · ')
+        const { automation } = row
+        const { subtitle, orphan } = automationRowSubtitle(row, props.projectName(automation))
         return (
           <ListRow
             key={automation.id}
@@ -91,3 +82,22 @@ export function AutomationList(props: {
     </ListGroup>
   )
 }
+
+/** A row's one line: its schedule and project, or what broke its owner. Shared with Home's tab. */
+export function automationRowSubtitle(
+  row: MobileAutomationRow,
+  project: string | undefined
+): { subtitle: string; orphan: boolean } {
+  const { automation, item } = row
+  return item.selector.kind === 'orphan'
+    ? { subtitle: automationOrphanIssueText(item.selector.issue), orphan: true }
+    : {
+        subtitle: [automationScheduleText(automation), project].filter(Boolean).join(' · '),
+        orphan: false
+      }
+}
+
+export const automationsEmptyTitle = () =>
+  translate('automations.mobile.noAutomations', 'No automations yet')
+export const automationsEmptyMessage = () =>
+  translate('automations.mobile.noAutomationsHint', 'Schedule an agent to work on this computer.')
