@@ -64,7 +64,7 @@ function WindowLabel({
   display: UsagePercentageDisplay
   showLabel?: boolean
   labelFirst?: boolean
-  /** Compact bar: a bright number with a smaller, dimmer unit. */
+  /** Compact bar: a bold bright number with a smaller, regular-weight muted unit. */
   compact?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -73,7 +73,11 @@ function WindowLabel({
     const value = String(getDisplayedUsagePercentage(w.usedPercent, display))
     const at = text.indexOf(value)
     const unit = (part: string) =>
-      part.trim() ? <span className="text-[0.82em] opacity-60">{part}</span> : part
+      part.trim() ? (
+        <span className="text-[0.82em] font-normal text-muted-foreground">{part}</span>
+      ) : (
+        part
+      )
     return (
       <span className="tabular-nums">
         {showLabel && labelFirst ? (
@@ -297,14 +301,6 @@ export function ProviderSegment({
   )
 
   const compactBar = barMode === 'compact'
-  // Why: muted color quiets monochrome SVGs; image icons ignore it, so they dim just enough to stay at 3:1.
-  const icon = compactBar ? (
-    <span className="inline-flex text-muted-foreground [&>img]:opacity-85 dark:[&>img]:opacity-75">
-      <ProviderIcon provider={provider} />
-    </span>
-  ) : (
-    <ProviderIcon provider={provider} />
-  )
 
   // Why static: unfocused windows never poll, so a pending chip's pulse would redraw the compositor indefinitely.
   if (!p || p.status === 'idle' || (p.status === 'fetching' && !tightest)) {
@@ -367,7 +363,7 @@ export function ProviderSegment({
       }
       title={compactTitle}
     >
-      {icon}
+      <ProviderIcon provider={provider} />
       {!template && mode === 'verbose' && tightest && !compact ? (
         <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
       ) : null}
