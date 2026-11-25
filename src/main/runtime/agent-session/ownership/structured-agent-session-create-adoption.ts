@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import {
   agentSessionRefusalError,
   isAgentSessionRefusalError
@@ -116,7 +117,10 @@ export function requireUnownedStructuredAgentSessionAdoption(input: {
 }
 
 export async function resolveStructuredAgentSessionAdoptionForCreate(
-  input: StructuredAgentSessionAdoptionInput
+  input: StructuredAgentSessionAdoptionInput & {
+    /** Refuses while a terminal still writes the conversation; consulted when the chat gets a copy. */
+    writerGate?: (providerSessionId: string) => Promise<void>
+  }
 ) {
   try {
     const { adoption, candidates } = await findStructuredAgentSessionAdoptionTranscript(input)
@@ -143,6 +147,10 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(
         source: { providerSessionId: input.providerSessionId, workspaceCwd: input.workspaceCwd }
       })
     ])
+    // A copy misses whatever a closing pane appends after it, so a live writer must refuse the create.
+    if (await isSnapshotOfSource(adoption.transcriptPath, prepared.transcriptPath)) {
+      await input.writerGate?.(input.providerSessionId)
+    }
     return { ...prepared, conversationName, folder }
   } catch (error) {
     if (isAgentSessionRefusalError(error)) {
@@ -154,6 +162,21 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(
       error instanceof Error ? error.message : String(error)
     )
   }
+}
+
+/** A prepared copy (hard link refused) stops seeing what the source's writer appends after preparation. */
+export async function isSnapshotOfSource(
+  sourcePath: string,
+  preparedPath: string
+): Promise<boolean> {
+  if (sourcePath === preparedPath) {
+    return false
+  }
+  const [source, prepared] = await Promise.all([
+    stat(sourcePath, { bigint: true }),
+    stat(preparedPath, { bigint: true })
+  ])
+  return source.dev !== prepared.dev || source.ino !== prepared.ino
 }
 
 const ADOPTED_CONVERSATION_NAME_TIMEOUT_MS = 2_000

@@ -196,9 +196,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     )
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const definition = this.requireRegisteredStructuredAgent(input.agent)
-    const host = getStructuredAgentSessionHost()
     const committedReplay = resolveCommittedStructuredAgentSessionAdoptionIntent({
-      host,
+      host: getStructuredAgentSessionHost(),
       ...input,
       location,
       ...(options ? { options } : {})
@@ -231,6 +230,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
                 evidence: input.structuredAgentCliSourceEvidence
               }),
             prepareCodexResume: this.prepareAiVaultSessionResumeFn ?? undefined,
+            writerGate: (id) => this.assertStructuredAdoptionTerminalWritersExited(input.agent, id),
             selectedAccountHome,
             launchEnv: await resolveHostStructuredAgentLaunchEnvironment(input.agent, settings),
             workspaceCwd: workspaceCwd
