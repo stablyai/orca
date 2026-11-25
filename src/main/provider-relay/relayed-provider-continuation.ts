@@ -17,8 +17,8 @@ export type ProviderRelayItemContinuation = {
    * whose end carries the whole item can put it on the saved row and retire the continuation.
    */
   finish?(line: string, tag: string): string[]
-  /** The attach's open-work group (keys as the daemon carries them) that every streamed item lives in. */
-  openGroup?: string
+  /** The attach's open-work groups (keys as the daemon carries them) every streamed item lives in. */
+  openGroup?: string | readonly string[]
   /** The key, as JSON, of the open work this line ends, if any. */
   settles?(line: string): string | null
 }
@@ -99,8 +99,9 @@ export function attachContinuation(
   fromSeq: number,
   result: ProviderRelayAttachResult
 ): RelayedProviderContinuation | null {
-  const carried = hook.openGroup ? result.openWork?.[hook.openGroup] : undefined
-  const open = carried?.length ? carried : null
+  const groups = typeof hook.openGroup === 'string' ? [hook.openGroup] : (hook.openGroup ?? [])
+  const carried = groups.flatMap((group) => result.openWork?.[group] ?? [])
+  const open = carried.length > 0 ? carried : null
   // A dropped kept span engages it even between turns; then the replay alone bounds it.
   if (fromSeq <= 0 || (open === null && result.truncatedThrough === undefined)) {
     return null
