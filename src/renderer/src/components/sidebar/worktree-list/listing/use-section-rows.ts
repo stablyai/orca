@@ -144,7 +144,11 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
   // Same-id registrations on two hosts: each row and project header needs its own host's.
   const repoOfWorktree = useMemo(() => createHostScopedRepoOf(repos, repoMap), [repos, repoMap])
-  const hiddenMainCheckouts = useHiddenMainCheckouts(repos, worktrees)
+  const hiddenMainCheckouts = useHiddenMainCheckouts(
+    args.visibleReposForRows,
+    worktrees,
+    defaultHostId
+  )
   const rowPlan = useMemo(
     () =>
       planSidebarRows({

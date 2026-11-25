@@ -158,32 +158,32 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
       (repoEntry) => ({ repoEntry })
     )
   ]
-  if (projectOrderBy === 'recent') {
-    // Groups compete with ungrouped projects instead of always sitting above them.
-    const rankOf = (entry: (typeof rootEntries)[number]): RecentRank =>
-      'projectGroup' in entry
-        ? getGroupRecentRank(entry.projectGroup.id)
-        : getRecentRank(entry.repoEntry)
-    rootEntries.sort((left, right) => compareRecentRank(rankOf(left), rankOf(right)))
-  } else {
-    rootEntries.sort((left, right) => {
-      const leftEntry =
-        'projectGroup' in left
-          ? { kind: 'group' as const, group: left.projectGroup }
-          : left.repoEntry[1].repo
-            ? { kind: 'repo' as const, repo: left.repoEntry[1].repo }
-            : null
-      const rightEntry =
-        'projectGroup' in right
-          ? { kind: 'group' as const, group: right.projectGroup }
-          : right.repoEntry[1].repo
-            ? { kind: 'repo' as const, repo: right.repoEntry[1].repo }
-            : null
-      return leftEntry && rightEntry
-        ? compareRootProjectEntries(leftEntry, rightEntry, repoOrder)
-        : 0
-    })
+  type RootEntry = (typeof rootEntries)[number]
+  const compareManual = (left: RootEntry, right: RootEntry): number => {
+    const leftEntry =
+      'projectGroup' in left
+        ? { kind: 'group' as const, group: left.projectGroup }
+        : left.repoEntry[1].repo
+          ? { kind: 'repo' as const, repo: left.repoEntry[1].repo }
+          : null
+    const rightEntry =
+      'projectGroup' in right
+        ? { kind: 'group' as const, group: right.projectGroup }
+        : right.repoEntry[1].repo
+          ? { kind: 'repo' as const, repo: right.repoEntry[1].repo }
+          : null
+    return leftEntry && rightEntry ? compareRootProjectEntries(leftEntry, rightEntry, repoOrder) : 0
   }
+  const rankOf = (entry: RootEntry): RecentRank =>
+    'projectGroup' in entry
+      ? getGroupRecentRank(entry.projectGroup.id)
+      : getRecentRank(entry.repoEntry)
+  // Under Recent, groups compete with ungrouped projects; equal ranks keep the manual order.
+  rootEntries.sort((left, right) =>
+    projectOrderBy === 'recent'
+      ? compareRecentRank(rankOf(left), rankOf(right)) || compareManual(left, right)
+      : compareManual(left, right)
+  )
   for (const entry of rootEntries) {
     if ('projectGroup' in entry) {
       walkProjectGroup(entry.projectGroup, 0)

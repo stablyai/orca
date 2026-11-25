@@ -242,7 +242,10 @@ export function planSidebarFeedRows(
     filterRepoIds: view.filters.filterRepoIds,
     hiddenProjects,
     // Same Recent ranking as the desktop list: a hidden main checkout's chats still count.
-    activityOnlyWorktrees: getHiddenMainCheckouts(visibleRepos, worktreesByRepo, visibleWorktrees)
+    activityOnlyWorktrees: getHiddenMainCheckouts(
+      { repos: visibleRepos, worktreesByRepo, visibleWorktrees },
+      defaultHostId
+    )
   })
   return {
     visibleWorktrees,
