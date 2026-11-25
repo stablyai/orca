@@ -44,6 +44,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       stopping: boolean
       closed: boolean
       groupTerminated: boolean
+      stopUnverified: boolean
       discarding?: { stdout?: boolean; stderr?: boolean }
     }
   >()
@@ -68,7 +69,8 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       pendingOutputBytes: 0,
       stopping: false,
       closed: false,
-      groupTerminated: false
+      groupTerminated: false,
+      stopUnverified: false
     }
     if (spec.terminationBarrier && process.platform !== 'win32') {
       state.group = createPosixGroupTermination(child, () => {
@@ -111,14 +113,14 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     child.on('exit', (code, signal) => port.postMessage({ type: 'exit', id, code, signal }))
     child.on('close', (code, signal) => {
       state.closed = true
-      const retained = Boolean(state.group) && !state.groupTerminated
+      if (state.stopping) {
+        state.group?.close()
+      }
+      const retained = Boolean(state.group) && !state.groupTerminated && !state.stopUnverified
       if (!retained) {
         children.delete(id)
       }
       port.postMessage({ type: 'close', id, code, signal, ...(retained ? { retained: true } : {}) })
-      if (state.stopping) {
-        state.group?.close()
-      }
     })
   }
 
@@ -215,7 +217,15 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       if (request.type === 'stop-owned-group') {
         if (state.group) {
           state.stopping = true
-          void state.group.stop()
+          void state.group.stop().then((verified) => {
+            if (!verified) {
+              state.stopUnverified = true
+              if (state.closed) {
+                children.delete(request.id)
+              }
+              port.postMessage({ type: 'group-stop-unverified', id: request.id })
+            }
+          })
           if (state.closed) {
             state.group.close()
           }

@@ -2,7 +2,7 @@
 // load at the end isn't a surprise; the address it lands on is pasted back here.
 import { useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight, Check } from 'lucide-react-native'
 import { ListRow } from '../../components/list/ListGroup'
 import { TextField } from '../../components/composer-input/TextField'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
@@ -13,10 +13,15 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { BotToolPhoneSignIn } from './use-bot-tool-phone-sign-in'
 
-export function StepNumber({ n }: { n: number }) {
+/** A step's number, or a tick once it's done. */
+export function StepNumber({ n, done = false }: { n: number; done?: boolean }) {
   return (
-    <View style={styles.number}>
-      <Text style={styles.numberText}>{n}</Text>
+    <View style={[styles.number, done && styles.numberDone]}>
+      {done ? (
+        <Check size={14} color={colors.bgBase} strokeWidth={3} />
+      ) : (
+        <Text style={styles.numberText}>{n}</Text>
+      )}
     </View>
   )
 }
@@ -81,7 +86,10 @@ export function MobileBotToolSignInPage(props: {
             title={step.title}
             subtitle={step.detail}
             subtitleLines={3}
-            leading={<StepNumber n={index + 1} />}
+            // Pasting the address shows the first two done, as the page's browser steps are.
+            leading={
+              <StepNumber n={index + 1} done={index < 2 && attempt !== null && pasted !== ''} />
+            }
           />
         ))}
       </SettingsSection>
@@ -138,6 +146,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  numberDone: { backgroundColor: colors.textPrimary },
   numberText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   paste: { marginTop: spacing.lg }
 }))

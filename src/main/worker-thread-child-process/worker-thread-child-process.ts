@@ -217,7 +217,8 @@ export class WorkerThreadChildProcessHost {
     }
     if (
       event.type === 'spawn-error' ||
-      (child.closed && (!child.ownedGroupStopping || child.ownedGroupTerminated))
+      (child.closed &&
+        (!child.ownedGroupStopping || child.ownedGroupTerminated || child.ownedGroupStopUnverified))
     ) {
       this.forget(event.id)
     }

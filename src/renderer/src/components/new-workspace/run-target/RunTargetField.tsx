@@ -21,6 +21,7 @@ export default function RunTargetField({
   committed,
   isRecipe,
   hostId,
+  icon,
   label,
   detail,
   listId,
@@ -39,6 +40,8 @@ export default function RunTargetField({
   committed: boolean
   isRecipe: boolean
   hostId: ExecutionHostId | null
+  /** The picked row's own icon, e.g. a WSL distro's penguin; else the host's. */
+  icon?: React.ReactNode
   label: string
   detail: string
   listId: string
@@ -73,6 +76,8 @@ export default function RunTargetField({
               {committed ? (
                 isRecipe ? (
                   <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : icon ? (
+                  icon
                 ) : hostId ? (
                   <HostRowIcon hostId={hostId} />
                 ) : null

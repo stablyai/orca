@@ -49,6 +49,7 @@ export class WorkerThreadChildStdin extends EventEmitter {
 export class WorkerThreadChildProcess extends EventEmitter {
   ownedGroupStopping = false
   ownedGroupTerminated = false
+  ownedGroupStopUnverified = false
   closed = false
   pid: number | undefined = undefined
   exitCode: number | null = null
@@ -88,9 +89,9 @@ export class WorkerThreadChildProcess extends EventEmitter {
     }
   }
 
-  stopOwnedGroup(): void {
+  stopOwnedGroup(): boolean {
     this.ownedGroupStopping = true
-    this.send({ type: 'stop-owned-group', id: this.id })
+    return this.send({ type: 'stop-owned-group', id: this.id })
   }
 
   receive(
@@ -103,6 +104,10 @@ export class WorkerThreadChildProcess extends EventEmitter {
       case 'group-terminated':
         this.ownedGroupTerminated = true
         this.emit('group-terminated')
+        return
+      case 'group-stop-unverified':
+        this.ownedGroupStopUnverified = true
+        this.emit('group-stop-unverified')
         return
       case 'spawn':
         this.pid = event.pid

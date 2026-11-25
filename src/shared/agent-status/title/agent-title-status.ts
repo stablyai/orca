@@ -11,7 +11,6 @@ import {
 import {
   CLAUDE_IDLE,
   GEMINI_IDLE,
-  GEMINI_PERMISSION,
   GEMINI_WORKING,
   QUARTER_CIRCLE_SPINNER_RE,
   containsAgentSpinnerGlyph,
@@ -26,7 +25,6 @@ import {
   isClaudeManagementTitle,
   isPiAgentTitle,
   isPiTerminalTitle,
-  isGeminiTerminalTitle,
   leadingGeminiGlyphStatus,
   grokFrameTitleStatus,
   GROK_PERMISSION_TITLE,
@@ -150,14 +148,10 @@ export function normalizeTerminalTitle(title: string): string {
     : title
 }
 
-const GEMINI_DISPLAY_LABEL = 'Gemini CLI'
 const QODER_DISPLAY_LABEL = 'Qoder CLI'
 const QODER_CN_DISPLAY_LABEL = 'Qoder CLI CN'
 const QODER_TITLE_GLYPHS = { working: GEMINI_WORKING, permission: '▲', idle: GEMINI_IDLE } as const
 const DESTRUCTIVE_TITLE_STAMPS: ReadonlySet<string> = new Set([
-  ...[GEMINI_WORKING, GEMINI_PERMISSION, GEMINI_IDLE].map(
-    (glyph) => `${glyph} ${GEMINI_DISPLAY_LABEL}`
-  ),
   ...Object.values(QODER_TITLE_GLYPHS).flatMap((glyph) =>
     [QODER_DISPLAY_LABEL, QODER_CN_DISPLAY_LABEL].map((label) => `${glyph} ${label}`)
   ),
@@ -182,21 +176,6 @@ function proposeTerminalTitle(title: string): string {
   }
   if (!title) {
     return title
-  }
-
-  // Pi/OMP explicit markers outrank Gemini glyphs embedded in free-form session/cwd labels.
-  if (!getPiStateTitleStatus(title) && isGeminiTerminalTitle(title)) {
-    const status = detectAgentStatusFromTitle(title)
-    if (status === 'permission') {
-      return `${GEMINI_PERMISSION} ${GEMINI_DISPLAY_LABEL}`
-    }
-    if (status === 'working') {
-      return `${GEMINI_WORKING} ${GEMINI_DISPLAY_LABEL}`
-    }
-    // Require a leading idle glyph before stamping Gemini rest state; a buried glyph is not readiness evidence.
-    if (status === 'idle' && leadingGeminiGlyphStatus(title) === 'idle') {
-      return `${GEMINI_IDLE} ${GEMINI_DISPLAY_LABEL}`
-    }
   }
 
   // Canonicalize Pi/OMP braille frames in place, including medial frames and multiplexer segments, retaining session/cwd (#16093, #8032).

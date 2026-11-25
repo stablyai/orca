@@ -106,9 +106,7 @@ export class ManagedRuntimeInstallation {
       const read = this.readInstalledFacts()
       facts = { phase, read }
       this.facts = facts
-      read.catch(() => {
-        this.facts = this.facts?.read === read ? null : this.facts
-      })
+      read.catch(() => (this.facts = this.facts?.read === read ? null : this.facts))
     }
     return {
       agent: this.agent,

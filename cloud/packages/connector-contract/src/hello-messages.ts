@@ -5,7 +5,7 @@ import { readHelloTriggers } from './trigger-messages.js'
 import { WebhookHookIdSchema } from './webhook-messages.js'
 import { webhookRuleId } from './webhook-names.js'
 import { CONNECTOR_PLACE_SOURCES, ConnectorHostDescription } from './connector-wire-scalars.js'
-import { ConnectorBotShareSchema, SharePublicKeySchema } from './share-messages.js'
+import { BotPurposeSchema, ConnectorBotShareSchema, SharePublicKeySchema } from './share-messages.js'
 import { ConnectorHelloWakeOfferSchema } from './wake-messages.js'
 
 export const CONNECTOR_PROMPT_KINDS = ['approval', 'question'] as const
@@ -102,7 +102,10 @@ export const ConnectorBotSchema = z.object({
   sharedAppWorkspaces: BotWorkspacesSchema,
   // The Orca accounts and invited emails the owner shared the bot with, to a cloud listing
   // bots.shares. Replaces the cloud's list for the bot; absent, it isn't shared.
-  sharedWith: z.array(ConnectorBotShareSchema).max(CONNECTOR_LIMITS.maxBotShares).optional()
+  sharedWith: z.array(ConnectorBotShareSchema).max(CONNECTOR_LIMITS.maxBotShares).optional(),
+  // What the owner says the bot is for, shown to the people it is shared with (botPurpose on
+  // `${shares}/mine`). Absent from an older machine, and when the owner wrote none.
+  botPurpose: BotPurposeSchema.optional()
 })
 
 export const ConnectorHelloRequestSchema = z
@@ -208,7 +211,7 @@ export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'
 // CONNECTOR_CLOUD_FEATURES, as prompts.audience is: only the code that reads the event lists it.
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
 // The cloud keeps a bot's sharedWith and hostKey, answers the shares routes and sends share_resolved,
-// share_accept and share_send (share-messages.ts); a machine lists it too once it takes them. Kept
+// share_accept, share_send and share_declined (share-messages.ts); a machine lists it too once it takes them. Kept
 // out of CONNECTOR_CLOUD_FEATURES, as prompts.audience is: only the code that serves shares lists it.
 export const CONNECTOR_CLOUD_BOT_SHARES_FEATURE = 'bots.shares'
 // Listed by a machine that keeps a reply outbox, and by a cloud that takes its `reply` events (kept

@@ -112,6 +112,7 @@ export async function acquireOwner(
       fence,
       ...(acquired.link ? { link: acquired.link } : {}),
       ...(acquired.accountHome ? { launchedAccountHome: acquired.accountHome } : {}),
+      ...(acquired.movedAccountHome ? { movedAccountHome: acquired.movedAccountHome } : {}),
       ...(acquired.accountRecipe
         ? {
             accountAcquisition: {
