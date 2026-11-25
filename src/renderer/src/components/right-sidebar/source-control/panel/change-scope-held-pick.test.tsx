@@ -252,7 +252,13 @@ describe('a commit picked from retained shallow history', () => {
       expect(latest?.changeScope).toMatchObject({ commit: { parentIds: ['p0'] } })
 
       await act(async () => reads[1].resolve(compare('p0', DEEP_ROWS)))
-      // The old root comparison settles last.
+      // The deepened rows publish while the old root comparison is still held.
+      expect(latest?.commitScopeFiles).toEqual({
+        commitId: SHALLOW.id,
+        status: 'ready',
+        entries: DEEP_ROWS
+      })
+      // The old root comparison settles last, and does not replace them.
       await act(async () => {
         reads[0].resolve(compare(null, ROOT_ROWS))
         settleRest()
