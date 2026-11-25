@@ -1,7 +1,7 @@
 import type { ClaudeAccountRuntime, ClaudeAccountSettings } from './claude-account-selection'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 
-export type ClaudeSelectionPointer = Pick<
+type ClaudeSelectionPointer = Pick<
   ClaudeAccountSettings,
   'activeClaudeManagedAccountId' | 'activeClaudeManagedAccountIdsByRuntime'
 >
@@ -11,14 +11,15 @@ export type ClaudeSelectionPointer = Pick<
 export type ClaudeSelectionOutcome = 'moved' | 'unchanged' | 'unknown'
 
 /** Saves and publishes `next` as one step: if either fails, restores `previous` and its publication,
- *  then rethrows, so no selection stands that new launches do not follow. A restore that fails too
- *  calls `routeUnknown` before the original error is rethrown. */
-export async function applyClaudeSelectionOrRestore(
+ *  then rethrows, so no selection stands that new launches do not follow. Before the original error
+ *  is rethrown, `restoreSettled` hears `moved` once the restore is republished, or `unknown` when the
+ *  restore fails too. */
+async function applyClaudeSelectionOrRestore(
   runtimeAuth: Pick<ClaudeAccountRuntime, 'syncForCurrentSelection' | 'publishAll'>,
   saveSettings: (patch: Partial<ClaudeAccountSettings>) => void,
   change: { previous: ClaudeSelectionPointer; next: ClaudeSelectionPointer },
   target: ClaudeAccountSelectionTarget | undefined,
-  routeUnknown: () => void
+  restoreSettled: (outcome: Exclude<ClaudeSelectionOutcome, 'unchanged'>) => void
 ): Promise<void> {
   try {
     saveSettings(pointer(change.next))
@@ -29,8 +30,10 @@ export async function applyClaudeSelectionOrRestore(
       await runtimeAuth.publishAll()
     } catch (restoreError) {
       console.warn('[claude-accounts] Could not restore the Claude selection:', restoreError)
-      routeUnknown()
+      restoreSettled('unknown')
+      throw error
     }
+    restoreSettled('moved')
     throw error
   }
 }
@@ -46,7 +49,7 @@ function pointer(selection: ClaudeSelectionPointer): ClaudeSelectionPointer {
 export function claudeSelectionApplier(
   runtimeAuth: () => Pick<ClaudeAccountRuntime, 'syncForCurrentSelection' | 'publishAll'>,
   saveSettings: (patch: Partial<ClaudeAccountSettings>) => void,
-  routeUnknown: () => void
+  restoreSettled: (outcome: Exclude<ClaudeSelectionOutcome, 'unchanged'>) => void
 ) {
   return (
     previous: ClaudeSelectionPointer,
@@ -58,6 +61,6 @@ export function claudeSelectionApplier(
       saveSettings,
       { previous, next },
       target,
-      routeUnknown
+      restoreSettled
     )
 }

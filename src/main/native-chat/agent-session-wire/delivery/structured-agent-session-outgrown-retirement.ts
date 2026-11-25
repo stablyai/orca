@@ -16,7 +16,7 @@ import {
 
 type RetirementDeps = Parameters<typeof retireOutgrownStructuredAgentSessionChild>[2]
 
-export type StructuredAgentSessionOutgrownRetirement = (
+type StructuredAgentSessionOutgrownRetirement = (
   sessionId: string,
   continuingId: string | undefined,
   next: AgentJournalSubmission | undefined,

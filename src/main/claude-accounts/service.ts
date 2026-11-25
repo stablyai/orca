@@ -194,9 +194,9 @@ export class ClaudeAccountService {
     try {
       return await change()
     } finally {
-      // It failed and the earlier selection was restored: checks run again against it.
+      // It failed before saving anything (a restore settles itself): nothing moved.
       if (this.selectionPending && !this.selectionRouteUnknown) {
-        this.selectionSettled('moved')
+        this.selectionSettled('unchanged')
       }
     }
   }

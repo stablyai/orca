@@ -150,6 +150,7 @@ export async function retireOutgrownStructuredAgentSessionChild(
       deps,
       () =>
         session.child === child &&
+        !child.close &&
         sameJournalCursor(cursor, journal.cursor()) &&
         sameJournalCursor(physical, journal.physicalCursor()) &&
         revision === session.operationalRevision &&

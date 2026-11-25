@@ -86,7 +86,7 @@ export class ClaudeAccountSelection {
   private readonly applySelection = claudeSelectionApplier(
     () => this.runtimeAuth,
     (patch) => this.saveSettings(patch),
-    () => this.selectionApplied('unknown')
+    (outcome) => this.selectionApplied(outcome)
   )
 
   list(): ClaudeRateLimitAccountsState {
