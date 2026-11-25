@@ -7,20 +7,24 @@ export function isHtmlDocumentCodeBlock(language: string | undefined, code: stri
   return language?.trim().toLowerCase() === 'html' && WHOLE_HTML_DOCUMENT.test(code)
 }
 
-/** Splits out each html fence holding a full page; the rest of the text keeps its other fences. */
+const SEAM = Symbol('removed page')
+
+/** Splits out each html fence holding a full page; the rest of the text is kept as written, with the
+ *  blank lines around each removed page folded into one. */
 export function splitHtmlDocumentFences(text: string): { text: string; documents: string[] } {
   const lines = text.split('\n')
   const tracker = createMarkdownFenceTracker()
-  const kept: string[] = []
+  const kept: (string | typeof SEAM)[] = []
   const documents: string[] = []
   let open: { start: number; language: string; body: string[] } | null = null
   for (const [index, line] of lines.entries()) {
+    const bare = line.replace(/\r$/, '')
     const wasInside = tracker.insideFence
-    const delimiter = tracker.consume(line)
+    const delimiter = tracker.consume(bare)
     if (delimiter && !wasInside) {
       open = {
         start: index,
-        language: line
+        language: bare
           .trim()
           .replace(/^[`~]+/, '')
           .trim(),
@@ -32,6 +36,7 @@ export function splitHtmlDocumentFences(text: string): { text: string; documents
       const code = open.body.join('\n')
       if (isHtmlDocumentCodeBlock(open.language.split(/\s/)[0], code)) {
         documents.push(code)
+        kept.push(SEAM)
       } else {
         kept.push(...lines.slice(open.start, index + 1))
       }
@@ -48,14 +53,25 @@ export function splitHtmlDocumentFences(text: string): { text: string; documents
   if (open) {
     kept.push(...lines.slice(open.start))
   }
-  return {
-    text:
-      documents.length > 0
-        ? kept
-            .join('\n')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim()
-        : text,
-    documents
+  if (documents.length === 0) {
+    return { text, documents }
   }
+  const out: string[] = []
+  let seam = false
+  for (const line of kept) {
+    const blank = line === SEAM || !line.trim()
+    if (line === SEAM) {
+      while (out.length > 0 && !out.at(-1)?.trim()) {
+        out.pop()
+      }
+      seam = true
+    } else if (!(seam && blank)) {
+      if (seam && out.length > 0) {
+        out.push('')
+      }
+      seam = false
+      out.push(line)
+    }
+  }
+  return { text: out.join('\n'), documents }
 }

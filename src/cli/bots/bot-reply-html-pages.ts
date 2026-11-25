@@ -6,25 +6,34 @@ import { splitHtmlDocumentFences } from '../../shared/markdown/html-document-fen
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { LocalFile } from '../slack/slack-action-files'
 
-/** The host's answer when a Slack reply's text holds a whole HTML page: it goes as an .html file. */
-export const HTML_DOCUMENT_AS_FILE = 'html_document_as_file'
+// Names Windows reserves for devices, whatever the extension.
+const WINDOWS_DEVICE_NAME = /^(con|prn|aux|nul|com\d|lpt\d)$/
 
-function htmlFileName(document: string, index: number): string {
+/** A page's file name from its title, never one an earlier page in the reply took. */
+function htmlFileName(document: string, taken: Set<string>): string {
   const title = /<title[^>]*>([^<]*)<\/title>/i.exec(document)?.[1] ?? ''
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60)
-  return `${slug || 'page'}${index > 0 ? `-${index + 1}` : ''}.html`
+  const stem = !slug ? 'page' : WINDOWS_DEVICE_NAME.test(slug) ? `${slug}-page` : slug
+  let name = `${stem}.html`
+  for (let n = 2; taken.has(name); n++) {
+    name = `${stem}-${n}.html`
+  }
+  taken.add(name)
+  return name
 }
 
-/** Each whole HTML page in the text, written to a temporary .html file for `send`, with the words
- *  left around them; the files are removed once `send` settles. */
-export async function withHtmlPageFiles<T>(
+/** Each whole HTML page in the text goes as an .html file (written to a temporary folder, removed
+ *  after) with the words left around them as one post. Null when a page couldn't be staged: nothing
+ *  has posted then, so the caller can send the words inline. */
+export async function replyWithHtmlPages<T>(
   text: string,
-  send: (files: LocalFile[], text: string | undefined) => Promise<T>
-): Promise<T> {
+  stage: (files: LocalFile[]) => Promise<string[]>,
+  post: (staged: string[], rest: string | undefined) => Promise<T>
+): Promise<{ files: number; sent: T } | null> {
   const split = splitHtmlDocumentFences(text)
   if (split.documents.length > CONNECTOR_REPLY_MAX_FILES) {
     throw new RuntimeClientError(
@@ -33,16 +42,21 @@ export async function withHtmlPageFiles<T>(
     )
   }
   const dir = await mkdtemp(join(tmpdir(), 'orca-reply-html-'))
+  let staged: string[] | null
   try {
     const files: LocalFile[] = []
-    for (const [index, document] of split.documents.entries()) {
-      const name = htmlFileName(document, index)
+    const taken = new Set<string>()
+    for (const document of split.documents) {
+      const name = htmlFileName(document, taken)
       const path = join(dir, name)
       await writeFile(path, document)
       files.push({ path, name, size: Buffer.byteLength(document) })
     }
-    return await send(files, split.text || undefined)
+    staged = await stage(files).catch(() => null)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+  return staged
+    ? { files: split.documents.length, sent: await post(staged, split.text || undefined) }
+    : null
 }
