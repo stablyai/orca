@@ -407,10 +407,21 @@ describe('codex rows across a reattach', () => {
         ]
       },
       // Spawned in an earlier parent turn: only the daemon's carried turns name it.
-      child: { id: 'turn-c', status: 'inProgress', items: [{ type: 'agentMessage', id: 'c1' }] }
+      child: {
+        id: 'turn-c',
+        status: 'inProgress',
+        items: [
+          { type: 'agentMessage', id: 'c1' },
+          { type: 'collabAgentToolCall', id: 'x', tool: 'spawnAgent', receiverThreadIds: ['grand'] }
+        ]
+      },
+      grand: { id: 'turn-g', status: 'inProgress', items: [] }
     }
     const request = async (method: string, params?: unknown) => {
       const threadId = String(readRecord(params).threadId)
+      if (method === 'thread/read' && threadId === 'grand') {
+        throw new Error('timed out')
+      }
       if (method === 'thread/read') {
         const spawn = { parent_thread_id: 'main' }
         return { thread: { id: threadId, source: { subAgent: { thread_spawn: spawn } } } }
@@ -432,7 +443,7 @@ describe('codex rows across a reattach', () => {
       connection: { request },
       translator,
       threadId: 'main',
-      carriedThreadIds: ['child'],
+      carriedThreadIds: ['child', 'grand'],
       timeoutMs: 1_000,
       onError: () => {}
     })
@@ -457,8 +468,11 @@ describe('codex rows across a reattach', () => {
     // Its message keeps the row the live run gave it.
     expect(rows.has('codex:main:turn-2:1')).toBe(true)
     // The child is registered under its parent, so Stop interrupts its running turn.
+    // A grandchild whose parent read failed stays under the child that spawned it, so Stop on
+    // the child reaches it too.
     expect(tracker.subagentStopTargets(['child']).turns).toEqual([
-      { threadId: 'child', turnId: 'turn-c' }
+      { threadId: 'child', turnId: 'turn-c' },
+      { threadId: 'grand', turnId: 'turn-g' }
     ])
   })
 

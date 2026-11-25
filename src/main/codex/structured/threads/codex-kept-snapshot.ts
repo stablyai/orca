@@ -35,7 +35,7 @@ async function turnPage(
   connection: Connection,
   threadId: string,
   limit: number,
-  itemsView: 'full' | 'summary',
+  itemsView: 'full' | 'notLoaded',
   timeoutMs: number
 ): Promise<Record<string, unknown>[]> {
   const page = readRecord(
@@ -77,7 +77,7 @@ async function readKeptThread(input: {
     : turnPage(connection, threadId, 1, 'full', timeoutMs)
   const [[turn], recent, parentThreadId] = await Promise.all([
     input.primary ? latest : soft(latest, []),
-    soft(turnPage(connection, threadId, SNAPSHOT_TURNS, 'summary', timeoutMs), []),
+    soft(turnPage(connection, threadId, SNAPSHOT_TURNS, 'notLoaded', timeoutMs), []),
     input.primary
       ? null
       : soft(
@@ -158,6 +158,8 @@ export async function readKeptCodexSnapshot(input: {
   const seen = new Set<string>()
   const turns: KeptCodexTurn[] = []
   const spawns: KeptCodexSpawn[] = []
+  /** Children whose parent couldn't be read: placed under the chat only if no read turn spawned them. */
+  const unparented: string[] = []
   let wave = [input.threadId, ...(input.carriedThreadIds ?? [])]
   while (wave.length > 0) {
     const threads = [...new Set(wave)].filter((id) => !seen.has(id))
@@ -183,7 +185,11 @@ export async function readKeptCodexSnapshot(input: {
     reads.forEach(({ turn, parentThreadId }, i) => {
       const threadId = reading[i]!
       if (threadId !== input.threadId) {
-        spawns.push(spawnOf(parentThreadId ?? input.threadId, threadId))
+        if (parentThreadId) {
+          spawns.push(spawnOf(parentThreadId, threadId))
+        } else {
+          unparented.push(threadId)
+        }
       }
       if (!turn) {
         return
@@ -197,6 +203,19 @@ export async function readKeptCodexSnapshot(input: {
         }
       }
     })
+  }
+  // A spawn in a read turn names the real parent (restated with that turn); a guess must not win.
+  const spawned = new Set(
+    turns.flatMap(({ items }) =>
+      items.flatMap((item) =>
+        item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE ? readReceiverThreadIds(item) : []
+      )
+    )
+  )
+  for (const threadId of unparented) {
+    if (!spawned.has(threadId)) {
+      spawns.push(spawnOf(input.threadId, threadId))
+    }
   }
   return { turns, spawns: parentsFirst(spawns, input.threadId) }
 }

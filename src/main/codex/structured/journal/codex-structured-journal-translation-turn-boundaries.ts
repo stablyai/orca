@@ -90,7 +90,12 @@ export class CodexJournalTurnBoundaries {
 
   start(event: TurnBoundaryEvent): CodexJournalTranslationAdmission {
     const turnId = readCodexTurnId(event.params)
-    if (!turnId || this.keptFinished.has(`${event.threadId}\u0000${turnId}`)) {
+    if (!turnId) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    if (this.keptFinished.has(`${event.threadId}\u0000${turnId}`)) {
+      // Its row stays finished; its replayed rows (a child's edits too) still belong to it.
+      this.deps.activeTurns.remember(event.threadId, turnId, this.receiptTime(event))
       return CODEX_JOURNAL_ADMITTED
     }
     const startedAt = this.receiptTime(event)
