@@ -76,6 +76,7 @@ function mountSession(pendingSelection: PendingSessionSelection | null) {
       appliedSnapshotMarkerRef: { current: { epoch: null, version: 0 } },
       appliedSessionTabsRevisionRef: { current: 0 },
       closedTabTombstonesRef: { current: new Map() },
+      closingTerminalTabsRef: { current: new Set() },
       selectedSessionTabIdRef: { current: null },
       markdownDocsRef: { current: new Map() },
       terminalDiagnosticsRef: { current: { tabsApplied: () => {} } },
@@ -140,4 +141,40 @@ it('shows the empty session after the last terminal closes', async () => {
 
 it('shows the empty session after closing a terminal the phone just picked', async () => {
   await closeLastTerminalBehindEmptySnapshot({ kind: 'terminal', handle: 'pty-1', tabId: 'tab-1' })
+})
+
+it('clears the rebound handle after the last terminal closes', async () => {
+  const { model, state, reply } = mountSession(null)
+  const closing = model.handleCloseSessionTab(terminalTab('tab-1', 'pty-1', true))
+
+  act(() => {
+    model.applySessionTabs(snapshot(2, [terminalTab('tab-1', 'pty-2', true)]))
+  })
+  expect(state.activeHandle).toBe('pty-2')
+  act(() => {
+    model.applySessionTabs(snapshot(3, []))
+  })
+  await act(async () => {
+    reply({ id: '1', ok: true, result: { closed: true } })
+    await closing
+  })
+
+  expect(state.activeHandle).toBeNull()
+})
+
+it('preserves another active terminal when the rebound tab closes', async () => {
+  const { model, state, reply } = mountSession(null)
+  const closing = model.handleCloseSessionTab(terminalTab('tab-1', 'pty-1', true))
+
+  act(() => {
+    model.applySessionTabs(snapshot(2, [terminalTab('tab-1', 'pty-2', true)]))
+    model.applySessionTabs(snapshot(3, [terminalTab('tab-2', 'pty-3', true)]))
+    model.applySessionTabs(snapshot(4, []))
+  })
+  await act(async () => {
+    reply({ id: '1', ok: true, result: { closed: true } })
+    await closing
+  })
+
+  expect(state.activeHandle).toBe('pty-3')
 })

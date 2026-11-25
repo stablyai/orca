@@ -121,6 +121,7 @@ export function sessionScreenTabMountAdapters(
             },
             forgetLastSessionTab: () => {},
             closedTabTombstonesRef: { current: new Map() },
+            closingTerminalTabsRef: { current: new Set() },
             setActiveHandle: (value) => {
               activeHandle = typeof value === 'function' ? value(activeHandle) : value
             },
