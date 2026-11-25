@@ -9,6 +9,8 @@ import { waitForSessionReady } from '../../desktop/renderer-probes/store'
 
 test.use({ seedTestRepo: false })
 
+type CheckoutHistoryEvent = { kind: 'activate' | 'tab' | 'pty'; id: string; at: number }
+
 function git(repo: string, ...args: string[]) {
   const result = runProcessSync({
     program: 'git',
@@ -266,17 +268,48 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
     if (!repo) {
       throw new Error('Primary registration failed')
     }
+    const target = `${repo.id}::${selected}`
+    // Every activation, tab and PTY binding of the selected checkout, timed, from before the add.
+    const history: { kind: 'activate' | 'tab' | 'pty'; id: string; at: number }[] = []
+    const seen = new Set<string>()
+    const record = (kind: 'activate' | 'tab' | 'pty', id: string) => {
+      if (!seen.has(`${kind}:${id}`)) {
+        seen.add(`${kind}:${id}`)
+        history.push({ kind, id, at: performance.now() })
+        document.documentElement.dataset.selectedCheckoutHistory = JSON.stringify(history)
+      }
+    }
+    store.subscribe((state) => {
+      if (state.activeWorktreeId === target) {
+        record('activate', target)
+      }
+      for (const tab of state.tabsByWorktree[target] ?? []) {
+        record('tab', tab.id)
+        for (const ptyId of state.ptyIdsByTabId[tab.id] ?? []) {
+          record('pty', ptyId)
+        }
+      }
+    })
     const original = store.getState().fetchWorktrees
     const faults: { repoId: string; importedSelected: boolean }[] = []
-    // Fail exactly the handoff's confirmation: the fresh read after it saved the selected import.
+    // Fail the handoff's confirmation: its authoritative local re-read of this repo after saving the
+    // selected import. Another caller making that same read in this window would also match; the
+    // exactly-one assertion below would then fail rather than pass on the wrong read.
     Object.assign(store.getState(), {
-      fetchWorktrees: async (id: string, options?: { forceFresh?: boolean }) => {
+      fetchWorktrees: async (id: string, options?: Parameters<typeof original>[1]) => {
         const importedSelected =
           store
             .getState()
             .repos.find((row) => row.id === id)
             ?.importedExternalWorktreePaths?.includes(selected) === true
-        if (options?.forceFresh && importedSelected) {
+        if (
+          id === repo.id &&
+          importedSelected &&
+          options?.forceFresh === true &&
+          options.requireAuthoritative === true &&
+          options.executionHostId === 'local' &&
+          options.suppressRemoteLineageRefresh !== true
+        ) {
           faults.push({ repoId: id, importedSelected })
           document.documentElement.dataset.selectedCheckoutFaults = JSON.stringify(faults)
           store.setState({ fetchWorktrees: original })
@@ -288,14 +321,11 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
     store.getState().openModal('confirm-add-project-from-folder', { folderPath: selected })
     return repo.id
   }, paths)
-  const selectedWorktreeId = `${repoId}::${paths.selected}`
-  const selectedTerminals = () =>
-    orcaPage.evaluate(
-      (id) =>
-        (window.__store!.getState().tabsByWorktree[id] ?? []).flatMap(
-          (tab) => window.__store!.getState().ptyIdsByTabId[tab.id] ?? []
-        ),
-      selectedWorktreeId
+  const readHistory = async (): Promise<CheckoutHistoryEvent[]> =>
+    JSON.parse(
+      await orcaPage.evaluate(
+        () => document.documentElement.dataset.selectedCheckoutHistory ?? '[]'
+      )
     )
   const dialog = orcaPage.getByRole('dialog', { name: 'Add Project', exact: true })
   await expect(dialog).toBeVisible()
@@ -318,9 +348,10 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
       repoId
     )
   ).toEqual([paths.selected])
-  // Nothing opened the selected checkout before Retry, so a terminal after it is Retry's own.
-  expect(await selectedTerminals()).toEqual([])
   await orcaPage.screenshot({ path: testInfo.outputPath('failed-confirmation-retry.png') })
+  // Nothing activated or started the selected checkout before Retry, so what follows is Retry's own.
+  const clickedAt = await orcaPage.evaluate(() => performance.now())
+  expect(await readHistory()).toEqual([])
   await retry.click()
   await expect(
     orcaPage.locator('[role="option"][data-worktree-id]').filter({ hasText: 'retry-selected' })
@@ -329,7 +360,14 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
     orcaPage.locator('[role="option"][data-worktree-id]').filter({ hasText: 'retry-hidden' })
   ).toHaveCount(0)
   const ptyId = await waitForActivePanePtyId(orcaPage)
-  expect(await selectedTerminals()).toContain(ptyId)
+  await expect
+    .poll(async () =>
+      (await readHistory()).find((event) => event.kind === 'pty' && event.id === ptyId)
+    )
+    .toEqual(expect.objectContaining({ kind: 'pty', id: ptyId }))
+  const history = await readHistory()
+  expect(history.every((event) => event.at > clickedAt)).toBe(true)
+  expect(history.map((event) => event.kind)).toEqual(expect.arrayContaining(['activate', 'tab']))
   await expect
     .poll(() => orcaPage.evaluate((id) => window.api.pty.getCwd(id), ptyId))
     .toBe(paths.selected)

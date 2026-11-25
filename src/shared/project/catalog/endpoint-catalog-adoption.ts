@@ -2,6 +2,7 @@
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../execution-host/execution-host'
 import {
@@ -22,7 +23,10 @@ export function adoptEndpointRepo(target: RuntimeClientTarget, repo: Repo): Repo
   if (repo.connectionId) {
     return { ...repo, executionHostId: getRepoExecutionHostId(repo) }
   }
-  return repo.executionHostId ? repo : { ...repo, executionHostId: LOCAL_EXECUTION_HOST_ID }
+  // An endpoint's own runtime: stamp is a client-minted address of that endpoint, never a peer.
+  return repo.executionHostId && parseExecutionHostId(repo.executionHostId)?.kind !== 'runtime'
+    ? repo
+    : { ...repo, executionHostId: LOCAL_EXECUTION_HOST_ID }
 }
 
 export function adoptEndpointProjectHostSetup(

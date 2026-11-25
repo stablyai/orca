@@ -42,8 +42,8 @@ export function createStore(seed: Repo[] = []) {
 
 export type FakeStore = ReturnType<typeof createStore>['store']
 
-export function asStore<T extends Store | RuntimeStore>(store: FakeStore): T {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration and nested import call only the repo and project-group methods this fake implements.
+export function asStore<T extends Store | RuntimeStore>(store: FakeStore | object): T {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each caller reads only the repo, project-group and worktree-meta methods its fake implements.
   return store as unknown as T
 }
 

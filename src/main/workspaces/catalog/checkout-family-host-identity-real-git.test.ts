@@ -31,6 +31,7 @@ vi.mock('../creation/worktree-root-preparation', () => ({
 }))
 
 import {
+  asStore,
   createDesktopNestedImport,
   createScratch,
   createStore,
@@ -39,6 +40,12 @@ import {
   runtimeNestedImport,
   seedRepo
 } from './checkout-family-real-git.test-fixture'
+import { adoptEndpointRepo } from '../../../shared/project/catalog/endpoint-catalog-adoption'
+import {
+  findExactRepoOwner,
+  hasConflictingStoredWorktreeOwner
+} from '../../ipc/worktrees/listing/worktree-host-ownership'
+import type { Store } from '../../persistence/loading-store/store'
 
 installRealWorkerThreadChildProcesses()
 
@@ -104,6 +111,39 @@ describe('a non-bare primary with linked siblings', () => {
       expect(id).not.toBe(ssh.id)
       expect(repos).toHaveLength(2)
       expect(repos[0]).toEqual(ssh)
+    })
+  })
+
+  // A paired client once stamped this machine's row with its own runtime: address.
+  describe('a desktop add reusing a row with an unmapped legacy runtime: stamp', () => {
+    it('completes on this machine: local route, local owner, legacy metadata kept', async () => {
+      const legacy = seedRepo(family.siblingA, { executionHostId: 'runtime:prior-client' })
+      const { store } = createStore([legacy])
+      const id = await writer('desktop add')(store, family.siblingB, family.parentDir)
+      expect(id).toBe(legacy.id)
+      // The desktop renderer adopts its own endpoint's row; completion routes by that host.
+      expect(adoptEndpointRepo({ kind: 'local' }, legacy).executionHostId).toBe('local')
+      // The local listing that completion requests finds this row as its owner.
+      const desktopStore = asStore<Store>({
+        ...store,
+        getWorktreeMeta: () => ({ hostId: 'runtime:prior-client' })
+      })
+      expect(findExactRepoOwner(desktopStore, id, 'local')).toBe(legacy)
+      // Metadata written under the legacy stamp does not read as another owner's.
+      expect(
+        hasConflictingStoredWorktreeOwner(desktopStore, legacy, [`${id}::${family.siblingB}`])
+      ).toBe(false)
+    })
+
+    it('keeps a paired server row and an SSH row on their own hosts', () => {
+      const paired = seedRepo(family.siblingA)
+      expect(
+        adoptEndpointRepo({ kind: 'environment', environmentId: 'paired' }, paired).executionHostId
+      ).toBe('runtime:paired')
+      const ssh = seedRepo(family.siblingA, { executionHostId: 'ssh:box' })
+      expect(adoptEndpointRepo({ kind: 'local' }, ssh).executionHostId).toBe('ssh:box')
+      const { store } = createStore([ssh])
+      expect(findExactRepoOwner(asStore<Store>(store), ssh.id, 'local')).toBeUndefined()
     })
   })
 

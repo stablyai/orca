@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import { useAppStore } from '@/store/index'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import { getSelectedNestedRepoPathsInScanOrder } from '@/lib/workspace/creation/nested-repo-selected-paths'
 import {
   buildNestedRepoImportActionTelemetry,
@@ -188,7 +188,13 @@ export function useAddRepoNestedImportFlow({
         if (result.failedCount > 0) {
           toastSomeNestedRepositoriesFailed(result.failedCount)
         }
-        const repo = useAppStore.getState().repos.find((entry) => entry.id === firstRepoId)
+        // The row the originating endpoint owns: another host may hold a row with this same id.
+        const completionHostId = completionOwnerOptions.executionHostId
+        const state = useAppStore.getState()
+        const repo = findRepoForHost(state.repos, firstRepoId, {
+          hostId: completionHostId,
+          settings: state.settings
+        })
         if (repo) {
           const source: AddRepoExistingWorkspaceSource = nestedConnectionId
             ? 'ssh_remote_path'
@@ -200,7 +206,7 @@ export function useAddRepoNestedImportFlow({
           await reportAfterGitRepoReady(
             takeNestedProjectReporter(),
             () =>
-              onGitRepoReady(repo.id, source, getRepoExecutionHostId(repo), {
+              onGitRepoReady(repo.id, source, completionHostId, {
                 selectedPath: firstEntry.path,
                 ...(mode === 'group' && result.group
                   ? { importedProjectGroupId: result.group.id }

@@ -14,7 +14,6 @@ import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from '../completion/project-added-default-checkout'
 import { captureCheckoutHandoffIntent } from '../completion/checkout-handoff-intent'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
@@ -78,6 +77,8 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         onResolvedSelectedPath: (resolved) => {
           selectedPath = resolved
         },
+        // A replaced request must not open this add's non-Git prompt or error over its successor.
+        canPublish: isCurrent,
         runtimeEnvironmentId
       })
 
@@ -89,7 +90,8 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         return
       }
       // The repo is already persisted; a non-authoritative refresh must not strand the add dialog.
-      await fetchWorktrees(repo.id, worktreeRefreshOptions(runtimeEnvironmentId))
+      const ownerOptions = worktreeRefreshOptions(runtimeEnvironmentId)
+      await fetchWorktrees(repo.id, ownerOptions)
       if (!isCurrent()) {
         return
       }
@@ -97,8 +99,8 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         repoId: repo.id,
         source: runtimeEnvironmentId ? 'runtime_server_path' : 'local_folder_picker',
         selectedPath,
-        // The returned row's own host: a reused row keeps its stamp, which the handoff must match.
-        executionHostId: getRepoExecutionHostId(repo),
+        // The endpoint that admitted it; its adoption gave the row that endpoint's owner identity.
+        executionHostId: ownerOptions.executionHostId,
         closeModal,
         intent
       })

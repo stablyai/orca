@@ -15,10 +15,22 @@ export type CheckoutHandoffIntent = {
 
 let handoffGeneration = 0
 
+/** The page a visible Browser tab shows; a background browser's remembered page is not on screen. */
+function visibleBrowserPageId(state: AppState, worktreeId: string | null): string | null {
+  if (state.activeTabType !== 'browser' || !worktreeId || !state.activeBrowserTabId) {
+    return null
+  }
+  return (
+    state.browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === state.activeBrowserTabId)
+      ?.activePageId ?? null
+  )
+}
+
 function visibleSurface(state: AppState): readonly unknown[] {
   const worktreeId = state.activeWorktreeId
   const groupId = worktreeId ? state.activeGroupIdByWorktree[worktreeId] : undefined
   return [
+    visibleBrowserPageId(state, worktreeId),
     state.activeView,
     worktreeId ?? null,
     state.activeWorkspaceExecutionHostId ?? null,

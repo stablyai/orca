@@ -173,6 +173,8 @@ export type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId: stri
 
 export type AddRepoPathOptions = {
   onResolvedSelectedPath?: (path: string) => void
+  /** False once the caller's request lost the foreground: failures and follow-up prompts are dropped; a registration still commits. */
+  canPublish?: () => boolean
   runtimeEnvironmentId?: string | null
   /** Overrides the host's basename naming for the new project. */
   displayName?: string

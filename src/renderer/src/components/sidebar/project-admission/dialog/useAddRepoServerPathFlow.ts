@@ -12,10 +12,7 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
-import {
-  getRepoExecutionHostId,
-  toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   wslHostWindowsDriveRefusalForLinuxPath,
   type WslHostWindowsDriveRefusal
@@ -206,7 +203,7 @@ export function useAddRepoServerPathFlow({
           if (gen !== serverAddGenRef.current) {
             return
           }
-          await onGitRepoReady(repo.id, 'runtime_server_path', getRepoExecutionHostId(repo), {
+          await onGitRepoReady(repo.id, 'runtime_server_path', ownerOptions.executionHostId, {
             selectedPath
           })
         } else if (repo) {

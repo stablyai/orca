@@ -126,7 +126,9 @@ export async function listDetectedGitWorktrees(
       ...worktreeCatalogHygienePlan(store, repo, localWorktreeGitOptions, true)
     }
   )
-  if (!observation) {
+  // An overtaken flight, including a failed one, says nothing about the repo after the invalidation
+  // that overtook it: the bounded supersession rescan re-lists instead of reporting it.
+  if (!observation || (superseded && observation.outcome.kind === 'failed')) {
     return {
       gitWorktrees: [],
       fresh: false,

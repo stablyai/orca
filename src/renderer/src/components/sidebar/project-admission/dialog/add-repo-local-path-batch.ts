@@ -4,9 +4,9 @@ import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { CompleteGitRepoAdd } from '../completion/use-complete-git-repo-add'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WslMoveRowRef } from '../../../../../../shared/wsl-move/wsl-move-driver-types'
 import { showSkippedBatchFoldersToast } from '../completion/add-repo-skipped-folders-toast'
+import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 
 /** What a paused add added; `imported` lists every repo a nested import added, `repo` included. */
 export type PausedLocalPathAdd = { repo: Repo; imported?: readonly WslMoveRowRef[] }
@@ -29,6 +29,7 @@ export async function addLocalPathsForGeneration({
   source,
   gen,
   isCurrentGen,
+  activeRuntimeEnvironmentId,
   addLocalPathForGeneration,
   onGitRepoReady
 }: {
@@ -36,6 +37,7 @@ export async function addLocalPathsForGeneration({
   source: AddRepoExistingWorkspaceSource
   gen: number
   isCurrentGen: () => boolean
+  activeRuntimeEnvironmentId: string | null | undefined
   addLocalPathForGeneration: (
     path: string,
     source: AddRepoExistingWorkspaceSource,
@@ -44,7 +46,7 @@ export async function addLocalPathsForGeneration({
   ) => Promise<LocalPathAddResult>
   onGitRepoReady: CompleteGitRepoAdd
 }): Promise<LocalPathBatchOutcome> {
-  let firstGitRepo: { repo: Repo; selectedPath: string } | undefined
+  let firstGitRepo: { id: string; selectedPath: string } | undefined
   const shouldDeferGitRepoReady = paths.length > 1
   let skippedCount = 0
   let sawFailure = false
@@ -70,7 +72,7 @@ export async function addLocalPathsForGeneration({
       return 'paused'
     }
     if (!firstGitRepo && isGitRepoKind(result.repo)) {
-      firstGitRepo = { repo: result.repo, selectedPath: result.selectedPath }
+      firstGitRepo = { id: result.repo.id, selectedPath: result.selectedPath }
     }
   }
   if (!isCurrentGen()) {
@@ -80,9 +82,12 @@ export async function addLocalPathsForGeneration({
     showSkippedBatchFoldersToast()
   }
   if (shouldDeferGitRepoReady && firstGitRepo) {
-    await onGitRepoReady(firstGitRepo.repo.id, source, getRepoExecutionHostId(firstGitRepo.repo), {
-      selectedPath: firstGitRepo.selectedPath
-    })
+    await onGitRepoReady(
+      firstGitRepo.id,
+      source,
+      worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null).executionHostId,
+      { selectedPath: firstGitRepo.selectedPath }
+    )
     return 'completed'
   }
   return sawFailure || (shouldDeferGitRepoReady && !firstGitRepo) ? 'unsettled' : 'completed'

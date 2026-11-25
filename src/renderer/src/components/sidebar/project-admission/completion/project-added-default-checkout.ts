@@ -206,12 +206,12 @@ export function openProjectDefaultCheckout({
       result: 'revealed_project',
       reason
     })
-    finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
-    // The owner can be removed while listing runs; only a live one can be retried.
+    // The owner can be removed while listing runs: a vanished one is neither revealed nor retried.
     if (!ownerHostId || !findProjectRepo(repoId, ownerHostId)) {
       showSelectedCheckoutFailure(repoId, { kind: 'owner_unavailable' })
       return
     }
+    finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
     const retry = () => {
       void openProjectDefaultCheckout({
         repoId,

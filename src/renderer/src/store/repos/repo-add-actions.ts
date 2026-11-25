@@ -36,6 +36,7 @@ export function createRepoAddActions(
 ): Pick<RepoSlice, 'addRepoPath' | 'addRepo' | 'addNonGitFolder'> {
   return {
     addRepoPath: async (path, kind = 'git', options) => {
+      const canPublish = (): boolean => options?.canPublish?.() !== false
       try {
         // Why: a new project has no row yet; without a picked host it goes to the default host.
         const target =
@@ -81,6 +82,9 @@ export function createRepoAddActions(
           if (target.kind !== 'local') {
             const status = await fetchRuntimeAddProjectPathStatus({ target, path })
             if (status?.exists !== true) {
+              if (!canPublish()) {
+                return null
+              }
               const hostName = getRuntimeEnvironmentDisplayName(get(), target.environmentId)
               toast.error(
                 translate(
@@ -100,6 +104,9 @@ export function createRepoAddActions(
             }
           }
           // Why: folder mode is a capability downgrade (no worktrees/SCM/PRs/checks), so confirm via dialog rather than silently falling back.
+          if (!canPublish()) {
+            return null
+          }
           const { openModal } = get()
           openModal('confirm-non-git-folder', {
             folderPath: path,
@@ -154,6 +161,9 @@ export function createRepoAddActions(
         return repo
       } catch (err) {
         console.error('Failed to add project:', err)
+        if (!canPublish()) {
+          return null
+        }
         const driveRefusal =
           err instanceof RuntimeRpcCallError
             ? readWslHostWindowsDriveRefusal(err.response.error.data)

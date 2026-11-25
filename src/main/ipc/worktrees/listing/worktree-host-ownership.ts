@@ -13,11 +13,16 @@ export function hasConflictingStoredWorktreeOwner(
   repo: Repo,
   worktreeIds: readonly string[]
 ): boolean {
-  const expectedHostId = getRepoExecutionHostId(repo)
+  // A native row's legacy runtime: stamp and this machine's local id name the same owner.
+  const ownerHostIds = new Set([getRepoExecutionHostId(repo)])
+  const evidence = resolveRepoOwnershipEvidence(repo)
+  if (evidence.status === 'owned') {
+    ownerHostIds.add(evidence.hostId)
+  }
   const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
   return worktreeIds.some((worktreeId) => {
     const meta = store.getWorktreeMeta(worktreeId)
-    return !!meta && (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1)
+    return !!meta && (meta.hostId ? !ownerHostIds.has(meta.hostId) : repoOwnerCount > 1)
   })
 }
 
@@ -41,9 +46,13 @@ export function resolveRepoOwnershipEvidence(repo: Repo): RepoOwnershipEvidence 
   if (explicitHost && connectionHostId && explicitHost.id !== connectionHostId) {
     return { status: 'contradictory' }
   }
+  // A store's runtime: stamps are client-minted addresses of this machine, never a peer's rows.
+  const nativeRuntimeStamp = explicitHost?.kind === 'runtime' && !connectionHostId
   return {
     status: 'owned',
-    hostId: explicitHost?.id ?? connectionHostId ?? LOCAL_EXECUTION_HOST_ID
+    hostId: nativeRuntimeStamp
+      ? LOCAL_EXECUTION_HOST_ID
+      : (explicitHost?.id ?? connectionHostId ?? LOCAL_EXECUTION_HOST_ID)
   }
 }
 
