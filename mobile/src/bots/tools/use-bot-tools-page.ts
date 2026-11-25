@@ -24,6 +24,8 @@ import {
 export type PhoneBotTools = {
   own: PhoneOwnTool[]
   inherited: { name: string; plugin?: true }[]
+  /** Whether its sessions also take the host's MCP servers; absent while the host's switch is off. */
+  hostMcpServers?: boolean
 }
 
 type ToolProblems = Readonly<Record<string, BotToolProblem>>
@@ -177,7 +179,11 @@ export function useBotToolsPage(
           if (!mounted.current) {
             return
           }
-          const next = { own: read.own ?? [], inherited: read.inherited ?? [] }
+          const next = {
+            own: read.own ?? [],
+            inherited: read.inherited ?? [],
+            ...(read.hostMcpServers === undefined ? {} : { hostMcpServers: read.hostMcpServers })
+          }
           setTools(next)
           shareTools(hostKey, botId, { own: next.own })
           setError(null)

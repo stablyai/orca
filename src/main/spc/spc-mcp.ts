@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { RelayRefusal } from '../bots/tool-relay/bot-tool-relay-requests'
-import type { BotToolRequestBinding } from '../bots/tool-relay/bot-tool-relay'
+import type { BotToolRequestBinding } from '../bots/tool-relay/bot-tool-relay-grants'
 import type { SpcRead } from './spc-terminal-result'
 
 const startsWorkflow = new Set([
@@ -58,19 +58,19 @@ export function spcRequestBinding(input: {
   return {
     accountForBot: (botId) => (input.handlesBot(botId) ? input.account() : null),
     bind: (url, grant, body) => {
-      if (url !== input.url || (!grant.account && !input.handlesBot(grant.botId))) {
+      if (url !== input.url || (!grant.account && !input.handlesBot(grant.owner))) {
         return body
       }
       return bindSpcMcpRequest(body, (requestId) => {
         if (
           !grant.account ||
           !grant.sessionId ||
-          !input.handlesBot(grant.botId) ||
+          !input.handlesBot(grant.owner) ||
           grant.account !== input.account()
         ) {
           throw new RelayRefusal(403, 'Open an Orca conversation to start this SPC workflow.')
         }
-        return input.bind(grant.account, grant.botId, grant.sessionId, requestId)
+        return input.bind(grant.account, grant.owner, grant.sessionId, requestId)
       })
     }
   }

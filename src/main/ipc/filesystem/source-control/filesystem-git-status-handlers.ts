@@ -20,6 +20,7 @@ import { registerFilesystemGitAtRiskLocalFilesHandlers } from './filesystem-git-
 import { isGitWorktreeMutationInFlight } from '../../../git/command-runner/git-worktree-mutation-state'
 import type { GitMutationInFlight } from '../../../../shared/git/commands/git-mutation-in-flight'
 import { checkIgnoredPaths } from '../../../git/source-control/ignores/check-ignored-paths'
+import { registerFilesystemGitRebaseHandlers } from './filesystem-git-rebase-handlers'
 import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
@@ -48,6 +49,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
   const { store, gitStatusCancellations } = context
   registerFilesystemGitHistoryHandlers(context)
   registerFilesystemGitAtRiskLocalFilesHandlers(context)
+  registerFilesystemGitRebaseHandlers(context)
   ipcMain.handle(
     'git:status',
     async (

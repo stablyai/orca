@@ -38,7 +38,7 @@ const FLAT: WorkspaceSeed[] = [
         toolInput: 'agent-host-review.ts'
       },
       {
-        agentType: 'gemini',
+        agentType: 'antigravity',
         state: 'done',
         minutesAgo: 50,
         message: 'Checked the reviewer list'

@@ -4,6 +4,8 @@ export const PI_RPC_AGENT: DirectoryAccountAgentDefinition = {
   agent: 'pi',
   handleTransport: 'jsonl-rpc',
   accountHomeVariable: 'PI_CODING_AGENT_DIR',
+  // Every launch passes --append-system-prompt, and Pi builds its system prompt from it at each start.
+  instructionsEachStart: true,
   capabilities: {
     rewind: false,
     compact: true,

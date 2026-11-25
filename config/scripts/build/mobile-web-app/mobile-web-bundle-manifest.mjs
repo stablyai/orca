@@ -158,7 +158,7 @@ export async function writeMobileWebBundleTree({
 }) {
   const brotliCopies = brotli ? await compressWithBrotli(written) : new Map()
   const assets = written
-    .map(({ path, sha256, byteLength, contentType, kind, deferred }) => {
+    .map(({ path, sha256, byteLength, contentType, kind }) => {
       const copy = brotliCopies.get(path)
       return {
         path,
@@ -166,8 +166,7 @@ export async function writeMobileWebBundleTree({
         byteLength,
         contentType,
         ...(copy === undefined ? {} : { brotliByteLength: copy.byteLength }),
-        ...(kind === undefined ? {} : { kind }),
-        ...(deferred === undefined ? {} : { deferred })
+        ...(kind === undefined ? {} : { kind })
       }
     })
     .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))

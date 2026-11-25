@@ -32,6 +32,8 @@ export type BotItemAddInput = {
   doneMeans?: string
   status: 'planned' | 'working'
   links: BotItemLinkInput[]
+  /** The thread, issue or pull request the adding turn's work started in, kept on its `made` event. */
+  startedIn?: string
 }
 
 export type BotItemSetInput = {
@@ -145,7 +147,12 @@ export function assertBotItemAddable(input: {
   if (!input.title.trim()) {
     throw new BotItemError('invalid_argument', 'An item needs a title.')
   }
-  if (input.links.length > BOT_ITEM_LIMITS.links) {
+  assertBotItemLinkRoom(0, input.links.length)
+}
+
+/** The one link bound, on every path that adds links: `held` on the item now, `adding` new ones. */
+export function assertBotItemLinkRoom(held: number, adding = 1): void {
+  if (held + adding > BOT_ITEM_LIMITS.links) {
     throw new BotItemError(
       'invalid_argument',
       `An item takes up to ${BOT_ITEM_LIMITS.links} links.`

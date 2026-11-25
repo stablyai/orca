@@ -3,7 +3,7 @@
 // would hand them to every session). Sign-ins need a configured server, so each bot has a sign-in
 // folder of its own, made a git repo so Claude keys it to itself, mirroring the bot's servers; Claude
 // keeps a token by server name and URL, so the chats' launch config finds it.
-import type { BotLaunchTools } from './bot-launch-tools'
+import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import type { McpHttpServerConfig, McpStdioServerConfig } from '@anthropic-ai/claude-agent-sdk'
 import { access, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -63,6 +63,27 @@ export async function readClaudeInheritedTools(
   return [...servers, ...plugins]
 }
 
+/**
+ * The names of the servers Claude already loads in `cwd` for the account in `configDir`: its user
+ * servers, its local ones for that folder and the folder's `.mcp.json`. A server from Orca of the
+ * same name would shadow or be shadowed by one of them.
+ */
+export async function claudeOwnServerNames(
+  configDir: string | null,
+  cwd: string
+): Promise<string[]> {
+  const [user, local, project] = await Promise.all([
+    readClaudeInheritedTools(configDir),
+    readClaudeMirror(configDir, cwd),
+    readJson(join(cwd, '.mcp.json'))
+  ])
+  return [
+    ...user.filter((tool) => !tool.plugin).map((tool) => tool.name),
+    ...Object.keys(local),
+    ...Object.keys(record(project.mcpServers))
+  ]
+}
+
 // npm's launchers are .cmd shims on Windows, which Claude Code can only start through cmd.
 const WINDOWS_CMD_SHIMS = new Set(['npx', 'npm', 'pnpm', 'pnpx', 'yarn'])
 const CMD_SPECIAL = /[&|<>^()%]/g
@@ -95,7 +116,7 @@ export function claudeServerConfig(
 
 /** The bot's servers for a chat's launch, added to the owner's own (never strict). */
 export function claudeLaunchServers(
-  tools: BotLaunchTools
+  tools: SessionMcpTools
 ): Record<string, McpHttpServerConfig | McpStdioServerConfig> {
   return Object.fromEntries(
     tools.servers.map((server) => [server.name, claudeServerConfig(server)])
