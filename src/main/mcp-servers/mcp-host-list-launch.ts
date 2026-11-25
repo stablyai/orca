@@ -61,8 +61,10 @@ export async function mcpServersForLaunch(
   workspace: LaunchWorkspace,
   folder = mcpHostListFolder()
 ): Promise<McpLaunchServers> {
-  const entries = await launchEntries(agent, workspace, folder)
-  return { servers: entries.map(({ server }) => server), sharedProcesses: sharedIds(entries) }
+  const { all, on } = await launchEntries(agent, workspace, folder)
+  const names = new Set(on.map(({ server }) => server.name))
+  const shared = [...sharedIds(all)].filter(([name]) => names.has(name))
+  return { servers: on.map(({ server }) => server), sharedProcesses: new Map(shared) }
 }
 
 /**
@@ -122,15 +124,15 @@ export async function mcpServerForLaunch(
   workspace: LaunchWorkspace,
   folder = mcpHostListFolder()
 ): Promise<BotToolServer | null> {
-  const entry = (await launchEntries(agent, workspace, folder)).find(
+  const entry = (await launchEntries(agent, workspace, folder)).on.find(
     (candidate) => candidate.extras.id === id
   )
   return entry?.server ?? null
 }
 
+/** The whole list, and the entries on for this launch. */
 async function launchEntries(agent: string, workspace: LaunchWorkspace, folder: string) {
   // Read only: a launch never writes the list, even to give an entry edited outside Orca its id.
-  return botToolEntries(await readBotToolsSnapshot(folder)).filter(({ extras }) =>
-    isOnForLaunch(extras, agent, workspace)
-  )
+  const all = botToolEntries(await readBotToolsSnapshot(folder))
+  return { all, on: all.filter(({ extras }) => isOnForLaunch(extras, agent, workspace)) }
 }

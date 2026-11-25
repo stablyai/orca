@@ -28,12 +28,19 @@ const sharedId = ({ server, extras }: BotToolEntry): string | null =>
 const entriesOf = async (folder: string): Promise<BotToolEntry[]> =>
   botToolEntries(await readBotToolsSnapshot(folder))
 
-/** The shared command servers among `entries`, by name to their id. */
+/**
+ * The shared command servers in the whole list `entries`, by name to their id. An id two entries
+ * hold (an edit outside Orca) names neither, so no lookup can run one entry's command for the other.
+ */
 export function sharedIds(entries: readonly BotToolEntry[]): Map<string, string> {
+  const holders = new Map<unknown, number>()
+  for (const { extras } of entries) {
+    holders.set(extras.id, (holders.get(extras.id) ?? 0) + 1)
+  }
   const ids = new Map<string, string>()
   for (const entry of entries) {
     const id = sharedId(entry)
-    if (id) {
+    if (id && holders.get(id) === 1) {
       ids.set(entry.server.name, id)
     }
   }
@@ -50,6 +57,8 @@ export async function sharedMcpProcessServer(
   id: string,
   folder = mcpHostListFolder()
 ): Promise<McpCommandServer | null> {
-  const entry = (await entriesOf(folder)).find((candidate) => sharedId(candidate) === id)
+  const entries = await entriesOf(folder)
+  const name = [...sharedIds(entries)].find(([, shared]) => shared === id)?.[0]
+  const entry = entries.find(({ server }) => server.name === name)
   return entry && !('url' in entry.server) ? entry.server : null
 }

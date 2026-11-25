@@ -123,7 +123,7 @@ export async function mcpServerConnection(
   }
   if (!('url' in server)) {
     // A command Orca runs once for every agent is reached through the relay, as chats reach it.
-    return (await sharedMcpProcessServer(caller.id, folder))
+    return (await sharedMcpProcessServer(caller.id, folder))?.name === server.name
       ? viaRelay((origin) => relayProcessUrl(origin, caller.id))
       : { on: true, command: server.command, args: server.args, env: server.env ?? {} }
   }
