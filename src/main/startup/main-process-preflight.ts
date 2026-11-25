@@ -73,6 +73,7 @@ import { ElectronSecretStore } from '../host/electron-secret-store'
 import { selectLinuxKeyringBackend } from './linux-runtime/select-linux-keyring-backend'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { applyMacPressAndHoldDefaultAtStartup } from '../window/desktop-integration/macos-press-and-hold-default'
+import { disableMacAutoFillHeuristicAtStartup } from '../window/desktop-integration/macos-autofill-heuristic'
 import { configureSessionParseCachePersistence } from '../ai-vault/parse-cache/session-parse-cache-persistence'
 import '../orca-profiles/profile-index-store'
 // oxfmt-ignore
@@ -277,6 +278,8 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   installServeSupervisorDisconnectQuit(state.isServeMode)
   // Use captured userData for the next-launch press-and-hold record.
   applyMacPressAndHoldDefaultAtStartup(getCanonicalUserDataPath())
+  // Before any window exists: AppKit AutoFill can wedge the main thread on macOS 27.
+  disableMacAutoFillHeuristicAtStartup()
   // Late app.getPath may change across restarts; persistence needs canonical userData.
   configureSessionParseCachePersistence({
     filePath: join(getCanonicalUserDataPath(), 'ai-vault', 'session-parse-cache.json'),
