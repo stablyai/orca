@@ -6,6 +6,7 @@ import {
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import { refusedForOlderHostPurposeLimit } from '../../../../shared/bots/bot-proposal'
 import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../../shared/worktree/removal/removal'
 import {
   agentSessionRefusalFailure,
@@ -60,6 +61,39 @@ export function botErrorText(error: unknown): string {
   return botFailureMessage(error) ?? (error instanceof Error ? error.message : String(error))
 }
 
+// A sentence for people: capital first, end punctuation, and no snake_case code inside.
+const HOST_SENTENCE = /^[A-Z][^\n]*\s[^\n]*[.!?]$/
+const CODE_TOKEN = /\b[a-z0-9]+_[a-z0-9_]+\b/
+
+/** An invalid_argument refusal the host worded for people: its reason beats a generic retry, which
+ *  would fail the same way. Codes and schema errors stay behind the generic copy. */
+function hostSentenceOf(error: unknown): string | null {
+  if (!(error instanceof RuntimeRpcCallError) || error.code !== 'invalid_argument') {
+    return null
+  }
+  const text = error.message.trim()
+  // A paired server's words call itself "this computer", which here would mean the Mac.
+  const remote = error.target?.kind === 'environment' && /this computer/i.test(text)
+  return HOST_SENTENCE.test(text) && !CODE_TOKEN.test(text) && !remote ? text : null
+}
+
+/** A create's refusal; an older host that checks the earlier purpose limit says so. */
+export function botCreateErrorMessage(
+  error: unknown,
+  purpose: string | undefined,
+  /** The picked computer's name, as Runs on shows it: an older paired one, not this Mac. */
+  host: string
+): string {
+  return error instanceof RuntimeRpcCallError &&
+    refusedForOlderHostPurposeLimit(error.code, error.message, purpose)
+    ? translate(
+        'bots.errors.purposeTooLongForHost',
+        "Orca on {{host}} takes up to 200 characters for what it's for. Shorten it, or update Orca on {{host}}.",
+        { host }
+      )
+    : botErrorMessage(error)
+}
+
 export function botErrorMessage(error: unknown): string {
   const coded = botFailureMessage(error)
   if (coded) {
@@ -100,6 +134,10 @@ export function botErrorMessage(error: unknown): string {
       refusal,
       host && structuredAgentSessionTargetPlace(useAppStore.getState(), host, translate)
     )
+  }
+  const reason = hostSentenceOf(error)
+  if (reason) {
+    return reason
   }
   return translate('bots.errors.generic', 'Something went wrong. Try again.')
 }

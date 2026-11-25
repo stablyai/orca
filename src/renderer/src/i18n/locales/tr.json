@@ -7129,7 +7129,7 @@
           "preservedTitle": "{{value0}} üzerindeki düzenlemeleriniz ayrı olarak kaydedildi",
           "preservedDescription": "Orca beceriyi güncelledi ve düzenlemelerinizi {{value0}} konumuna kaydetti.",
           "uncertainTitle": "Orca, {{value0}} üzerindeki beceri güncellemesini doğrulayamadı",
-          "uncertainDescription": "Orca, {{value0}} üzerindeki becerileri güncellemiş olabilir ancak sonucu doğrulayamadı. Güncelleme sırasında bir beceriyi düzenlediyseniz kopyanız {{value1}} konumunda."
+          "uncertainDescriptionKept": "Orca, {{value0}} üzerindeki becerileri güncellemiş olabilir ancak sonucu doğrulayamadı. Güncelleme sırasında bir beceriyi düzenlediyseniz kopyanız {{value1}} konumunda ya da hâlâ beceriler klasöründe."
         },
         "SkillBackupPathLine": {
           "movedTo": "Eski kopyanın taşındığı yer:",
@@ -28661,6 +28661,7 @@
     "errors": {
       "unsavedDrafts": "Klasöründe kaydedilmemiş düzenleyici değişiklikleri var. Bunları kaydedin veya kapatın, ardından silmeyi tekrar deneyin.",
       "nameTaken": "Bu ad başka bir bot tarafından kullanılıyor.",
+      "purposeTooLongForHost": "{{host}} üzerindeki Orca, amaç için en fazla 200 karakter kabul ediyor. Kısaltın veya {{host}} üzerindeki Orca'yı güncelleyin.",
       "generic": "Bir sorun oluştu. Tekrar deneyin.",
       "avatarHomeUnreadable": "Kaydedilen resim okunamadı. Resmi yeniden seçin.",
       "folderNotOwned": "Bu botun klasörü doğrulanamadı.",

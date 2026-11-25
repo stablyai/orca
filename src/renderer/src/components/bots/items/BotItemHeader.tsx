@@ -1,6 +1,7 @@
 // The open item's top, two rows: number and title, then its status, its links and (while its question is
-// off screen) Reply; a snooze adds its line. It sits above the Activity's scroller, so the links stay in
-// reach while the owner reads the activity below.
+// off screen) Reply; a snooze adds its line. It stays at the top of the item's scroll the whole time (CSS
+// sticky, nothing read on scroll), so the links are in reach while the owner reads the activity below.
+import { useEffect, useEffectEvent, useRef } from 'react'
 import { AlarmClock, Check, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -37,7 +38,9 @@ export function BotItemHeader({
   deleted,
   onStatus,
   snoozing,
-  reply
+  scrollRef,
+  reply,
+  onHeight
 }: {
   bot: Bot
   item: BotItem
@@ -46,14 +49,23 @@ export function BotItemHeader({
   deleted: boolean
   onStatus: (to: BotItemStatus) => void
   snoozing: BotItemSnoozing
+  /** The item's scroller: a control Tab reaches is scrolled clear of this header, not under it. */
+  scrollRef: React.RefObject<HTMLDivElement | null>
   /** At the status row's end: the way to the question when it is off screen. */
   reply?: React.ReactNode
+  /** The header's height, each time it changes. */
+  onHeight?: (height: number) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const header = useRef<HTMLDivElement | null>(null)
+  useScrollPaddingBelow(scrollRef, header, onHeight)
   const now = useNow(60_000)
   const snoozed = isBotItemSnoozed(item, now)
   return (
-    <div className="flex shrink-0 flex-col gap-1.5 border-b border-border/60 px-3.5 pt-1 pb-2.5">
+    <div
+      ref={header}
+      className="sticky top-0 z-10 flex shrink-0 flex-col gap-1.5 border-b border-border/60 bg-sidebar px-3.5 pt-1 pb-2.5"
+    >
       <h2
         title={item.title}
         className="line-clamp-2 break-words text-[15px] font-semibold leading-[21px] text-foreground [@media(max-height:620px)]:line-clamp-1"
@@ -95,6 +107,36 @@ export function BotItemHeader({
       ) : null}
     </div>
   )
+}
+
+/** Keyboard focus and scroll-into-view stop below the header rather than under it. Measured when the
+ *  header changes size, never on scroll. */
+function useScrollPaddingBelow(
+  scrollRef: React.RefObject<HTMLDivElement | null>,
+  header: React.RefObject<HTMLDivElement | null>,
+  onHeight: ((height: number) => void) | undefined
+): void {
+  const report = useEffectEvent((height: number) => onHeight?.(height))
+  useEffect(() => {
+    const root = scrollRef.current
+    const node = header.current
+    if (!root || !node || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const previous = root.style.scrollPaddingTop
+    const measure = (): void => {
+      const height = node.getBoundingClientRect().height
+      root.style.scrollPaddingTop = `${height}px`
+      report(height)
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    measure()
+    return () => {
+      observer.disconnect()
+      root.style.scrollPaddingTop = previous
+    }
+  }, [scrollRef, header])
 }
 
 function StatusMenu({

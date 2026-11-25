@@ -6343,7 +6343,7 @@
           "preservedTitle": "你对 {{value0}} 的修改已单独保存",
           "preservedDescription": "Orca 已更新该技能，并将你的修改保存到 {{value0}}",
           "uncertainTitle": "Orca 无法确认 {{value0}} 上的技能更新",
-          "uncertainDescription": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}"
+          "uncertainDescriptionKept": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}，或仍在技能文件夹中"
         },
         "SkillBackupPathLine": {
           "movedTo": "旧副本已移动到：",
@@ -29805,6 +29805,7 @@
     },
     "errors": {
       "nameTaken": "已有其他 bot 使用此名称",
+      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 个字符的用途说明。请缩短内容，或更新 {{host}} 上的 Orca。",
       "generic": "出了点问题，请重试",
       "avatarInvalid": "无法使用该图片。请选择 PNG 或 JPG 图片",
       "unsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先保存或关闭这些更改，然后再删除"

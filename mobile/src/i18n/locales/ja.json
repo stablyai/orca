@@ -5249,6 +5249,9 @@
       "continuesAt": "{{time}} に再開",
       "continues": "{{time}} に再開",
       "hitLimit": "上限に到達 · {{time}} にリセット"
+    },
+    "new": {
+      "purposeTooLongForHost": "{{host}} の Orca では、用途は 200 文字までです。短くするか、{{host}} の Orca を更新してください。"
     }
   },
   "sidebar": {
