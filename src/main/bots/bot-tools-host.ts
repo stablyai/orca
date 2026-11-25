@@ -43,7 +43,8 @@ import { cliWithLaunchTools, withRelayProblems, type BotLaunchTools } from './bo
 import type { BotAgent } from '../../shared/bot-types'
 import { readBotToolOAuth, withSavedBotToolHeaders } from './bot-tool-credentials'
 
-type BotToolsFolder = {
+export type BotToolsFolder = {
+  /** The relay grant's owner: the bot, or the host list's reserved owner. */
   botId: string
   folder: string
   /** Claude: a folder of Orca's own where the CLI keeps the bot's servers to sign them in. */

@@ -43,6 +43,9 @@ const hashToken = (token: string): string => createHash('sha256').update(token).
 const credentialKey = (folder: string, credentialId: string) => `${folder}\0${credentialId}`
 const SESSION_ENDED = 'This tool’s session ended. Start a new one.'
 
+/** The host MCP list's checks hold a grant under this owner; it never names a bot (bot ids are UUIDs). */
+export const MCP_HOST_LIST_RELAY_OWNER = 'mcp-host-list'
+
 export class BotToolRelay {
   private server: Server | null = null
   private port = 0
@@ -74,7 +77,8 @@ export class BotToolRelay {
 
   /** The bot a token was granted to in this run of Orca; null once revoked or from another run. */
   botOf(token: string): string | null {
-    return this.grants.get(hashToken(token))?.botId ?? null
+    const botId = this.grants.get(hashToken(token))?.botId ?? null
+    return botId === MCP_HOST_LIST_RELAY_OWNER ? null : botId
   }
 
   /** A deleted bot's token stops working at once, and its open calls are cut. */
