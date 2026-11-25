@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
+import { shallow } from 'zustand/shallow'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
@@ -9,27 +9,33 @@ import {
   type AgentCliUpdateGroup
 } from '../status-bar/updates/AgentCliUpdateList'
 
-const NO_HOST_NAMES: Readonly<Record<string, string>> = Object.freeze({})
+const NAMES_BY_CATALOG = new WeakMap<
+  AppState['runtimeEnvironments'],
+  Readonly<Record<string, string>>
+>()
+let lastNames: Readonly<Record<string, string>> = Object.freeze({})
 
-/** Names of paired servers with listed updates; the shared empty value keeps always-mounted readers still. */
-function remoteHostNames(state: AppState): Readonly<Record<string, string>> {
-  const keys = [...state.agentCliUpdates.keys()].filter((key) => key !== '')
-  if (keys.length === 0) {
-    return NO_HOST_NAMES
+/** Host names by id, built once per catalog array so unrelated store writes cost one lookup. */
+function hostNames(state: AppState): Readonly<Record<string, string>> {
+  const catalog = state.runtimeEnvironments
+  let names = NAMES_BY_CATALOG.get(catalog)
+  if (!names) {
+    const built = Object.fromEntries(
+      catalog.map((environment) => [environment.id, environment.name])
+    )
+    // Equal names keep one object, so a catalog change that keeps every name (a last-used time) re-renders no reader.
+    names = shallow(built, lastNames) ? lastNames : built
+    lastNames = names
+    NAMES_BY_CATALOG.set(catalog, names)
   }
-  return Object.fromEntries(
-    keys.map((key) => [
-      key,
-      state.runtimeEnvironments.find((environment) => environment.id === key)?.name ?? key
-    ])
-  )
+  return names
 }
 
 /** Every host's offered or running CLI updates, this computer first, labelled once another host is added. */
 export function useAgentCliUpdateGroups(): AgentCliUpdateGroup[] {
   const t = useTranslate()
   const hosts = useAppStore((s) => s.agentCliUpdates)
-  const hostNames = useAppStore(useShallow(remoteHostNames))
+  const names = useAppStore(hostNames)
   const hasOtherHosts = useAppStore(
     (s) => !isPairedWebClientWindow() && s.runtimeEnvironments.length > 0
   )
@@ -46,7 +52,9 @@ export function useAgentCliUpdateGroups(): AgentCliUpdateGroup[] {
         ? null
         : group.hostKey === ''
           ? t('agentCliUpdate.thisComputer', 'This computer')
-          : (hostNames[group.hostKey] ?? group.hostKey)
+          : Object.hasOwn(names, group.hostKey)
+            ? names[group.hostKey]
+            : group.hostKey
     }))
-  }, [hosts, hostNames, hasOtherHosts, t])
+  }, [hosts, names, hasOtherHosts, t])
 }
