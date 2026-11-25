@@ -27,6 +27,8 @@ import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChat
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
+import { useBotSidebarOlder } from './use-bot-sidebar-older'
+import { BotSidebarOlderChats } from './BotSidebarOlderChats'
 
 /** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by indent. */
 export function BotSidebarChats({
@@ -70,6 +72,8 @@ export function BotSidebarChats({
       activeLineId: activeLine?.id ?? null
     })
   }, [chats, listed, workspaceChats, workspaces, folds, steps, activeLine])
+  // Settled chats a day untouched fold under "Show N older"; presentation only.
+  const older = useBotSidebarOlder(bot, view.chats, activeLine?.id ?? null)
   // A reveal of a worker line under a folded chat opens that chat, once per request.
   const reveal = useBotsRevealRequest(botSidebarEntryKey(bot))
   const revealWorker = reveal?.target.hostDown ? undefined : reveal?.target.worker
@@ -102,19 +106,32 @@ export function BotSidebarChats({
     return labels
   }, [view.notes, t])
 
+  const renderChat = (chatView: (typeof view.chats)[number]) => (
+    <BotSidebarChat
+      key={chatView.chat.chatId}
+      bot={bot}
+      view={chatView}
+      notes={notes}
+      lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
+      onStep={(next) => onStep(chatView.chat.chatId, next)}
+      onOpen={onOpen}
+    />
+  )
+
   return (
     <>
-      {view.chats.map((chatView) => (
-        <BotSidebarChat
-          key={chatView.chat.chatId}
-          bot={bot}
-          view={chatView}
-          notes={notes}
-          lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
-          onStep={(next) => onStep(chatView.chat.chatId, next)}
-          onOpen={onOpen}
-        />
-      ))}
+      <div className="flex flex-col gap-1" {...older.hold}>
+        {older.recent.map(renderChat)}
+        {older.older.length > 0 ? (
+          <BotSidebarOlderChats
+            count={older.older.length}
+            open={older.showOlder}
+            onToggle={older.toggleOlder}
+          >
+            {older.older.map(renderChat)}
+          </BotSidebarOlderChats>
+        ) : null}
+      </div>
       {view.stray.length > 0 ? (
         <AttachedWorktreeCards
           roots={view.stray}
