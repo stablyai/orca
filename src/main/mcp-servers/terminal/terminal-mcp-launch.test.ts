@@ -7,6 +7,7 @@ import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui
 import { changeBotToolEntries } from '../../bots/bot-tools-file'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { ClaudeAgentTeamsService } from '../../runtime/terminal/agent-teams/claude-agent-teams-service'
+import type { AgentTeamsTerminalApi } from '../../runtime/terminal/agent-teams/claude-agent-teams-types'
 import { withTerminalMcpServers, type TerminalMcpLaunchInput } from './terminal-mcp-launch'
 
 const dirs: string[] = []
@@ -72,6 +73,35 @@ const teammateEnv = (leadEnv: Record<string, string>): Record<string, string> =>
     shimBin: null
   }).env
 
+/** The env a teammate's split pane gets from `team`, as the lead's tmux shim asks for one. */
+async function teammateSplitEnv(
+  service: ClaudeAgentTeamsService,
+  team: { teamId: string; token: string; leaderPane: string }
+): Promise<Record<string, string>> {
+  let env: Record<string, string> = {}
+  const unused = (): never => {
+    throw new Error('a split asks for nothing else')
+  }
+  const api: AgentTeamsTerminalApi = {
+    allocateTerminalHandle: () => 'term_teammate',
+    splitTerminal: async (_handle, opts) => {
+      env = opts.env ?? {}
+      return { handle: 'term_teammate', tabId: 'tab', paneRuntimeId: -1, leafId: 'leaf' }
+    },
+    readTerminal: unused,
+    sendTerminal: unused,
+    focusTerminal: unused,
+    closeTerminal: unused,
+    showTerminal: unused
+  }
+  const reply = await service.handleTmuxCompat(
+    { ...team, envPane: team.leaderPane, argv: ['split-window', 'claude'] },
+    api
+  )
+  expect(reply.stderr).toBe('')
+  return env
+}
+
 const launch = (agent: TuiAgent, command: string): TerminalMcpLaunchInput => ({
   launchAgent: agent,
   command,
@@ -121,6 +151,51 @@ describe('the host list in an agent terminal', () => {
       NO_PROXY: expect.stringContaining('127.0.0.1'),
       no_proxy: expect.stringContaining('127.0.0.1')
     })
+  })
+
+  it('gives a team made before its lead’s spawn the lead’s relay env, only with the switch on and the team’s token', async () => {
+    const hostFolder = await hostList()
+    for (const enabled of [false, true]) {
+      process.env.ORCA_MCP_SERVERS = enabled ? '1' : '0'
+      const service = new ClaudeAgentTeamsService()
+      const team = service.createLaunchEnv({
+        leaderHandle: 'term_lead',
+        baseEnv: { PATH: '/usr/bin:/bin' },
+        shimDir: '/shim',
+        shimBin: null
+      })
+      const input = launch('claude', 'claude --teammate-mode auto')
+      Object.assign(input.env, team.env)
+      await withTerminalMcpServers(input, { relay, hostFolder })
+      if (enabled) {
+        service.shareLeadMcpRelayEnv(input.env)
+        expect(await teammateSplitEnv(service, team)).toMatchObject({
+          ORCA_MCP_TOKEN: TOKEN,
+          NO_PROXY: expect.any(String)
+        })
+      } else {
+        expect(input.env).not.toHaveProperty('ORCA_MCP_TOKEN')
+        // Even a lead env that holds a token shares nothing while the switch is off.
+        service.shareLeadMcpRelayEnv({ ...input.env, ORCA_MCP_TOKEN: TOKEN, NO_PROXY: '127.0.0.1' })
+        const env = await teammateSplitEnv(service, team)
+        expect(env).not.toHaveProperty('ORCA_MCP_TOKEN')
+        expect(env).not.toHaveProperty('NO_PROXY')
+      }
+    }
+    // Another team's env, or one that only names this team, adds nothing to it.
+    const service = new ClaudeAgentTeamsService()
+    const team = service.createLaunchEnv({
+      leaderHandle: 'term_lead',
+      baseEnv: {},
+      shimDir: '/shim',
+      shimBin: null
+    })
+    service.shareLeadMcpRelayEnv({
+      ORCA_AGENT_TEAMS_TEAM_ID: team.teamId,
+      ORCA_AGENT_TEAMS_TOKEN: 'not-the-team-token',
+      ORCA_MCP_TOKEN: TOKEN
+    })
+    expect(await teammateSplitEnv(service, team)).not.toHaveProperty('ORCA_MCP_TOKEN')
   })
 
   it('never puts a saved value or the relay token on the command line or in the launch file', async () => {

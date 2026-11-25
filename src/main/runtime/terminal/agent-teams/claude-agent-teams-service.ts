@@ -78,6 +78,15 @@ export class ClaudeAgentTeamsService {
     return { teamId, token, leaderPane, env }
   }
 
+  /** A lead's spawn gave its terminal the host's MCP servers after its team was made (a plain
+   *  `claude --teammate-mode auto`): its teammates get the relay env they need from it too. */
+  shareLeadMcpRelayEnv(leadEnv: Readonly<Record<string, string | undefined>>): void {
+    const team = this.teams.get(leadEnv.ORCA_AGENT_TEAMS_TEAM_ID ?? '')
+    if (team && team.token === leadEnv.ORCA_AGENT_TEAMS_TOKEN) {
+      Object.assign(team.baseEnv, teammateMcpRelayEnv(leadEnv))
+    }
+  }
+
   releaseTeam(teamId: string): void {
     this.teams.delete(teamId)
   }
