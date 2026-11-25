@@ -60,4 +60,16 @@ describe('chat open failure toast', () => {
     expect(retry).toHaveBeenCalledTimes(1)
     expect(screen.queryByText("Couldn't open chat")).toBeNull()
   })
+
+  it('gives way to a still-starting notice that reuses its id', () => {
+    act(() => showChatOpenUnavailable({ detail: DETAIL, retry: () => undefined }))
+    act(() => vi.advanceTimersByTime(0))
+    act(() => showChatOpenUnavailable({ starting: true }))
+    act(() => vi.advanceTimersByTime(0))
+    expect(screen.queryByText("Couldn't open chat")).toBeNull()
+    expect(screen.getByText('This chat is still starting. Try again in a moment.')).toBeTruthy()
+    settle()
+    settle()
+    expect(screen.queryByText('This chat is still starting. Try again in a moment.')).toBeNull()
+  })
 })

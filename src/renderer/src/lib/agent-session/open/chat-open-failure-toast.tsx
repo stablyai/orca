@@ -15,6 +15,13 @@ export type ChatOpenUnavailable = {
 let chatOpenToastGeneration = 0
 let chatOpenFailureCount = 0
 
+const replacedFailureCard = {
+  jsx: undefined,
+  duration: undefined,
+  closeButton: undefined,
+  unstyled: undefined
+}
+
 export const chatOpenUnavailableText = {
   stillStarting: () =>
     translate(
@@ -41,6 +48,8 @@ export function showChatOpenUnavailable(context: ChatOpenUnavailable = {}, agent
   if (context.starting) {
     toast.info(chatOpenUnavailableText.stillStarting(), {
       ...toastOptions,
+      // Sonner merges a reused id into the live toast, so clear the error card it may be replacing.
+      ...replacedFailureCard,
       description: undefined,
       action: undefined
     })
@@ -118,7 +127,7 @@ export function ChatOpenFailureCard({
   return (
     <div
       ref={cardRef}
-      role="alert"
+      data-chat-open-failure-card
       className="ml-auto w-[min(360px,calc(100vw-2rem))] rounded-xl border border-(--notice-border) bg-popover p-3.5 text-[13px] text-popover-foreground shadow-notice"
     >
       <div className="flex items-center gap-2">
