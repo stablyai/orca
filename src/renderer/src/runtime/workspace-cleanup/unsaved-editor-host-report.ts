@@ -59,6 +59,28 @@ function unsavedWorktreeIdsByHost(
   return new Map([...byHost].map(([host, ids]) => [host, [...ids].sort()]))
 }
 
+// The report reads only which files have drafts; typing replaces the map but keeps its keys, so it keeps the token.
+const draftKeysTokens = new WeakMap<Record<string, string>, object>()
+let latest: { drafts: Record<string, string>; keyCount: number; token: object } | null = null
+function selectDraftKeys(state: Pick<AppState, 'editorDrafts'>): object {
+  const drafts = state.editorDrafts
+  const known = draftKeysTokens.get(drafts)
+  if (known) {
+    return known
+  }
+  const keys = Object.keys(drafts)
+  const previous = latest
+  const token =
+    previous &&
+    keys.length === previous.keyCount &&
+    keys.every((key) => Object.hasOwn(previous.drafts, key))
+      ? previous.token
+      : {}
+  draftKeysTokens.set(drafts, token)
+  latest = { drafts, keyCount: keys.length, token }
+  return token
+}
+
 /** Every field the report and file-owner routing read; the mapped type fails to compile until a new one is listed. */
 const REPORT_INPUTS: {
   [K in keyof UnsavedReportState]-?: (state: UnsavedReportState) => unknown
@@ -66,7 +88,7 @@ const REPORT_INPUTS: {
   activeWorkspaceExecutionHostId: (state) => state.activeWorkspaceExecutionHostId,
   activeWorktreeId: (state) => state.activeWorktreeId,
   detectedWorktreesByRepo: selectDetectedWorktreesByRepo,
-  editorDrafts: (state) => state.editorDrafts,
+  editorDrafts: selectDraftKeys,
   folderWorkspaces: selectFolderWorkspaces,
   openFiles: (state) => state.openFiles,
   projectGroups: (state) => state.projectGroups,
@@ -109,6 +131,8 @@ export function installUnsavedEditorHostReport(): () => void {
   const stopWatches = new Map<string, () => void>()
   // One report in flight per host, so an older list can never land after a newer one.
   const inFlight = new Set<string>()
+  // A remounted reporter takes over; a reply to this one must not start more reports.
+  let disposed = false
   // Checked against the store at every read, so no send depends on store-listener order.
   let reportInputs: readonly unknown[] | null = null
   let reports = new Map<string, string[]>()
@@ -144,7 +168,9 @@ export function installUnsavedEditorHostReport(): () => void {
       .finally(() => {
         inFlight.delete(host)
         // Edits made while it was in flight go out now, as the latest list only.
-        syncHosts([host])
+        if (!disposed) {
+          syncHosts([host])
+        }
       })
   }
 
@@ -226,6 +252,7 @@ export function installUnsavedEditorHostReport(): () => void {
     }
   })
   return () => {
+    disposed = true
     stopStatuses()
     stopStore()
     for (const stop of stopWatches.values()) {
