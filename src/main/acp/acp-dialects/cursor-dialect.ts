@@ -14,7 +14,7 @@ import {
   type AcpRequestPresentation,
   type AcpRequestSettlement
 } from './acp-dialect'
-import { CURSOR_CLI_MODEL_SUFFIX } from '../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-gemini-cursor'
+import { CURSOR_CLI_MODEL_SUFFIX } from '../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-cursor'
 
 const ASK_QUESTION = 'cursor/ask_question'
 const CREATE_PLAN = 'cursor/create_plan'

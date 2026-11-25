@@ -251,8 +251,8 @@ export type StructuredAgentSessionHostDeps = {
     record: AgentSessionRecord,
     purpose?: 'read' | 'identity'
   ) => Promise<AgentSessionAccountHome | null>
-  /** The tools a chat's agent launched with, against what its next launch would get; absent or a
-   *  chat that launched none (not a bot's, or look-around) never refreshes for tools. */
+  /** The MCP servers a chat's agent launched with from Orca (a bot's own, the host list's), against
+   *  what its next launch would get; a chat that got none never refreshes for tools. */
   launchTools?: {
     /** Rereads the tools, so it also sees edits made outside Orca. */
     changed: (sessionId: string) => Promise<boolean>

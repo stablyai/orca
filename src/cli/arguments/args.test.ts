@@ -1,8 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeCommandPositionals, parseArgs } from './args'
+import { COMMAND_SPECS } from '../specs'
+import { normalizeCommandPositionals, parseArgs, validateCommandAndFlags } from './args'
 
 describe('parseArgs', () => {
+  it.each([
+    [['--focus', 'failing checks on my PRs'], 'failing checks on my PRs'],
+    [['--focus', ''], ''],
+    [['--focus=failing checks'], 'failing checks'],
+    [['--focus', 'x', '--json'], 'x']
+  ])('reads look-around set %j as focus text', (focusArgs, focus) => {
+    const paths = COMMAND_SPECS.map((spec) => spec.path)
+    const parsed = parseArgs(['bot', 'look-around', 'set', ...focusArgs], paths, COMMAND_SPECS)
+
+    expect(parsed.commandPath).toEqual(['bot', 'look-around', 'set'])
+    expect(parsed.flags.get('focus')).toBe(focus)
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, parsed)).not.toThrow()
+  })
+
   it('preserves a selector value that is also a registered command', () => {
     const parsed = parseArgs(
       ['--environment', 'status', 'worktree', 'list'],

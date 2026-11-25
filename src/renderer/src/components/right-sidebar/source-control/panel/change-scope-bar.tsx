@@ -29,6 +29,18 @@ function commitCountLabel(t: Translate, count: number): string {
   })
 }
 
+function allScopeDetail(t: Translate, files: number, commitsAhead: number): string {
+  return commitsAhead > 0
+    ? `${fileCountLabel(t, files)} · ${commitCountLabel(t, commitsAhead)}`
+    : fileCountLabel(t, files)
+}
+
+function uncommittedScopeDetail(t: Translate, files: number): string {
+  return files > 0
+    ? fileCountLabel(t, files)
+    : t('auto.components.right.sidebar.SourceControl.scopeNone', 'None')
+}
+
 function LineCounts({ added, removed }: { added: number; removed: number }): React.JSX.Element {
   return (
     <>
@@ -81,19 +93,26 @@ export function SourceControlChangeScopeBar({
     setChangeScopeMenuOpen
   } = model
 
-  const uncommitted = summarizeChangeScopeEntries(entries)
   const branchReady = branchSummary?.status === 'ready'
-  const allRows = summarizeChangeScopeEntries(
-    branchReady ? [...entries, ...branchEntries] : entries
-  )
-  // Committed + uncommitted rows overlap per path, so only the deduplicated merge-base total is a true sum.
-  const all: ChangeScopeSummary = {
-    files: allRows.files,
-    lines: !branchReady
-      ? allRows.lines
-      : branchLineTotal && branchLineTotal.mergeBase === branchSummary.mergeBase
-        ? { added: branchLineTotal.added, removed: branchLineTotal.removed }
-        : null
+  // Each summary walks every row: build only what the shown scope or the open menu reads.
+  const uncommitted =
+    changeScopeMenuOpen || changeScope.kind === 'uncommitted'
+      ? summarizeChangeScopeEntries(entries)
+      : null
+  let all: ChangeScopeSummary | null = null
+  if (changeScopeMenuOpen || changeScope.kind === 'all') {
+    const allRows = summarizeChangeScopeEntries(
+      branchReady ? [...entries, ...branchEntries] : entries
+    )
+    // Committed + uncommitted rows overlap per path, so only the deduplicated merge-base total is a true sum.
+    all = {
+      files: allRows.files,
+      lines: !branchReady
+        ? allRows.lines
+        : branchLineTotal && branchLineTotal.mergeBase === branchSummary.mergeBase
+          ? { added: branchLineTotal.added, removed: branchLineTotal.removed }
+          : null
+    }
   }
   const commitsAhead = branchReady ? (branchSummary.commitsAhead ?? 0) : 0
   const commitFiles =
@@ -108,22 +127,6 @@ export function SourceControlChangeScopeBar({
       : changeScope.kind === 'uncommitted'
         ? uncommitted
         : commitFiles
-
-  let allDetail =
-    commitsAhead > 0
-      ? `${fileCountLabel(t, all.files)} · ${commitCountLabel(t, commitsAhead)}`
-      : fileCountLabel(t, all.files)
-  if (branchSummary?.status === 'no-merge-base' && branchSummary.baseRef === compareBaseRef) {
-    allDetail = t(
-      'auto.components.right.sidebar.SourceControl.scopeNoSharedHistory',
-      'No shared history with {{ref}}',
-      { ref: formatSourceControlRefLabel(branchSummary.baseRef) }
-    )
-  }
-  const uncommittedDetail =
-    uncommitted.files > 0
-      ? fileCountLabel(t, uncommitted.files)
-      : t('auto.components.right.sidebar.SourceControl.scopeNone', 'None')
 
   // Whole-scope ruling: All changes waits for branch compare instead of opening a partial diff.
   const branchCompareLoading =
@@ -266,14 +269,23 @@ export function SourceControlChangeScopeBar({
           ) : null}
         </div>
       </div>
-      {changeScopeMenuOpen ? (
+      {/* An open menu always has both summaries; the checks only narrow their types. */}
+      {changeScopeMenuOpen && all && uncommitted ? (
         <SourceControlChangeScopeMenuContent
           scope={changeScope}
           onScopeChange={setChangeScope}
           baseRef={branchSummary?.baseRef ?? null}
           onChangeBaseRef={() => setBaseRefDialogOpen(true)}
-          allDetail={allDetail}
-          uncommittedDetail={uncommittedDetail}
+          allDetail={
+            branchSummary?.status === 'no-merge-base' && branchSummary.baseRef === compareBaseRef
+              ? t(
+                  'auto.components.right.sidebar.SourceControl.scopeNoSharedHistory',
+                  'No shared history with {{ref}}',
+                  { ref: formatSourceControlRefLabel(branchSummary.baseRef) }
+                )
+              : allScopeDetail(t, all.files, commitsAhead)
+          }
+          uncommittedDetail={uncommittedScopeDetail(t, uncommitted.files)}
           historyContextKey={gitHistoryContextKey}
           historyState={gitHistoryState}
           graphSupported={graphSupported}
