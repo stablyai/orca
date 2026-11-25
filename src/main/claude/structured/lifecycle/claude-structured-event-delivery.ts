@@ -20,7 +20,12 @@ function stopClaudeAuthRetries(
   logger: ClaudeEventDelivery['deps']['logger']
 ): void {
   const turnId = session.translator?.currentTurnId
-  if (!turnId || authStoppedTurns.get(session) === turnId) {
+  // A command turn (e.g. compaction) reads its failure from Claude's own notice, so it keeps it.
+  if (
+    !turnId ||
+    session.translator?.commandTurnId === turnId ||
+    authStoppedTurns.get(session) === turnId
+  ) {
     return
   }
   authStoppedTurns.set(session, turnId)
