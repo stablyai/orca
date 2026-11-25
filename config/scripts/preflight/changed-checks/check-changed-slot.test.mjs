@@ -5,17 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { queueFileFor } from './check-changed-slot.mjs'
 import {
-  createQueue,
-  exitedPid,
-  file,
-  insertTicket,
   observe,
-  openQueue,
-  outsider,
-  queueRows,
-  root,
-  run,
-  spawnOwned,
   until,
   registerSlotHarness,
   WAITING,
@@ -23,15 +13,18 @@ import {
   within
 } from './check-changed-slot.test-harness.mjs'
 
-registerSlotHarness()
-
 /** A wait line showing exactly this place, with or without a holder after it. */
 const showsPlace = (message, place) =>
   message === `${WAITING} ${place}` || message.startsWith(`${WAITING} ${place} `)
 
 // Production Windows runs check:changed concurrently and never loads the slot; these tests need POSIX ps or /proc.
 describe.skipIf(process.platform === 'win32')('check:changed slot queue order', () => {
-  it('admits waiters one at a time in arrival order, whatever their poll rate', async () => {
+  registerSlotHarness()
+
+  it('admits waiters one at a time in arrival order, whatever their poll rate', async ({
+    slot
+  }) => {
+    const { run, queueRows } = slot
     const holder = await run()
     const order = []
     let active = 1
@@ -54,7 +47,8 @@ describe.skipIf(process.platform === 'win32')('check:changed slot queue order', 
     expect(queueRows()).toEqual([])
   }, 180_000)
 
-  it('serves an earlier slow waiter before a stream of fast newcomers', async () => {
+  it('serves an earlier slow waiter before a stream of fast newcomers', async ({ slot }) => {
+    const { run } = slot
     const holder = await run()
     const order = []
     const slow = run({ pollMs: 100 }, (release) => {
@@ -80,7 +74,10 @@ describe.skipIf(process.platform === 'win32')('check:changed slot queue order', 
     expect(order).toEqual(['slow', 'new0', 'new1', 'new2', 'late'])
   }, 180_000)
 
-  it('keeps separate processes exclusive when they all start on a cold queue at once', async () => {
+  it('keeps separate processes exclusive when they all start on a cold queue at once', async ({
+    slot
+  }) => {
+    const { spawnOwned } = slot
     const children = Array.from({ length: 4 }, () =>
       spawnOwned(`const release = await acquireChangedCheckSlot(file, { pollMs: 5, ancestors: [], log: () => {} })
 const start = Date.now()
@@ -104,7 +101,8 @@ process.exit(0)`)
     }
   }, 240_000)
 
-  it('admits separate processes in the order they queued', async () => {
+  it('admits separate processes in the order they queued', async ({ slot }) => {
+    const { run, root, spawnOwned } = slot
     const holder = await run()
     const orderFile = join(root, 'order.txt')
     const children = []
@@ -131,7 +129,8 @@ process.exit(0)`)
     expect(await readFile(orderFile, 'utf8')).toBe('a\nb\nc\n')
   }, 240_000)
 
-  it('removes the ticket of a waiter whose process is gone', async () => {
+  it('removes the ticket of a waiter whose process is gone', async ({ slot }) => {
+    const { run, insertTicket, exitedPid, queueRows } = slot
     const holder = await run()
     const dead = insertTicket({ pid: await exitedPid() })
     const waiter = run()
@@ -141,7 +140,10 @@ process.exit(0)`)
     expect(queueRows().map((row) => row.id)).not.toContain(dead)
   }, 180_000)
 
-  it('stops a silent ticket holding up the line at once and removes it once expired, whoever owns its pid', async () => {
+  it('stops a silent ticket holding up the line at once and removes it once expired, whoever owns its pid', async ({
+    slot
+  }) => {
+    const { run, insertTicket, queueRows } = slot
     const holder = await run()
     const staleMs = 1000
     // A pid that is alive but no longer checking in, as when the waiter stopped or its pid now
@@ -163,7 +165,10 @@ process.exit(0)`)
     await within(waiter.promise, 'waiter')
   }, 180_000)
 
-  it('expires a silent backlog larger than one batch, shared by whichever waiters are polling', async () => {
+  it('expires a silent backlog larger than one batch, shared by whichever waiters are polling', async ({
+    slot
+  }) => {
+    const { run, insertTicket, queueRows } = slot
     const holder = await run()
     const long = Date.now() - 60 * 60_000
     for (let index = 0; index < 40; index++) {
@@ -178,7 +183,8 @@ process.exit(0)`)
     await within(first.promise, 'first waiter')
   }, 180_000)
 
-  it('expires at most eight old tickets in one decision', async () => {
+  it('expires at most eight old tickets in one decision', async ({ slot }) => {
+    const { run, insertTicket, queueRows } = slot
     const holder = await run()
     for (let index = 0; index < 17; index++) {
       insertTicket({ pid: process.pid, lane: 2, seenAt: Date.now() - 60 * 60_000 })
@@ -190,7 +196,10 @@ process.exit(0)`)
     await holder()
   }, 180_000)
 
-  it('clears at most a bounded number of tickets per decision and still gets through a backlog', async () => {
+  it('clears at most a bounded number of tickets per decision and still gets through a backlog', async ({
+    slot
+  }) => {
+    const { run, exitedPid, insertTicket, queueRows } = slot
     const holder = await run()
     const dead = await exitedPid()
     for (let index = 0; index < 40; index++) {
@@ -208,7 +217,8 @@ process.exit(0)`)
     await within(waiter.promise, 'waiter')
   }, 180_000)
 
-  it('does not recount for each batch while it clears a long backlog', async () => {
+  it('does not recount for each batch while it clears a long backlog', async ({ slot }) => {
+    const { run, exitedPid, insertTicket, queueRows } = slot
     // Timed recounts every staleMs / 3 = 20 s, so during the drain only a recount triggered by a
     // batch would show up.
     const staleMs = 60_000
@@ -226,7 +236,8 @@ process.exit(0)`)
     await within(waiter.promise, 'waiter')
   }, 180_000)
 
-  it('corrects its position immediately when a capped walk reaches the front', async () => {
+  it('corrects its position immediately when a capped walk reaches the front', async ({ slot }) => {
+    const { createQueue, outsider, exitedPid, insertTicket, run } = slot
     await createQueue()
     const other = outsider()
     expect(other.tryLock()).toBe(true)
@@ -267,7 +278,10 @@ process.exit(0)`)
     { ahead: 100, line: 'Position 101 of over 100.' },
     { ahead: 101, line: 'Position over 100 of over 100.' }
   ]) {
-    it(`says ${line} with ${ahead} tickets ahead, and prints the correction when one leaves`, async () => {
+    it(`says ${line} with ${ahead} tickets ahead, and prints the correction when one leaves`, async ({
+      slot
+    }) => {
+      const { run, insertTicket, openQueue } = slot
       const holder = await run({ staleMs: 60_000 })
       const ids = []
       for (let index = 0; index < ahead; index++) {
@@ -289,7 +303,10 @@ process.exit(0)`)
     }, 180_000)
   }
 
-  it('counts each lane against the cap separately, so 60 + 41 ahead is shown exactly', async () => {
+  it('counts each lane against the cap separately, so 60 + 41 ahead is shown exactly', async ({
+    slot
+  }) => {
+    const { run, insertTicket, exitedPid } = slot
     const holder = await run({ staleMs: 60_000 })
     for (let index = 0; index < 60; index++) {
       insertTicket({ pid: process.pid })
@@ -315,7 +332,10 @@ process.exit(0)`)
     await holder()
   }, 180_000)
 
-  it('prints the corrected line when a ticket changes lane and the numbers stay the same', async () => {
+  it('prints the corrected line when a ticket changes lane and the numbers stay the same', async ({
+    slot
+  }) => {
+    const { run, insertTicket, exitedPid, openQueue } = slot
     const holder = await run({ staleMs: 60_000 })
     const ids = []
     for (let index = 0; index < 101; index++) {
@@ -342,7 +362,10 @@ process.exit(0)`)
       { side: 'inside', age: 25_000, keeps: true },
       { side: 'outside', age: 35_000, keeps: false }
     ]) {
-      it(`keeps or gives up its place on return from ${side} the expiry horizon (lane ${lane})`, async () => {
+      it(`keeps or gives up its place on return from ${side} the expiry horizon (lane ${lane})`, async ({
+        slot
+      }) => {
+        const { run, queueRows, openQueue } = slot
         // expireMs = 10 * staleMs = 30 s.
         const staleMs = 3000
         const holder = await run({ staleMs })
@@ -380,7 +403,10 @@ process.exit(0)`)
     }
   }
 
-  it('recounts its place as soon as it starts yielding, with the same run ahead and holder', async () => {
+  it('recounts its place as soon as it starts yielding, with the same run ahead and holder', async ({
+    slot
+  }) => {
+    const { run, exitedPid, spawnOwned } = slot
     // Timed recounts run every staleMs / 3 = 20 s; launchers are probed every 500 ms, so a quick
     // recount after the launcher exits can only come from the lane change.
     const staleMs = 60_000
@@ -422,7 +448,8 @@ process.exit(0)`)
     expect(waiter.settled).toBe(false)
   }, 240_000)
 
-  it('passes a live waiter only once it has been silent for staleMs', async () => {
+  it('passes a live waiter only once it has been silent for staleMs', async ({ slot }) => {
+    const { createQueue, insertTicket, run, queueRows } = slot
     await createQueue()
     const staleMs = 1500
     const seenAt = Date.now()
@@ -435,7 +462,8 @@ process.exit(0)`)
     await release()
   }, 180_000)
 
-  it('lets a fresh yielding waiter pass an earlier stopped waiter', async () => {
+  it('lets a fresh yielding waiter pass an earlier stopped waiter', async ({ slot }) => {
+    const { run, insertTicket, exitedPid, queueRows } = slot
     const holder = await run()
     const stopped = insertTicket({
       pid: process.pid,
@@ -451,7 +479,10 @@ process.exit(0)`)
     { yields: false, label: 'a silent ticket ahead in the same lane' },
     { yields: true, label: 'a normal ticket while the waiter yields' }
   ]) {
-    it(`decides only on committed queue state: ${label} checks in mid-decision`, async () => {
+    it(`decides only on committed queue state: ${label} checks in mid-decision`, async ({
+      slot
+    }) => {
+      const { createQueue, outsider, exitedPid, spawnOwned, run, queueRows } = slot
       await createQueue()
       const holder = outsider()
       expect(holder.tryLock()).toBe(true)
@@ -502,7 +533,10 @@ await next()`)
     }, 240_000)
   }
 
-  it('lets no check-in commit between reading the queue and claiming the slot', async () => {
+  it('lets no check-in commit between reading the queue and claiming the slot', async ({
+    slot
+  }) => {
+    const { createQueue, insertTicket, run, file } = slot
     await createQueue()
     const peer = insertTicket({ pid: process.pid, seenAt: 1 })
     const attempts = []
@@ -531,7 +565,8 @@ await next()`)
     await release()
   }, 180_000)
 
-  it('moves a waiter behind the line when its launcher has exited', async () => {
+  it('moves a waiter behind the line when its launcher has exited', async ({ slot }) => {
+    const { run, exitedPid } = slot
     const holder = await run()
     const order = []
     const messages = []
@@ -552,7 +587,8 @@ await next()`)
     expect(messages[0]).toContain('has exited')
   }, 180_000)
 
-  it('rejoins at the back when its ticket is removed', async () => {
+  it('rejoins at the back when its ticket is removed', async ({ slot }) => {
+    const { run, queueRows, openQueue } = slot
     const holder = await run()
     const order = []
     const first = run({}, (release) => {
