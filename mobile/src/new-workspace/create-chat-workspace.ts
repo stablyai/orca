@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { createChatWorkspaceDraft } from '../../../src/shared/repository/chat-workspace-draft'
-import { createNonSecureContextUuid } from '../../../src/shared/identifiers/non-secure-context-uuid'
+import { structuredSessionOperationId } from '../session/native-chat/agent-session/structured-session-operation-id'
 import { translate } from '../i18n/mobile-i18n'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { readWorktreeCatalogSnapshot } from '../worktree/catalog/worktree-catalog-snapshot-client'
@@ -14,7 +14,7 @@ import { isMobileMethodUnavailableError } from '../transport/rpc/mobile-method-u
 
 export function newChatWorkspaceSubmission() {
   const draft = createChatWorkspaceDraft()
-  const operationId = createNonSecureContextUuid()
+  const operationId = structuredSessionOperationId()
   let createdRepo: { id: string; path: string; displayName: string } | null = null
   let noteSaved = false
   let intent: { agent: TuiAgent | '__blank__'; note: string } | null = null
