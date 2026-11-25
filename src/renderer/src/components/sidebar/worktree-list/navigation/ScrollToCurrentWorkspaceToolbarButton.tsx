@@ -5,12 +5,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/class-names'
 import { requestScrollToCurrentWorkspaceReveal } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 import { useTranslate } from '@/i18n/use-translate'
-import {
-  useSidebarRevealUnavailableReason,
-  type SidebarRevealUnavailableReason
-} from '../../sidebar-reveal-target-state'
+import { useSidebarRevealUnavailableReason } from '../../sidebar-reveal-target-state'
+import type { SidebarRevealNoneReason } from '../../../../../../shared/sidebar-list/sidebar-reveal-target'
 
-function useReasonText(reason: SidebarRevealUnavailableReason | null): string | null {
+function useReasonText(reason: SidebarRevealNoneReason | null): string | null {
   const t = useTranslate()
   switch (reason) {
     case null:

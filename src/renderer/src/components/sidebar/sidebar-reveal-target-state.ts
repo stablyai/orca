@@ -165,7 +165,7 @@ function targetFrom(
     state.activeWorkspaceKey,
     state.activeWorktreeId
   )
-  return resolveSidebarRevealTarget({
+  const target = resolveSidebarRevealTarget({
     ...ownerInputs(state, statuses, bots, groups),
     activeView: state.activeView,
     activeWorkspaceId,
@@ -173,6 +173,10 @@ function targetFrom(
     frontTab: selectFrontTab(state),
     activeIsArchived: activeWorkspaceId ? activeIsArchived(state, activeWorkspaceId) : false
   })
+  if (target.section === 'projects' && state.settings?.showProjectsInSidebar === false) {
+    return { section: 'none', reason: 'projects-hidden' }
+  }
+  return target
 }
 
 /** What "Reveal current" points at right now, for a click or a command. */
@@ -211,22 +215,17 @@ const readBotListsVersion = (): readonly [readonly Bot[], readonly BotGroup[]] =
 }
 let lastLists: readonly [readonly Bot[], readonly BotGroup[]] | null = null
 
-export type SidebarRevealUnavailableReason = SidebarRevealNoneReason | 'projects-hidden'
-
 /** Why "Reveal current" has nothing to show, or null when it does. Reads the lists as already
  *  loaded; it never starts a bot read of its own. */
-export function useSidebarRevealUnavailableReason(): SidebarRevealUnavailableReason | null {
+export function useSidebarRevealUnavailableReason(): SidebarRevealNoneReason | null {
   const [bots, groups] = useSyncExternalStore(
     subscribeToBotLists,
     readBotListsVersion,
     readBotListsVersion
   )
   const select = useCallback(
-    (state: AppState, statuses: RuntimeStatuses): SidebarRevealUnavailableReason | null => {
+    (state: AppState, statuses: RuntimeStatuses): SidebarRevealNoneReason | null => {
       const target = targetFrom(state, statuses, bots, groups)
-      if (target.section === 'projects' && state.settings?.showProjectsInSidebar === false) {
-        return 'projects-hidden'
-      }
       return target.section === 'none' ? target.reason : null
     },
     [bots, groups]

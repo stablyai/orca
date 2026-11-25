@@ -17,6 +17,7 @@ export type SidebarRevealNoneReason =
   | 'no-workspace'
   | 'full-page-view'
   | 'archived'
+  | 'projects-hidden'
   | 'bots-off'
   | 'bot-hidden'
 
