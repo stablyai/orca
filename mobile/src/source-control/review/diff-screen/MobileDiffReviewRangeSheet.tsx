@@ -42,6 +42,8 @@ export function MobileDiffReviewRangeSheet({
   const body = controller.composerBody.trim()
   const onGitHub = canCommentOnGitHub(controller.github, item, range) && item !== null
   const toGitHub = onGitHub && destination === 'github'
+  // GitHub stopped taking these lines (the branch moved, say): Send waits for the agent row, never posts elsewhere.
+  const gitHubGone = destination === 'github' && !onGitHub
   const title =
     range.startLine === range.line
       ? t('components.diffReviewDrawers.rangeLine', 'Line {{line}}', { line: range.line })
@@ -71,7 +73,7 @@ export function MobileDiffReviewRangeSheet({
         if (error) {
           setPostError(error)
         } else {
-          controller.selectLines(null)
+          controller.clearLines(range)
         }
       })
       .finally(() => setBusy(false))
@@ -89,7 +91,7 @@ export function MobileDiffReviewRangeSheet({
           label: t('components.diffReviewDrawers.send', 'Send'),
           onPress: send,
           busy,
-          disabled: !body
+          disabled: !body || gitHubGone
         }}
       />
       <View style={prSheetStyles.body}>
@@ -107,7 +109,7 @@ export function MobileDiffReviewRangeSheet({
           style={styles.rangeField}
         />
         {postError ? <Text style={prSheetStyles.error}>{postError}</Text> : null}
-        {onGitHub ? (
+        {onGitHub || gitHubGone ? (
           <View>
             <SectionHeader title={t('components.diffReviewDrawers.sendTo', 'Send to')} first />
             <ListGroup>
@@ -146,7 +148,7 @@ export function MobileDiffReviewRangeSheet({
                 selected={destination === 'github'}
                 accessibilityRole="radio"
                 onPress={() => setDestination('github')}
-                disabled={busy}
+                disabled={busy || gitHubGone}
               />
             </ListGroup>
           </View>

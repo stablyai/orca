@@ -148,15 +148,6 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const filteredQueue = useMemo(() => filterMobileDiffReviewQueue(queue, filter), [filter, queue])
   const { currentIndex, currentItem, selectIndex, selectKey, moveSelection } =
     useMobileDiffReviewSelection(filteredQueue, initialTarget)
-  // Lines picked on the open file; another file starts with none.
-  const [selection, setSelection] = useState<{ key: string; range: LineRange } | null>(null)
-  const lineSelection =
-    selection !== null && selection.key === currentItem?.key ? selection.range : null
-  const selectLines = useCallback(
-    (range: LineRange | null) =>
-      setSelection(range && currentItem ? { key: currentItem.key, range } : null),
-    [currentItem]
-  )
   const reviewedCount = useMemo(
     () => filteredQueue.filter((item) => item.isReviewed).length,
     [filteredQueue]
@@ -175,6 +166,27 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     screenState,
     statusRevision
   })
+
+  // Lines picked in the loaded diff; another file or a reload of this one starts with none.
+  const loadedLines = diffState.kind === 'ready' ? diffState.lines : null
+  const [selection, setSelection] = useState<{ lines: object; range: LineRange } | null>(null)
+  const lineSelection =
+    selection !== null && selection.lines === loadedLines ? selection.range : null
+  const selectLines = useCallback(
+    (range: LineRange | null) =>
+      setSelection(range && loadedLines ? { lines: loadedLines, range } : null),
+    [loadedLines]
+  )
+  // A send that settles late clears only the lines it was about, never a pick made since.
+  const clearLines = useCallback(
+    (range: LineRange) =>
+      setSelection((current) =>
+        current?.range.startLine === range.startLine && current.range.line === range.line
+          ? null
+          : current
+      ),
+    []
+  )
 
   const comments = screenState.kind === 'ready' ? screenState.comments : NO_COMMENTS
   const { commentsByLine, staleCommentIds } = useMemo(
@@ -249,6 +261,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     fileNotes: commentsByLine.get(0) ?? [],
     lineSelection,
     selectLines,
+    clearLines,
     filter,
     filteredQueue,
     queue,
