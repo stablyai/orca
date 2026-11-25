@@ -172,6 +172,7 @@ export class ClaudeImportSource {
 
   async verify(): Promise<ClaudeSourceVersion> {
     const before = await this.version()
+    // A matching stat can reuse a completed content proof on this handle.
     if (!this.verified || !sameVersion(before, this.verified)) {
       await this.verifyPrefix(before)
       this.verified = before
@@ -195,9 +196,12 @@ export class ClaudeImportSource {
       }
     }
     const hash = createHash('sha256')
-    await this.readPrefix((slab) => {
-      hash.update(slab)
-    })
+    const slab = Buffer.allocUnsafeSlow(Math.min(SLAB_BYTES, this.size))
+    for (let offset = 0; offset < this.size; offset += slab.length) {
+      const chunk = slab.subarray(0, Math.min(slab.length, this.size - offset))
+      await this.read(chunk, offset)
+      hash.update(chunk)
+    }
     if (!this.digest?.equals(hash.digest()) || !sameVersion(before, await this.version())) {
       changed()
     }

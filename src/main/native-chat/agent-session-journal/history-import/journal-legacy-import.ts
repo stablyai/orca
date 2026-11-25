@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type { ClaudeImportAuthority, PrepareClaudeImport } from './journal-claude-import-stage'
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
 import {
@@ -58,37 +57,7 @@ export async function importLegacyTranscriptIntoJournal(input: {
   sessionId: string
   fence: number
   options?: LegacyImportOptions
-  prepareClaudeImport?: PrepareClaudeImport
 }): Promise<LegacyImportResult> {
-  if (resolveNativeChatTranscriptAgent(input.agent) === 'claude') {
-    const operationId = randomUUID()
-    try {
-      if (!input.prepareClaudeImport) {
-        throw new ClaudeImportResourceError('Claude history import requires a journal writer.')
-      }
-      const prepared = await prepareClaudeLegacyImport(input, input.prepareClaudeImport, {
-        sessionId: input.journal.identity.sessionId,
-        operationId,
-        fingerprint: operationId
-      })
-      try {
-        const cursor = prepared.count
-          ? (await prepared.install(input.journal, input.fence)).cursor
-          : input.journal.cursor()
-        return {
-          ok: true,
-          epoch: cursor.epoch,
-          cursor,
-          imported: prepared.count,
-          replaced: prepared.count > 0
-        }
-      } finally {
-        await prepared.close()
-      }
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
   const prepared = await prepareLegacyTranscriptImport(input)
   if (!prepared.ok) {
     return prepared

@@ -1,3 +1,4 @@
+import { assertAdoptedSourceIdentity } from './adopted-transcript-source'
 import type { ClaudeSourceVersion } from './journal-claude-import-source'
 import { AgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
@@ -60,7 +61,7 @@ async function takeSlot(pool: Slots, signal?: AbortSignal): Promise<() => void> 
   }
 }
 
-export type ClaudeImportWorker = ClaudeImportHeader & {
+export type ClaudeImportWorker = Omit<ClaudeImportHeader, 'identity'> & {
   verify(): Promise<ClaudeSourceVersion>
   close(): Promise<void>
 }
@@ -172,6 +173,19 @@ export async function importClaudeTranscriptInWorker(
       failImport(response)
     }
     const { header } = response
+    if (work.source && !header.sourceEmpty) {
+      if (!header.identity) {
+        throw new ClaudeImportResourceError('Claude history source identity is unavailable.')
+      }
+      await assertAdoptedSourceIdentity(
+        work.source,
+        header.identity,
+        true,
+        lifetime.signal,
+        work.agent
+      )
+      check()
+    }
     for (let ordinal = 0; header.count > 0; ordinal++) {
       const releasePage = await takeSlot(pageSlots, lifetime.signal)
       try {
@@ -196,7 +210,8 @@ export async function importClaudeTranscriptInWorker(
       }
     }
     return {
-      ...header,
+      count: header.count,
+      sourceEmpty: header.sourceEmpty,
       async verify() {
         check()
         const result = await request({ kind: 'verify' })

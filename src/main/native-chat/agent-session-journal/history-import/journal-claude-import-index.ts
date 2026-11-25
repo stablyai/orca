@@ -6,6 +6,7 @@ import {
   Keys,
   Link,
   Position,
+  RangeData,
   Row,
   Table
 } from './journal-claude-import-index-storage'
@@ -17,8 +18,10 @@ export class ClaudeImportIndex {
   private readonly ids = new Keys(this.budget)
   private readonly rows = new Table(Row.Width, this.budget)
   private readonly positions = new Table(Position.Width, this.budget, Float64Array)
+  private readonly rangeData = new Table(RangeData.Width, this.budget)
   private readonly keys = this.ids.table
   private readonly links = new Table(Link.Width, this.budget)
+  private hasQueuedPrompts = false
   private previousUuid: { value: string; key: number } | undefined
 
   record(record: Record<string, unknown>, range: ClaudeRange): void {
@@ -30,21 +33,24 @@ export class ClaudeImportIndex {
         type !== 'attachment' &&
         type !== 'progress') ||
       record.isSidechain === true ||
-      record.teamName ||
-      record.parent_tool_use_id != null
+      record.teamName
     ) {
       return
     }
     const attachment = asRecord(record.attachment)
     const turn = type === 'user' || type === 'assistant'
+    const queuedPrompt =
+      type === 'attachment' &&
+      attachment?.type === 'queued_command' &&
+      attachment.commandMode === 'prompt' &&
+      (asRecord(attachment.origin)?.kind ?? 'human') === 'human'
     const decode =
       turn ||
+      queuedPrompt ||
       (type === 'system' &&
         subtype === 'local_command' &&
-        asRecord(record.commandRun)?.command === 'recap') ||
-      (attachment?.type === 'queued_command' &&
-        attachment.commandMode === 'prompt' &&
-        (asRecord(attachment.origin)?.kind ?? 'human') === 'human')
+        asRecord(record.commandRun)?.command === 'recap')
+    this.hasQueuedPrompts ||= queuedPrompt
     const uuid = this.ids.intern(record.uuid)
     // Skip non-addressable rows that can neither bridge a link nor produce an item.
     if (!uuid && !decode) {
@@ -71,6 +77,7 @@ export class ClaudeImportIndex {
     const flags =
       (decode ? Flag.Decode : 0) |
       (turn ? Flag.Turn : 0) |
+      (queuedPrompt ? Flag.QueuedPrompt : 0) |
       (type !== 'progress' && !(type === 'attachment' && attachment?.type === 'fork_briefing')
         ? Flag.Leaf
         : 0) |
@@ -87,10 +94,14 @@ export class ClaudeImportIndex {
     }
     const compact =
       uuid && type === 'system' && subtype === 'compact_boundary' ? this.compact(record) : 0
-    this.positions.append(range.offset, range.legacyOffset, range.line)
+    const position = decode
+      ? this.positions.append(range.offset, range.legacyOffset, range.line)
+      : 0
+    if (position) {
+      this.rangeData.append(range.length, range.digest)
+    }
     const row = this.rows.append(
-      range.length,
-      range.digest,
+      position,
       flags,
       uuid,
       parent,
@@ -133,7 +144,7 @@ export class ClaudeImportIndex {
   }
 
   select(check: () => void): Promise<void> {
-    return selectClaudeImportRows(this.rows, this.keys, this.links, check)
+    return selectClaudeImportRows(this.rows, this.keys, this.links, this.hasQueuedPrompts, check)
   }
 
   *ranges(): Iterable<ClaudeRange> {
@@ -149,12 +160,13 @@ export class ClaudeImportIndex {
       const parentRow = this.keys.get(parent, Key.LatestRow)
       const unanchored = !uuid && (!parent || this.rows.get(parentRow, Row.Flags) & Flag.Selected)
       if (this.rows.get(row, Row.Flags) & Flag.Selected || unanchored) {
+        const position = this.rows.get(row, Row.Range)
         yield {
-          offset: this.positions.get(row, Position.Offset),
-          legacyOffset: this.positions.get(row, Position.LegacyOffset),
-          line: this.positions.get(row, Position.Line),
-          length: this.rows.get(row, Row.Length),
-          digest: this.rows.get(row, Row.Digest)
+          offset: this.positions.get(position, Position.Offset),
+          legacyOffset: this.positions.get(position, Position.LegacyOffset),
+          line: this.positions.get(position, Position.Line),
+          length: this.rangeData.get(position, RangeData.Length),
+          digest: this.rangeData.get(position, RangeData.Digest)
         }
       }
     }

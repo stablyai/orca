@@ -20,12 +20,15 @@ if (!parentPort) {
 const port = parentPort
 const controller = new AbortController()
 const work: ClaudeImportWork = workerData
-const preparation = importClaudeTranscript({ ...work, signal: controller.signal })
+let source: Pick<Awaited<ReturnType<typeof importClaudeTranscript>>, 'verify' | 'close'> | undefined
 let pages: IterableIterator<Uint8Array> | undefined
-let requests = preparation.then(
-  ({ items, sourceEmpty }) => {
-    pages = claudeImportPages(items)
-    send({ kind: 'imported', header: { count: items.length, sourceEmpty } })
+let requests = importClaudeTranscript({ ...work, signal: controller.signal }).then(
+  ({ items, sourceEmpty, identity, verify, close }) => {
+    source = { verify, close }
+    if (items.length) {
+      pages = claudeImportPages(items)
+    }
+    send({ kind: 'imported', header: { count: items.length, sourceEmpty, identity } })
   },
   (error: unknown) => send(failure(error))
 )
@@ -36,16 +39,24 @@ port.on('message', (request: ClaudeImportWorkerRequest) => {
   }
   requests = requests.then(async () => {
     try {
-      const result = await preparation
       if (request.kind === 'close') {
         pages = undefined
-        await result.close()
+        await source?.close()
+        source = undefined
         send({ kind: 'closed' })
       } else if (request.kind === 'verify') {
-        send({ kind: 'verified', version: await result.verify() })
+        if (!source) {
+          throw new ClaudeImportResourceError('Claude history source is unavailable.')
+        }
+        send({ kind: 'verified', version: await source.verify() })
       } else {
         const next = pages?.next()
-        send(next?.done === false ? { kind: 'page', bytes: next.value } : { kind: 'finished' })
+        if (next?.done === false) {
+          send({ kind: 'page', bytes: next.value })
+        } else {
+          pages = undefined
+          send({ kind: 'finished' })
+        }
       }
     } catch (error) {
       send(failure(error))

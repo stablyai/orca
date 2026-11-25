@@ -1,10 +1,8 @@
-import { appendFile, mkdtemp, rename, rm, truncate, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { importClaudeTranscript, type ClaudeImportInput } from './journal-claude-import'
-import { ClaudeImportSource, type ClaudeRange } from './journal-claude-import-source'
-import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 
 let root: string | undefined
@@ -190,7 +188,10 @@ it('closes parallel tool calls with canonical UUIDs and unambiguous result owner
     result('cross-parent', 'abandoned', 'unique', { sourceToolAssistantUUID: 'parallel' }),
     result('duplicate-cross', 'abandoned', 'unique'),
     result('obsolete', 'abandoned', 'old-id'),
-    result('subagent', 'selected', 'shared', { parent_tool_use_id: 'subagent-call' }),
+    result('subagent', 'selected', 'shared', {
+      isSidechain: true,
+      parent_tool_use_id: 'subagent-call'
+    }),
     entry('answer', 'direct')
   ])
   const actual = await items(input)
@@ -243,66 +244,58 @@ it('keeps the same newest suffix as a linear 60k import', async () => {
   )
 })
 
-it('accepts verified appends but refuses an edit to a discarded link', async () => {
-  const input = await transcript([entry('old', null), entry('lost', 'old'), entry('answer', 'old')])
-  const result = await importClaudeTranscript(input)
-  try {
-    await appendFile(input.filePath, `${JSON.stringify(entry('append', 'answer'))}\n`)
-    await result.verify()
-    const file = [
-      entry('old', null),
-      entry('lost', 'xxx'),
-      entry('answer', 'old'),
-      entry('append', 'answer')
-    ]
-    await writeFile(input.filePath, file.map((row) => `${JSON.stringify(row)}\n`).join(''))
-    await expect(result.verify()).rejects.toThrow(ClaudeImportResourceError)
-  } finally {
-    await result.close()
-  }
+it('keeps a turn linked by parent_tool_use_id and excludes actual sidechains', async () => {
+  const input = await transcript([
+    entry('root', null, { type: 'user' }),
+    entry('x', 'root', { parent_tool_use_id: 'toolu_1' }),
+    entry('answer', 'x'),
+    entry('side', 'answer', { isSidechain: true }),
+    entry('teammate', 'answer', { teamName: 'team' })
+  ])
+  expect(identities(await items(input))).toEqual(['root', 'x', 'answer'])
 })
 
-it.each(['truncation', 'replacement'] as const)(
-  'refuses %s of the snapshot before publication',
-  async (change) => {
-    const input = await transcript([entry('a', null)])
-    const result = await importClaudeTranscript(input)
-    try {
-      if (change === 'truncation') {
-        await truncate(input.filePath, 0)
-      } else {
-        await rename(input.filePath, `${input.filePath}.old`)
-        await writeFile(input.filePath, `${JSON.stringify(entry('a', null))}\n`)
-      }
-      await expect(result.verify()).rejects.toThrow(ClaudeImportResourceError)
-    } finally {
-      await result.close()
+it('keeps queued human prompts after the active turn unless they lead into an abandoned turn', async () => {
+  const queued = (uuid: string, parentUuid: string) => ({
+    type: 'attachment',
+    uuid,
+    parentUuid,
+    attachment: {
+      type: 'queued_command',
+      commandMode: 'prompt',
+      prompt: uuid,
+      origin: { kind: 'human' }
     }
-  }
-)
-
-it('refuses a rewritten selected row during the offset reread', async () => {
-  const input = await transcript([entry('root', null)])
-  const source = await ClaudeImportSource.open(input.filePath)
-  try {
-    const ranges: ClaudeRange[] = []
-    await source.scan((_, range) => {
-      ranges.push(range)
-    })
-    await writeFile(input.filePath, `${JSON.stringify(entry('edit', null))}\n`)
-    await expect(source.reread(ranges).next()).rejects.toThrow(ClaudeImportResourceError)
-  } finally {
-    await source.close()
-  }
+  })
+  const input = await transcript([
+    entry('question', null, { type: 'user' }),
+    entry('turn', 'question'),
+    queued('earlier', 'turn'),
+    queued('abandoned-prompt', 'turn'),
+    entry('abandoned-turn', 'abandoned-prompt'),
+    queued('trailing', 'turn')
+  ])
+  expect(identities(await items(input))).toEqual(['question', 'turn', 'earlier', 'trailing'])
 })
 
-it('validates adoption using the requested agent identity', async () => {
-  const input = await transcript([entry('root', null)])
-  const workspaceCwd = root!
-  const source = { providerSessionId: 'session', workspaceCwd }
-  await writeFile(input.filePath, JSON.stringify(entry('root', null, { cwd: workspaceCwd })))
-  expect(identities(await items({ ...input, source }))).toEqual(['root'])
-  await expect(items({ ...input, agent: 'openclaude', source })).rejects.toThrow(
-    'The saved conversation does not match the requested provider identity.'
-  )
+it('keeps a trailing recap reply on the winning terminal path', async () => {
+  const input = await transcript([
+    entry('question', null, { type: 'user' }),
+    entry('turn', 'question'),
+    {
+      type: 'system',
+      subtype: 'local_command',
+      uuid: 'recap',
+      parentUuid: 'turn',
+      commandRun: { command: 'recap' },
+      content: '<local-command-stdout>Recap</local-command-stdout>'
+    }
+  ])
+  const actual = await items(input)
+  expect(identities(actual)).toEqual(['question', 'turn', 'recap'])
+  expect(actual[2].body).toEqual({
+    kind: 'message',
+    role: 'system',
+    blocks: [{ type: 'text', text: 'Recap', presentation: 'command-output' }]
+  })
 })

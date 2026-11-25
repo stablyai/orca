@@ -18,6 +18,7 @@ export type ImportStage = {
   count: number
   ordinal: number
   size: number
+  lines: number
   page?: ImportStagePage
 }
 
@@ -29,7 +30,7 @@ export function applyJournalImportStage(
   >
 ): JournalForkStageResult {
   if (operation.kind === 'import-stage-begin') {
-    if (operation.count <= 0 || operation.count > MAX_LEGACY_IMPORT_RETAINED_BYTES) {
+    if (!Number.isSafeInteger(operation.count) || operation.count <= 0) {
       throw new Error('Invalid journal import item count.')
     }
     const token = randomUUID()
@@ -37,7 +38,8 @@ export function applyJournalImportStage(
       authority: operation.authority,
       count: operation.count,
       ordinal: 0,
-      size: 0
+      size: 0,
+      lines: 0
     })
     return { token }
   }
@@ -47,15 +49,25 @@ export function applyJournalImportStage(
     !stage ||
     stage.ordinal !== operation.ordinal ||
     !operation.bytes.length ||
-    operation.bytes.length > CLAUDE_IMPORT_PAGE_DATA_BYTES ||
-    stage.size + operation.bytes.length > MAX_LEGACY_IMPORT_RETAINED_BYTES + stage.count
+    operation.bytes.length > CLAUDE_IMPORT_PAGE_DATA_BYTES
   ) {
     throw new Error('Journal import page does not match its private stage.')
+  }
+  const { buffer, byteOffset, byteLength } = operation.bytes
+  const bytes = Buffer.from(buffer, byteOffset, byteLength)
+  let lines = stage.lines
+  for (let at = bytes.indexOf(10); at !== -1; at = bytes.indexOf(10, at + 1)) {
+    lines++
+  }
+  const size = stage.size + byteLength
+  if (lines > stage.count || size - lines > MAX_LEGACY_IMPORT_RETAINED_BYTES) {
+    throw new Error('Journal import page exceeds its private stage budget.')
   }
   imports.set(operation.token, {
     ...stage,
     ordinal: stage.ordinal + 1,
-    size: stage.size + operation.bytes.length,
+    size,
+    lines,
     page: { prior: stage.page, bytes: operation.bytes }
   })
   return null

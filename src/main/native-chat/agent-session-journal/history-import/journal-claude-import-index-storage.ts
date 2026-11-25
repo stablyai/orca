@@ -153,8 +153,7 @@ export class Keys {
 }
 
 export const enum Row {
-  Length,
-  Digest,
+  Range,
   Flags,
   Uuid,
   Parent,
@@ -173,6 +172,11 @@ export const enum Position {
   Line,
   Width
 }
+export const enum RangeData {
+  Length,
+  Digest,
+  Width
+}
 export const enum Flag {
   Decode = 1,
   Turn = 2,
@@ -182,7 +186,11 @@ export const enum Flag {
   HasChild = 64,
   HasLeafChild = 128,
   Exhausted = 256,
-  ToolResult = 512
+  ToolResult = 512,
+  QueuedPrompt = 1024,
+  UnselectedTurnPath = 2048,
+  TrailingReachable = 4096,
+  TrailingVisited = 8192
 }
 export const enum Link {
   Key,

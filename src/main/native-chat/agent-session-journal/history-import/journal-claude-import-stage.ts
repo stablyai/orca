@@ -95,6 +95,15 @@ export async function stageClaudeImport(
     }
     await worker.verify()
     const prepared = worker
+    let closing: Promise<void> | undefined
+    const finish = () =>
+      (closing ??= (async () => {
+        try {
+          await prepared.close()
+        } finally {
+          await dropStage()
+        }
+      })())
     return {
       count: prepared.count,
       sourceEmpty: prepared.sourceEmpty,
@@ -131,15 +140,10 @@ export async function stageClaudeImport(
           return commit
         } finally {
           input.signal?.removeEventListener('abort', cancel)
+          await finish()
         }
       },
-      async close() {
-        try {
-          await dropStage()
-        } finally {
-          await prepared.close()
-        }
-      }
+      close: finish
     }
   } catch (error) {
     try {

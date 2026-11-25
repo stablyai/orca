@@ -1,9 +1,16 @@
 import { setImmediate } from 'node:timers/promises'
 import { Flag, Key, Link, Row, SLAB_ROWS, type Table } from './journal-claude-import-index-storage'
+import { selectClaudeTrailingRows } from './journal-claude-import-trailing'
 import { closeClaudeToolForks } from './journal-claude-import-tool-forks'
 
-export function selectClaudeImportRows(rows: Table, keys: Table, links: Table, check: () => void) {
-  return new ClaudeImportSelection(rows, keys, links).select(check)
+export function selectClaudeImportRows(
+  rows: Table,
+  keys: Table,
+  links: Table,
+  hasQueuedPrompts: boolean,
+  check: () => void
+) {
+  return new ClaudeImportSelection(rows, keys, links).select(hasQueuedPrompts, check)
 }
 
 class ClaudeImportSelection {
@@ -129,7 +136,7 @@ class ClaudeImportSelection {
     }
   }
 
-  private async leaf(check: () => void): Promise<number> {
+  private async leaf(check: () => void): Promise<{ anchor: number; terminal: number }> {
     let visited = 0
     for (let row = 1; row <= this.rows.length; row++) {
       if (++visited % SLAB_ROWS === 0) {
@@ -165,7 +172,7 @@ class ClaudeImportSelection {
           check()
         }
         if (this.has(cursor, Flag.Turn)) {
-          return cursor
+          return { anchor: cursor, terminal: row }
         }
         this.flag(cursor, Flag.Exhausted)
         cursor = this.parent(cursor)
@@ -173,24 +180,19 @@ class ClaudeImportSelection {
     }
     const fallback = await this.latestTurnBehindLeaf(check)
     if (fallback) {
-      return fallback
+      return { anchor: fallback, terminal: fallback }
     }
     // A graph of system/progress rows can still contain a presentable local-command reply.
-    for (let row = this.rows.length; row > 0; row--) {
-      if (this.canonical(row) && this.rows.get(row, Row.Uuid) && this.has(row, Flag.Decode)) {
-        return row
-      }
-    }
     for (let row = this.rows.length; row > 0; row--) {
       if (++visited % SLAB_ROWS === 0) {
         await setImmediate()
         check()
       }
       if (this.canonical(row) && this.rows.get(row, Row.Uuid) && this.has(row, Flag.Decode)) {
-        return row
+        return { anchor: row, terminal: row }
       }
     }
-    return 0
+    return { anchor: 0, terminal: 0 }
   }
 
   private async latestTurnBehindLeaf(check: () => void): Promise<number> {
@@ -243,12 +245,12 @@ class ClaudeImportSelection {
     return visible || any
   }
 
-  async select(check: () => void): Promise<void> {
+  async select(hasQueuedPrompts: boolean, check: () => void): Promise<void> {
     await this.rewire(check)
-    const leaf = await this.leaf(check)
+    const { anchor, terminal } = await this.leaf(check)
     let visited = 0
     let root = 0
-    for (let row = leaf; row && !this.has(row, Flag.Selected); row = this.parent(row)) {
+    for (let row = anchor; row && !this.has(row, Flag.Selected); row = this.parent(row)) {
       if (++visited % SLAB_ROWS === 0) {
         await setImmediate()
         check()
@@ -258,5 +260,15 @@ class ClaudeImportSelection {
       root = row
     }
     await closeClaudeToolForks(this.rows, this.keys, this.links, root, check)
+    if (anchor && (hasQueuedPrompts || anchor !== terminal)) {
+      await selectClaudeTrailingRows(
+        this.rows,
+        this.keys,
+        anchor,
+        terminal,
+        hasQueuedPrompts,
+        check
+      )
+    }
   }
 }

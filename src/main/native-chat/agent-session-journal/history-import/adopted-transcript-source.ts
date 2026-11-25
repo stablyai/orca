@@ -35,9 +35,11 @@ export type AdoptedTranscriptSource = {
   conversationStore?: string
 }
 
+export type AdoptedSourceIdentity = { sessionId: string | null; cwd: string | null }
+
 export async function assertAdoptedSourceIdentity(
   source: AdoptedTranscriptSource,
-  actual: { sessionId: string | null; cwd: string | null },
+  actual: AdoptedSourceIdentity,
   requireCwd = true,
   signal?: AbortSignal,
   agent?: AgentType
@@ -117,7 +119,7 @@ export function adoptedTranscriptSourceObserver(input: {
   let cwd: string | null = null
   let sawCodexMetadata = false
   /** The conversation's recorded identity, read after every line is observed. */
-  const identity = async (): Promise<{ sessionId: string | null; cwd: string | null }> => {
+  const identity = async (): Promise<AdoptedSourceIdentity> => {
     if (input.agent === 'grok') {
       const summaryPath = join(dirname(input.filePath), 'summary.json')
       if (!(await admitTranscriptPath(dirname(input.filePath), summaryPath))) {
@@ -193,7 +195,7 @@ async function readAdoptedOpenCodeIdentity(
   dbPath: string,
   source: AdoptedTranscriptSource,
   signal?: AbortSignal
-): Promise<{ sessionId: string | null; cwd: string | null }> {
+): Promise<AdoptedSourceIdentity> {
   const metadata = await readOpenCodeTranscriptSignalViaWorker(
     { dbPath, sessionId: source.providerSessionId },
     signal
