@@ -1,4 +1,5 @@
 import type { AcpAgentConnection, AcpAgentConnectionOptions } from './acp-agent-connection'
+import type { AcpKeptSession } from './acp-kept-session'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 
 export type AcpStructuredConnection = Pick<
@@ -32,6 +33,8 @@ export type AcpStructuredConnection = Pick<
   readonly lastCloseResult?: AcpAgentConnection['lastCloseResult']
   readonly lostBeforeExit?: AcpAgentConnection['lostBeforeExit']
   readonly kept?: AcpAgentConnection['kept']
+  /** The earlier app's prompt to a kept agent, when this agent reads its failure differently. */
+  earlierPrompt?: () => ReturnType<AcpKeptSession['earlierPrompt']>
 }
 
 export type ConnectAcpAgent<Connection = AcpStructuredConnection> = (

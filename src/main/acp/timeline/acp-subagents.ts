@@ -51,6 +51,11 @@ export class AcpSubagents {
     return this.known.has(id)
   }
 
+  /** Whether this session ever started a subagent, ended or not. */
+  get anyStarted(): boolean {
+    return this.known.size > 0
+  }
+
   /** Subagents not yet ended, by the id their agent names them. */
   get openIds(): string[] {
     return [...this.known].flatMap(([id, subagent]) => (subagent.ended ? [] : [id]))
