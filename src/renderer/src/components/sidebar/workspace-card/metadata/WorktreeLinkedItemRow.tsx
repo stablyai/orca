@@ -27,7 +27,7 @@ export function WorktreeLinkedItemRow({
   onRemove
 }: Props): React.JSX.Element {
   const t = useTranslate()
-  const { label, source } = getWorkspaceAttachmentDisplayLabels(item, repo ?? null)
+  const { label, source } = getWorkspaceAttachmentDisplayLabels(item, repo)
   const provider = workspaceAttachmentProviderLabel(item)
   const observedCount = item.origins?.filter((origin) => origin.kind === 'observed').length ?? 0
   const sessionsLabel = t('workspace.links.sessions', 'Sessions & terminals')

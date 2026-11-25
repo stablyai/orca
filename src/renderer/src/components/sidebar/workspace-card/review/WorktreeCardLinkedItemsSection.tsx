@@ -129,7 +129,7 @@ export function WorktreeCardLinkedItemsSection({
               />
               <div className="divide-y divide-border">
                 {group.rows.map(({ item, key, url, detail, live, liveTask }) => {
-                  const { label, source } = getWorkspaceAttachmentDisplayLabels(item, repo ?? null)
+                  const { label, source } = getWorkspaceAttachmentDisplayLabels(item, repo)
                   return (
                     <div
                       key={key}

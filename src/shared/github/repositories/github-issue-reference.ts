@@ -1,6 +1,10 @@
 import { buildGitHubRepoUrl, parseGitHubIssueOrPRLink, type RepoSlug } from './links'
 import { isGitHubOwnerSlug } from './owner-slug'
 import { isGitHubRepositorySlug } from './repository-slug'
+import { githubHostFromIdentityKey } from './repository-identity-key'
+import { isUnresolvedSshHostAlias } from '../../git/remotes/git-remote-host-alias'
+import { isFolderRepo } from '../../repository/repo-kind'
+import type { Repo } from '../../repository/repo-types'
 
 export type IssueRepository = Pick<RepoSlug, 'owner' | 'repo'>
 type BareIssueReference = { kind: 'bare'; number: number }
@@ -11,6 +15,22 @@ type IssueReference = BareIssueReference | ShorthandIssueReference | IssueUrl
 type IssueReferenceContext = {
   host?: string
   defaultGitHubIssueRepository?: IssueRepository | null
+}
+
+/** Host and default repository a project resolves issue references against; folders have neither. */
+export function githubIssueReferenceContext(
+  repo: Pick<Repo, 'kind' | 'upstream' | 'defaultGitHubIssueRepository'> | undefined,
+  originKey: string | null | undefined
+): IssueReferenceContext {
+  if (!repo || isFolderRepo(repo)) {
+    return {}
+  }
+  const host = githubHostFromIdentityKey(originKey) ?? repo.upstream?.host
+  return {
+    // An unresolved SSH alias is not a web host; fall back to github.com.
+    host: host && !isUnresolvedSshHostAlias(host) ? host : undefined,
+    defaultGitHubIssueRepository: repo.defaultGitHubIssueRepository
+  }
 }
 
 const SHORTHAND = /^([^/]+)\/([^/#]+)#(\d+)$/

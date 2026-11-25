@@ -10,6 +10,7 @@ import {
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { getProvenWorkspaceReferenceIdentity } from './workspace-reference-identity'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
+import { normalizeGitRemoteUrl } from '../git/remotes/git-remote-identity'
 
 function nonEmpty(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
@@ -136,6 +137,17 @@ export function getWorkspaceAttachmentUrlScope(item: WorkspaceAttachment): strin
   } catch {
     return ''
   }
+}
+
+// GitHub owner and repository names are case-insensitive; other providers keep exact matching.
+export function isWorkspaceAttachmentFromRemote(
+  item: WorkspaceAttachment,
+  remoteKey: string
+): boolean {
+  const scope = normalizeGitRemoteUrl(getWorkspaceAttachmentUrlScope(item))
+  return item.provider === 'github'
+    ? scope?.toLowerCase() === remoteKey.toLowerCase()
+    : scope === remoteKey
 }
 
 /** One entry per proven external reference and source context; local repo IDs never split it. */

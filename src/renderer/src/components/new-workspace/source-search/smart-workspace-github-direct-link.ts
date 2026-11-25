@@ -1,6 +1,5 @@
 import type React from 'react'
 import type { GitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
-import { normalizeGitHubLinkQuery } from '../../../../../shared/new-workspace/github-links'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
@@ -48,8 +47,7 @@ export async function resolveSmartWorkspaceGithubDirectLink({
       return { items: [], prompt: null }
     }
     const selectedSlug = await getRepoSlugCached(selectedRepo, githubSourceContext, repoSlugCache)
-    const link = normalizeGitHubLinkQuery(query, selectedSlug?.host).directLink
-    if (!link || !isCurrent()) {
+    if (!isCurrent()) {
       return { items: [], prompt: null }
     }
     const item = await lookupSmartGitHubSubmitItem({
@@ -58,9 +56,10 @@ export async function resolveSmartWorkspaceGithubDirectLink({
       sourceContext: githubSourceContext,
       intent: {
         kind: 'link',
-        ...link.slug,
-        number: link.number,
-        type: link.type,
+        ...directLink.slug,
+        host: selectedSlug?.host || directLink.slug.host,
+        number: directLink.number,
+        type: directLink.type,
         allowSameHost: true
       },
       workItem: lookupGitHubWorkItemForSource,

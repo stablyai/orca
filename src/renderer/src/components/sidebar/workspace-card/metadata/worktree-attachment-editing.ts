@@ -2,8 +2,6 @@ import type { HostedReviewProvider } from '../../../../../../shared/source-contr
 import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
-import { normalizeGitRemoteUrl } from '../../../../../../shared/git/remotes/git-remote-identity'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import {
@@ -12,14 +10,14 @@ import {
 } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import {
   getWorkspaceAttachmentKey,
-  getWorkspaceAttachmentUrlScope
+  isWorkspaceAttachmentFromRemote
 } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import {
+  githubIssueReferenceContext,
   parseGitHubIssueReference,
   resolveGitHubIssueReference
 } from '../../../../../../shared/github/repositories/github-issue-reference'
-import { githubHostFromIdentityKey } from '../../../../../../shared/github/repositories/repository-identity-key'
 import { parseGitLabIssueOrMRLink } from '../../../../../../shared/new-workspace/gitlab-links'
 import { parseLinearIssueInput } from '../../../../../../shared/linear/links'
 import { parseJiraIssueUrl } from '../../../../../../shared/jira/jira-issue-url'
@@ -147,11 +145,10 @@ export function parseWorkspaceAttachmentInput(
     return null
   }
   if (kind === 'github-issue') {
-    const reference = resolveGitHubIssueReference(parseGitHubIssueReference(value), {
-      host: githubHostFromIdentityKey(repo?.gitRemoteIdentity?.canonicalKey),
-      defaultGitHubIssueRepository:
-        repo && !isFolderRepo(repo) ? repo.defaultGitHubIssueRepository : undefined
-    })
+    const reference = resolveGitHubIssueReference(
+      parseGitHubIssueReference(value),
+      githubIssueReferenceContext(repo, repo?.gitRemoteIdentity?.canonicalKey)
+    )
     if (reference) {
       return {
         provider: 'github',
@@ -279,10 +276,7 @@ export function isWorkspaceRepositoryAttachment(
     return false
   }
   try {
-    const scope = normalizeGitRemoteUrl(getWorkspaceAttachmentUrlScope(item))
-    return item.provider === 'github' && item.type === 'issue'
-      ? scope?.toLowerCase() === remoteKey.toLowerCase()
-      : scope === remoteKey
+    return isWorkspaceAttachmentFromRemote(item, remoteKey)
   } catch {
     return false
   }

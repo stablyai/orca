@@ -34,19 +34,13 @@ function getCardTasks(
   issue: WorktreeCardIssueDisplay | null | undefined,
   linearIssue: WorktreeCardLinearIssueDisplay | null | undefined,
   jiraIssue: WorktreeCardJiraIssueDisplay | null | undefined,
-  linkedIssue: WorkspaceAttachment | undefined,
   t?: Translate
 ): CardTask[] {
   const tasks: CardTask[] = []
   if (issue) {
     tasks.push({
-      item: {
-        provider: 'github',
-        type: 'issue',
-        number: issue.number,
-        url: linkedIssue?.url ?? issue.url
-      },
-      title: issue.state ? issue.title : linkedIssue?.title || issue.title,
+      item: { provider: 'github', type: 'issue', number: issue.number, url: issue.url },
+      title: issue.title,
       state: getIssueTaskState(issue.state, t),
       labels: issue.labels
     })
@@ -151,7 +145,6 @@ export function WorktreeCardTaskActions({
 
 export function WorktreeCardTaskDetailSection({
   issue,
-  linkedIssue,
   workspaceRepo,
   linearIssue,
   jiraIssue,
@@ -161,8 +154,7 @@ export function WorktreeCardTaskDetailSection({
   onManageLinks
 }: {
   issue?: WorktreeCardIssueDisplay | null
-  linkedIssue?: WorkspaceAttachment
-  workspaceRepo?: Repo | null
+  workspaceRepo?: Repo
   linearIssue?: WorktreeCardLinearIssueDisplay | null
   jiraIssue?: WorktreeCardJiraIssueDisplay | null
   actions: WorktreeCardTaskActionHandlers
@@ -171,7 +163,7 @@ export function WorktreeCardTaskDetailSection({
   onManageLinks?: (event: MouseEvent) => void
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const tasks = getCardTasks(issue, linearIssue, jiraIssue, linkedIssue, t)
+  const tasks = getCardTasks(issue, linearIssue, jiraIssue, t)
   if (!tasks.length) {
     return null
   }
@@ -184,10 +176,7 @@ export function WorktreeCardTaskDetailSection({
       />
       <div className="divide-y divide-border">
         {tasks.map(({ item, title, state, labels }) => {
-          const { label, source } = getWorkspaceAttachmentDisplayLabels(
-            item,
-            linkedIssue?.url ? workspaceRepo : undefined
-          )
+          const { label, source } = getWorkspaceAttachmentDisplayLabels(item, workspaceRepo)
           return (
             <div key={item.provider} className="py-1.5">
               <WorktreeCardReferenceRow

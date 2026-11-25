@@ -134,6 +134,15 @@ export function WorktreeCardDetailsHover({
     singleAttachment.number === issue?.number
       ? singleAttachment
       : undefined
+  // A saved other-repo issue URL outranks the URL the card derives from the project repo.
+  const taskIssue =
+    issue && linkedIssue?.url
+      ? {
+          ...issue,
+          url: linkedIssue.url,
+          title: issue.state ? issue.title : linkedIssue.title || issue.title
+        }
+      : issue
   const showAttachmentCollection =
     attachments.length > 1 ||
     (attachments.length === 1 && !issue && !linearIssue && !jiraIssue && !review)
@@ -215,9 +224,8 @@ export function WorktreeCardDetailsHover({
               />
 
               <WorktreeCardTaskDetailSection
-                issue={issue}
-                linkedIssue={linkedIssue}
-                workspaceRepo={repo ?? null}
+                issue={taskIssue}
+                workspaceRepo={linkedIssue?.url ? repo : undefined}
                 linearIssue={linearIssue}
                 jiraIssue={jiraIssue}
                 actions={taskActions}

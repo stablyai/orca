@@ -283,7 +283,7 @@ export function WorkspaceAttachmentSearch({
                     <Plus className="size-3.5" />
                     <span>
                       {t('workspace.links.addItem', 'Add {{label}}', {
-                        label: getWorkspaceAttachmentDisplayLabels(direct, props.repo ?? null).label
+                        label: getWorkspaceAttachmentDisplayLabels(direct, props.repo).label
                       })}
                     </span>
                     {directLinked ? (

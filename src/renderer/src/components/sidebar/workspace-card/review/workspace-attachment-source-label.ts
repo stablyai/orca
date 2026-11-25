@@ -52,19 +52,11 @@ function githubRepositoryLabel(repo: RepoSlug): string {
 
 export function getWorkspaceAttachmentDisplayLabels(
   item: WorkspaceAttachment,
-  workspaceRepo?: Repo | null
+  workspaceRepo: Repo | undefined
 ): { label: string; source: string | null } {
-  if (
-    workspaceRepo !== undefined &&
-    item.provider === 'github' &&
-    item.type === 'issue' &&
-    item.url
-  ) {
+  if (workspaceRepo && item.provider === 'github' && item.type === 'issue' && item.url) {
     const issue = parseGitHubIssueOrPRLink(item.url)
-    if (
-      issue?.type === 'issue' &&
-      !isWorkspaceRepositoryAttachment(item, workspaceRepo ?? undefined)
-    ) {
+    if (issue?.type === 'issue' && !isWorkspaceRepositoryAttachment(item, workspaceRepo)) {
       return { label: `${githubRepositoryLabel(issue.slug)}#${item.number}`, source: null }
     }
   }

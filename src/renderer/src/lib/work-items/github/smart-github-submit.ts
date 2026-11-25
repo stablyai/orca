@@ -8,12 +8,12 @@ import {
 import { getLinkedWorkItemWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
 import type { LinkedWorkItemSummary } from '../../workspace/creation/new-workspace'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
-import { resolveGitHubIssueReference } from '../../../../../shared/github/repositories/github-issue-reference'
-import { resolveGitHubWorkItemIdentity } from '../../../../../shared/new-workspace/github-work-item-identity'
 import {
-  githubHostFromIdentityKey,
-  githubRepoIdentityKey
-} from '../../../../../shared/github/repositories/repository-identity-key'
+  githubIssueReferenceContext,
+  resolveGitHubIssueReference
+} from '../../../../../shared/github/repositories/github-issue-reference'
+import { resolveGitHubWorkItemIdentity } from '../../../../../shared/new-workspace/github-work-item-identity'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { resolveRepoSlug } from '@/lib/workspace/catalog/repo-slug-index'
 
@@ -218,13 +218,9 @@ function bareNumberLookups(repo: Repo, number: number, lookup: SmartGitHubNumber
   return {
     any: null,
     issue: async (): Promise<GitHubWorkItem | null> => {
-      const originKey = await resolveRepoSlug(repo)
       const issue = resolveGitHubIssueReference(
         { kind: 'bare', number },
-        {
-          defaultGitHubIssueRepository,
-          host: originKey ? githubHostFromIdentityKey(originKey) : repo.upstream?.host
-        }
+        githubIssueReferenceContext(repo, await resolveRepoSlug(repo))
       )
       return issue?.kind === 'url'
         ? lookupIntent({
