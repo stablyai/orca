@@ -1,5 +1,6 @@
 import {
   BotGroupCreate,
+  BotGroupList,
   BotGroupRead,
   BotGroupSend,
   BotGroupUpdate,
@@ -37,10 +38,17 @@ export const BOT_GROUP_METHODS = [
   defineMethod({
     name: 'bots.groups.list',
     permission: 'workspace',
-    params: null,
-    handler: (_params, { runtime }) => ({
-      groups: runtime.bots.enabled() ? runtimeBotGroups(runtime).store.listing() : []
-    })
+    params: BotGroupList,
+    handler: (params, { runtime, caller }) => {
+      const includeReplyPreviews =
+        params.includeReplyPreviews === true &&
+        (caller?.kind === 'desktop' || (caller?.kind === 'paired-device' && !caller.agent))
+      return {
+        groups: runtime.bots.enabled()
+          ? runtimeBotGroups(runtime).store.listing(includeReplyPreviews)
+          : []
+      }
+    }
   }),
   defineMethod({
     name: 'bots.groups.create',

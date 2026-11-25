@@ -43,6 +43,7 @@ import {
   writeNativeChatDraftCache
 } from '../native-chat/drafts/native-chat-draft-views'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
+import { useBotGroupReplyJump, useBotGroupReplyReveal } from './bot-group-reply-reveal'
 
 const EMPTY_MESSAGES: BotGroupMessage[] = []
 
@@ -73,6 +74,7 @@ export function BotGroupChat({
   const bots = useBots()
 
   const [error, setError] = useState<string | null>(null)
+  const replyReveal = useBotGroupReplyReveal(tabId)
   const [sessions, setSessions] = useState<ReadonlyMap<string, BotGroupSession>>(() => new Map())
   const report = useCallback(
     (sessionId: string, session: BotGroupSession | null) =>
@@ -87,12 +89,8 @@ export function BotGroupChat({
       }),
     []
   )
-  const { data, apply, loadEarlier } = useBotGroupTranscript(
-    place?.group,
-    threadId,
-    isVisible,
-    setError
-  )
+  const transcript = useBotGroupTranscript(place?.group, threadId, isVisible, setError, replyReveal)
+  const { data, apply, loadEarlier } = transcript
   const group = data?.group ?? found
   const fileContexts = useBotGroupFileContexts(bots, group, tabId)
   const roomContext = (group && fileContexts.get(group.id)) ?? null
@@ -179,6 +177,15 @@ export function BotGroupChat({
     ),
     isWorking: working,
     isVisible
+  })
+  const { missingReply, clearMissingReply } = useBotGroupReplyJump({
+    tabId,
+    replyReveal,
+    transcript,
+    follow,
+    sessions,
+    error,
+    visible: isVisible && isFocusedGroup
   })
   const roomLinkContext = roomContext?.fileLinkContext ?? null
   const linkContextFor = useBotGroupLinkContextFor(fileContexts, roomLinkContext)
@@ -361,7 +368,20 @@ export function BotGroupChat({
           isWorking={working}
           canSend={Boolean(group)}
           onStop={() => stop()}
-          notices={error ? [{ key: 'bot-group-error', kind: 'error', text: error }] : []}
+          notices={[
+            ...(error ? [{ key: 'bot-group-error', kind: 'error' as const, text: error }] : []),
+            ...(missingReply
+              ? [
+                  {
+                    key: 'bot-group-reply-missing',
+                    kind: 'host' as const,
+                    tone: 'warning' as const,
+                    text: t('bots.groups.replyUnavailable', 'That reply could not be found.'),
+                    onDismiss: clearMissingReply
+                  }
+                ]
+              : [])
+          ]}
         />
       </NativeChatSurface>
     </NativeChatPaneFileDropSurface>

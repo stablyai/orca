@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo } from 'react'
+import { Users } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
+import { selectActiveBotGroupRoomId } from '@/lib/bot-group-catalog'
+import { useBotGroups } from '@/lib/bot-group-list'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
@@ -27,6 +30,7 @@ import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChat
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
+import { revealBotGroupReply } from './bot-group-reply-reveal'
 
 /** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by indent. */
 export function BotSidebarChats({
@@ -37,7 +41,8 @@ export function BotSidebarChats({
   activeLine,
   steps,
   onStep,
-  onOpen
+  onOpen,
+  groupReplies
 }: {
   bot: Bot
   tree: BotChatTree
@@ -48,6 +53,7 @@ export function BotSidebarChats({
   steps: Readonly<Record<string, number>>
   onStep: (chatId: string, steps: number) => void
   onOpen: () => void
+  groupReplies: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const { chats, workspaceChats } = tree
@@ -104,16 +110,19 @@ export function BotSidebarChats({
 
   return (
     <>
+      {!view.chats.some(({ chat }) => chat.origin === 'home') && groupReplies}
       {view.chats.map((chatView) => (
-        <BotSidebarChat
-          key={chatView.chat.chatId}
-          bot={bot}
-          view={chatView}
-          notes={notes}
-          lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
-          onStep={(next) => onStep(chatView.chat.chatId, next)}
-          onOpen={onOpen}
-        />
+        <React.Fragment key={chatView.chat.chatId}>
+          <BotSidebarChat
+            bot={bot}
+            view={chatView}
+            notes={notes}
+            lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
+            onStep={(next) => onStep(chatView.chat.chatId, next)}
+            onOpen={onOpen}
+          />
+          {chatView.chat.origin === 'home' && groupReplies}
+        </React.Fragment>
       ))}
       {view.stray.length > 0 ? (
         <AttachedWorktreeCards
@@ -125,6 +134,59 @@ export function BotSidebarChats({
           onOpen={onOpen}
         />
       ) : null}
+    </>
+  )
+}
+
+export function BotSidebarGroupReplies({
+  bot,
+  onOpen
+}: {
+  bot: Bot
+  onOpen: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const groups = useBotGroups()
+  const activeRoom = useAppStore(selectActiveBotGroupRoomId)
+  const previews = useMemo(
+    () =>
+      groups
+        .flatMap((group) => {
+          const reply =
+            group.hostId === bot.hostId
+              ? group.replyPreviews?.find((candidate) => candidate.botId === bot.id)
+              : undefined
+          return reply ? [{ group, reply }] : []
+        })
+        .sort((left, right) => right.reply.at - left.reply.at),
+    [bot.hostId, bot.id, groups]
+  )
+  return (
+    <>
+      {previews.map(({ group, reply }) => (
+        <button
+          key={group.id}
+          type="button"
+          data-bot-sidebar-group-reply={group.id}
+          aria-label={t('bots.groups.openReply', 'Open reply in {{name}}: {{reply}}', {
+            name: group.name,
+            reply: reply.text
+          })}
+          aria-current={activeRoom === group.id ? 'true' : undefined}
+          className={cn(
+            'flex h-6 min-w-0 cursor-pointer items-center gap-1.5 rounded-md pr-0.5 pl-1 text-left text-xs text-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            activeRoom === group.id && 'bg-sidebar-accent'
+          )}
+          onClick={() => void revealBotGroupReply(group, reply, onOpen)}
+        >
+          <Users aria-hidden className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">
+            <span className="text-foreground">{group.name}</span>
+            {' · '}
+            {reply.text}
+          </span>
+        </button>
+      ))}
     </>
   )
 }

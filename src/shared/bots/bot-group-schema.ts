@@ -74,6 +74,14 @@ export const BotGroupLatestSchema = z.object({
   at: z.number()
 })
 
+const BotGroupReplyPreviewSchema = BotGroupLatestSchema.pick({ text: true, at: true }).extend({
+  botId: z.string(),
+  messageId: z.string(),
+  sequence: z.number().int().positive(),
+  operationId: z.string(),
+  replyMessageId: z.string().optional()
+})
+
 export const BotGroupSchema = z.object({
   id: z.string().min(1),
   name: BotNameSchema,
@@ -94,7 +102,8 @@ export const BotGroupSchema = z.object({
   /** Listed beside the record, never in it: its place in the sidebar, set by a drag. */
   sidebarOrder: z.number().int().nonnegative().optional(),
   /** Listed beside the record, never in it. Older hosts list neither. */
-  latest: BotGroupLatestSchema.optional()
+  latest: BotGroupLatestSchema.optional(),
+  replyPreviews: z.array(BotGroupReplyPreviewSchema).optional()
 })
 
 /** One native operation a post started; the bot's name, avatar and agent as they were then. */
@@ -117,6 +126,8 @@ const BotGroupTurnSchema = z.object({
   /** The finished reply, saved when the turn ended; null when it ended without one. Absent while
    *  the turn runs, and on turns saved before replies were. */
   reply: z.string().nullable().optional(),
+  replyAt: z.number().optional(),
+  replyMessageId: z.string().optional(),
   /** Its answer to another member's request: sent as mail, so its own chat shows only the call. */
   answer: z.string().optional(),
   /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */
@@ -227,7 +238,8 @@ export const LegacyBotGroupSchema = BotGroupSchema.omit({
   folder: true,
   folderWorkspaceId: true,
   sidebarOrder: true,
-  latest: true
+  latest: true,
+  replyPreviews: true
 }).extend({ anchorSessionId: z.string().min(1) })
 
 export type BotGroupReplyMode = z.infer<typeof BotGroupReplyMode>

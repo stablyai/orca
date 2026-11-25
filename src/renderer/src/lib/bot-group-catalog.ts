@@ -14,6 +14,7 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared
 import { activateAndRevealFolderWorkspaceWithOutcome } from './workspace/activation/worktree-activation'
 import type { AppState } from '../store/types'
 import { selectFrontTab } from '../store/slices/tabs/active-tab-selection'
+import { afterPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 
 /** The tab of one room in the group: the original room's, or a thread's. */
 function roomTab(state: AppState, group: Pick<BotGroup, 'folderWorkspaceId'>, roomId: string) {
@@ -33,8 +34,8 @@ function showRoomTab(workspace: string, tabId: string): void {
 }
 
 /** Opens the group's home and focuses its room tab there, adding the tab the first time. */
-export function openBotGroup(group: BotGroup): Promise<void> {
-  return openBotGroupRoom(group, group.id, group.name)
+export async function openBotGroup(group: BotGroup): Promise<void> {
+  await openBotGroupRoom(group, group.id, group.name)
 }
 
 /** A new thread in the group, opened in its own room tab beside the others. */
@@ -63,7 +64,7 @@ export async function openBotGroupRoom(
   group: BotGroup,
   roomId: string,
   label: string
-): Promise<void> {
+): Promise<string> {
   await useAppStore
     .getState()
     .fetchFolderWorkspaces({ runtimeEnvironmentId: runtimeTargetEnvironmentId(botTarget(group)) })
@@ -90,7 +91,7 @@ export async function openBotGroupRoom(
   const existing = roomTab(state, group, roomId)
   if (existing) {
     showRoomTab(workspace, existing.id)
-    return
+    return existing.id
   }
   const drawHere = (tabId?: string): string =>
     state.createUnifiedTab(workspace, 'room', {
@@ -113,10 +114,21 @@ export async function openBotGroupRoom(
       drawHere: () => drawHere(tabId)
     })
     if (sent) {
-      return
+      const shown = await new Promise<string | null>((resolve) => afterPendingTab(tabId, resolve))
+      if (!shown) {
+        throw new BotGroupRoomUnavailableError(
+          translate('bots.groups.openUnavailable', 'Could not open “{{name}}”.', {
+            name: group.name
+          }),
+          false
+        )
+      }
+      return shown
     }
   }
-  showRoomTab(workspace, drawHere())
+  const tabId = drawHere()
+  showRoomTab(workspace, tabId)
+  return tabId
 }
 
 /** The room in front, the group's or a thread's, for the sidebar's current row. */

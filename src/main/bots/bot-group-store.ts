@@ -1,5 +1,4 @@
 import {
-  BotGroupLatestSchema,
   BotGroupSchema,
   BotGroupMessageSchema,
   LegacyBotGroupSchema,
@@ -15,6 +14,7 @@ import type {
   BotGroupTurn
 } from '../../shared/bots/bot-group'
 import { createBotGroupTables, withoutClearedRoster } from './bot-group-store-tables'
+import { BOT_GROUP_LISTING_SQL, BotGroupListing } from './bot-group-listing'
 
 // The row's sequence is the message order; the record keeps everything else.
 const MessageRecordSchema = BotGroupMessageSchema.omit({ sequence: true })
@@ -22,6 +22,7 @@ const MessageRecordSchema = BotGroupMessageSchema.omit({ sequence: true })
 export type PendingGroupTurn = { message: BotGroupMessage; turn: BotGroupTurn }
 
 export class BotGroupStore {
+  private readonly sidebar = new BotGroupListing()
   /** False when this open couldn't index older posts' questions, so their mail must wait. */
   readonly remoteAsksIndexed: boolean
 
@@ -38,24 +39,11 @@ export class BotGroupStore {
   }
 
   /** The groups as the sidebar lists them: each with its saved place and newest post. */
-  listing(): BotGroup[] {
-    const rows = new Map(
-      this.db
-        .prepare('SELECT group_id, sidebar_order, latest FROM bot_group_sidebar')
-        .all()
-        .map((row) => [String(row.group_id), row])
-    )
-    return this.list().map((group) => {
-      const row = rows.get(group.id)
-      const latest = row?.latest
-        ? BotGroupLatestSchema.safeParse(JSON.parse(String(row.latest)))
-        : null
-      return {
-        ...group,
-        ...(typeof row?.sidebar_order === 'number' ? { sidebarOrder: row.sidebar_order } : {}),
-        ...(latest?.success ? { latest: latest.data } : {})
-      }
-    })
+  listing(includeReplyPreviews = false): BotGroup[] {
+    const groups = this.list()
+    const missing = includeReplyPreviews ? this.sidebar.missingPreviews(groups) : []
+    const rows = this.db.prepare(BOT_GROUP_LISTING_SQL).all(JSON.stringify(missing))
+    return this.sidebar.decorate(groups, rows, missing, includeReplyPreviews)
   }
 
   // Kept beside the record, so a membership edit that writes the record back keeps them.
@@ -154,6 +142,7 @@ export class BotGroupStore {
 
   /** The group and everything kept for it: messages, pending sends, operation and worker links. */
   deleteGroup(groupId: string): void {
+    this.sidebar.delete(groupId)
     const ofGroup = 'SELECT id FROM bot_group_messages WHERE group_id = ?'
     const operations = `SELECT operation_id FROM bot_group_operations WHERE message_id IN (${ofGroup})`
     this.transaction(() => {
@@ -226,6 +215,7 @@ export class BotGroupStore {
 
   /** Stores a post with each turn's pending context, owed until native admission. */
   append(message: Omit<BotGroupMessage, 'sequence'>, contexts = new Map<string, string>()) {
+    this.sidebar.invalidate(message)
     this.transaction(() => {
       this.db
         .prepare('INSERT INTO bot_group_messages(id, group_id, record) VALUES (?, ?, ?)')
@@ -332,6 +322,7 @@ export class BotGroupStore {
   }
 
   update({ sequence: _sequence, ...message }: BotGroupMessage): void {
+    this.sidebar.invalidate(message)
     const turns = message.turns.map(({ workerDispatchIds: _workers, ...turn }) => turn)
     this.db
       .prepare('UPDATE bot_group_messages SET record = ? WHERE id = ? AND group_id = ?')

@@ -28683,7 +28683,10 @@
       },
       "deliveryUnconfirmed": "Delivery unconfirmed",
       "starting": "Starting…",
-      "notStarted": "Not started"
+      "notStarted": "Not started",
+      "replyUnavailable": "That reply could not be found.",
+      "openReply": "Open reply in {{name}}: {{reply}}",
+      "openUnavailable": "Could not open “{{name}}”."
     },
     "google": {
       "turnOn": {

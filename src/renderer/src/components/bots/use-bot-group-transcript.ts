@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from 'react'
+import { useCallback, useEffect, useReducer, useState } from 'react'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import type { BotRef } from '@/lib/bot-hosts'
 import { callBotGroupRpc } from '@/lib/bot-group-rpc'
@@ -7,6 +7,7 @@ import {
   reduceBotGroupTranscript,
   type BotGroupTranscript
 } from '../../../../shared/bots/bot-group-transcript'
+import type { BotGroupReplyReveal } from './bot-group-reply-reveal'
 
 function readPage(
   group: BotRef,
@@ -27,9 +28,11 @@ export function useBotGroupTranscript(
   group: BotRef | undefined,
   threadId: string | undefined,
   isVisible: boolean,
-  setError: (message: string | null) => void
+  setError: (message: string | null) => void,
+  replyReveal: BotGroupReplyReveal | null
 ) {
   const [data, apply] = useReducer(reduceBotGroupTranscript, null)
+  const [readForReveal, setReadForReveal] = useState<BotGroupReplyReveal | null>(null)
   const groupId = group?.id
   const hostId = group?.hostId
   useEffect(() => {
@@ -46,9 +49,15 @@ export function useBotGroupTranscript(
           if (!closed && request === current) {
             apply({ kind: 'recent', page })
             setError(null)
+            setReadForReveal(replyReveal)
           }
         })
-        .catch((error: unknown) => !closed && setError(String(error)))
+        .catch((error: unknown) => {
+          if (!closed && request === current) {
+            setError(String(error))
+            setReadForReveal(replyReveal)
+          }
+        })
     }
     read()
     const stopListening = onBotsChanged(
@@ -64,13 +73,21 @@ export function useBotGroupTranscript(
       closed = true
       stopListening()
     }
-  }, [apply, groupId, hostId, threadId, isVisible, setError])
+  }, [apply, groupId, hostId, threadId, isVisible, setError, replyReveal])
+  const earlierSequence = data?.hasEarlier ? data.messages[0]?.sequence : undefined
+  const loadEarlierPage = useCallback(
+    async (signal?: AbortSignal) => {
+      if (groupId && hostId && earlierSequence !== undefined) {
+        const page = await readPage({ id: groupId, hostId }, threadId, earlierSequence)
+        if (!signal?.aborted) {
+          apply({ kind: 'earlier', page })
+        }
+      }
+    },
+    [groupId, hostId, threadId, earlierSequence]
+  )
   const loadEarlier = () => {
-    if (data?.hasEarlier) {
-      void readPage(data.group, threadId, data.messages[0]?.sequence)
-        .then((page) => apply({ kind: 'earlier', page }))
-        .catch((error: unknown) => setError(String(error)))
-    }
+    void loadEarlierPage().catch((error: unknown) => setError(String(error)))
   }
-  return { data, apply, loadEarlier }
+  return { data, apply, loadEarlier, loadEarlierPage, earlierSequence, readForReveal }
 }

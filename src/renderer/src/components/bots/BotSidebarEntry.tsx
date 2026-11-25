@@ -22,7 +22,7 @@ import {
 } from '../../../../shared/bots/bot-sidebar-workspaces'
 import { ROOT_PROJECT_GROUP_HEADER_BUCKET } from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
 import { BotRow } from './BotRow'
-import { BotSidebarChats } from './BotSidebarChats'
+import { BotSidebarChats, BotSidebarGroupReplies } from './BotSidebarChats'
 import { botListsUnderRow } from '../../../../shared/bots/bot-sidebar-tree'
 import { useBotOwnChatTree } from './use-bot-chat-tree'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
@@ -212,6 +212,7 @@ function BotSidebarList({
   if (chatTree.state === 'loading') {
     return null
   }
+  const groupReplies = <BotSidebarGroupReplies bot={bot} onOpen={onOpen} />
   if (chatTree.chats.length > 0) {
     return (
       <BotSidebarChats
@@ -223,16 +224,18 @@ function BotSidebarList({
         steps={chatSteps}
         onStep={setChatSteps}
         onOpen={onOpen}
+        groupReplies={groupReplies}
       />
     )
   }
   if (workspaces.length === 0) {
-    return null
+    return groupReplies
   }
   const shown = showAllWorkspaces ? workspaces : capBotWorkspaceLines(workspaces, activeLine)
   const hidden = workspaces.length - shown.length
   return (
     <>
+      {groupReplies}
       {/* Names the lines as workspaces, so they don't read as the bot's chat threads; clicking folds them. */}
       <button
         type="button"

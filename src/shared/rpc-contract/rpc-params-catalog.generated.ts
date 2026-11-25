@@ -12,6 +12,7 @@ import { UsageCallParams } from '../backend/backend-service-contract'
 import {
   BotGroupCreate,
   BotGroupDelete,
+  BotGroupList,
   BotGroupNewThread,
   BotGroupRead,
   BotGroupReorder,
@@ -1317,7 +1318,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.googleSetup.write': GoogleSetupWrite,
   'bots.groups.create': BotGroupCreate,
   'bots.groups.delete': BotGroupDelete,
-  'bots.groups.list': null,
+  'bots.groups.list': BotGroupList,
   'bots.groups.newThread': BotGroupNewThread,
   'bots.groups.read': BotGroupRead,
   'bots.groups.reorder': BotGroupReorder,
