@@ -52,6 +52,17 @@ describe('codex rows across a reattach', () => {
     expect(acks).toEqual(['4 keep 3', '5', '6 keep 6'])
   })
 
+  it("keeps an item's start until the reader took its end, not just until its end was handed on", () => {
+    const floor = createCodexRelayAckFloor()
+    floor.observe(1, item('item/started', 'a'))
+    floor.observe(2, '{"method":"item/agentMessage/delta","params":{"itemId":"a"}}')
+    floor.observe(3, item('item/completed', 'a', 'completed'))
+    // The reader took only through 2: a crash now replays from 3, so a's start must stay.
+    expect(floor.floor(2)).toBe(1)
+    expect(floor.floor(3)).toBe(null)
+    expect(floor.floor(2)).toBe(null)
+  })
+
   it('never keeps from a floor a forced ack gave up, and an ask before any keep starts keeping', async () => {
     const acks: string[] = []
     const output = new RelayedProviderOutput({
