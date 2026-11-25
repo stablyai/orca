@@ -153,7 +153,13 @@ function folderPagingNode(
  * Paths in folders already listed whose name contains `query`, as the search reports them (folders as `dir/`).
  * The host's search sees no SSH workspace and none offline; what was opened still answers.
  */
-export function listedPathMatches(cache: DirectoryCache, query: string, limit: number): string[] {
+export function listedPathMatches(
+  cache: DirectoryCache,
+  query: string,
+  limit: number,
+  /** Paths already shown, which take none of the limit. */
+  skip: ReadonlySet<string>
+): string[] {
   const needle = query.trim().toLowerCase()
   const found: string[] = []
   const visit = (relativePath: string): void => {
@@ -163,8 +169,9 @@ export function listedPathMatches(cache: DirectoryCache, query: string, limit: n
         continue
       }
       const childPath = joinRelativePath(relativePath, entry.name)
-      if (entry.name.toLowerCase().includes(needle)) {
-        found.push(entry.isDirectory ? `${childPath}/` : childPath)
+      const path = entry.isDirectory ? `${childPath}/` : childPath
+      if (entry.name.toLowerCase().includes(needle) && !skip.has(path)) {
+        found.push(path)
       }
       if (entry.isDirectory) {
         visit(childPath)
