@@ -67,6 +67,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     showToast,
     readFileTab,
     leaveSessionDroppingDrafts,
+    takeLeaveHandoff,
     discardMarkdownLocalContent,
     copyMarkdownPath,
     confirmDiscardMarkdown,
@@ -272,6 +273,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             icon: FileText,
             onPress: () => {
               const drafts = leaveDrafts ?? []
+              const handoff = takeLeaveHandoff()
               const combined = drafts
                 .map((draft) => `# ${draft.title}\n\n${draft.content}`)
                 .join('\n\n---\n\n')
@@ -279,7 +281,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                 .writeText(combined)
                 .then(() => {
                   setLeaveDrafts(null)
-                  leaveSessionDroppingDrafts(drafts)
+                  leaveSessionDroppingDrafts(drafts, handoff)
                 })
                 .catch(() => {
                   triggerError()
@@ -292,12 +294,17 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             label: t('session.sheets.discardAndLeave', 'Discard & Leave'),
             destructive: true,
             onPress: () => {
+              const handoff = takeLeaveHandoff()
               setLeaveDrafts(null)
-              leaveSessionDroppingDrafts(leaveDrafts ?? [])
+              leaveSessionDroppingDrafts(leaveDrafts ?? [], handoff)
             }
           }
         ]}
-        onClose={() => setLeaveDrafts(null)}
+        onClose={() => {
+          // Cancel keeps the session and arms nothing; a chosen action took its handoff first.
+          takeLeaveHandoff()
+          setLeaveDrafts(null)
+        }}
       />
       <ConfirmModal
         visible={discardMarkdownTarget != null}

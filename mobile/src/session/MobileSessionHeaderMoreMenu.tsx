@@ -7,10 +7,8 @@ import {
   GitBranch,
   ListChecks,
   Plus,
-  SquareChevronRight,
-  Trash2
+  SquareChevronRight
 } from 'lucide-react-native'
-import { useQueryClient } from '@tanstack/react-query'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
@@ -19,17 +17,8 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
-import {
-  useWorkspaceExecutionHost,
-  useWorkspaceOnPairedHost
-} from '../navigation/workspace-execution-host'
-import { useHostListInThisDocument } from '../navigation/host-list-in-document'
-import { cachedHostWorktrees } from '../host-screen/catalog/host-list-queries'
-import {
-  findHostListDeleteRow,
-  HOST_LIST_DELETE_PARAM,
-  requestHostListDelete
-} from '../host-screen/workspace-actions/host-list-delete-intent'
+import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
+import { useSessionWorkspaceDeleteAction } from './use-session-workspace-delete-action'
 
 type Props = {
   controller: MobileSessionController
@@ -60,16 +49,10 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     createTabBusy,
     handleOpenNewTab,
     handleOpenQuickCommands,
-    itemsOnPhone,
-    hostId,
-    worktreeId,
-    routeBot,
-    router
+    itemsOnPhone
   } = controller
   const workspaceOnPairedHost = useWorkspaceOnPairedHost()
-  const executionHost = useWorkspaceExecutionHost()
-  const queryClient = useQueryClient()
-  const hostListHere = useHostListInThisDocument(hostId)
+  const workspace = useSessionWorkspaceDeleteAction(controller)
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
     ...(!isFloatingWorkspaceRoute
@@ -185,47 +168,6 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
         ]
       : [])
   ]
-  // Delete hands off to the host list's own confirm, so it is offered only where that list opens in
-  // this document. A floating workspace has no row; a bot's home is removed from its bot.
-  const deleteTarget =
-    hostListHere && !isFloatingWorkspaceRoute && routeBot === null
-      ? { hostId, executionHost, worktreeId }
-      : null
-  // The cached list row, read only while the menu is open; a host that hasn't said leaves it enabled.
-  const primaryCheckout =
-    showHeaderMoreActions &&
-    deleteTarget !== null &&
-    findHostListDeleteRow(cachedHostWorktrees(queryClient, hostId) ?? [], deleteTarget)
-      ?.isMainWorktree === true
-  const workspace: ActionSheetAction[] = deleteTarget
-    ? [
-        {
-          id: 'deleteWorkspace',
-          // Desktop's folder rows say Remove Workspace: the folder stays on disk.
-          label: isFolderWorkspaceRoute
-            ? t('hostScreen.deleteConfirm.removeTitle', 'Remove Workspace')
-            : t('hostScreen.deleteConfirm.deleteTitle', 'Delete Workspace'),
-          icon: Trash2,
-          destructive: true,
-          disabled: connState !== 'connected' || primaryCheckout,
-          ...(primaryCheckout
-            ? {
-                hint: t(
-                  'hostScreen.hostScreenOverlays.primaryWorktreeDeleteHint',
-                  "Primary worktree — can't be deleted. Remove the project instead."
-                )
-              }
-            : {}),
-          closeBeforePress: true,
-          onPress: () => {
-            const token = requestHostListDelete(deleteTarget)
-            router.dismissTo(
-              `/h/${encodeURIComponent(hostId)}?${HOST_LIST_DELETE_PARAM}=${encodeURIComponent(token)}`
-            )
-          }
-        }
-      ]
-    : []
   return (
     <PullDownMenu
       visible={showHeaderMoreActions}

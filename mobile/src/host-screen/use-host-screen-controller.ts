@@ -136,7 +136,6 @@ export function useHostScreenController({
     state,
     hostPlatform
   )
-  useHostListDeleteIntent({ embedded, hostId, rows: displayWorktrees, state })
   // Row identities, so a workspace swapped for another of the same count still rereads the bots.
   const botRowsKey = useMemo(
     () => displayWorktrees.map((row) => `${row.hostId ?? ''}|${row.worktreeId}`).join('\n'),
@@ -153,6 +152,14 @@ export function useHostScreenController({
     changeKey: botsChangeKeys['every-host'],
     pairedChangeKey: botsChangeKeys.host + botsChangeKeys['host-threads'],
     pairedThreadsKey: botsChangeKeys['host-threads']
+  })
+  useHostListDeleteIntent({
+    embedded,
+    hostId,
+    connected: connState === 'connected',
+    rows: displayWorktrees,
+    bots,
+    state
   })
   const sectionsResult = useHostListSections({
     client,

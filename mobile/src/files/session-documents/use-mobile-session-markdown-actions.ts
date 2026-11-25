@@ -10,6 +10,7 @@ import { markdownTabSave } from './mobile-markdown-tab-operations'
 import { dropDocumentEditDraft, markdownTabDraftKey } from '../../drafts/document-edit-draft-rows'
 import { triggerSuccess, triggerError } from '../../platform/haptics/haptics'
 import type { DirtyMarkdownDraft } from './session-document-state'
+import { useSessionLeaveHandoff } from './use-session-leave-handoff'
 import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 import type { MobileSessionDiffCommentsModel } from '../../source-control/review/review-notes/use-mobile-session-diff-comments'
 
@@ -136,17 +137,29 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
   }, [hostId, router, standalone])
 
   // The sheet's Copy and Discard both settle the phone's drafts, so none is offered back next time.
+  // A handoff (the menu's Delete) leaves its own way once the drafts are settled.
   const leaveSessionDroppingDrafts = useCallback(
-    (drafts: readonly DirtyMarkdownDraft[]) => {
+    (drafts: readonly DirtyMarkdownDraft[], handoff?: () => void) => {
       for (const draft of drafts) {
         dropDocumentEditDraft(markdownTabDraftKey(draftScope, draft.tabId))
       }
-      leaveSession()
+      if (handoff) {
+        handoff()
+      } else {
+        leaveSession()
+      }
     },
     [draftScope, leaveSession]
   )
 
+  const { requestLeaveForHandoff, takeLeaveHandoff } = useSessionLeaveHandoff(
+    getDirtyMarkdownDrafts,
+    setLeaveDrafts
+  )
+
   const requestLeaveSession = useCallback(() => {
+    // A plain leave supersedes a handoff still waiting on the drafts sheet.
+    takeLeaveHandoff()
     if (holdLeaveForDictation()) {
       return
     }
@@ -157,7 +170,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     }
     Keyboard.dismiss()
     setLeaveDrafts(dirtyDrafts)
-  }, [getDirtyMarkdownDrafts, holdLeaveForDictation, leaveSession])
+  }, [getDirtyMarkdownDrafts, holdLeaveForDictation, leaveSession, takeLeaveHandoff])
 
   // Native always claims Back to avoid root exit; the web shell already pops, so only dirty drafts and dictation need a claim.
   const hasDirtyDraft = getDirtyMarkdownDrafts().length > 0
@@ -288,6 +301,8 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     leaveSession,
     leaveSessionDroppingDrafts,
     requestLeaveSession,
+    requestLeaveForHandoff,
+    takeLeaveHandoff,
     discardMarkdownLocalContent,
     confirmDiscardMarkdown,
     saveMarkdownTab
