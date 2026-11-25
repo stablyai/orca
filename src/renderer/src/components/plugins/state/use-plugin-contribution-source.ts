@@ -17,7 +17,7 @@ import {
   manifestContributionSource,
   type PluginContributionSource
 } from '../presentation/plugin-contributions'
-import { statusBarItemTitles } from '../presentation/plugin-contribution-row-labels'
+import { pluginItemTitles } from '../presentation/plugin-contribution-row-labels'
 
 /** What an installed plugin adds right now, from Orca's live registrations; empty for others. */
 function useInstalledPluginContributionSource(
@@ -52,7 +52,8 @@ function useInstalledPluginContributionSource(
       customEditors: plugin.customEditors ?? [],
       vmRecipes: plugin.vmRecipes?.map((recipe) => recipe.name) ?? [],
       newFiles: plugin.newFiles ?? [],
-      statusBarItems: statusBarItemTitles(plugin.statusBarItems),
+      statusBarItems: pluginItemTitles(plugin.statusBarItems),
+      composerItems: pluginItemTitles(plugin.composerItems),
       mcpServers: plugin.mcpServers ?? []
     }
   }, [plugin, appThemes, terminalThemes, iconThemes, syntaxes, languagePacks, failures])

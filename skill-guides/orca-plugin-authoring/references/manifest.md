@@ -49,6 +49,7 @@
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
 - `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.
+- `composerItems` (ComposerItemContribution[], since 1.4.276): Items shown for each desktop native Chat, with optional worker commands to resolve their display and handle clicks. At most 8.
 - `mcpServers` (McpServerContribution[], since 1.4.276): MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers. At most 16.
 
 Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `taskSources`, `connections`, `sidebarCards`.
@@ -194,6 +195,28 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 - `tone` ("neutral" | "accent" | "success" | "warning" | "danger", since 1.4.248): Colour of the item. Defaults to `neutral`.
 - `tooltip` (string, since 1.4.248): Shown on hover. Defaults to the plugin name.
 - `command` (string, since 1.4.248): Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed.
+
+## ComposerItemContribution
+
+An item in the native Chat composer on desktop.
+
+- `id` (string, required, since 1.4.276): Item id, unique among this plugin's composer items.
+- `text` (string, since 1.4.276): Short label shown in the chat.
+- `icon` (one of activity, bar-chart-3, bell, blocks, book, bot, bug, calendar, cloud, code, database, file-text, flag, folder, gauge, globe, hammer, layers, lightbulb, package, plug, puzzle, rocket, star, terminal, wrench, zap, add, remove, delete, edit, refresh, search, settings, check, close, info, warning, error, open-external, copy, download, upload, play, pause, stop, more, expand, collapse, next, filter, branch, file, agent, link, since 1.4.276): Icon from the panel icon set.
+- `tone` ("neutral" | "accent" | "success" | "warning" | "danger", since 1.4.276): Colour of the item. Defaults to neutral.
+- `tooltip` (string, since 1.4.276): Shown on hover. Defaults to the plugin name.
+- `placement` ("toolbar" | "footer", since 1.4.276): Toolbar beside the model controls, or footer beside the workspace and branch. Defaults to toolbar.
+- `resolve` (string, since 1.4.276): Worker command that receives the chat context and returns the display fields, or null to hide the item. Orca calls it when a chat opens and when its agent settles after a turn.
+- `popover` (ComposerItemPopover, since 1.4.276): Opens a native popover when pressed. A resolver can update its content. Mutually exclusive with the item command.
+- `command` (string, since 1.4.276): Worker command run when the item is pressed. Receives the same chat context as the resolver.
+
+## ComposerItemPopover
+
+Details and actions shown when the user presses a composer item.
+
+- `title` (string, since 1.4.276): Heading of the popover.
+- `rows` (object[], since 1.4.276): Label and value pairs with unique labels. At most 12.
+- `actions` (object[], since 1.4.276): Buttons that invoke distinct contributed worker commands. At most 4.
 
 ## McpServerContribution
 

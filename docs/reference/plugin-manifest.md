@@ -46,6 +46,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
 | `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
 | `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8. |
+| `contributes.composerItems` | [ComposerItemContribution](#composeritemcontribution)[] | no | 1.4.276 | Items shown for each desktop native Chat, with optional worker commands to resolve their display and handle clicks. At most 8. |
 | `contributes.mcpServers` | [McpServerContribution](#mcpservercontribution)[] | no | 1.4.276 | MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers. At most 16. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
@@ -230,6 +231,32 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 | `tone` | `"neutral"` \| `"accent"` \| `"success"` \| `"warning"` \| `"danger"` | no | 1.4.248 | Colour of the item. Defaults to `neutral`. Example: `"warning"` |
 | `tooltip` | string | no | 1.4.248 | Shown on hover. Defaults to the plugin name. |
 | `command` | string | no | 1.4.248 | Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed. Example: `"guard.showLog"` |
+
+## ComposerItemContribution
+
+An item in the native Chat composer on desktop.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `id` | string | yes | 1.4.276 | Item id, unique among this plugin's composer items. |
+| `text` | string | no | 1.4.276 | Short label shown in the chat. Example: `"3 blocked"` |
+| `icon` | `"activity"` \| `"bar-chart-3"` \| `"bell"` \| `"blocks"` \| `"book"` \| `"bot"` \| `"bug"` \| `"calendar"` \| `"cloud"` \| `"code"` \| `"database"` \| `"file-text"` \| `"flag"` \| `"folder"` \| `"gauge"` \| `"globe"` \| `"hammer"` \| `"layers"` \| `"lightbulb"` \| `"package"` \| `"plug"` \| `"puzzle"` \| `"rocket"` \| `"star"` \| `"terminal"` \| `"wrench"` \| `"zap"` \| `"add"` \| `"remove"` \| `"delete"` \| `"edit"` \| `"refresh"` \| `"search"` \| `"settings"` \| `"check"` \| `"close"` \| `"info"` \| `"warning"` \| `"error"` \| `"open-external"` \| `"copy"` \| `"download"` \| `"upload"` \| `"play"` \| `"pause"` \| `"stop"` \| `"more"` \| `"expand"` \| `"collapse"` \| `"next"` \| `"filter"` \| `"branch"` \| `"file"` \| `"agent"` \| `"link"` | no | 1.4.276 | Icon from the panel icon set. Example: `"bell"` |
+| `tone` | `"neutral"` \| `"accent"` \| `"success"` \| `"warning"` \| `"danger"` | no | 1.4.276 | Colour of the item. Defaults to neutral. Example: `"warning"` |
+| `tooltip` | string | no | 1.4.276 | Shown on hover. Defaults to the plugin name. |
+| `placement` | `"toolbar"` \| `"footer"` | no | 1.4.276 | Toolbar beside the model controls, or footer beside the workspace and branch. Defaults to toolbar. Example: `"footer"` |
+| `resolve` | string | no | 1.4.276 | Worker command that receives the chat context and returns the display fields, or null to hide the item. Orca calls it when a chat opens and when its agent settles after a turn. |
+| `popover` | [ComposerItemPopover](#composeritempopover) | no | 1.4.276 | Details and actions shown when the user presses a composer item. |
+| `command` | string | no | 1.4.276 | Worker command run when the item is pressed. Receives the same chat context as the resolver. |
+
+## ComposerItemPopover
+
+Details and actions shown when the user presses a composer item.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `title` | string | no | 1.4.276 | Heading of the popover. Example: `"Usage"` |
+| `rows` | object[] | no | 1.4.276 | Label and value pairs with unique labels. At most 12. |
+| `actions` | object[] | no | 1.4.276 | Buttons that invoke distinct contributed worker commands. At most 4. |
 
 ## McpServerContribution
 

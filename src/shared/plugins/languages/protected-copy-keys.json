@@ -1271,6 +1271,7 @@
     "components.newWorkspace.directSetup.skip",
     "components.newWorkspace.directSetup.yamlSource",
     "components.newWorkspace.setupCheckFailed",
+    "components.plugins.newComposerItems",
     "components.settings.agents.deleteHistoryWithWorkspace.cancel",
     "components.settings.agents.deleteHistoryWithWorkspace.chat",
     "components.settings.agents.deleteHistoryWithWorkspace.chatHistory",

@@ -56,6 +56,11 @@ import {
   pluginStatusBarItemContributionSchema
 } from './plugin-status-bar-item-contribution'
 import {
+  PLUGIN_COMPOSER_ITEMS_SINCE,
+  PLUGIN_COMPOSER_ITEM_LIMIT,
+  pluginComposerItemContributionSchema
+} from './plugin-composer-item-contribution'
+import {
   PLUGIN_SETTING_LIMIT,
   pluginSettingContributionSchema
 } from './plugin-settings-contribution'
@@ -78,6 +83,7 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'newFiles',
   'settings',
   'statusBarItems',
+  'composerItems',
   'mcpServers'
 ] as const
 
@@ -239,6 +245,12 @@ export const pluginContributesFields = {
     'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled.',
     PLUGIN_STATUS_BAR_SINCE
   ),
+  composerItems: contributionList(
+    pluginComposerItemContributionSchema,
+    PLUGIN_COMPOSER_ITEM_LIMIT,
+    'Items shown for each desktop native Chat, with optional worker commands to resolve their display and handle clicks.',
+    PLUGIN_COMPOSER_ITEMS_SINCE
+  ),
   mcpServers: contributionList(
     pluginMcpServerContributionSchema,
     PLUGIN_MCP_SERVER_LIMIT,
@@ -293,6 +305,7 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   settings: { execution: 'sandboxed-ui', catalogType: null, bindsContent: false },
   // Why declarative: a static item only names its own command; updating it needs a worker.
   statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false },
+  composerItems: { execution: 'declarative', catalogType: null, bindsContent: false },
   // Why bound: a command server runs on the host for every agent session, so approval names it.
   mcpServers: { execution: 'declarative', catalogType: 'instructions', bindsContent: true }
 }

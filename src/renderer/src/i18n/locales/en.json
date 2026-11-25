@@ -24315,6 +24315,10 @@
         "filesStayLine": "Its files stay on {{host}}.",
         "removing": "Removing…"
       }
+    },
+    "plugins": {
+      "composerItems": "Chat composer",
+      "newComposerItems": "Chat composer items"
     }
   },
   "dashboardPopout": {

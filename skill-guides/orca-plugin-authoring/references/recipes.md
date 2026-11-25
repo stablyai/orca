@@ -71,6 +71,25 @@ keep their value and `visible: false` hides it. Bind a key to the same command w
 `contributes.keybindings` (`{ "command", "key": "Mod+Shift+K" }`).
 `ORCA plugin shot <plugin-key> --status-bar` saves a PNG of the status bar with the item drawn.
 
+## An item for each native Chat
+
+Declare `contributes.composerItems` with an `id` and a short `text`, `icon`, or both. Use
+`placement: "footer"` to show a summary beside the workspace and branch. The default
+`"toolbar"` placement sits beside the model controls and moves into More chat controls in a
+narrow pane. These items appear in native Chat in the desktop app.
+
+For live data, set `resolve` to your own worker command id. Orca calls it when a chat opens and
+after the agent finishes working. The command receives `{ itemId, sessionId, agent, runtime }`.
+`sessionId` is Orca's chat id and `runtime` is `"local"` or `"remote"`. Return display fields
+(`text`, `icon`, `tone`, `tooltip`, `visible`) or `null` to hide the item. A separate optional
+`command` receives the same arguments when the user presses the item.
+
+Use `command` for a direct action or `popover` to show details when pressed. A popover accepts
+a `title`, `rows` of `{ label, value }`, and `actions` of `{ label, command }`. If you declare a
+popover, your resolver can return `popover: { title, rows }` to update its content or
+`popover: null` to hide it. Action commands are declared in the manifest and receive the same
+chat context. After a command succeeds, Orca reruns the item's resolver when one is configured.
+
 ## Changing or refusing what Orca does (hooks)
 
 `trusted-worker` with `main`; list each hook in `contributes.hooks` (`{ "event": "terminal.send" }`)

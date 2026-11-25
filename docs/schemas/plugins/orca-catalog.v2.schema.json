@@ -575,6 +575,7 @@
             "newFiles",
             "settings",
             "statusBarItems",
+            "composerItems",
             "mcpServers"
           ],
           "description": "Contribution point.",

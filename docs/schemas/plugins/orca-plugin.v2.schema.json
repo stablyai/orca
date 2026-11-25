@@ -345,6 +345,16 @@
             "$ref": "#/$defs/StatusBarItemContribution"
           }
         },
+        "composerItems": {
+          "default": [],
+          "description": "Items shown for each desktop native Chat, with optional worker commands to resolve their display and handle clicks. At most 8.",
+          "x-orca-since": "1.4.276",
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ComposerItemContribution"
+          }
+        },
         "mcpServers": {
           "default": [],
           "description": "MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers. At most 16.",
@@ -1601,6 +1611,221 @@
       ],
       "additionalProperties": false,
       "description": "An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`."
+    },
+    "ComposerItemContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Item id, unique among this plugin's composer items.",
+          "x-orca-since": "1.4.276"
+        },
+        "text": {
+          "description": "Short label shown in the chat.",
+          "x-orca-since": "1.4.276",
+          "examples": [
+            "3 blocked"
+          ],
+          "type": "string",
+          "maxLength": 64
+        },
+        "icon": {
+          "description": "Icon from the panel icon set.",
+          "x-orca-since": "1.4.276",
+          "examples": [
+            "bell"
+          ],
+          "type": "string",
+          "enum": [
+            "activity",
+            "bar-chart-3",
+            "bell",
+            "blocks",
+            "book",
+            "bot",
+            "bug",
+            "calendar",
+            "cloud",
+            "code",
+            "database",
+            "file-text",
+            "flag",
+            "folder",
+            "gauge",
+            "globe",
+            "hammer",
+            "layers",
+            "lightbulb",
+            "package",
+            "plug",
+            "puzzle",
+            "rocket",
+            "star",
+            "terminal",
+            "wrench",
+            "zap",
+            "add",
+            "remove",
+            "delete",
+            "edit",
+            "refresh",
+            "search",
+            "settings",
+            "check",
+            "close",
+            "info",
+            "warning",
+            "error",
+            "open-external",
+            "copy",
+            "download",
+            "upload",
+            "play",
+            "pause",
+            "stop",
+            "more",
+            "expand",
+            "collapse",
+            "next",
+            "filter",
+            "branch",
+            "file",
+            "agent",
+            "link"
+          ]
+        },
+        "tone": {
+          "description": "Colour of the item. Defaults to neutral.",
+          "x-orca-since": "1.4.276",
+          "examples": [
+            "warning"
+          ],
+          "type": "string",
+          "enum": [
+            "neutral",
+            "accent",
+            "success",
+            "warning",
+            "danger"
+          ]
+        },
+        "tooltip": {
+          "description": "Shown on hover. Defaults to the plugin name.",
+          "x-orca-since": "1.4.276",
+          "type": "string",
+          "maxLength": 256
+        },
+        "placement": {
+          "description": "Toolbar beside the model controls, or footer beside the workspace and branch. Defaults to toolbar.",
+          "x-orca-since": "1.4.276",
+          "examples": [
+            "footer"
+          ],
+          "type": "string",
+          "enum": [
+            "toolbar",
+            "footer"
+          ]
+        },
+        "resolve": {
+          "description": "Worker command that receives the chat context and returns the display fields, or null to hide the item. Orca calls it when a chat opens and when its agent settles after a turn.",
+          "x-orca-since": "1.4.276",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
+        },
+        "popover": {
+          "description": "Opens a native popover when pressed. A resolver can update its content. Mutually exclusive with the item command.",
+          "x-orca-since": "1.4.276",
+          "$ref": "#/$defs/ComposerItemPopover"
+        },
+        "command": {
+          "description": "Worker command run when the item is pressed. Receives the same chat context as the resolver.",
+          "x-orca-since": "1.4.276",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "description": "An item in the native Chat composer on desktop."
+    },
+    "ComposerItemPopover": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "description": "Heading of the popover.",
+          "x-orca-since": "1.4.276",
+          "examples": [
+            "Usage"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "rows": {
+          "description": "Label and value pairs with unique labels. At most 12.",
+          "x-orca-since": "1.4.276",
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "label",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "actions": {
+          "description": "Buttons that invoke distinct contributed worker commands. At most 4.",
+          "x-orca-since": "1.4.276",
+          "maxItems": 4,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
+              }
+            },
+            "required": [
+              "label",
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Details and actions shown when the user presses a composer item."
     },
     "McpServerContribution": {
       "type": "object",

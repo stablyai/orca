@@ -3,6 +3,7 @@ import type { PluginCatalogType } from './catalog/plugin-catalog-types'
 import type { PluginExecutionProfile } from './contributions/plugin-execution-profile'
 import type { ResolvedPluginPanelPathIcon } from './contributions/plugin-panel-path-icon'
 import type { PluginHostImages } from './images/plugin-image-url'
+import type { PluginComposerItemContribution } from './contributions/plugin-composer-item-contribution'
 import type { PluginStatusBarItemContribution } from './contributions/plugin-status-bar-item-contribution'
 
 /** One installed plugin as main projects it for every client (preload IPC and the `plugins.list`
@@ -114,6 +115,7 @@ export type PluginHostListEntry = {
   }[]
   /** The manifest's status bar items; a worker's changes arrive separately. Absent on older hosts. */
   statusBarItems?: PluginStatusBarItemContribution[]
+  composerItems?: PluginComposerItemContribution[]
   /** The hooks its manifest lists, so a window can skip asking when none applies. Absent on older
    *  hosts. */
   hooks?: string[]
