@@ -1,3 +1,4 @@
+import type { observeAgentStateFile } from '../codex-path-observation'
 import type { CodexSettingsBaseline } from './config-settings-baseline'
 import { collectPromotionChanges } from './config-settings-promotion-changes'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
@@ -141,24 +142,28 @@ function retainCarriedRegistrations(
   return carried.filter(({ promotion }) => !droppedKeys.has(promotion.key))
 }
 
-export type CodexGuestRegeneration = {
-  baseline: CodexSettingsBaseline | null
-  /** Empty when the managed copy has no config yet. */
-  runtimeConfig: string
-}
+export type CodexGuestRegeneration = { baseline: CodexSettingsBaseline | null }
 
 /**
- * Plan from the mirror's own read of the distro config and apply the kept values to it in memory,
- * before it is merged into the managed copy. Records the plan for the pass's baseline snapshot.
+ * Plan from the mirror's own reads of both configs and apply the kept values to the distro config
+ * in memory, before it is merged into the managed copy. Records the plan for the baseline snapshot.
+ * The managed copy's write is checked against the same read, so a tab save in between is never
+ * carried from an older read.
  */
 export function applyGuestCarryForward(
   systemConfig: string,
-  plan: { guestRegeneration?: CodexGuestRegeneration; guestCarryForward?: CodexGuestCarryForward }
+  plan: { guestRegeneration?: CodexGuestRegeneration; guestCarryForward?: CodexGuestCarryForward },
+  runtime: ReturnType<typeof observeAgentStateFile>
 ): string {
   if (!plan.guestRegeneration) {
     return systemConfig
   }
-  const carry = planGuestRegenerationCarryForward(plan.guestRegeneration, systemConfig)
+  const runtimeConfig = runtime.kind === 'present' ? runtime.value : ''
+  const carry = planGuestRegenerationCarryForward(
+    plan.guestRegeneration,
+    runtimeConfig,
+    systemConfig
+  )
   plan.guestCarryForward = carry
   if (isGuestCarryForwardEmpty(carry)) {
     return systemConfig
@@ -195,7 +200,8 @@ function readNormalizedField(
 
 /** An older Orca promoted tab edits on its next pass; keep the ones still pending at the update. */
 function planGuestRegenerationCarryForward(
-  { baseline, runtimeConfig }: CodexGuestRegeneration,
+  { baseline }: CodexGuestRegeneration,
+  runtimeConfig: string,
   systemConfig: string
 ): CodexGuestCarryForward {
   if (baseline?.guestCarryForward) {

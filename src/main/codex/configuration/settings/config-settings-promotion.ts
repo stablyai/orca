@@ -158,7 +158,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   if (runtimeTomlObservation.kind === 'absent') {
     // A fresh guest copy has no tab edits of its own, but values kept earlier still apply.
     return guestSource
-      ? regenerateFromGuestPlan(observeCodexSettingsBaseline(runtimeHomePath), '')
+      ? regenerateFromGuestPlan(observeCodexSettingsBaseline(runtimeHomePath))
       : emptyPromotionPlan()
   }
   if (runtimeTomlObservation.kind === 'indeterminate') {
@@ -166,10 +166,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     throw runtimeTomlObservation.error
   }
   if (guestSource) {
-    return regenerateFromGuestPlan(
-      observeCodexSettingsBaseline(runtimeHomePath),
-      runtimeTomlObservation.value
-    )
+    return regenerateFromGuestPlan(observeCodexSettingsBaseline(runtimeHomePath))
   }
   // Scalars need a baseline to distinguish stale copies from new Codex edits.
   const baselineObservation = observeCodexSettingsBaseline(runtimeHomePath)
@@ -252,8 +249,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
  * the mirror regenerates it from the distro file plus the lines the managed home owns.
  */
 function regenerateFromGuestPlan(
-  baselineObservation: ReturnType<typeof observeCodexSettingsBaseline>,
-  runtimeConfig: string
+  baselineObservation: ReturnType<typeof observeCodexSettingsBaseline>
 ): CodexSettingsPromotionPlan {
   if (baselineObservation.kind === 'indeterminate') {
     throw new Error('Codex settings baseline could not be read')
@@ -263,7 +259,7 @@ function regenerateFromGuestPlan(
     ...emptyPromotionPlan(),
     mirroredMcpServers: baseline?.mcpServers ?? new Set(),
     mirroredMcpServerRoot: baseline?.mcpServerRoot ?? false,
-    guestRegeneration: { baseline, runtimeConfig },
+    guestRegeneration: { baseline },
     guestCarryForward: EMPTY_GUEST_CARRY_FORWARD
   }
 }

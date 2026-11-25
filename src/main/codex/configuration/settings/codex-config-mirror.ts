@@ -257,11 +257,11 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
         }
   }
 
-  const guestConfig = applyGuestCarryForward(rawSystemConfig, promotionPlan)
+  const source = applyGuestCarryForward(rawSystemConfig, promotionPlan, runtimeConfigObservation)
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
     const freshRuntimeConfig = applyRuntimeOwnedConfig(
-      prepareSystemConfigForFreshRuntimeMirror(guestConfig, sourceConfigDir, runtimeHomePath),
+      prepareSystemConfigForFreshRuntimeMirror(source, sourceConfigDir, runtimeHomePath),
       runtimeHomePath,
       null
     )
@@ -286,7 +286,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
 
   const daemonGuarded = codexDaemonSocketPathExceedsLimit(runtimeHomePath)
   const systemConfig = guardSystemConfigForRuntimeMerge(
-    prepareSystemConfigForRuntimeMirror(guestConfig, sourceConfigDir, runtimeHomePath),
+    prepareSystemConfigForRuntimeMirror(source, sourceConfigDir, runtimeHomePath),
     runtimeHomePath,
     daemonGuarded
   )

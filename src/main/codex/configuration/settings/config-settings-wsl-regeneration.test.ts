@@ -291,6 +291,20 @@ describe('managed Codex config for a WSL distro config', () => {
     expect(readFileSync(systemConfigPath(), 'utf-8')).toBe('model = "gpt-5"\n')
   })
 
+  it('never keeps an edit a tab reverted during the pass', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    simulateCodexSettingWrite('model', '"o4"')
+    wslTestState.wslPath = systemConfigPath()
+    wslTestState.afterPromotion = () => simulateCodexSettingWrite('model', '"gpt-5"')
+
+    syncSystemConfigIntoManagedCodexHome()
+    wslTestState.afterPromotion = null
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).toMatch(/^model = "gpt-5"$/m)
+  })
+
   it('lets a distro save made during a pass win over a kept value', () => {
     writeSystemConfig('model = "gpt-5"\n')
     syncSystemConfigIntoManagedCodexHome()
