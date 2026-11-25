@@ -204,7 +204,7 @@ export function isQuotedWindowsPathEntry(entry: string): boolean {
 }
 
 function acceptsQuotedPathEntries(shell?: AgentStartupShell): boolean {
-  return process.platform !== 'win32' || shell === 'cmd' || shell === 'posix'
+  return shell === 'cmd' || shell === 'posix'
 }
 
 function onTerminalPath(file: string, pathEnv: string, shell?: AgentStartupShell): boolean {
@@ -263,7 +263,7 @@ export async function readHostManagedAgentCommands(
   const env = options.pathEnv === undefined ? await resolveLoginShellEnvironment() : undefined
   const pathEnv = options.pathEnv ?? env?.PATH ?? env?.Path ?? ''
   const lookupPath =
-    options.forDelivery && !acceptsQuotedPathEntries(options.shell)
+    process.platform === 'win32' && options.forDelivery && !acceptsQuotedPathEntries(options.shell)
       ? pathEnv
           .split(delimiter)
           .filter((entry) => !isQuotedWindowsPathEntry(entry))
@@ -272,10 +272,16 @@ export async function readHostManagedAgentCommands(
   await Promise.all(
     selections.map(async ({ agent, program }) => {
       try {
-        const own = await lookUpOwnProgram(
+        let own = await lookUpOwnProgram(
           program,
           withoutManagedDirectories(agent, lookupPath, options.forDelivery)
         )
+        if (own === program && lookupPath !== pathEnv) {
+          own = await lookUpOwnProgram(
+            program,
+            withoutManagedDirectories(agent, pathEnv, options.forDelivery)
+          )
+        }
         if (own === program) {
           const managed = await managedCopyFor(agent, program, settings)
           if (managed) {
