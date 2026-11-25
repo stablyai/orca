@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -6,14 +6,20 @@ import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { automationRunOperationId } from '../launch/automation-run-operation'
 import { observeAutomationChatRun } from './runtime-chat-run-observer'
+import { reserveGroupTurns } from '../../bots/bot-group-turn-reservation'
+import type { BotGroupRuntime } from '../../bots/bot-group-runtime'
+import type { BotGroup } from '../../../shared/bots/bot-group'
+import type { Bot } from '../../../shared/bot-types'
 
-// After a restart, a run that sent into a chat it did not launch has no launch receipt: Orca finds
-// its turn by the run-derived message id, and a run sent before those ids existed has an unknown end.
+// After a restart: a run that sends its own prompt is found by its run-derived message id, in a chat
+// or a room; one sent before those ids existed settles failed once its chat is idle; a launched Chat
+// run still needs its launch receipt.
+const NOW = Date.parse('2026-11-25T09:00:00Z')
 const run: AutomationRun = {
   id: 'run-7',
   automationId: 'auto-1',
   title: 'Daily report',
-  scheduledFor: 1_000,
+  scheduledFor: NOW,
   status: 'dispatched',
   trigger: 'manual',
   workspaceId: 'ws-1',
@@ -26,9 +32,9 @@ const run: AutomationRun = {
   precheckResult: null,
   usage: null,
   error: null,
-  startedAt: 1_000,
-  dispatchedAt: 1_000,
-  createdAt: 1_000
+  startedAt: NOW,
+  dispatchedAt: NOW,
+  createdAt: NOW
 }
 
 function chatWith(messageId: string, outcome: 'success' | 'failure'): AgentJournalSnapshot {
@@ -70,11 +76,28 @@ function chatWith(messageId: string, outcome: 'success' | 'failure'): AgentJourn
   } as unknown as AgentJournalSnapshot
 }
 
-function observeAfterRestart(snapshot: AgentJournalSnapshot) {
+type Chat = {
+  snapshot: AgentJournalSnapshot
+  working: boolean
+  workReads?: number
+  operationRow?: unknown
+  turnEnded?: () => void
+}
+
+function observeAfterRestart(chat: Chat, sentByRun: boolean) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the host reads the observer calls
   setStructuredAgentSessionHost({
-    automationRun: async () => snapshot,
+    automationRun: async () => chat.snapshot,
     queuedSendAnswer: async () => null,
+    currentWork: async () => {
+      chat.workReads = (chat.workReads ?? 0) + 1
+      return { working: () => chat.working, hasActionablePrompt: () => false }
+    },
+    subscribeTurnCompletions: (listener: { emit: (event: unknown) => void }) => {
+      chat.turnEnded = () =>
+        listener.emit({ type: 'completion', completion: { sessionId: 'chat-1' } })
+      return () => {}
+    },
     observeConversationPublications: (
       _sessionId: string,
       observer: { next: (hint: unknown) => void }
@@ -87,29 +110,88 @@ function observeAfterRestart(snapshot: AgentJournalSnapshot) {
   const runtime = {
     ensureStructuredAgentSessionHost: async () => {},
     openAgentSessionRecordStore: async () => ({
-      getOperationRow: () => undefined,
+      getOperationRow: () => chat.operationRow,
       getConversation: () => ({ provider: 'claude', location: { workspaceId: 'ws-1' } })
     })
   } as unknown as OrcaRuntimeService
-  return observeAutomationChatRun(runtime, run, new AbortController().signal)
+  return observeAutomationChatRun(runtime, run, new AbortController().signal, sentByRun)
 }
 
-afterEach(() => setStructuredAgentSessionHost(null))
+const derivedId = automationRunOperationId(run, 'run-message')
+
+beforeEach(() => {
+  // Only the clock: the run's 6-hour deadline counts from NOW.
+  vi.useFakeTimers({ now: NOW + 60_000, toFake: ['Date'] })
+})
+afterEach(() => {
+  vi.useRealTimers()
+  setStructuredAgentSessionHost(null)
+})
 
 it('settles a run from its own turn after a restart, by how that turn ended', async () => {
-  const messageId = automationRunOperationId(run, 'run-message')
-  const finished = await observeAfterRestart(chatWith(messageId, 'success'))
+  const finished = await observeAfterRestart(
+    { snapshot: chatWith(derivedId, 'success'), working: false },
+    true
+  )
   expect(finished.status).toBe('completed')
   expect(finished.error).toBeNull()
   expect(finished.outputSnapshot?.content.trim()).toBe('Report sent.')
 
-  const failed = await observeAfterRestart(chatWith(messageId, 'failure'))
+  const failed = await observeAfterRestart(
+    { snapshot: chatWith(derivedId, 'failure'), working: false },
+    true
+  )
   expect(failed.status).toBe('dispatch_failed')
 })
 
-it('settles a run sent before run messages had derived ids as an unknown result, not a failure', async () => {
-  const settled = await observeAfterRestart(chatWith('random-older-id', 'success'))
+it('finds a room run by the same derived id', async () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an empty room reads only its messages
+  const groups = { store: { roomMessages: () => [] }, runtime: {} } as unknown as BotGroupRuntime
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reservation reads only these fields
+  const room = { id: 'room-1', members: [{ botId: 'b1', sessionId: 'chat-1' }] } as BotGroup
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reservation reads only these fields
+  const member = { id: 'b1', name: 'Reporter', agent: 'claude' } as Bot
+  const { turns } = await reserveGroupTurns(
+    groups,
+    room,
+    undefined,
+    [member],
+    ['b1'],
+    () => derivedId
+  )
+  expect(turns.map((turn) => turn.operationId)).toEqual([derivedId])
+
+  const settled = await observeAfterRestart(
+    { snapshot: chatWith(turns[0].operationId, 'success'), working: false },
+    true
+  )
   expect(settled.status).toBe('completed')
-  expect(settled.outputSnapshot ?? null).toBeNull()
-  expect(settled.error).toMatch(/result is unknown/)
+})
+
+it('waits for a busy chat to go idle before settling a run sent before derived ids', async () => {
+  const chat: Chat = { snapshot: chatWith('random-older-id', 'success'), working: true }
+  let settled: Awaited<ReturnType<typeof observeAfterRestart>> | undefined
+  void observeAfterRestart(chat, true).then((value) => (settled = value))
+  await vi.waitFor(() => expect(chat.workReads).toBe(1))
+  for (let i = 0; i < 10; i += 1) {
+    await Promise.resolve()
+  }
+  expect(settled).toBeUndefined()
+
+  chat.working = false
+  chat.turnEnded?.()
+  await vi.waitFor(() => expect(settled).toBeDefined())
+  expect(settled?.status).toBe('dispatch_failed')
+  expect(settled?.error).toMatch(/restarted before this run's result was recorded/)
+})
+
+it('keeps a launched Chat run on its receipt: a failed or expired one stays dispatch_failed', async () => {
+  for (const operationRow of [undefined, { outcome: { status: 'failed' } }]) {
+    const settled = await observeAfterRestart(
+      { snapshot: chatWith(derivedId, 'success'), working: false, operationRow },
+      false
+    )
+    expect(settled.status).toBe('dispatch_failed')
+    expect(settled.error).toMatch(/could not confirm this run's prompt/)
+  }
 })

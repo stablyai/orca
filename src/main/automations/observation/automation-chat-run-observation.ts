@@ -138,7 +138,7 @@ export function automationAgentDidNotStartError(agent: string): string {
   return `${agent} did not start (the machine may have slept or startup timed out), so it never received this run's prompt. Run the automation again.`
 }
 
-/** A run Orca can no longer match to its turn: its prompt went in, but how it ended is unknown. */
-export function automationRunOutcomeUnknown(agent: string): string {
-  return `Orca restarted during this run and couldn't tell which of ${agent}'s replies was this run's, so its result is unknown. Open the chat to see how it ended.`
+/** A run sent before Orca could find its turn again: its chat has finished, but which reply was the run's is unknown. */
+export function automationRunResultNotRecorded(agent: string): string {
+  return `Orca restarted before this run's result was recorded. Open ${agent}'s chat to see how it ended.`
 }

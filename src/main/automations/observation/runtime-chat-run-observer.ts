@@ -1,5 +1,5 @@
 import {
-  automationRunOutcomeUnknown,
+  automationRunResultNotRecorded,
   resolveChatAutomationRun
 } from './automation-chat-run-observation'
 
@@ -17,10 +17,13 @@ import { automationRunOperationId } from '../launch/automation-run-operation'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
 import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 
+/** `sentByRun`: the run sent its prompt into an existing or new chat itself, under its run-derived
+ *  message id, rather than through a launch that leaves a receipt. */
 export async function observeAutomationChatRun(
   runtime: OrcaRuntimeService,
   run: AutomationRun,
-  signal: AbortSignal
+  signal: AbortSignal,
+  sentByRun = false
 ): Promise<AutomationRunCompletionObservation> {
   await runtime.ensureStructuredAgentSessionHost()
   const host = getStructuredAgentSessionHost()
@@ -31,11 +34,9 @@ export async function observeAutomationChatRun(
   const receipt = readAutomationRunReceipt(store, run)
   const agent =
     tuiAgentDisplayName(store.getConversation(run.chatSessionId)?.provider ?? 'Agent') ?? 'Agent'
-  // No launch receipt: the run sent into a chat it did not launch, under its run-derived message id.
-  const runMessage = receipt === null
-  const messageId = runMessage
+  const messageId = sentByRun
     ? automationRunOperationId(run, 'run-message')
-    : receipt.kind === 'chat' && receipt.sessionId === run.chatSessionId && receipt.accepted
+    : receipt?.kind === 'chat' && receipt.sessionId === run.chatSessionId && receipt.accepted
       ? receipt.messageId
       : null
   if (!messageId) {
@@ -47,6 +48,7 @@ export async function observeAutomationChatRun(
   const sessionId = run.chatSessionId
   return new Promise((resolve, reject) => {
     let release: (() => void) | undefined
+    let stopTurnEnds: (() => void) | undefined
     let settled = false
     let reading = false
     let dirty = false
@@ -70,6 +72,7 @@ export async function observeAutomationChatRun(
       clearTimeout(deadline)
       signal.removeEventListener('abort', abort)
       release?.()
+      stopTurnEnds?.()
       if (error) {
         reject(error)
       } else {
@@ -137,11 +140,18 @@ export async function observeAutomationChatRun(
             agent,
             queued
           )
-          // A dispatched run's prompt was already taken, so a chat without it holds a run sent
-          // before run messages had derived ids: its turn cannot be told apart.
-          if (runMessage && !submission && !queued) {
-            finish({ status: 'completed', error: automationRunOutcomeUnknown(agent) })
-            return
+          // A dispatched run's prompt was already taken, so a chat without it holds a run sent before
+          // prompts had derived ids. Decide only once the chat is idle, so a running turn can finish.
+          if (sentByRun && !submission && !queued) {
+            const work = await host.currentWork(sessionId)
+            if (!current()) {
+              continue
+            }
+            if (!work || (!work.working() && !work.hasActionablePrompt())) {
+              finish({ status: 'dispatch_failed', error: automationRunResultNotRecorded(agent) })
+              return
+            }
+            continue
           }
           if (submission) {
             submissionId = submission.clientMessageId
@@ -172,11 +182,27 @@ export async function observeAutomationChatRun(
         }
       }
     }
+    const reread = (): void => {
+      revision++
+      dirty = true
+      queueMicrotask(() => void read())
+    }
     signal.addEventListener('abort', abort, { once: true })
     if (signal.aborted) {
       abort()
       return
     }
+    // A chat's turn end is when an unmatched run's chat goes idle.
+    stopTurnEnds = sentByRun
+      ? host.subscribeTurnCompletions({
+          id: `automation-run:${run.id}`,
+          emit: (event) => {
+            if (event.type === 'completion' && event.completion.sessionId === sessionId) {
+              reread()
+            }
+          }
+        })
+      : undefined
     release = host.observeConversationPublications(sessionId, {
       next: (hint) => {
         if (settled) {
@@ -217,11 +243,6 @@ export async function observeAutomationChatRun(
         const structural = source !== hint.source || hint.kind !== 'commit' || !contiguous || linked
         source = hint.source
         cursor = hint.cursor
-        const reread = (): void => {
-          revision++
-          dirty = true
-          queueMicrotask(() => void read())
-        }
         if (structural) {
           reread()
         }
