@@ -62,6 +62,19 @@ const statusGroupLettersWorktree = makeWorktree('status-letters', 'API rate limi
   branch: 'nwparker/api-rate-limiting'
 })
 
+const sshRepo = {
+  ...makeRepo(),
+  id: 'repo-ssh',
+  displayName: 'language-tools',
+  connectionId: 'ssh-devbox',
+  badgeColor: '#14b8a6'
+}
+
+const sshWorktree = makeWorktree('status-ssh', 'language issues/PRs', {
+  repoId: sshRepo.id,
+  branch: 'nwparker/language-issues'
+})
+
 export const classicRepoBadgePlacement = defineFixture({
   width: 340,
   store: {
@@ -69,10 +82,11 @@ export const classicRepoBadgePlacement = defineFixture({
       ...getDefaultSettings('/home/fixture'),
       experimentalNewWorktreeCardStyle: false
     },
-    repos: [imageRepo, repo],
+    repos: [imageRepo, repo, sshRepo],
     worktreesByRepo: {
       [imageRepo.id]: [pinnedWorktree, statusGroupWorktree],
-      [repo.id]: [statusGroupLettersWorktree]
+      [repo.id]: [statusGroupLettersWorktree],
+      [sshRepo.id]: [sshWorktree]
     },
     worktreeCardProperties: ['status', 'branch']
   },
@@ -96,6 +110,12 @@ export const classicRepoBadgePlacement = defineFixture({
       <WorktreeCard
         worktree={statusGroupLettersWorktree}
         repo={repo}
+        isActive={false}
+        nativeDragEnabled={false}
+      />
+      <WorktreeCard
+        worktree={sshWorktree}
+        repo={sshRepo}
         isActive={false}
         nativeDragEnabled={false}
       />
