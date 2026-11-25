@@ -9,14 +9,16 @@ function isShown(element: Element | null | undefined): element is HTMLElement {
 
 /**
  * Focus for when a dialog opened from the pane's ⋯ closes: the opening menu row is gone by then.
- * Lands on this pane's ⋯ trigger, else its active tab, whichever is shown now.
+ * Lands on this pane's ⋯ trigger, else the Close button that replaces it in a wide strip, else its active tab, whichever is shown now.
  * Leaves focus alone when the pane lost ownership or something live already holds focus.
  */
 export function focusStripActionsReturnTarget({
   trigger,
+  fallback,
   stillOwned
 }: {
   trigger: HTMLElement | null
+  fallback?: HTMLElement | null
   stillOwned: () => boolean
 }): HTMLElement | null {
   if (!trigger?.isConnected || !stillOwned()) {
@@ -29,6 +31,7 @@ export function focusStripActionsReturnTarget({
   const strip = trigger.closest<HTMLElement>('[data-tab-group-strip-id]')
   const candidates = [
     trigger,
+    fallback,
     strip
       ?.querySelector('[data-tab-strip-slot]:has([data-active="true"])')
       ?.querySelector('[tabindex]')

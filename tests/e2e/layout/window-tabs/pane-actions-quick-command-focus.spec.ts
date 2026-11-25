@@ -125,6 +125,9 @@ function focusTarget(page: Page, groupId: string): Promise<string> {
     if (active.hasAttribute('data-pane-actions-menu-trigger')) {
       return strip?.contains(active) ? 'owner-pane-actions' : 'other-pane-actions'
     }
+    if (active.hasAttribute('data-pane-close-trigger')) {
+      return strip?.contains(active) ? 'owner-pane-close' : 'other-pane-close'
+    }
     const slot = active.closest('[data-tab-strip-slot]')
     if (slot && strip?.contains(slot)) {
       return active.querySelector('[data-active="true"]') || active.matches('[data-active="true"]')
@@ -197,6 +200,7 @@ for (const how of ['Save', 'Cancel', 'Escape'] as const) {
       'Lint the repo'
     )
     await closeAddDialog(orcaPage, how)
-    await expectLandingAndTabOrder(orcaPage, groupId, 'owner-pane-actions')
+    // The wide strip drops ⋯ for a direct Close button, which takes the focus.
+    await expectLandingAndTabOrder(orcaPage, groupId, 'owner-pane-close')
   })
 }
