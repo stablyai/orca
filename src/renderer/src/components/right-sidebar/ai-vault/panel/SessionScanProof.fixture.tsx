@@ -13,7 +13,10 @@ import type {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultScanProgress } from '../../../../../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT } from '../session-list/ai-vault-session-limit'
-import { cacheAiVaultSessionList } from '../scanning/ai-vault-session-list-request'
+import {
+  cacheAiVaultSessionList,
+  readCachedAiVaultSessionList
+} from '../scanning/ai-vault-session-list-request'
 import { invalidateAiVaultSessionResults } from '../scanning/ai-vault-session-result-cache'
 import { AiVaultScanProgressStrip } from '../scanning/AiVaultScanProgressStrip'
 import AiVaultPanel from './AiVaultPanel'
@@ -65,6 +68,13 @@ function panelFixture(host: ExecutionHostId, populated: boolean, step: Step = 'w
     folderPath: '/demo/garden'
   })
   const result = { ...empty, sessions: populated ? [{ ...row, executionHostId: host }] : [] }
+  // The panel's Workspace scope for this folder; seeding any other key would exercise the uncached path instead.
+  const listRequest = {
+    scopePaths: ['/demo/garden'],
+    scopeOnly: true,
+    executionHostScope: host,
+    sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
+  }
   const requests: {
     resolve: (result: AiVaultListResult) => void
     reject: (error: Error) => void
@@ -79,27 +89,28 @@ function panelFixture(host: ExecutionHostId, populated: boolean, step: Step = 'w
       if (step === 'retry') {
         invalidateAiVaultSessionResults(host)
       } else {
-        cacheAiVaultSessionList(
-          {
-            scopePaths: [],
-            executionHostScope: host,
-            sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
-          },
-          result,
-          { replaceHostEntries: true }
-        )
+        cacheAiVaultSessionList(listRequest, result, { replaceHostEntries: true })
+        if (readCachedAiVaultSessionList(listRequest)?.sessions.length !== result.sessions.length) {
+          throw new Error('Seeded history cache did not install')
+        }
       }
       window.api.aiVault = {
         ...window.api.aiVault,
         listSessions: async (args) => {
-          if (args?.executionHostScope !== host) {
-            throw new Error('Wrong seeded host requested')
+          if (
+            args?.executionHostScope !== host ||
+            args.scopeOnly !== true ||
+            args.scopePaths?.join('\n') !== listRequest.scopePaths.join('\n')
+          ) {
+            throw new Error('Panel requested a list other than the seeded one')
           }
           return new Promise<AiVaultListResult>((resolve, reject) =>
             requests.push({ resolve, reject })
           )
         },
         cancelListSessions: async () => {},
+        // A paired host with search off; the panel falls back to filtering titles, which shows the note.
+        searchSessions: async () => ({ kind: 'unavailable', reason: 'disabled' }),
         getScanProgress: async () => null,
         onScanProgress: () => () => {},
         onWindowFocused: (callback) => {
@@ -120,6 +131,7 @@ function panelFixture(host: ExecutionHostId, populated: boolean, step: Step = 'w
     interact: async (frame) => {
       await until(() => requests.length === 1)
       if (step === 'settled') {
+        await until(() => frame.textContent?.includes('Session list loading') === true)
         requests[0].resolve(result)
         await until(() => frame.textContent?.includes('No agent sessions found') === true)
         if (frame.textContent?.includes('Session list loading')) {
@@ -144,8 +156,14 @@ function panelFixture(host: ExecutionHostId, populated: boolean, step: Step = 'w
         if (!populated && frame.querySelectorAll('[aria-busy="true"]').length !== 1) {
           throw new Error('Empty cache lacks one neutral loader')
         }
+        if (!populated && !frame.textContent?.includes('Loading sessions')) {
+          throw new Error('Empty cache loader claims a scan')
+        }
         if (populated && !frame.textContent?.includes('Loading sessions')) {
           throw new Error('Nonempty wait lacks neutral strip')
+        }
+        if (populated && !frame.textContent?.includes(row.title)) {
+          throw new Error('Nonempty wait hid the seeded row')
         }
       }
     }
