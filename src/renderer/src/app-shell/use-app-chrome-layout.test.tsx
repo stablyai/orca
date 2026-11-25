@@ -75,18 +75,25 @@ describe('useAppChromeLayout with the workspace list on the right', () => {
 })
 
 describe('useAppChromeLayout with the workspace list on the left', () => {
-  it('keeps the stacked layout while the workspace list is open in a full-page view', () => {
-    setChromeState({
-      settings: { ...getDefaultSettings('/tmp'), workspaceSidebarPosition: 'left' },
-      activeView: 'tasks',
-      sidebarOpen: true
-    })
-    const { result } = renderHook(() => useAppChromeLayout())
+  it.each([false, true])(
+    'stacks the tasks header only when the workspace list is visible (app rail: %s)',
+    (experimentalAppRail) => {
+      setChromeState({
+        settings: {
+          ...getDefaultSettings('/tmp'),
+          workspaceSidebarPosition: 'left',
+          experimentalAppRail
+        },
+        activeView: 'tasks',
+        sidebarOpen: true
+      })
+      const { result } = renderHook(() => useAppChromeLayout())
 
-    expect(result.current.stackedSidebarOpen).toBe(true)
-    expect(result.current.leftTitlebarChromeLayout.shouldMount).toBe(true)
-    expect(leftHeaderIsClipped(result.current)).toBe(false)
-  })
+      expect(result.current.stackedSidebarOpen).toBe(!experimentalAppRail)
+      expect(result.current.leftTitlebarChromeLayout.shouldMount).toBe(!experimentalAppRail)
+      expect(leftHeaderIsClipped(result.current)).toBe(false)
+    }
+  )
 
   it('floats the left header once the workspace list collapses', () => {
     setChromeState({

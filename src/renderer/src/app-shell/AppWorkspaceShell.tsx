@@ -147,7 +147,7 @@ function TrailingWorkspaceSidebarSlot({
 }): React.JSX.Element {
   return (
     <div
-      className={`flex min-h-0 flex-col shrink-0${
+      className={`${layout.listHiddenByRailPage ? 'hidden' : 'flex'} min-h-0 flex-col shrink-0${
         layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'
       }`}
     >
