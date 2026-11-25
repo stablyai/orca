@@ -149,6 +149,13 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
 
     pendingRevealWorktree: null,
     pendingRevealSidebarRow: null,
+    sidebarJumpedWorktreeId: null,
+    keepJumpedWorktreeVisibleInSidebar: (worktreeId) =>
+      set((state) =>
+        state.sidebarJumpedWorktreeId === worktreeId
+          ? state
+          : { sidebarJumpedWorktreeId: worktreeId }
+      ),
     // Activity view unmounts workspaces; incidental activation must not switch bodies or queue a surprise reveal.
     revealWorktreeInSidebar: (worktreeId, options) =>
       set((state) =>

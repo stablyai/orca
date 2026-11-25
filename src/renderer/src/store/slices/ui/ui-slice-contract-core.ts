@@ -236,6 +236,9 @@ export type UISliceCore = {
   clearNewWorkspaceDraft: () => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
+  /** The workspace last opened from Cmd+J; the sidebar lists it even when its filters hide it. */
+  sidebarJumpedWorktreeId: string | null
+  keepJumpedWorktreeVisibleInSidebar: (worktreeId: string) => void
   revealWorktreeInSidebar: (
     worktreeId: string,
     options?: {

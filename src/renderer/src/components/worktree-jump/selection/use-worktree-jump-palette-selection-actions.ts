@@ -81,6 +81,8 @@ export function useWorktreeJumpPaletteSelectionActions({
       if (!activation) {
         return
       }
+      // Why: a jump can land on a workspace the sidebar filters hide; list it so its row can be used.
+      useAppStore.getState().keepJumpedWorktreeVisibleInSidebar(worktree.id)
       recordFeatureInteraction('cmd-j-workspace-open')
       dismissForSelection()
       if (!queueWorkspaceActivationTerminalFocus(worktree.id, activation)) {
