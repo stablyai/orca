@@ -12,8 +12,10 @@ import { readWorkerThreadMemoryData } from '../worker-threads/worker-thread-diag
  */
 export const MAIN_MEMORY_SPIKE_RISE_MB = 300
 export const MAIN_MEMORY_SPIKE_WINDOW_MS = 2 * 60_000
-/** Ticks fire late (more so on a busy main), so the oldest sample can be just past the window. */
-const SAMPLE_LATENESS_SLACK_MS = 30_000
+/** 10 s ticks fire late (more so on a busy main), so the oldest sample can be just past the window. */
+const SAMPLE_LATENESS_SLACK_MS = 10_000
+/** A read that never settles must not stop sampling for the rest of the session. */
+const STUCK_READ_MS = 60_000
 export const MAIN_MEMORY_SPIKE_MIN_INTERVAL_MS = 60 * 60_000
 const MB = 2 ** 20
 
@@ -28,7 +30,7 @@ let armedAtMs: number | null = null
 let lastCaptureAtMs = Number.NEGATIVE_INFINITY
 let readCounts: MainMemorySpikeCounts | null = null
 let readProcessMetrics: (() => Details) | null = null
-let sampleInFlight = false
+let readStartedAtMs: number | null = null
 
 export function setMainMemorySpikeCounts(counts: MainMemorySpikeCounts | null): void {
   readCounts = counts
@@ -39,23 +41,26 @@ export function setMainMemorySpikeProcessMetrics(read: (() => Details) | null): 
   readProcessMetrics = read
 }
 
-/** One in-process OS footprint read; skipped while the last read is pending or tracing is off. */
+/** One in-process OS footprint read; skipped while tracing is off or the last read is pending (up to a minute). */
 export async function sampleMainMemoryFootprint(): Promise<void> {
+  const startedAtMs = Date.now()
   if (
-    sampleInFlight ||
+    (readStartedAtMs !== null && startedAtMs - readStartedAtMs < STUCK_READ_MS) ||
     !hasActiveTraceSink() ||
     typeof process.getProcessMemoryInfo !== 'function'
   ) {
     return
   }
-  sampleInFlight = true
+  readStartedAtMs = startedAtMs
   try {
     const info = await process.getProcessMemoryInfo()
     observeMainMemorySample(Math.round(info.private / 1024), Date.now())
   } catch {
     // A failed read skips one sample.
   } finally {
-    sampleInFlight = false
+    if (readStartedAtMs === startedAtMs) {
+      readStartedAtMs = null
+    }
   }
 }
 
@@ -190,5 +195,5 @@ export function resetMainMemorySpikeCaptureForTest(): void {
   lastCaptureAtMs = Number.NEGATIVE_INFINITY
   readCounts = null
   readProcessMetrics = null
-  sampleInFlight = false
+  readStartedAtMs = null
 }

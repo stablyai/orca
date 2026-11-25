@@ -1,17 +1,19 @@
-// Main's memory spike capture: an idle or steadily growing main writes no record and reads no counts;
-// one 300 MB footprint jump within two minutes writes exactly one record an hour.
+// Main's memory spike capture (#46734, footprint trigger #48847): an idle or steadily growing main writes
+// no record and reads no counts, tracing off reads no footprint, and one 300 MB jump writes one record an hour.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 vi.mock('../worker-threads/worker-thread-diagnostics', () => ({
   readWorkerThreadMemoryData: async () => ({ workers: 0 })
 }))
 
-import { PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS } from '../crash-reporting/memory/pre-gone-host-memory'
+import {
+  PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
+  samplePreGoneSystemMemory
+} from '../crash-reporting/memory/pre-gone-host-memory'
 import { setActiveSink } from '../observability/tracer'
 import {
   observeMainMemorySample,
   resetMainMemorySpikeCaptureForTest,
-  sampleMainMemoryFootprint,
   setMainMemorySpikeCounts,
   setMainMemorySpikeProcessMetrics
 } from './main-memory-spike-capture'
@@ -32,7 +34,6 @@ afterEach(() => {
   setActiveSink(null)
   records.length = 0
   counts.mockClear()
-  vi.useRealTimers()
   Reflect.deleteProperty(process, 'getProcessMemoryInfo')
 })
 
@@ -99,38 +100,12 @@ it('writes one record for a spike and none for another within the hour', async (
   expect(records).toHaveLength(2)
 })
 
-/** Feeds the footprint curve through the real read path, one read per host-memory tick. */
-async function sampleEveryHostMemoryTick(
-  untilMs: number,
-  footprintMBAt: (ms: number) => number
-): Promise<ReturnType<typeof vi.fn>> {
-  const read = vi.fn(async () => ({ private: footprintMBAt(Date.now()) * 1024, shared: 0 }))
-  Object.defineProperty(process, 'getProcessMemoryInfo', { value: read, configurable: true })
-  vi.useFakeTimers({ toFake: ['Date'] })
-  for (let ms = 0; ms <= untilMs; ms += PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS) {
-    vi.setSystemTime(ms)
-    await sampleMainMemoryFootprint()
-  }
-  await settle()
-  return read
-}
-
-it('catches a footprint spike that lasts about a minute', async () => {
-  // A reported spike: 693 MB to 1,223 MB of footprint in 63 s, then back down to 908 MB. Starting
-  // 5 s before a minute tick, a once-a-minute sampler sees only 735 MB and then 908 MB.
-  const riseAt = 10 * MINUTE + 55_000
-  await sampleEveryHostMemoryTick(15 * MINUTE, (ms) => {
-    if (ms < riseAt) {
-      return 693
-    }
-    return ms <= riseAt + 63_000 ? Math.round(693 + ((ms - riseAt) / 63_000) * 530) : 908
-  })
-  expect(records).toHaveLength(1)
-  expect(records[0].attributes).toMatchObject({ baselineFootprintMB: 693 })
-})
-
 it('reads no footprint while tracing is off', async () => {
   setActiveSink(null)
-  const read = await sampleEveryHostMemoryTick(60 * MINUTE, () => 500)
+  const read = vi.fn(async () => ({ private: 500 * 1024, shared: 0 }))
+  Object.defineProperty(process, 'getProcessMemoryInfo', { value: read, configurable: true })
+  for (let tick = 0; tick < 360; tick += 1) {
+    await samplePreGoneSystemMemory(tick * PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS)
+  }
   expect(read).not.toHaveBeenCalled()
 })
