@@ -146,9 +146,10 @@ export async function mcpServerEntriesForLaunch(
   agent: string,
   workspace: LaunchWorkspace,
   folder = mcpHostListFolder()
-): Promise<McpLaunchEntry[]> {
+): Promise<{ entries: McpLaunchEntry[]; sharedProcesses: ReadonlyMap<string, string> }> {
+  const { all, on } = await launchEntries(agent, workspace, folder)
   const seen = new Set<string>()
-  return (await launchEntries(agent, workspace, folder)).map(({ server, extras }) => {
+  const entries = on.map(({ server, extras }) => {
     const given =
       typeof extras.id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(extras.id) ? extras.id : null
     const id = given && !seen.has(given) ? given : null
@@ -157,4 +158,9 @@ export async function mcpServerEntriesForLaunch(
     }
     return { id, server }
   })
+  const names = new Set(on.map(({ server }) => server.name))
+  return {
+    entries,
+    sharedProcesses: new Map([...sharedIds(all)].filter(([name]) => names.has(name)))
+  }
 }

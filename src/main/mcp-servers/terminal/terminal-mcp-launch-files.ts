@@ -9,23 +9,26 @@ import { writePluginFileAtomically } from '../../plugins/installation/plugin-ato
 import { wslAutomountRootFor } from '../../wsl/filesystem/wsl-automount-root'
 
 const DIR = 'mcp-terminal-launch'
-let ready: Promise<string> | null = null
+/** Each folder's sweep of an earlier run's files, done once per run. */
+const swept = new Map<string, Promise<void>>()
 
-function launchDir(): Promise<string> {
-  ready ??= (async () => {
-    const dir = join(getAppEnvironment().getPath('userData'), DIR)
-    await mkdir(dir, { recursive: true, mode: 0o700 })
+async function launchDir(): Promise<string> {
+  const dir = join(getAppEnvironment().getPath('userData'), DIR)
+  // Made again each time: removing it while Orca runs mustn't stop later launches.
+  await mkdir(dir, { recursive: true, mode: 0o700 })
+  let sweep = swept.get(dir)
+  if (!sweep) {
     // An earlier run's files name tokens that died with it; a terminal that survived the restart
     // already read its file at start.
-    for (const name of await readdir(dir)) {
-      await rm(join(dir, name), { force: true })
-    }
-    return dir
-  })().catch((error: unknown) => {
-    ready = null
-    throw error
-  })
-  return ready
+    sweep = readdir(dir).then(async (names) => {
+      for (const name of names) {
+        await rm(join(dir, name), { force: true })
+      }
+    })
+    swept.set(dir, sweep)
+  }
+  await sweep.catch(() => undefined)
+  return dir
 }
 
 /** Writes `config` as JSON for `agent`'s launch and answers its path on this host. */

@@ -141,4 +141,27 @@ describe('the host list in an agent terminal', () => {
     expect(command).not.toContain('hunter2')
     expect(JSON.stringify(input.env)).not.toContain('hunter2')
   })
+
+  it('reaches a shared command server through the relay instead of starting its own copy', async () => {
+    process.env.ORCA_MCP_SERVERS = '1'
+    const folder = tempDir('mcp-host-list-')
+    await changeBotToolEntries(folder, () => [
+      {
+        server: { name: 'pg', command: 'npx', args: ['pg-mcp'], env: { DATABASE_URL: SECRET } },
+        extras: { id: 'id-pg-000001', sharedProcess: true }
+      }
+    ])
+    const input = launch('claude', 'claude')
+    const { command } = await withTerminalMcpServers(input, { relay, hostFolder: folder })
+    const file = /--mcp-config=([^' ]+)/.exec(command ?? '')?.[1]
+    const config = readFileSync(file!, 'utf8')
+    expect(JSON.parse(config).mcpServers).toEqual({
+      pg: {
+        type: 'http',
+        url: 'http://127.0.0.1:4100/mcp-processes/id-pg-000001/mcp',
+        headers: { authorization: 'Bearer ${ORCA_MCP_TOKEN}' }
+      }
+    })
+    expect(config).not.toContain('hunter2')
+  })
 })

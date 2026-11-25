@@ -110,36 +110,45 @@ function throughOrcaExec(
 }
 
 /**
- * The servers a pane of `agent` gets, shaped for a terminal: in WSL, only those needing neither the
- * relay nor saved env (the guest can't reach Windows loopback, and `orca mcp exec` there would run
- * the server on Windows).
+ * The servers a pane of `agent` gets, shaped for a terminal. A command server Orca runs once for
+ * every session stays as it is here: SessionMcpTools points the agent at it through the relay. In
+ * WSL, only servers needing neither the relay nor saved env (the guest can't reach Windows
+ * loopback, and `orca mcp exec` there would run the server on Windows).
  */
 async function terminalServers(
   agent: string,
   workspaceId: string | null,
   wsl: boolean,
   deps: Deps
-): Promise<{ folder: string; servers: BotToolServer[]; bridged: BotToolServer[] }> {
+): Promise<{
+  folder: string
+  servers: BotToolServer[]
+  sharedProcesses: ReadonlyMap<string, string>
+  bridged: BotToolServer[]
+}> {
   const folder = deps.hostFolder ?? mcpHostListFolder()
   const key = workspaceId ? mcpServerWorkspaceKeyOf(workspaceId) : null
-  const entries = await mcpServerEntriesForLaunch(agent, { key }, folder)
+  const { entries, sharedProcesses } = await mcpServerEntriesForLaunch(agent, { key }, folder)
+  const shared = (server: BotToolServer): boolean => sharedProcesses.has(server.name)
   const savedEnv = (server: BotToolServer): boolean =>
-    !('url' in server) && Object.keys(server.env ?? {}).length > 0
+    !('url' in server) && !shared(server) && Object.keys(server.env ?? {}).length > 0
+  const relayed = (server: BotToolServer): boolean =>
+    'url' in server ? server.credential !== undefined : shared(server)
   const cli =
     wsl || !entries.some(({ server }) => savedEnv(server)) ? null : await orcaCliLauncher()
   const bridged: BotToolServer[] = []
   const servers = entries.flatMap((entry) => {
     const { server } = entry
-    if (wsl && ('url' in server ? server.credential !== undefined : savedEnv(server))) {
+    if (wsl && (relayed(server) || savedEnv(server))) {
       return []
     }
-    const shaped = throughOrcaExec(entry, { agent, workspaceId }, cli)
+    const shaped = shared(server) ? server : throughOrcaExec(entry, { agent, workspaceId }, cli)
     if (shaped && shaped !== server) {
       bridged.push(server)
     }
     return shaped ? [shaped] : []
   })
-  return { folder, servers, bridged }
+  return { folder, servers, sharedProcesses, bridged }
 }
 
 type OfferedTools = { tools: SessionMcpTools; bridged: readonly BotToolServer[] }
