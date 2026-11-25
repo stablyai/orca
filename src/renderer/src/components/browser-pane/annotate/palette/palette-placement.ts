@@ -155,9 +155,9 @@ export type PaletteDragStart = {
 }
 
 /**
- * Where a drag comes to rest and what it saves. `released` is null for a cancelled drag; a press that never moved
- * saves nothing either (converting its anchored edge back to a fraction would drift the saved place). An axis with
- * no room to move keeps its saved fraction.
+ * Where a drag comes to rest and what it saves. `released` is null for a cancelled drag. Only an axis the drag
+ * actually moved is written: an unmoved one keeps its saved fraction (reading it back from an anchored or pinned
+ * edge would drift it), so a press that never moved saves nothing.
  */
 export function paletteDragRest(
   start: PaletteDragStart,
@@ -165,10 +165,25 @@ export function paletteDragRest(
   topMin: number
 ): { left: number; top: number; save: AnnotatePalettePosition | null; snapped: boolean } {
   const { boundsWidth, boundsHeight, paletteWidth, paletteHeight, saved } = start
-  if (!released || (released.left === start.left && released.top === start.top)) {
-    // A find bar that opened or closed meanwhile moved the top limit: place the saved height against the new one.
-    const top =
-      topMin === start.topMin
+  const releasedLeft = released && released.left !== start.left ? released.left : null
+  const releasedTop = released && released.top !== start.top ? released.top : null
+  const rawX =
+    releasedLeft === null
+      ? saved.x
+      : paletteRatioForOffset(releasedLeft, boundsWidth, paletteWidth, saved.x)
+  const x = releasedLeft === null ? saved.x : snapPaletteRatio(rawX)
+  const left =
+    releasedLeft === null
+      ? start.left
+      : x === rawX
+        ? releasedLeft
+        : paletteOffsetForRatio(x, boundsWidth, paletteWidth)
+  // An unmoved top stays put, unless a find bar opened or closed meanwhile: then the saved height goes against the
+  // new limit.
+  const top =
+    releasedTop !== null
+      ? clampPaletteOffset(releasedTop, boundsHeight, paletteHeight, topMin)
+      : topMin === start.topMin
         ? start.top
         : clampPaletteOffset(
             paletteOffsetForRatio(saved.y, boundsHeight, paletteHeight, topMin),
@@ -176,15 +191,12 @@ export function paletteDragRest(
             paletteHeight,
             topMin
           )
-    return { left: start.left, top, save: null, snapped: false }
-  }
-  const canMoveX = boundsWidth - paletteWidth - PALETTE_EDGE_INSET_PX * 2 > 0
-  const rawX = paletteRatioForOffset(released.left, boundsWidth, paletteWidth, saved.x)
-  const x = canMoveX ? snapPaletteRatio(rawX) : saved.x
-  const left = x === rawX ? released.left : paletteOffsetForRatio(x, boundsWidth, paletteWidth)
-  const top = clampPaletteOffset(released.top, boundsHeight, paletteHeight, topMin)
-  const y = paletteRatioForOffset(top, boundsHeight, paletteHeight, saved.y, topMin)
-  return { left, top, save: { x, y }, snapped: x !== rawX }
+  const y =
+    releasedTop === null
+      ? saved.y
+      : paletteRatioForOffset(top, boundsHeight, paletteHeight, saved.y, topMin)
+  const moved = releasedLeft !== null || releasedTop !== null
+  return { left, top, save: moved ? { x, y } : null, snapped: x !== rawX }
 }
 
 /**

@@ -35,6 +35,8 @@ function PalettePage({
   const boundsRef = useRef<HTMLDivElement>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const [tool, setTool] = useState(initialTool)
+  // Find really closes (Esc or its close button) and reopens from the header, as in the pane.
+  const [findShown, setFindShown] = useState(findOpen)
   // The palette reads the app-wide saved position; seed it before the palette mounts.
   useState(() => setAnnotatePalettePosition({ x: ratio, y }))
   const [drawSlot, setDrawSlot] = useState<HTMLElement | null>(null)
@@ -49,10 +51,20 @@ function PalettePage({
         <span>Pricing</span>
         <span>Docs</span>
         <span>Blog</span>
+        {findOpen ? (
+          <button type="button" className="ml-auto" onClick={() => setFindShown(true)}>
+            Open find
+          </button>
+        ) : null}
       </div>
       <div className="p-4 text-sm text-muted-foreground">Page content</div>
       {findOpen ? (
-        <BrowserFind browserPageId="sample-page" isOpen onClose={noop} webviewRef={webviewRef} />
+        <BrowserFind
+          browserPageId="sample-page"
+          isOpen={findShown}
+          onClose={() => setFindShown(false)}
+          webviewRef={webviewRef}
+        />
       ) : null}
       <BrowserAnnotateToolPalette
         boundsRef={boundsRef}

@@ -306,6 +306,10 @@ export function usePaletteDrag({
       },
       onDoubleClick: () => commitPosition(DEFAULT_ANNOTATE_PALETTE_POSITION, true),
       onKeyDown: (event) => {
+        // The pointer drag owns the place until it ends; a key now would save a place Esc then abandons.
+        if (dragRef.current) {
+          return
+        }
         const next = paletteKeyMove(
           event.key,
           event.shiftKey,

@@ -91,10 +91,25 @@ describe('annotate palette placement', () => {
       expect(paletteDragRest(start, null, 52)).toMatchObject({ top: 203, save: null })
     })
 
-    it('keeps the saved fraction of an axis with no room to move', () => {
-      // An 80px page under a 52px find bar limit leaves no vertical travel; a sideways drag keeps the saved height.
-      const short = { ...start, boundsHeight: 80, top: 52, topMin: 52, saved: { x: 0.5, y: 0.8 } }
-      expect(paletteDragRest(short, { left: 400, top: 52 }, 52).save).toEqual({ x: 1, y: 0.8 })
+    it('writes only the axis the drag moved', () => {
+      // Pinned on X (a 304px palette in a 320px page): a vertical drag keeps the saved X for a wider page later.
+      const pinnedX = {
+        ...start,
+        boundsWidth: 320,
+        paletteWidth: 304,
+        left: 8,
+        saved: { x: 0.2, y: 0.5 }
+      }
+      expect(paletteDragRest(pinnedX, { left: 8, top: 354 }, 8).save).toEqual({ x: 0.2, y: 1 })
+      // Pinned on Y (38px palette in a 54px page): a sideways drag keeps the saved Y.
+      const pinnedY = { ...start, boundsHeight: 54, top: 8, saved: { x: 0.5, y: 1 } }
+      expect(paletteDragRest(pinnedY, { left: 392, top: 8 }, 8).save).toEqual({ x: 1, y: 1 })
+      // An anchored edge 20px right of the saved centre doesn't leak into a vertical-only drag.
+      expect(paletteDragRest(start, { left: 220, top: 8 }, 8).save).toEqual({ x: 0.5, y: 0 })
+    })
+
+    it('saves the top as 0 when a drag ends at an open find bar limit', () => {
+      expect(paletteDragRest(start, { left: 220, top: 52 }, 52).save).toEqual({ x: 0.5, y: 0 })
     })
   })
 
