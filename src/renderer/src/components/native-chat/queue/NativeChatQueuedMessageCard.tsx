@@ -328,19 +328,18 @@ export function NativeChatQueuedMessageCard({
                   type="button"
                   variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
                   size="xs"
-                  // Its glyphs start with their own blank edge, so the icon buttons' inset (not 6px) evens the gap before it.
-                  className={cn(QUEUED_ROW_TARGET, 'has-[>svg]:pl-(--queued-row-inset)')}
+                  className="min-h-[24px] min-w-[24px]"
                   data-queued-message-send
                   onClick={onSteer}
                   disabled={steerHeld || busy}
                 >
-                  <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
+                  <NativeChatPendingIcon pending={pending === 'send'} className={STEER_GLYPH}>
                     {failed && drag?.grip ? (
-                      <AlertCircle className="size-3 text-destructive" />
+                      <AlertCircle className={cn(STEER_GLYPH, 'text-destructive')} />
                     ) : sendNow.steers ? (
-                      <CornerDownRight className="size-3" />
+                      <CornerDownRight className={STEER_GLYPH} />
                     ) : (
-                      <Send className="size-3" />
+                      <Send className={STEER_GLYPH} />
                     )}
                   </NativeChatPendingIcon>
                   {failed
@@ -373,6 +372,10 @@ export function NativeChatQueuedMessageCard({
   )
 }
 
+// Steer's glyphs start with their own blank edge: pulled in to the icon buttons' inset (from the
+// button's 6px), the gap before them matches the row's other gaps.
+const STEER_GLYPH = 'size-3 ml-[calc(var(--queued-row-inset)-var(--spacing)*1.5)]'
+
 function QueuedMessageExpandToggle({
   expanded,
   controls,
@@ -394,7 +397,7 @@ function QueuedMessageExpandToggle({
           type="button"
           variant="ghost"
           size="icon-xs"
-          className={QUEUED_ROW_TARGET}
+          className="min-h-[24px] min-w-[24px]"
           aria-label={label}
           aria-expanded={expanded}
           aria-controls={controls}

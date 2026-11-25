@@ -6,7 +6,8 @@ export const QUEUED_ROW_REVEAL =
   'pointer-events-none opacity-0 group-hover/queued:pointer-events-auto group-hover/queued:opacity-100 group-has-[:focus-visible]/queued:pointer-events-auto group-has-[:focus-visible]/queued:opacity-100 [@media(hover:none)]:group-focus-within/queued:pointer-events-auto [@media(hover:none)]:group-focus-within/queued:opacity-100'
 
 /** At the smallest chat text size `--spacing` shrinks a size-6 button to about 20.6px. The row's targets sit
- * flush, so each keeps a 24px floor: an undersized target would touch its neighbor. */
+ * flush, so each keeps a 24px floor: an undersized target would touch its neighbor. Buttons spell it out,
+ * since their classes must be static strings. */
 export const QUEUED_ROW_TARGET = 'min-h-[24px] min-w-[24px]'
 
 /** The space an icon button leaves beside its size-3.5 glyph (5px at the default size). Set on the tool row
@@ -37,7 +38,7 @@ export function QueuedMessageRowTool({
           type="button"
           variant="ghost"
           size="icon-xs"
-          className={QUEUED_ROW_TARGET}
+          className="min-h-[24px] min-w-[24px]"
           aria-label={label}
           disabled={disabled}
           onClick={onClick}

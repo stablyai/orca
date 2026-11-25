@@ -11,7 +11,6 @@ import type { NativeChatMessage } from '../../../../../shared/native-chat/native
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import { queuedMessageCardSendNow } from './NativeChatQueuedMessageCard'
 import { refocusAfterQueueAction } from './native-chat-queue-refocus'
-import { QUEUED_ROW_TARGET } from './NativeChatQueuedMessageRowTools'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 
 /** Other agents' waiting mail and what a person can do with it before the agent takes it. */
@@ -70,7 +69,7 @@ export function NativeChatWaitingAgentMailActions({
             type="button"
             variant="ghost"
             size="xs"
-            className={QUEUED_ROW_TARGET}
+            className="min-h-[24px] min-w-[24px]"
             disabled={actions.steerHeld || busy}
             onClick={() => refocusAfter(actions.steer(queuedMessageId))}
           >
@@ -95,7 +94,7 @@ export function NativeChatWaitingAgentMailActions({
               type="button"
               variant="ghost"
               size="icon-xs"
-              className={QUEUED_ROW_TARGET}
+              className="min-h-[24px] min-w-[24px]"
               aria-label={editLabel}
               disabled={busy}
               onClick={() => void actions.edit(queuedMessageId)}
@@ -114,7 +113,7 @@ export function NativeChatWaitingAgentMailActions({
             type="button"
             variant="ghost"
             size="icon-xs"
-            className={QUEUED_ROW_TARGET}
+            className="min-h-[24px] min-w-[24px]"
             aria-label={deleteLabel}
             disabled={busy}
             onClick={() => refocusAfter(actions.remove(queuedMessageId))}

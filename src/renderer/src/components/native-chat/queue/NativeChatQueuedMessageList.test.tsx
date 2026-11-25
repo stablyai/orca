@@ -412,9 +412,9 @@ it('keeps every control in a queued row a 24px target', () => {
       ...within(row).getAllByRole('button'),
       ...within(row).queryAllByRole('img', { name: /image/i })
     ]
-    expect(targets.map((target) => target.getAttribute('aria-label') ?? target.textContent)).toEqual(
-      expect.arrayContaining(['Show full message', 'Delete'])
-    )
+    expect(
+      targets.map((target) => target.getAttribute('aria-label') ?? target.textContent)
+    ).toEqual(expect.arrayContaining(['Show full message', 'Delete']))
     for (const target of targets) {
       expect(target.classList.contains('min-w-[24px]')).toBe(true)
       expect(target.classList.contains('min-h-[24px]')).toBe(true)
