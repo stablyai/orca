@@ -27,18 +27,23 @@ export function mcpAgentFileEntry(
 }
 
 /**
- * The entry's name: the server's own for the installed app's data folder (`orca`), and suffixed by
- * any other folder's name (`linear-orca-dev`), so two Orcas on one machine never claim one name.
+ * The entry's name: the server's, then this Orca's data folder by name and a short hash of its full
+ * path (`linear-orca-3f2a1c`), so two Orcas on one machine never claim one name, even two profiles
+ * whose folders are both called `orca`.
  */
 export function mcpAgentFileEntryName(serverName: string, userDataPath: string): string {
   return `${serverName}${entrySuffix(userDataPath)}`
 }
 
+const instanceHash = (userDataPath: string): string =>
+  createHash('sha256').update(userDataPath).digest('hex')
+
 function entrySuffix(userDataPath: string): string {
   const folder = basename(userDataPath)
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
-  return folder === 'orca' || folder === '' ? '' : `-${folder}`
+    .slice(0, 24)
+  return `-${folder || 'orca'}-${instanceHash(userDataPath).slice(0, 6)}`
 }
 
 /** The host server an entry this Orca wrote stands for, by name; null for anyone else's entry. */
@@ -55,7 +60,7 @@ export function mcpHostServerNameOfEntry(
 
 /** The marker lines around this instance's block in a TOML file. */
 export function mcpAgentFileMarkers(userDataPath: string): ManagedTomlMarkers {
-  const tag = createHash('sha256').update(userDataPath).digest('hex').slice(0, 12)
+  const tag = instanceHash(userDataPath).slice(0, 12)
   return {
     startMarker: `# BEGIN ORCA MCP SERVERS ${tag}`,
     endMarker: `# END ORCA MCP SERVERS ${tag}`

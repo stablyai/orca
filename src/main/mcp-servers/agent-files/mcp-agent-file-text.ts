@@ -53,14 +53,15 @@ export function mcpAgentFileServerNames(edit: McpAgentFileEdit, text: string): S
 
 /**
  * `text` without this Orca's entries: its marker block in TOML; in JSON each entry that still holds
- * what the ledger says Orca wrote (`owned`) or what it would write now (`recognized`), then the
+ * what the ledger says Orca wrote (`owned`) or exactly what it would write now, under any name
+ * (`recognized`: an entry from before a rename still comes out), then the
  * servers' table when Orca added it (`addedTable`) and nothing else is left in it.
  */
 export function withoutOrcaEntries(
   edit: McpAgentFileEdit,
   text: string,
   owned: Readonly<Record<string, unknown>>,
-  recognized: ReadonlyMap<string, unknown>,
+  recognized: readonly unknown[],
   addedTable: boolean
 ): string {
   if (edit.format === 'toml') {
@@ -77,7 +78,7 @@ export function withoutOrcaEntries(
   for (const [name, value] of Object.entries(servers)) {
     const ours =
       (Object.hasOwn(owned, name) && isDeepStrictEqual(value, owned[name])) ||
-      (recognized.has(name) && isDeepStrictEqual(value, recognized.get(name)))
+      recognized.some((wanted) => isDeepStrictEqual(value, wanted))
     if (ours) {
       next = removeJsonProperty(next, [key, name])
     }
