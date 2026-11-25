@@ -86,7 +86,8 @@ const markersFor = new WeakMap<RelayedProviderChild, ProviderRelayWorkMarkers>()
 const carriedFor = new WeakMap<RelayedProviderChild, ProviderRelayCarriedWork>()
 /** Attached children that kept running from before this app started. */
 const reattachedChildren = new WeakSet<RelayedProviderChild>()
-/** Chats whose reattached agent went back to the daemon unopened: its end here ends nothing. */
+/** Chats whose reattached agent went back to the daemon unopened: its end here (the next one,
+ *  once) ends nothing. Any later launch for the chat retires it, so a new agent's end settles. */
 const handedBack = new Set<string>()
 let quitting = false
 let durableFor: ((chatKey: string, force: boolean) => Promise<boolean> | undefined) | null = null
@@ -244,6 +245,7 @@ export async function launchRelayedProviderProcess(
   launch: ProviderProcessLaunch,
   relay: ProviderRelayLaunch
 ): Promise<RelayedProviderProcess | null> {
+  handedBack.delete(relay.chatKey)
   const installed = route
   if (!installed) {
     return null
@@ -316,9 +318,9 @@ export function providerRelayDetachesSettled(shutdown: Promise<unknown>): Promis
   )
 }
 
-/** The chat's agent was handed back to the daemon still running: its local end settles no work. */
-export function providerRelayHandedBack(chatKey: string): boolean {
-  return handedBack.has(chatKey)
+/** True once, for the local end of the agent just handed back to the daemon still running. */
+export function takeProviderRelayHandedBack(chatKey: string): boolean {
+  return handedBack.delete(chatKey)
 }
 
 /** The chat's attached agent kept running from before this app started (same writer, same turn). */

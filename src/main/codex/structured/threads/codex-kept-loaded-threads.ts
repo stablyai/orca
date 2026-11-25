@@ -1,5 +1,6 @@
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import { readRecord } from '../../app-server/codex-item-field-readers'
+import { CodexAppServerTimeoutError } from '../../app-server/codex-app-server-request-error'
 import { codexSubagentParentThreadId } from '../../app-server/shared-servers/codex-shared-server-frames'
 import { codexSubagentPathLabel } from '../../../../shared/agent-hook-listener/providers/codex/codex-agent-path'
 
@@ -10,7 +11,9 @@ const MAX_IDLE_LOADED_CHILDREN = 16
 /** Loaded threads looked at, in pages; every one is checked so a running child is never missed. */
 const MAX_LOADED_THREADS = 512
 /** Metadata reads in flight at once, so a large list never floods the agent. */
-const LOADED_READ_CONCURRENCY = 16
+const LOADED_READ_CONCURRENCY = 8
+/** The whole loaded phase's budget: past it no read starts, and what is in flight is let go. */
+const LOADED_PHASE_BUDGET_MS = 5_000
 /** A short bound for reads that only add to the snapshot (and for the chat thread's retry). */
 export const SOFT_READ_TIMEOUT_MS = 5_000
 
@@ -68,27 +71,33 @@ export async function loadedThreadIds(
   return ids
 }
 
-/** Runs `read` over `items` with at most `limit` in flight, keeping their order. */
+/** Runs `read` over `items` in order, at most `limit` in flight, starting none past `deadline`. */
 async function readBounded<T, R>(
   items: readonly T[],
   limit: number,
-  read: (item: T) => Promise<R>
+  deadline: number,
+  read: (item: T, remainingMs: number) => Promise<R>
 ): Promise<R[]> {
   const results: R[] = []
   let next = 0
   const worker = async (): Promise<void> => {
     for (let at = next++; at < items.length; at = next++) {
-      results[at] = await read(items[at]!)
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= 0) {
+        return
+      }
+      results[at] = await read(items[at]!, remainingMs)
     }
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-  return results
+  return results.filter((result) => result !== undefined)
 }
 
 /**
- * Loaded threads nothing else named: only spawned agents count, running ones first, then the most
- * recently active idle ones (a child that ended while no app was attached is among them). One
- * whose metadata can't be read is still followed, after the running ones, by its turns alone.
+ * Loaded threads nothing else named, under one budget: newest first (ids are time-ordered), as a
+ * running child is likeliest among them. Only spawned agents count, running ones first, then the
+ * most recently active idle ones (a child that ended while no app was attached is among them). One
+ * whose metadata read failed (not merely ran out of budget) is still followed by its turns.
  */
 export async function loadedChildren(input: {
   connection: Connection
@@ -96,19 +105,30 @@ export async function loadedChildren(input: {
   room: number
   onError: (threadId: string, error: unknown) => void
 }): Promise<{ threadId: string; source: ChildSource | null }[]> {
-  const read = await readBounded(input.ids, LOADED_READ_CONCURRENCY, (threadId) =>
-    readSource(input.connection, threadId, SOFT_READ_TIMEOUT_MS).then(
-      (source) => ({ threadId, source }),
-      (error: unknown) => {
-        input.onError(threadId, error)
-        return { threadId, source: null }
-      }
-    )
+  if (input.room <= 0 || input.ids.length === 0) {
+    return []
+  }
+  const newestFirst = [...input.ids].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
+  const deadline = Date.now() + LOADED_PHASE_BUDGET_MS
+  const read = await readBounded(
+    newestFirst,
+    LOADED_READ_CONCURRENCY,
+    deadline,
+    (threadId, remainingMs) =>
+      readSource(input.connection, threadId, Math.min(SOFT_READ_TIMEOUT_MS, remainingMs)).then(
+        (source) => ({ threadId, source }),
+        (error: unknown) => {
+          input.onError(threadId, error)
+          // Out of time (the budget's or the agent's) is no reason to wait on its turns too.
+          return error instanceof CodexAppServerTimeoutError ? null : { threadId, source: null }
+        }
+      )
   )
-  const known = read.flatMap((child) =>
+  const answered = read.flatMap((child) => (child ? [child] : []))
+  const known = answered.flatMap((child) =>
     child.source?.spawned ? [{ ...child, source: child.source }] : []
   )
-  const unknown = read.filter((child) => child.source === null)
+  const unknown = answered.filter((child) => child.source === null)
   const active = known.filter(({ source }) => source.active)
   const idle = known
     .filter(({ source }) => !source.active)

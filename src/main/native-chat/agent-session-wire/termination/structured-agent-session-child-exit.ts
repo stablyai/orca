@@ -1,7 +1,7 @@
 // First-hand writer death evidence ends the child record in finally. Attempt/report every bookkeeping step;
 // expected changes presentation, never whether the dead child remains recorded.
 
-import { providerRelayHandedBack } from '../../../provider-relay/app-provider-relays'
+import { takeProviderRelayHandedBack } from '../../../provider-relay/app-provider-relays'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { PROVIDER_EXIT_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -195,7 +195,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   }
   const record = context.store.getRecord(sessionId)
   // A kept agent handed back to the daemon unopened runs on: nothing of it ended or is settled.
-  if (!record || record.lease.handoffStage !== null || providerRelayHandedBack(sessionId)) {
+  if (!record || record.lease.handoffStage !== null || takeProviderRelayHandedBack(sessionId)) {
     endChild()
     await wakeQueuedDelivery()
     return

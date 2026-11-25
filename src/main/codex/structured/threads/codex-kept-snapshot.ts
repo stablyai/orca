@@ -31,6 +31,7 @@ import {
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
 const PRIMARY_RETRY_MS = 500
+const LOADED_TURN_TIMEOUT_MS = 10_000
 const KEPT_UNREACHABLE_DETAIL =
   "Orca couldn't reconnect to this chat's agent, which is still running. Send again to reconnect."
 
@@ -179,7 +180,10 @@ export async function readKeptCodexSnapshot(input: {
         return []
       })
     : Promise.resolve([])
-  const readWave = async (wave: { threadId: string; source?: ChildSource | null }[]) => {
+  const readWave = async (
+    wave: { threadId: string; source?: ChildSource | null }[],
+    timeoutMs = input.timeoutMs
+  ) => {
     // Once per thread: the chat's own can be named twice (directly and by carried root work).
     const fresh = wave.filter(
       ({ threadId }, at) =>
@@ -199,7 +203,7 @@ export async function readKeptCodexSnapshot(input: {
           threadId,
           primary: threadId === input.threadId,
           ...(source !== undefined ? { source } : {}),
-          timeoutMs: input.timeoutMs,
+          timeoutMs,
           onError: input.onError
         })
       )
@@ -241,8 +245,9 @@ export async function readKeptCodexSnapshot(input: {
       room: MAX_SNAPSHOT_THREADS - seen.size,
       onError: input.onError
     })
+    // Children only the inventory found are read on a short leash: they hold this chat's launch slot.
     while (wave.length > 0) {
-      wave = await readWave(wave)
+      wave = await readWave(wave, Math.min(input.timeoutMs, LOADED_TURN_TIMEOUT_MS))
     }
   }
   // A spawn in a read turn names the real parent (restated with that turn); a guess must not win.
