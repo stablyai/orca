@@ -2,12 +2,10 @@ import { toast } from 'sonner'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
-import {
-  workerTabStampsEqual,
-  type WorkerTabStamp
-} from '../../../../shared/orchestration/workers/worker-tab-stamp'
+import { workerTabStampsEqual } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { workerTabCloseKind, type WorkerTabCloseKind } from './worker-tab-view-actions'
+import { stampedLegacyCloseAddresses } from './stamped-legacy-close-addresses'
 
 // Store-safe: no store import, so the store's bulk close can use it synchronously.
 
@@ -20,13 +18,7 @@ export type WorkerCloseTarget =
 type CloseAddressState = Pick<AppState, 'unifiedTabsByWorktree' | 'tabsByWorktree'>
 type CloseKindState = Pick<AppState, 'terminalLayoutsByTabId'>
 type AddressIndex = ReadonlyMap<string, readonly { tab: Tab; worktreeId: string }[]>
-type StampedLegacyAddress = { worktreeId: string; stamp: WorkerTabStamp } | null
-
 const addressIndexes = new WeakMap<AppState['unifiedTabsByWorktree'], AddressIndex>()
-const legacyAddressIndexes = new WeakMap<
-  AppState['tabsByWorktree'],
-  ReadonlyMap<string, StampedLegacyAddress>
->()
 
 /** One pass over the unified rows, reused until they change: a tab is addressed by its id, a terminal
  *  also by its entity id. */
@@ -56,41 +48,23 @@ function indexCloseAddresses(state: Pick<AppState, 'unifiedTabsByWorktree'>): Ad
   return index
 }
 
-function indexStampedLegacyAddresses(tabs: AppState['tabsByWorktree']) {
-  const cached = legacyAddressIndexes.get(tabs)
-  if (cached) {
-    return cached
-  }
-  const index = new Map<string, StampedLegacyAddress>()
-  for (const [worktreeId, rows] of Object.entries(tabs)) {
-    for (const row of rows) {
-      const stamp = row.workerTab
-      if (stamp) {
-        const id = row.id
-        index.set(id, index.has(id) || row.worktreeId !== worktreeId ? null : { worktreeId, stamp })
-      }
-    }
-  }
-  legacyAddressIndexes.set(tabs, index)
-  return index
-}
-
 /** An exact unified match can still disagree with the legacy terminal the close would reach. */
 export function workerCloseTargetForTab(
   state: Pick<AppState, 'tabsByWorktree'>,
   tab: Tab,
   worktreeId: string
 ): WorkerCloseTarget {
-  const legacy = indexStampedLegacyAddresses(state.tabsByWorktree)
+  const legacy = stampedLegacyCloseAddresses(state.tabsByWorktree)
   const conflicts = (address: string): boolean => {
-    const row = legacy.get(address)
+    const owners = legacy.get(address)
+    const stamp = owners?.get(worktreeId)
     return (
-      row !== undefined &&
-      (!row ||
-        row.worktreeId !== worktreeId ||
+      owners !== undefined &&
+      (owners.size !== 1 ||
+        !stamp ||
         tab.contentType !== 'terminal' ||
         tab.entityId !== address ||
-        !workerTabStampsEqual(tab.workerTab, row.stamp))
+        !workerTabStampsEqual(tab.workerTab, stamp))
     )
   }
   if (
@@ -115,7 +89,7 @@ export function resolveWorkerCloseTarget(
   }
   const stamped =
     matches.some((match) => match.tab.workerTab) ||
-    indexStampedLegacyAddresses(state.tabsByWorktree).has(id)
+    stampedLegacyCloseAddresses(state.tabsByWorktree).has(id)
   return stamped ? { kind: 'protected' } : null
 }
 

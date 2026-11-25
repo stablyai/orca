@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab } from './tab-types'
-import type { WorkerTabStamp } from '../../orchestration/workers/worker-tab-stamp'
+import {
+  workerTabStampSchema,
+  type WorkerTabStamp
+} from '../../orchestration/workers/worker-tab-stamp'
 import {
   canMoveLeafIntoTab,
   isMixedWorkerTab,
@@ -97,6 +100,30 @@ describe('isWorkerTabFolded', () => {
   it('never folds an unstamped tab', () => {
     const { workerTab: _stamp, ...plain } = tab
     expect(isWorkerTabFolded(plain, context({ choice: () => 'hidden' }))).toBe(false)
+  })
+
+  it('keeps a restored worker stamp bound to its structured session lineage', () => {
+    const chat: Tab = {
+      ...tab,
+      contentType: 'agent-session',
+      entityId: 'worker-session',
+      agentSessionAgent: 'claude',
+      workerTab: workerTabStampSchema.parse({
+        ...stamp('dispatch-chat'),
+        agentIdentity: { agentType: 'claude' },
+        structuredSessionLineageRootId: 'worker-session'
+      })
+    }
+    expect(isWorkerTabFolded(chat, context())).toBe(true)
+    expect(
+      isWorkerTabFolded(
+        { ...chat, entityId: 'cleared-session', agentSessionLineageRootId: 'worker-session' },
+        context()
+      )
+    ).toBe(true)
+    expect(isWorkerTabFolded({ ...chat, entityId: 'unrelated-claude-session' }, context())).toBe(
+      false
+    )
   })
 })
 

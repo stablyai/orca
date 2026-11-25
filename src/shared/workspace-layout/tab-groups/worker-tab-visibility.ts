@@ -19,12 +19,20 @@ export type WorkerTabFoldContext = {
   failOpenShown: ReadonlySet<string>
 }
 
+type WorkerChatIdentity = Pick<
+  Tab,
+  'workerTab' | 'entityId' | 'agentSessionLineageRootId' | 'agentSessionAgent'
+>
+type WorkerTabSurface = WorkerChatIdentity & Pick<Tab, 'contentType'>
+
 /** A stamped chat is the worker's only while the bound agent is the one the stamp names. */
-export function isWorkerChatIdentityConsistent(
-  tab: Pick<Tab, 'workerTab' | 'agentSessionAgent'>
-): boolean {
+export function isWorkerChatIdentityConsistent(tab: WorkerChatIdentity): boolean {
   const stamp = tab.workerTab
   if (!stamp || workerTabHasNewAgent(stamp)) {
+    return false
+  }
+  const root = stamp.structuredSessionLineageRootId
+  if (root !== undefined && root !== (tab.agentSessionLineageRootId ?? tab.entityId)) {
     return false
   }
   const stamped = stamp.agentIdentity?.agentType
@@ -33,9 +41,9 @@ export function isWorkerChatIdentityConsistent(
 
 /** Every leaf is Orca's worker leaf; any user leaf makes the tab mixed, and mixed tabs never fold. */
 export function isWorkerTabFoldable(
-  tab: Pick<Tab, 'workerTab' | 'contentType' | 'agentSessionAgent'>,
+  tab: WorkerTabSurface,
   leafIds: readonly string[] | undefined
-): tab is Pick<Tab, 'contentType'> & { workerTab: WorkerTabStamp } {
+): tab is WorkerTabSurface & { workerTab: WorkerTabStamp } {
   if (!tab.workerTab) {
     return false
   }
@@ -63,7 +71,7 @@ export function isMixedWorkerTab(
 
 /** Precedence: active > peek > mixed > kept > hidden (deliberate, wins over fail-open) > auto (reachable past grace). */
 export function isWorkerTabFolded(
-  tab: Pick<Tab, 'id' | 'workerTab' | 'contentType' | 'agentSessionAgent'>,
+  tab: WorkerTabSurface & Pick<Tab, 'id'>,
   ctx: WorkerTabFoldContext
 ): boolean {
   if (ctx.mode !== 'open-when-clicked') {

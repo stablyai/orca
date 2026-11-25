@@ -161,7 +161,10 @@ export async function createStructuredWorkerSession(args: {
   })
   let created: Awaited<ReturnType<typeof createStructuredAgentSessionForWorktree>> | undefined
   if (args.workerTab) {
-    rememberStructuredWorkerTabStamp(sessionId, args.workerTab)
+    rememberStructuredWorkerTabStamp(sessionId, {
+      ...args.workerTab,
+      structuredSessionLineageRootId: sessionId
+    })
   }
   try {
     created = await createStructuredAgentSessionForWorktree({

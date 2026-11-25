@@ -25,6 +25,8 @@ export type WorkerTabLineage = {
 export type WorkerTabStamp = {
   /** Immutable provenance from creation. */
   origin: WorkerTabLineage
+  /** Structured chat workers only: the host session that owns this stamp, including its /clear descendants. */
+  structuredSessionLineageRootId?: string
   /** The latest Dispatch bound to the worker leaf; absent until a re-bind. */
   current?: WorkerTabLineage
   /** Agent identity at the latest bind, so a different session in the leaf can reclaim the live title. */
@@ -51,6 +53,7 @@ const workerTabLineageSchema = z.object({
 export const workerTabStampSchema = z
   .object({
     origin: workerTabLineageSchema,
+    structuredSessionLineageRootId: z.string().min(1).optional(),
     current: workerTabLineageSchema.optional(),
     agentIdentity: z
       .object({ agentType: z.string(), providerSessionId: z.string().optional() })
@@ -123,6 +126,7 @@ export function workerTabStampsEqual(
   }
   return (
     lineagesEqual(a.origin, b.origin) &&
+    a.structuredSessionLineageRootId === b.structuredSessionLineageRootId &&
     lineagesEqual(a.current, b.current) &&
     a.agentIdentity?.agentType === b.agentIdentity?.agentType &&
     a.agentIdentity?.providerSessionId === b.agentIdentity?.providerSessionId
