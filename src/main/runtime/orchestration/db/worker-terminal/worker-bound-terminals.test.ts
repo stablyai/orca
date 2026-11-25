@@ -36,8 +36,12 @@ describe('terminals bound to a worker', () => {
   const botChat = createOrcaSessionId(randomUUID)
   const personChat = createOrcaSessionId(randomUUID)
   const isBotChat = (sessionId: string) => sessionId === botChat
+  // Setup terminals the runtime sees still running; empty after a restart.
+  const runningSetups = new Set<string>()
+  const setupTerminals = { isSetupTerminalRunning: (handle: string) => runningSetups.has(handle) }
 
   beforeEach(() => {
+    runningSetups.clear()
     directory = mkdtempSync(join(tmpdir(), 'orca-worker-bound-terminals-'))
     db = new OrchestrationDb(join(directory, 'orchestration.db'))
     runId = db.createRun({
@@ -126,6 +130,7 @@ describe('terminals bound to a worker', () => {
         panes.delete(handle)
       },
       runtime: {
+        ...setupTerminals,
         getExistingOrchestrationDb: () => db,
         getTerminalPaneKey: (handle: string) => panes.get(handle) ?? null,
         getTerminalHandleForPaneKey: (paneKey: string) =>
@@ -173,7 +178,7 @@ describe('terminals bound to a worker', () => {
 
   it('a failed setup terminal stays open, with no countdown, until a retry succeeds', async () => {
     const worker = startWorker(botChat, 'failed')
-    expect(paneAutoCloseState(db, worker.setup.paneKey)).toBeNull()
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toBeNull()
     const { runtime, closed } = host(worker)
     await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.tab.terminalHandle])
@@ -184,14 +189,16 @@ describe('terminals bound to a worker', () => {
 
   it('a stop during a running setup leaves it running, and no longer bound to the worker', async () => {
     const worker = startWorker(botChat, 'running')
+    runningSetups.add(worker.setup.terminalHandle)
     // It shows no closes-soon countdown while it runs, since the worker's close leaves it open.
-    expect(paneAutoCloseState(db, worker.setup.paneKey)).toBeNull()
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toBeNull()
     const { runtime, closed } = host(worker)
     await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.tab.terminalHandle])
-    expect(paneAutoCloseState(db, worker.setup.paneKey)).toBeNull()
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toBeNull()
 
     // Finishing later does not close it with a worker that is gone.
+    runningSetups.clear()
     db.updateWorkerSetupEvidence({
       dispatchId: worker.dispatchId,
       setupState: 'succeeded',
@@ -199,6 +206,33 @@ describe('terminals bound to a worker', () => {
     })
     await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.tab.terminalHandle])
+  })
+
+  it('a running setup shows the countdown again once it finishes', () => {
+    const worker = startWorker(botChat, 'running')
+    runningSetups.add(worker.setup.terminalHandle)
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toBeNull()
+    runningSetups.clear()
+    db.updateWorkerSetupEvidence({
+      dispatchId: worker.dispatchId,
+      setupState: 'succeeded',
+      effects: []
+    })
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toMatchObject({
+      kept: false,
+      boundTo: { paneKey: worker.agentPaneKey }
+    })
+  })
+
+  it('a setup still recorded running that the runtime no longer sees running closes with its worker', async () => {
+    // Orca restarted, or setup finished while nothing watched it: the stored state never moved on.
+    const worker = startWorker(botChat, 'running')
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toMatchObject({
+      boundTo: { paneKey: worker.agentPaneKey }
+    })
+    const { runtime, closed } = host(worker)
+    await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle])
   })
 
   it('a retry that becomes ready closes the failed setups of every attempt before it', async () => {
@@ -254,8 +288,11 @@ describe('terminals bound to a worker', () => {
   it('Keep open on a bound terminal keeps only that one', async () => {
     const worker = startWorker(botChat)
     // A bound terminal shows the worker's own countdown and names the worker's pane.
-    expect(paneAutoCloseState(db, worker.agentPaneKey)).toEqual({ kept: false, closesAt: null })
-    expect(paneAutoCloseState(db, worker.setup.paneKey)).toEqual({
+    expect(paneAutoCloseState(db, setupTerminals, worker.agentPaneKey)).toEqual({
+      kept: false,
+      closesAt: null
+    })
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toEqual({
       kept: false,
       closesAt: null,
       boundTo: {
@@ -267,8 +304,11 @@ describe('terminals bound to a worker', () => {
     })
 
     keepPaneOpen(db, worker.setup.paneKey)
-    expect(paneAutoCloseState(db, worker.setup.paneKey)).toBeNull()
-    expect(paneAutoCloseState(db, worker.agentPaneKey)).toEqual({ kept: false, closesAt: null })
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toBeNull()
+    expect(paneAutoCloseState(db, setupTerminals, worker.agentPaneKey)).toEqual({
+      kept: false,
+      closesAt: null
+    })
 
     const { runtime, closed } = host(worker)
     await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)

@@ -10,7 +10,7 @@ import {
 
 type BoundTerminalCloseRuntime = Pick<
   OrcaRuntimeService,
-  'getTerminalPaneKey' | 'getTerminalHandleForPaneKey' | 'closeTerminal'
+  'getTerminalPaneKey' | 'getTerminalHandleForPaneKey' | 'closeTerminal' | 'isSetupTerminalRunning'
 >
 
 /** After a worker closed: close the terminals bound to it. A failed setup stays open, and bound, to
@@ -25,7 +25,7 @@ export async function closeWorkerBoundTerminals(
   try {
     for (const bound of listWorkerBoundTerminals(db, originDispatchId)) {
       // Checked per row: earlier closes await, and Keep open or a setup failure may land meanwhile.
-      const outlives = setupBindingOutlivesWorker(db, bound)
+      const outlives = setupBindingOutlivesWorker(db, runtime, bound)
       if (outlives === 'running') {
         unbindWorkerTerminal(db, bound.terminal_handle)
       }
@@ -52,7 +52,7 @@ export async function closeRetriedFailedSetup(
     seen.add(attempt)
     const origin = db.getWorkerTerminalResourceByOwner(attempt)?.origin_dispatch_id ?? attempt
     for (const bound of listWorkerBoundTerminals(db, origin)) {
-      if (setupBindingOutlivesWorker(db, bound) === 'failed') {
+      if (setupBindingOutlivesWorker(db, runtime, bound) === 'failed') {
         await closeBound(runtime, db, bound)
       }
     }
