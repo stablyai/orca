@@ -9,7 +9,12 @@ import { readHostMethodReply } from '../host-screen/sidebar-feed/host-sidebar-fe
 import { rpcClientForExecutionHost } from '../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import { newBotRefusal, shownHostBotListings, type HostBotListing } from './host-bot-listing'
+import {
+  mergeHostBotListing,
+  newBotRefusal,
+  shownHostBotListings,
+  type HostBotListing
+} from './host-bot-listing'
 import {
   botHomeLinksRead,
   botOwnChatsRead,
@@ -96,7 +101,7 @@ export async function readHostBotListing(
     ...(createRefusal ? { createRefusal } : {}),
     takesTemplates: bots.takesTemplates,
     // Groups read on their own: a failed read leaves them out, and the list reads again.
-    ...(groups ? { groups } : {})
+    ...(groups ? { groups, groupsFresh: true } : {})
   }
 }
 
@@ -130,31 +135,8 @@ function startBotListingReads(args: {
     listing: HostBotListing | null,
     threads: boolean
   ): void => {
-    // A failed read keeps the host's last listing, and a failed groups read its last groups, so
-    // neither flashes back into folders. Hosts this read doesn't cover keep theirs: a server that
-    // went down lists its last read, dimmed. A read without threads keeps the last threads' facts.
-    if (listing?.kind === 'read-failed') {
-      setListings((previous) =>
-        previous.some((entry) => entry.hostId === hostId) ? previous : [...previous, listing]
-      )
-    } else if (listing) {
-      setListings((previous) => {
-        const last = previous.find((entry) => entry.hostId === hostId)
-        const kept = listing.kind === 'listed' && last && last.kind === 'listed' ? last : null
-        const groups =
-          kept && listing.kind === 'listed' && !listing.groups ? kept.groups : undefined
-        const threadFacts =
-          kept && !threads
-            ? {
-                ...(kept.links ? { links: kept.links } : {}),
-                ...(kept.ownChats ? { ownChats: kept.ownChats } : {})
-              }
-            : {}
-        return [
-          ...previous.filter((entry) => entry.hostId !== hostId),
-          { ...listing, ...threadFacts, ...(groups ? { groups } : {}) }
-        ]
-      })
+    if (listing) {
+      setListings((previous) => mergeHostBotListing(previous, hostId, listing, threads))
     }
     if (listing?.kind === 'listed' && !listing.groups) {
       groupsUnread.add(hostId)

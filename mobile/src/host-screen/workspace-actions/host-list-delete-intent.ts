@@ -74,34 +74,44 @@ export function findHostListDeleteRow<Row extends Pick<Worktree, 'worktreeId' | 
   return matches.length === 1 ? matches[0] : null
 }
 
-/** This desktop's bot and group homes, or null while its bots are unread or unreadable. */
-export function hostListBotHomes(listings: readonly HostBotListing[]): ReadonlySet<string> | null {
+/** This desktop's bot and group homes as last read, and whether that read proves no other exists. */
+export type HostListBotHomes = { homes: ReadonlySet<string>; complete: boolean }
+
+/** Any listed home refuses, even from an old read; only a current read of bots and of groups (where the
+ *  host keeps groups) proves a folder is none. */
+export function hostListBotHomes(
+  listings: readonly HostBotListing[],
+  groupsSupported: boolean
+): HostListBotHomes {
   const local = listings.find((listing) => listing.hostId === LOCAL_EXECUTION_HOST_ID)
   if (local?.kind === 'update-needed') {
-    return new Set()
+    return { homes: new Set(), complete: true }
   }
   if (local?.kind !== 'listed') {
-    return null
+    return { homes: new Set(), complete: false }
   }
-  return new Set(
-    [...local.bots, ...(local.groups ?? [])].map((home) =>
-      folderWorkspaceKey(home.folderWorkspaceId)
-    )
-  )
+  return {
+    homes: new Set(
+      [...local.bots, ...(local.groups ?? [])].map((home) =>
+        folderWorkspaceKey(home.folderWorkspaceId)
+      )
+    ),
+    complete: local.stale !== true && (!groupsSupported || local.groupsFresh === true)
+  }
 }
 
 /** Whether the list's own menu would offer Delete for this row; a folder waits until homes are known. */
 export function admitsHostListDelete(
   row: Pick<Worktree, 'worktreeId' | 'botHome'>,
-  homes: ReadonlySet<string> | null
+  homes: HostListBotHomes
 ): boolean | 'unknown' {
-  if (row.botHome === true) {
+  if (row.botHome === true || homes.homes.has(row.worktreeId)) {
     return false
   }
   if (folderIdOfSelector(row.worktreeId) === undefined) {
     return true
   }
-  return homes === null ? 'unknown' : !homes.has(row.worktreeId)
+  return homes.complete ? true : 'unknown'
 }
 
 export type HostListDeleteView<Row> = {
@@ -110,10 +120,10 @@ export type HostListDeleteView<Row> = {
   hostId: string | undefined
   pathname: string
   connected: boolean
-  /** Another row's menu or confirm is open: the user is doing something else. */
-  overlayBusy: boolean
+  /** Another list action is under way: the user is doing something else. */
+  busy: boolean
   rows: readonly Row[]
-  homes: ReadonlySet<string> | null
+  homes: HostListBotHomes
   now: number
 }
 
@@ -121,12 +131,13 @@ export type HostListDeleteStep<Row> =
   | { kind: 'wait' }
   | { kind: 'open'; row: Row }
   | { kind: 'notFound' }
+  | { kind: 'primary' }
   | { kind: 'none' }
 
 /** One pass of the list's claim: a new token replaces the held claim before any row is published,
  *  and the held claim opens only while still on its route, unanswered, within the tap's deadline. */
 export function advanceHostListDeleteClaim<
-  Row extends Pick<Worktree, 'worktreeId' | 'hostId' | 'botHome'>
+  Row extends Pick<Worktree, 'worktreeId' | 'hostId' | 'botHome' | 'isMainWorktree'>
 >(
   held: HostListDeleteClaim | null,
   view: HostListDeleteView<Row>
@@ -138,7 +149,7 @@ export function advanceHostListDeleteClaim<
   if (!claim) {
     return { claim: null, step: { kind: 'none' } }
   }
-  if (claim.hostId !== view.hostId || claim.pathname !== view.pathname || view.overlayBusy) {
+  if (claim.hostId !== view.hostId || claim.pathname !== view.pathname || view.busy) {
     return { claim: null, step: { kind: 'none' } }
   }
   if (view.now > claim.deadline) {
@@ -150,9 +161,13 @@ export function advanceHostListDeleteClaim<
   if (!row || admitted === 'unknown') {
     return { claim, step: { kind: 'wait' } }
   }
-  return admitted
-    ? { claim: null, step: { kind: 'open', row } }
-    : { claim: null, step: { kind: 'notFound' } }
+  if (!admitted) {
+    return { claim: null, step: { kind: 'notFound' } }
+  }
+  // A primary checkout can't be deleted: the request ends here, with no sheet.
+  return row.isMainWorktree === true
+    ? { claim: null, step: { kind: 'primary' } }
+    : { claim: null, step: { kind: 'open', row } }
 }
 
 export function resetHostListDeleteIntentForTest(): void {

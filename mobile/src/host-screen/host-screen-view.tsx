@@ -29,7 +29,8 @@ export function HostScreenView({ controller }: { controller: HostScreenControlle
   }
 
   return (
-    <View style={styles.container}>
+    // Any touch on the list moves the user on from a session's pending Delete.
+    <View style={styles.container} onStartShouldSetResponderCapture={controller.retireDeleteIntent}>
       <SafeAreaView style={styles.topChromeSafeArea} edges={['top']}>
         <HostScreenHeader controller={controller} collapsingTitle={collapsingTitle} />
       </SafeAreaView>

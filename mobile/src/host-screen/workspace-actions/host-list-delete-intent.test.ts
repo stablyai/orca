@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { mergeHostBotListing, type HostBotListing } from '../../bots/host-bot-listing'
+import { DEFAULT_BOT_SIDEBAR_VIEW } from '../../../../src/shared/bots/bot-sidebar-view'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import {
   advanceHostListDeleteClaim,
   findHostListDeleteRow,
+  hostListBotHomes,
   requestHostListDelete,
   resetHostListDeleteIntentForTest,
   takeHostListDeleteIntent,
   type HostListDeleteView
 } from './host-list-delete-intent'
 
-type Row = Pick<Worktree, 'worktreeId' | 'hostId' | 'botHome'>
+type Row = Pick<Worktree, 'worktreeId' | 'hostId' | 'botHome' | 'isMainWorktree'>
+
+const COMPLETE = { homes: new Set<string>(), complete: true }
 
 // A spent, stale, misdirected or superseded intent would open a delete confirm the user never asked for.
 describe('host list delete intent', () => {
@@ -21,12 +26,14 @@ describe('host list delete intent', () => {
     hostId: 'desk',
     pathname: '/h/desk',
     connected: true,
-    overlayBusy: false,
+    busy: false,
     rows: [],
-    homes: new Set(),
+    homes: COMPLETE,
     now: 1_000,
     ...over
   })
+  const held = (claimTarget: Parameters<typeof requestHostListDelete>[0] = target) =>
+    advanceHostListDeleteClaim(null, view({ token: requestHostListDelete(claimTarget, 0) })).claim
   beforeEach(resetHostListDeleteIntentForTest)
 
   it('is spent by the first presented token, only for its own host, within the tap deadline', () => {
@@ -48,61 +55,69 @@ describe('host list delete intent', () => {
   })
 
   it('lets a new tap replace a held claim before the old row can open', () => {
-    const held = advanceHostListDeleteClaim(
-      null,
-      view({ token: requestHostListDelete(target, 0) })
-    ).claim
+    const old = held()
     const next = requestHostListDelete({ ...target, worktreeId: 'repo::/b' }, 0)
-    const pass = advanceHostListDeleteClaim(held, view({ token: next, rows: [rowA, rowB] }))
+    const pass = advanceHostListDeleteClaim(old, view({ token: next, rows: [rowA, rowB] }))
     expect(pass.step).toEqual({ kind: 'open', row: rowB })
   })
 
-  it('drops a held claim for good once the user opens another row or leaves the route', () => {
-    const held = advanceHostListDeleteClaim(
-      null,
-      view({ token: requestHostListDelete(target, 0) })
-    ).claim
-    const manual = advanceHostListDeleteClaim(held, view({ overlayBusy: true, rows: [rowA] }))
-    expect(manual).toEqual({ claim: null, step: { kind: 'none' } })
-    expect(advanceHostListDeleteClaim(manual.claim, view({ rows: [rowA] })).step.kind).toBe('none')
-    const moved = advanceHostListDeleteClaim(
-      held,
-      view({ pathname: '/h/desk/session/x', rows: [rowA] })
-    )
-    expect(moved.step.kind).toBe('none')
-  })
-
-  it('opens only an eligible row on the session checkout host, and only while connected', () => {
-    const held = advanceHostListDeleteClaim(
-      null,
-      view({ token: requestHostListDelete(target, 0) })
-    ).claim
+  it('opens only the row on the session checkout host, only while connected, never a primary', () => {
+    const claim = held()
     expect(
-      advanceHostListDeleteClaim(held, view({ connected: false, rows: [rowA] })).step.kind
+      advanceHostListDeleteClaim(claim, view({ connected: false, rows: [rowA] })).step.kind
     ).toBe('wait')
     const twin: Row = { worktreeId: 'repo::/a', hostId: 'ssh:box' }
-    expect(advanceHostListDeleteClaim(held, view({ rows: [twin] })).step.kind).toBe('wait')
+    expect(advanceHostListDeleteClaim(claim, view({ rows: [twin] })).step.kind).toBe('wait')
     expect(findHostListDeleteRow([rowA, { ...rowA }], target)).toBeNull()
-    const home: Row = { ...rowA, botHome: true }
-    expect(advanceHostListDeleteClaim(held, view({ rows: [home] })).step.kind).toBe('notFound')
+    expect(
+      advanceHostListDeleteClaim(claim, view({ rows: [{ ...rowA, isMainWorktree: true }] }))
+    ).toEqual({ claim: null, step: { kind: 'primary' } })
+  })
 
+  it("admits a folder only once this host's bot and group homes are currently known", () => {
     const folder = { hostId: 'desk', owner: 'local', worktreeId: 'folder:f1' } as const
     const folderRow: Row = { worktreeId: 'folder:f1', hostId: 'local' }
-    const folderClaim = advanceHostListDeleteClaim(
-      null,
-      view({ token: requestHostListDelete(folder, 0) })
-    ).claim
-    expect(
-      advanceHostListDeleteClaim(folderClaim, view({ rows: [folderRow], homes: null })).step.kind
-    ).toBe('wait')
-    expect(
+    const claim = held(folder)
+    const step = (listings: readonly HostBotListing[], groupsSupported = true) =>
       advanceHostListDeleteClaim(
-        folderClaim,
-        view({ rows: [folderRow], homes: new Set(['folder:f1']) })
+        claim,
+        view({ rows: [folderRow], homes: hostListBotHomes(listings, groupsSupported) })
       ).step.kind
+    const base: HostBotListing = {
+      kind: 'listed',
+      hostId: 'local',
+      hostLabel: 'Desk',
+      bots: [],
+      hideBotCreated: false,
+      view: DEFAULT_BOT_SIDEBAR_VIEW,
+      workspaceLineage: {},
+      worktreeLineage: {}
+    }
+    const failed: HostBotListing = { kind: 'read-failed', hostId: 'local', hostLabel: 'Desk' }
+    const fresh: HostBotListing = { ...base, groups: [], groupsFresh: true }
+    const home = {
+      id: 'b1',
+      name: 'Bot',
+      folderWorkspaceId: 'f1',
+      avatar: null,
+      paused: false,
+      chatSessionId: null
+    }
+    // Eligible control: bots and groups both read now, and f1 is neither.
+    expect(step([fresh])).toBe('open')
+    // Cold: bots listed but the groups read failed.
+    expect(step([base])).toBe('wait')
+    // A host without groups needs only its bots.
+    expect(step([base], false)).toBe('open')
+    // Retained groups can't prove a Home made since; a failed read makes the whole listing stale.
+    const kept = mergeHostBotListing([fresh], 'local', base, true)
+    expect(step(kept)).toBe('wait')
+    expect(step(mergeHostBotListing([fresh], 'local', failed, true))).toBe('wait')
+    // A Home known from any read, however old, still refuses.
+    const withHome = mergeHostBotListing([{ ...fresh, bots: [home] }], 'local', failed, true)
+    expect(step(withHome)).toBe('notFound')
+    expect(
+      advanceHostListDeleteClaim(claim, view({ rows: [{ ...folderRow, botHome: true }] })).step.kind
     ).toBe('notFound')
-    expect(advanceHostListDeleteClaim(folderClaim, view({ rows: [folderRow] })).step.kind).toBe(
-      'open'
-    )
   })
 })

@@ -68,6 +68,10 @@ export type ListedHostBots = {
   takesTemplates?: boolean
   /** Its groups, which list as their rooms among its bots, never as folders; absent while their read fails. */
   groups?: readonly BotGroup[]
+  /** The groups came from this listing's own read, not kept from an earlier one. */
+  groupsFresh?: true
+  /** A later read of this host failed; these are its last-read bots. */
+  stale?: true
   /** The host's word while it is down (e.g. "Disconnected"): its last-read bots stay, dimmed. */
   offline?: string
 }
@@ -127,4 +131,38 @@ export function shownHostBotListings(
     return host.health === 'available' ? [] : [{ kind: 'unreachable', ...named }]
   })
   return [...(local ? [local] : []), ...servers]
+}
+
+/** A host's new listing over its last. A failed read keeps the last listing, marked stale, and a
+ *  failed groups read its last groups, unmarked as fresh, so neither flashes back into folders. Hosts
+ *  this read doesn't cover keep theirs: a server that went down lists its last read, dimmed. A read
+ *  without threads keeps the last threads' facts. */
+export function mergeHostBotListing(
+  previous: readonly HostBotListing[],
+  hostId: ExecutionHostId,
+  listing: HostBotListing,
+  threads: boolean
+): readonly HostBotListing[] {
+  const last = previous.find((entry) => entry.hostId === hostId)
+  if (listing.kind === 'read-failed') {
+    if (!last) {
+      return [...previous, listing]
+    }
+    return last.kind === 'listed' && last.stale !== true
+      ? previous.map((entry) => (entry === last ? { ...last, stale: true } : entry))
+      : previous
+  }
+  const kept = listing.kind === 'listed' && last && last.kind === 'listed' ? last : null
+  const groups = kept && listing.kind === 'listed' && !listing.groups ? kept.groups : undefined
+  const threadFacts =
+    kept && !threads
+      ? {
+          ...(kept.links ? { links: kept.links } : {}),
+          ...(kept.ownChats ? { ownChats: kept.ownChats } : {})
+        }
+      : {}
+  return [
+    ...previous.filter((entry) => entry.hostId !== hostId),
+    { ...listing, ...threadFacts, ...(groups ? { groups } : {}) }
+  ]
 }

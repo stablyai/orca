@@ -18,6 +18,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostListInThisDocument } from '../navigation/host-list-in-document'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useRouteCapability } from '../worktree/execution-hosts/use-workspace-client'
+import { useProvenSessionOwner } from './session-delete-owner'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 type LiveDelete = { key: string; target: HostListDeleteTarget; allowed: boolean } | null
@@ -49,20 +50,24 @@ export function useSessionWorkspaceDeleteAction(
   const hostListHere = useHostListInThisDocument(hostId)
   const botsOnPhone = useRouteCapability(BOTS_MOBILE_RUNTIME_CAPABILITY)
   const botsEntry = useHostBotsEntry(isFolderWorkspaceRoute ? hostBotsKey(hostId) : null)
-  // The checkout's own host, as the session read it; a server's rows can't prove theirs, so none is offered.
-  const owner = executionHost === undefined ? canonicalExecutionHostId(worktreeHostId) : null
+  // The checkout's own host, as this session entry first read it; a server's rows can't prove theirs,
+  // so none is offered there, and an entry that later reads another host offers none either.
+  const owner = useProvenSessionOwner(
+    `${hostId}\n${executionHost ?? ''}\n${worktreeId}`,
+    executionHost === undefined ? canonicalExecutionHostId(worktreeHostId) : null
+  )
   const target: HostListDeleteTarget | null =
     hostListHere && !isFloatingWorkspaceRoute && routeBot === null && owner
       ? { hostId, owner, worktreeId }
       : null
   // A folder may be a bot's home until this host's bots are read; the list checks again before confirming.
   const homeUnknown = isFolderWorkspaceRoute && botsOnPhone && botsEntry === null
-  // The cached list row, read only while the menu is open; a host that hasn't said leaves it enabled.
-  const primaryCheckout =
-    showHeaderMoreActions &&
-    target !== null &&
-    findHostListDeleteRow(cachedHostWorktrees(queryClient, hostId) ?? [], target)
-      ?.isMainWorktree === true
+  // The cached list row says primary; a host that hasn't said leaves it enabled.
+  const isPrimary = (of: HostListDeleteTarget) =>
+    findHostListDeleteRow(cachedHostWorktrees(queryClient, of.hostId) ?? [], of)?.isMainWorktree ===
+    true
+  // Drawn only while the menu is open; the press reads it again, as it is then.
+  const primaryCheckout = showHeaderMoreActions && target !== null && isPrimary(target)
   const allowed = target !== null && connState === 'connected' && !homeUnknown && !primaryCheckout
 
   // The press runs after the menu has slid away; it acts only on what is still true then.
@@ -79,7 +84,11 @@ export function useSessionWorkspaceDeleteAction(
   )
   const stillAllowed = (key: string): HostListDeleteTarget | null => {
     const current = liveRef.current
-    return current && current.key === key && current.allowed && navigation.isFocused()
+    return current &&
+      current.key === key &&
+      current.allowed &&
+      !isPrimary(current.target) &&
+      navigation.isFocused()
       ? current.target
       : null
   }
@@ -112,15 +121,18 @@ export function useSessionWorkspaceDeleteAction(
           return
         }
         // Unsaved phone drafts get the same Copy/Discard choice as Back; cancelling arms nothing.
-        requestLeaveForHandoff(() => {
-          const current = stillAllowed(key)
-          if (!current) {
-            return
+        requestLeaveForHandoff({
+          valid: () => stillAllowed(key) !== null,
+          run: () => {
+            const current = stillAllowed(key)
+            if (!current) {
+              return
+            }
+            const token = requestHostListDelete(current)
+            router.dismissTo(
+              `/h/${encodeURIComponent(current.hostId)}?${HOST_LIST_DELETE_PARAM}=${encodeURIComponent(token)}`
+            )
           }
-          const token = requestHostListDelete(current)
-          router.dismissTo(
-            `/h/${encodeURIComponent(hostId)}?${HOST_LIST_DELETE_PARAM}=${encodeURIComponent(token)}`
-          )
         })
       }
     }

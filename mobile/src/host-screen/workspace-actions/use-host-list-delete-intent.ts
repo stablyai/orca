@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { useGlobalSearchParams, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import { translate } from '../../i18n/mobile-i18n'
 import { firstParam } from '../../navigation/route-param-reader'
@@ -14,21 +14,41 @@ import {
 
 type DeleteParams = { [HOST_LIST_DELETE_PARAM]?: string | string[] }
 
-/** Opens this list's own delete confirm for the row a session's ⋯ Delete named, once. */
+export type HostListDeleteIntentState = Pick<
+  HostScreenState,
+  | 'actionTarget'
+  | 'confirmDelete'
+  | 'confirmRemoveHost'
+  | 'showWorkspaceOptions'
+  | 'showNewWorktree'
+  | 'setActionTarget'
+  | 'setConfirmDelete'
+  | 'setActionError'
+>
+
+/** Opens this list's own delete confirm for the row a session's ⋯ Delete named, once. Returns the
+ *  list's touch hook: any touch on the list means the user has moved on, and retires the claim. */
 export function useHostListDeleteIntent(args: {
   embedded: boolean
   hostId: string | undefined
   connected: boolean
   rows: readonly Worktree[]
   bots: readonly HostBotListing[]
-  state: Pick<
-    HostScreenState,
-    'actionTarget' | 'confirmDelete' | 'setActionTarget' | 'setConfirmDelete' | 'setActionError'
-  >
-}): void {
-  const { embedded, hostId, connected, rows, bots, state } = args
+  groupsSupported: boolean
+  /** The New bot sheet, which lives outside the list state. */
+  newBotOpen: boolean
+  state: HostListDeleteIntentState
+}): () => boolean {
+  const { embedded, hostId, connected, rows, bots, groupsSupported, newBotOpen, state } = args
   const { setActionTarget, setConfirmDelete, setActionError } = state
-  const overlayBusy = state.actionTarget !== null || state.confirmDelete !== null
+  // Every sheet the list opens of its own: a claim never opens over, or after, another action.
+  const busy =
+    state.actionTarget !== null ||
+    state.confirmDelete !== null ||
+    state.confirmRemoveHost ||
+    state.showWorkspaceOptions ||
+    state.showNewWorktree ||
+    newBotOpen
   // A layout-mounted sidebar has no route params of its own; a stacked list reads only its own,
   // so a list hidden under another screen never takes the focused list's token.
   const globalParams = useGlobalSearchParams<DeleteParams>()
@@ -54,21 +74,30 @@ export function useHostListDeleteIntent(args: {
       hostId,
       pathname,
       connected,
-      overlayBusy,
+      busy,
       rows,
-      homes: hostListBotHomes(bots),
+      homes: hostListBotHomes(bots, groupsSupported),
       now: Date.now()
     })
     claimRef.current = claim
+    // Say why nothing opened, without covering another action's message.
+    const sayOnce = (message: string) =>
+      setActionError((current) => (current === '' ? message : current))
     if (step.kind === 'open') {
       setActionTarget(step.row)
-      // A primary checkout opens the row menu instead, whose Delete explains why it can't.
-      setConfirmDelete(step.row.isMainWorktree === true ? null : step.row)
+      setConfirmDelete(step.row)
     } else if (step.kind === 'notFound') {
-      setActionError(
+      sayOnce(
         translate(
           'hostScreen.deleteConfirm.rowNotFound',
           "Couldn't find that workspace. Try again from the list."
+        )
+      )
+    } else if (step.kind === 'primary') {
+      sayOnce(
+        translate(
+          'hostScreen.hostScreenOverlays.primaryWorktreeDeleteHint',
+          "Primary worktree — can't be deleted. Remove the project instead."
         )
       )
     }
@@ -80,10 +109,11 @@ export function useHostListDeleteIntent(args: {
     return () => clearTimeout(timer)
   }, [
     bots,
+    busy,
     connected,
     deadlineTick,
+    groupsSupported,
     hostId,
-    overlayBusy,
     pathname,
     router,
     rows,
@@ -92,4 +122,10 @@ export function useHostListDeleteIntent(args: {
     setConfirmDelete,
     token
   ])
+
+  // Capture-phase responder check: never claims the touch, only retires a waiting claim.
+  return useCallback(() => {
+    claimRef.current = null
+    return false
+  }, [])
 }

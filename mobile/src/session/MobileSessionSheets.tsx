@@ -66,8 +66,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     quickCommandsSupported,
     showToast,
     readFileTab,
-    leaveSessionDroppingDrafts,
-    takeLeaveHandoff,
+    leaveRequest,
     discardMarkdownLocalContent,
     copyMarkdownPath,
     confirmDiscardMarkdown,
@@ -272,18 +271,18 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             label: t('session.sheets.copyAllAndLeave', 'Copy All & Leave'),
             icon: FileText,
             onPress: () => {
-              const drafts = leaveDrafts ?? []
-              const handoff = takeLeaveHandoff()
-              const combined = drafts
+              const ticket = leaveRequest.beginLeave()
+              if (!ticket) {
+                return
+              }
+              const combined = (leaveDrafts ?? [])
                 .map((draft) => `# ${draft.title}\n\n${draft.content}`)
                 .join('\n\n---\n\n')
               void clipboard
                 .writeText(combined)
-                .then(() => {
-                  setLeaveDrafts(null)
-                  leaveSessionDroppingDrafts(drafts, handoff)
-                })
+                .then(() => leaveRequest.finishLeave(ticket))
                 .catch(() => {
+                  leaveRequest.abandonLeave(ticket)
                   triggerError()
                   showToast(t('session.sheets.copyDraftsFailed', "Couldn't copy drafts"), 1500)
                 })
@@ -294,15 +293,16 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             label: t('session.sheets.discardAndLeave', 'Discard & Leave'),
             destructive: true,
             onPress: () => {
-              const handoff = takeLeaveHandoff()
-              setLeaveDrafts(null)
-              leaveSessionDroppingDrafts(leaveDrafts ?? [], handoff)
+              const ticket = leaveRequest.beginLeave()
+              if (ticket) {
+                leaveRequest.finishLeave(ticket)
+              }
             }
           }
         ]}
         onClose={() => {
-          // Cancel keeps the session and arms nothing; a chosen action took its handoff first.
-          takeLeaveHandoff()
+          // Cancel keeps the session and arms nothing; a press already settling keeps its request.
+          leaveRequest.closeLeave()
           setLeaveDrafts(null)
         }}
       />
