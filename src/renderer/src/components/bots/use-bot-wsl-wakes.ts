@@ -1,18 +1,21 @@
 // The sleeping WSL hosts New bot wakes on its own: at most once each, until the owner re-picks one.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { connectRuntimeEnvironmentAndRecordStatus } from '@/components/status-bar/host-connections/runtime-environment-explicit-connect'
+import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import {
   botWslMayAutoWake,
   botWslShowsWaking,
   botWslWakeAfterStatus,
   botWslWakeSettled,
-  type BotWslWake
+  botWslWakeTimedOut,
+  type BotWslWake,
+  type BotWslWakeStep
 } from './bot-wsl-wake-policy'
 
-const WAKE_CONNECT_TIMEOUT_MS = 5_000
+/** A wake main never finishes stops holding Create after this. */
+const WAKE_CAP_MS = 90_000
 const NONE: ReadonlyMap<string, BotWslWake> = new Map()
 
 function toastWakeFailed(environmentId: string): void {
@@ -49,44 +52,53 @@ export function useBotWslWakes(): {
   reset: () => void
 } {
   const [wakes, setWakes] = useState(NONE)
+  // Read by async answers, which must judge the wakes as they are now, not as they were.
+  const current = useRef(wakes)
+  const nextToken = useRef(0)
   const statuses = useAppStore((s) => s.wslHostStatuses)
+
+  const apply = useCallback((environmentId: string, step: BotWslWakeStep): void => {
+    if (step.toast) {
+      toastWakeFailed(environmentId)
+    }
+    if (step.refresh) {
+      // Main finished a wake the connect call gave up on: record the host and reload its projects.
+      void startWslHostAndReloadProjects(environmentId, { quiet: true })
+    }
+    if (step.wake !== current.current.get(environmentId)) {
+      current.current = withWake(current.current, environmentId, step.wake)
+      setWakes(current.current)
+    }
+  }, [])
 
   // Main's state decides how a wake ends once the connect call has given up, and when a failure clears.
   useEffect(() => {
-    let changed = false
-    let next = wakes
-    for (const [environmentId, wake] of wakes) {
-      const moved = botWslWakeAfterStatus(wake, statuses[environmentId]?.state)
-      if (moved.toast) {
-        toastWakeFailed(environmentId)
-      }
-      if (moved.wake !== wake) {
-        changed = true
-        next = withWake(next, environmentId, moved.wake)
-      }
+    for (const [environmentId, wake] of current.current) {
+      apply(environmentId, botWslWakeAfterStatus(wake, statuses[environmentId]?.state))
     }
-    if (changed) {
-      setWakes(next)
-    }
-  }, [statuses, wakes])
+  }, [statuses, apply])
 
-  const wake = useCallback((environmentId: string): void => {
-    setWakes((previous) => withWake(previous, environmentId, { phase: 'waking' }))
-    void connectRuntimeEnvironmentAndRecordStatus(environmentId, WAKE_CONNECT_TIMEOUT_MS).then(
-      (ok) => {
-        const settled = botWslWakeSettled(
-          ok,
-          useAppStore.getState().wslHostStatuses[environmentId]?.state
-        )
-        if (settled.toast) {
-          toastWakeFailed(environmentId)
+  const wake = useCallback(
+    (environmentId: string): void => {
+      nextToken.current += 1
+      const token = nextToken.current
+      apply(environmentId, { wake: { phase: 'waking', token }, toast: false })
+      const cap = window.setTimeout(
+        () => apply(environmentId, botWslWakeTimedOut(current.current.get(environmentId), token)),
+        WAKE_CAP_MS
+      )
+      // The shared start reloads the host's projects too; quiet, since main may still be booting.
+      void startWslHostAndReloadProjects(environmentId, { quiet: true }).then((ok) => {
+        const state = useAppStore.getState().wslHostStatuses[environmentId]?.state
+        const step = botWslWakeSettled(current.current.get(environmentId), token, ok, state)
+        if (step.wake?.phase !== 'waking') {
+          window.clearTimeout(cap)
         }
-        setWakes((previous) =>
-          previous.has(environmentId) ? withWake(previous, environmentId, settled.wake) : previous
-        )
-      }
-    )
-  }, [])
+        apply(environmentId, step)
+      })
+    },
+    [apply]
+  )
 
   const waking = useMemo(
     () => new Set([...wakes].filter(([, entry]) => botWslShowsWaking(entry)).map(([id]) => id)),
@@ -96,12 +108,15 @@ export function useBotWslWakes(): {
     waking,
     mayAutoWake: (environmentId) => botWslMayAutoWake(wakes.get(environmentId)),
     wake,
-    forget: (environmentId) =>
-      setWakes((previous) =>
-        previous.get(environmentId)?.phase === 'failed'
-          ? withWake(previous, environmentId, undefined)
-          : previous
-      ),
-    reset: () => setWakes(NONE)
+    forget: (environmentId) => {
+      if (current.current.get(environmentId)?.phase === 'failed') {
+        apply(environmentId, { wake: undefined, toast: false })
+      }
+    },
+    // A new session: answers for earlier wakes find no attempt of theirs and change nothing.
+    reset: () => {
+      current.current = NONE
+      setWakes(NONE)
+    }
   }
 }
