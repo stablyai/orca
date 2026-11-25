@@ -77,6 +77,32 @@ describe('fetchCommandCodeRateLimits', () => {
     )
   })
 
+  it('returns the credits failure when credits is rate-limited but subscriptions succeeds', async () => {
+    routeBy((url) =>
+      url.endsWith(COMMAND_CODE_CREDITS_PATH)
+        ? new Response('{}', { status: 429 })
+        : new Response(JSON.stringify({ success: true, data: { status: 'active' } }), {
+            status: 200
+          })
+    )
+    const result = await fetchCommandCodeRateLimits({ apiKey: KEY })
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('rate-limited')
+  })
+
+  it('keeps parse when credits succeeds but data is unrecognized', async () => {
+    routeBy((url) =>
+      url.endsWith(COMMAND_CODE_CREDITS_PATH)
+        ? new Response(JSON.stringify({ unexpected: true }), { status: 200 })
+        : new Response(JSON.stringify({ success: true, data: { status: 'active' } }), {
+            status: 200
+          })
+    )
+    const result = await fetchCommandCodeRateLimits({ apiKey: KEY })
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('parse')
+  })
+
   it('reports a body-read transport failure as network, not parse', async () => {
     const response = new Response('{}', { status: 200 })
     vi.spyOn(response, 'text').mockRejectedValue(new Error('socket hang up'))

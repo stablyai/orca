@@ -12,6 +12,7 @@ import {
   callCommandCodeCredentials,
   UsageCredentialsHostOutdatedError
 } from '@/runtime/provider-accounts/usage/runtime-usage-credentials-client'
+import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
@@ -133,7 +134,7 @@ export function useCommandCodeCredentials(
     }
     const result = await runMutation(clear ? 'clearApiKey' : 'saveApiKey', draft.trim())
     if (result instanceof Error) {
-      const copy = mutationFailureCopy(clear, t)
+      const copy = mutationFailureCopy(clear, t, result)
       toast.error(copy.title, { description: copy.description })
       return
     }
@@ -149,17 +150,44 @@ function formatCredits(balance: number, locale: string): string {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(balance)
 }
 
-function mutationFailureCopy(clear: boolean, t: Translate): { title: string; description: string } {
+export function isClearTimeoutError(error: unknown): boolean {
+  if (
+    hasRuntimeRpcErrorCode(error, 'runtime_timeout') ||
+    hasRuntimeRpcErrorCode(error, 'timeout')
+  ) {
+    return true
+  }
+  if (error instanceof Error) {
+    if (/timeout/i.test(error.name)) {
+      return true
+    }
+    if (/timed out/i.test(error.message)) {
+      return true
+    }
+  }
+  return false
+}
+
+export function mutationFailureCopy(
+  clear: boolean,
+  t: Translate,
+  error?: unknown
+): { title: string; description: string } {
   return clear
     ? {
         title: t(
           'auto.components.settings.AccountsPane.commandCode.clearFailed',
           'Could not clear the Command Code key'
         ),
-        description: t(
-          'auto.components.settings.AccountsPane.commandCode.clearFailedDescription',
-          'The saved key is unchanged. Try again.'
-        )
+        description: isClearTimeoutError(error)
+          ? t(
+              'auto.components.settings.AccountsPane.commandCode.clearFailedDescription',
+              'Orca could not confirm the key was cleared. The status will refresh; check it before trying again.'
+            )
+          : t(
+              'auto.components.settings.AccountsPane.commandCode.clearFailedUnchangedDescription',
+              'The saved key is unchanged. Try again.'
+            )
       }
     : {
         title: t(
@@ -311,6 +339,9 @@ export function CommandCodeAccountsSection({
     </SettingsGroup>
   )
 }
+
+export const isTimeoutError = isClearTimeoutError
+export const isClearTimeout = isClearTimeoutError
 
 export function renderCommandCodeAccountsSection(
   ownerKey: string,

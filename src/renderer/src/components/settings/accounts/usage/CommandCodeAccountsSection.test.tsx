@@ -19,10 +19,13 @@ vi.mock('@/runtime/provider-accounts/usage/runtime-usage-credentials-client', ()
 }))
 
 import {
+  isClearTimeoutError,
+  mutationFailureCopy,
   selectCommandCodeUsage,
   useCommandCodeCredentials,
   type OwnerUsageSnapshot
 } from './CommandCodeAccountsSection'
+import type { Translate } from '@/i18n/use-translate'
 
 function provider(): ProviderRateLimits {
   return {
@@ -73,6 +76,29 @@ describe('selectCommandCodeUsage', () => {
         snapshot('other', provider())
       )
     ).toBeNull()
+  })
+})
+
+describe('mutationFailureCopy', () => {
+  const t: Translate = (_key, fallback) => fallback
+
+  it('uses unknown-outcome wording on a clear timeout', () => {
+    const copy = mutationFailureCopy(
+      true,
+      t,
+      Object.assign(new Error('timed out'), { name: 'TimeoutError' })
+    )
+    expect(copy.description).toBe(
+      'Orca could not confirm the key was cleared. The status will refresh; check it before trying again.'
+    )
+    expect(
+      isClearTimeoutError(Object.assign(new Error('timed out'), { name: 'TimeoutError' }))
+    ).toBe(true)
+  })
+
+  it('keeps unchanged wording on a clear failure known to leave the key in place', () => {
+    const copy = mutationFailureCopy(true, t, new Error('boom'))
+    expect(copy.description).toBe('The saved key is unchanged. Try again.')
   })
 })
 

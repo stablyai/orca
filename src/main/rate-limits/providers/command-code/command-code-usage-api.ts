@@ -127,6 +127,11 @@ export async function fetchCommandCodeRateLimits(input: {
     now: Date.now()
   })
   if (!normalized.session && !normalized.weekly && !normalized.extraUsage) {
+    // A failed credits read with a successful subscriptions read is a request failure, not an
+    // unrecognized payload: surface the credits failure (e.g. rate-limited) instead of 'parse'.
+    if (credits.kind === 'failed' && subscriptions.kind === 'ok') {
+      return failed('Command Code usage request failed', credits.failureKind)
+    }
     // Key names only, never values: enough to see the real schema without leaking balances or identity.
     const shape = [
       `credits: ${describeShape(credits)}`,
