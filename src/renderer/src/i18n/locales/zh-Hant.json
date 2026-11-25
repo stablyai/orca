@@ -4726,8 +4726,6 @@
             "runtime_last_close_reason": "已關閉：{{value0}}",
             "runtime_reconnect_attempt": "第 {{value0}} 次嘗試",
             "runtime_workspace_window_closed": "工作區視窗已關閉",
-            "connectedHostCount_one": "{{count}} 個主機",
-            "connectedHostCount_other": "{{count}} 個主機",
             "searchSshHosts": "搜尋 SSH 主機…",
             "noMatchingSshHosts": "沒有符合的 SSH 主機。",
             "moreSshHostMatches_one": "還有 {{count}} 個符合的主機。繼續輸入以縮小範圍。",

@@ -5080,8 +5080,6 @@
             "runtime_reconnecting": "重新连接中",
             "runtime_last_close_reason": "已关闭：{{value0}}",
             "runtime_reconnect_attempt": "第 {{value0}} 次尝试",
-            "connectedHostCount_one": "{{count}} 个主机",
-            "connectedHostCount_other": "{{count}} 个主机",
             "searchSshHosts": "搜索 SSH 主机…",
             "noMatchingSshHosts": "没有匹配的 SSH 主机",
             "moreSshHostMatches_one": "还有 {{count}} 个匹配项，继续输入以缩小范围",
