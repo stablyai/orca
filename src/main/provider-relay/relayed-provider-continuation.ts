@@ -24,6 +24,9 @@ export type ProviderRelayItemContinuation = {
   /** The open work, keys as JSON, a provider reads from the attach itself (used for `openGroup`'s);
    *  null: none, so only a daemon cut engages the continuation. */
   openAt?(result: ProviderRelayAttachResult): string[] | null
+  /** Whether a cut-named item not yet seen may still resume under the attach's open work (read
+   *  after `openAt`); without it, every named item is awaited. */
+  awaits?(key: string): boolean
   /** The key, as JSON, of the open work this line ends, if any. */
   settles?(line: string): string | null
 }
@@ -49,7 +52,8 @@ export class RelayedProviderContinuation {
     private readonly open: Set<string> | null = null,
     private readonly cutKeys: ReadonlySet<string> | null = null
   ) {
-    this.awaited = new Set(open ? (cutKeys ?? []) : [])
+    const awaits = (key: string) => hook.awaits?.(key) ?? true
+    this.awaited = new Set(open ? [...(cutKeys ?? [])].filter(awaits) : [])
   }
 
   private lastSeq = 0
