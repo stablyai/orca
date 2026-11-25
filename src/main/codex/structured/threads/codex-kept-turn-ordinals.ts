@@ -2,6 +2,9 @@ import type { CodexAppServerConnection } from '../../app-server/codex-app-server
 import { readCodexTurnStatus } from '../../app-server/codex-structured-thread-facts'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
+import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import {
   isCodexMessageItemType,
   readCodexThreadItem,
@@ -68,13 +71,17 @@ export async function seedKeptCodexTurnOrdinals(input: {
       (value) => readCodexThreadItem(value) ?? []
     )
     const status = readCodexTurnStatus(turn)
-    fetched.push({ threadId, turnId: turn.id, status, items })
+    const kept: KeptCodexTurn = { threadId, turnId: turn.id, status, items }
+    fetched.push(kept)
     // A command still running (a background one outlives its turn) streams on after the reattach.
-    input.translator.seedRunningItems(
-      threadId,
-      turn.id,
-      items.filter((item) => item.type === 'commandExecution' && item.status === 'inProgress')
+    const running = items.filter(
+      (item) => item.type === 'commandExecution' && item.status === 'inProgress'
     )
+    const identities = input.translator.seedRunningItems(threadId, turn.id, running)
+    kept.running = running.map((item, i) => ({
+      itemId: item.id,
+      identity: identities[i]!
+    }))
     // A subagent spawned in a finished turn can still be running, so every spawn is followed.
     for (const item of items) {
       if (item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE) {
@@ -98,6 +105,29 @@ export type KeptCodexTurn = {
   turnId: string
   status: string | null
   items: CodexThreadItem[]
+  /** Its commands still running, seeded into the translator under these rows. */
+  running?: { itemId: string; identity: AgentJournalItemIdentity }[]
+}
+
+/**
+ * A kept command's row already shows its output up to the last ack; seeding its stream with that
+ * text keeps it on view while the replay (which starts after it) and live output continue. A
+ * truncated row's head can't be continued, so it waits for the command's own end.
+ */
+export async function seedKeptCodexCommandOutput(
+  translator: Pick<CodexJournalTranslator, 'seedRunningOutput'>,
+  journal: { reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'itemBody'> } | null,
+  turns: readonly KeptCodexTurn[]
+): Promise<void> {
+  for (const { threadId, running = [] } of journal ? turns : []) {
+    for (const { itemId, identity } of running) {
+      const body = await journal!.reads.itemBody(agentJournalItemKey(identity)).catch(() => null)
+      const output = body?.kind === 'tool-call' ? body.output : undefined
+      if (output && !output.truncated) {
+        translator.seedRunningOutput(threadId, itemId, output.head)
+      }
+    }
+  }
 }
 
 /**
