@@ -4,6 +4,10 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { McpFileAgent } from '../../../shared/mcp-servers/mcp-servers'
 import {
+  agentMcpConfigEntry,
+  isOrcaOwnedAgentMcpServer
+} from '../../../shared/mcp/agent-mcp-config-entry'
+import {
   findManagedTomlBlocks,
   stripManagedTomlRegions,
   type ManagedTomlMarkers
@@ -51,17 +55,32 @@ export function mcpAgentFileServerNames(edit: McpAgentFileEdit, text: string): S
   )
 }
 
+/** The file's names that hold an Orca's own bridge entry, this Orca's or another's. */
+export function orcaOwnedServerNames(edit: McpAgentFileEdit, text: string): Set<string> {
+  const parsed = parseAgentMcpConfigText(text, edit.format)
+  const servers = valueAtKeyPath(parsed, [SERVERS_KEY[edit.agent]])
+  if (typeof servers !== 'object' || servers === null || Array.isArray(servers)) {
+    return new Set()
+  }
+  const dialect = edit.format === 'toml' ? 'grok-toml' : 'mcp-json'
+  return new Set(
+    Object.entries(servers).flatMap(([name, raw]) => {
+      const entry = agentMcpConfigEntry(name, raw, dialect)
+      return entry && isOrcaOwnedAgentMcpServer(entry.server) ? [name] : []
+    })
+  )
+}
+
 /**
  * `text` without this Orca's entries: its marker block in TOML; in JSON each entry that still holds
- * what the ledger says Orca wrote (`owned`) or exactly what it would write now, under any name
- * (`recognized`: an entry from before a rename still comes out), then the
+ * what the ledger says Orca wrote (`owned`) or what it would write now (`recognized`), then the
  * servers' table when Orca added it (`addedTable`) and nothing else is left in it.
  */
 export function withoutOrcaEntries(
   edit: McpAgentFileEdit,
   text: string,
   owned: Readonly<Record<string, unknown>>,
-  recognized: readonly unknown[],
+  recognized: ReadonlyMap<string, unknown>,
   addedTable: boolean
 ): string {
   if (edit.format === 'toml') {
@@ -78,7 +97,7 @@ export function withoutOrcaEntries(
   for (const [name, value] of Object.entries(servers)) {
     const ours =
       (Object.hasOwn(owned, name) && isDeepStrictEqual(value, owned[name])) ||
-      recognized.some((wanted) => isDeepStrictEqual(value, wanted))
+      (recognized.has(name) && isDeepStrictEqual(value, recognized.get(name)))
     if (ours) {
       next = removeJsonProperty(next, [key, name])
     }

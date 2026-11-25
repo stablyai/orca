@@ -35,6 +35,7 @@ import {
   isEmptyMcpAgentFile,
   mcpAgentFileServerNames,
   mcpAgentFileValue,
+  orcaOwnedServerNames,
   withOrcaEntries,
   withoutOrcaEntries,
   type McpAgentFileEdit
@@ -147,7 +148,9 @@ async function syncFileOnce(
     deps.log(`[mcp-servers] ${path} doesn't parse, so Orca leaves it as it is`)
     return true
   }
-  const recognized = [...wanted.values()].map((entry) => mcpAgentFileValue(edit.agent, entry))
+  const recognized = new Map(
+    [...wanted].map(([name, entry]) => [name, mcpAgentFileValue(edit.agent, entry)] as const)
+  )
   // Untouched since Orca's last write, the file goes back to exactly what it was; edited since,
   // only Orca's own entries come out and the user's edits stay.
   const before =
@@ -164,14 +167,15 @@ async function syncFileOnce(
           )
   const created = current === null || (record?.created ?? false)
   const taken = before === null ? new Set<string>() : mcpAgentFileServerNames(edit, before)
-  // A name the user (or another Orca) already uses stays theirs, and so does the server's own name:
-  // a server the user keeps in the agent too runs from there, not twice.
+  // A name the user (or another Orca) already uses stays theirs, and so does a server name the user
+  // keeps in the agent itself: that server runs from there, not twice. Another Orca's bridge entry
+  // under the bare name (an older build) doesn't count as the user's.
+  const orcaNames = before === null ? new Set<string>() : orcaOwnedServerNames(edit, before)
   const adding = new Map(
-    [...wanted].filter(
-      ([name, entry]) =>
-        !taken?.has(name) &&
-        !taken?.has(mcpHostServerNameOfEntry(name, entry.env, deps.userDataPath) ?? name)
-    )
+    [...wanted].filter(([name, entry]) => {
+      const serverName = mcpHostServerNameOfEntry(name, entry.env, deps.userDataPath) ?? name
+      return !taken?.has(name) && !(taken?.has(serverName) && !orcaNames.has(serverName))
+    })
   )
   const added = adding.size > 0 ? withOrcaEntries(edit, before, adding) : before
   if (taken === null || (added !== null && mcpAgentFileServerNames(edit, added) === null)) {
