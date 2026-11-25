@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
 import {
-  agentCliUpdateRows,
   agentCliUpdateStartable,
   runAgentCliUpdateRow
 } from '../status-bar/updates/AgentCliUpdateList'
@@ -24,12 +22,9 @@ import { useAgentCliUpdateGroups } from './use-agent-cli-update-groups'
 const DONE_HIDE_MS = 3000
 const EXIT_MS = 150
 
-// Read from the store at close time, so a timer closing the card records what is listed then.
-function listedOfferKeys(): string[] {
-  return [...useAppStore.getState().agentCliUpdates].flatMap(([hostKey, host]) =>
-    agentCliUpdateRows(hostKey, host).flatMap((row) => agentCliUpdateOfferKey(row) ?? [])
-  )
-}
+/** An Update all run, with the releases its offer showed; only those count as seen when it closes. */
+type RunSession = { targets: readonly RunTarget[]; shownKeys: readonly string[] }
+
 /** Bottom-right offer to update the user's own agent CLIs; Update all collapses it to a progress strip. */
 export function AgentCliUpdateCard(): React.JSX.Element | null {
   const t = useTranslate()
@@ -39,17 +34,16 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
   const offerKeys = useMemo(() => rows.flatMap((row) => agentCliUpdateOfferKey(row) ?? []), [rows])
   const [memory, setMemory] = useState<AgentCliUpdateCardMemory>(readAgentCliUpdateCardMemory)
   const [clock, setClock] = useState(() => Date.now())
-  const [targets, setTargets] = useState<readonly RunTarget[] | null>(null)
+  const [session, setSession] = useState<RunSession | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [exiting, setExiting] = useState(false)
   const exitTimer = useRef<number | null>(null)
-  const cardRef = useRef<HTMLDivElement>(null)
-  const heightRef = useRef<number | null>(null)
 
   const wait = agentCliUpdateCardWait(offerKeys, memory, clock)
-  const phases = targets?.map((target) => targetPhase(target, rows)) ?? []
+  const targets = session?.targets ?? []
+  const phases = targets.map((target) => targetPhase(target, rows))
   const view =
-    targets === null
+    session === null
       ? 'offer'
       : phases.includes('running')
         ? 'updating'
@@ -71,26 +65,29 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
     return () => window.clearTimeout(timer)
   }, [wait, offerKeys, memory])
 
-  const close = useCallback((): void => {
-    const finish = (): void => {
-      exitTimer.current = null
-      const next = { closedAt: Date.now(), seen: listedOfferKeys() }
-      writeAgentCliUpdateCardMemory(next)
-      setMemory(next)
-      setClock(next.closedAt)
-      setTargets(null)
-      setDetailsOpen(false)
-      setExiting(false)
-    }
-    if (prefersReducedMotion) {
-      finish()
-      return
-    }
-    if (exitTimer.current === null) {
-      setExiting(true)
-      exitTimer.current = window.setTimeout(finish, EXIT_MS)
-    }
-  }, [prefersReducedMotion])
+  const close = useCallback(
+    (shownKeys: readonly string[]): void => {
+      const finish = (): void => {
+        exitTimer.current = null
+        const next = { closedAt: Date.now(), seen: shownKeys }
+        writeAgentCliUpdateCardMemory(next)
+        setMemory(next)
+        setClock(next.closedAt)
+        setSession(null)
+        setDetailsOpen(false)
+        setExiting(false)
+      }
+      if (prefersReducedMotion) {
+        finish()
+        return
+      }
+      if (exitTimer.current === null) {
+        setExiting(true)
+        exitTimer.current = window.setTimeout(finish, EXIT_MS)
+      }
+    },
+    [prefersReducedMotion]
+  )
   useEffect(
     () => () => {
       if (exitTimer.current !== null) {
@@ -100,54 +97,30 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
     []
   )
 
+  const sessionShownKeys = session?.shownKeys
   useEffect(() => {
-    if (view !== 'done') {
+    if (view !== 'done' || !sessionShownKeys) {
       return
     }
-    const timer = window.setTimeout(close, DONE_HIDE_MS)
+    const timer = window.setTimeout(() => close(sessionShownKeys), DONE_HIDE_MS)
     return () => window.clearTimeout(timer)
-  }, [view, close])
-
-  // Tracks the card's height so a switch between offer and strip can ease from the old one.
-  useEffect(() => {
-    const card = cardRef.current
-    if (!card) {
-      heightRef.current = null
-      return
-    }
-    const observer = new ResizeObserver(() => {
-      heightRef.current = card.offsetHeight
-    })
-    observer.observe(card)
-    return () => observer.disconnect()
-  }, [visible])
-  useLayoutEffect(() => {
-    const card = cardRef.current
-    const from = heightRef.current
-    if (!card || from === null || prefersReducedMotion) {
-      return
-    }
-    const to = card.offsetHeight
-    if (from !== to) {
-      card.animate([{ height: `${from}px` }, { height: `${to}px` }], {
-        duration: 240,
-        easing: 'cubic-bezier(0.23, 1, 0.32, 1)'
-      })
-    }
-  }, [view, prefersReducedMotion])
+  }, [view, close, sessionShownKeys])
 
   if (!visible) {
     return null
   }
 
   const startable = offerRows.filter(agentCliUpdateStartable)
+  const hostLabels = new Map(groups.map((group) => [group.hostKey, group.label]))
   const startAll = (): void => {
-    setTargets(
-      startable.flatMap((row) =>
+    setSession({
+      shownKeys: offerKeys,
+      targets: startable.flatMap((row) =>
         row.update
           ? [
               {
                 hostKey: row.hostKey,
+                hostLabel: hostLabels.get(row.hostKey) ?? null,
                 agent: row.agent,
                 from: row.update.installedVersion,
                 to: row.update.latestVersion
@@ -155,18 +128,20 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
             ]
           : []
       )
-    )
+    })
     setDetailsOpen(false)
     startable.forEach(runAgentCliUpdateRow)
   }
   const retryFailed = (): void => {
-    targets?.forEach((target, index) => {
+    targets.forEach((target, index) => {
       const row = rowFor(target, rows)
       if (phases[index] === 'failed' && row) {
         runAgentCliUpdateRow(row)
       }
     })
   }
+  const closeShown = (): void => close(session?.shownKeys ?? offerKeys)
+  // Scoped to the card like Orca's update card: a global Escape would also fire for terminals and chats.
   const onKeyDown = (event: React.KeyboardEvent): void => {
     if (event.key !== 'Escape') {
       return
@@ -175,7 +150,7 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
     if (view === 'updating') {
       setDetailsOpen(false)
     } else {
-      close()
+      closeShown()
     }
   }
 
@@ -190,7 +165,6 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
       }
     >
       <Card
-        ref={cardRef}
         size="notice"
         role="complementary"
         aria-label={t('agentCliUpdate.cardLabel', 'Agent CLI updates')}
@@ -205,18 +179,18 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
             detailsOpen={detailsOpen}
             onToggleDetails={() => setDetailsOpen((open) => !open)}
             onUpdate={startAll}
-            onClose={close}
+            onClose={closeShown}
           />
         ) : (
           <AgentCliUpdateCardStrip
             view={view}
-            targets={targets ?? []}
+            targets={targets}
             phases={phases}
             rows={rows}
             detailsOpen={detailsOpen || view === 'failed'}
             onToggleDetails={() => setDetailsOpen((open) => !open)}
             onRetry={retryFailed}
-            onClose={close}
+            onClose={closeShown}
           />
         )}
       </Card>

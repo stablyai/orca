@@ -118,16 +118,30 @@ export function AgentCliUpdateCardManualRow({
           type="button"
           variant="outline"
           size="xs"
-          onClick={() => copyAgentCliUpdateCommand(command, t)}
+          onClick={() => void copyAgentCliUpdateCommand(command, t)}
         >
           <Copy />
           {t('agentCliUpdate.copyCommand', 'Copy')}
         </Button>
       </AgentCliUpdateCardRow>
-      <p className="pr-2 pb-1.5 pl-7.5 text-2xs text-muted-foreground">
-        {t('agentCliUpdate.manualHint', 'Run in a terminal:')}{' '}
-        <code className="font-mono break-all text-foreground">{command}</code>
-      </p>
+      <AgentCliUpdateManualHint command={command} className="pr-2 pb-1.5 pl-7.5" />
     </div>
+  )
+}
+
+/** The command for a CLI Orca can't update itself. */
+export function AgentCliUpdateManualHint({
+  command,
+  className
+}: {
+  command: string
+  className: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <p className={cn('text-2xs text-muted-foreground', className)}>
+      {t('agentCliUpdate.manualHint', 'Run in a terminal:')}{' '}
+      <code className="font-mono break-all text-foreground">{command}</code>
+    </p>
   )
 }

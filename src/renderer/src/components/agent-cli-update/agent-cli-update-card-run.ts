@@ -2,7 +2,14 @@ import type { AgentCliUpdateAgent } from '../../../../shared/agent-launch/instal
 import type { AgentCliUpdateRow } from '../status-bar/updates/AgentCliUpdateList'
 
 /** One CLI the card started updating, with the versions it showed. */
-export type RunTarget = { hostKey: string; agent: AgentCliUpdateAgent; from: string; to: string }
+export type RunTarget = {
+  hostKey: string
+  /** The host heading the offer showed; null when it showed none. */
+  hostLabel: string | null
+  agent: AgentCliUpdateAgent
+  from: string
+  to: string
+}
 export type TargetPhase = 'running' | 'failed' | 'done'
 
 export function rowFor(

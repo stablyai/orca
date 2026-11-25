@@ -13,7 +13,8 @@ import {
   AgentCliUpdateCardReveal,
   AgentCliUpdateCardRow,
   AgentCliUpdateCardVersions,
-  AgentCliUpdateIconStack
+  AgentCliUpdateIconStack,
+  AgentCliUpdateManualHint
 } from './AgentCliUpdateCardRows'
 
 function joinNames(names: readonly string[], t: Translate): string {
@@ -82,10 +83,17 @@ export function AgentCliUpdateCardOffer({
           count: offerRows.length,
           defaultValue_one: '{{count}} CLI update'
         })
+  // With another host added, a lone update names its host so Update doesn't hide where it runs.
+  const singleHost = single ? groups.find((group) => group.hostKey === single.hostKey)?.label : null
   const subtitle = single?.update
-    ? t('agentCliUpdate.cardSingleInstalled', 'You have {{version}}', {
-        version: single.update.installedVersion
-      })
+    ? singleHost
+      ? t('agentCliUpdate.cardSingleInstalledOn', '{{host}} has {{version}}', {
+          host: singleHost,
+          version: single.update.installedVersion
+        })
+      : t('agentCliUpdate.cardSingleInstalled', 'You have {{version}}', {
+          version: single.update.installedVersion
+        })
     : multiHost
       ? joinNames(
           hosts.map((group) => group.label ?? ''),
@@ -127,6 +135,9 @@ export function AgentCliUpdateCardOffer({
           <X className="size-3.5" />
         </Button>
       </div>
+      {singleManual ? (
+        <AgentCliUpdateManualHint command={singleManual} className="px-3.5 pt-2.5" />
+      ) : null}
       {single ? null : (
         <AgentCliUpdateCardReveal open={detailsOpen}>
           <div className="mx-2 mt-3 border-t border-border pt-1.5">
@@ -192,10 +203,14 @@ export function AgentCliUpdateCardOffer({
           <Button
             type="button"
             size="sm"
-            onClick={() => {
-              copyAgentCliUpdateCommand(singleManual, t)
-              onClose()
-            }}
+            // Closing records this version as seen, so a failed copy keeps the card up.
+            onClick={() =>
+              void copyAgentCliUpdateCommand(singleManual, t).then((copied) => {
+                if (copied) {
+                  onClose()
+                }
+              })
+            }
           >
             {primary}
           </Button>

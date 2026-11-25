@@ -54,11 +54,17 @@ export function runAgentCliUpdateRow(row: AgentCliUpdateRow): void {
   void useAppStore.getState().runAgentCliUpdate(agentCliUpdateHostTarget(row.hostKey), row.agent)
 }
 
-/** For a CLI Orca can't update itself: the user runs its command in a terminal. */
-export function copyAgentCliUpdateCommand(command: string, t: Translate): void {
-  void window.api.ui.writeClipboardText(command).then(
-    () => toast.success(t('agentCliUpdate.commandCopied', 'Command copied')),
-    () => toast.error(t('agentCliUpdate.commandNotCopied', 'Could not copy the command'))
+/** For a CLI Orca can't update itself: the user runs its command in a terminal. Resolves whether it copied. */
+export function copyAgentCliUpdateCommand(command: string, t: Translate): Promise<boolean> {
+  return window.api.ui.writeClipboardText(command).then(
+    () => {
+      toast.success(t('agentCliUpdate.commandCopied', 'Command copied'))
+      return true
+    },
+    () => {
+      toast.error(t('agentCliUpdate.commandNotCopied', 'Could not copy the command'))
+      return false
+    }
   )
 }
 
@@ -115,7 +121,7 @@ function AgentCliUpdateListRow({
                   type="button"
                   variant="outline"
                   size="xs"
-                  onClick={() => copyAgentCliUpdateCommand(manual, t)}
+                  onClick={() => void copyAgentCliUpdateCommand(manual, t)}
                 >
                   <Copy />
                   {t('agentCliUpdate.copyCommand', 'Copy')}

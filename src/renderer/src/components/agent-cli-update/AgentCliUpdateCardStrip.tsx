@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { AlertCircle, Check, ChevronDown, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -36,6 +37,8 @@ export function AgentCliUpdateCardStrip({
   const done = phases.filter((phase) => phase === 'done').length
   const settled = phases.filter((phase) => phase !== 'running').length
   const failed = targets.filter((_, index) => phases[index] === 'failed')
+  // Same headings as the offer, so a failure on one host can be told from the same CLI on another.
+  const multiHost = new Set(targets.map((target) => target.hostKey)).size > 1
   const [onlyTarget] = targets
   const [onlyFailed] = failed
   const label =
@@ -124,38 +127,42 @@ export function AgentCliUpdateCardStrip({
         <div className={cn('mx-2 pt-1.5', view === 'failed' ? 'border-t border-border' : 'pb-2')}>
           {targets.map((target, index) => {
             const phase = phases[index]
+            const heading =
+              multiHost && target.hostKey !== targets[index - 1]?.hostKey ? target.hostLabel : null
             return (
-              <AgentCliUpdateCardRow
-                key={`${target.hostKey}\n${target.agent}`}
-                agent={target.agent}
-              >
-                {phase === 'running' ? (
-                  <>
-                    <span>{t('agentCliUpdate.updating', 'Updating…')}</span>
-                    <Loader2 className="size-3 animate-spin" />
-                  </>
-                ) : phase === 'failed' ? (
-                  <AgentCliUpdateFailedChip
-                    onOpen={() =>
-                      openAgentCliUpdateFailure({
-                        hostKey: target.hostKey,
-                        agent: target.agent,
-                        tryAgain: () => {
-                          const row = rowFor(target, rows)
-                          if (row) {
-                            runAgentCliUpdateRow(row)
+              <Fragment key={`${target.hostKey}\n${target.agent}`}>
+                {heading ? (
+                  <div className="px-2 pt-1.5 pb-1 text-2xs text-muted-foreground">{heading}</div>
+                ) : null}
+                <AgentCliUpdateCardRow agent={target.agent}>
+                  {phase === 'running' ? (
+                    <>
+                      <span>{t('agentCliUpdate.updating', 'Updating…')}</span>
+                      <Loader2 className="size-3 animate-spin" />
+                    </>
+                  ) : phase === 'failed' ? (
+                    <AgentCliUpdateFailedChip
+                      onOpen={() =>
+                        openAgentCliUpdateFailure({
+                          hostKey: target.hostKey,
+                          agent: target.agent,
+                          tryAgain: () => {
+                            const row = rowFor(target, rows)
+                            if (row) {
+                              runAgentCliUpdateRow(row)
+                            }
                           }
-                        }
-                      })
-                    }
-                  />
-                ) : (
-                  <>
-                    <span>{target.to}</span>
-                    <Check className="size-3.5 text-status-success" />
-                  </>
-                )}
-              </AgentCliUpdateCardRow>
+                        })
+                      }
+                    />
+                  ) : (
+                    <>
+                      <span>{target.to}</span>
+                      <Check className="size-3.5 text-status-success" />
+                    </>
+                  )}
+                </AgentCliUpdateCardRow>
+              </Fragment>
             )
           })}
         </div>

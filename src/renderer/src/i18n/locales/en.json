@@ -31073,7 +31073,8 @@
     "cardDone_one": "{{count}} CLI is up to date",
     "cardDone_other": "All {{count}} CLIs are up to date",
     "cardFailed_one": "{{count}} CLI didn’t update",
-    "cardFailed_other": "{{count}} CLIs didn’t update"
+    "cardFailed_other": "{{count}} CLIs didn’t update",
+    "cardSingleInstalledOn": "{{host}} has {{version}}"
   },
   "backgroundWorkerPaused": {
     "title": "Some background work paused after crashing repeatedly",
