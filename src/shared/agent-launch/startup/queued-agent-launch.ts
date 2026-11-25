@@ -3,10 +3,7 @@ import { stockLaunchProgram, stockProgramKey } from './managed-agent-launch-prog
 import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 import { readLaunchPosition } from './launch-position'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
-import {
-  COMMAND_TOKEN_SCAN_MAX_CHARS,
-  getCommandTokenPathBasename
-} from '../../shell/command-resolution/command-token-scanner'
+import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shell/command-resolution/command-token-scanner'
 
 export type QueuedAgentLaunch = {
   /** An app PTY id for desktop IPC, or the serving runtime's terminal handle for RPC. */
@@ -46,7 +43,7 @@ export function mayResolveQueuedAgentLaunch(
   const launch = readLaunchPosition(command, shell)
   return Boolean(
     launch &&
-    (stockPrograms.has(stockProgramKey(getCommandTokenPathBasename(launch.executable), platform)) ||
+    (stockPrograms.has(stockProgramKey(launch.executable, platform)) ||
       /[\\/]agent-runtimes[\\/]/i.test(launch.executable))
   )
 }

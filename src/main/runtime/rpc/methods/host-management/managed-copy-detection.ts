@@ -306,23 +306,14 @@ export async function readHostManagedAgentCommands(
     selections.map(async ({ agent, program }) => {
       try {
         const ownPath = withoutManagedDirectories(agent, pathEnv, options.forDelivery)
-        const explicit = options.explicitExecutable
-        if (explicit) {
-          const own = await lookUpTerminalProgram(explicit, ownPath, preferUnquotedPath)
-          if (isAbsolute(own)) {
-            if (!onTerminalPath(own, pathEnv, options.shell)) {
-              commands[agent] = own
-            }
-            return
-          }
-        }
-        const own = await lookUpTerminalProgram(program, ownPath, preferUnquotedPath)
-        if (own === program) {
+        const executable = options.explicitExecutable ?? program
+        const own = await lookUpTerminalProgram(executable, ownPath, preferUnquotedPath)
+        if (own === executable) {
           const managed = await managedCopyFor(agent, program, settings)
           if (managed) {
             commands[agent] = managed
           }
-        } else if (!explicit && isAbsolute(own) && !onTerminalPath(own, pathEnv, options.shell)) {
+        } else if (isAbsolute(own) && !onTerminalPath(own, pathEnv, options.shell)) {
           commands[agent] = own
         }
       } catch (error) {

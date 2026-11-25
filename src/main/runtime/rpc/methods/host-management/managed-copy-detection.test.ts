@@ -56,13 +56,14 @@ it.runIf(process.platform === 'win32')(
 )
 
 it.runIf(process.platform === 'win32')(
-  'keeps codex.exe when an earlier PATH directory contains codex.cmd',
+  'uses codex.exe from PATH or Orca when PATH also contains codex.cmd',
   async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-codex-path-'))
     const a = join(dir, 'A')
     const b = join(dir, 'B')
     const exe = join(b, 'codex.exe')
     const managed = join(dir, 'managed')
+    const managedExe = join(managed, 'bin', 'codex.exe')
     const launch = (queuedPath: string) =>
       alignManagedAgentLaunchAtSpawn(
         {
@@ -81,9 +82,11 @@ it.runIf(process.platform === 'win32')(
       expect(await launch(`${a};"${b}"`)).toBe(`& '${exe}' --version`)
 
       await mkdir(join(managed, 'bin'), { recursive: true })
-      await writeFile(join(managed, 'bin', 'codex.exe'), '')
+      await writeFile(managedExe, '')
       rememberManagedAgentRelease('codex', managed)
       vi.stubEnv('USERPROFILE', dir)
+      vi.stubEnv('FNM_DIR', dir)
+      expect(await launch(a)).toBe(`& '${managedExe}' --version`)
       expect(
         await alignManagedAgentLaunchAtSpawn(
           {
