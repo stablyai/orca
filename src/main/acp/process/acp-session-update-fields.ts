@@ -49,7 +49,7 @@ const MESSAGE_ID = field('messageId')
 const TOOL_CALL_ID = field('toolCallId')
 
 /** The fields the floor needs, scanned from the line's ends. A call's end is read by the
- *  connection, which parses every line anyway (`AcpRelayTurns.observeUpdate`). */
+ *  connection, which parses every line anyway (`AcpRelayTurns.observeSessionUpdate`). */
 function updateFields(line: string): AcpUpdateFields {
   const windows =
     line.length <= 2 * FIELD_WINDOW_CHARS

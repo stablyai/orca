@@ -8,7 +8,7 @@ import { relayedManagedProcess } from '../../../provider-relay/relayed-managed-p
 import { createAcpAgentConnection } from '../acp-agent-connection'
 import type { AcpSessionEvent } from '../../protocol/acp-session-events'
 import { acpKeptAgent, restorableAcpSession } from '../acp-kept-agent'
-import { AcpRelayTurns } from '../acp-relay-ack-floor'
+import { AcpRelayTurns } from '../acp-relay-turns'
 
 const policy = () => ({ idleStopMs: null, markers: [] })
 const line = (message: Record<string, unknown>): string =>

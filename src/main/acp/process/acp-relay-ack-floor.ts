@@ -13,10 +13,8 @@ import {
 
 const MAX_OPEN_ITEMS = 256
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
+/** A message an earlier attach's cut split, as its continuation names it. */
+export type AcpInheritedCut = { session: string; id: string; child: boolean; resumes: boolean }
 /** `last`: its latest chunk's seq, so the ones streamed last are kept and named. */
 type Item = { session?: string; child: boolean; last?: number }
 /** The tag a continuation puts before a moved message's id (`relay:<relay>:<seq>:`). */
@@ -54,7 +52,7 @@ const first = (open: Map<string, { seq: number }>): number | null =>
  * the replay numbers them again as the live run did. Only session updates are read past their
  * envelope.
  */
-class AcpRelayAckFloor implements ProviderRelayAckFloor {
+export class AcpRelayAckFloor implements ProviderRelayAckFloor {
   /** Insertion order is seq order, so the first entry is the earliest. */
   private readonly calls = new Map<string, { seq: number }>()
   private readonly messages = new Map<string, Item & { seq: number }>()
@@ -76,9 +74,16 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   private readonly superseded = new Map<string, Item & { seq: number }>()
   /** How far acks may have reached: past this, a line may not replay again. */
   private ackable = 0
+  /** Ended messages with lines past `ackable`: a replay from there shows them without their
+   *  start, so they're named until acks pass their last line. */
+  private readonly ended = new Map<string, Item>()
+  /** The output names on every ack what a replay would split, so saved lines aren't shown twice. */
+  readonly namesEveryAck = true
   /** Messages of agent-started turns the app ended: a late chunk of one is dropped, as live. */
   private endedByTurn = new Set<string>()
   private wakeAck: (() => void) | null = null
+  /** An earlier cut named fewer than it split: this attach's cuts say so too. */
+  private carriedOverflow = false
   /** Per session, the message its latest chunk named: only a new one ends the others. */
   private readonly current = new Map<string | undefined, string>()
 
@@ -218,6 +223,19 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
         named.push([id, item])
       }
     }
+    // Superseded ones whose start an ack may pass resume without it; ended ones still replay.
+    for (const [id, item] of this.superseded) {
+      if (item.seq <= this.ackable) {
+        named.push([id, item])
+      }
+    }
+    for (const [id, item] of this.ended) {
+      if ((item.last ?? 0) > this.ackable) {
+        named.push([id, item])
+      } else {
+        this.ended.delete(id)
+      }
+    }
     // Only a session's latest few can resume, so those streamed last are named, within the cap.
     const last = ([, item]: [string, Item & { seq?: number }]) => item.last ?? item.seq ?? 0
     named.sort((a, b) => last(b) - last(a))
@@ -239,7 +257,34 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
         keys.add(key)
       }
     }
-    return overflow ? [...keys, RELAY_CUT_KEYS_OVERFLOW] : [...keys]
+    return overflow || this.carriedOverflow ? [...keys, RELAY_CUT_KEYS_OVERFLOW] : [...keys]
+  }
+
+  /** What an earlier attach's cut split and may still resume: cut here too, so a later cut of
+   *  this attach names it again instead of dropping it from the daemon's record. */
+  inheritCuts(cuts: readonly AcpInheritedCut[], overflow: boolean, savedThrough: number): void {
+    for (const { session, id, child, resumes } of cuts) {
+      const known = this.messages.has(id) || this.cutMessages.has(id) || this.pausedCuts.has(id)
+      if (known) {
+        continue
+      }
+      // One that can't resume is named while its saved lines may still replay.
+      if (resumes && this.pausedCuts.size < MAX_OPEN_ITEMS) {
+        this.pausedCuts.set(id, { session, child, last: savedThrough })
+      } else if (!resumes) {
+        this.retire(id, { session, child, last: savedThrough })
+      }
+    }
+    this.carriedOverflow ||= overflow
+  }
+
+  private retire(id: string, item: Item): void {
+    if ((item.last ?? 0) > this.ackable) {
+      if (this.ended.size >= MAX_OPEN_ITEMS) {
+        this.ended.delete(this.ended.keys().next().value ?? '')
+      }
+      this.ended.set(id, item)
+    }
   }
 
   wake(ack: () => void): void {
@@ -275,6 +320,7 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
       for (const [id, item] of open) {
         if (!item.child) {
           open.delete(id)
+          this.retire(id, item)
         }
       }
     }
@@ -311,6 +357,7 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
       for (const [id, item] of open) {
         if (item.session === session) {
           open.delete(id)
+          this.retire(id, item)
         }
       }
     }
@@ -319,60 +366,6 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   private open<T>(map: Map<string, T>, key: string, entry: T): void {
     if (!map.has(key) && map.size < MAX_OPEN_ITEMS) {
       map.set(key, entry)
-    }
-  }
-}
-
-/**
- * A relayed ACP agent's prompt turns, as the app sends, adopts and settles its prompts, read by
- * each attach's ack floor. A prompt's end that a newer prompt already superseded changes nothing.
- */
-export class AcpRelayTurns {
-  private running = false
-  private serial = 0
-  private current: AcpRelayAckFloor | null = null
-
-  /** A fresh floor for each attach, holding a prompt that runs across it. */
-  readonly ackFloor = (): ProviderRelayAckFloor => {
-    this.current = new AcpRelayAckFloor(this.running)
-    return this.current
-  }
-
-  /** A prompt sent by `send` (or an earlier app's one, `adopted`) runs until its answer or failure. */
-  track<T>(send: () => Promise<T>, adopted = false): Promise<T> {
-    const serial = ++this.serial
-    this.running = true
-    this.current?.startTurn(adopted)
-    const end = (): void => {
-      if (serial === this.serial && this.running) {
-        this.running = false
-        this.current?.endTurn()
-      }
-    }
-    const answered = send()
-    void answered.then(end, end)
-    return answered
-  }
-
-  /** The agent's own turn ended (it has no prompt to answer): its messages no longer hold acks,
-   *  so a reattach doesn't replay them into a turn of their own again. */
-  readonly agentTurnEnded = (): void => {
-    if (!this.running) {
-      this.current?.endAgentTurn()
-    }
-  }
-
-  /** Every session update's params the connection parsed: a call's final status lets the floor
-   *  past it. Acks follow the save barrier, so the parse is in before the floor is next read. */
-  observeSessionUpdate(params: unknown): void {
-    const update = isRecord(params) ? params.update : undefined
-    if (
-      isRecord(update) &&
-      (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') &&
-      (update.status === 'completed' || update.status === 'failed') &&
-      typeof update.toolCallId === 'string'
-    ) {
-      this.current?.endCall(update.toolCallId)
     }
   }
 }

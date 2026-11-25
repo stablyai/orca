@@ -8,9 +8,8 @@ import {
   type RelayedProviderProcess
 } from '../../provider-relay/app-provider-relays'
 import { readProcessStartTimeMs } from '../../runtime/agent-session/ownership/agent-session-process-identity-probe'
-import { AcpRelayItemContinuation } from './acp-relay-item-continuation'
+import { acpRelayFloors, type AcpRelayTurns } from './acp-relay-turns'
 import { acpRelayWorkMarkers, acpSpecRelays } from './acp-relay-work-markers'
-import { AcpRelayTurns } from './acp-relay-ack-floor'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
 import { isJsonRpcAnswerAbove, jsonRpcResultOf } from '../../provider-relay/relayed-json-rpc-lines'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
@@ -238,18 +237,10 @@ export async function launchRelayedAcpAgent(
   }
   // Answers to this app's own requests pass a reattach's hold; everything else waits for the chat.
   let floor = Number.POSITIVE_INFINITY
-  const turns = new AcpRelayTurns()
-  const continuation = new AcpRelayItemContinuation(Boolean(spec.dialect.childSessionStop))
+  const { turns, continuation, ackFloor } = acpRelayFloors(Boolean(spec.dialect.childSessionStop))
   const relay: ProviderRelayLaunch = {
     chatKey: input.acquire.identity.sessionId,
-    markers: {
-      ...acpRelayWorkMarkers(spec.agent),
-      ackFloor: () => {
-        continuation.reset()
-        return turns.ackFloor()
-      },
-      continuation
-    },
+    markers: { ...acpRelayWorkMarkers(spec.agent), ackFloor, continuation },
     keep: { ...acpRelayKeep(spec.dialect), note: acpLaunchNote(launch.fullAccess) },
     passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor)
   }

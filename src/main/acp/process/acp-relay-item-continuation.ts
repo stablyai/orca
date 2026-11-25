@@ -4,6 +4,7 @@ import {
 } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayItemContinuation } from '../../provider-relay/relayed-provider-continuation'
 import { jsonRpcAnswerId } from '../../provider-relay/relayed-json-rpc-lines'
+import type { AcpInheritedCut } from './acp-relay-ack-floor'
 import {
   ACP_MESSAGE_BOUNDARIES,
   ACP_MESSAGE_CHUNKS,
@@ -16,6 +17,14 @@ const PROMPT = 'session/prompt'
 
 /** More messages than this in one cut replay can't be real; later ones read as started. */
 const MAX_SEEN_MESSAGES = 1_024
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -32,8 +41,16 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
   /** Sessions past their first message or a boundary: their later messages start whole. */
   private readonly started = new Set<string | undefined>()
 
-  /** `childSessions`: the agent's subagents are child sessions (OpenCode) that report their end. */
-  constructor(private readonly childSessions = false) {}
+  /** `childSessions`: the agent's subagents are child sessions (OpenCode) that report their end.
+   *  `inherit`: given the cut messages that may still resume, at each attach. */
+  constructor(
+    private readonly childSessions = false,
+    private readonly inherit?: (
+      cuts: AcpInheritedCut[],
+      overflow: boolean,
+      savedThrough: number
+    ) => void
+  ) {}
 
   /** The messages this attach's cut split, as the client named them; null: unnamed, so guessed. */
   private cutKeys: ReadonlySet<string> | null = null
@@ -106,11 +123,24 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     // OpenCode's subagents stream past their parent's prompt, until each reports its end.
     const children = this.childSessions ? (result.openWork?.subagent ?? []) : []
     this.resumable = { prompt: cut.length > 0, children: new Set(children.map((key) => key[0])) }
+    const overflow = this.cutKeys?.has(RELAY_CUT_KEYS_OVERFLOW) === true
+    this.inherit?.(this.stillCut(), overflow, result.savedThrough ?? 0)
     const open = [
       ...cut.map((request) => JSON.stringify(request.id)),
       ...children.map((key) => JSON.stringify(key))
     ]
     return open.length > 0 ? open : null
+  }
+
+  private stillCut(): AcpInheritedCut[] {
+    return [...(this.cutKeys ?? [])].flatMap((key) => {
+      const parts: unknown = key === RELAY_CUT_KEYS_OVERFLOW ? null : safeJson(key)
+      const [session, id] = Array.isArray(parts) ? parts : []
+      const child = typeof session === 'string' && this.resumable.children.has(session)
+      return typeof session === 'string' && typeof id === 'string'
+        ? [{ session, id, child, resumes: this.awaits(key) }]
+        : []
+    })
   }
 
   /** A named message resumes only inside a prompt still running, or a child session still open. */

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ProviderRelayCarriedWork } from '../../../provider-relay/provider-relay-carried-work'
 import { RelayedProviderOutput } from '../../../provider-relay/relayed-provider-output'
 import { RELAY_CUT_KEYS_OVERFLOW } from '../../../daemon/protocol/daemon-provider-relay-protocol'
-import { AcpRelayTurns } from '../acp-relay-ack-floor'
+import { AcpRelayTurns } from '../acp-relay-turns'
 
 const update = (sessionUpdate: string, rest: Record<string, unknown> = {}): string =>
   JSON.stringify({
@@ -172,7 +172,8 @@ describe('ACP relay ack floor', () => {
     await send(...Array.from({ length: 17 }, (_, at) => chunk('t', `n${at}`)))
     await send(chunk('again', 'n0'))
     expect(cuts.length).toBe(1)
-    expect(cutKeys.at(-1)).toEqual([JSON.stringify(['s', 'n0'])])
+    // n0, and n1, whose start acks passed as it was superseded too: it may resume as well.
+    expect(cutKeys.at(-1)).toEqual([JSON.stringify(['s', 'n0']), JSON.stringify(['s', 'n1'])])
   })
 
   it('keeps a message that streams between many others held, by when it last streamed', async () => {
