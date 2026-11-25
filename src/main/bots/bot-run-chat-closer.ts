@@ -30,7 +30,13 @@ import { readBotChats } from '../runtime/rpc/methods/bots-chats'
 import { chatIsIdle, chatPaneKey } from '../external-conversations/external-conversation-chat'
 import { requireStructuredHost } from './bot-chat-session'
 import { runChatClosesOwed, runtimeRunChatClose } from './bot-run-chat-close-step'
-import { chatRunId, coordinatesLiveRun, ownsOpenItem, personSpoke } from './bot-run-chat-facts'
+import {
+  chatRunId,
+  coordinatesLiveRun,
+  ownsOpenItem,
+  personSpoke,
+  runChatTabInFront
+} from './bot-run-chat-facts'
 
 type RunChatRead = BotRunChatPreviewRow & {
   /** The session running it now; a /clear moves it on from the row's root. */
@@ -113,7 +119,7 @@ async function readRunChat(
       context.runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))?.key
     ),
     'live-run': coordinatesLiveRun(db, sessionId),
-    'tab-open': host.getSessionTabId(sessionId) !== null,
+    'tab-in-front': runChatTabInFront(context.runtime, host, sessionId),
     'person-spoke': await personSpoke(host, sessions.all)
   }
   return {
@@ -280,8 +286,8 @@ export async function closeEndedRunChats(
         })
       if (outcome === 'closed') {
         tried.push(chat.chatId)
-      } else if (outcome === 'tab-open') {
-        keep(['tab-open'])
+      } else if (outcome === 'tab-in-front') {
+        keep(['tab-in-front'])
       } else if (outcome === 'failed') {
         failed += 1
       }

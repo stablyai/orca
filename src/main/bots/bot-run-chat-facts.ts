@@ -1,5 +1,6 @@
 // What the run chat closer reads about one chat: the run that opened it, whether a person wrote in
-// it, whether it owns an open item, and whether a Run it coordinates is still going.
+// it, whether it owns an open item, whether a Run it coordinates is still going, and whether its
+// tab is in front.
 import { BOT_ITEM_STATUSES, isOpenBotItemStatus } from '../../shared/bots/bot-items'
 import { readAutomationRunMessage } from '../../shared/automations/automation-run-message'
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
@@ -85,4 +86,21 @@ export function coordinatesLiveRun(db: OrchestrationDb, sessionId: string): bool
       live.get(run.id) !== undefined ||
       placed.all(run.id).some((row) => remoteHoldOnTask(db, String(row.task_id))?.liveWorker)
   )
+}
+
+/** Someone may be reading the chat: its tab is the one its workspace, or a split group of it, shows.
+ *  A tab behind another is not, and closes with the chat; one whose place is unknown counts. */
+export function runChatTabInFront(
+  runtime: Pick<OrcaRuntimeService, 'structuredSessionTabInFront'>,
+  host: Pick<StructuredAgentSessionHost, 'getSessionTabId'> | null,
+  sessionId: string
+): boolean {
+  if ((host?.getSessionTabId(sessionId) ?? null) === null) {
+    return false
+  }
+  try {
+    return runtime.structuredSessionTabInFront(sessionId) !== false
+  } catch {
+    return true
+  }
 }

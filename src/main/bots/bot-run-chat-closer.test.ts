@@ -39,6 +39,9 @@ const world = vi.hoisted(() => {
     journals: new Map<string, { first: unknown; 'last-person': unknown }>(),
     working: new Set<string>(),
     tabs: new Set<string>(),
+    /** Where each shown chat's tab is, as the window published it: true in front (the default),
+     *  false behind another tab, null unpublished, 'throws' for a chat whose scope is gone. */
+    tabPlace: new Map<string, boolean | null | 'throws'>(),
     closeCalls,
     /** Runs before the recheck under the lock, as mail arriving meanwhile would. */
     beforeRecheck: () => {},
@@ -48,7 +51,7 @@ const world = vi.hoisted(() => {
     lineage: new Map<string, string[]>(),
     /** Chats whose journal cannot be read. */
     unreadable: new Set<string>(),
-    /** Chats a tab opened on after the recheck, which the close's last word refuses. */
+    /** Chats whose tab came to the front after the recheck, which the close's last word refuses. */
     tabAtClose: new Set<string>(),
     /** Bots with a close left to finish, and each finishing look: the bot and the chats it saw. */
     owing: new Set<string>(),
@@ -88,7 +91,7 @@ vi.mock('./bot-run-chat-close-step', () => ({
         return 'kept'
       }
       if (world.tabAtClose.has(sessionId)) {
-        return 'tab-open'
+        return 'tab-in-front'
       }
       world.closeCalls.push(sessionId)
       // A row is listed by its root, and closed by the session running it.
@@ -187,6 +190,13 @@ function setup(bot: Partial<Bot> = {}) {
         fixture.liveRuns.has(orcaSessionId) ? [{ id: `run-of-${orcaSessionId}` }] : [],
       db: { prepare: () => ({ get: () => ({ live: 1 }) }) }
     }),
+    structuredSessionTabInFront: (id: string) => {
+      const place = world.tabPlace.has(id) ? world.tabPlace.get(id) : true
+      if (place === 'throws') {
+        throw new Error('Chat presentation scope is unavailable')
+      }
+      return place
+    },
     getExternalConversationSeam: () => ({
       replyTarget: (pane: string) =>
         fixture.threads.has(pane) ? { key: { source: 'slack' } } : null
@@ -231,6 +241,7 @@ beforeEach(() => {
   world.journals.clear()
   world.working.clear()
   world.tabs.clear()
+  world.tabPlace.clear()
   world.closeCalls = []
   world.beforeRecheck = () => {}
   world.sessionBot = null
@@ -305,7 +316,7 @@ describe('closing ended run chats', () => {
         }),
       thread: (id) => fixture.threads.add(`pane:${id}`),
       'live-run': (id) => fixture.liveRuns.add(id),
-      'tab-open': (id) => world.tabs.add(id),
+      'tab-in-front': (id) => world.tabs.add(id),
       'person-spoke': (id) =>
         (world.journals.get(id)!['last-person'] = {
           itemId: 'typed',
@@ -369,13 +380,36 @@ describe('closing ended run chats', () => {
     expect(world.closeCalls).toEqual([])
   })
 
-  it('counts a chat whose tab opened just before its close as kept for its tab, not as failed', async () => {
+  it('closes a chat whose tab is behind another, and keeps one in front or whose place is unknown', async () => {
+    const { bot, runtime } = setup()
+    const shown = (place: boolean | null | 'throws') => {
+      const id = runChat()
+      world.tabs.add(id)
+      world.tabPlace.set(id, place)
+      return id
+    }
+    const behind = shown(false)
+    const front = shown(true)
+    const unpublished = shown(null)
+    const scopeGone = shown('throws')
+    const preview = await previewRunChats(runtime, bot)
+    expect(preview.close.map((chat) => chat.chatId)).toEqual([behind])
+    expect(preview.keep.map((chat) => [chat.chatId, chat.keep])).toEqual([
+      [front, ['tab-in-front']],
+      [unpublished, ['tab-in-front']],
+      [scopeGone, ['tab-in-front']]
+    ])
+    await closeEndedRunChats(runtime, bot)
+    expect(world.closeCalls).toEqual([behind])
+  })
+
+  it('counts a chat whose tab came to the front just before its close as kept for its tab, not as failed', async () => {
     const { bot, runtime } = setup()
     world.tabAtClose.add(runChat())
     await expect(closeEndedRunChats(runtime, bot)).resolves.toEqual({
       closed: 0,
       failed: 0,
-      kept: { 'tab-open': 1 }
+      kept: { 'tab-in-front': 1 }
     })
   })
 
@@ -652,9 +686,9 @@ describe('closing one run chat under the bot lock', () => {
     expect(refused.calls).toEqual(['close run-chat'])
     expect(refused.owed.size).toBe(0)
 
-    // A tab that opened since the recheck refused it at the close's last word.
-    const shown = sessions({ stopped: false, tabOpen: true })
-    await expect(shown.close('run-chat', true)).resolves.toBe('tab-open')
+    // A tab that came to the front since the recheck refused it at the close's last word.
+    const shown = sessions({ stopped: false, tabInFront: true })
+    await expect(shown.close('run-chat', true)).resolves.toBe('tab-in-front')
     expect(shown.calls).toEqual(['close run-chat'])
     expect(shown.owed.size).toBe(0)
   })
@@ -760,10 +794,10 @@ describe('closing one run chat under the bot lock', () => {
     expect(owed.size).toBe(0)
   })
 
-  it('holds up nothing on a record it cannot drop: a tab still refuses as tab-open, and the next records settle', async () => {
-    const shown = sessions({ stopped: false, tabOpen: true })
+  it('holds up nothing on a record it cannot drop: a tab in front still refuses as tab-in-front, and the next records settle', async () => {
+    const shown = sessions({ stopped: false, tabInFront: true })
     shown.fail.forget = true
-    await expect(shown.close('run-chat', true)).resolves.toBe('tab-open')
+    await expect(shown.close('run-chat', true)).resolves.toBe('tab-in-front')
     expect(shown.owed.size).toBe(1)
 
     const owed = new Map([

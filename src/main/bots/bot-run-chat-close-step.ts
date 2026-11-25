@@ -1,6 +1,6 @@
 // One ended run chat's close, under the bot's lock so mail into it waits: judged again there, closed
-// only while idle and shown in no tab, then what was queued or coordinated there goes on to the
-// Home Chat. A move that fails after the close is tried again on the bot's next look, after a
+// only while idle and not in front, then what was queued or coordinated there goes on to the
+// Home Chat. A tab behind another closes with the chat. A move that fails after the close is tried again on the bot's next look, after a
 // restart too.
 import type { Bot } from '../../shared/bot-types'
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
@@ -16,13 +16,14 @@ import {
 import { runtimeBotChats, type BotChatHost, type botChatSessions } from './bot-chat-session'
 import { carryQueuedMessages } from './bot-chat-queued-carry'
 import { dropReplacedChatMail } from './bot-chat-replacement'
+import { runChatTabInFront } from './bot-run-chat-facts'
 
 export type RunChatCloseSteps = {
-  /** `tabOpen` when a tab showed the chat at the last word before Stop, which refuses it.
+  /** `tabInFront` when the chat's tab was in front at the last word before Stop, which refuses it.
    *  `whenStopped` when the stop waits for the agent's start to end: true once the chat closed. */
   close: (
     sessionId: string
-  ) => Promise<{ stopped: boolean; tabOpen?: boolean; whenStopped?: Promise<boolean> }>
+  ) => Promise<{ stopped: boolean; tabInFront?: boolean; whenStopped?: Promise<boolean> }>
   /** False when a card that moves stayed behind. */
   carry: (host: BotChatHost, from: string, to: string) => Promise<boolean>
   handOver: (from: string, to: string) => void
@@ -41,7 +42,7 @@ export type RunChatCloseSteps = {
 }
 
 /** `stopping`: the chat closes once its agent's start ends, and the moves follow then. */
-export type RunChatCloseOutcome = 'kept' | 'tab-open' | 'failed' | 'stopping' | 'closed'
+export type RunChatCloseOutcome = 'kept' | 'tab-in-front' | 'failed' | 'stopping' | 'closed'
 
 type ChatLock = Pick<ReturnType<typeof botChatSessions>, 'underChatLock'>
 
@@ -132,7 +133,7 @@ export function closeRunChatUnderLock(
     }
     if (!closed.stopped) {
       forget(steps, sessionId)
-      return closed.tabOpen ? 'tab-open' : 'failed'
+      return closed.tabInFront ? 'tab-in-front' : 'failed'
     }
     await finishClose(steps, host, bot, sessionId, home)
     return 'closed'
@@ -175,19 +176,19 @@ const stopsWaiting = new Set<string>()
 
 export function runtimeRunChatClose(runtime: OrcaRuntimeService) {
   const steps: RunChatCloseSteps = {
-    // A turn or send that started, or a tab that opened, after the last look refuses the close.
+    // A turn or send that started, or a tab that came to the front, after the last look refuses it.
     close: async (sessionId) => {
-      let tabOpen = false
+      let tabInFront = false
       const outcome = await closeStructuredAgentSessionChild(sessionId, {
         runtime,
         admitClose: (work) => {
-          tabOpen = (getStructuredAgentSessionHost()?.getSessionTabId(sessionId) ?? null) !== null
-          return work.state === 'idle' && !tabOpen
+          tabInFront = runChatTabInFront(runtime, getStructuredAgentSessionHost(), sessionId)
+          return work.state === 'idle' && !tabInFront
         }
       })
       return {
         stopped: outcome.stopped,
-        tabOpen,
+        tabInFront,
         ...(outcome.whenStartEnds ? { whenStopped: outcome.whenStartEnds } : {})
       }
     },

@@ -66,7 +66,7 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca bot run-chats [--bot <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'bot'],
     notes: [
-      'Reads only. A run chat is one an automation run opened as a new conversation; it closes once its run ended and nothing waits there (a turn, unread mail, an open item, an automation aimed at it, a thread, a live Run, an open tab, a person who wrote after the run, or a turn in the last 10 minutes).',
+      'Reads only. A run chat is one an automation run opened as a new conversation; it closes once its run ended and nothing waits there (a turn, unread mail, an open item, an automation aimed at it, a thread, a live Run, its tab in front, a person who wrote after the run, or a turn in the last 10 minutes). A tab behind another closes with the chat.',
       'Closed chats keep their history and show under `orca bot chats --all`. --json lists each chat with its title and items.'
     ]
   },

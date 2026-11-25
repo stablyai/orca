@@ -8,11 +8,14 @@ import { unfinishedRunChatCloses } from '../runtime/orchestration/db/bot-request
 const lane = vi.hoisted(() => {
   const now: {
     tabs: Set<string>
+    behind: Set<string>
     state: StructuredAgentSessionCloseWork['state']
     startEnds: Promise<boolean> | null
   } = {
     /** Chats a tab shows by the time the close reaches its last word. */
     tabs: new Set<string>(),
+    /** Of those, the ones whose tab sits behind another in its workspace. */
+    behind: new Set<string>(),
     state: 'idle',
     /** An agent still starting: the stop waits for that start to end. */
     startEnds: null
@@ -59,6 +62,7 @@ let db: OrchestrationDb
 afterEach(() => {
   db.close()
   lane.tabs.clear()
+  lane.behind.clear()
   lane.state = 'idle'
   lane.startEnds = null
 })
@@ -66,15 +70,26 @@ afterEach(() => {
 function closer() {
   db = new OrchestrationDb(':memory:')
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close step reads only the database.
-  const runtime = { getOrchestrationDb: () => db } as unknown as OrcaRuntimeService
+  const runtime = {
+    getOrchestrationDb: () => db,
+    structuredSessionTabInFront: (id: string) => !lane.behind.has(id)
+  } as unknown as OrcaRuntimeService
   return runtimeRunChatClose(runtime)
 }
 
 describe("a run chat close's last word", () => {
-  it('refuses the close when a tab opened on the chat since the recheck, and keeps no record', async () => {
+  it("refuses the close when the chat's tab came to the front since the recheck, and keeps no record", async () => {
     const { close } = closer()
     lane.tabs.add('run-chat')
-    await expect(close('bot-1', 'run-chat', async () => true)).resolves.toBe('tab-open')
+    await expect(close('bot-1', 'run-chat', async () => true)).resolves.toBe('tab-in-front')
+    expect(unfinishedRunChatCloses(db, 'bot-1')).toEqual([])
+  })
+
+  it('closes a chat whose tab sits behind another, tab and all', async () => {
+    const { close } = closer()
+    lane.tabs.add('run-chat')
+    lane.behind.add('run-chat')
+    await expect(close('bot-1', 'run-chat', async () => true)).resolves.toBe('closed')
     expect(unfinishedRunChatCloses(db, 'bot-1')).toEqual([])
   })
 

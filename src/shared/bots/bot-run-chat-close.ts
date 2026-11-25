@@ -21,8 +21,9 @@ export const RUN_CHAT_KEEP_REASONS = [
   /** A Run it coordinates has a worker still going: its Dispatch is pending or out, or a paired
    *  server holds its Task. */
   'live-run',
-  /** Someone has its tab open. */
-  'tab-open',
+  /** Its tab is the one its workspace, or a split group of it, shows. A tab behind another closes
+   *  with the chat. */
+  'tab-in-front',
   /** A person wrote in it after the run. */
   'person-spoke'
 ] as const
