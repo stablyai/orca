@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { Check, Ellipsis } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -63,17 +63,32 @@ export function useAppRailCustomizeLabel(): string {
   return t('appRail.customize', 'Customize')
 }
 
-/** One checkbox row per rail page; toggling keeps the menu open so several can change in one visit. */
+/**
+ * One checkbox row per rail page; toggling keeps the menu open so several can change in one visit. `focusRow` is the
+ * row a toggle left focused before "…" and More swapped; the checklist reopened in the new form starts on it.
+ */
 export function AppRailCustomizeRows({
-  rows
+  rows,
+  focusRow = null
 }: {
   rows: readonly AppRailCustomizeRow[]
+  focusRow?: string | null
 }): React.JSX.Element {
+  // Focus the row as it attaches, so it already holds focus when the menu's opening focus scope looks. Once only: the
+  // row's composed ref is rebuilt on its re-renders, and focus must not follow the arrow keys back to it.
+  const pendingFocusRef = useRef(focusRow)
+  const focusPendingRow = useCallback((node: HTMLDivElement | null) => {
+    if (node && pendingFocusRef.current !== null) {
+      pendingFocusRef.current = null
+      node.focus({ preventScroll: true })
+    }
+  }, [])
   return (
     <>
       {rows.map((row) => (
         <DropdownMenuItem
           key={row.id}
+          ref={row.id === focusRow ? focusPendingRow : undefined}
           role="menuitemcheckbox"
           aria-checked={row.shown}
           onSelect={(event) => {
@@ -93,20 +108,41 @@ export function AppRailCustomizeRows({
   )
 }
 
+/**
+ * A checklist toggle that swaps "…" and More remounts the "…" slot as the other form. The rail hands the new form the
+ * row that was toggled (`reopenOn`, read at mount only) so it opens its checklist on that row, and hears when the
+ * checklist closes (`onChecklistClose`) so a later swap doesn't reopen it.
+ */
+export type AppRailChecklistCarry = {
+  reopenOn: string | null
+  onChecklistClose: () => void
+}
+
 /** The rail's "…": which pages the rail shows, in rail order. Becomes More's Customize submenu when the rail folds. */
 export function AppRailCustomizeMenu({
   rows,
-  tabStop
+  tabStop,
+  checklist
 }: {
   rows: readonly AppRailCustomizeRow[]
   tabStop: boolean
+  checklist: AppRailChecklistCarry
 }): React.JSX.Element {
   const label = useAppRailCustomizeLabel()
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(checklist.reopenOn !== null)
+  // Only the opening this form mounted with starts on the carried row; later openings start as usual.
+  const [focusRow, setFocusRow] = useState(checklist.reopenOn)
   const heldInPlace = useMenuHeldInPlace(open, triggerRef, rows)
+  const handleOpenChange = (next: boolean): void => {
+    setOpen(next)
+    if (!next) {
+      setFocusRow(null)
+      checklist.onChecklistClose()
+    }
+  }
   return (
-    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
+    <DropdownMenu modal={false} open={open} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -136,7 +172,7 @@ export function AppRailCustomizeMenu({
         {...heldInPlace}
         onCloseAutoFocus={() => refocusTriggerIfFocusLost(triggerRef.current)}
       >
-        <AppRailCustomizeRows rows={rows} />
+        <AppRailCustomizeRows rows={rows} focusRow={focusRow} />
       </DropdownMenuContent>
     </DropdownMenu>
   )

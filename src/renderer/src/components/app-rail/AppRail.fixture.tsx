@@ -3,10 +3,21 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { AppRail } from './AppRail'
+import { APP_RAIL_SLOT_PX } from './app-rail-overflow'
 
 // Tall enough for every page plus "…"; the short one folds into More.
 const TALL_PX = 420
 const SHORT_PX = 200
+// Exactly four slots (plus the toolbar's 12px of padding): Workspaces, one page, "…" and the account button. A second
+// page folds the rail into More and hiding it unfolds it again.
+const FULL_RAIL_PX = 4 * APP_RAIL_SLOT_PX + 12
+const ONLY_TASKS: Partial<GlobalSettings> = {
+  showTasksButton: true,
+  showAutomationsButton: false,
+  showArtifactsButton: false,
+  showSkillsButton: false,
+  showMobileButton: false
+}
 
 function RailFrame({ height }: { height: number }): React.JSX.Element {
   return (
@@ -80,4 +91,11 @@ export const shortMoreOpen = defineFixture({
     sub?.focus()
     sub?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
   }
+})
+
+export const fullRail = defineFixture({
+  width: 420,
+  store: { activeView: 'terminal', sidebarBody: 'workspaces' },
+  setup: () => echoSettingsWrites(ONLY_TASKS),
+  render: () => <RailFrame height={FULL_RAIL_PX} />
 })

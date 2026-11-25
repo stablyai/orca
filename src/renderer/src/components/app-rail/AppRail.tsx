@@ -21,7 +21,11 @@ import {
   type AppRailItemId
 } from './AppRailButton'
 import { AppRailMoreMenu, useAppRailSlotCapacity } from './AppRailMoreMenu'
-import { AppRailCustomizeMenu, type AppRailCustomizeRow } from './AppRailCustomizeMenu'
+import {
+  AppRailCustomizeMenu,
+  type AppRailChecklistCarry,
+  type AppRailCustomizeRow
+} from './AppRailCustomizeMenu'
 import { AppRailAccountMenu } from './AppRailAccountMenu'
 import { partitionAppRail } from './app-rail-overflow'
 import { railItemOwningFocus } from './app-rail-focus-ownership'
@@ -119,6 +123,9 @@ export function AppRail({
         ? 'account'
         : null
   const [lastFocusedItem, setLastFocusedItem] = useState<AppRailItemId | null>(null)
+  // The row last toggled in the open Customize checklist. A toggle can swap "…" and More (one more page folds the rail,
+  // one fewer unfolds it); the form that mounts in the swap reopens the checklist on this row so editing carries on.
+  const [checklistRow, setChecklistRow] = useState<AppRailDestinationId | null>(null)
   const tabStopItem =
     lastFocusedItem && renderedItems.includes(lastFocusedItem)
       ? lastFocusedItem
@@ -228,8 +235,15 @@ export function AppRail({
     label: destinationLabel(id),
     icon: destinationIcon(id, 14, undefined, 'size-3.5'),
     shown: shownDestinationSet.has(id),
-    onToggle: () => setRailDestinationShown(id, !shownDestinationSet.has(id))
+    onToggle: () => {
+      setChecklistRow(id)
+      setRailDestinationShown(id, !shownDestinationSet.has(id))
+    }
   }))
+  const checklist: AppRailChecklistCarry = {
+    reopenOn: checklistRow,
+    onChecklistClose: () => setChecklistRow(null)
+  }
   const openSettings = (): void => useAppStore.getState().openSettingsPage()
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -321,6 +335,7 @@ export function AppRail({
             <AppRailMoreMenu
               tabStop={tabStopItem === 'more'}
               customizeRows={customizeRows}
+              checklist={checklist}
               destinations={foldedDestinations.map((id) => ({
                 id,
                 label: destinationLabel(id),
@@ -332,7 +347,11 @@ export function AppRail({
               }))}
             />
           ) : (
-            <AppRailCustomizeMenu rows={customizeRows} tabStop={tabStopItem === 'customize'} />
+            <AppRailCustomizeMenu
+              rows={customizeRows}
+              tabStop={tabStopItem === 'customize'}
+              checklist={checklist}
+            />
           )}
         </div>
         <div className="flex flex-col items-center gap-2.5">
