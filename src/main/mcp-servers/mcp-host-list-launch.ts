@@ -55,6 +55,25 @@ function isOnForLaunch(
 /** Reads the host list as it stands now (`readBotToolsSnapshot`), or as another reader just did. */
 export type McpHostListRead = (folder: string) => Promise<BotToolsSnapshot>
 
+// One write advances the epoch for every running chat; the first to compare after it reads the
+// list, and the rest share that read (a later write starts a new one). A failed read isn't kept.
+let epochRead: { folder: string; epoch: number; snapshot: Promise<BotToolsSnapshot> } | null = null
+
+/** The list as read at `epoch` (`botToolsEpoch`, taken before the read): one read for every caller. */
+export function mcpHostListAtEpoch(folder: string, epoch: number): Promise<BotToolsSnapshot> {
+  if (epochRead?.folder === folder && epochRead.epoch === epoch) {
+    return epochRead.snapshot
+  }
+  const read = { folder, epoch, snapshot: readBotToolsSnapshot(folder) }
+  epochRead = read
+  read.snapshot.catch(() => {
+    if (epochRead === read) {
+      epochRead = null
+    }
+  })
+  return read.snapshot
+}
+
 /**
  * The servers a new session of `agent` gets: those on for the agent and on in the workspace with
  * `key` (null for none). A bot's session (`'any'`) takes them whichever workspaces they're on in.

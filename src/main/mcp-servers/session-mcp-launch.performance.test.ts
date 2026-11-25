@@ -14,7 +14,7 @@ import { changeBotToolEntries } from '../bots/bot-tools-file'
 import { setMcpServerAgentEnabled } from './mcp-host-list'
 import { sessionLaunchToolsChanged, sessionMcpLaunchTools } from './session-mcp-launch'
 
-const reads = vi.hoisted(() => ({ paths: [] as string[] }))
+const reads = vi.hoisted((): { paths: string[] } => ({ paths: [] }))
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof Fs>()
   return {

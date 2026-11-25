@@ -3,11 +3,7 @@
 // filtered by the session's agent and workspace. With the host's switch off, only a bot's own.
 import { mcpServerWorkspaceKeyOf } from '../../shared/mcp-servers/mcp-servers'
 import type { Bot } from '../../shared/bot-types'
-import {
-  currentBotToolsRevision,
-  readBotLaunchServers,
-  readBotToolsSnapshot
-} from '../bots/bot-tools-file'
+import { currentBotToolsRevision, readBotLaunchServers } from '../bots/bot-tools-file'
 import {
   advanceBotToolsEpoch,
   botToolsEpoch,
@@ -15,7 +11,11 @@ import {
 } from '../bots/bot-tools-revision'
 import { onMcpHostListSignInChanged } from './mcp-host-list-sign-in'
 import { botToolRelay, type BotToolRelay } from '../bots/tool-relay/bot-tool-relay'
-import { mcpServersWithDigestsForLaunch, type McpHostListRead } from './mcp-host-list-launch'
+import {
+  mcpHostListAtEpoch,
+  mcpServersWithDigestsForLaunch,
+  type McpHostListRead
+} from './mcp-host-list-launch'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { botHostMcpAccess } from './bot-host-mcp-access'
 import { isMcpServersFeatureEnabled } from './mcp-servers-feature'
@@ -50,7 +50,7 @@ async function hostServersFor(
   agent: string,
   workspace: HostWorkspace,
   given: string | undefined,
-  read: (folder: string, epoch: number) => ReturnType<McpHostListRead> = readBotToolsSnapshot
+  read?: (folder: string, epoch: number) => ReturnType<McpHostListRead>
 ): Promise<HostRead | undefined> {
   if (!isMcpServersFeatureEnabled()) {
     return undefined
@@ -63,7 +63,7 @@ async function hostServersFor(
       agent,
       workspace,
       folder,
-      (listFolder) => read(listFolder, epoch)
+      read ? (listFolder) => read(listFolder, epoch) : undefined
     )
     return {
       host: { folder, servers, sharedProcesses },
@@ -156,7 +156,7 @@ export async function sessionLaunchToolsChanged(
     host.epoch = epoch
     return false
   }
-  const now = await hostServersFor(host.agent, host.workspace, host.folder, listAtEpoch)
+  const now = await hostServersFor(host.agent, host.workspace, host.folder, mcpHostListAtEpoch)
   if (!now && isMcpServersFeatureEnabled()) {
     // The list can't be read now: the next turn compares again, so a change isn't lost.
     return false
@@ -169,25 +169,6 @@ export async function sessionLaunchToolsChanged(
   // Not this session's, or the switch went off: nothing to act on.
   host.epoch = epoch
   return false
-}
-
-// One write advances the epoch for every running chat; the first to compare after it reads the
-// list, and the rest share that read (a later write starts a new one). A failed read isn't kept.
-let epochRead: { folder: string; epoch: number; snapshot: ReturnType<McpHostListRead> } | null =
-  null
-
-function listAtEpoch(folder: string, epoch: number): ReturnType<McpHostListRead> {
-  if (epochRead?.folder === folder && epochRead.epoch === epoch) {
-    return epochRead.snapshot
-  }
-  const read = { folder, epoch, snapshot: readBotToolsSnapshot(folder) }
-  epochRead = read
-  read.snapshot.catch(() => {
-    if (epochRead === read) {
-      epochRead = null
-    }
-  })
-  return read.snapshot
 }
 
 /** A new server whose name the agent's own config already has restarts once; reading the agent's
