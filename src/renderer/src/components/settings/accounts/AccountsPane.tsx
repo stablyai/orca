@@ -37,7 +37,6 @@ import { getCodexAccountAuthWarning } from './codex/codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex/codex-config-sync-warning'
 import {
   getProviderAccountActiveIdForView,
-  providerAccountIsActiveInView,
   providerAccountMatchesView
 } from '../../provider-accounts/provider-account-visibility'
 import { GrokAccountsSection } from './providers/GrokAccountsSection'
@@ -59,7 +58,7 @@ import { getRuntimeSentenceLabel } from '../../../lib/provider-accounts/account-
 import { watchCodexConfigSyncStatus } from '../../../runtime/provider-accounts/codex-config-sync-observer'
 import { createAccountsPaneRunners } from './accounts-pane-account-actions'
 import { renderAccountsLocationSection } from './scope/accounts-pane-location-section'
-import { systemDefaultCandidates } from './scope/system-default-lanes'
+import { isSystemDefaultActive } from './scope/system-default-lanes'
 import { renderClaudeAccountsSection } from './claude/accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './codex/accounts-pane-codex-section'
 import { renderOpenCodeAccountsSection } from './providers/accounts-pane-opencode-section'
@@ -191,20 +190,17 @@ export function AccountsPane({
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
   const activeCodexAccountId = getProviderAccountActiveIdForView(codexAccounts, accountRuntime)
-  // Unknown remote platforms hide WSL rows; check the full roster before marking System default active.
-  const systemCodexActive = !systemDefaultCandidates(
-    codexAccounts.accounts,
+  const systemCodexActive = isSystemDefaultActive(
+    codexAccounts,
     visibleCodexAccounts,
+    accountRuntime,
     accountVisibilityOptions
-  ).some((account) =>
-    providerAccountIsActiveInView(account, codexAccounts, accountRuntime, accountVisibilityOptions)
   )
-  const systemClaudeActive = !systemDefaultCandidates(
-    claudeAccounts.accounts,
+  const systemClaudeActive = isSystemDefaultActive(
+    claudeAccounts,
     visibleClaudeAccounts,
+    accountRuntime,
     accountVisibilityOptions
-  ).some((account) =>
-    providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
   )
   // System identity reflects the host’s ~/.codex; per-distro WSL uses generic copy.
   const systemCodexIdentity =

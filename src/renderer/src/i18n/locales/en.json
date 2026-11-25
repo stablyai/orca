@@ -25550,7 +25550,8 @@
     "selection": {
       "claudeRemoteWslDefaultUnavailable": "Switching this host's WSL lane back to the system default isn't available from here yet.",
       "claudeWslLanesNotReset": "WSL Claude accounts can't be reset from here yet.",
-      "codexSystemDefaultIncludingWsl": "Use your current {{value0}} Codex login, including WSL."
+      "codexSystemDefaultIncludingWsl": "Use your current {{value0}} Codex login, including WSL.",
+      "systemDefaultIncludingWsl": "{{value0}} · including WSL"
     },
     "rename": {
       "action": "Rename",

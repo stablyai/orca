@@ -10,6 +10,7 @@ import type {
   CodexAccountActionRunner,
   ProviderAccountVisibilityOptions
 } from '../accounts-pane-types'
+import { PartialAccountUpdateError } from '../accounts-pane-partial-update'
 
 type Account = Parameters<typeof getProviderAccountRuntime>[0]
 type Selection = Parameters<typeof providerAccountIsActiveInView>[1]
@@ -22,6 +23,18 @@ export function systemDefaultCandidates<T extends Account>(
   options: ProviderAccountVisibilityOptions
 ): readonly T[] {
   return options.remoteOwner && options.ownerPlatform === null ? roster : visibleAccounts
+}
+
+/** System default is Active when no candidate account holds its own lane. */
+export function isSystemDefaultActive<T extends Account>(
+  state: Selection & { accounts: readonly T[] },
+  visibleAccounts: readonly T[],
+  view: ProviderAccountRuntimeView,
+  options: ProviderAccountVisibilityOptions
+): boolean {
+  return !systemDefaultCandidates(state.accounts, visibleAccounts, options).some((account) =>
+    providerAccountIsActiveInView(account, state, view, options)
+  )
 }
 
 /** Lanes the pane's single System default clears: active remote WSL lanes first, the shown lane last. */
@@ -53,8 +66,9 @@ export function getSystemDefaultLanes(
   ]
 }
 
-export function lanesIncludeWsl(lanes: readonly Lane[]): boolean {
-  return lanes.some((lane) => lane.runtime === 'wsl')
+/** True when System default also clears WSL lanes besides the shown one, i.e. a remote Windows roster. */
+export function clearsHiddenWslLanes(lanes: readonly Lane[]): boolean {
+  return lanes.slice(0, -1).some((lane) => lane.runtime === 'wsl')
 }
 
 /** One runner action for every lane: the button stays disabled throughout, and the first failure stops it with one toast. */
@@ -71,8 +85,14 @@ export function runSystemDefaultSelect(
     'select:system',
     async () => {
       let next: CodexRateLimitAccountsState | null = null
+      const applied: Lane[] = []
       for (const lane of lanes) {
-        next = await select(owner, { accountId: null, ...lane })
+        try {
+          next = await select(owner, { accountId: null, ...lane })
+        } catch (error) {
+          throw next ? new PartialAccountUpdateError(next, applied, error) : error
+        }
+        applied.push(lane)
       }
       if (!next) {
         throw new Error('No account lane to reset.')

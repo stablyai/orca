@@ -4,7 +4,7 @@ import type { Translate } from '@/i18n/use-translate'
 import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
 import {
   getSystemDefaultLanes,
-  lanesIncludeWsl,
+  clearsHiddenWslLanes,
   systemDefaultCandidates
 } from '../scope/system-default-lanes'
 import { Badge } from '../../../ui/badge'
@@ -55,7 +55,7 @@ export function renderClaudeAccountsSection(
     wslCapabilitiesLoading
   } = model
   // Remote Claude has no targeted select, so System default resets only the shown lane and says so.
-  const skipsWslLanes = lanesIncludeWsl(
+  const skipsWslLanes = clearsHiddenWslLanes(
     getSystemDefaultLanes(
       accountRuntime,
       systemDefaultCandidates(
