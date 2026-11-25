@@ -43,6 +43,8 @@ import {
 } from '../controls/sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectEphemeralVmHostLifecycles } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
+import { useProjectTreeRows } from './project-chat-rows'
+import { showsProjectChats } from '../../../../../../shared/sidebar-list/project-tree-settings'
 
 function createSidebarHostOptionsSelector() {
   let inputs: readonly unknown[] = []
@@ -143,6 +145,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
   // Same-id registrations on two hosts: each row and project header needs its own host's.
   const repoOfWorktree = useMemo(() => createHostScopedRepoOf(repos, repoMap), [repos, repoMap])
+  const projectChats = useAppStore((s) => showsProjectChats(s.settings, args.groupBy))
   const rowPlan = useMemo(
     () =>
       planSidebarRows({
@@ -159,6 +162,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         lineageParentIdentities,
         worktreeMap: args.worktreeMap,
         nestLineage: true,
+        // Tree: a project's card holds all its worktrees, even ones spawned from another project.
+        nestAcrossProjects: !projectChats,
         projectGroups: args.visibleProjectGroupsForRows,
         placeholderRepoIds,
         importedWorktreesByRepo: args.importedWorktreesByRepo,
@@ -196,7 +201,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       pendingCreations,
       hostLabelById,
       args.pinnedDisplayPolicy,
-      args.filterRepoIds
+      args.filterRepoIds,
+      projectChats
     ]
   )
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({
@@ -279,6 +285,10 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     () => collectRenderedSidebarRowKeys(sectionRows),
     [sectionRows]
   )
+  const viewportRows = useProjectTreeRows(sectionRows, {
+    groupBy: args.groupBy,
+    collapsedGroups: effectiveCollapsedGroups
+  })
 
   const headerHostOptions: readonly ExecutionHostRegistryEntry[] = hostOptions
   return {
@@ -287,6 +297,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     effectiveCollapsedGroups,
     rows,
     sectionRows,
+    viewportRows,
     renderedSidebarRowKeys,
     allRepoIds,
     placeholderRepoIds,

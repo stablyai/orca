@@ -299,6 +299,8 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       effectiveCollapsedGroups,
       rows: rendered.rows,
       sectionRows,
+      // shortcut: main-owned sidebar inputs (off in shipped builds) get no Chats rows yet.
+      viewportRows: sectionRows,
       renderedSidebarRowKeys,
       allRepoIds,
       placeholderRepoIds: planned.placeholderRepoIds,

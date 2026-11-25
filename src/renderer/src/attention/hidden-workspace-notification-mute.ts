@@ -8,6 +8,7 @@ import { sidebarHasActiveFilters } from '@/components/sidebar/worktree-list/cont
 import { computeVisibleWorktreeIds } from '@/components/sidebar/worktree-list/listing/compute-visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from '@/components/sidebar/worktree-list/listing/visible-worktree-options-from-state'
 import { NO_HIDDEN_PROJECTS } from '../../../shared/project/catalog/hidden-projects'
+import { showsProjectChats } from '../../../shared/sidebar-list/project-tree-settings'
 import { isFolderWorkspaceFromOtherDevice } from '../../../shared/workspace-view/workspace-creator-visibility'
 import {
   selectFolderWorkspaces,
@@ -49,6 +50,9 @@ export function isWorkspaceNotificationMutedBySidebarFilters(
   // Use the full sidebar pass (~0.2–0.3ms/1,000 workspaces) to preserve every rule that adds rows back.
   const visibleIds = computeVisibleWorktreeIds(selectWorktreesByRepo(state), [], {
     ...inputs,
+    // The project tree lists a hidden main checkout's agents as the project's Chats.
+    hideDefaultBranchWorkspace:
+      inputs.hideDefaultBranchWorkspace && !showsProjectChats(state.settings, state.groupBy),
     // Hiding a project is a view choice, never a mute: its workspaces notify as if listed.
     hiddenProjects: NO_HIDDEN_PROJECTS,
     filterRepoIds: [],

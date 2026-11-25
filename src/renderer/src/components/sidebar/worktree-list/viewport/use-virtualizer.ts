@@ -18,6 +18,13 @@ import type { RenderRow } from '../listing/render-row'
 import { getWorktreeSidebarRevealTopInset } from '../navigation/worktree-sidebar-reveal'
 import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { createSidebarSmoothReveal } from './sidebar-smooth-reveal'
+import { useAppStore } from '@/store/index'
+import { isProjectTreeOn } from '../../../../../../shared/sidebar-list/project-tree-settings'
+import {
+  isSeparatedTreeHeader,
+  TREE_LINE_ROW_HEIGHT,
+  TREE_SEPARATOR_SPACE
+} from '../rows/project-frame'
 
 export type WorktreeListVirtualizer = ReturnType<typeof useWorktreeListVirtualizer>
 
@@ -50,6 +57,32 @@ export function useWorktreeListVirtualizer(args: {
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
   const activeStickyHostIndexRef = useRef<number | null>(null)
   const stickyRangeStartIndexRef = useRef(0)
+  const projectTree = useAppStore((s) => isProjectTreeOn(s.settings))
+  const estimateRowSize = useCallback(
+    (index: number) => {
+      const type = renderRows[index]?.type
+      // Tree rows are single lines, far shorter than the cards the defaults assume.
+      if (projectTree && (type === 'item' || type === 'folder-workspace')) {
+        return TREE_LINE_ROW_HEIGHT
+      }
+      if (type === 'project-chats') {
+        return TREE_LINE_ROW_HEIGHT + 6
+      }
+      return (
+        estimateRenderRowSize(
+          renderRows,
+          index,
+          firstHeaderIndex,
+          activeStickyHeaderIndexRef.current
+        ) +
+        // Tree: a top-level entry after another gets extra room above it.
+        (projectTree && isSeparatedTreeHeader(renderRows, index, firstHeaderIndex)
+          ? TREE_SEPARATOR_SPACE
+          : 0)
+      )
+    },
+    [firstHeaderIndex, projectTree, renderRows]
+  )
 
   const getVirtualItemKey = useCallback(
     (index: number) => {
@@ -90,27 +123,14 @@ export function useWorktreeListVirtualizer(args: {
         const index = getVirtualRowIndex(element)
         const measured = instance.getVirtualItems().find((item) => item.index === index)
         // Why: a stale ResizeObserver row after remount would write a wrong height; return current size to no-op it.
-        return (
-          measured?.size ??
-          estimateRenderRowSize(
-            renderRows,
-            index ?? -1,
-            firstHeaderIndex,
-            activeStickyHeaderIndexRef.current
-          )
-        )
+        return measured?.size ?? estimateRowSize(index ?? -1)
       }
       const index = getVirtualRowIndex(element)
       if (
         index !== null &&
         (renderRows[index]?.type === 'header' || renderRows[index]?.type === 'host-header')
       ) {
-        return estimateRenderRowSize(
-          renderRows,
-          index,
-          firstHeaderIndex,
-          activeStickyHeaderIndexRef.current
-        )
+        return estimateRowSize(index)
       }
       const row = index === null ? undefined : renderRows[index]
       if (row?.type === 'item' || row?.type === 'folder-workspace') {
@@ -120,7 +140,7 @@ export function useWorktreeListVirtualizer(args: {
       const box = entry?.borderBoxSize?.[0]
       return Math.round(box ? box.blockSize : element.offsetHeight) + 6
     },
-    [firstHeaderIndex, isCurrentVirtualRowElement, renderRows]
+    [estimateRowSize, isCurrentVirtualRowElement, renderRows]
   )
 
   const [smoothScrollRevision, onRetired] = useReducer((revision: number) => revision + 1, 0)
@@ -134,12 +154,7 @@ export function useWorktreeListVirtualizer(args: {
     estimateSize: (index) => {
       const frame = args.projection.frames[index]
       return (
-        estimateRenderRowSize(
-          renderRows,
-          index,
-          firstHeaderIndex,
-          activeStickyHeaderIndexRef.current
-        ) +
+        estimateRowSize(index) +
         (renderRows[index]?.type === 'item' || renderRows[index]?.type === 'folder-workspace'
           ? frame.before + frame.closing + frame.after
           : 0)

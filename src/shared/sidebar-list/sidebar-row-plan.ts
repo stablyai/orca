@@ -77,6 +77,8 @@ export type SidebarRowPlanInputs = {
   lineageParentIdentities?: SidebarLineageParentIdentities
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
+  /** False keeps a child in its own project rather than under a parent from another (Tree style). */
+  nestAcrossProjects?: boolean
   projectGroups: readonly ProjectGroup[]
   placeholderRepoIds: ReadonlySet<string>
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
@@ -104,8 +106,6 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     repoOrder,
     workspaceStatuses,
     projectOrderBy,
-    lineageById,
-    lineageParentIdentities,
     worktreeMap,
     nestLineage,
     projectGroups,
@@ -137,11 +137,12 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const lineageChildren = nestLineage
     ? getSidebarLineageChildren(
         worktrees,
-        lineageById,
+        inputs.lineageById,
         worktreeMap,
         filterRepoIds,
-        lineageParentIdentities,
-        folders.rows
+        inputs.lineageParentIdentities,
+        folders.rows,
+        inputs.nestAcrossProjects
       )
     : new Map<string, Worktree[]>()
   const occurrencePlan = buildWorktreeOccurrencePlan({

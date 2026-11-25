@@ -13,6 +13,8 @@ import type { RepoHeaderProjectActions } from './repo-header-project-actions'
 
 export type SectionHeaderRowContext = {
   groupBy: WorktreeGroupBy
+  /** Experimental project tree: chevron, group labels and collapsed-project summary. */
+  projectTree?: boolean
   projectHeaderHostContexts?: ReadonlyMap<string, ProjectHeaderHostContext>
   collapsedGroups: Set<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]

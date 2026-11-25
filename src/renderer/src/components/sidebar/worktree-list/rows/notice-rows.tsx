@@ -7,11 +7,19 @@ import ImportedWorktreesVisibilityLine from '../listing/ImportedWorktreesVisibil
 import NewExternalWorktreesInboxLine from '../listing/NewExternalWorktreesInboxLine'
 import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
+import { ProjectChatsLine } from './ProjectChatsRow'
+import type { RepoHeaderProjectActions } from './repo-header-project-actions'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import { ProjectFrameEdge, type ProjectFramePiece } from './project-frame'
+
+type FramedRowArgs = { projectFrame?: ProjectFramePiece }
 
 type NoticeRowFrameProps = {
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
   className?: string
+  /** Project tree: this row's piece of its open project's frame. */
+  projectFrame?: ProjectFramePiece
   children: React.ReactNode
 }
 
@@ -20,6 +28,7 @@ function NoticeRowFrame({
   vItem,
   measureVirtualRowElement,
   className = 'absolute left-0 right-0 top-0',
+  projectFrame,
   children
 }: NoticeRowFrameProps): React.JSX.Element {
   return (
@@ -33,25 +42,29 @@ function NoticeRowFrame({
       className={className}
       style={{ transform: getVirtualRowTransform(vItem.start) }}
     >
+      <ProjectFrameEdge piece={projectFrame} />
       {children}
     </div>
   )
 }
 
-export function renderImportedWorktreesVirtualRow(args: {
-  row: Extract<Row, { type: 'imported-worktrees-card' }>
-  vItem: VirtualItem
-  measureVirtualRowElement: (element: HTMLDivElement | null) => void
-  actionStateByProjectId: ReadonlyMap<string, ImportedWorktreeCardActionState>
-  onShow: (projectId: string) => void
-  onKeepHidden: (projectId: string) => void
-}): React.JSX.Element {
+export function renderImportedWorktreesVirtualRow(
+  args: {
+    row: Extract<Row, { type: 'imported-worktrees-card' }>
+    vItem: VirtualItem
+    measureVirtualRowElement: (element: HTMLDivElement | null) => void
+    actionStateByProjectId: ReadonlyMap<string, ImportedWorktreeCardActionState>
+    onShow: (projectId: string) => void
+    onKeepHidden: (projectId: string) => void
+  } & FramedRowArgs
+): React.JSX.Element {
   const { row, actionStateByProjectId } = args
   const frame = (line: React.JSX.Element): React.JSX.Element => (
     <NoticeRowFrame
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
+      projectFrame={args.projectFrame}
     >
       {line}
     </NoticeRowFrame>
@@ -86,20 +99,23 @@ export function renderImportedWorktreesVirtualRow(args: {
   )
 }
 
-export function renderNewExternalWorktreesInboxVirtualRow(args: {
-  row: Extract<Row, { type: 'new-external-worktrees-inbox' }>
-  vItem: VirtualItem
-  measureVirtualRowElement: (element: HTMLDivElement | null) => void
-  actionState: NewExternalWorktreesInboxActionState | undefined
-  onReview: (repo: Extract<Row, { type: 'new-external-worktrees-inbox' }>['repo']) => void
-  onSuppress: (projectId: string) => void
-}): React.JSX.Element {
+export function renderNewExternalWorktreesInboxVirtualRow(
+  args: {
+    row: Extract<Row, { type: 'new-external-worktrees-inbox' }>
+    vItem: VirtualItem
+    measureVirtualRowElement: (element: HTMLDivElement | null) => void
+    actionState: NewExternalWorktreesInboxActionState | undefined
+    onReview: (repo: Extract<Row, { type: 'new-external-worktrees-inbox' }>['repo']) => void
+    onSuppress: (projectId: string) => void
+  } & FramedRowArgs
+): React.JSX.Element {
   const { row, actionState } = args
   return (
     <NoticeRowFrame
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
+      projectFrame={args.projectFrame}
     >
       <NewExternalWorktreesInboxLine
         repoDisplayName={row.repo.displayName}
@@ -115,21 +131,49 @@ export function renderNewExternalWorktreesInboxVirtualRow(args: {
   )
 }
 
-export function renderPendingCreationVirtualRow(args: {
-  row: Extract<Row, { type: 'pending-creation' }>
-  vItem: VirtualItem
-  measureVirtualRowElement: (element: HTMLDivElement | null) => void
-}): React.JSX.Element {
+export function renderPendingCreationVirtualRow(
+  args: {
+    row: Extract<Row, { type: 'pending-creation' }>
+    vItem: VirtualItem
+    measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  } & FramedRowArgs
+): React.JSX.Element {
   return (
     <NoticeRowFrame
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
       className="absolute left-0 right-0 top-0 px-2 pb-1.5"
+      projectFrame={args.projectFrame}
     >
       <PendingWorktreeRow
         creationId={args.row.creationId}
         repoName={args.row.repo?.displayName ?? null}
+      />
+    </NoticeRowFrame>
+  )
+}
+
+export function renderProjectChatsVirtualRow(
+  args: {
+    row: Extract<Row, { type: 'project-chats' }>
+    vItem: VirtualItem
+    measureVirtualRowElement: (element: HTMLDivElement | null) => void
+    onCreateForRepo: RepoHeaderProjectActions['onCreateForRepo']
+    onCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
+  } & FramedRowArgs
+): React.JSX.Element {
+  return (
+    <NoticeRowFrame
+      key={args.vItem.key}
+      vItem={args.vItem}
+      measureVirtualRowElement={args.measureVirtualRowElement}
+      projectFrame={args.projectFrame}
+    >
+      <ProjectChatsLine
+        row={args.row}
+        onCreateForRepo={args.onCreateForRepo}
+        onCreateFolderWorkspace={args.onCreateFolderWorkspace}
       />
     </NoticeRowFrame>
   )

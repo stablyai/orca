@@ -131,6 +131,26 @@ export type FolderWorkspaceRow = {
   lineageCollapsed?: boolean
 }
 
+/** Tree card style's section lines: a project's Chats (its hidden main checkout's agents), the label over
+ * its worktrees, its "+ chat / + worktree" line, or a folder group's Chats label.
+ * Only the desktop window adds them, after planning; the phone and feed never see them. */
+export type ProjectChatsRow = {
+  type: 'project-chats'
+  key: string
+  /** The owning header's project-group depth, so the row indents with it. */
+  groupDepth: number
+} & (
+  | {
+      section: 'chats' | 'worktrees' | 'actions'
+      repo: Repo
+      /** This host's main checkout (a folder project's folder); null until it loads, when "+ chat" creates a workspace instead. */
+      mainWorktree: Worktree | null
+      /** The header's rows all sit on its repo's host, so "+ worktree" may pin that host. */
+      pinHost: boolean
+    }
+  | { section: 'group-chats'; projectGroup: ProjectGroup }
+)
+
 /** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */
 export type PendingCreationRef = { creationId: string; repoId: string }
 
@@ -141,6 +161,7 @@ export type Row =
   | NewExternalWorktreesInboxRow
   | PendingCreationRow
   | FolderWorkspaceRow
+  | ProjectChatsRow
 
 /** The registration a project header reorders by, or none for a repeated copy. */
 export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {

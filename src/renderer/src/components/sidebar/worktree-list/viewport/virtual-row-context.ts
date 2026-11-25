@@ -2,6 +2,7 @@ import type React from 'react'
 import type { AppState } from '@/store/types'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import { isProjectTreeOn } from '../../../../../../shared/sidebar-list/project-tree-settings'
 import type { LineageRowProjection } from '../listing/lineage-row-projection'
 import type { RenderRow } from '../listing/render-row'
 import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
@@ -22,6 +23,7 @@ import type { ProjectHeaderHostContext } from '../rows/project-header-host-conte
 
 type BuildArgs = {
   props: VirtualizedWorktreeViewportProps
+  projectFrames?: WorktreeVirtualRowContext['projectFrames']
   projectGroups: readonly ProjectGroup[]
   dragUnitsByRow: ReadonlyMap<number, { identity: string }>
   hiddenDragRanges: readonly { start: number; end: number }[]
@@ -61,6 +63,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
     projection: args.projection,
     activeFamilyRoots: args.activeFamilyRoots,
     renderRows: args.renderRows,
+    projectFrames: args.projectFrames,
     firstHeaderIndex: args.firstHeaderIndex,
     activeStickyHeaderIndexRef: args.virtualization.activeStickyHeaderIndexRef,
     activeStickyHostIndexRef: args.virtualization.activeStickyHostIndexRef,
@@ -83,6 +86,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
     onWorkspaceStatusDrop: statusDrag.handleWorkspaceStatusDrop,
     header: {
       groupBy: props.groupBy,
+      projectTree: isProjectTreeOn(args.settings),
       collapsedGroups: props.collapsedGroups,
       workspaceStatuses: props.workspaceStatuses,
       projectGroups: args.projectGroups,

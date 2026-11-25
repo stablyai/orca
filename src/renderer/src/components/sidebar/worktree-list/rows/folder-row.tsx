@@ -15,6 +15,8 @@ import {
   getFolderWorkspaceHostIdentity
 } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
+import { FolderWorkspaceTopicCard, hasDefaultFolderWorkspaceName } from './folder-workspace-topic'
+import { isProjectTreeOn } from '../../../../../../shared/sidebar-list/project-tree-settings'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import {
@@ -90,6 +92,11 @@ export function renderFolderWorkspaceOption(args: {
 }): React.JSX.Element {
   const { ctx, row, vItem, lineage, frame } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
+  const projectTree = isProjectTreeOn(ctx.settings)
+  const FolderCard =
+    projectTree && hasDefaultFolderWorkspaceName(row.folderWorkspace.name, row.projectGroup.name)
+      ? FolderWorkspaceTopicCard
+      : WorktreeCard
   const folderWorktreeIdentity = getWorktreeHostIdentity(folderWorktree)
   const isActiveWorktree = isActiveSidebarWorkspace(folderWorktree, {
     worktreeId: ctx.activeWorktreeId,
@@ -147,7 +154,7 @@ export function renderFolderWorkspaceOption(args: {
       onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)}
     >
       <div className="relative" style={{ paddingLeft: surfaceInset, paddingRight: frame?.right }}>
-        <WorktreeCard
+        <FolderCard
           worktree={folderWorktree}
           repo={undefined}
           isActive={isActiveWorktree}
@@ -157,6 +164,8 @@ export function renderFolderWorkspaceOption(args: {
           isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
           contentIndent={cardContentIndent}
           flushSurface
+          compactLine={projectTree}
+          lineTime
           nativeDragEnabled={false}
           onImmediateActivate={activationDisabled ? undefined : ctx.onImmediateActivate}
           activationRowKey={folderWorktreeIdentity}

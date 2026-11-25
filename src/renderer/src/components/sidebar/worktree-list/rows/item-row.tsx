@@ -15,6 +15,7 @@ import type { LineageRowFrame } from '../listing/lineage-row-projection'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
 import type { WorktreeRowDragState } from '../drag/row-state'
+import { isProjectTreeOn } from '../../../../../../shared/sidebar-list/project-tree-settings'
 
 export type WorktreeItemRowContext = {
   settings: AppState['settings']
@@ -135,6 +136,8 @@ export function renderWorktreeItemRow(
         // Why: pinned worktrees mix repos; cross-repo children opt into the existing project-name badge.
         hostContextLabel={itemRow.hostContextLabel}
         showProjectName={itemRow.showProjectName}
+        compactLine={isProjectTreeOn(ctx.settings)}
+        lineTime
         inPinnedSection={itemRow.sectionKey === PINNED_GROUP_KEY}
         renameRowKey={itemRow.rowKey}
         lineageChildCount={itemRow.lineageChildCount}

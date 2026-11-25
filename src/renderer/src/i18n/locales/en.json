@@ -9328,7 +9328,8 @@
             "copy": "Choose how workspace cards look in the sidebar.",
             "ariaLabel": "Card style",
             "classic": "Classic",
-            "experimental": "Experimental"
+            "experimental": "Experimental",
+            "tree": "Tree"
           },
           "appRail": {
             "title": "App rail",
@@ -11532,7 +11533,9 @@
               "metadata": "metadata",
               "status": "status",
               "worktree": "worktree",
-              "worktrees": "worktrees"
+              "worktrees": "worktrees",
+              "tree": "tree",
+              "chats": "chats"
             },
             "9af7a518db": "character",
             "791fefc0b0": "corner",
@@ -24327,6 +24330,14 @@
       }
     },
     "sidebar": {
+      "projectChats": {
+        "title": "Chats",
+        "worktrees": "Worktrees",
+        "addChat": "+ chat",
+        "addWorktree": "+ worktree",
+        "groupTitle": "Group chats",
+        "newChatIn": "New chat in {{name}}"
+      },
       "ForgetSshWorkspaceDialog": {
         "removeFromOrcaTitle": "Remove {{name}} from Orca?",
         "ghostHostLine": "{{host}} is no longer a saved host. Its files stay on it.",

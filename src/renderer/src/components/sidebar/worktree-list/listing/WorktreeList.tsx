@@ -32,6 +32,7 @@ import { markSidebarWorktreeActiveImmediately } from '../rows/option-dom'
 import { EMPTY_PROJECT_GROUPS } from '../viewport/viewport-props'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from '../drag/drop-commit-context'
 import { useAgentSendTargetWorktreeId } from './use-agent-send-target'
+import { useExpandActiveProject } from './use-expand-active-project'
 import { useProjectGroupDialogs } from '../rows/use-project-group-dialogs'
 import { useSidebarRevealRequests } from '../navigation/use-reveal-requests'
 import { useSidebarWorktreeFilters } from './use-filters'
@@ -167,6 +168,7 @@ const WorktreeList = React.memo(function WorktreeList({
     () => new Map(rowModel.occurrencePlan.sections.map(({ key, group }) => [key, group.repoIds])),
     [rowModel.occurrencePlan]
   )
+  useExpandActiveProject(rowModel.occurrencePlan.sections, groupBy)
   const effectiveCollapsedGroups = rowModel.effectiveCollapsedGroups
   const projectCollapseKeys = useMemo(
     () => (groupBy === 'repo' ? getRenderedProjectCollapseKeys(rowModel.sectionRows) : []),
@@ -322,7 +324,7 @@ const WorktreeList = React.memo(function WorktreeList({
       <VirtualizedWorktreeViewport
         // Wake moves status headers; preserve viewport identity across those changes.
         key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
-        rows={rowModel.sectionRows}
+        rows={rowModel.viewportRows}
         hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}
         visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}

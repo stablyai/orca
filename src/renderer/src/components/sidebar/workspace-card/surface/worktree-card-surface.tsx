@@ -62,12 +62,16 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         : undefined
     }
   )
-  const parentCardContent = newCardStyle ? (
-    // One roll-up per card feeds the status lane, the title and the title's right-hand slot.
-    <WorktreeCardTitleStatusProvider card={card}>{templateContent}</WorktreeCardTitleStatusProvider>
-  ) : (
-    templateContent
-  )
+  // A compact line that ends with its time reads that time from the same roll-up.
+  const parentCardContent =
+    newCardStyle || (card.compactLine && card.lineTime === true) ? (
+      // One roll-up per card feeds the status lane, the title and the title's right-hand slot.
+      <WorktreeCardTitleStatusProvider card={card}>
+        {templateContent}
+      </WorktreeCardTitleStatusProvider>
+    ) : (
+      templateContent
+    )
   const { cardStyle } = geometryFor(frame.statusLane)
   const titleOnlyCard = frame.singleLine
 

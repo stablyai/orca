@@ -33,6 +33,8 @@ export type WorktreeCardProps = {
   showProjectName?: boolean
   /** One Compact line whatever the card setting, the project as muted text at its end. */
   compactLine?: boolean
+  /** A compact line that still ends with its status and time, like a sidebar row (bot lines leave it off). */
+  lineTime?: boolean
   /** A line under a bot: the bot's computer. A line on another paired server names that server. */
   lineOwnerHostId?: ExecutionHostId
   /** A line under a bot's chat: a muted note after its name, such as "handed over". */

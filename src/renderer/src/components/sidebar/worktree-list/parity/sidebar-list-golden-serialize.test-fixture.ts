@@ -107,6 +107,8 @@ export function serializeSidebarRow(
         field('creation', row.creationId),
         field('repo', row.repo?.id)
       ])
+    case 'project-chats':
+      return line('CHATS', [field('key', row.key), field('section', row.section)])
     case 'imported-worktrees-card':
       return line('IMPORTED', [
         field('key', row.key),
