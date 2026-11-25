@@ -54,6 +54,13 @@ function walk(
   if (schema instanceof z.ZodPipe) {
     return walk(schema.def.in, value, path, current)
   }
+  // Why: a union's options can need different releases (an icon name vs. a path icon), so
+  // walk the option the value actually matches.
+  if (schema instanceof z.ZodUnion) {
+    const options: readonly z.core.$ZodType[] = schema.def.options
+    const option = options.find((candidate) => z.safeParse(candidate, value).success)
+    return option ? walk(option, value, path, current) : current
+  }
   if (schema instanceof z.ZodArray && Array.isArray(value)) {
     return value.reduce<Floor | null>(
       (acc, item, index) => walk(schema.def.element, item, [...path, index], acc),

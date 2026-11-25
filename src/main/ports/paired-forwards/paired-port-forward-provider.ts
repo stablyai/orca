@@ -33,7 +33,7 @@ export class PairedPortForwardProvider implements SshPortForwardProvider<PairedP
     let closed = false
     const target = { host: options.remoteHost, port: options.remotePort }
 
-    // Another OS account on this computer may not ride this desktop's pairing (uid on Linux, SID on Windows).
+    // Another OS account on this computer may not ride this desktop's pairing (uid on Linux, SID on Windows; macOS has no lookup).
     const admitClient = createSocksClientAdmission('port forward')
     const forward = (socket: Socket): void => {
       tunnel.open(target).then(
