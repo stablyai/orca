@@ -242,7 +242,8 @@ function quotedLine(
 }
 
 /** The ask the host's item read says waits: its `waitingAsk`, else its Needs you question. */
-function hostWaitingAsk(item: BotItemWaitingView): string | null {
+/** The ask the host's read says the agent waits on, whatever events are loaded; null when it names none. */
+export function botItemHostWaitingAsk(item: BotItemWaitingView): string | null {
   return item.waitingAsk ?? (item.status === 'needs_you' ? (item.question?.eventId ?? null) : null)
 }
 
@@ -263,7 +264,7 @@ export function botItemWaitingAsk(
   if (!paired) {
     return null
   }
-  const host = hostWaitingAsk(item)
+  const host = botItemHostWaitingAsk(item)
   if (
     host === null ||
     host === paired[0] ||
