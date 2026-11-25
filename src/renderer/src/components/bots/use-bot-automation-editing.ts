@@ -36,7 +36,12 @@ export function useBotAutomationEditing(screenKey: string): {
     return kept ? { ...kept, restored: true, saving: false, error: null, conflict: null } : null
   })
   const latest = useRef(editing)
+  // A save that answers after this editor unmounted must not keep or drop the draft a newer one holds.
+  const alive = useRef(true)
   const setEditing: React.Dispatch<React.SetStateAction<Editing | null>> = (change) => {
+    if (!alive.current) {
+      return
+    }
     const previous = latest.current
     let next = typeof change === 'function' ? change(previous) : change
     if (next && !retainBotAutomationDraft(screenKey, next)) {
@@ -69,8 +74,10 @@ export function useBotAutomationEditing(screenKey: string): {
     latest.current = editing
   })
   const discarded = useRef(false)
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
       const open = latest.current
       if (open && !discarded.current) {
         retainBotAutomationDraft(screenKey, {
@@ -80,9 +87,8 @@ export function useBotAutomationEditing(screenKey: string): {
           base: open.base
         })
       }
-    },
-    [screenKey]
-  )
+    }
+  }, [screenKey])
   return {
     editing,
     setEditing,
