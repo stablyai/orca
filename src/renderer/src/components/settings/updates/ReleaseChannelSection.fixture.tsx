@@ -1,6 +1,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { ReleaseBuild } from '../../../../../shared/updater/release-channel'
 import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
+import { useAppStore } from '../../../store/index'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 
 const RUNNING_VERSION = '1.4.272'
@@ -23,6 +24,10 @@ function stubUpdater(): void {
   // Records switch requests the fixture received, so an interaction check can tell a live click from a dead one.
   const switchRequests: unknown[] = []
   Reflect.set(window, '__releaseSwitchRequests', switchRequests)
+  // Lets an interaction check move the status live, as main's broadcasts would.
+  Reflect.set(window, '__setFixtureUpdateStatus', (updateStatus: UpdateStatus) =>
+    useAppStore.setState({ updateStatus })
+  )
   Object.assign(window.api, {
     updater: {
       ...window.api.updater,
