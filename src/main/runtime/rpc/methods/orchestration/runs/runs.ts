@@ -41,6 +41,9 @@ export function createBoundRun(
     coordinatorPaneKey: caller.paneKey,
     coordinatorOrcaSessionId: caller.orcaSessionId
   })
+  if (caller.terminalHandle) {
+    runtime.openCodeSessionBinding.bind(run.id, caller.terminalHandle)
+  }
   // The earlier Run keeps this consumer, so only waiters that plain check now redirects end.
   runtime.cancelMessageWaiters(from)
   cancelBoundDispatchWaiters(runtime, caller, run.id)
@@ -117,6 +120,9 @@ export const ORCHESTRATION_RUN_METHODS = [
           'run_not_found',
           `Run ${params.id} was not found or is inspect-only.`
         )
+      }
+      if (caller.terminalHandle) {
+        runtime.openCodeSessionBinding.bind(run.id, caller.terminalHandle)
       }
       runtime.cancelMessageWaiters(params.from)
       cancelBoundDispatchWaiters(runtime, caller, run.id)
