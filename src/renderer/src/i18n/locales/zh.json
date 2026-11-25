@@ -21283,6 +21283,12 @@
       "dock": {
         "label": "消息框和提示"
       },
+      "googleOffer": {
+        "useAccount": "将 {{email}} 用于 Google",
+        "reconnect": "重新连接 {{email}}",
+        "use": "使用 {{email}}",
+        "staysDefault": "{{email}} 仍为默认账户"
+      },
       "workerDock": {
         "commandOutputPending": "命令输出暂不可用",
         "notNow": "暂不",
@@ -21343,6 +21349,17 @@
         "unreadDetail": "工作者加载后将显示在此处",
         "chipLabel": "{{label}}，最新：{{title}}"
       },
+      "webhookSetup": {
+        "heading": "设置 Webhook",
+        "keyAndSecret": "密钥和签名密钥",
+        "copiedReceipt": "✓ 已复制 URL",
+        "signingSecret": "签名密钥",
+        "addSecret": "添加…",
+        "noSecret": "无",
+        "sampleCall": "示例调用",
+        "sampleNote": "会启动一次真实运行",
+        "send": "发送"
+      },
       "editDeliveryNotice": "编辑",
       "signIn": {
         "title": "登录 {{agent}} 即可开始聊天"
@@ -21355,7 +21372,8 @@
         "oneComment": "1 条评论",
         "comments": "{{count}} 条评论",
         "unavailable": "预览不可用",
-        "retry": "重试"
+        "retry": "重试",
+        "retryKeyHint": "预览不可用，按 {{key}} 重试"
       },
       "webPeek": {
         "unavailable": "此页面没有预览"
@@ -21445,7 +21463,8 @@
           "addressLabel": "登录页面地址",
           "unfinished": "尚未完成登录，请在打开的页面上完成，然后点击“完成”",
           "pastePlaceholder": "http://localhost:…"
-        }
+        },
+        "manage": "管理 MCP 服务器"
       },
       "ciResultLine": {
         "failingLead": "CI 失败于",
@@ -21668,7 +21687,8 @@
         "signIn": "登录",
         "signsInClaudeAccount": "登录此 Claude 账户",
         "runsCommand": "在终端中运行 {{command}}",
-        "thenSlashCommand": "请先登录，然后输入 {{slashCommand}}"
+        "thenSlashCommand": "请先登录，然后输入 {{slashCommand}}",
+        "signsInAgy": "在浏览器中使用 Google 登录 agy"
       },
       "antigravityAuth": {
         "chipLabel": "更改 Antigravity 登录方式（当前：{{method}}）",
@@ -21702,7 +21722,31 @@
         "yourAgyVersion": "你的 agy · v{{version}}",
         "orcasAgy": "Orca 自带的 agy",
         "orcasAgyVersion": "Orca 自带的 agy · v{{version}}",
-        "runsOn": "运行于：{{program}}"
+        "runsOn": "运行于：{{program}}",
+        "keepsOwnLogin": "此聊天沿用 agy 自带的 Google 登录，新聊天将使用 {{method}}",
+        "apiKeyEnvironment": "来自你的环境变量",
+        "foundGcloud": "你的 gcloud 登录也可以使用",
+        "foundKey": "你的 Gemini API 密钥也可以使用",
+        "foundKeyAndGcloud": "你的 Gemini API 密钥和 gcloud 登录也可以使用",
+        "gcloudProject": "项目 {{project}}",
+        "otherWaysMenu": "其他登录方式…",
+        "useGcloudLogin": "使用你的 gcloud 登录",
+        "otherWaysLabel": "其他登录方式"
+      },
+      "pairedServerAsk": {
+        "always": "始终允许 {{server}}",
+        "deny": "拒绝",
+        "once": "允许一次",
+        "thisServer": "此服务器",
+        "title": "{{from}} 想给此计算机上的 {{to}} 发消息",
+        "titlePills": "<from>{{from}}</from> 想给此计算机上的 <to>{{to}}</to> 发消息"
+      },
+      "clientAsk": {
+        "declined": "已拒绝",
+        "notConnected": "未连接",
+        "pairedComputer": "已配对的计算机",
+        "waitingForYou": "等待你处理",
+        "waitingOn": "正在等待 {{computer}} 上的批准"
       },
       "automationSaved": {
         "resultsInRuns": "结果留在每次运行中",
