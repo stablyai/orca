@@ -3,9 +3,12 @@
 // can only ever leave an entry behind, never take a user's.
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
+import { isDeepStrictEqual } from 'node:util'
+import { MCP_FILE_AGENTS } from '../../../shared/mcp-servers/mcp-servers'
 import { writeOwnerOnlyFileDurable } from '../../filesystem/owner-only-durable-file-write'
 
 const FileRecordSchema = z.object({
+  agent: z.enum(MCP_FILE_AGENTS),
   /** No file was there before Orca's first entry. */
   created: z.boolean(),
   /** The JSON file had no servers' table before Orca added one. */
@@ -39,6 +42,9 @@ export class McpAgentFileLedger {
 
   async set(configPath: string, record: McpAgentFileRecord | null): Promise<void> {
     const ledger = await this.read()
+    if (record && isDeepStrictEqual(ledger.files[configPath], record)) {
+      return
+    }
     if (record) {
       ledger.files[configPath] = record
     } else if (configPath in ledger.files) {

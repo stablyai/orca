@@ -100,12 +100,28 @@ async function syncAgentFile(
     format: location.format,
     markers: mcpAgentFileMarkers(deps.userDataPath)
   }
+  // A file Orca wrote where GROK_HOME (or the others) used to point loses its entries too.
+  const retired = Object.entries((await deps.ledger.read()).files)
+    .filter(([path, record]) => record.agent === agent && path !== location.path)
+    .map(([path]) => path)
+  for (const path of retired) {
+    await syncFile(path, edit, new Map(), deps)
+  }
+  await syncFile(location.path, edit, wanted, deps)
+}
+
+async function syncFile(
+  path: string,
+  edit: McpAgentFileEdit,
+  wanted: ReadonlyMap<string, McpAgentFileEntry>,
+  deps: McpAgentFileSyncDeps
+): Promise<void> {
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    if (await syncFileOnce(location.path, edit, wanted, deps)) {
+    if (await syncFileOnce(path, edit, wanted, deps)) {
       return
     }
   }
-  deps.log(`[mcp-servers] ${location.path} kept changing; it syncs again on the next change`)
+  deps.log(`[mcp-servers] ${path} kept changing; it syncs again on the next change`)
 }
 
 /** False when the file changed while it was being written, so the caller reads it again. */
@@ -166,6 +182,7 @@ async function syncFileOnce(
     path,
     next !== null && adding.size > 0
       ? {
+          agent: edit.agent,
           created,
           addedTable: record?.addedTable ?? (before === null || !hasMcpServersTable(edit, before)),
           before,

@@ -3,7 +3,10 @@
 // server that's off for the session answers as one with no tools and stays up, so the agent never
 // shows it failing. Each message is forwarded as it arrives: the agent's stdio may cross WSL interop.
 import type { McpServerConnection } from '../../shared/mcp-servers/mcp-servers'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import {
+  StreamableHTTPClientTransport,
+  StreamableHTTPError
+} from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, type JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js'
@@ -11,6 +14,9 @@ import { spawnProcess } from '@orca/process-host'
 
 type Connect = () => Promise<McpServerConnection>
 type HttpConnection = Extract<McpServerConnection, { url: string }>
+
+/** A replayed handshake that gets no answer fails the message instead of holding every later one. */
+const HANDSHAKE_TIMEOUT_MS = 30_000
 
 const stdinEnded = (): Promise<void> =>
   new Promise((resolve) => {
@@ -65,6 +71,18 @@ async function runCommand(
     })
     child.once('exit', (code) => resolve(code ?? 1))
   })
+}
+
+/**
+ * The server never ran the message: nothing listened (Orca restarted, so its relay moved), or it
+ * refused the token or session before running anything.
+ */
+function neverReachedServer(error: unknown): boolean {
+  if (error instanceof StreamableHTTPError) {
+    return error.code === 401 || error.code === 403 || error.code === 404
+  }
+  const cause = error instanceof Error ? (error.cause as { code?: unknown } | undefined) : undefined
+  return cause?.code === 'ECONNREFUSED'
 }
 
 const isRequest = (
@@ -159,8 +177,13 @@ class HttpBridge {
     try {
       await this.upstream!.send(message)
       return
-    } catch {
-      // Retried below on a fresh session.
+    } catch (error) {
+      // Sent again only when the server provably never ran it: a call cut off mid-answer may have
+      // done its work, and running it twice could do it twice.
+      if (!neverReachedServer(error)) {
+        this.fail(message, error)
+        return
+      }
     }
     try {
       if (this.generation === sentOn) {
@@ -171,12 +194,16 @@ class HttpBridge {
       await this.reopening
       await this.upstream!.send(message)
     } catch (error) {
-      if (isRequest(message)) {
-        const reason = error instanceof Error ? error.message : String(error)
-        void this.stdio
-          .send({ jsonrpc: '2.0', id: message.id, error: { code: -32000, message: reason } })
-          .catch(() => {})
-      }
+      this.fail(message, error)
+    }
+  }
+
+  private fail(message: JSONRPCMessage, error: unknown): void {
+    if (isRequest(message)) {
+      const reason = error instanceof Error ? error.message : String(error)
+      void this.stdio
+        .send({ jsonrpc: '2.0', id: message.id, error: { code: -32000, message: reason } })
+        .catch(() => {})
     }
   }
 
@@ -192,9 +219,22 @@ class HttpBridge {
     }
     // The agent's own handshake, again on the new session; its answer stays here.
     const id = `orca-reconnect-${this.generation}`
-    const answered = new Promise<JSONRPCMessage>((resolve) => this.replies.set(id, resolve))
-    await this.upstream!.send({ ...handshake, id })
-    const answer = await answered
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const answered = new Promise<JSONRPCMessage>((resolve, reject) => {
+      this.replies.set(id, resolve)
+      timer = setTimeout(
+        () => reject(new Error('The server didn’t answer after Orca restarted.')),
+        HANDSHAKE_TIMEOUT_MS
+      )
+    })
+    let answer: JSONRPCMessage
+    try {
+      await this.upstream!.send({ ...handshake, id })
+      answer = await answered
+    } finally {
+      clearTimeout(timer)
+      this.replies.delete(id)
+    }
     const version = 'result' in answer ? answer.result.protocolVersion : undefined
     if (typeof version === 'string') {
       this.upstream!.setProtocolVersion(version)

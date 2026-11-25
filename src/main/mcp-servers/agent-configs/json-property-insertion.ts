@@ -31,9 +31,10 @@ export function insertJsonProperty(
     .split('\n')
     .join(eol + indent)}`
   if (!last) {
-    // An empty object: `{}` becomes the property on its own line.
-    const end = object.offset + object.length
-    return `${text.slice(0, object.offset)}{${eol}${indent}${property}${eol}${outer}}${text.slice(end)}`
+    // An empty object: the property goes on its own line before `}`, after any comment inside.
+    const close = object.offset + object.length - 1
+    const inside = text.slice(object.offset + 1, close).trimEnd()
+    return `${text.slice(0, object.offset + 1)}${inside}${eol}${indent}${property}${eol}${outer}${text.slice(close)}`
   }
   const end = last.offset + last.length
   const after = skipTrivia(text, end)

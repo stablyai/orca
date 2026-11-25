@@ -3,7 +3,9 @@
 // entries, and others replace or shadow one with the other.
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { readAgentMcpServers } from './agent-configs/agent-mcp-config-read'
+import { mcpHostServerNameOfEntry } from './agent-files/mcp-agent-file-entry'
 import { MCP_CONFIG_AGENTS, type McpConfigAgent } from './agent-configs/agent-mcp-config-locations'
 
 /** A chat agent whose config is another agent's files. */
@@ -21,12 +23,21 @@ export async function agentOwnMcpServerNames(
   if (!configAgent) {
     return []
   }
+  // The agent loads Orca's own bridge entries too: one this Orca keeps for a server (Grok's,
+  // Cursor's and Droid's files) already serves it, so the session isn't given it a second time.
   const servers = await readAgentMcpServers(
     configAgent,
     { homeDir: homedir(), env, platform: process.platform },
-    { projectPath: cwd }
+    { projectPath: cwd, withOrcaOwned: true }
   )
+  const userDataPath = hasAppEnvironment() ? getAppEnvironment().getPath('userData') : null
   return servers
     .filter(({ source }) => !source.projectPath || resolve(source.projectPath) === resolve(cwd))
-    .map((server) => server.configName)
+    .flatMap(({ configName, server }) => {
+      const hostName =
+        userDataPath && !('url' in server)
+          ? mcpHostServerNameOfEntry(configName, server.env, userDataPath)
+          : null
+      return hostName && hostName !== configName ? [configName, hostName] : [configName]
+    })
 }

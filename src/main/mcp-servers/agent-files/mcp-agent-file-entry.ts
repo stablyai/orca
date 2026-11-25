@@ -31,10 +31,26 @@ export function mcpAgentFileEntry(
  * any other folder's name (`linear-orca-dev`), so two Orcas on one machine never claim one name.
  */
 export function mcpAgentFileEntryName(serverName: string, userDataPath: string): string {
+  return `${serverName}${entrySuffix(userDataPath)}`
+}
+
+function entrySuffix(userDataPath: string): string {
   const folder = basename(userDataPath)
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
-  return folder === 'orca' || folder === '' ? serverName : `${serverName}-${folder}`
+  return folder === 'orca' || folder === '' ? '' : `-${folder}`
+}
+
+/** The host server an entry this Orca wrote stands for, by name; null for anyone else's entry. */
+export function mcpHostServerNameOfEntry(
+  entryName: string,
+  entryEnv: Readonly<Record<string, string>> | undefined,
+  userDataPath: string
+): string | null {
+  const suffix = entrySuffix(userDataPath)
+  return entryEnv?.ORCA_USER_DATA_PATH === userDataPath && entryName.endsWith(suffix)
+    ? entryName.slice(0, entryName.length - suffix.length)
+    : null
 }
 
 /** The marker lines around this instance's block in a TOML file. */

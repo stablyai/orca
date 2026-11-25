@@ -10,22 +10,28 @@ import {
 import type { CommandHandler } from '../dispatch/dispatch'
 import { getRequiredStringFlag } from '../arguments/flags'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeRpcFailureError } from '../runtime/connection/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { resolveCurrentWorktreeSelection } from '../workspace-selection/workspace-selector'
 import { readOrcaCliVersion } from '../cli-version'
 import { bridgeMcpServer } from './mcp-connect-bridge'
 
-/** The session's workspace: the Orca pane's own (WSL forwards it), else the one holding cwd. */
-async function workspaceOf(client: RuntimeClient, cwd: string): Promise<string | null> {
+/**
+ * The session's workspace: the Orca pane's own (WSL forwards it), else the one holding cwd; null
+ * outside every workspace, `unknown` when cwd can't be pinned to one (two repos claim it).
+ */
+async function workspaceOf(client: RuntimeClient, cwd: string): Promise<string | null | 'unknown'> {
   const own = process.env.ORCA_WORKSPACE_ID?.trim()
   if (own) {
     return own
   }
   try {
     return (await resolveCurrentWorktreeSelection(cwd, client, 'current')).worktreeId
-  } catch {
-    // Outside every workspace: the server follows its "workspaces added later" choice.
-    return null
+  } catch (error) {
+    if (!(error instanceof RuntimeClientError) || !error.code.startsWith('selector_')) {
+      throw error
+    }
+    // Outside every workspace, the server follows its "workspaces added later" choice.
+    return error.code === 'selector_not_found' ? null : 'unknown'
   }
 }
 
@@ -37,10 +43,15 @@ async function readConnection(
   const botToken = readInjectedBotToken()
   const callerSessionId = readInjectedAgentSessionId()
   try {
+    const workspaceId = await workspaceOf(client, params.cwd)
+    if (workspaceId === 'unknown') {
+      // A server may be off in one of the workspaces: offer none rather than guess.
+      return { on: false }
+    }
     const response = await client.call<McpServerConnection>('mcpServers.connect', {
       id: params.id,
       agent: params.agent,
-      workspaceId: await workspaceOf(client, params.cwd),
+      workspaceId,
       ...(botToken ? { botToken } : {}),
       ...(callerSessionId ? { callerSessionId } : {})
     })
