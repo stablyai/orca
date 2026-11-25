@@ -9,7 +9,7 @@ export async function replyFeishu(
   original: string,
   chat: string,
   message: { type: 'text' | 'post' | 'file'; content: unknown },
-  part: 'final' | 'progress' | 'file',
+  part: 'final' | 'file',
   signal: AbortSignal
 ): Promise<void> {
   const uuid = createHash('sha256')
@@ -84,7 +84,7 @@ export async function uploadFeishuFile(
     .parse(reply).data.file_key
 }
 
-/** Progress is best effort: reserve once before posting so a lost receipt cannot repeat the notice. */
+/** A best-effort receipt on the original message consumes no reply in the chat. */
 export async function acknowledgeFeishuMessage(
   inbox: FeishuStore,
   b: Binding,
@@ -101,13 +101,19 @@ export async function acknowledgeFeishuMessage(
   ) {
     return
   }
-  await replyFeishu(
-    b.app,
-    b.account,
-    mid,
-    b.chat,
-    { type: 'text', content: { text: 'Received in Orca. I’m working on this.' } },
-    'progress',
-    signal
+  await feishuCommand(
+    [
+      '--profile',
+      b.app,
+      'api',
+      'POST',
+      `/open-apis/im/v1/messages/${mid}/reactions`,
+      '--as',
+      'bot',
+      '--data',
+      '-'
+    ],
+    signal,
+    JSON.stringify({ reaction_type: { emoji_type: 'OK' } })
   ).catch(() => {})
 }
