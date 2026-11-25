@@ -100,6 +100,21 @@ export class ProviderRelayAttachment {
     return true
   }
 
+  /** The initialize answer, kept lines and held requests, as events, so no reply line has to carry
+   *  them; false once released. */
+  async sendPreamble(
+    initializeResult: string | null,
+    kept: ProviderRelayRecord[],
+    pending: ProviderRelayRecord[]
+  ): Promise<boolean> {
+    return (
+      (initializeResult === null ||
+        (await this.sendPieces('relayInitialize', 0, initializeResult))) &&
+      (await this.sendRecords('relayKept', kept)) &&
+      (await this.sendRecords('relayPending', pending))
+    )
+  }
+
   /** Kept lines or unanswered requests, in seq order; false once released. */
   async sendRecords(
     event: ProviderRelayLineEvent,

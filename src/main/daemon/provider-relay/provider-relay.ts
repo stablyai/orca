@@ -162,17 +162,10 @@ export class ProviderRelay {
       () => void this.detach(clientId)
     )
     this.attachment = attachment
-    // The initialize answer, kept lines and held requests go first, as events, so no reply line has to carry them.
     const { initializeResult } = this.pending
-    const kept = this.pending.kept.records()
-    // Named as sent: a line kept while this attach awaits would name a seq never sent as kept.
-    const keptLines = this.pending.kept.lines()
+    const { records: kept, lines: keptLines } = this.pending.kept.snapshot()
     const pending = this.pending.records()
-    const sent =
-      (initializeResult === null ||
-        (await attachment.sendPieces('relayInitialize', 0, initializeResult))) &&
-      (await attachment.sendRecords('relayKept', kept)) &&
-      (await attachment.sendRecords('relayPending', pending))
+    const sent = await attachment.sendPreamble(initializeResult, kept, pending)
     // A detach or takeover during the preamble owns the spool now; this attach must not touch it.
     if (!sent || this.attachment !== attachment) {
       throw new Error(RELAY_TAKEN_OVER)
