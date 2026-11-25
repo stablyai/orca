@@ -134,6 +134,7 @@ async function launchOnAThenSelectB(orcaPage: Page, electronApp: ElectronApplica
 }
 
 test.describe('on the planned account home', () => {
+  test.skip(process.platform !== 'darwin', 'automatic restart requires rollout-holder proof')
   test.use({ launchEnv: stubEnv })
 
   test('restart only stops Codex; the pane resumes the same conversation on the new account', async ({
@@ -168,18 +169,21 @@ test.describe('on the planned account home', () => {
   })
 })
 
-test.describe('on a home Orca did not plan', () => {
+test.describe('when the rollout holder cannot be verified', () => {
+  const useCustomHome = process.platform === 'darwin'
   test.use({
     launchEnv: {
       ...stubEnv,
-      ORCA_E2E_RESTART_CUSTOM_HOME: '1'
+      ...(useCustomHome ? { ORCA_E2E_RESTART_CUSTOM_HOME: '1' } : {})
     }
   })
 
   test('the restart stops nothing and shows the manual line', async ({ orcaPage, electronApp }) => {
     const { accounts, launches, userData } = await launchOnAThenSelectB(orcaPage, electronApp)
     const original = launches()[0]!
-    expect(original.codexHome).toBe(path.join(userData, 'custom-codex-home'))
+    expect(original.codexHome).toBe(
+      useCustomHome ? path.join(userData, 'custom-codex-home') : accounts[0]!.managedHomePath
+    )
     const restart = orcaPage.getByRole('button', { name: 'Restart', exact: true })
     await expect(restart).toBeVisible({ timeout: 30_000 })
     await restart.click()

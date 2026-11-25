@@ -3,28 +3,33 @@ import { linkSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { listCodexTranscriptHolders } from './codex-transcript-writer-check'
+import {
+  listCodexTranscriptHolders,
+  resolveTranscriptHolderLookup
+} from './codex-transcript-writer-check'
 
 const TRANSCRIPT = '/home/u/.codex/sessions/2026/11/01/rollout-thread.jsonl'
-type TranscriptWriterCheckDeps = NonNullable<Parameters<typeof listCodexTranscriptHolders>[1]>
-
-function deps(overrides: Partial<TranscriptWriterCheckDeps>): TranscriptWriterCheckDeps {
-  return {
-    platform: 'darwin',
-    exec: async () => ({ code: 1, stdout: '', stderr: '' }),
-    findProcHolders: async () => [],
-    ...overrides
-  }
-}
 
 describe('Codex transcript holders', () => {
-  it('distinguishes a failed lsof from an empty result even when both exit with code 1', async () => {
-    await expect(listCodexTranscriptHolders(TRANSCRIPT, deps({}))).resolves.toEqual([])
-    const failed = deps({ exec: async () => ({ code: 1, stdout: '', stderr: 'status error' }) })
-    await expect(listCodexTranscriptHolders(TRANSCRIPT, failed)).resolves.toBeNull()
+  it('leaves Linux and Windows manual before probing or stopping the process', () => {
+    expect(resolveTranscriptHolderLookup({}, 'linux')).toBeNull()
+    expect(resolveTranscriptHolderLookup({}, 'win32')).toBeNull()
   })
 
-  it.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
+  it('distinguishes a failed lsof from an empty result even when both exit with code 1', async () => {
+    await expect(
+      listCodexTranscriptHolders(TRANSCRIPT, async () => ({ code: 1, stdout: '', stderr: '' }))
+    ).resolves.toEqual([])
+    await expect(
+      listCodexTranscriptHolders(TRANSCRIPT, async () => ({
+        code: 1,
+        stdout: '',
+        stderr: 'status error'
+      }))
+    ).resolves.toBeNull()
+  })
+
+  it.skipIf(process.platform !== 'darwin')(
     'sees a real process that still holds the transcript open, and its exit',
     async () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-writer-check-'))
