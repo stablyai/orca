@@ -36,7 +36,7 @@ function Age({ at, visible }: { at: number | null; visible: boolean }) {
   )
 }
 
-/** One panel row: status mark and the full title, then model and time; on hover or
+/** One panel row: status mark and the full title, then kind, model and time; on hover or
  *  focus Stop or Clear cover the row's end.
  *  The open button stretches over the whole row, so a press anywhere but the action opens it. A row
  *  whose details have not arrived yet keeps the same button, so focus on it survives their arrival. */
@@ -62,7 +62,8 @@ export const WorkerDockRow = memo(function WorkerDockRow({
   const rowId = row?.id ?? id ?? ''
   const loading = t('components.native-chat.workerDock.loadingWorker', 'Loading worker…')
   const title = row ? workerDockRowTitle(row) : loading
-  // An unreadable state has no label anywhere: the row reads as its title and time only.
+  const kind = row ? workerDockKindLabel(t, row.kind) : ''
+  // An unreadable state has no status label.
   const state = !row
     ? ''
     : row.retired
@@ -84,11 +85,9 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     row.reason
       ? row.reason
       : ''
-  const label = [mixed && row ? workerDockKindLabel(t, row.kind) : '', title, state, reason, remote]
-    .filter(Boolean)
-    .join(' · ')
+  const label = [mixed ? kind : '', title, state, reason, remote].filter(Boolean).join(' · ')
   const tooltip = row
-    ? [row.name, title === row.title ? '' : row.title, title, state, reason, remote]
+    ? [kind, row.name, title === row.title ? '' : row.title, title, state, reason, remote]
         .filter(Boolean)
         .join(' · ')
     : undefined
@@ -116,10 +115,11 @@ export const WorkerDockRow = memo(function WorkerDockRow({
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="line-clamp-3 break-words">{title}</span>
-          {row && (row.model || row.changedAt !== null) ? (
+          {row ? (
             <span className="truncate text-xs text-muted-foreground">
-              {row.model}
-              {row.model && row.changedAt !== null ? ' · ' : null}
+              {kind}
+              {row.model ? ` · ${row.model}` : null}
+              {row.changedAt !== null ? ' · ' : null}
               <Age at={row.changedAt} visible={visible} />
             </span>
           ) : null}
