@@ -101,7 +101,7 @@ export function ClaudeSwitcherForOwner({
       runtimeTarget,
       claudeAccountSyncKey,
       EMPTY_CLAUDE_ACCOUNTS,
-      !ownerUsage.remoteOwner
+      !ownerUsage.remoteOwner || wslHostDistro !== null
     )
   const { signingInId, handleSignIn } = useClaudeAccountSignIn(loadAccounts, mountedRef)
   const {

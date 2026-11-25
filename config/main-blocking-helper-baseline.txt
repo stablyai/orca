@@ -1107,6 +1107,7 @@
 1 src/main/rate-limits/service/service-muse-usage-fetch.ts
 3 src/main/rate-limits/service/service-provider-cycles.ts
 1 src/main/rate-limits/service/service-state.ts
+1 src/main/rate-limits/service/service-target-usage-read.ts # the poller's own async Codex fetch, for a user-focused WSL host; renderer TTL-bounds it
 2 src/main/remote-policies/release-asset-policy-live-update.ts
 4 src/main/ripgrep/bundled-ripgrep-path.ts
 1 src/main/ripgrep/bundled-ripgrep-spawn.ts

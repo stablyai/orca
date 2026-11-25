@@ -235,6 +235,25 @@ function addNotSetUpPlaceholders(
 // Why: an older host publishes no usage at all; its account services always cover these.
 const ACCOUNT_OWNED_PROVIDERS: ReadonlySet<UsageProviderKey> = new Set(['claude', 'codex'])
 
+/** A WSL distro read covers only Claude and Codex; other slots fail closed, never showing this device's numbers. */
+export function keepAccountOwnedProviders(
+  local: RateLimitState,
+  remote: RateLimitState,
+  notShown: string
+): RateLimitState {
+  return {
+    ...remote,
+    ...mapProviders((key) => {
+      if (ACCOUNT_OWNED_PROVIDERS.has(key)) {
+        return remote[key]
+      }
+      return local[key]
+        ? ownerPlaceholderSnapshot(key, notShown, { unverifiableOwner: true })
+        : null
+    })
+  }
+}
+
 export function resolveOwnerUsageRateLimits(
   local: RateLimitState,
   owner: OwnerUsageState,

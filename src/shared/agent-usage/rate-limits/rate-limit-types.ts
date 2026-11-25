@@ -223,3 +223,10 @@ export type RateLimitState = {
   /** Saved Antigravity accounts; agy has one shared login, so only the active one is ever read. */
   antigravityAccounts: AntigravityAccountUsage[]
 }
+
+/** One runtime target's selected-account usage, read without switching the desktop's fetch target. */
+export type RuntimeTargetUsageRead = {
+  /** The account each reading was taken for, so a caller can drop one that no longer matches. */
+  accounts: { claude: string | null; codex: string | null }
+  rateLimits: RateLimitState
+}

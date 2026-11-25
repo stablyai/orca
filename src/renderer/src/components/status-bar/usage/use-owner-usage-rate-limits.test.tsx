@@ -20,11 +20,15 @@ const mocks = vi.hoisted(() => {
     distro: string | null
     watchers: Watcher[]
     callRuntimeRpc: Mock
+    readUsageForRuntimeTarget: Mock
+    settings: unknown
   } = {
     owner: { kind: 'local' },
     distro: null,
     watchers: [],
-    callRuntimeRpc: vi.fn()
+    callRuntimeRpc: vi.fn(),
+    readUsageForRuntimeTarget: vi.fn(),
+    settings: null
   }
   return state
 })
@@ -49,7 +53,7 @@ vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-clie
 }))
 vi.mock('../../../store/index', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({ settings: null, runtimeEnvironments: [{ id: 'mini', name: 'Mac Mini' }] })
+    selector({ settings: mocks.settings, runtimeEnvironments: [{ id: 'mini', name: 'Mac Mini' }] })
 }))
 
 const { useOwnerUsageRateLimits } = await import('./use-owner-usage-rate-limits')
@@ -82,6 +86,11 @@ describe('useOwnerUsageRateLimits', () => {
     mocks.distro = null
     mocks.watchers.length = 0
     mocks.callRuntimeRpc.mockReset()
+    mocks.readUsageForRuntimeTarget.mockReset().mockReturnValue(new Promise(() => {}))
+    mocks.settings = null
+    Object.assign(window, {
+      api: { rateLimits: { readUsageForRuntimeTarget: mocks.readUsageForRuntimeTarget } }
+    })
   })
   afterEach(() => cleanup())
 
@@ -163,30 +172,50 @@ describe('useOwnerUsageRateLimits', () => {
     expect(mocks.watchers).toEqual([])
   })
 
-  it('withholds every WSL quota across refreshes, settings updates and owner changes', async () => {
-    mocks.owner = { kind: 'local' }
+  it("shows a focused WSL host's distro usage, never the host runtime's numbers", async () => {
+    mocks.distro = 'Alpine'
+    let resolveRead: (value: unknown) => void = () => {}
+    mocks.readUsageForRuntimeTarget.mockReturnValue(
+      new Promise((resolve) => (resolveRead = resolve))
+    )
     const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
-    expect(result.current.rateLimits).toBe(local)
-    mocks.distro = 'Ubuntu'
-    rerender()
+    // Pending: no host-runtime number may stand in for the distro's.
     expect(result.current.rateLimits.claude?.session).toBeNull()
-    expect(result.current.rateLimits.codex?.session).toBeNull()
-    expect(result.current.rateLimits.inactiveClaudeAccounts).toEqual([])
-    expect(result.current.rateLimits.inactiveCodexAccounts).toEqual([])
-    await act(async () => {
-      await result.current.refreshRemote?.()
+    expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledWith({
+      runtime: 'wsl',
+      wslDistro: 'Alpine'
     })
-    expect(result.current.rateLimits.claude?.session).toBeNull()
-    rerender()
-    expect(result.current.rateLimits.claude?.session).toBeNull()
-    mocks.distro = 'Debian'
-    rerender()
-    expect(result.current.rateLimits.codex?.session).toBeNull()
+    const rateLimits = createEmptyRateLimitState({ claude: provider('claude', 77) })
+    await act(async () => resolveRead({ accounts: { claude: null, codex: null }, rateLimits }))
+    expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(77)
     mocks.distro = null
     rerender()
     expect(result.current.rateLimits).toBe(local)
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(mocks.watchers).toEqual([])
+  })
+
+  it("drops a distro reading taken for an account that isn't selected", async () => {
+    mocks.distro = 'Arch'
+    mocks.settings = {
+      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: { Arch: 'current' } }
+    }
+    const rateLimits = createEmptyRateLimitState({ claude: provider('claude', 66) })
+    mocks.readUsageForRuntimeTarget.mockResolvedValue({
+      accounts: { claude: 'previous', codex: null },
+      rateLimits
+    })
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
+    await act(async () => {})
+    expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalled()
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+  })
+
+  it('fails closed when this client cannot read the distro', async () => {
+    mocks.distro = 'Fedora'
+    mocks.readUsageForRuntimeTarget.mockResolvedValue(null)
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
+    await act(async () => {})
+    expect(result.current.rateLimits.claude?.usageMetadata?.unverifiableOwner).toBe(true)
+    expect(result.current.rateLimits.claude?.session).toBeNull()
   })
 
   it('never retains a paired snapshot when a WSL chat becomes visible', () => {

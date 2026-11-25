@@ -80,7 +80,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing || (remoteOwner !== null && remoteOwner.environmentId === null)) {
+    // Why: an unproven owner has no transport to refresh; a WSL distro reads on this device.
+    if (
+      isRefreshing ||
+      (remoteOwner !== null && remoteOwner.environmentId === null && !remoteOwner.wslDistro)
+    ) {
       return
     }
     setIsRefreshing(true)
