@@ -212,7 +212,11 @@ function namesOption(word: string, options: readonly string[]): boolean {
 
 /** `bash -lc '<command>'` as Codex wraps it: the inner command is what runs. */
 function unwrapShell(command: string): string {
-  const wrapped = /^(?:\S*\/)?(?:ba|z)?sh\s+-l?c\s+'((?:[^']|'\\'')*)'$/.exec(command.trim())
+  // A bare shell or a system shell path, and nothing before it: a prefix could run something itself.
+  const wrapped =
+    /^(?:(?:\/usr|\/usr\/local|\/opt\/homebrew)?\/bin\/)?(?:ba|z)?sh[ \t]+-l?c[ \t]+'((?:[^']|'\\'')*)'$/.exec(
+      command.trim()
+    )
   return wrapped ? wrapped[1]!.replace(/'\\''/g, "'") : command.trim()
 }
 
