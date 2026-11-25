@@ -15,10 +15,6 @@
     "terminalPromptFailed": "Orca가 {{value0}}의 터미널을 열었지만 프롬프트를 전달하지 못했습니다. 해당 터미널에서 프롬프트를 보내세요."
   },
   "app": {
-    "saving": {
-      "delayedTitle": "프로필 저장소 작업에 평소보다 오래 걸리고 있습니다",
-      "delayedDescription": "이 작업이 완료될 때까지 이후 저장이 지연될 수 있습니다."
-    },
     "recoverableError": {
       "rootTitle": "Orca에 렌더러 오류가 발생했습니다.",
       "rootDescription": "앱 셸에서 렌더링을 완료할 수 없습니다. 다시 마운트해 보거나 오류가 지속되면 Orca를 다시 시작하세요.",
