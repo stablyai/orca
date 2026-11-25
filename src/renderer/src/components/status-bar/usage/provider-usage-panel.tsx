@@ -5,13 +5,7 @@ import type {
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import {
-  ClaudeIcon,
-  GeminiIcon,
-  MiniMaxIcon,
-  OpenAIIcon,
-  OpenCodeGoIcon
-} from '../accounts/provider-icons'
+import { ClaudeIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from '../accounts/provider-icons'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
@@ -76,9 +70,6 @@ export function formatResetCreditExpiry(
 export function ProviderIcon({ provider }: { provider: string }): React.JSX.Element {
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
-  }
-  if (provider === 'gemini') {
-    return <GeminiIcon size={13} />
   }
   if (provider === 'opencode-go') {
     return <OpenCodeGoIcon size={13} />

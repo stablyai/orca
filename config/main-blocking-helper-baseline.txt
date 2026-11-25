@@ -511,7 +511,6 @@
 4 src/main/filesystem/rolling-file-backup.ts # stageRollingFileBackup + commit (same sync copy and rename); the staged-copy rmSync moved into removeFileWithWindowsRetry so Windows AV locks are retried
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
-6 src/main/gemini/hook-service.ts
 1 src/main/git/command-runner/git-environment/git-ssh-policy-env.ts
 1 src/main/git/command-runner/git-exec-file-sync.ts
 3 src/main/git/command-runner/git-exec-file.ts

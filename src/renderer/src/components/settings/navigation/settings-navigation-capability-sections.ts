@@ -56,8 +56,8 @@ export function buildCapabilitySettingsSections(
       id: 'accounts',
       title: t('auto.hooks.useSettingsNavigationMetadata.f70ac54d38', 'AI Provider Accounts'),
       description: t(
-        'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
-        'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
+        'settings.navigation.accounts.description',
+        'Optional account switching and usage setup for Claude, Codex, Antigravity, OpenCode Go, MiniMax, and Grok.'
       ),
       icon: UserCog,
       searchEntries: getAccountsPaneSearchEntries(),
