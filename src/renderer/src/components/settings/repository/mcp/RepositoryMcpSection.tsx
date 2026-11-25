@@ -12,7 +12,7 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { McpConfigSection } from './McpConfigSection'
 import { McpRepoServersSection } from './McpRepoServersSection'
 
-export function RepositoryMcpSection({ repo }: { repo: Repo }): React.JSX.Element {
+export function RepositoryMcpSection({ repo }: { repo: Repo }): React.JSX.Element | null {
   // A direct SSH repo has no Orca runtime to keep a server list.
   const target = getRepoSshConnectionId(repo)
     ? null
@@ -21,6 +21,10 @@ export function RepositoryMcpSection({ repo }: { repo: Repo }): React.JSX.Elemen
     target,
     MCP_SERVERS_RUNTIME_CAPABILITY
   )
+  if (target && support === 'unknown') {
+    // Neither section until the host answers: the old one would show, then swap for the new one.
+    return null
+  }
   return target && support === 'supported' ? (
     <McpRepoServersSection repo={repo} target={target} />
   ) : (
