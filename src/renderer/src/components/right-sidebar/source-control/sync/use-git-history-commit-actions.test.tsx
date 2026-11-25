@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { act, useState } from 'react'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -51,6 +51,7 @@ vi.mock('@/lib/browser/workspace/workspace-browser-tab-open', () => ({
 import { useGitHistoryCommitActions } from './use-git-history-commit-actions'
 import { COMMIT_COMPARE_JOIN_WINDOW_MS } from './git-history-commit-compare'
 import { useChangeScopeSync } from '../panel/use-change-scope-sync'
+import type { GitHistoryPanelState } from './git-history-page-store'
 import {
   ALL_CHANGES_SCOPE,
   type SourceControlChangeScope,
@@ -205,6 +206,70 @@ describe('useGitHistoryCommitActions context fencing', () => {
     await act(async () => root.rerender(<ScopeProbe changeScope={ALL_CHANGES_SCOPE} />))
     await act(async () => root.rerender(<ScopeProbe changeScope={commitScope(deepened)} />))
     expect(reads).toHaveLength(2)
+  })
+
+  it('follows a held pick to its parents on a refreshed page after a deepen', async () => {
+    const reads = deferCompareReads()
+    const shallow: GitHistoryItem = { id: 'a', parentIds: [], subject: 'a', message: 'a' }
+    const deepened: GitHistoryItem = { ...shallow, parentIds: ['p0'] }
+    let files: SourceControlCommitScopeFiles | null = null
+    const setCommitScopeFiles = (next: SourceControlCommitScopeFiles | null): void => {
+      files = next
+    }
+    let picked: SourceControlChangeScope | null = null
+    function HeldPickProbe({ gitHistoryState }: { gitHistoryState: GitHistoryPanelState }): null {
+      const [changeScope, setChangeScope] = useState<SourceControlChangeScope>({
+        kind: 'commit',
+        commit: shallow,
+        pickedBaseOid: null,
+        pickedFromBranchPage: false
+      })
+      picked = changeScope
+      latest = useGitHistoryCommitActions({
+        activeWorktreeId: 'A',
+        worktreePath: '/A',
+        activeRepoTarget: { kind: 'local' },
+        resolveSplitTargetGroupId: () => undefined
+      })
+      useChangeScopeSync({
+        changeScope,
+        setChangeScope,
+        setCommitScopeFiles,
+        gitHistoryState,
+        statusHead: null,
+        loadCommitFiles: latest.loadCommitFiles
+      })
+      return null
+    }
+
+    // Picked from the shallow page (or the old page still shown while the menu refreshes).
+    const root = render(<HeldPickProbe gitHistoryState={{ status: 'idle' }} />)
+    await act(async () => reads[0].resolve(compare('root.ts', 'a', null)))
+    expect(reads).toHaveLength(1)
+    // The checkout is deepened and the refreshed page shows the commit's parent.
+    const page = {
+      items: [deepened],
+      hasIncomingChanges: false,
+      hasOutgoingChanges: false,
+      hasMore: false,
+      limit: 50
+    }
+    await act(async () =>
+      root.rerender(<HeldPickProbe gitHistoryState={{ status: 'ready', result: page }} />)
+    )
+    expect(reads).toHaveLength(2)
+    await act(async () => {
+      reads[1].resolve(compare('changed.ts', 'a', 'p0'))
+      for (const read of reads.slice(2)) {
+        read.resolve(compare('extra.ts', 'a', 'extra'))
+      }
+    })
+
+    const changed: GitBranchChangeEntry[] = [{ path: 'changed.ts', status: 'modified' }]
+    expect(files).toEqual({ commitId: 'a', status: 'ready', entries: changed })
+    expect(picked).toMatchObject({ commit: deepened })
+    await latest!.openHistoryCommitDiff(deepened)
+    expect(mocks.openCommitAllDiffs.mock.lastCall?.[2]).toMatchObject({ parentOid: 'p0' })
   })
 
   it('replaces a compare that outlived the owner timeout when the commit is reselected', async () => {

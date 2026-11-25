@@ -10,7 +10,7 @@ import {
   type SourceControlCommitScopeFiles
 } from './change-scope'
 
-/** Load a picked commit's files, and fall back to All changes once a fenced, complete page proves it left the branch. */
+/** Load a picked commit's files, follow its parents on a fenced page, and fall back to All changes once a complete page proves it left the branch. */
 export function useChangeScopeSync({
   changeScope,
   setChangeScope,
@@ -81,8 +81,17 @@ export function useChangeScopeSync({
 
   const result = gitHistoryState.status === 'ready' ? gitHistoryState.result : undefined
   useEffect(() => {
-    if (commitScope && result && provesPickedCommitGone(commitScope, result, statusHead)) {
+    if (!commitScope || !result) {
+      return
+    }
+    if (provesPickedCommitGone(commitScope, result, statusHead)) {
       setChangeScope(ALL_CHANGES_SCOPE)
+      return
+    }
+    // A deepened shallow clone shows the picked commit's parent; follow the page so its compare reads again.
+    const shown = result.items.find((item) => item.id === commitScope.commit.id)
+    if (shown && shown.parentIds.join() !== commitScope.commit.parentIds.join()) {
+      setChangeScope({ ...commitScope, commit: shown })
     }
   }, [commitScope, result, setChangeScope, statusHead])
 
