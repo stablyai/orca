@@ -35,7 +35,7 @@ import {
   WorkspaceReviewChecksIndicator,
   workspaceReviewChecksLabel
 } from '../../workspace-status/presentation/WorkspaceReviewChecksIndicator'
-import { getReviewMergeQueueLabel } from '../../../github/review-merge-queue-presentation'
+import { presentReviewMergeQueueEntry } from '../../../github/review-merge-queue-presentation'
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
@@ -114,7 +114,8 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay, t: Translate = tran
     return t('workspace.reviewStatus.draft', '{{review}}: Draft', values)
   }
   if (review.state === 'open' && review.mergeQueueEntry) {
-    return `${getReviewLabel(review)}: ${getReviewMergeQueueLabel(review.mergeQueueEntry)}`
+    const { label, tooltip } = presentReviewMergeQueueEntry(review.mergeQueueEntry)
+    return `${getReviewLabel(review)}: ${label} · ${tooltip}`
   }
   const outcome = review.status
     ? getProviderChecksOutcome(review.checksSummary, review.status)

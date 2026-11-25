@@ -8,7 +8,10 @@ describe('parsePullRequestMergeQueueEntryResponse', () => {
   it('reads the queue position and state of a queued PR', () => {
     expect(
       parsePullRequestMergeQueueEntryResponse(
-        respond({ isInMergeQueue: true, mergeQueueEntry: { position: 3, state: 'AWAITING_CHECKS' } })
+        respond({
+          isInMergeQueue: true,
+          mergeQueueEntry: { position: 3, state: 'AWAITING_CHECKS' }
+        })
       )
     ).toEqual({ position: 3, state: 'AWAITING_CHECKS' })
   })
@@ -23,7 +26,9 @@ describe('parsePullRequestMergeQueueEntryResponse', () => {
 
   it('keeps a queued PR whose entry GitHub did not return', () => {
     expect(
-      parsePullRequestMergeQueueEntryResponse(respond({ isInMergeQueue: true, mergeQueueEntry: null }))
+      parsePullRequestMergeQueueEntryResponse(
+        respond({ isInMergeQueue: true, mergeQueueEntry: null })
+      )
     ).toEqual({ position: null, state: null })
   })
 

@@ -28,7 +28,9 @@ export function shouldFetchPullRequestMergeQueueEntry(pr: {
 }
 
 function readField(value: unknown, key: string): unknown {
-  return typeof value === 'object' && value !== null ? Reflect.get(value, key) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)[key]
+    : undefined
 }
 
 /** `undefined` means GitHub's answer is unknown; `null` means the PR is not queued. */

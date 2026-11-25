@@ -12,6 +12,7 @@ import {
 } from './../detect/pull-request-merge-queue-entry'
 import { derivePullRequestMergeable, type PullRequestLookupData } from './pull-request-lookup-data'
 import { getCachedGitHubPRStackSummary } from './pr-stack-summary-cache'
+import { ownerRepoFromPullRequestUrl } from '../github-exec-scope'
 
 export async function derivePRRefreshData(args: {
   data: PullRequestLookupData
@@ -71,15 +72,17 @@ export async function derivePRRefreshData(args: {
     stack && dataRepo
       ? await detectRepositoryMergeMetadata(dataRepo, stack.baseRefName, ghOptions, executionScope)
       : undefined
+  // Fallback lookups return no dataRepo; the PR URL still identifies the queue repository.
+  const queueRepo = dataRepo ?? ownerRepoFromPullRequestUrl(data.url)
   const mergeQueueEntry =
-    dataRepo &&
+    queueRepo &&
     shouldFetchPullRequestMergeQueueEntry({
       state: mapPRState(data.state, data.isDraft),
       mergeQueueRequired: stackMergeMetadata
         ? stackMergeMetadata.mergeQueueRequired
         : data.mergeQueueRequired
     })
-      ? await fetchPullRequestMergeQueueEntry(dataRepo, data.number, ghOptions)
+      ? await fetchPullRequestMergeQueueEntry(queueRepo, data.number, ghOptions)
       : undefined
   const conflictSummary =
     !connectionId &&
