@@ -438,12 +438,9 @@
     "sessionHistoryList": {
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
-      "currentWorktree": "current worktree",
       "resumeSession": "Resume agent session",
       "continueInCli": "Continue in CLI",
-      "hidePreview": "Hides the recent messages.",
-      "showPreview": "Shows the recent messages.",
-      "you": "You"
+      "thisWorkspace": "This workspace"
     },
     "panel": {
       "workspace": "Workspace",
@@ -454,16 +451,15 @@
       "unknownHostPlatform": "Unable to determine host platform.",
       "sessionQueued": "Agent session queued.",
       "resumeFailed": "Failed to resume session.",
-      "title": "Agent Session History",
+      "title": "Agent history",
       "refreshSessions": "Refresh agent sessions",
-      "unavailable": "Agent Session History Unavailable",
+      "unavailable": "Agent history unavailable",
       "updateHost": "Update Orca on this host to browse agent session history.",
       "placeholder": "Search sessions, repo:, path:",
       "skipped_one": "{{count}} transcript skipped",
       "skipped_other": "{{count}} transcripts skipped",
       "noSessions": "No agent sessions",
       "noSearchResults": "No sessions match your search.",
-      "emptyScope": "No past agent sessions in this scope.",
       "hideDetails": "Hide details",
       "showDetails": "Show details",
       "loading": "Loading agent sessions…",

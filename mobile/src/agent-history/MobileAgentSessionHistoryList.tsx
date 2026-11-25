@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import { RefreshControl, SectionList, View } from 'react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -39,35 +39,26 @@ export function MobileAgentSessionHistoryList({
   bottomPadding = 0
 }: Props) {
   const colorScheme = useMobileColorScheme()
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-
-  const toggleExpanded = useCallback((id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id))
-  }, [])
 
   const renderItem = useCallback(
     ({ item }: { item: MobileAgentHistoryCard }) => (
       <AgentHistorySessionRow
         card={item}
-        expanded={expandedId === item.id}
         session={sessionsById.get(item.id) ?? null}
         showCurrentWorktreeBadge={showCurrentWorktreeBadges}
         resumeActionState={resumeActionStateBySessionId?.get(item.id)}
         onResume={onResume}
         primaryAction={primaryAction}
-        onPress={() => toggleExpanded(item.id)}
         onLongPress={onLongPress}
       />
     ),
     [
-      expandedId,
       onLongPress,
       primaryAction,
       onResume,
       resumeActionStateBySessionId,
       sessionsById,
-      showCurrentWorktreeBadges,
-      toggleExpanded
+      showCurrentWorktreeBadges
     ]
   )
 

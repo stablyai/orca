@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "Toutes",
-      "emptyScope": "Aucune session d'agent passée dans ce périmètre.",
       "hideDetails": "Masquer les détails",
       "showDetails": "Afficher les détails",
       "loading": "Chargement des sessions d'agent…",
@@ -66,7 +65,6 @@
       "untitledSession": "Session sans titre"
     },
     "sessionHistoryList": {
-      "currentWorktree": "worktree actuel",
       "messages_many": "{{count}} messages",
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
@@ -5801,7 +5799,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",

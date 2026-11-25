@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "Все",
-      "emptyScope": "В выбранной области нет предыдущих сессий агентов.",
       "missingResumeId": "У этой сессии нет идентификатора для продолжения.",
       "noSearchResults": "По вашему запросу сессий не найдено.",
       "noSessions": "Нет сессий агентов",
@@ -67,16 +66,12 @@
       "untitledSession": "Сессия без названия"
     },
     "sessionHistoryList": {
-      "currentWorktree": "текущее рабочее дерево",
       "messages_few": "{{count}} сообщения",
       "messages_many": "{{count}} сообщений",
       "messages_one": "{{count}} сообщение",
       "messages_other": "{{count}} сообщения",
       "resumeSession": "Продолжить сессию агента",
-      "continueInCli": "Продолжить в CLI",
-      "hidePreview": "Скрывает последние сообщения.",
-      "showPreview": "Показывает последние сообщения.",
-      "you": "Вы"
+      "continueInCli": "Продолжить в CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Не удалось связаться с сервером",
