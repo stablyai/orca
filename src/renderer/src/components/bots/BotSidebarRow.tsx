@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Bell, BellOff, Pencil } from 'lucide-react'
+import { Bell, BellOff, Pencil, Pin, PinOff } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -22,6 +23,7 @@ import {
   botAvatarBadgeCutout,
   useBotAvatarBadgeSleeping
 } from './bot-avatar-status-badge'
+import { botErrorMessage } from './bot-presentation'
 
 /** One row of the Bots section, a bot's or a group's: picture, name and time, then its newest line. */
 export type BotSidebarRowProps = {
@@ -36,9 +38,10 @@ export type BotSidebarRowProps = {
   /** Its chat, worker or run stopped on a usage limit while the row is quiet: the corner's tooltip. */
   stopTip?: string | null
   isUnread: boolean
+  isPinned?: boolean
   isActive: boolean
   dimmed?: boolean
-  /** Its host is disconnected: Rename and Mark Read/Unread are off, as the caller's items are. */
+  /** Its host is disconnected: Rename, Pin and Mark Read/Unread are off, as the caller's items are. */
   actionsDisabled?: boolean
   /** The Bots section's reorder: this row is where a drag starts. */
   dragHandle?: boolean
@@ -55,7 +58,7 @@ export type BotSidebarRowProps = {
   trailing?: React.ReactNode
   /** What the hover card shows, rendered only while it is open. */
   hoverDetails: (keyboardFocus: boolean) => React.ReactNode
-  /** Rename and Mark Read/Unread lead the menu; these follow. */
+  /** Rename, Pin and Mark Read/Unread surround these items. */
   menuItems: React.ReactNode
   menuFooter: React.ReactNode
 }
@@ -68,6 +71,7 @@ export function BotSidebarRow({
   status,
   stopTip = null,
   isUnread,
+  isPinned = false,
   isActive,
   expanded,
   dimmed = false,
@@ -84,10 +88,20 @@ export function BotSidebarRow({
 }: BotSidebarRowProps): React.JSX.Element {
   const t = useTranslate()
   const setWorkspaceUnreadByUser = useAppStore((s) => s.setWorkspaceUnreadByUser)
+  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const [renameRequested, setRenameRequested] = useState(false)
   const [hoverOpen, setHoverOpen] = useState(false)
   const [keyboardFocus, setKeyboardFocus] = useState(false)
   const toggleUnread = (): void => setWorkspaceUnreadByUser(workspaceId, !isUnread, hostId)
+  const togglePin = (): void => {
+    void updateWorktreeMeta(workspaceId, { isPinned: !isPinned }, { executionHostId: hostId }).then(
+      (result) => {
+        if (!result.ok) {
+          toast.error(botErrorMessage(new Error(result.error)))
+        }
+      }
+    )
+  }
   // Working shows once, at the row's end, where every working row shows it.
   const badgeStatus = status === 'working' ? null : status
   const badge = {
@@ -159,6 +173,15 @@ export function BotSidebarRow({
                       beginEditing={renameRequested}
                       onBeginEditingConsumed={() => setRenameRequested(false)}
                     />
+                    {isPinned ? (
+                      <span
+                        role="img"
+                        aria-label={t('bots.row.pinned', 'Pinned')}
+                        className="flex shrink-0 items-center text-muted-foreground"
+                      >
+                        <Pin className="size-3" aria-hidden="true" />
+                      </span>
+                    ) : null}
                     {age ? (
                       <span className="ml-auto shrink-0 text-3xs leading-none text-muted-foreground tabular-nums">
                         {age}
@@ -188,6 +211,10 @@ export function BotSidebarRow({
         <ContextMenuItem disabled={actionsDisabled} onSelect={() => setRenameRequested(true)}>
           <Pencil className="size-3.5" />
           {t('bots.row.rename', 'Rename')}
+        </ContextMenuItem>
+        <ContextMenuItem disabled={actionsDisabled} onSelect={togglePin}>
+          {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+          {isPinned ? t('bots.row.unpin', 'Unpin') : t('bots.row.pin', 'Pin')}
         </ContextMenuItem>
         {menuItems}
         <ContextMenuItem disabled={actionsDisabled} onSelect={toggleUnread}>

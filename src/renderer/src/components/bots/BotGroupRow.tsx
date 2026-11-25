@@ -69,6 +69,7 @@ export function BotGroupRow({
       hostId={LOCAL_EXECUTION_HOST_ID}
       status={status}
       isUnread={home.isUnread}
+      isPinned={home.isPinned}
       isActive={isActive}
       dragHandle={dragHandle}
       onOpen={() => {

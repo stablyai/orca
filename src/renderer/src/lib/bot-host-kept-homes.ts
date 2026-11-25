@@ -7,8 +7,16 @@ import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-w
 import { readKeptBotHostList, type KeptBotHome, type KeptBotHostList } from './bot-host-kept-lists'
 
 function keptHome(workspace: FolderWorkspace): KeptBotHome {
-  const { id, name, folderPath, executionHostId, projectGroupId, sortOrder } = workspace
-  return { id, name, folderPath, executionHostId, projectGroupId, sortOrder }
+  const { id, name, folderPath, executionHostId, projectGroupId, sortOrder, isPinned } = workspace
+  return {
+    id,
+    name,
+    folderPath,
+    executionHostId,
+    projectGroupId,
+    sortOrder,
+    ...(isPinned ? { isPinned: true } : {})
+  }
 }
 
 /** The kept list's homes as the app lists them now; a home not loaded yet stays as kept. */
@@ -41,7 +49,7 @@ function restoredHome(home: KeptBotHome): FolderWorkspace {
     comment: '',
     isArchived: false,
     isUnread: false,
-    isPinned: false,
+    isPinned: home.isPinned === true,
     lastActivityAt: 0,
     createdAt: 0,
     updatedAt: 0

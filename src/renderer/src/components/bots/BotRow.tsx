@@ -89,6 +89,7 @@ export function BotRow({
       status={offline ? null : status}
       stopTip={!offline && limit ? usageLimitStopTip(t, limit.stop) : null}
       isUnread={isUnread}
+      isPinned={home.isPinned}
       isActive={isActive}
       expanded={fold ? !fold.folded : undefined}
       dimmed={bot.paused || offline}

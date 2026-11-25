@@ -67,9 +67,10 @@ export type HostBotSectionInputs = {
 
 /** One bot or group of one host, drawn, before the one list arranges them. */
 export type DrawnBotEntry = {
-  entry:
+  entry: (
     | { kind: 'bot'; bot: { name: string; paused: boolean } }
     | { kind: 'group'; group: { name: string } }
+  ) & { isPinned?: boolean }
   items: WorkspaceListItem[]
   preview?: NonNullable<Section['botPreview']>[number]
   activity: BotSidebarEntryActivity
@@ -173,7 +174,7 @@ export function drawHostBotEntries(
       })
       if (!query || matchBotSearchText(entry.group.name, inputs.search)) {
         drawn.push({
-          entry,
+          entry: { ...entry, isPinned: home.row.isPinned },
           items: [groupRow],
           activity: {
             needsYou: botStatusNeedsAttention(getWorktreeDotStatus(home.row)),
@@ -300,7 +301,7 @@ export function drawHostBotEntries(
       continue
     }
     drawn.push({
-      entry,
+      entry: { ...entry, isPinned: home.row.isPinned },
       items: [botRow, ...(listsUnder ? shownLines : [])],
       preview: {
         ...preview,

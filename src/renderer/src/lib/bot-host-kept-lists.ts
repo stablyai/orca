@@ -17,7 +17,8 @@ export const KEPT_BOT_LIST_FLUSH_MS = 1_500
 export type KeptBotHome = Pick<
   FolderWorkspace,
   'id' | 'name' | 'folderPath' | 'executionHostId' | 'projectGroupId' | 'sortOrder'
->
+> &
+  Partial<Pick<FolderWorkspace, 'isPinned'>>
 
 // Each part is checked only for its outer shape: the server's next read replaces it whole.
 const someObject = (value: unknown): boolean => typeof value === 'object' && value !== null
