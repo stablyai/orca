@@ -15,7 +15,11 @@ import { readBotShareActivity } from './bot-share-activity'
 import type { ConnectorLinearState } from '../../../shared/connector-bot-linear-contract'
 import type { ConnectorGitHubState } from '../../../shared/connector-bot-github-contract'
 import type { GoogleStatusView } from '../../../shared/google/google-connect-types'
+import type { ConnectorBotSlackStateResponse } from '../../../shared/connector-bot-slack-contract'
+import type { ComposioStatus } from '../../../shared/composio/composio-apps'
 import {
+  botShareComposioStatus,
+  botShareSlackState,
   botShareGitHubState,
   botShareGoogleStatus,
   botShareLinearState,
@@ -46,6 +50,9 @@ export type BotShareScopedView = EveryScopedMethod<{
   'google.status': { bot: Bot | null; view: (view: GoogleStatusView) => GoogleStatusView }
   /** By bot: the teammate's own Activity, built from their chats alone. */
   'bots.activity': () => Promise<BotActivityRead>
+  /** By bot: the shared bot's Slack and Composio, read as their allowlisted views. */
+  'bots.slack.state': (state: ConnectorBotSlackStateResponse) => ConnectorBotSlackStateResponse
+  'bots.composio.status': (status: ComposioStatus) => ComposioStatus
   /** By bot: the shared bot's tools by name, never their URL or command line. */
   'bots.tools.list': (tools: BotTools) => BotTools
 }>
@@ -79,6 +86,8 @@ export function botShareScopedView(
     'bots.github.state': (state) => botShareGitHubState(state, scope.botId),
     'google.status': sharedGoogleStatus(runtime.bots.list(), scope.botId),
     'bots.activity': () => readBotShareActivity(runtime, scope),
+    'bots.slack.state': botShareSlackState,
+    'bots.composio.status': botShareComposioStatus,
     'bots.tools.list': botShareTools
   }
 }

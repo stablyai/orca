@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -29,7 +29,8 @@ import {
   SHARE_BY_ENVELOPE_SESSION,
   SHARE_BY_SESSION
 } from '../../../../shared/bots/bot-share-rpc-methods'
-import { FileDirRead } from '../../../../shared/rpc-contract/filesystem/files-params'
+import { FileDirRead, FileTreePath } from '../../../../shared/rpc-contract/filesystem/files-params'
+import { confinedFolderRead, confinedFolderWatch } from '../methods/files/files-bot-folder-read'
 import { FileOpen } from '../../../../shared/rpc-contract/filesystem/files-target-params'
 import {
   BotSlackBot,
@@ -232,7 +233,20 @@ beforeEach(() => {
         permission: 'workspace',
         share: SHARE_BY_BOT_FOLDER,
         params: FileDirRead,
-        handler: ran
+        // Answers with the params it ran with, as the read would use them.
+        handler: (params) => params
+      }),
+      defineMethod({
+        name: 'files.stat',
+        permission: 'workspace',
+        share: SHARE_BY_BOT_FOLDER,
+        params: FileTreePath,
+        // A part of the path swapped for a symlink out while the read runs.
+        handler: confinedFolderRead(async () => {
+          renameSync(join(homes.shared, 'notes'), join(homes.shared, 'notes-moved'))
+          symlinkSync(homes.other, join(homes.shared, 'notes'), 'junction')
+          return { ran: true }
+        })
       }),
       defineMethod({
         name: 'files.read',
@@ -414,12 +428,49 @@ describe('the share guard', () => {
       expect(errorCode(await read(escape))).toBe('not_found')
     }
     expect(errorCode(await readDir(home, 'escape'))).toBe('not_found')
-    expect(errorCode(await readDir(home, '', true))).toBe('not_found')
+    // The read runs with symlinks off whatever is asked or left to the host's setting, so a symlink
+    // out of the folder (escape) is listed by name and never followed; its path is the resolved one.
+    for (const followSymlinks of [undefined, true]) {
+      const listed = await readDir(home, '', followSymlinks)
+      expect(listed.ok ? listed.result : null).toMatchObject({
+        relativePath: '',
+        followSymlinks: false
+      })
+    }
+    symlinkSync(join(homes.shared, 'notes'), join(homes.shared, 'inner'), 'junction')
+    const viaLink = await readDir(home, 'inner')
+    expect(viaLink.ok ? viaLink.result : null).toMatchObject({
+      relativePath: 'notes',
+      followSymlinks: false
+    })
     // Another bot's home, and a spelling of a selector other than the home's own.
     expect(errorCode(await readDir(folderWorkspaceKey(OTHER.folderWorkspaceId), ''))).toBe(
       'not_found'
     )
     expect(errorCode(await readDir(`path:${homes.shared}`, ''))).toBe('not_found')
+  })
+
+  it('answers nothing for a read whose path was swapped for a symlink out while it ran', async () => {
+    const home = `id:${folderWorkspaceKey(SHARED.folderWorkspaceId)}`
+    expect(
+      errorCode(await call('files.stat', { worktree: home, relativePath: 'notes/a.md' }))
+    ).not.toBeNull()
+  })
+
+  it('ends a teammate’s watch once its folder is moved, and passes nothing after', async () => {
+    const forwarded: unknown[] = []
+    const watch = await confinedFolderWatch(
+      { worktree: `id:${folderWorkspaceKey(SHARED.folderWorkspaceId)}` },
+      { runtime, callerScope: SCOPE },
+      (event) => forwarded.push(event)
+    )
+    watch.emit('before')
+    await vi.waitFor(() => expect(forwarded).toEqual(['before']))
+    renameSync(homes.shared, `${homes.shared}-moved`)
+    mkdirSync(homes.shared)
+    watch.emit('after')
+    await vi.waitFor(() => expect(watch.signal?.aborted).toBe(true))
+    expect(forwarded).toEqual(['before'])
   })
 
   it('reads the shared bot’s connectors only, and none of their setup', async () => {

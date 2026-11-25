@@ -261,6 +261,7 @@ function FileExplorerFiles(): React.JSX.Element {
           worktreePath={worktreePath}
           {...getRouteForLocalPathOpenOwner(openInOwner)}
           workspaceId={activeWorktreeId}
+          hostOnly={readOnly}
           refresh={manualRefresh}
           canRefresh={isFilesViewActive}
           canCollapseAll={canCollapseAll}

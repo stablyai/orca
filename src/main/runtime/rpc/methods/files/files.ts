@@ -1,6 +1,7 @@
-import { SHARE_BY_BOT_FOLDER } from '../../../../../shared/bots/bot-share-rpc-methods'
-import { notShared, defineMethod, defineStreamingMethod } from '../../core'
-import { runFileWatchStream } from './file-watch-stream-lifecycle'
+import type { z } from 'zod'
+import { BOT_FOLDER_READ, confinedFolderRead } from './files-bot-folder-read'
+import { notShared, defineMethod } from '../../core'
+import { FILE_WATCH_METHOD } from './files-watch-method'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
 import { dirListingPageCache } from './files-read-dir-page'
 import { FILE_STAGED_SAVE_METHODS } from './files-staged-save-methods'
@@ -11,7 +12,6 @@ import {
 import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../../shared/quick-open/quick-open-transport-budget'
 import {
   FileOpen,
-  FileWatch,
   WorktreeSelector
 } from '../../../../../shared/rpc-contract/filesystem/files-target-params'
 import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
@@ -34,9 +34,7 @@ import {
 } from '../../../../../shared/rpc-contract/filesystem/files-params'
 import { limitSearchResultToContentBudget } from '../../../../../shared/file-search/search-result-transport-budget'
 
-let filesWatchSubscriptionSeq = 0
-// Reads a teammate may make in the shared bot's home folder (bot-share-folder.ts confines them).
-const BOT_FOLDER_READ = { permission: 'workspace', share: SHARE_BY_BOT_FOLDER } as const
+type FileOpenParams = z.infer<typeof FileOpen>
 
 export const FILE_METHODS = [
   defineMethod({
@@ -103,8 +101,9 @@ export const FILE_METHODS = [
     name: 'files.read',
     ...BOT_FOLDER_READ,
     params: FileOpen,
-    handler: async (params, { runtime }) =>
+    handler: confinedFolderRead(async (params: FileOpenParams, { runtime }) =>
       runtime.readMobileFile(params.worktree, params.relativePath)
+    )
   }),
   defineMethod({
     name: 'files.readDocPreview',
@@ -156,12 +155,14 @@ export const FILE_METHODS = [
     name: 'files.readPreview',
     ...BOT_FOLDER_READ,
     params: FileOpen,
-    handler: async (params, { runtime, clientKind, requestId }) => {
-      const budget = remoteFileContentBudget(clientKind, requestId)
-      return budget === undefined
-        ? runtime.readFileExplorerPreview(params.worktree, params.relativePath)
-        : runtime.readFileExplorerPreview(params.worktree, params.relativePath, budget)
-    }
+    handler: confinedFolderRead(
+      async (params: FileOpenParams, { runtime, clientKind, requestId }) => {
+        const budget = remoteFileContentBudget(clientKind, requestId)
+        return budget === undefined
+          ? runtime.readFileExplorerPreview(params.worktree, params.relativePath)
+          : runtime.readFileExplorerPreview(params.worktree, params.relativePath, budget)
+      }
+    )
   }),
   defineMethod({
     name: 'files.readChatImage',
@@ -178,33 +179,39 @@ export const FILE_METHODS = [
     name: 'files.readChunk',
     ...BOT_FOLDER_READ,
     params: FileReadChunk,
-    handler: async (params, { runtime }) =>
+    handler: confinedFolderRead(async (params: z.infer<typeof FileReadChunk>, { runtime }) =>
       runtime.readFileExplorerChunk(
         params.worktree,
         params.relativePath,
         params.offset,
         params.length
       )
+    )
   }),
   defineMethod({
     name: 'files.readDir',
     ...BOT_FOLDER_READ,
     params: FileDirRead,
-    handler: async (params, { runtime, clientKind, requestId, connectionId }) => {
-      const list = () =>
-        params.followSymlinks === undefined
-          ? runtime.readFileExplorerDir(params.worktree, params.relativePath)
-          : runtime.readFileExplorerDir(params.worktree, params.relativePath, {
-              followSymlinks: params.followSymlinks
-            })
-      const budget = remoteFileContentBudget(clientKind, requestId)
-      if (params.after === undefined && params.limit === undefined) {
-        return assertDirListingWithinRemoteBudget(await list(), budget)
+    handler: confinedFolderRead(
+      async (
+        params: z.infer<typeof FileDirRead>,
+        { runtime, clientKind, requestId, connectionId }
+      ) => {
+        const list = () =>
+          params.followSymlinks === undefined
+            ? runtime.readFileExplorerDir(params.worktree, params.relativePath)
+            : runtime.readFileExplorerDir(params.worktree, params.relativePath, {
+                followSymlinks: params.followSymlinks
+              })
+        const budget = remoteFileContentBudget(clientKind, requestId)
+        if (params.after === undefined && params.limit === undefined) {
+          return assertDirListingWithinRemoteBudget(await list(), budget)
+        }
+        const page = await dirListingPageCache.readPage(connectionId, params, list)
+        assertDirListingWithinRemoteBudget(page.entries, budget)
+        return page
       }
-      const page = await dirListingPageCache.readPage(connectionId, params, list)
-      assertDirListingWithinRemoteBudget(page.entries, budget)
-      return page
-    }
+    )
   }),
   defineMethod({
     name: 'files.browseServerDir',
@@ -270,27 +277,11 @@ export const FILE_METHODS = [
     name: 'files.stat',
     ...BOT_FOLDER_READ,
     params: FileTreePath,
-    handler: async (params, { runtime }) =>
+    handler: confinedFolderRead(async (params: z.infer<typeof FileTreePath>, { runtime }) =>
       runtime.statRuntimeFile(params.worktree, params.relativePath)
+    )
   }),
-  defineStreamingMethod({
-    name: 'files.watch',
-    ...BOT_FOLDER_READ,
-    params: FileWatch,
-    handler: async (params, { runtime, connectionId, signal }, emit) => {
-      const seq = ++filesWatchSubscriptionSeq
-      const subscriptionId = `files-watch-${connectionId ?? 'inproc'}-${seq}`
-      await runFileWatchStream({
-        runtime,
-        worktree: params.worktree,
-        batchCadence: params.batchCadence,
-        connectionId,
-        signal,
-        subscriptionId,
-        emit
-      })
-    }
-  }),
+  FILE_WATCH_METHOD,
   defineMethod({
     name: 'files.unwatch',
     ...notShared('workspace'),
