@@ -59,8 +59,8 @@ export function reportingSharedBotsCloud(
 ): SharedBotsCloud {
   return {
     ...cloud,
-    mine: async (wait) => {
-      const answer = await cloud.mine(wait)
+    mine: async () => {
+      const answer = await cloud.mine()
       failures.listed(answer)
       return answer
     },

@@ -1,3 +1,4 @@
+import { SHARE_BY_BOT } from '../../../../shared/bots/bot-share-rpc-methods'
 // `bots.composio.*`: a bot's Composio apps. Orca reads the app list and the bot's sign-ins with the
 // owner's key on the bot's host; the key itself is set only from the owner's Orca.
 import { randomUUID } from 'node:crypto'
@@ -153,7 +154,8 @@ export function setupBot(
 export const BOT_COMPOSIO_METHODS = [
   defineMethod({
     name: 'bots.composio.status',
-    ...notShared('workspace'),
+    permission: 'workspace',
+    share: SHARE_BY_BOT,
     params: ComposioBot,
     handler: ({ botId }, context) => composio(context, botId).status(botId)
   }),

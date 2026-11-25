@@ -7,13 +7,25 @@ import { z } from 'zod'
  *  `bot`: the bot it names must be the shared bot; its handler lists only the teammate's chats.
  *  `scoped`: names nothing; what it returns comes from `botShareScopedView` alone.
  *  `attachment`: the stored file it names must be claimed by one of the teammate's own chats.
- *  `self`: bound to the caller's own connection (its Relay credential, its uploads, its phone). */
+ *  `self`: bound to the caller's own connection (its Relay credential, its uploads, its phone).
+ *  `bot-folder`: a read in the shared bot's home folder: the selector must name that folder, and the
+ *  path must resolve (symlinks followed) inside it; nothing that follows symlinks out is allowed. */
 export type BotShareMethodAccess =
   | { kind: 'chat'; sessionId: (params: unknown) => string | undefined }
   | { kind: 'bot'; botId: (params: unknown) => string | undefined }
   | { kind: 'scoped' }
   | { kind: 'self' }
   | { kind: 'attachment'; path: (params: unknown) => string | undefined }
+  | { kind: 'bot-folder'; read: (params: unknown) => BotFolderRead | undefined }
+
+/** What a folder read names: the workspace selector, a path in it (absent for whole-folder reads), and
+ *  whether it asks to follow symlinks. */
+export type BotFolderRead = z.infer<typeof BotFolderParams>
+const BotFolderParams = z.looseObject({
+  worktree: z.string(),
+  relativePath: z.string().optional(),
+  followSymlinks: z.boolean().optional()
+})
 
 const SessionParams = z.looseObject({ sessionId: z.string() })
 const EnvelopeParams = z.looseObject({ envelope: SessionParams })
@@ -38,6 +50,11 @@ export const SHARE_BY_BOT: BotShareMethodAccess = {
   botId: (params) => BotParams.safeParse(params).data?.botId
 }
 
+export const SHARE_BY_BOT_FOLDER: BotShareMethodAccess = {
+  kind: 'bot-folder',
+  read: (params) => BotFolderParams.safeParse(params).data
+}
+
 /** The methods that name nothing: each needs its view in `botShareScopedView`, or the build fails. */
 export const BOT_SHARE_SCOPED_METHODS = [
   'bots.list',
@@ -45,7 +62,10 @@ export const BOT_SHARE_SCOPED_METHODS = [
   'bots.chats.own',
   'bots.agentChoices',
   'agentSession.subscribeStatus',
-  'status.get'
+  'status.get',
+  'bots.linear.state',
+  'bots.github.state',
+  'google.status'
 ] as const
 export type BotShareScopedMethod = (typeof BOT_SHARE_SCOPED_METHODS)[number]
 export const SHARE_SCOPED: BotShareMethodAccess = { kind: 'scoped' }

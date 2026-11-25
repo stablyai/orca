@@ -10,10 +10,7 @@ import { agentCardAvatar } from '../../../shared/bots/shared-agent-card'
 import { SharedBotHosts } from './shared-bot-hosts'
 import { newSharedBotHostEntry, SharedBotHostStore } from './shared-bot-host-store'
 import type { MineShare } from './shared-bot-pairing'
-import { sharedBotsCloud, type SharedBotOfferWait, type SharedBotsCloud } from './shared-bots-cloud'
-import { reportingSharedBotsCloud, SharedBotHostFailures } from './shared-bot-host-failures'
-import { requestConnector } from '../../connector-cloud/connector-cloud-request'
-import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
+import type { SharedBotOfferWait, SharedBotsCloud } from './shared-bots-cloud'
 import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 
 const dirs: string[] = []
@@ -169,67 +166,6 @@ describe('a share offered to this account', () => {
       service.stop()
       expect(reads.length).toBe(settled + 1)
       expect(reads.filter(Boolean)).toHaveLength(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it("over the wire as wired in the app: the cloud's 202 to Accept is the next read's wait", async () => {
-    vi.useFakeTimers()
-    try {
-      // The cloud as it answered in production: Accept 202, the host's offer on the share 0.4 s later,
-      // and a read naming the share held until then.
-      const requests: string[] = []
-      let offerLanded = false
-      let landOffer = () => {}
-      const fetchImpl: typeof fetch = async (input, init) => {
-        const url = new URL(String(input))
-        requests.push(`${init?.method} ${url.pathname}${url.search}`)
-        if (url.pathname.endsWith('/accept')) {
-          setTimeout(() => {
-            offerLanded = true
-            landOffer()
-          }, 400)
-          return new Response(JSON.stringify({ status: 'queued' }), { status: 202 })
-        }
-        if (url.searchParams.has('waitShare') && !offerLanded) {
-          await new Promise<void>((resolve) => (landOffer = resolve))
-        }
-        return new Response(JSON.stringify({ v: 1, shares: [offered] }), { status: 200 })
-      }
-      const call: ConnectorCloud['call'] = async (path, body, schema, options) =>
-        requestConnector(
-          {
-            fetchImpl,
-            url: `https://cloud.test${path}`,
-            body,
-            method: options?.method,
-            timeoutMs: options?.timeoutMs
-          },
-          schema
-        )
-      const cloud = reportingSharedBotsCloud(sharedBotsCloud({ call }), new SharedBotHostFailures())
-      const dir = mkdtempSync(join(tmpdir(), 'shared-bot-accept-'))
-      dirs.push(dir)
-      const service = new SharedBotHosts({
-        userDataPath: dir,
-        account: () => 'ada',
-        cloud: () => cloud,
-        platform: NODE_RELAY_CLIENT_PLATFORM,
-        publish: () => {},
-        homes: memorySharedBotHomes(dir).homes,
-        now: () => Date.now()
-      })
-      await service.refresh()
-      await service.accept('share-1')
-      await vi.advanceTimersByTimeAsync(0)
-      const device = encodeURIComponent(service.store.get('share-1')?.deviceKey.publicKeyB64 ?? '')
-      expect(service.store.get('share-1')?.acceptedAt).toBeDefined()
-      expect(requests.at(-1)).toBe(`GET /v1/shares/mine?waitShare=share-1&device=${device}`)
-      expect(service.views()[0]?.accepting).toBe(true)
-      await vi.advanceTimersByTimeAsync(400)
-      service.stop()
-      expect(service.views()[0]?.accepting).toBe(false)
     } finally {
       vi.useRealTimers()
     }

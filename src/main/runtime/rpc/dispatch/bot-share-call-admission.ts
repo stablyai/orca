@@ -5,8 +5,13 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcMethodShare } from '../../../../shared/bots/bot-share-rpc-methods'
 import type { BotShareCallerScope } from '../callers/rpc-caller-scope'
 import { botShareOwnsSession } from '../../../bots/team-share/bot-share-chats'
+import { botShareFolderAdmits } from '../../../bots/team-share/bot-share-folder'
 
-export type BotShareRefusal = 'bot_not_found' | 'session_not_found' | 'method_not_found'
+export type BotShareRefusal =
+  | 'bot_not_found'
+  | 'session_not_found'
+  | 'method_not_found'
+  | 'path_not_found'
 
 export async function refuseBotShareCall(
   runtime: OrcaRuntimeService,
@@ -41,6 +46,10 @@ export async function refuseBotShareCall(
         ? null
         : 'session_not_found'
     }
+    case 'bot-folder':
+      return (await botShareFolderAdmits(runtime, scope, access.read(params)))
+        ? null
+        : 'path_not_found'
     case undefined:
       return 'method_not_found'
   }

@@ -1,3 +1,5 @@
+import { SHARE_BY_BOT } from '../../../../shared/bots/bot-share-rpc-methods'
+import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
 import { forgetBotToolsEpoch } from '../../../bots/bot-tools-revision'
 import { join } from 'node:path'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
@@ -152,11 +154,13 @@ export function botToolServerOf(source: string, name?: string): BotToolServer {
 export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.list',
-    ...notShared('workspace'),
+    permission: 'workspace',
+    share: SHARE_BY_BOT,
     params: BotToolsList,
     handler: async (params, context) => {
       const bot = targetBot(params, context)
-      const tools = await listBotTools(await botToolsHome(context.runtime, bot))
+      const listed = await listBotTools(await botToolsHome(context.runtime, bot))
+      const tools = botShareScopedView(context)?.['bots.tools.list'](listed) ?? listed
       return isMcpServersFeatureEnabled()
         ? { ...tools, hostMcpServers: bot.hostMcpServers === true }
         : tools

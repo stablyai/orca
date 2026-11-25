@@ -154,10 +154,13 @@ export async function requestConnector<TSchema extends z.ZodType>(
       error.success ? error.data.reason : undefined
     )
   }
-  // Only the contract's success counts: 204 with no body for a no-content reader, else its JSON (a
-  // 202 Accepted carries one too).
+  // Only the contract's success counts: 204 with no body for a no-content reader, 200 with its JSON.
+  if (response.status !== 200 && response.status !== 204) {
+    await cancelUnreadResponseBody(response)
+    return failure(null)
+  }
   const payload = response.status === 204 ? undefined : await readJson(response)
-  if (response.status !== 204 && payload === undefined) {
+  if (response.status === 200 && payload === undefined) {
     return failure(null)
   }
   const parsed = schema.safeParse(payload)

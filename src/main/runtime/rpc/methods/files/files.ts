@@ -1,3 +1,4 @@
+import { SHARE_BY_BOT_FOLDER } from '../../../../../shared/bots/bot-share-rpc-methods'
 import { notShared, defineMethod, defineStreamingMethod } from '../../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
@@ -34,11 +35,13 @@ import {
 import { limitSearchResultToContentBudget } from '../../../../../shared/file-search/search-result-transport-budget'
 
 let filesWatchSubscriptionSeq = 0
+// Reads a teammate may make in the shared bot's home folder (bot-share-folder.ts confines them).
+const BOT_FOLDER_READ = { permission: 'workspace', share: SHARE_BY_BOT_FOLDER } as const
 
 export const FILE_METHODS = [
   defineMethod({
     name: 'files.list',
-    ...notShared('workspace'),
+    ...BOT_FOLDER_READ,
     params: WorktreeSelector,
     handler: async (params, { runtime, signal }) =>
       signal === undefined
@@ -47,7 +50,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.searchPaths',
-    ...notShared('workspace'),
+    ...BOT_FOLDER_READ,
     params: FilePathSearch,
     handler: async (params, { runtime, signal, clientKind, requestId }) => {
       if (params.mode !== 'quick-open') {
@@ -98,7 +101,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.read',
-    ...notShared('workspace'),
+    ...BOT_FOLDER_READ,
     params: FileOpen,
     handler: async (params, { runtime }) =>
       runtime.readMobileFile(params.worktree, params.relativePath)
@@ -151,7 +154,7 @@ export const FILE_METHODS = [
   ...FILE_TERMINAL_ARTIFACT_METHODS,
   defineMethod({
     name: 'files.readPreview',
-    ...notShared('workspace'),
+    ...BOT_FOLDER_READ,
     params: FileOpen,
     handler: async (params, { runtime, clientKind, requestId }) => {
       const budget = remoteFileContentBudget(clientKind, requestId)
@@ -173,7 +176,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.readChunk',
-    ...notShared('workspace'),
+    ...BOT_FOLDER_READ,
     params: FileReadChunk,
     handler: async (params, { runtime }) =>
       runtime.readFileExplorerChunk(
@@ -185,7 +188,7 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.readDir',
-    ...notShared('workspace'),
+    ...BOT_FOLDER_READ,
     params: FileDirRead,
     handler: async (params, { runtime, clientKind, requestId, connectionId }) => {
       const list = () =>
@@ -265,14 +268,14 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.stat',
-    ...notShared('workspace'),
+    ...BOT_FOLDER_READ,
     params: FileTreePath,
     handler: async (params, { runtime }) =>
       runtime.statRuntimeFile(params.worktree, params.relativePath)
   }),
   defineStreamingMethod({
     name: 'files.watch',
-    ...notShared('workspace'),
+    ...BOT_FOLDER_READ,
     params: FileWatch,
     handler: async (params, { runtime, connectionId, signal }, emit) => {
       const seq = ++filesWatchSubscriptionSeq

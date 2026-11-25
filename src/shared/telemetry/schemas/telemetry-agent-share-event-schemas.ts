@@ -31,7 +31,12 @@ export const agentShareFailedSchema = z.discriminatedUnion('stage', [
   // Teammate: a held message the host then refused.
   stage('held_not_sent', ['refused']),
   // Owner: the share guard refused a teammate's call.
-  stage('admission_refused', ['bot_not_found', 'session_not_found', 'method_not_found']),
+  stage('admission_refused', [
+    'bot_not_found',
+    'session_not_found',
+    'method_not_found',
+    'path_not_found'
+  ]),
   // Owner: a held message delivered through Orca Cloud was refused.
   stage('held_delivery_refused', [
     'host_key_unavailable',
