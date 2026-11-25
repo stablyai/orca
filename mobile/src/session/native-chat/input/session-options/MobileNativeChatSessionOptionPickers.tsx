@@ -125,7 +125,7 @@ export function MobileNativeChatSessionOptionPickers({
     page: null,
     search: false
   })
-  if (page !== null && page !== searchLayout.page) {
+  if (page !== null && page !== searchLayout.page && (homeView || activeDescriptor !== undefined)) {
     setSearchLayout({
       page,
       search:
