@@ -12,6 +12,7 @@ import {
   findOrchestrationPointerSpans,
   type ScreenRow
 } from '../../../../../shared/orchestration/mailbox/orchestration-pointer-screen-match'
+import { viewportScreenRows } from './terminal-viewport-screen-rows'
 import { hexToRgb, rgbaToHex } from '../../../../../shared/color/rgba-contrast'
 
 // Coalesce a TUI's redraw bursts into one viewport read.
@@ -70,34 +71,6 @@ function cellBackground(
   return hexColor(inverse ? theme?.foreground : theme?.background, fallback)
 }
 
-function viewportRows(terminal: Terminal, buffer: IBuffer): ScreenRow[] | null {
-  const top = buffer.viewportY
-  const lines = Array.from({ length: terminal.rows }, (_, offset) => buffer.getLine(top + offset))
-  // Most output never mentions orchestration; skip the per-cell read for it.
-  if (!lines.some((line) => line?.translateToString(true).includes('orchestration'))) {
-    return null
-  }
-  const cell = buffer.getNullCell()
-  return lines.map((line) => {
-    let text = ''
-    const columns: number[] = []
-    for (let column = 0; line && column < line.length; column++) {
-      const read = line.getCell(column, cell)
-      const chars = read?.getChars() ?? ''
-      for (const char of chars) {
-        text += char
-        columns.push(column)
-      }
-      // The second cell of a wide character has width 0 and no text of its own.
-      if (!chars && read?.getWidth() !== 0) {
-        text += ' '
-        columns.push(column)
-      }
-    }
-    return { text, columns, wrapped: line?.isWrapped === true }
-  })
-}
-
 type Cover = { row: number; start: number; end: number; background: string }
 
 /** The cells to paint over each pointer on screen. A row holding nothing but the pointer is wiped
@@ -109,11 +82,16 @@ function pointerCovers(terminal: Terminal, buffer: IBuffer, rows: ScreenRow[]): 
   const backgroundAt = (row: number, column: number): string =>
     cellBackground(buffer.getLine(buffer.viewportY + row)?.getCell(column), theme, plain)
   const blank = (row: number): boolean => rows[row].text.trim() === ''
-  const onlyPointer = (row: number, start: number, end: number): boolean =>
-    [...rows[row].text].every((char, index) => {
-      const column = rows[row].columns[index] ?? index
-      return (column >= start && column < end) || /\s/.test(char)
-    })
+  const onlyPointer = (row: number, start: number, end: number): boolean => {
+    const { text, columns } = rows[row]
+    for (let index = 0; index < text.length; index++) {
+      const column = columns[index] ?? index
+      if ((column < start || column >= end) && !/\s/.test(text[index])) {
+        return false
+      }
+    }
+    return true
+  }
   const wipe = (row: number): Cover => ({ row, start: 0, end: terminal.cols, background: plain })
   const covers: Cover[] = []
   const spans = findOrchestrationPointerSpans(rows)
@@ -164,7 +142,7 @@ export function installTerminalOrchestrationNoticeMask(terminal: Terminal): IDis
   const scan = (): void => {
     timer = null
     const buffer = terminal.buffer.active
-    const rows = hidden ? viewportRows(terminal, buffer) : null
+    const rows = hidden ? viewportScreenRows(terminal.rows, buffer) : null
     if (!rows) {
       clear()
       return
@@ -178,7 +156,8 @@ export function installTerminalOrchestrationNoticeMask(terminal: Terminal): IDis
       wanted.add(key)
       const existing = shown.get(key)
       // A TUI's redraw scrolls its screen, and xterm disposes the markers on lines it drops.
-      if (existing && !existing.decoration.isDisposed) {
+      // Trimmed scrollback moves a live marker off the line its key names.
+      if (existing && !existing.decoration.isDisposed && existing.marker.line === line) {
         continue
       }
       existing?.marker.dispose()

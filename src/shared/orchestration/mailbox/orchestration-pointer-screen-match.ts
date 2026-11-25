@@ -22,10 +22,13 @@ const POINTER =
 
 /** Only a prompt glyph (Claude's `❯`) or indent stands before the pointer on its first row. */
 function promptOnlyBefore(row: ScreenRow, start: number): boolean {
-  const before = [...row.text]
-    .filter((_, index) => (row.columns[index] ?? index) < start)
-    .join('')
-    .trim()
+  let before = ''
+  for (let index = 0; index < row.text.length; index++) {
+    if ((row.columns[index] ?? index) < start) {
+      before += row.text[index]
+    }
+  }
+  before = before.trim()
   return before.length <= 2 && !/[\p{L}\p{N}]/u.test(before)
 }
 
