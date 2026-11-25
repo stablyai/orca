@@ -36,6 +36,8 @@ export type ProviderRelayItemContinuation = {
 export class RelayedProviderContinuation {
   private readonly started = new Set<string>()
   private readonly moved = new Map<string, string>()
+  /** Named items not yet seen: one may resume after the replay, while its open work runs. */
+  private readonly awaited: Set<string>
 
   constructor(
     private readonly hook: ProviderRelayItemContinuation,
@@ -44,17 +46,20 @@ export class RelayedProviderContinuation {
     private readonly replayThrough: number,
     private readonly open: Set<string> | null = null,
     private readonly cutKeys: ReadonlySet<string> | null = null
-  ) {}
+  ) {
+    this.awaited = new Set(open ? (cutKeys ?? []) : [])
+  }
 
   private lastSeq = 0
 
   /**
-   * Nothing is left to move: past the replay with no item moved (a cut item still streaming shows
-   * in its replay), or once every open work the attach carried has ended (no item outlives it).
+   * Nothing is left to move: past the replay with no item moved and none named still to come (a
+   * cut item paused by a call may resume later), or once every open work the attach carried has
+   * ended (no item outlives it).
    */
   get done(): boolean {
     return (
-      (this.lastSeq >= this.replayThrough && this.moved.size === 0) ||
+      (this.lastSeq >= this.replayThrough && this.moved.size === 0 && this.awaited.size === 0) ||
       (this.open !== null && this.open.size === 0)
     )
   }
@@ -69,6 +74,9 @@ export class RelayedProviderContinuation {
       }
     }
     const item = this.hook.item(line)
+    if (item) {
+      this.awaited.delete(item.key)
+    }
     if (!item || seq <= this.cutThrough) {
       return [line]
     }
