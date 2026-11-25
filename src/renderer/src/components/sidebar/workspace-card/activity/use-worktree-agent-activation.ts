@@ -18,6 +18,7 @@ import { getPtyExecutionHost } from '../../../../../../shared/terminal/pty/lifec
 import { dismissStaleAgentRowByKey } from '../../../terminal-pane/agent-status/stale-agent-row'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 
 export function useWorktreeAgentActivation(worktreeId: string, executionHostId?: ExecutionHostId) {
   return useCallback(
@@ -103,7 +104,12 @@ export function activateWorktreeAgentPane(
       flashFocusedPane: true,
       scrollToBottomIfOutputSinceLastView: true
     })
-    activateTerminalTabOnOwner(worktreeId, tabId, parsed.leafId)
+    activateTerminalTabOnOwner(
+      worktreeId,
+      tabId,
+      parsed.leafId,
+      runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), worktreeId)
+    )
   } else if (!activateStructuredAgentSessionTab({ worktreeId, tabId })) {
     const current = useAppStore.getState()
     const liveEntry = current.agentStatusByPaneKey.get(paneKey)

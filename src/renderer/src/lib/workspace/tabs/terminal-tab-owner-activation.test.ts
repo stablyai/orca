@@ -41,10 +41,24 @@ it('sends owner activation under the pairing current at the click, not one made 
   expect(activation?.expectedEnvironmentPairingRevision).toBe(7)
 })
 
+it('sends owner activation when the pairing stays current through the lazy load', async () => {
+  replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 7 }])
+  activateTerminalTabOnOwner('repo::/sample', 'tab-1', 'leaf-1', 'env-1')
+
+  await vi.waitFor(() =>
+    expect(sent).toContainEqual(
+      expect.objectContaining({
+        method: 'session.tabs.activate',
+        expectedEnvironmentPairingRevision: 7
+      })
+    )
+  )
+})
+
 it('sends nothing for a named owner with no known pairing at the click', async () => {
   activateTerminalTabOnOwner('repo::/sample', 'tab-1', 'leaf-1', 'env-1')
   replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 8 }])
 
   await vi.dynamicImportSettled()
-  expect(sent.filter((r) => r.method === 'session.tabs.activate')).toEqual([])
+  expect(sent).toEqual([])
 })
