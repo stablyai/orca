@@ -32,10 +32,11 @@ function lateControlFailure(availableCredits: number) {
   const kits = [brokenKit, replacementKit]
   const sharedDeps = deps(createGlyphInkReader(() => kits.shift() ?? null))
   const firstCanvas = pageWithInk(true)
-  const laterCanvas = pageWithInk(false)
+  const laterCanvas = pageWithInk(true)
   const sharedAtlas = atlas()
   sharedAtlas.pages[0].canvas = firstCanvas
-  sharedAtlas.pages.push({ canvas: laterCanvas, glyphs: [glyph(0)] })
+  // The origin is inked; this packed glyph is blank even though it shares that page.
+  sharedAtlas.pages.push({ canvas: laterCanvas, glyphs: [glyph(17)] })
   const affected = fakePane(sharedAtlas)
   const unrelatedAtlas = atlas()
   const unrelatedCanvas = unrelatedAtlas.pages[0].canvas
@@ -113,6 +114,28 @@ describe('terminal WebGL atlas work limits', () => {
       'refused',
       'refused'
     ])
+  })
+
+  it('refuses an eleventh clear across distinct atlases in the same renderer session', () => {
+    const kit = fakeKit()
+    const readback = vi.spyOn(kit.ctx, 'getImageData')
+    const sharedDeps = deps(createGlyphInkReader(() => kit))
+    const panes = Array.from({ length: 11 }, () => fakePane(atlas()))
+    register(true, panes)
+
+    for (const pane of panes.slice(0, 10)) {
+      verifyPaneWebglAtlasIntegrity(pane, 'reveal', sharedDeps)
+      expect(pane.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
+      advanceServiceClock(50)
+    }
+    expect(readback).toHaveBeenCalledTimes(10)
+
+    const last = panes[10]
+    verifyPaneWebglAtlasIntegrity(last, 'reveal', sharedDeps)
+    expect(readback).toHaveBeenCalledTimes(11)
+    expect(events.at(-1)).toMatchObject({ outcome: 'refused' })
+    expect(last.addon.clearTextureAtlas).not.toHaveBeenCalled()
+    expect(last.refresh).not.toHaveBeenCalled()
   })
 
   it('does no owner discovery while the renderer-wide gate still denies the service', () => {
@@ -236,8 +259,10 @@ describe('terminal WebGL atlas work limits', () => {
 
   it('reads the next page after a late preparation failure with two reservations', () => {
     const observation = lateControlFailure(2)
-    const sources = observation.replacementCopies.mock.calls.map(([source]) => source)
-    expect(sources).toEqual([observation.laterCanvas, observation.replacementKit.control])
+    expect(observation.replacementCopies.mock.calls).toEqual([
+      [observation.laterCanvas, 17, 0, 9, 18, 0, 0, 9, 18],
+      [observation.replacementKit.control, 257, 0]
+    ])
     expect(observation.replacementReadback).toHaveBeenCalledTimes(1)
     expect(observation.affected.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
     expect(observation.unrelated.addon.clearTextureAtlas).not.toHaveBeenCalled()

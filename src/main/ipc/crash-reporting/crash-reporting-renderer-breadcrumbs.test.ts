@@ -1,21 +1,33 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB } from '../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
-import { rendererBreadcrumbCoalesceKey } from './crash-reporting-renderer-breadcrumbs'
+import { getCrashBreadcrumbSnapshot } from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
+import { recordRendererBreadcrumbFromRenderer } from './crash-reporting-renderer-breadcrumbs'
 
-describe('rendererBreadcrumbCoalesceKey', () => {
-  it('keeps poisoned-atlas observations with different reasons or outcomes apart', () => {
-    const key = (reason: string, outcome: string) =>
-      rendererBreadcrumbCoalesceKey(TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB, {
-        kind: 'webgl-atlas-poisoned',
-        reason,
-        outcome,
-        trigger: 'reveal'
-      })
-    const keys = new Set([
-      key('blank-page-glyph', 'recovered'),
-      key('empty-cached-glyph', 'recovered'),
-      key('blank-page-glyph', 'suppressed')
-    ])
-    expect(keys.size).toBe(3)
+describe('recordRendererBreadcrumbFromRenderer', () => {
+  it('keeps different atlas-loss reasons and outcomes separate and coalesces a repeated pair', () => {
+    const origin = 'terminal-atlas-test'
+    const name = TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB
+    const kind = 'webgl-atlas-poisoned'
+    const first = { kind, reason: 'blank-page-glyph', outcome: 'reset', trigger: 'reveal' }
+    const otherReason = { ...first, reason: 'empty-cached-glyph' }
+    const otherOutcome = { ...first, outcome: 'refused' }
+
+    vi.useFakeTimers({ toFake: ['Date', 'performance'] })
+    try {
+      for (const data of [first, otherReason, otherOutcome, first]) {
+        recordRendererBreadcrumbFromRenderer({ name, data }, origin)
+      }
+
+      const stored = getCrashBreadcrumbSnapshot(origin).filter(
+        (breadcrumb) => breadcrumb.name === name && breadcrumb.origin === origin
+      )
+      expect(stored.map((breadcrumb) => breadcrumb.data)).toEqual([
+        { ...first, suppressedSinceLast: 1 },
+        otherReason,
+        otherOutcome
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

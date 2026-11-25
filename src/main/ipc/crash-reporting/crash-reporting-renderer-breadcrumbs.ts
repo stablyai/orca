@@ -62,7 +62,7 @@ const NAME_ONLY_COALESCED_BREADCRUMB_NAMES = new Set(['terminal_safe_fit_retry_e
 // Coalesce the scarce ring while preserving every bounded-rate event in durable spans.
 const PER_EVENT_TRACED_COALESCED_BREADCRUMB_NAMES = new Set([REPLAY_GUARD_WEDGED_BREADCRUMB])
 
-export function rendererBreadcrumbCoalesceKey(
+function rendererBreadcrumbCoalesceKey(
   name: string,
   data: CrashReportBreadcrumbData | undefined
 ): string | undefined {

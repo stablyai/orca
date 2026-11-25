@@ -284,13 +284,22 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
   })
 
   it('runs the atlas-change check on a later task, after xterm assigns the atlas', () => {
-    const pane = fakePane(atlas())
+    const previous = atlas()
+    const current = atlas([glyph(0)], 1024)
+    const currentCanvas = current.pages[0].canvas
+    const pane = fakePane(previous)
     register(true, [pane])
+    const reader = vi.fn(fakeReader((canvas) => (canvas === currentCanvas ? 'blank' : 'ink')))
 
-    requestAtlasChangeIntegrityCheck(pane, pane.webglAddon, deps(blank))
-    expect(pane.addon.clearTextureAtlas).not.toHaveBeenCalled()
+    requestAtlasChangeIntegrityCheck(pane, pane.webglAddon, deps(reader))
+    expect(reader).not.toHaveBeenCalled()
+    pane.addon._renderer._charAtlas = current
     runTimers()
-    expect(events[0]).toMatchObject({ trigger: 'atlas-change', outcome: 'reset' })
+
+    expect(reader.mock.calls.map(([canvas]) => canvas)).toEqual([currentCanvas])
+    expect(previous.pageLayoutVersion).toBe(1)
+    expect(current.pageLayoutVersion).toBe(2)
+    expect(events[0]).toMatchObject({ trigger: 'atlas-change', outcome: 'reset', pageSize: 1024 })
   })
 
   it.each(['before', 'after'])(

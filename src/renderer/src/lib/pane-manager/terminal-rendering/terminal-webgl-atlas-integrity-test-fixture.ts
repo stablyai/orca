@@ -52,7 +52,10 @@ type FakePane = ManagedPaneInternal & {
   webglAddon: NonNullable<ManagedPaneInternal['webglAddon']>
   refresh: ReturnType<typeof vi.fn>
   refreshRows: ReturnType<typeof vi.fn>
-  addon: { clearTextureAtlas: ReturnType<typeof vi.fn> }
+  addon: {
+    _renderer: { _charAtlas: MutableAtlas }
+    clearTextureAtlas: ReturnType<typeof vi.fn>
+  }
 }
 
 export function evict(paneAtlas: MutableAtlas): void {
@@ -78,12 +81,13 @@ export function fakePane(
       : undefined
   }
   const container = { isConnected: true, querySelector: () => (options.covered ? {} : null) }
+  const renderer = {
+    _charAtlas: paneAtlas,
+    _gl: { isContextLost: () => options.contextLost === true }
+  }
   const addon = {
-    _renderer: {
-      _charAtlas: paneAtlas,
-      _gl: { isContextLost: () => options.contextLost === true }
-    },
-    clearTextureAtlas: vi.fn(() => evict(paneAtlas))
+    _renderer: renderer,
+    clearTextureAtlas: vi.fn(() => evict(renderer._charAtlas))
   }
   return {
     id: 1,
