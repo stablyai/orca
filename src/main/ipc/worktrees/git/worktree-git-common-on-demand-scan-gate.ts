@@ -23,7 +23,8 @@ export function createOnDemandScanGate(
   let lastScanStartedAt = performance.now()
   // Where the old 30 s tick would fall: start-to-start from the last timed or forced scan (pokes never moved it).
   let oldCadenceAnchor = lastScanStartedAt
-  let hiddenAt: number | null = null
+  // A poller can start while the window is already hidden; the hide signal does not replay.
+  let hiddenAt: number | null = visibility.isWindowVisible() ? null : performance.now()
   let retry: ReturnType<typeof setTimeout> | null = null
   let requestedAt: number | null = null
   const unsubscribeHidden =

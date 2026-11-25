@@ -27,7 +27,7 @@ const isUncPath = (path: string): boolean => /^[\\/]{2}/.test(path)
 export async function isOnNetworkVolume(
   path: string,
   platform: NodeJS.Platform = process.platform,
-  bootVolumePath = '/'
+  bootVolumePaths: readonly string[] = ['/', '/System/Volumes/Data']
 ): Promise<boolean> {
   if (platform === 'win32') {
     if (isUncPath(path)) {
@@ -41,10 +41,18 @@ export async function isOnNetworkVolume(
     }
   }
   if (platform === 'darwin') {
-    // darwin statfs types are per-boot indexes; any volume but the boot one (shares, network homes, external disks) keeps the old cadence.
+    // darwin statfs types are per-boot indexes; any volume but the startup System/Data pair (shares, network homes, external disks) keeps the old cadence.
     try {
-      const [target, boot] = await Promise.all([stat(path), stat(bootVolumePath)])
-      return target.dev !== boot.dev
+      const target = await stat(path)
+      const startup = await Promise.all(
+        bootVolumePaths.map((volume) =>
+          stat(volume)
+            .then((s) => s.dev)
+            .catch(() => null)
+        )
+      )
+      // No readable startup volume: stay local rather than guess.
+      return startup.some((dev) => dev !== null) && !startup.includes(target.dev)
     } catch {
       return false
     }

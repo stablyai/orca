@@ -406,3 +406,14 @@ it('reports activity within 30 s even when a full sweep follows soon after the r
   expect(events).toContainEqual({ type: 'create', path: added })
   await stop()
 })
+
+it('forces the reveal sweep when reconciliation started while the window was hidden', async () => {
+  visible = false
+  const { unsubscribe: stop } = await startReconciliation()
+  fs.nodes.set(join(WORKTREES, 'w11', 'locked'), { dir: false, mtimeMs: fs.clock++, ino: fs.ino++ })
+  await vi.advanceTimersByTimeAsync(61_000)
+  reveal?.()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(events.some((event) => event.path.startsWith(join(WORKTREES, 'w11')))).toBe(true)
+  await stop()
+})
