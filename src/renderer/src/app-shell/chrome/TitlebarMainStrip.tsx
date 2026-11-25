@@ -37,7 +37,7 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              className="titlebar-icon-button"
+              className="titlebar-icon-button mr-2"
               onClick={handleToggleExpand}
               aria-label={t('auto.App.c1cf0b0e4a', 'Collapse pane')}
               disabled={!layout.activeTabCanExpand}
