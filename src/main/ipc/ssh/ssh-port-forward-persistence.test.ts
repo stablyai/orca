@@ -83,7 +83,9 @@ const loopbackProvider: SshPortForwardProvider = {
         remotePort: options.remotePort
       },
       close: () => close(server),
-      dispose: () => void close(server)
+      dispose: () => void close(server),
+      // Like ssh2: the listener belongs to the connection it started on.
+      isLive: (current) => current === conn
     }
   }
 }
@@ -142,10 +144,16 @@ describe('SSH forwards beside a local [::1] server on the same port', () => {
     // An edit to another remote port, or another kind's forward with this ID, is not this forward.
     expect(await systemBrowserUrlForForward({ ...request, remotePort: 4000 })).toBeNull()
     expect(await systemBrowserUrlForForward({ ...request, forwardKind: 'paired' })).toBeNull()
-    // A disconnect disposes the session before the forward's listener finishes closing.
-    setConnectionManager({
-      getConnection: () => ({ isDisposed: () => true })
-    } as unknown as SshConnectionManager)
-    expect(await systemBrowserUrlForForward(request)).toBeNull()
+    // A browser treats a root-dot name as localhost too.
+    const rootDot = await systemBrowserUrlForForward({
+      ...request,
+      url: `http://app.localhost.:${localPort}/`
+    })
+    expect(rootDot?.url.toString()).toBe(`http://127.0.0.1:${localPort}/`)
+    // A reconnect leaves the listener on its old connection; a disconnect disposes the session.
+    for (const current of [{ isDisposed: () => false }, { isDisposed: () => true }]) {
+      setConnectionManager({ getConnection: () => current } as unknown as SshConnectionManager)
+      expect(await systemBrowserUrlForForward(request)).toBeNull()
+    }
   })
 })

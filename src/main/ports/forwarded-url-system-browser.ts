@@ -11,19 +11,25 @@ function urlPort(url: URL): number {
   return url.port === '' ? (url.protocol === 'https:' ? 443 : 80) : Number(url.port)
 }
 
-/** Teardown disposes a connection before its listeners finish closing; their entries reach nothing. */
-function connectionUsable(request: ForwardedUrlOpenRequest): boolean {
-  const connection =
-    request.forwardKind === 'ssh'
-      ? connectionManager?.getConnection(request.connectionId)
-      : pairedForwardTunnel(request.connectionId)
-  return connection !== undefined && connection !== null && !connection.isDisposed()
+/** Teardown disposes a connection before its listeners finish closing, and a reconnect leaves an
+ *  ssh2 listener on its old client; either way the entry reaches nothing. */
+function connectionServes(request: ForwardedUrlOpenRequest): boolean {
+  if (request.forwardKind === 'paired') {
+    const tunnel = pairedForwardTunnel(request.connectionId)
+    return tunnel !== undefined && !tunnel.isDisposed()
+  }
+  const connection = connectionManager?.getConnection(request.connectionId)
+  return (
+    connection !== undefined &&
+    !connection.isDisposed() &&
+    (portForwardManager?.isForwardServing(request.forwardId, connection) ?? false)
+  )
 }
 
-/** The forward still listed under the same mapping, on a connection that is not torn down. Whether
- *  it has bound yet is not checked: dialing it would open a remote stream on every click. */
+/** The forward still listed under the same mapping and carried by its connection. Whether a system
+ *  SSH forward has bound yet is not checked: dialing it would open a remote stream on every click. */
 function liveForward(request: ForwardedUrlOpenRequest): PortForwardEntry | undefined {
-  if (!connectionUsable(request)) {
+  if (!connectionServes(request)) {
     return undefined
   }
   const forwards =
@@ -59,7 +65,8 @@ export async function systemBrowserUrlForForward(
   ) {
     return null
   }
-  const hostname = url.hostname.toLowerCase()
+  // A root dot (localhost.) still names localhost to a browser.
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, '')
   const ipv4Only = request.forwardKind === 'ssh' || !holdsIpv6Loopback(process.platform)
   if (!ipv4Only || (hostname !== 'localhost' && !hostname.endsWith('.localhost'))) {
     return { url, movedToIpv4: false }
