@@ -86,7 +86,9 @@ export const SHARED_BOT_HOST_ERRORS = {
   // Past the cloud's limit for one held message.
   tooLarge: 'shared_host_send_too_large',
   // The owner stopped sharing it: nothing is sent or held.
-  unshared: 'shared_host_unshared'
+  unshared: 'shared_host_unshared',
+  // The phone failed to take the call to the host at all: nothing was sent.
+  failed: 'shared_host_call_failed'
 } as const
 
 /** What a call to a host whose share ended answers, on the desktop and the phone. */

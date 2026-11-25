@@ -36,6 +36,11 @@ export function sharedBotHeldChat(sessionId: string): SharedBotHeldChat {
  * the host hasn't started yet, and while an earlier held message in the same chat hasn't landed, so a
  * later one never overtakes it.
  */
+/** Whether sends to a host with this key are ever held: holding is on and the host published one. */
+export function sharedBotHoldsSends(hostKey: string | undefined): boolean {
+  return SHARED_HOSTS_HOLD_WHILE_AWAY && hostKey !== undefined
+}
+
 export function sendsHeldTo(
   hostKey: string | undefined,
   held: readonly SharedBotHeldRoute[],
@@ -43,7 +48,7 @@ export function sendsHeldTo(
   chat: SharedBotHeldChat,
   heldStates: ReadonlyMap<string, SharedBotHeldState>
 ): boolean {
-  if (!SHARED_HOSTS_HOLD_WHILE_AWAY || !hostKey) {
+  if (!sharedBotHoldsSends(hostKey)) {
     return false
   }
   if (link !== 'live' || 'newChatId' in chat) {

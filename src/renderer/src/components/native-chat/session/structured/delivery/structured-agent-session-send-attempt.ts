@@ -110,6 +110,7 @@ function sharedBotHostAnswer(error: unknown): StructuredAgentSessionSendAttempt 
       return { kind: 'held' }
     case SHARED_BOT_HOST_ERRORS.tooLarge:
     case SHARED_BOT_HOST_ERRORS.unshared:
+    case SHARED_BOT_HOST_ERRORS.failed:
       return { kind: 'not-sent', parts: [{ text: error.message }] }
     case SHARED_BOT_HOST_ERRORS.offline:
       return { kind: 'not-sent', parts: [{ text: error.message }, 'notDoneSend'] }

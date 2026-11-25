@@ -57,7 +57,8 @@ export function structuredAgentSessionBlocksTooLarge(blocks: readonly unknown[])
     .exceededLimit
 }
 
+// Buffer-free: phones parse sends too.
 export const SendBody = SendBodyStructure.refine(
-  (value) => Buffer.byteLength(JSON.stringify(value.blocks), 'utf8') <= MAX_PROMPT_BYTES,
+  (value) => !structuredAgentSessionBlocksTooLarge(value.blocks),
   'Message is too large'
 )

@@ -270,6 +270,33 @@ describe('a call to a shared agent whose owner stopped sharing it', () => {
   })
 })
 
+describe('a send from the phone to a shared agent', () => {
+  it('answers without Buffer: offline while holding is off (never parsed to hold), held when on', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    cloud()
+    await agents.syncComputer('computer-1', computer().client)
+    const entry = agents.find('computer-1', 'env-1')!
+    vi.stubGlobal('Buffer', undefined)
+    const response = await agents.call(entry, 'agentSession.send', send('op-1'))
+    expect(response.ok ? null : response.error.code).toBe(
+      SHARED_HOSTS_HOLD_WHILE_AWAY ? SHARED_BOT_HOST_ERRORS.held : SHARED_BOT_HOST_ERRORS.offline
+    )
+  })
+
+  it('answers as not sent, never rejecting, when the phone fails to take a call', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    cloud()
+    await agents.syncComputer('computer-1', computer().client)
+    const entry = agents.find('computer-1', 'env-1')!
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stands in for any throw on the phone's path.
+    vi.spyOn(agents as unknown as { reach: () => Promise<never> }, 'reach').mockRejectedValue(
+      new ReferenceError('boom')
+    )
+    const response = await agents.call(entry, 'agentSession.send', send('op-2'))
+    expect(response.ok ? null : response.error.code).toBe(SHARED_BOT_HOST_ERRORS.failed)
+  })
+})
+
 describe('a page frame before the phone’s shared agents are loaded', () => {
   it('waits for the computer’s verdict, and only a shared agent’s leaves once they load', async () => {
     const first = new PhoneSharedAgents(() => 1_000)

@@ -19,10 +19,11 @@ import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from '../../transport/connection/m
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import {
-  heldSendFailure,
+  sharedAgentCallFailed,
   sharedAgentOffline,
   sharedAgentUnshared
 } from './phone-shared-agent-failures'
+import { sharedBotHoldsSends } from '../../../../src/shared/bots/shared-bot-held-routing'
 import { PhoneSharedAgentFollows } from './phone-shared-agent-follows'
 import { PhoneSharedAgentHeld } from './phone-shared-agent-held'
 import { PhoneSharedAgentHeldPoll } from './phone-shared-agent-held-poll'
@@ -169,7 +170,19 @@ export class PhoneSharedAgents {
       .find((entry) => entry.pairedHostId === pairedHostId && entry.environmentId === environmentId)
   }
 
+  /** Never rejects: a page's call that fails here answers as not sent, so the page says so. */
   async call(entry: PhoneSharedAgent, method: string, params: unknown): Promise<RpcResponse> {
+    return await this.callHost(entry, method, params).catch((error: unknown) => {
+      console.warn('[shared-agents] a call failed on the phone', method, error)
+      return sharedAgentCallFailed(method)
+    })
+  }
+
+  private async callHost(
+    entry: PhoneSharedAgent,
+    method: string,
+    params: unknown
+  ): Promise<RpcResponse> {
     const link = await this.reach(entry)
     if (link !== 'live' && !(await this.stillShared(entry))) {
       return sharedAgentUnshared(method)
@@ -177,7 +190,9 @@ export class PhoneSharedAgents {
     // Answered on the phone: a new chat's placeholder, or a send held (or refused) for the host.
     const here =
       this.held.startHere(this.view(entry).holds, link, method, params) ??
-      (method === 'agentSession.send' ? await this.sendHeld(entry, link, params) : null)
+      (method === 'agentSession.send'
+        ? await this.held.answerSend(entry, link, params, () => this.forget(entry.shareId))
+        : null)
     if (here) {
       return here
     }
@@ -255,28 +270,12 @@ export class PhoneSharedAgents {
   }
 
   /** A send that belongs on the held queue: held, or why not; null when it goes to the host live. */
-  private async sendHeld(
-    entry: PhoneSharedAgent,
-    link: SharedHostLink,
-    params: unknown
-  ): Promise<RpcResponse | null> {
-    const send = this.held.heldSend(params)
-    if (!send || !this.held.sendsHeld(entry, link, send.chat)) {
-      return send || link === 'live' ? null : sharedAgentOffline(entry, 'agentSession.send')
-    }
-    const result = await this.held.hold(entry, send)
-    if (result === 'unshared') {
-      this.forget(entry.shareId)
-    }
-    return heldSendFailure(entry, result)
-  }
-
   /** The agent as its pages show it: whether it holds (the off switch applied there) and what. */
   private view(entry: PhoneSharedAgent): SharedBotHostView {
     return sharedBotHostView(entry, {
       homeWorkspaceId: null,
       link: this.linkFor(entry).current(),
-      holds: true,
+      holds: sharedBotHoldsSends(entry.hostKey),
       held: this.held.views(entry)
     })
   }

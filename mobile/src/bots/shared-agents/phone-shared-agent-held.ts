@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { sealBotTeamShareHeldMessage } from '../../../../src/shared/bots/bot-team-share-seal'
 import {
   sendsHeldTo,
+  sharedBotHoldsSends,
   sharedBotHeldChat,
   sharedBotHeldChatId,
   type SharedBotHeldChat
@@ -22,6 +23,7 @@ import { SendParams } from '../../../../src/shared/rpc-contract/structured-agent
 import { MOBILE_PAIRED_E2EE_PRIMITIVES as PRIMITIVES } from '../../transport/encryption/mobile-paired-e2ee-primitives'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { phoneSharedAgentCloud } from './phone-shared-agent-cloud'
+import { heldSendFailure, sharedAgentOffline } from './phone-shared-agent-failures'
 import type {
   PhoneSharedAgent,
   PhoneSharedAgentHeld as Held,
@@ -56,6 +58,29 @@ export class PhoneSharedAgentHeld {
   sendsHeld(entry: PhoneSharedAgent, link: SharedHostLink, chat: SharedBotHeldChat): boolean {
     const states = new Map(entry.held.map((held) => [held.clientMessageId, this.state(held)]))
     return sendsHeldTo(entry.hostKey, entry.held, link, chat, states)
+  }
+
+  /** A send to `entry`'s host answered here: held (or why not), or offline; null when it goes to the
+   *  host live. `unshared` runs when the cloud says the share ended. */
+  async answerSend(
+    entry: PhoneSharedAgent,
+    link: SharedHostLink,
+    params: unknown,
+    unshared: () => void
+  ): Promise<RpcResponse | null> {
+    // Holding off for this host: a send goes to it live, or reads as offline; it is never parsed here.
+    if (!sharedBotHoldsSends(entry.hostKey)) {
+      return link === 'live' ? null : sharedAgentOffline(entry, 'agentSession.send')
+    }
+    const send = this.heldSend(params)
+    if (!send || !this.sendsHeld(entry, link, send.chat)) {
+      return send || link === 'live' ? null : sharedAgentOffline(entry, 'agentSession.send')
+    }
+    const result = await this.hold(entry, send)
+    if (result === 'unshared') {
+      unshared()
+    }
+    return heldSendFailure(entry, result)
   }
 
   /** The words an `agentSession.send` would hold, or null when it isn't one this phone can hold

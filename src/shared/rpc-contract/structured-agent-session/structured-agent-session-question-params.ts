@@ -1,6 +1,8 @@
 import { MAX_PROMPT_BYTES } from './structured-agent-session-message-params'
 import { Identifier } from './structured-agent-session-identifiers'
 import * as z from 'zod'
+// Buffer-free: phones parse these too.
+import { measureUtf8ByteLength } from '../../text/utf8-byte-limits'
 import {
   AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES,
   AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH
@@ -26,7 +28,9 @@ const QuestionAnswer = z
       .string()
       .max(AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES)
       .refine(
-        (value) => Buffer.byteLength(value, 'utf8') <= AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES,
+        (value) =>
+          !measureUtf8ByteLength(value, { stopAfterBytes: AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES })
+            .exceededLimit,
         'Answer is too large'
       )
       .optional()
@@ -49,7 +53,8 @@ export const RespondToQuestionParams = z
     }
     if (
       value.answers !== undefined &&
-      Buffer.byteLength(JSON.stringify(value.answers), 'utf8') > MAX_PROMPT_BYTES
+      measureUtf8ByteLength(JSON.stringify(value.answers), { stopAfterBytes: MAX_PROMPT_BYTES })
+        .exceededLimit
     ) {
       ctx.addIssue({ code: 'custom', message: 'Answer is too large' })
     }

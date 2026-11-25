@@ -23,6 +23,11 @@ export function sharedAgentUnshared(method: string): RpcFailure {
   return failure(method, SHARED_BOT_HOST_ERRORS.unshared, SHARED_BOT_UNSHARED_MESSAGE)
 }
 
+/** A call the phone failed to take to the host at all. */
+export function sharedAgentCallFailed(method: string): RpcFailure {
+  return failure(method, SHARED_BOT_HOST_ERRORS.failed, 'Not sent; try again.')
+}
+
 /** A send the phone tried to hold: why it isn't sent now, including when it waits. */
 export function heldSendFailure(entry: PhoneSharedAgent, result: HoldResult): RpcFailure {
   const refusal = sharedBotHeldRefusal(result, entry.ownerName)
