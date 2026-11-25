@@ -24403,6 +24403,9 @@
       "fileRenameFailed": "Failed to rename '{{name}}'.",
       "worktreeCreateFailed": "Failed to create worktree.",
       "missingBaseBranchHelp": "Create an initial commit (for example on main), or select an existing branch in Create From, then try again.",
+      "baseBranchLookupFailedTitle": "Could not look up the base branch",
+      "baseBranchLookupFailedMessage": "Git failed or timed out while looking up this repo's default base branch.",
+      "baseBranchLookupFailedHelp": "Try again, or select a base branch in Create From.",
       "dropTooManyPaths": "Drop contains too many paths.",
       "dropPathsTooLarge": "Drop path list is too large.",
       "fileOwnerResolveFailed": "Failed to resolve file owner."

@@ -24296,6 +24296,9 @@
       "fileRenameFailed": "“{{name}}” yeniden adlandırılamadı.",
       "worktreeCreateFailed": "Worktree oluşturulamadı.",
       "missingBaseBranchHelp": "İlk commit’i oluşturun (örneğin main üzerinde) veya kaynak branch seçiminden mevcut bir branch'i seçip yeniden deneyin.",
+      "baseBranchLookupFailedTitle": "Temel branch belirlenemedi",
+      "baseBranchLookupFailedMessage": "Bu deponun varsayılan temel branch'i aranırken Git başarısız oldu veya zaman aşımına uğradı.",
+      "baseBranchLookupFailedHelp": "Yeniden deneyin veya kaynak branch seçiminden bir temel branch seçin.",
       "dropTooManyPaths": "Tek seferde çok fazla dosya veya klasör bıraktınız.",
       "dropPathsTooLarge": "Bırakma yolu listesi çok büyük.",
       "fileOwnerResolveFailed": "Dosyanın sahibi belirlenemedi."
