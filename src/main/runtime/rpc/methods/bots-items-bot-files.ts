@@ -14,8 +14,10 @@ import { BotItemError } from '../../../bots/bot-item-error'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
 import {
   getAgentSessionAttachmentClaimer,
-  getAgentSessionAttachmentStore
+  getAgentSessionAttachmentStore,
+  getUnpublishedAttachmentDiscarder
 } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import { parseAgentSessionAttachmentStorePath } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import type { RpcContext } from '../core'
 import { botChatTakingMail } from './bots-chats'
 
@@ -23,28 +25,58 @@ export async function admitBotItemFiles(
   context: RpcContext,
   item: BotItemRecord,
   text: string,
-  files: readonly string[] | undefined
-): Promise<BotItemCommentAttached> {
+  files: readonly string[] | undefined,
+  mayConflict = false
+): Promise<BotItemCommentAttached & { discardCopies?: () => Promise<void> }> {
   if (!files?.length) {
     return { text, images: [] }
   }
   const { runtime } = context
   // The attachment store and its claims come up with the structured chat host.
   await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-  assertFitsWithFiles(getAgentSessionAttachmentStore()?.rootDir, text, files)
+  const store = getAgentSessionAttachmentStore()
+  const claim = getAgentSessionAttachmentClaimer()
+  const discard = mayConflict ? getUnpublishedAttachmentDiscarder() : null
+  const copied: string[] = []
+  let claimedBy: string | undefined
+  assertFitsWithFiles(store?.rootDir, text, files)
   const bot = runtime.bots.list().find((entry) => entry.id === item.ownerBotId)
   try {
-    return await admitBotItemCommentAttachments(
+    const attached = await admitBotItemCommentAttachments(
       {
-        store: getAgentSessionAttachmentStore(),
+        store:
+          store && discard
+            ? {
+                rootDir: store.rootDir,
+                isUploadInFlight: (id) => store.isUploadInFlight(id),
+                storeWith: async (name, write) => {
+                  const path = await store.storeWith(name, write)
+                  const copy = parseAgentSessionAttachmentStorePath(store.rootDir, path)
+                  if (copy) {
+                    copied.push(copy.uploadId)
+                  }
+                  return path
+                }
+              }
+            : store,
         local: true,
-        claim: getAgentSessionAttachmentClaimer(),
+        claim:
+          claim && discard
+            ? async (sessionId, body) => {
+                await claim(sessionId, body)
+                claimedBy = sessionId
+              }
+            : claim,
         chat: async () => (bot ? botChatTakingMail(runtime, bot, item.chatId) : null)
       },
       text,
       [],
       files
     )
+    const sessionId = claimedBy
+    return discard && sessionId && copied.length > 0
+      ? { ...attached, discardCopies: () => discard(sessionId, copied) }
+      : attached
   } catch (error) {
     if (error instanceof BotItemError) {
       throw new BotItemError(error.code, `${error.message} Nothing was posted.`)

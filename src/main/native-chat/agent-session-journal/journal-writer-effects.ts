@@ -17,6 +17,7 @@ import {
   claimAgentSessionAttachmentsInTransaction,
   finishUploadSweep,
   markUnclaimedUploadForSweep,
+  markUnpublishedUploadForSweep,
   pruneAgentSessionAttachmentClaims,
   type AgentSessionAttachmentClaim
 } from '../agent-session-attachments/agent-session-attachment-claims'
@@ -62,6 +63,7 @@ export type JournalWriterEffect =
       kind: 'sweep'
       operation:
         | { kind: 'mark'; uploadId: string; now: number }
+        | { kind: 'discard-unpublished'; uploadId: string; sessionId: string; now: number }
         | { kind: 'finish'; uploadId: string }
         | { kind: 'prune'; pairs: readonly { uploadId: string; sessionId: string }[] }
     }
@@ -124,6 +126,14 @@ export function applyJournalWriterEffect(
       const operation = effect.operation
       if (operation.kind === 'mark') {
         return markUnclaimedUploadForSweep(db, operation.uploadId, operation.now)
+      }
+      if (operation.kind === 'discard-unpublished') {
+        return markUnpublishedUploadForSweep(
+          db,
+          operation.uploadId,
+          operation.sessionId,
+          operation.now
+        )
       }
       if (operation.kind === 'finish') {
         finishUploadSweep(db, operation.uploadId)
