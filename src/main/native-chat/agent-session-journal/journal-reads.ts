@@ -1,4 +1,4 @@
-import type { JournalRunningSubagent } from './journal-running-subagents'
+import type { JournalRunningSubagents } from './journal-running-subagents'
 import type { JournalRestartCut } from './journal-sql-restart-cut'
 import type {
   AgentJournalAcceptanceReceipt,
@@ -131,7 +131,7 @@ export type AgentSessionJournalReads = {
   /** Saved Claude aliases, attempts, roster and goal, read per acquisition and epoch replacement. */
   claudeSnapshot(): Promise<ClaudeJournalSnapshot>
   /** Child agents whose saved turn is still open, as a reattach numbers and registers them. */
-  runningSubagents(): Promise<JournalRunningSubagent[]>
+  runningSubagents(): Promise<JournalRunningSubagents>
   contextUsage(): Promise<AgentSessionContextUsage>
   visitItems(filter: JournalItemFilter, visit: JournalItemLinkageVisitor): Promise<void>
 }

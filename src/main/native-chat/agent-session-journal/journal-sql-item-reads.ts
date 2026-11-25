@@ -74,7 +74,7 @@ export type JournalSqlItemReadResult =
   | { kind: 'context-usage'; usage: AgentSessionContextUsage }
   | { kind: 'thread-goal-source'; source: JournalThreadGoalSource }
   | { kind: 'claude-snapshot'; snapshot: ClaudeJournalSnapshot }
-  | { kind: 'running-subagents'; subagents: ReturnType<typeof readJournalDomainRunningSubagents> }
+  | { kind: 'running-subagents'; running: ReturnType<typeof readJournalDomainRunningSubagents> }
   | { kind: 'named-turn'; turn: JournalNamedTurn }
   | { kind: 'message-options'; options: JournalMessageOptions }
   | JournalContinuationReadResult
@@ -231,7 +231,7 @@ export function readJournalDomainItems(
     case 'thread-goal-source':
       return { kind: 'thread-goal-source', source: readThreadGoal(db, prefix) }
     case 'running-subagents':
-      return { kind: 'running-subagents', subagents: readJournalDomainRunningSubagents(db, prefix) }
+      return { kind: 'running-subagents', running: readJournalDomainRunningSubagents(db, prefix) }
   }
 }
 

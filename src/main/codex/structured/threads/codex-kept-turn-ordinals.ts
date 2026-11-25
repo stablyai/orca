@@ -116,10 +116,16 @@ export type KeptCodexSpawn = { threadId: string; turnId: string; item: CodexThre
  */
 export async function keptCodexSubagentSpawns(
   primaryThreadId: string,
-  journal: { reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'runningSubagents'> } | null
+  journal: {
+    reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'runningSubagents'>
+  } | null
 ): Promise<KeptCodexSpawn[]> {
-  // A read that fails fails the open; a chat with no history journal has none to name.
-  const running = (await journal?.reads.runningSubagents()) ?? []
+  // A chat with no history journal has none to name; past the cap the oldest go unnamed.
+  const read = await journal?.reads.runningSubagents()
+  if (read?.more) {
+    console.warn('[codex] a reattach names only the most recently active running subagents')
+  }
+  const running = read?.subagents ?? []
   return running.map(({ agentId, parentAgentId }) => ({
     threadId: parentAgentId ?? primaryThreadId,
     turnId: '',

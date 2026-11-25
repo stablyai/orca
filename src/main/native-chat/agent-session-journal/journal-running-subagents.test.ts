@@ -55,7 +55,8 @@ it('names every child whose saved turn is still open, with its parent, after the
   // No hand-off: the reopen knows only what was saved.
   await first.close()
   const reopened = await journals.open({ ...options, keptWriter: true })
-  const running = await reopened.reads.runningSubagents()
+  const { subagents: running, more } = await reopened.reads.runningSubagents()
+  expect(more).toBe(false)
   expect(running.toSorted((a, b) => a.agentId.localeCompare(b.agentId))).toEqual([
     { agentId: 'child-s' },
     { agentId: 'grandchild', parentAgentId: 'child-s' }
