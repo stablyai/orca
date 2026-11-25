@@ -21,6 +21,8 @@ export type NativeChatTextReveal = {
   savedAt?: number
   /** For such a reply, the time between its last two saves, which paces how each save is shown. */
   saveGapMs?: number
+  /** The arrival time of the save whose first half is drawn, so a remount doesn't draw it again. */
+  halfDrawnAt?: number
 }
 
 /** The surface's frame clock; the reveal steps once a frame. */
@@ -153,6 +155,10 @@ export function receiveNativeChatText(
   now: number,
   revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
+  // Unchanged text whose reveal only its drawing steps (no delay to run out) needs no work.
+  if (revealMs === Infinity && !reducedMotion && text === previous.source) {
+    return previous
+  }
   const immediate =
     reducedMotion ||
     (!streaming &&
@@ -203,11 +209,19 @@ const MAX_SAVE_GAP_MS = 8000
 export function playNativeChatSaveReveal(
   reveal: NativeChatTextReveal,
   onScreen: number,
-  draw: (shown: number) => void,
-  now: number,
-  gapMs: number | undefined
+  step: (next: NativeChatTextReveal) => void,
+  /** Paced by the gap between saves while streaming; otherwise the usual reveal delay. */
+  paced: boolean,
+  now = performance.now()
 ): () => void {
+  const gapMs = paced ? reveal.saveGapMs : undefined
   const end = reveal.source.length
+  let current = reveal
+  const draw = (shown: number, halfDrawnAt = current.halfDrawnAt): void => {
+    const arrivals = shown < end ? current.arrivals : []
+    current = { ...current, shown, arrivals, halfDrawnAt }
+    step(current)
+  }
   // Never back: the reveal may already show more than the screen does, or all of it.
   const from = Math.max(onScreen, reveal.shown)
   if (from >= end) {
@@ -222,8 +236,8 @@ export function playNativeChatSaveReveal(
     return () => {}
   }
   const middle = pacedTextEnd(reveal.source, from + (end - from) / 2, true)
-  if (middle > from) {
-    draw(middle)
+  if (middle > from && reveal.halfDrawnAt !== savedAt) {
+    draw(middle, savedAt)
   }
   const timer = setTimeout(() => draw(end), wait)
   return () => clearTimeout(timer)

@@ -153,7 +153,6 @@ export function useNativeChatPacedText(
   const [grew, setGrew] = useState(initial.shown < text.length)
   const heldTextSession = useContext(NativeChatHeldTextSessionContext)
   const heldDrawn = useRef(documentHeldDrawnCount(heldTextSession))
-  // Only the drawing steps a reply shown at its saves while it streams: two redraws a save.
   const pacesSaves = drawsWhole && streaming && !reducedMotion
   const lastSaveAt = useRef<number | undefined>(undefined)
   // A drawn streaming reply keeps its chat's live text unless it, and every other, shows saves only.
@@ -206,8 +205,7 @@ export function useNativeChatPacedText(
       performance.now(),
       pacesSaves ? Infinity : revealMs
     )
-    if (drawsWhole) {
-      // Its drawing times a save from that save's arrival alone, so only the last is kept.
+    if (drawsWhole && pace.current !== previous) {
       const arrivals = pacesSaves ? pace.current.arrivals.slice(-1) : pace.current.arrivals
       pace.current = { ...pace.current, arrivals, savedAt: saved.current.revision, saveGapMs }
     }
@@ -248,14 +246,12 @@ export function useNativeChatPacedText(
       return
     }
     if (drawsWhole) {
-      const draw = (to: number): void => {
-        const { arrivals, source: drawn } = pace.current
-        pace.current = { ...pace.current, shown: to, arrivals: to < drawn.length ? arrivals : [] }
-        reveals?.drawn.set(rowKey, pace.current)
-        setShown(to, true)
+      const draw = (next: NativeChatTextReveal): void => {
+        pace.current = next
+        reveals?.drawn.set(rowKey, next)
+        setShown(next.shown, true)
       }
-      const gap = pacesSaves ? pace.current.saveGapMs : undefined
-      return playNativeChatSaveReveal(pace.current, onScreen.current, draw, performance.now(), gap)
+      return playNativeChatSaveReveal(pace.current, onScreen.current, draw, pacesSaves)
     }
     return playNativeChatTextRevealOnClock(
       () => pace.current,
