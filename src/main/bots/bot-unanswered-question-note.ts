@@ -2,13 +2,7 @@
 // And the reverse: when the chat's own Needs you items change, list them so an answer in chat clears them.
 // The turn number is the chat's ended turns as its journal holds them, read on the journal's reader.
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
-import { actsForOwner } from '../../shared/bots/bot-acts-for'
 import { canonicalOrcaSessionId } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
-import type { BotLookAroundStore } from './bot-look-around-store'
-import {
-  readBotConversationActsFor,
-  type BotConversationActsForSources
-} from './bot-conversation-acts-for'
 import { BOT_ORCA_CLI } from './bot-preamble'
 import { fenceQuotedText } from '../../shared/quoted-text-fence'
 import type { BotNeedsYouItem, BotTurnNote } from './bot-active-work'
@@ -18,52 +12,17 @@ export const UNANSWERED_QUESTION_NOTE_EVERY_TURNS = 5
 
 export const BOT_UNANSWERED_QUESTION_NOTE = `[Orca: if you asked your owner something in this chat that they've clearly left unanswered and that still matters, put it on an item as Needs you (${BOT_ORCA_CLI} bot item set <n> --status needs-you --comment "<context>" --ask "<question>", adding --option "..." per choice when it has choices), or add an item for it. Skip anything already on an item, and items your owner snoozed.]`
 
-export type BotUnansweredQuestionSources = BotConversationActsForSources & {
-  lookAround: Pick<BotLookAroundStore, 'botOfLook' | 'botOfTidyUp'>
-  /** How many of the chat's turns have ended; rejects when the journal can't say. */
-  endedTurns: (sessionId: string) => Promise<number>
-}
-
-/** Whether a chat acts for the bot's owner, and isn't one of its look-around or tidy-up runs. */
-export function createBotOwnerChatCheck(
-  sources: Omit<BotUnansweredQuestionSources, 'endedTurns'>
-): (sessionId: string) => boolean {
-  // A chat's acts-for is written once and never changes, so each chat reads it once.
-  const ownerChats = new Map<string, boolean>()
-  const isOwnerChat = (sessionId: string): boolean => {
-    const known = ownerChats.get(sessionId)
-    if (known !== undefined) {
-      return known
-    }
-    const recorded = readBotConversationActsFor(sources, chatRoot(sessionId))
-    if (!recorded) {
-      // Not recorded yet: a later turn reads it again.
-      return false
-    }
-    const owner = actsForOwner(recorded.actsFor)
-    ownerChats.set(sessionId, owner)
-    return owner
-  }
-  return (sessionId) =>
-    sources.lookAround.botOfLook(sessionId) === null &&
-    sources.lookAround.botOfTidyUp(sessionId) === null &&
-    isOwnerChat(sessionId)
-}
-
 /** The id items name a chat by: its /clear root. */
 function chatRoot(sessionId: string): string {
   return isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
 }
 
-/** The note for the turn starting now in one of a host's chats, when it is an owner chat's every-fifth. */
+/** The note for the turn starting now in an owner chat, on its every-fifth. */
 export function createBotUnansweredQuestionNote(
-  isOwnerChat: (sessionId: string) => boolean,
-  endedTurns: BotUnansweredQuestionSources['endedTurns']
+  /** How many of the chat's turns have ended; rejects when the journal can't say. */
+  endedTurns: (sessionId: string) => Promise<number>
 ): (sessionId: string) => Promise<string | null> {
   return async (sessionId) => {
-    if (!isOwnerChat(sessionId)) {
-      return null
-    }
     const ended = await endedTurns(sessionId)
     return (ended + 1) % UNANSWERED_QUESTION_NOTE_EVERY_TURNS === 0
       ? BOT_UNANSWERED_QUESTION_NOTE
