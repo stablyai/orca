@@ -11,9 +11,11 @@ import { launchPlainProcessSpecOnPosixWorker } from './process-spec-worker-launc
 const workerMock: {
   readyNow: boolean
   host: WorkerThreadChildProcessHost | null
+  lastChild: { exitCode: number | null } | null
 } = vi.hoisted(() => ({
   readyNow: false,
-  host: null
+  host: null,
+  lastChild: null
 }))
 
 vi.mock(
@@ -29,7 +31,8 @@ vi.mock(
         if (!workerMock.host) {
           throw new Error('Test worker host not initialized')
         }
-        return workerMock.host.spawn(spec)
+        workerMock.lastChild = workerMock.host.spawn(spec)
+        return workerMock.lastChild
       }
     }
   }
@@ -271,16 +274,15 @@ describe.skipIf(process.platform === 'win32')('launchPlainProcessSpecOnPosixWork
     )
     await vi.waitFor(() => expect(pids).toHaveLength(2), { timeout: 5_000 })
     const [rootPid, helperPid] = pids
+    const kill = vi.spyOn(process, 'kill')
     try {
-      // Reaped means the exit was posted; give that message a few turns to cross.
-      await vi.waitFor(() => expect(() => process.kill(rootPid, 0)).toThrow(), { timeout: 5_000 })
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await vi.waitFor(() => expect(workerMock.lastChild?.exitCode).toBe(0), { timeout: 5_000 })
       setup.loseWorker()
 
       expect(await settled).toBe('ERR_ORCA_WORKER_CHILD_ABANDONED')
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      expect(() => process.kill(helperPid, 0)).not.toThrow()
+      expect(kill).not.toHaveBeenCalledWith(-rootPid, 'SIGKILL')
     } finally {
+      kill.mockRestore()
       process.kill(helperPid, 'SIGKILL')
     }
   })
