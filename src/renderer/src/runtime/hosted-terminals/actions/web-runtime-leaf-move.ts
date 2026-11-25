@@ -13,6 +13,7 @@ import {
   isWebRuntimeSessionActive
 } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
+import { focusTerminalTabSurface } from '../../../components/terminal-pane/input/focus/focus-terminal-tab-surface'
 
 /**
  * Who commits a pane move for this worktree: its paired host, this window (local, direct SSH and
@@ -126,10 +127,20 @@ async function hostHoldsMovedPane(
   }
 }
 
+export type HostPaneMoveSettleHooks = {
+  /** Tells the user the host refused their move; absent for a move another client asked for. */
+  onRefused?: () => void
+  /** The host holds the pane in the tab this window drew. */
+  onCommitted?: () => void
+}
+
 /**
- * Settles this window with the host's answer. A committed move this window could not draw, and a
- * lost reply the host turns out to have committed, take the host's tabs; a refusal undoes the move.
- * A lost reply the host cannot be asked about waits for its next snapshot.
+ * Settles this window with the host's answer. The host's versioned tab snapshots are the only
+ * truth; this only decides what the window does until the next one lands (keyed by the move's
+ * fresh target tab id and leaf). A committed move this window could not draw, and a lost reply
+ * the host turns out to have committed, take the host's tabs; a refusal undoes the move. A lost
+ * reply the host cannot be asked about waits for its next snapshot. Only an explicit refusal is
+ * reported: after a lost reply a late commit can still arrive, and its snapshot redraws the tab.
  */
 export async function settleHostPaneMove(
   environmentId: string,
@@ -137,17 +148,22 @@ export async function settleHostPaneMove(
   outcome: HostPaneMoveOutcome,
   /** This window moved the pane before the answer. */
   movedHere: boolean,
-  /** Tells the user their move was undone; absent for a move another client asked for. */
-  onRefused?: () => void
+  hooks: HostPaneMoveSettleHooks = {}
 ): Promise<void> {
   const committed =
     outcome === 'unknown' ? await hostHoldsMovedPane(environmentId, request) : outcome === 'moved'
-  if (committed === null || (committed && movedHere)) {
+  if (committed === null) {
     return
+  }
+  if (committed && movedHere) {
+    hooks.onCommitted?.()
+    return
+  }
+  if (outcome === 'refused') {
+    hooks.onRefused?.()
   }
   if (!committed && movedHere) {
     await revertRefusedPaneMove(environmentId, request)
-    onRefused?.()
     return
   }
   await refreshWebRuntimeSessionTabsSnapshot(environmentId, request.worktreeId, {
@@ -165,6 +181,7 @@ async function revertRefusedPaneMove(
   request: TerminalLeafMoveRequest
 ): Promise<void> {
   const state = useAppStore.getState()
+  const userWasOnMovedTab = state.activeTabId === request.targetTabId
   // The move carried the pane's status and launch records to the new tab; they come back first.
   state.transferAgentPaneAuthority({
     fromPaneKey: makePaneKey(request.targetTabId, request.leafId),
@@ -181,4 +198,8 @@ async function revertRefusedPaneMove(
   await refreshWebRuntimeSessionTabsSnapshot(environmentId, request.worktreeId, {
     acceptCurrentSnapshot: true
   })
+  // The pane is back in its source; the user who was typing in it keeps typing there.
+  if (userWasOnMovedTab && useAppStore.getState().activeTabId === request.sourceTabId) {
+    focusTerminalTabSurface(request.sourceTabId, request.leafId)
+  }
 }

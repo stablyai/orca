@@ -11,6 +11,9 @@ import {
 
 const DRAG_THRESHOLD = 5
 
+// One window, one keyboard: the Escape that cancelled the last drag, until its release.
+let disarmCancelKeyGuard: (() => void) | null = null
+
 function isDragCancelKey(event: KeyboardEvent): boolean {
   return (
     event.key === 'Escape' &&
@@ -115,8 +118,8 @@ export function beginPaneDragFromPointerDown(
     // Why: the drag owns this Escape; reaching the terminal would interrupt a running agent.
     ev.preventDefault()
     ev.stopImmediatePropagation()
-    state.disarmKeyGuard?.()
-    state.disarmKeyGuard = armKeyLifecycleGuard(ev)
+    disarmCancelKeyGuard?.()
+    disarmCancelKeyGuard = armKeyLifecycleGuard(ev)
     cancelled = true
     removeAppKeyListener('keydown', onKeyDown)
     endDragVisuals(false)

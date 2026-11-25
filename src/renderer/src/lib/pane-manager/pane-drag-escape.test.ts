@@ -9,6 +9,7 @@ vi.mock('./pane-lifecycle', async (importOriginal) => {
 })
 
 const { PaneManager } = await import('./pane-manager')
+const { addAppKeyListener, removeAppKeyListener } = await import('../keyboard/app-keyboard-router')
 
 function pointer(type: string, init: { clientX?: number; clientY?: number } = {}): Event {
   return Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
@@ -85,6 +86,8 @@ describe('Escape during a pane drag', () => {
   })
 
   afterEach(() => {
+    // Ends a key guard a test left armed (its release never came).
+    window.dispatchEvent(new Event('blur'))
     manager.destroy()
     root.remove()
     vi.unstubAllGlobals()
@@ -123,16 +126,54 @@ describe('Escape during a pane drag', () => {
     expect(terminalKeys).toEqual([])
   })
 
-  it('swallows the cancelling press through its repeats and release, then lets keys through', () => {
+  // The release itself goes on to the terminal, whose Kitty orphan-keyup guard drops it because
+  // xterm never encoded the press.
+  it('swallows the cancelling press through its repeats, then lets keys through', () => {
     startDrag()
     terminalInput.dispatchEvent(key('keydown'))
     terminalInput.dispatchEvent(key('keydown', { repeat: true }))
     terminalInput.dispatchEvent(key('keydown', { key: 'a', code: 'KeyA' }))
     terminalInput.dispatchEvent(key('keyup'))
-    terminalInput.dispatchEvent(key('keydown'))
-    terminalInput.dispatchEvent(key('keyup'))
+    terminalInput.dispatchEvent(key('keydown', { repeat: true }))
 
-    expect(terminalKeys).toEqual(['keydown:a', 'keydown:Escape', 'keyup:Escape'])
+    expect(terminalKeys).toEqual(['keydown:a', 'keyup:Escape', 'keydown:Escape:repeat'])
+  })
+
+  it('keeps owning the held key after the pane that was dragged is gone', () => {
+    startDrag()
+    terminalInput.dispatchEvent(key('keydown'))
+    manager.destroy()
+    const nextTerminal = document.createElement('textarea')
+    document.body.appendChild(nextTerminal)
+    const nextKeys: string[] = []
+    nextTerminal.addEventListener('keydown', (event) => nextKeys.push(event.key))
+    nextTerminal.dispatchEvent(key('keydown', { repeat: true }))
+    nextTerminal.dispatchEvent(key('keyup'))
+    nextTerminal.dispatchEvent(key('keydown', { repeat: true }))
+    nextTerminal.remove()
+
+    expect(nextKeys).toEqual(['Escape'])
+  })
+
+  it('lets an Escape owner that appears mid-drag take the key; the drag then ends on release', () => {
+    const handle = startDrag()
+    const lateOwner = vi.fn((event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopImmediatePropagation()
+      }
+    })
+    addAppKeyListener('keydown', lateOwner, { first: true })
+    try {
+      terminalInput.dispatchEvent(key('keydown'))
+    } finally {
+      removeAppKeyListener('keydown', lateOwner)
+    }
+
+    expect(lateOwner).toHaveBeenCalledTimes(1)
+    expect(root.querySelector('.is-drag-source')).not.toBeNull()
+    handle.dispatchEvent(pointer('pointerup', { clientX: 40, clientY: 20 }))
+    expect(onExternalPaneDrop).toHaveBeenCalledTimes(1)
+    expect(terminalKeys).toEqual([])
   })
 
   it('treats a fresh Escape press as new when the release was missed', () => {
@@ -148,9 +189,18 @@ describe('Escape during a pane drag', () => {
     terminalInput.dispatchEvent(key('keydown'))
     window.dispatchEvent(new Event('blur'))
     handle.dispatchEvent(pointer('pointerup'))
-    terminalInput.dispatchEvent(key('keyup'))
+    terminalInput.dispatchEvent(key('keydown', { repeat: true }))
 
-    expect(terminalKeys).toEqual(['keyup:Escape'])
+    expect(terminalKeys).toEqual(['keydown:Escape:repeat'])
+  })
+
+  it('ends the drag without a drop when the window loses focus', () => {
+    const handle = startDrag()
+    window.dispatchEvent(new Event('blur'))
+    expect(root.querySelector('.is-pane-dragging, .is-drag-source')).toBeNull()
+    handle.dispatchEvent(pointer('pointerup', { clientX: 40, clientY: 20 }))
+
+    expect(onExternalPaneDrop).not.toHaveBeenCalled()
   })
 
   it('leaves Escape alone before the drag starts and while an IME composes', () => {

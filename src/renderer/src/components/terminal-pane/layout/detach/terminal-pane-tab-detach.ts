@@ -1,11 +1,8 @@
 import { toast } from 'sonner'
-import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
-import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalLeafMoveRequest } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import { commitTerminalSurfaceClose } from '@/store/terminals/retirement/terminal-surface-close-intent'
-import type { PaneCwdEntry } from '../split/resolve-split-cwd'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 import { moveLeafThroughLayoutOwner } from './terminal-pane-detach-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
@@ -19,94 +16,17 @@ import {
   settleHostPaneMove
 } from '@/runtime/hosted-terminals/actions/web-runtime-leaf-move'
 import { resolveHostTabDropTarget } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-move'
-import { paneMoveReadiness } from './terminal-pane-move-readiness'
-
-export type TerminalPaneTabDetachStore = Pick<
-  AppState,
-  | 'closeTab'
-  | 'createTab'
-  | 'groupsByWorktree'
-  | 'reorderUnifiedTabs'
-  | 'setActiveTab'
-  | 'setActiveTabType'
-  | 'setTabCustomTitle'
-  | 'setTabLayout'
-  | 'syncPaneDetachPtyOwnership'
-  | 'tabsByWorktree'
-  | 'terminalLayoutsByTabId'
->
-
-type TerminalPaneTabDetachManager = {
-  getPanes: () => readonly { id: number }[]
-  getLeafId: (paneId: number) => string | null
-  detachPaneForExternalMove: (paneId: number) => boolean
-}
-
-type SourcePaneCwd = Pick<PaneCwdEntry, 'cwd' | 'deferredSplitSpawn' | 'pendingCwd'> &
-  Partial<Pick<PaneCwdEntry, 'confirmed'>>
-
-export type DetachedTerminalPaneTab = {
-  tab: TerminalTab
-  leafId: string
-  ptyId: string | null
-}
-
-/** Where a pane's new tab goes; `targetTabId` names a tab another client already drew. */
-export type TerminalPaneNewTabTarget = { groupId: string; index?: number; targetTabId?: string }
-
-export type DetachTerminalPaneToNewTab = (
-  sourcePaneId: number,
-  target: TerminalPaneNewTabTarget
-) => Promise<DetachedTerminalPaneTab | null>
-
-function moveCreatedTabToIndex(args: {
-  groupId: string
-  store: TerminalPaneTabDetachStore
-  tabId: string
-  targetIndex: number | undefined
-  worktreeId: string
-  /** Main placed the new tab at this index itself. */
-  mainPlaced: boolean
-}): void {
-  if (args.targetIndex === undefined) {
-    return
-  }
-  const group = args.store.groupsByWorktree[args.worktreeId]?.find(
-    (candidate) => candidate.id === args.groupId
-  )
-  if (!group) {
-    return
-  }
-  const orderWithoutCreatedTab = (group.tabOrder ?? []).filter((id) => id !== args.tabId)
-  const insertionIndex = Math.min(Math.max(args.targetIndex, 0), orderWithoutCreatedTab.length)
-  const nextOrder = [...orderWithoutCreatedTab]
-  nextOrder.splice(insertionIndex, 0, args.tabId)
-  args.store.reorderUnifiedTabs(args.groupId, nextOrder, {
-    recordInteraction: false,
-    layoutOwnerHandled: args.mainPlaced
-  })
-}
+import {
+  canMoveNow,
+  indexAfterPinnedTabs,
+  moveCreatedTabToIndex,
+  nameTabAfterPane,
+  type DetachedTerminalPaneTab,
+  type DetachTerminalPaneToTabArgs
+} from './terminal-pane-tab-detach-steps'
 
 function reportMoveFailed(): void {
   toast.error(translate('terminal.paneMove.failed', "Couldn't move the pane to a new tab."))
-}
-
-type DetachTerminalPaneToTabArgs = {
-  /** The PTY the source pane's transport is attached to now; it outranks the saved layout. */
-  livePtyId?: string | null
-  getStore: () => TerminalPaneTabDetachStore
-  manager: TerminalPaneTabDetachManager | null
-  persistLayoutSnapshot: () => void
-  sourcePaneId: number
-  sourcePaneCwd?: SourcePaneCwd
-  /** The pane's transport is still awaiting its PTY id from a spawn or reattach. */
-  sourceConnectPending?: boolean
-  sourceTabId: string
-  targetGroupId: string
-  targetIndex?: number
-  /** The new tab's id when another client already drew the tab; else one is minted. */
-  targetTabId?: string
-  worktreeId: string
 }
 
 // Leaves whose move main is committing; a repeat drop meanwhile is a no-op.
@@ -132,27 +52,13 @@ async function moveLeafToNewTab(
   args: DetachTerminalPaneToTabArgs,
   leafId: string
 ): Promise<DetachedTerminalPaneTab | null> {
-  const initialStore = args.getStore()
-  const targetGroupExists =
-    initialStore.groupsByWorktree[args.worktreeId]?.some(
-      (group) => group.id === args.targetGroupId
-    ) ?? false
-  if (!args.manager || !targetGroupExists) {
+  // The user was looking at the source tab when they asked; the move follows the pane only if they still are.
+  const sourceShownAtInvocation = args.getStore().activeTabId === args.sourceTabId
+  if (!canMoveNow(args, leafId)) {
     return null
   }
   const persistedPtyId =
-    initialStore.terminalLayoutsByTabId[args.sourceTabId]?.ptyIdsByLeafId?.[leafId]
-  const readiness = paneMoveReadiness({
-    paneCount: args.manager.getPanes().length,
-    livePtyId: args.livePtyId,
-    persistedPtyId,
-    sourcePaneCwd: args.sourcePaneCwd,
-    connectPending: args.sourceConnectPending ?? false
-  })
-  if (readiness !== 'ready') {
-    return null
-  }
-
+    args.getStore().terminalLayoutsByTabId[args.sourceTabId]?.ptyIdsByLeafId?.[leafId]
   const livePtyId = args.livePtyId ?? persistedPtyId ?? null
   // A move another client asked for reports to that client; only this window's user gets a toast.
   const userInitiated = !args.targetTabId
@@ -167,7 +73,20 @@ async function moveLeafToNewTab(
     }
     return null
   }
+  // The host answer took a turn; the pane, its group or its binding may have changed meanwhile.
+  if (!canMoveNow(args, leafId)) {
+    return null
+  }
   const paneMoveHost = hostRoute.kind === 'host' ? hostRoute.environmentId : null
+  const targetIndex = indexAfterPinnedTabs(
+    args.getStore(),
+    args.worktreeId,
+    args.targetGroupId,
+    args.targetIndex
+  )
+  const placed = { ...args, targetIndex }
+  const followPane = (): boolean =>
+    sourceShownAtInvocation && args.getStore().activeTabId === args.sourceTabId
   args.persistLayoutSnapshot()
   const request: TerminalLeafMoveRequest = {
     worktreeId: args.worktreeId,
@@ -184,22 +103,28 @@ async function moveLeafToNewTab(
       worktreeId: args.worktreeId,
       tabId: request.targetTabId,
       targetGroupId: args.targetGroupId,
-      ...(args.targetIndex !== undefined ? { index: args.targetIndex } : {})
+      ...(targetIndex !== undefined ? { index: targetIndex } : {})
     })
+    if (!canMoveNow(args, leafId)) {
+      return null
+    }
     // Why: the host's snapshot push can land before its reply and would leave nothing to detach, so
     // the window moves first. The call is dispatched before the move's layout pushes, so the host
     // sees the move first.
     const hostMove = moveWebRuntimeLeafToNewTab(paneMoveHost, request, placement)
-    const applied = applyMove(args, request, false, request.ptyId)
+    const applied = applyMove(placed, request, {
+      mainMoved: false,
+      ptyId: request.ptyId,
+      speculative: true,
+      follow: followPane()
+    })
     void hostMove
       .then((outcome) =>
-        settleHostPaneMove(
-          paneMoveHost,
-          request,
-          outcome,
-          applied !== null,
-          userInitiated ? reportMoveFailed : undefined
-        )
+        settleHostPaneMove(paneMoveHost, request, outcome, applied !== null, {
+          ...(userInitiated ? { onRefused: reportMoveFailed } : {}),
+          // The tab is the host's only once it commits, so its name waits for that.
+          onCommitted: () => applied && nameTabAfterPane(args.getStore(), applied, args)
+        })
       )
       .catch((error: unknown) => console.warn('[terminal-pane-detach] move not settled', error))
     return applied
@@ -209,7 +134,7 @@ async function moveLeafToNewTab(
     ORCA_LAYOUT_OWNER_IS_MAIN
       ? moveLeafThroughLayoutOwner(
           request,
-          { groupId: args.targetGroupId, index: args.targetIndex },
+          { groupId: args.targetGroupId, index: targetIndex },
           args.sourcePaneCwd?.cwd
         )
       : window.api.pty.moveLeafToNewTab(request)
@@ -222,10 +147,16 @@ async function moveLeafToNewTab(
       ORCA_LAYOUT_OWNER_IS_MAIN && answer.tabId
         ? { ...request, targetTabId: answer.tabId }
         : request
-    return applyMove(args, moved, true, answer.ptyId)
+    return nameAfterPane(
+      applyMove(placed, moved, { mainMoved: true, ptyId: answer.ptyId, follow: followPane() }),
+      args
+    )
   }
   if (answer?.status === 'not_held') {
-    return applyMove(args, request, false, request.ptyId)
+    return nameAfterPane(
+      applyMove(placed, request, { mainMoved: false, ptyId: request.ptyId, follow: followPane() }),
+      args
+    )
   }
   // Failed persistence rolls main back; unknown outcomes fault persistence and reload converges on main’s committed side.
   console.warn('[terminal-pane-detach] main did not move the pane', answer)
@@ -240,9 +171,16 @@ async function moveLeafToNewTab(
 function applyMove(
   args: DetachTerminalPaneToTabArgs,
   request: TerminalLeafMoveRequest,
-  mainMoved: boolean,
-  ptyId: string | null
+  options: {
+    mainMoved: boolean
+    ptyId: string | null
+    /** Drawn before the host answers; undone if it refuses. */
+    speculative?: boolean
+    /** Show the new tab: the user still has the source tab in front of them. */
+    follow: boolean
+  }
 ): DetachedTerminalPaneTab | null {
+  const { mainMoved, ptyId } = options
   const { leafId, sourceTabId, targetTabId, worktreeId } = request
   const { manager } = args
   const panes = manager?.getPanes() ?? []
@@ -250,6 +188,11 @@ function applyMove(
   const sourceLayout = args.getStore().terminalLayoutsByTabId[sourceTabId]
   // A sibling closed meanwhile, so the pane takes the whole source layout and the source tab closes.
   const lastPane = panes.length === 1
+  // Why: closing the source here is outside what a refusal can undo, and the host keeps its last
+  // pane anyway; the host's answer and snapshot settle this window instead.
+  if (lastPane && options.speculative) {
+    return null
+  }
   const split = lastPane ? null : detachTerminalLayoutLeaf(sourceLayout, leafId)
   const movedLayout = lastPane ? sourceLayout : split?.detachedLayout
   // Compute handoff before removing the source pane; its close must detach listeners without killing the PTY.
@@ -283,7 +226,7 @@ function applyMove(
     latestStore.createTab(worktreeId, args.targetGroupId, sourceShellOverride, {
       id: targetTabId,
       ...(isWebTerminalSurfaceTabId(targetTabId) ? { mirroredHostTab: true } : {}),
-      activate: true,
+      activate: options.follow,
       ...(detachedLayout.chatLeafId ? { viewMode: 'chat' as const } : {}),
       initialPtyId: ptyId ?? undefined,
       ...(!ptyId
@@ -326,15 +269,20 @@ function applyMove(
       localPtyTeardownOwnedExternally: true
     })
   }
-  afterCreateStore.setActiveTab(tab.id)
-  afterCreateStore.setActiveTabType('terminal', worktreeId)
-  // The pane's own name is what made it findable, so its new tab starts with it (copied, not linked).
-  // The client that asked for the move names the tab; its rename reaches this window through the owner.
-  // Switch point: main's rename frame redraws the moved pane without its title; main should name the tab.
-  const paneTitle = detachedLayout.titlesByLeafId?.[leafId]?.trim()
-  if (!ORCA_LAYOUT_OWNER_IS_MAIN && paneTitle && !args.targetTabId && !tab.customTitle) {
-    afterCreateStore.setTabCustomTitle(tab.id, paneTitle, { recordInteraction: false })
+  if (options.follow) {
+    afterCreateStore.setActiveTab(tab.id)
+    afterCreateStore.setActiveTabType('terminal', worktreeId)
   }
 
-  return { tab, leafId, ptyId }
+  return { tab, leafId, ptyId, followed: options.follow }
+}
+
+function nameAfterPane(
+  moved: DetachedTerminalPaneTab | null,
+  args: DetachTerminalPaneToTabArgs
+): DetachedTerminalPaneTab | null {
+  if (moved) {
+    nameTabAfterPane(args.getStore(), moved, args)
+  }
+  return moved
 }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect } from 'react'
 import type { PaneExternalDropTarget } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '../../../../store/index'
-import { detachTerminalPaneToTab, type TerminalPaneNewTabTarget } from './terminal-pane-tab-detach'
+import { detachTerminalPaneToTab } from './terminal-pane-tab-detach'
+import type { TerminalPaneNewTabTarget } from './terminal-pane-tab-detach-steps'
 import {
   isTerminalTabStripDropTarget,
   resolveTerminalTabStripDropTarget
@@ -15,6 +16,24 @@ import { registerTerminalPaneUserMoveHandler } from './terminal-pane-move-reques
 export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingController) {
   const { managerRef, paneCwdRef, paneTransportsRef, persistLayoutSnapshot, tabId, worktreeId } =
     controller
+  /** Whether a pane can move now; menus read it only while open, and the move checks it again. */
+  const getPaneMoveReadiness = useCallback(
+    (paneId: number): PaneMoveReadiness => {
+      const manager = managerRef.current
+      const leafId = manager?.getLeafId(paneId)
+      const transport = paneTransportsRef.current.get(paneId)
+      return paneMoveReadiness({
+        paneCount: manager?.getPanes().length ?? 0,
+        livePtyId: transport?.getPtyId() ?? null,
+        persistedPtyId: leafId
+          ? useAppStore.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+          : null,
+        sourcePaneCwd: paneCwdRef.current.get(paneId),
+        connectPending: transport?.isConnectPending?.() ?? false
+      })
+    },
+    [managerRef, paneCwdRef, paneTransportsRef, tabId]
+  )
   const resolveExternalPaneDropTarget = useCallback(
     ({
       sourcePaneId,
@@ -26,7 +45,11 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
       clientY: number
     }) => {
       const panes = managerRef.current?.getPanes() ?? []
-      if (panes.length <= 1 || !panes.some((pane) => pane.id === sourcePaneId)) {
+      // A pane still starting cannot move, so the strip offers no drop (no "New tab" pill).
+      if (
+        !panes.some((pane) => pane.id === sourcePaneId) ||
+        getPaneMoveReadiness(sourcePaneId) !== 'ready'
+      ) {
         return null
       }
       return resolveTerminalTabStripDropTarget({
@@ -36,7 +59,7 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
         worktreeId
       })
     },
-    [worktreeId, managerRef]
+    [getPaneMoveReadiness, worktreeId, managerRef]
   )
   const detachPaneToNewTab = useCallback(
     (sourcePaneId: number, target: TerminalPaneNewTabTarget) => {
@@ -74,24 +97,6 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
       return true
     },
     [detachPaneToNewTab, tabId]
-  )
-  /** Whether a pane can move now; menus read it only while open, and the move checks it again. */
-  const getPaneMoveReadiness = useCallback(
-    (paneId: number): PaneMoveReadiness => {
-      const manager = managerRef.current
-      const leafId = manager?.getLeafId(paneId)
-      const transport = paneTransportsRef.current.get(paneId)
-      return paneMoveReadiness({
-        paneCount: manager?.getPanes().length ?? 0,
-        livePtyId: transport?.getPtyId() ?? null,
-        persistedPtyId: leafId
-          ? useAppStore.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
-          : null,
-        sourcePaneCwd: paneCwdRef.current.get(paneId),
-        connectPending: transport?.isConnectPending?.() ?? false
-      })
-    },
-    [managerRef, paneCwdRef, paneTransportsRef, tabId]
   )
   /** Moves a pane to a new tab right after this one: the menu, shortcut and palette path. */
   const movePaneToNewTab = useCallback(

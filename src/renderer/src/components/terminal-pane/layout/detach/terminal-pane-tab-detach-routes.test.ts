@@ -11,7 +11,8 @@ import {
   TARGET_GROUP_ID,
   WORKTREE_ID
 } from './terminal-pane-tab-detach-fixture'
-import type { TerminalPaneTabDetachStore } from './terminal-pane-tab-detach'
+import type { TerminalPaneTabDetachStore } from './terminal-pane-tab-detach-steps'
+import type { TerminalLeafMoveResult } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 
 type HostRoute =
   | { kind: 'host'; environmentId: string }
@@ -40,6 +41,8 @@ vi.mock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-move', 
     targetGroupId: args.targetGroupId
   }))
 }))
+// Only reached with the main layout owner on, which these tests leave off; its graph is heavy.
+vi.mock('./terminal-pane-detach-layout-owner', () => ({ moveLeafThroughLayoutOwner: vi.fn() }))
 vi.mock('@/store/terminals/retirement/terminal-surface-close-intent', () => ({
   commitTerminalSurfaceClose: vi.fn()
 }))
@@ -75,14 +78,14 @@ function manager() {
 function storeFor(sourceTabId: string, layout: TerminalLayoutSnapshot): TerminalPaneTabDetachStore {
   const store = createStore(layout)
   store.terminalLayoutsByTabId[sourceTabId] = layout
-  Object.assign(store, { setTabCustomTitle: vi.fn() })
+  store.activeTabId = sourceTabId
   return store
 }
 
 function detach(
   store: TerminalPaneTabDetachStore,
   sourceTabId: string,
-  extra: { targetTabId?: string } = {}
+  extra: { targetTabId?: string; targetIndex?: number } = {}
 ) {
   return detachTerminalPaneToTab({
     livePtyId: 'pty-right',
@@ -130,6 +133,42 @@ describe('moving a pane to a new tab', () => {
     expect(store.setTabCustomTitle).not.toHaveBeenCalled()
   })
 
+  const mainAnswers: [string, () => Promise<TerminalLeafMoveResult>][] = [
+    ['main refuses', async () => ({ status: 'refused', reason: 'pane_unavailable' })],
+    [
+      'main does not answer',
+      async () => {
+        throw new Error('ipc gone')
+      }
+    ]
+  ]
+  it.each(mainAnswers)(
+    'leaves the pane in place and tells the user when %s',
+    async (_case, answer) => {
+      vi.mocked(window.api.pty.moveLeafToNewTab).mockImplementationOnce(answer)
+      const store = storeFor(SOURCE_TAB_ID, titledLayout())
+
+      const moved = await detach(store, SOURCE_TAB_ID)
+
+      expect(moved).toBeNull()
+      expect(store.createTab).not.toHaveBeenCalled()
+      expect(store.setTabLayout).not.toHaveBeenCalled()
+      expect(toast.error).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('moves the pane in this window when main does not hold the tab', async () => {
+    vi.mocked(window.api.pty.moveLeafToNewTab).mockResolvedValueOnce({ status: 'not_held' })
+    const store = storeFor(SOURCE_TAB_ID, titledLayout())
+
+    const moved = await detach(store, SOURCE_TAB_ID)
+
+    expect(moved?.ptyId).toBe('pty-right')
+    expect(store.terminalLayoutsByTabId['tab-detached']?.ptyIdsByLeafId).toEqual({
+      [LEAF_2]: 'pty-right'
+    })
+  })
+
   it('refuses up front when the host owning the tab cannot take the move', async () => {
     hostMove.route = { kind: 'unavailable' }
     const store = storeFor(HOST_SOURCE_TAB_ID, titledLayout())
@@ -151,9 +190,69 @@ describe('moving a pane to a new tab', () => {
     await vi.waitFor(() => expect(hostMove.settle).toHaveBeenCalled())
 
     expect(moved).not.toBeNull()
-    const [, , outcome, movedHere, onRefused] = hostMove.settle.mock.calls[0]
+    const [, , outcome, movedHere, hooks] = hostMove.settle.mock.calls[0]
     expect([outcome, movedHere]).toEqual(['refused', true])
-    onRefused()
+    hooks.onRefused()
     expect(toast.error).toHaveBeenCalledTimes(1)
+  })
+
+  it('names a host tab only once the host commits the move', async () => {
+    hostMove.route = { kind: 'host', environmentId: 'env-1' }
+    const store = storeFor(HOST_SOURCE_TAB_ID, titledLayout())
+
+    const moved = await detach(store, HOST_SOURCE_TAB_ID)
+    await vi.waitFor(() => expect(hostMove.settle).toHaveBeenCalled())
+
+    expect(store.setTabCustomTitle).not.toHaveBeenCalled()
+    hostMove.settle.mock.calls[0][4].onCommitted()
+    expect(store.setTabCustomTitle).toHaveBeenCalledWith(moved?.tab.id, 'build-watch', {
+      recordInteraction: false
+    })
+  })
+
+  it('places the new tab after the pinned tabs, since it is never pinned', async () => {
+    const store = storeFor(SOURCE_TAB_ID, titledLayout())
+    store.unifiedTabsByWorktree[WORKTREE_ID] = [
+      { id: 'tab-existing-1', isPinned: true },
+      { id: 'tab-existing-2', isPinned: false }
+    ].map((tab) => ({
+      ...tab,
+      entityId: tab.id,
+      groupId: TARGET_GROUP_ID,
+      worktreeId: WORKTREE_ID,
+      contentType: 'terminal' as const,
+      label: tab.id,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }))
+
+    await detach(store, SOURCE_TAB_ID, { targetIndex: 0 })
+
+    expect(store.groupsByWorktree[WORKTREE_ID]?.[0]?.tabOrder).toEqual([
+      'tab-existing-1',
+      'tab-detached',
+      'tab-existing-2'
+    ])
+  })
+
+  it('does not pull the user to the new tab when they moved on before the move landed', async () => {
+    const store = storeFor(SOURCE_TAB_ID, titledLayout())
+    vi.mocked(window.api.pty.moveLeafToNewTab).mockImplementationOnce(async () => {
+      store.activeTabId = 'tab-existing-2'
+      return { status: 'moved', ptyId: 'pty-right' }
+    })
+
+    const moved = await detach(store, SOURCE_TAB_ID)
+
+    expect(moved?.followed).toBe(false)
+    expect(store.createTab).toHaveBeenCalledWith(
+      WORKTREE_ID,
+      TARGET_GROUP_ID,
+      undefined,
+      expect.objectContaining({ activate: false })
+    )
+    expect(store.setActiveTab).not.toHaveBeenCalled()
   })
 })

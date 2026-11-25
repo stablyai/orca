@@ -3,10 +3,12 @@ import { addAppKeyListener, removeAppKeyListener } from './app-keyboard-router'
 type GuardedKey = Pick<KeyboardEvent, 'code'>
 
 /**
- * Owns the rest of a key press Orca already consumed: its auto-repeats and its release never
- * reach the terminal (Kitty event-type mode reports releases to the PTY). Ends on that release,
- * on a fresh press of the same key (the release was missed), or when the window loses focus,
- * since an unfocused window never receives the release.
+ * Owns the rest of a key press Orca already consumed: its auto-repeats never reach the terminal,
+ * where a held Escape would otherwise arrive as a stream of ESC bytes. The release is left to the
+ * terminal's Kitty orphan-keyup guard, which already drops releases of presses xterm never
+ * encoded. Ends on that release, on a fresh press of the same key (the release was missed), or
+ * when the window loses focus, since an unfocused window never receives the release. It belongs to
+ * the window, not to a pane, so closing the pane that consumed the press does not end it early.
  */
 export function armKeyLifecycleGuard(consumed: GuardedKey): () => void {
   const { code } = consumed
@@ -26,11 +28,9 @@ export function armKeyLifecycleGuard(consumed: GuardedKey): () => void {
     disarm()
   }
   const onKeyUp = (event: KeyboardEvent): void => {
-    if (event.code !== code) {
-      return
+    if (event.code === code) {
+      disarm()
     }
-    swallow(event)
-    disarm()
   }
   const disarm = (): void => {
     if (!armed) {
@@ -42,7 +42,7 @@ export function armKeyLifecycleGuard(consumed: GuardedKey): () => void {
     window.removeEventListener('blur', disarm)
   }
   addAppKeyListener('keydown', onKeyDown, { first: true })
-  addAppKeyListener('keyup', onKeyUp, { first: true })
+  addAppKeyListener('keyup', onKeyUp)
   window.addEventListener('blur', disarm)
   return disarm
 }

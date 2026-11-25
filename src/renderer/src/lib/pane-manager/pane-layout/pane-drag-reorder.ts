@@ -18,8 +18,6 @@ export type DragReorderState = {
   currentDropTarget: { paneId: number; zone: DropZone } | null
   currentExternalDropTarget: PaneExternalDropTarget | null
   cleanupActiveDrag: ((commitDrop: boolean) => void) | null
-  /** Owns the rest of an Escape press that cancelled a drag; outlives the gesture until release. */
-  disarmKeyGuard: (() => void) | null
 }
 
 export type DragReorderCallbacks = {
@@ -46,14 +44,11 @@ export function createDragReorderState(): DragReorderState {
     dropOverlay: null,
     currentDropTarget: null,
     currentExternalDropTarget: null,
-    cleanupActiveDrag: null,
-    disarmKeyGuard: null
+    cleanupActiveDrag: null
   }
 }
 
 export function cancelActivePaneDrag(state: DragReorderState): void {
-  state.disarmKeyGuard?.()
-  state.disarmKeyGuard = null
   if (state.cleanupActiveDrag) {
     state.cleanupActiveDrag(false)
     return

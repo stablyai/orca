@@ -1,5 +1,8 @@
 import { focusTerminalTabSurface } from '../../input/focus/focus-terminal-tab-surface'
-import type { DetachedTerminalPaneTab, TerminalPaneNewTabTarget } from './terminal-pane-tab-detach'
+import type {
+  DetachedTerminalPaneTab,
+  TerminalPaneNewTabTarget
+} from './terminal-pane-tab-detach-steps'
 
 /** A pane moved without a drop lands in a new tab right after its source tab. */
 type PlacementState = {
@@ -43,6 +46,9 @@ function focusStayedWithSource(sourceTabId: string): boolean {
  * the move was settling (a remote host can take a moment).
  */
 export function focusMovedPane(sourceTabId: string, moved: DetachedTerminalPaneTab): void {
+  if (!moved.followed) {
+    return
+  }
   focusTerminalTabSurface(moved.tab.id, moved.leafId, {
     shouldFocus: () => focusStayedWithSource(sourceTabId)
   })

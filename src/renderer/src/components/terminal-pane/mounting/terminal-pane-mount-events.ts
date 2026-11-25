@@ -19,7 +19,7 @@ import {
   resolveTerminalPaneSplitSourceId
 } from '../layout/split/terminal-pane-split-request-routing'
 import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
-import type { DetachTerminalPaneToNewTab } from '../layout/detach/terminal-pane-tab-detach'
+import type { DetachTerminalPaneToNewTab } from '../layout/detach/terminal-pane-tab-detach-steps'
 import {
   registerTerminalPaneMoveToNewTabHandler,
   resolvePaneMoveTargetGroup

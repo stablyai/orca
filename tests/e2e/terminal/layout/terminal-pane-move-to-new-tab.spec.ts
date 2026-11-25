@@ -140,6 +140,13 @@ test.describe('Move a terminal pane to a new tab', () => {
       )
       .toBeGreaterThanOrEqual(2)
     expect(await getTerminalContentForPtyId(orcaPage, pane.ptyId, 8000)).not.toContain('^[')
+    // Positive control: the same check sees an Escape that is not cancelling a drag.
+    const control = `CONTROL_${Date.now()}`
+    await orcaPage.keyboard.press('Escape')
+    await orcaPage.keyboard.type(`${control}\r`)
+    await expect
+      .poll(async () => getTerminalContentForPtyId(orcaPage, pane.ptyId, 8000))
+      .toContain(`^[${control}`)
     await orcaPage.keyboard.press('Control+c')
     expect(await readTabs(orcaPage)).toEqual(before)
     expect((await readLeafHome(orcaPage, pane.leafId))?.tabId).toBe(before.activeTabId)

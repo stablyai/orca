@@ -2,7 +2,7 @@ import { TerminalPaneRecentImages } from './TerminalRecentImages'
 import { useAppStore } from '@/store'
 import type { PaneTitleOverlayRect } from './pane-title-overlay-rects'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
-import { useEffect, useRef, type CSSProperties, type RefObject } from 'react'
+import { useEffect, useState, type CSSProperties, type RefObject } from 'react'
 import { MessageSquarePlus, SquareSplitVertical, SquareTerminal, X } from 'lucide-react'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -113,21 +113,23 @@ export default function TerminalPaneHeaderOverlay({
     'components.terminalPane.paneDragHandle.tooltip',
     'Drag to move to a new tab'
   )
-  const layerRef = useRef<HTMLDivElement>(null)
   // Headers sit outside their panes' DOM, so hovering a pane marks its header for the faint grip.
+  // Renders only when the pointer crosses a pane boundary; a remounted header keeps the mark.
+  const [hoveredLeafId, setHoveredLeafId] = useState<string | null>(null)
   useEffect(() => {
     if (paneCount < 2) {
       return
     }
     const listeners = new AbortController()
     for (const pane of panes) {
-      const mark = (hovered: boolean) => (): void => {
-        layerRef.current
-          ?.querySelector(`[data-pane-header-leaf="${CSS.escape(pane.leafId)}"]`)
-          ?.toggleAttribute('data-pane-hovered', hovered)
-      }
-      pane.container.addEventListener('pointerenter', mark(true), { signal: listeners.signal })
-      pane.container.addEventListener('pointerleave', mark(false), { signal: listeners.signal })
+      pane.container.addEventListener('pointerenter', () => setHoveredLeafId(pane.leafId), {
+        signal: listeners.signal
+      })
+      pane.container.addEventListener(
+        'pointerleave',
+        () => setHoveredLeafId((current) => (current === pane.leafId ? null : current)),
+        { signal: listeners.signal }
+      )
     }
     return () => listeners.abort()
   }, [paneCount, panes])
@@ -156,7 +158,7 @@ export default function TerminalPaneHeaderOverlay({
         destination={{ pane, tabId, worktreeId, cwd, managerRef, paneTransportsRef }}
         className="pane-title-bar"
         data-terminal-tab-id={tabId}
-        data-pane-header-leaf={pane.leafId}
+        {...(paneCount > 1 && hoveredLeafId === pane.leafId ? { 'data-pane-hovered': '' } : {})}
         data-pane-prevent-terminal-focus=""
         {...(isActivePane ? { 'data-active-pane': '' } : {})}
         {...(isChromeless ? { 'data-chromeless': '' } : {})}
@@ -366,7 +368,6 @@ export default function TerminalPaneHeaderOverlay({
 
   return (
     <div
-      ref={layerRef}
       className="pane-title-overlay-layer"
       data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
       style={{

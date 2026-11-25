@@ -21,7 +21,7 @@ import type { ReplayingPanesRef } from '../snapshots/replay-guard'
 import type { TerminalLinkActionRequester } from '../links/terminal-link-action-request'
 
 import type { SessionRestoredBannerReason } from '../session-restore/session-restored-banner-pane-state'
-import type { DetachTerminalPaneToNewTab } from '../layout/detach/terminal-pane-tab-detach'
+import type { DetachTerminalPaneToNewTab } from '../layout/detach/terminal-pane-tab-detach-steps'
 
 export type TerminalPaneStartup = Exclude<PtyPaneStartup, null>
 
