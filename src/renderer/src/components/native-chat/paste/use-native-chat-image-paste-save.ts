@@ -4,9 +4,7 @@ import { nativeChatWorktreeNotReadyNotice } from '../attachments/intake/native-c
 import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-chat-attachment-owner'
 import {
   hasNativeChatPendingAttachment,
-  holdNativeChatPendingImageSave,
-  nativeChatPendingAttachmentScope,
-  releaseNativeChatPendingImageSave
+  nativeChatPendingAttachmentScope
 } from '../attachments/chips/native-chat-pending-attachment-scopes'
 import { flushNativeChatWaitingPasteReferences } from '../attachments/chips/native-chat-pending-attachment-cache'
 import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
@@ -17,35 +15,19 @@ import {
 } from './native-chat-image-paste-drop'
 import { saveNativeChatPastedClipboardImage } from './native-chat-clipboard-image-save'
 import {
+  closeNativeChatComposerNoticeRoute,
   deferNativeChatComposerNotice,
-  takeDeferredNativeChatComposerNotices
+  openNativeChatComposerNoticeRoute,
+  takeDeferredNativeChatComposerNotices,
+  type NativeChatComposerNoticeRoute
 } from '../composer/controls/native-chat-deferred-composer-notice'
+import { setNativeChatPasteFailure } from '../composer/controls/native-chat-composer-notice'
+import { holdingPendingImageSave } from './native-chat-image-paste-hold'
 import type { UseNativeChatComposerPasteArgs } from './native-chat-composer-paste-options'
 import type { useNativeChatPasteLifetime } from './use-native-chat-paste-lifetime'
 
 type PasteLifetime = ReturnType<typeof useNativeChatPasteLifetime>
-
-/**
- * Hold the chip only while main saves it, so a composer going unavailable then cannot discard it;
- * release it and run `afterSave` however the save ends. Module-level so the hook compiles.
- */
-async function holdingPendingImageSave(
-  pendingId: string | null,
-  save: () => Promise<boolean>,
-  afterSave: () => void
-): Promise<boolean> {
-  if (pendingId) {
-    holdNativeChatPendingImageSave(pendingId)
-  }
-  try {
-    return await save()
-  } finally {
-    if (pendingId) {
-      releaseNativeChatPendingImageSave(pendingId)
-    }
-    afterSave()
-  }
-}
+type PasteNotice = { text: string; errorText?: string; route?: NativeChatComposerNoticeRoute }
 
 /** Save a pasted image and settle it into its chip's draft; every loss is reported or traced. */
 export function useNativeChatImagePasteSave({
@@ -118,8 +100,63 @@ export function useNativeChatImagePasteSave({
     ]
   )
 
+  /** Show a failure here, or defer it to its draft's composer if this one is replaced or moved on. */
+  const publishNotice = useCallback(
+    ({ text, errorText, route }: PasteNotice): void => {
+      const scope = route ? closeNativeChatComposerNoticeRoute(route) : undefined
+      if (scope === null) {
+        return
+      }
+      if (
+        scope !== undefined &&
+        (!lifetime.active || scope !== currentDraftScope(attachmentScopeKey ?? scope))
+      ) {
+        deferNativeChatComposerNotice(scope, text, errorText)
+      } else if (errorText) {
+        setNotice(text, errorText)
+      } else {
+        setNotice(text)
+      }
+    },
+    [attachmentScopeKey, lifetime, setNotice]
+  )
+
+  /** A clipboard read failed before classification: report it like a failed save, then drop the chips. */
+  const failClipboardCandidates = useCallback(
+    (chipIds: readonly string[], error: unknown): void => {
+      // Decide owner and recipient before dropping: only chips the user did not remove are owed a notice.
+      const remaining =
+        attachmentScopeKey === undefined ? chipIds : chipIds.filter(hasNativeChatPendingAttachment)
+      const reportable =
+        remaining.length > 0 &&
+        (lifetime.active || canComplete() || attachmentScopeKey !== undefined)
+      const route =
+        reportable && attachmentScopeKey !== undefined
+          ? openNativeChatComposerNoticeRoute(
+              nativeChatPendingAttachmentScope(attachmentScopeKey, remaining[0])
+            )
+          : undefined
+      chipIds.forEach(dropImagePaste)
+      recordNativeChatImagePasteDropped(remaining.length > 0 ? 'save-failed' : 'chip-removed')
+      let notice: PasteNotice | undefined
+      if (reportable) {
+        setNativeChatPasteFailure((text, errorText) => {
+          if (text !== null) {
+            notice = { text, errorText, route }
+          }
+        }, error)
+      }
+      if (notice) {
+        publishNotice(notice)
+      } else if (route) {
+        closeNativeChatComposerNoticeRoute(route)
+      }
+    },
+    [attachmentScopeKey, canComplete, dropImagePaste, lifetime, publishNotice]
+  )
+
   // Image failures do not decide whether text can be inserted. Resolves whether the image settled.
-  return useCallback(
+  const saveClipboardImage = useCallback(
     async (
       owner: NativeChatAttachmentOwner,
       pendingId: string | null,
@@ -132,6 +169,12 @@ export function useNativeChatImagePasteSave({
         pendingId !== null &&
         attachmentScopeKey !== undefined &&
         !hasNativeChatPendingAttachment(pendingId)
+      // Removed before its save began (a clipboard read finishing late): start no save work.
+      if (isChipRemoved()) {
+        recordNativeChatImagePasteDropped('chip-removed')
+        dropImagePaste(pendingId)
+        return false
+      }
       // Failures stay visible while the composer is unavailable or replaced; a removed chip stays quiet.
       const canReport = (): boolean =>
         !isChipRemoved() && (lifetime.active || canComplete() || attachmentScopeKey !== undefined)
@@ -147,21 +190,22 @@ export function useNativeChatImagePasteSave({
           liveScope = nativeChatPendingAttachmentScope(attachmentScopeKey, pendingId)
         }
       }
-      // A replaced composer, or one whose draft moved on, cannot show it; the draft's composer does.
-      let notice: { text: string; errorText?: string } | undefined
+      // The route follows the draft if it moves before the notice is published.
+      let notice: PasteNotice | undefined
       const report = (text: string, errorText?: string): void => {
         followChip()
-        notice = { text, errorText }
+        if (notice?.route) {
+          closeNativeChatComposerNoticeRoute(notice.route)
+        }
+        notice = {
+          text,
+          errorText,
+          route: liveScope === undefined ? undefined : openNativeChatComposerNoticeRoute(liveScope)
+        }
       }
-      const settleSaved = async (): Promise<boolean> => {
-        const { stagingScope } = owner.kind === 'local' ? owner : { stagingScope: undefined }
-        let saved = await saveNativeChatPastedClipboardImage(owner, {
-          besideText,
-          ready,
-          eventImage,
-          canNotify: canReport,
-          setNotice: report
-        })
+      const { stagingScope } = owner.kind === 'local' ? owner : { stagingScope: undefined }
+      const settle = (result: Awaited<ReturnType<typeof saveNativeChatPastedClipboardImage>>) => {
+        let saved = result
         followChip()
         const chipRemoved = isChipRemoved()
         const reportable = canReport()
@@ -179,9 +223,7 @@ export function useNativeChatImagePasteSave({
         if (lostTo) {
           recordNativeChatImagePasteDropped(lostTo)
         }
-        const kept = keepStoreUploadAfterUnmount(pendingId, saved, {
-          stagingScope
-        })
+        const kept = keepStoreUploadAfterUnmount(pendingId, saved, { stagingScope })
         if (saved.status !== 'saved') {
           if (!kept) {
             dropImagePaste(pendingId)
@@ -210,20 +252,22 @@ export function useNativeChatImagePasteSave({
           flushNativeChatWaitingPasteReferences(liveScope)
         }
         if (notice) {
-          const { text, errorText } = notice
-          if (
-            liveScope !== undefined &&
-            (!lifetime.active || liveScope !== currentDraftScope(attachmentScopeKey ?? liveScope))
-          ) {
-            deferNativeChatComposerNotice(liveScope, text, errorText)
-          } else if (errorText) {
-            setNotice(text, errorText)
-          } else {
-            setNotice(text)
-          }
+          publishNotice(notice)
         }
       }
-      return holdingPendingImageSave(pendingId, settleSaved, flushAndNotify)
+      return holdingPendingImageSave(
+        pendingId,
+        () =>
+          saveNativeChatPastedClipboardImage(owner, {
+            besideText,
+            ready,
+            eventImage,
+            canNotify: canReport,
+            setNotice: report
+          }),
+        settle,
+        flushAndNotify
+      )
     },
     [
       attachmentScopeKey,
@@ -231,8 +275,10 @@ export function useNativeChatImagePasteSave({
       dropImagePaste,
       keepStoreUploadAfterUnmount,
       lifetime,
-      setNotice,
+      publishNotice,
       settleImagePaste
     ]
   )
+
+  return { saveClipboardImage, failClipboardCandidates }
 }

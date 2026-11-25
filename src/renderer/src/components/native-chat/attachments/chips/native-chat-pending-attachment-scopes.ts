@@ -13,8 +13,13 @@ export function hasNativeChatPendingAttachment(id: string): boolean {
   return chipScopes.has(id)
 }
 
-export function holdNativeChatPendingImageSave(id: string): void {
+/** Only a chip still in a draft's cache can be held, so a removed chip never restarts save work. */
+export function holdNativeChatPendingImageSave(id: string): boolean {
+  if (!chipScopes.has(id)) {
+    return false
+  }
   savingImageChips.add(id)
+  return true
 }
 
 export function releaseNativeChatPendingImageSave(id: string): void {

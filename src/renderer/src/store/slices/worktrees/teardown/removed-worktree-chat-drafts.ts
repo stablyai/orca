@@ -13,11 +13,11 @@ import {
   deleteNativeChatComposerDraftsOwnedBy
 } from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { clearNativeChatPendingAttachments } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 import {
-  clearNativeChatPendingAttachments,
   dropNativeChatPendingAttachmentsForTab,
   dropNativeChatPendingAttachmentsOwnedBy
-} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-drops'
 
 /** Include owner-tagged open/closed drafts plus tab conversation/pane keys written before owner attribution existed. */
 export type WorkspaceChatDraftKeys = {

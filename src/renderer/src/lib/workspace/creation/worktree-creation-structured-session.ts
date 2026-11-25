@@ -88,13 +88,11 @@ export async function launchStructuredWorktreeSession(
     text: request.launchDraftPrompt ?? request.quickPrompt,
     attachments: promptAttachments
   })
+  // The composer's own input (typing, chips still saving, staged files), apart from the first send.
+  const sourceHoldsInput = (): boolean =>
+    nativeChatComposerHasUserContent(sourceScope) || hasNativeChatStagedFiles(sourceScope)
   const needsChat = (): boolean =>
-    Boolean(
-      promptAttachments?.length ||
-      pending?.heldChatSkills?.length ||
-      nativeChatComposerHasUserContent(sourceScope) ||
-      hasNativeChatStagedFiles(sourceScope)
-    )
+    Boolean(promptAttachments?.length || pending?.heldChatSkills?.length) || sourceHoldsInput()
   const retainInput = (): WorktreeCreationStructuredSessionResult => {
     useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
       worktreeId: args.worktreeId,
@@ -155,6 +153,8 @@ export async function launchStructuredWorktreeSession(
       revealAbandoned.abort()
     }
   })
+  // Set only once the source draft moved into the chat: a published tab alone does not prove it.
+  let draftTransferred = false
   const handOffDraft = async (tabId: string | null): Promise<void> => {
     const tab = tabId ? useAppStore.getState().getTab(tabId) : null
     if (tab?.contentType !== 'agent-session') {
@@ -191,13 +191,16 @@ export async function launchStructuredWorktreeSession(
         sourceScope,
         selection
       )
+      draftTransferred = true
     }
   }
   // The surfaces that took the input: a published chat, or (plain text only) a terminal.
   let chatOpened = false
   let reached = false
+  // An open chat proves the first send landed, not that the composer's own input moved with it.
   const inputLost = (): boolean =>
-    (!chatOpened && needsChat()) || (!reached && Boolean(plan.prompt?.trim()))
+    (chatOpened ? !draftTransferred && sourceHoldsInput() : needsChat()) ||
+    (!reached && Boolean(plan.prompt?.trim()))
   try {
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,

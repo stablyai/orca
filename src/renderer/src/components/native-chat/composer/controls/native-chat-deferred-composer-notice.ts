@@ -8,6 +8,45 @@ import type { NativeChatComposerNoticeContent } from './native-chat-composer-not
 // composer says why, so the loss is never silent. Only the latest notice per draft is kept.
 const deferred = new Map<string, NativeChatComposerNoticeContent>()
 const listeners = new Map<string, Set<(scope: string) => void>>()
+// Failures reported but not yet published, by draft: they follow a move and end with the draft.
+const routes = new Map<string, Set<NativeChatComposerNoticeRoute>>()
+
+/** Where a reported failure is published; `retired` once its draft was deleted for good. */
+export type NativeChatComposerNoticeRoute = { scopeKey: string; retired: boolean }
+
+/** Open when the failure is reported; publication may come after an async gap. */
+export function openNativeChatComposerNoticeRoute(scopeKey: string): NativeChatComposerNoticeRoute {
+  const route = { scopeKey: currentDraftScope(scopeKey), retired: false }
+  const scoped = routes.get(route.scopeKey) ?? new Set()
+  routes.set(route.scopeKey, scoped)
+  scoped.add(route)
+  return route
+}
+
+/** Call at publication; returns the draft to publish to, or null if that draft is gone. */
+export function closeNativeChatComposerNoticeRoute(
+  route: NativeChatComposerNoticeRoute
+): string | null {
+  const scoped = routes.get(route.scopeKey)
+  scoped?.delete(route)
+  if (scoped?.size === 0) {
+    routes.delete(route.scopeKey)
+  }
+  return route.retired ? null : route.scopeKey
+}
+
+export function deferredNativeChatComposerNoticeScopes(): string[] {
+  return [...new Set([...deferred.keys(), ...routes.keys()])]
+}
+
+/** The draft is gone for good: its waiting notice and any still being reported go with it. */
+export function retireDeferredNativeChatComposerNotices(scopeKey: string): void {
+  deferred.delete(scopeKey)
+  for (const route of routes.get(scopeKey) ?? []) {
+    route.retired = true
+  }
+  routes.delete(scopeKey)
+}
 
 export function deferNativeChatComposerNotice(
   scopeKey: string,
@@ -51,10 +90,23 @@ export function takeDeferredNativeChatComposerNotices(
 export function moveDeferredNativeChatComposerNotice(from: string, to: string): void {
   from = currentDraftScope(from)
   to = currentDraftScope(to)
+  if (from === to) {
+    return
+  }
   const notice = deferred.get(from)
-  if (notice && from !== to) {
+  if (notice) {
     deferred.delete(from)
     deferNativeChatComposerNotice(to, notice.text, notice.errorText)
+  }
+  const moving = routes.get(from)
+  if (moving) {
+    routes.delete(from)
+    const scoped = routes.get(to) ?? new Set()
+    routes.set(to, scoped)
+    for (const route of moving) {
+      route.scopeKey = to
+      scoped.add(route)
+    }
   }
 }
 

@@ -64,7 +64,7 @@ export function useNativeChatComposerPaste({
       setNotice
     )
 
-  const saveClipboardImage = useNativeChatImagePasteSave({
+  const { saveClipboardImage, failClipboardCandidates } = useNativeChatImagePasteSave({
     attachmentScopeKey,
     lifetime,
     canComplete,
@@ -121,12 +121,11 @@ export function useNativeChatComposerPaste({
             chips.reveal()
             void saveClipboardImage(macOwner, primary.chipId, read.text !== '')
           },
-          (error) => {
-            chips.reserved.forEach(({ chipId }) => dropImagePaste(chipId))
-            if (canPaste()) {
-              setNativeChatPasteFailure(setNotice, error)
-            }
-          }
+          (error) =>
+            failClipboardCandidates(
+              chips.reserved.map(({ chipId }) => chipId),
+              error
+            )
         )
         return
       }
@@ -181,6 +180,7 @@ export function useNativeChatComposerPaste({
       captureCopiedFiles,
       caret,
       dropImagePaste,
+      failClipboardCandidates,
       insertTypedText,
       showPasteUnavailable,
       resolveAttachmentOwner,

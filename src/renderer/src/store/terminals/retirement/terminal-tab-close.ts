@@ -21,7 +21,7 @@ import { removePaneKeysByTabPrefix } from '../../slices/agent-status/pane-author
 import { removeTabsAttention } from '../../slices/workspace-attention/subject-attention-transitions'
 import { omitRecordKeys } from '../../slices/worktrees/teardown/record-key-omission'
 import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
-import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-drops'
 import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane/agent-launch-pane-closes'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import { settleAttentionRemovedBy } from '../../slices/workspace-attention/attention-removal-follow-up'

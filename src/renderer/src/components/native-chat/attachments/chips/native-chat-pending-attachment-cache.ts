@@ -16,10 +16,6 @@ import {
   appendToNativeChatComposerDraft,
   readNativeChatComposerDraft
 } from '../../drafts/native-chat-composer-draft-store'
-import {
-  nativeChatDraftScopeTabId,
-  structuredAgentSessionIdOfDraftScope
-} from '../../drafts/native-chat-draft-scope'
 import { resolveNativeChatComposerDraftOwner } from '../../drafts/native-chat-composer-draft-memory'
 import {
   chipScopes,
@@ -59,8 +55,10 @@ function writePending(scopeKey: string, next: readonly NativeChatComposerImageAt
   for (const chip of next) {
     chipScopes.set(chip.id, scopeKey)
   }
+  // Left every draft (not moved): end what the operation owned, even if its save never returns.
   for (const chip of previous) {
     if (!chipScopes.has(chip.id)) {
+      savingImageChips.delete(chip.id)
       waitingPasteReferences.get(chip.id)?.cancel()
       waitingPasteReferences.delete(chip.id)
     }
@@ -225,9 +223,15 @@ export function deferNativeChatPasteReference(
 ): boolean {
   const queue = nativeChatPendingAttachmentSnapshot(nativeChatPendingAttachmentScope(scopeKey, id))
   const index = queue.findIndex((chip) => chip.id === id && chip.pending)
+  // Behind an image still saving or a reference already waiting, so a later paste cannot overtake.
   if (
     index < 1 ||
-    !queue.slice(0, index).some((chip) => chip.pending && savingImageChips.has(chip.id))
+    !queue
+      .slice(0, index)
+      .some(
+        (chip) =>
+          chip.pending && (savingImageChips.has(chip.id) || waitingPasteReferences.has(chip.id))
+      )
   ) {
     return false
   }
@@ -235,6 +239,10 @@ export function deferNativeChatPasteReference(
   return true
 }
 
+// Set while waiting references drain: they append to the draft in queue order, never at a caret.
+let draining = 0
+
+/** Settle waiting references in paste order up to the first image still saving. */
 export function flushNativeChatWaitingPasteReferences(scopeKey: string): void {
   for (const chip of nativeChatPendingAttachmentSnapshot(scopeKey)) {
     if (chip.pending && savingImageChips.has(chip.id)) {
@@ -243,8 +251,17 @@ export function flushNativeChatWaitingPasteReferences(scopeKey: string): void {
     const operation = waitingPasteReferences.get(chip.id)
     if (operation) {
       waitingPasteReferences.delete(chip.id)
-      operation.settle()
+      drainOne(operation)
     }
+  }
+}
+
+function drainOne(operation: { settle: () => void }): void {
+  draining += 1
+  try {
+    operation.settle()
+  } finally {
+    draining -= 1
   }
 }
 
@@ -264,7 +281,9 @@ export function settleNativeChatPendingAttachmentReferences(
   if (paths.length === 0) {
     return false
   }
-  if (insertAtCaret && scopeKey === originalScope) {
+  // A drained reference may belong to a replaced composer whose editor has not adopted the draft yet:
+  // appending to the draft keeps every earlier reference and the paste order.
+  if (insertAtCaret && scopeKey === originalScope && draining === 0) {
     insertAtCaret(paths)
   } else {
     insertNativeChatComposerDraftText(
@@ -273,6 +292,8 @@ export function settleNativeChatPendingAttachmentReferences(
       { owner, draftOnly: true }
     )
   }
+  // Settling and draining happen at one boundary, so nothing can slip in between.
+  flushNativeChatWaitingPasteReferences(scopeKey)
   return true
 }
 
@@ -311,21 +332,4 @@ export function dropNativeChatPendingAttachmentsWhere(
       writePending(scopeKey, [])
     }
   }
-}
-
-/** Drop only closed-tab pane chips; conversation scopes survive tab closure. */
-export function dropNativeChatPendingAttachmentsForTab(tabId: string): void {
-  dropNativeChatPendingAttachmentsWhere(
-    (scopeKey) =>
-      structuredAgentSessionIdOfDraftScope(scopeKey) === null &&
-      nativeChatDraftScopeTabId(scopeKey) === tabId
-  )
-}
-
-export function dropNativeChatPendingAttachmentsOwnedBy(owner: NativeChatComposerDraftOwner): void {
-  dropNativeChatPendingAttachmentsWhere(
-    (_scopeKey, pendingOwner) =>
-      pendingOwner?.workspaceId === owner.workspaceId &&
-      pendingOwner.executionHostId === owner.executionHostId
-  )
 }

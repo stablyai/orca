@@ -212,6 +212,7 @@ export function useNativeChatPasteLifetime(args: {
           ? nativeChatPendingAttachmentScope(attachmentScopeKey, pendingId)
           : undefined
         lifetime.pending.delete(pendingId)
+        lifetime.uploads.delete(pendingId)
         releaseNativeChatPendingImageSave(pendingId)
         dropPendingImageAttachment(pendingId)
         if (scope !== undefined) {
