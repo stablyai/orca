@@ -30,6 +30,9 @@ export const BotToolUpdate = z.strictObject({
 
 export const BotToolTarget = z.object({ ...Target, name: ToolName })
 
+// Whether the bot's sessions also take its host's MCP server list.
+export const BotToolsSetHostMcpServers = z.strictObject({ ...Target, enabled: z.boolean() })
+
 // The address a sign-in's browser ended on, for a host the browser couldn't reach.
 export const BotToolFinishSignIn = z.object({
   ...Target,

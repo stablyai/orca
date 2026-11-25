@@ -163,11 +163,13 @@ export class RuntimeBrowserTabCreation {
       targetGroupId: params.targetGroupId
     })
 
-    // The webview starts at about:blank; bridge navigation preserves registered ownership.
     if (url && url !== 'about:blank') {
       const navigate = async (): Promise<void> => {
         // Nobody reads a new tab's effects, so its first load skips the settle.
-        const result = await bridge.goto(url, worktreeId, browserPageId, { reportEffects: false })
+        const result = await bridge.goto(url, worktreeId, browserPageId, {
+          reportEffects: false,
+          awaitFirstLoad: true
+        })
         this.targets.notifyRendererNavigation(browserPageId, result.url, result.title)
         if (this.host.getAvailableAuthoritativeWindowId() === null && worktreeId) {
           this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)

@@ -18,15 +18,16 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
+import { activityItemAriaLabel, activityItemTooltip } from './activity-bar-item-names'
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab
   pluginKey?: string
   icon: React.ComponentType<{ size?: number; className?: string }>
   title: string
+  accessibleTitle?: string
   shortcut: string
   /** When true, hidden for non-git (folder-mode) repos. */
   gitOnly?: boolean
@@ -56,22 +57,6 @@ const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
   pending: 'bg-amber-500',
   neutral: 'bg-muted-foreground',
   cancelled: 'bg-muted-foreground'
-}
-
-function activityItemAriaLabel(
-  item: ActivityBarItem,
-  status?: CheckStatus | null,
-  t: Translate = translate
-): string {
-  const titled = item.shortcut ? `${item.title} (${item.shortcut})` : item.title
-  const base = item.count
-    ? `${titled}, ${item.countLabel ?? t('bots.upNext.newCount', '{{count}} new', { count: item.count })}`
-    : titled
-  return status === 'failure'
-    ? `${base} — ${t('auto.components.right.sidebar.activityBar.error', 'Error')}`
-    : status === 'cancelled'
-      ? `${base} — ${t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}`
-      : base
 }
 
 function openKeyboardContextMenu(event: React.KeyboardEvent<HTMLElement>): void {
@@ -295,9 +280,11 @@ export function ActivityBarButton({
                 : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
             )
           : cn(
-              'shrink-0',
+              'shrink-0 [&>svg]:transition-opacity',
               isTop ? 'h-[36px] w-9' : 'w-10 h-10',
-              active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
+              active
+                ? 'text-foreground'
+                : 'text-muted-foreground [&>svg]:opacity-60 hover:[&>svg]:opacity-100 forced-colors:[&>svg]:opacity-100'
             )
       )}
       // Enter and Space fire click with detail 0.
@@ -363,7 +350,7 @@ export function ActivityBarButton({
     <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
       <TooltipContent side={isTop ? 'bottom' : 'left'} sideOffset={6}>
-        {item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
+        {activityItemTooltip(item)}
       </TooltipContent>
     </Tooltip>
   )

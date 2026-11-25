@@ -1,4 +1,5 @@
 // `orca bot item`: one short line per write, one row per item, and an item with its activity.
+import { formatLocalTime } from '../output/local-time'
 import {
   botItemCommentImages,
   BOT_ITEM_STATUSES,
@@ -71,19 +72,34 @@ export function formatBotItemWrite(view: BotItemWriteView): string {
   return lines.join('\n')
 }
 
+/** A list row stays one line: past this many PRs, the newest and a count. */
+const ROW_PRS = 5
+
 function linkSummary(links: readonly BotItemLinkView[]): string[] {
   const workers = links.filter((link) => link.kind === 'dispatch')
-  const parts =
-    workers.length > 0 ? [`${workers.length} worker${workers.length === 1 ? '' : 's'}`] : []
+  const prs: string[] = []
+  let serverPr = false
   for (const link of links) {
     const pr = link.kind === 'pr' || link.kind === 'dispatch' ? link.pr : null
     if (pr?.shown) {
-      parts.push(`#${pr.number}`)
-    } else if (pr && !pr.shown) {
-      parts.push('PR not shown for server work yet')
+      prs.push(`#${pr.number}`)
+    } else if (pr) {
+      serverPr = true
     }
   }
-  return [...new Set(parts)]
+  const unique = [...new Set(prs)]
+  // Past the cap, the newest distinct PRs: a later link to an earlier PR counts as new.
+  const shown =
+    unique.length <= ROW_PRS
+      ? unique
+      : [...new Set(prs.toReversed())].slice(0, ROW_PRS).toReversed()
+  const hidden = unique.length - shown.length
+  return [
+    ...(workers.length > 0 ? [`${workers.length} worker${workers.length === 1 ? '' : 's'}`] : []),
+    ...shown,
+    ...(hidden > 0 ? [`${hidden} more PR${hidden === 1 ? '' : 's'}`] : []),
+    ...(serverPr ? ['PR not shown for server work yet'] : [])
+  ]
 }
 
 function age(at: number, now: number): string {
@@ -95,16 +111,6 @@ function age(at: number, now: number): string {
   return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`
 }
 
-/** `2026-11-19 09:00 (-05:00)`: this computer's time, with its offset so it reads anywhere. */
-export function formatSnoozeTime(at: number): string {
-  const date = new Date(at)
-  const two = (value: number) => String(value).padStart(2, '0')
-  const offset = -date.getTimezoneOffset()
-  const sign = offset < 0 ? '-' : '+'
-  const zone = `${sign}${two(Math.floor(Math.abs(offset) / 60))}:${two(Math.abs(offset) % 60)}`
-  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}:${two(date.getMinutes())} (${zone})`
-}
-
 /** What the bot reads on a snoozed item, in list and show: it carries the guidance, not the Rules. */
 function snoozedWords(until: string): string {
   return `by your owner until ${until}: don't ask about it before then; comments and worker results stay hidden from them until then, and setting it to Needs you or closing it brings it back now`
@@ -113,7 +119,7 @@ function snoozedWords(until: string): string {
 /** When the owner's snooze ends, while it lasts. */
 function snoozedUntil(item: BotItem, now: number): string | null {
   return isBotItemSnoozed(item, now) && item.snoozedUntil !== null
-    ? formatSnoozeTime(item.snoozedUntil)
+    ? formatLocalTime(item.snoozedUntil)
     : null
 }
 
@@ -155,6 +161,17 @@ function linkLine(link: BotItemLinkView): string {
   }
 }
 
+/** Links `show` prints: the newest page, so a busy item's 1,000 never flood each read. */
+const SHOWN_LINKS = 50
+
+function shownLinkLines(links: readonly BotItemLinkView[]): string[] {
+  const earlier = links.length - SHOWN_LINKS
+  return [
+    ...(earlier > 0 ? [`  ${earlier} earlier links; --json lists them all`] : []),
+    ...links.slice(-SHOWN_LINKS).map((link) => `  ${linkLine(link)}`)
+  ]
+}
+
 function eventLine(event: BotItemEvent): string {
   const who = event.actor.kind === 'bot' ? '' : event.actor.kind === 'owner' ? 'Owner: ' : 'Orca: '
   const data = event.data
@@ -174,7 +191,7 @@ function eventLine(event: BotItemEvent): string {
         return `linked ${Array.isArray(data.links) ? data.links.join(', ') : ''}`
       case 'snoozed':
         return typeof data.until === 'number'
-          ? `snoozed until ${formatSnoozeTime(data.until)}`
+          ? `snoozed until ${formatLocalTime(data.until)}`
           : 'snoozed'
       case 'unsnoozed':
         return data.early ? 'back from snooze early' : 'unsnoozed'
@@ -194,7 +211,7 @@ export function formatBotItemShow(view: BotItemShowView, now = Date.now()): stri
     ...(item.question ? [`Asks your owner: ${item.question.text}`] : []),
     ...(item.wait ? [`Waits on: ${item.wait.text}`] : []),
     ...(item.closeNote ? [`Closed: ${item.closeNote}`] : []),
-    ...item.links.map((link) => `  ${linkLine(link)}`),
+    ...shownLinkLines(item.links),
     '',
     ...view.events.map(eventLine),
     ...(view.nextCursor ? [`More: --after ${view.nextCursor}`] : [])

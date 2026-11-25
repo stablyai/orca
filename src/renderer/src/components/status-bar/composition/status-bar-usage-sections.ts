@@ -16,8 +16,6 @@ export type StatusBarUsageSection = {
   labelFirst?: boolean
 }
 
-const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
-
 export function getStatusBarUsageSections(
   p: ProviderRateLimits | null,
   mode: StatusBarUsageMode,
@@ -37,12 +35,9 @@ export function getStatusBarUsageSections(
     return [{ key: 'headline', ...headline, labelFirst: isNamedBucket }]
   }
   if (p.buckets?.length) {
-    // Antigravity pool names vary by account tier; Gemini's experimental pools stay hidden.
+    // Antigravity pool names vary by account tier.
     const buckets = p.buckets.filter(
-      (bucket) =>
-        p.provider === 'antigravity' ||
-        STATUS_BAR_BUCKET_NAMES.has(bucket.name) ||
-        isCursorUsageBucket(bucket.name)
+      (bucket) => p.provider === 'antigravity' || isCursorUsageBucket(bucket.name)
     )
     if (buckets.length > 0) {
       return buckets.map((bucket) => ({

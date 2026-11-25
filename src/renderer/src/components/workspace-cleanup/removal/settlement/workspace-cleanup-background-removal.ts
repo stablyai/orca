@@ -50,6 +50,7 @@ export type WorkspaceCleanupBackgroundRemovalArgs = {
   // IPC cannot be canceled; timeout is provisional until authoritative settlement replaces its UI.
   onLateResult?: (result: WorkspaceCleanupRemoveResult) => void
   onError?: (error: unknown) => void
+  canReportFailure?: (identity: string) => boolean
   // Report preflight/nested-workspace failures immediately so queued overlays clear before batch completion.
   onRowFailed?: (failure: WorkspaceCleanupFailure) => void
   /** Rows delete one at a time; these let a step show which row is current and which finished. */
@@ -72,6 +73,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
   onResult,
   onLateResult,
   onError,
+  canReportFailure,
   onRowFailed,
   onRowStarted,
   onRowRemoved,
@@ -286,9 +288,8 @@ export function startWorkspaceCleanupBackgroundRemoval({
         removalTimeoutMs,
         removalSettlementGraceMs,
         onRowStarted: (candidate) => notifyWorkspaceCleanupRowObserver(onRowStarted, candidate),
-        reportResult: (lateResult, latePendingFailures) => {
-          reportLateWorkspaceCleanupResult(lateResult, onLateResult, latePendingFailures)
-        }
+        reportResult: (result, pending) =>
+          reportLateWorkspaceCleanupResult(result, onLateResult, pending, canReportFailure)
       })
     )
     const result: WorkspaceCleanupRemoveResult = {
@@ -303,7 +304,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
       console.error('Workspace cleanup result callback failed', callbackError)
     }
 
-    showWorkspaceCleanupRemovalResultToasts(result, pendingSettlementFailures)
+    showWorkspaceCleanupRemovalResultToasts(result, pendingSettlementFailures, canReportFailure)
   })().catch((error: unknown) => {
     detachAllLateResultReconcilers()
     onError?.(error)

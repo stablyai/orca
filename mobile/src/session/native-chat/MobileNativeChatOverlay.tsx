@@ -160,7 +160,9 @@ function MobileNativeChatOverlayContent({
       agentMailEditable: queued.agentMailEditable
     },
     taskList,
-    backgroundTasks: controller.nativeChatBackgroundTasks
+    backgroundTasks: controller.nativeChatBackgroundTasks,
+    workerDock: controller.nativeChatWorkerDock,
+    workerApprovals: controller.nativeChatWorkerApprovals.open
   })
   const visuals = useMobileNativeChatVisualRenderer(controller.nativeChatVisualSource)
   const replyReveals = useMobileNativeChatReplyReveals(folded, streaming !== null, sendSurfaceId)

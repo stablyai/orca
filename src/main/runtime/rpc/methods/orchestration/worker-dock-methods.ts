@@ -21,12 +21,18 @@ import {
 } from '../../../orchestration/dock/worker-dock-activity'
 import { subscribeWorkerDock } from '../../../orchestration/dock/worker-dock-stream'
 import { stopWorkerAndHelpers } from './worker/worker-stop'
+import {
+  holdWorkerDockStopping,
+  isConfirmedWorkerStop
+} from '../../../orchestration/dock/worker-dock-owner-stop'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
+import { isPersonCaller } from './access/worker-approval-access'
 import type { RpcContext } from '../../core'
 
+/** Clear and Stop are the person's: this computer's Orca window, or a paired window or phone that
+ *  says it is one. The orca CLI, agents and a paired Orca's forwarded calls are refused. */
 function requireOwner({ ctx }: { ctx: RpcContext }): void {
-  const caller = ctx.caller
-  if (caller?.kind !== 'desktop') {
+  if (!isPersonCaller(ctx)) {
     throw new OrchestrationError(
       'owner_required',
       'Use Orca to clear or stop workers in this dock.'
@@ -118,24 +124,14 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
       if (typeof request.receipt === 'string') {
         return JSON.parse(request.receipt)
       }
-      const receipt = await stopWorkerAndHelpers(runtime, dispatch, orchestrationMutation)
-      const confirmed =
-        receipt.state === 'stopped' &&
-        !receipt.alreadySettled &&
-        receipt.processAction !== 'none' &&
-        !receipt.lastError &&
-        !receipt.warning &&
-        !receipt.helperStopError &&
-        (receipt.helpers ?? []).every(
-          (helper) => helper.outcome === 'stopped' || helper.outcome === 'already_finished'
-        )
-      db.db
-        .prepare(`UPDATE worker_dock_owner_stops SET receipt = ?, confirmed = ?, settlement =
-        (SELECT settlement FROM worker_dock_facts WHERE dispatch_id = ?) WHERE request_id = ?`)
-        .run(JSON.stringify(receipt), Number(confirmed), dispatch, requestId)
-      db.workerDockSources.invalidate(source)
-      db.crewChanges.notify(new Set(['topology']))
-      return receipt
+      return holdWorkerDockStopping(db, dispatch, async () => {
+        const receipt = await stopWorkerAndHelpers(runtime, dispatch, orchestrationMutation)
+        db.db
+          .prepare(`UPDATE worker_dock_owner_stops SET receipt = ?, confirmed = ?, settlement =
+          (SELECT settlement FROM worker_dock_facts WHERE dispatch_id = ?) WHERE request_id = ?`)
+          .run(JSON.stringify(receipt), Number(isConfirmedWorkerStop(receipt)), dispatch, requestId)
+        return receipt
+      })
     }
   }),
   defineOrchestrationStreamingMethod({
@@ -143,7 +139,11 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
     permission: 'workspace',
     access: { kind: 'localOnly', targets: { party: 'party' } },
     params: WorkerDockSubscribe,
-    handler: ({ party, includeRows, currentOnly }, { runtime, signal, connectionId }, emit) =>
+    handler: (
+      { party, includeRows, currentOnly },
+      { runtime, signal, connectionId, requestId },
+      emit
+    ) =>
       new Promise<void>((resolve) => {
         if (signal?.aborted) {
           resolve()
@@ -165,9 +165,13 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
           () => {
             stop()
             signal?.removeEventListener('abort', close)
+            // A relay holds a stream's id until its end frame, as crew streams send.
+            emit({ type: 'end' })
             resolve()
           },
-          connectionId
+          connectionId,
+          // A phone ends this one stream by its request id (`orchestration.workerApprovalsUnsubscribe`).
+          requestId
         )
         signal?.addEventListener('abort', close, { once: true })
         if (signal?.aborted) {

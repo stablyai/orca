@@ -1,14 +1,17 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { WorkspaceCleanupRemoveResult } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { makeFacetCandidate as makeCandidate } from '../query/workspace-cleanup-facet.test.fixture'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { useWorkspaceCleanupRemoval } from './use-workspace-cleanup-removal'
+import { isWorkspaceCleanupRemovalBusy } from './workspace-cleanup-removal-candidates'
 import { useWorkspaceCleanupRunStore } from './run/workspace-cleanup-run-store'
 import { WORKSPACE_CLEANUP_PROVISIONAL_CEILING_MS } from './run/workspace-cleanup-run-reporter'
+import { startWorkspaceCleanupRowAttempt } from './workspace-cleanup-row-failures'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 
@@ -17,6 +20,7 @@ const UNRESOLVED_AFTER_MS = 125_000
 
 beforeEach(() => {
   vi.useFakeTimers()
+  vi.clearAllMocks()
   // No snapshot-prune IPC in tests; the batch runs without it.
   vi.stubGlobal('api', { workspaceCleanup: {} })
   useAppStore.setState(useAppStore.getInitialState(), true)
@@ -29,61 +33,129 @@ afterEach(() => {
 })
 
 describe('useWorkspaceCleanupRemoval Browse failures', () => {
-  it('retries a failed row while the batch still owns another deletion', async () => {
-    const failed = makeCandidate({
-      executionHostId: 'local',
-      worktreeId: 'repo-1::/repo/preflight-failure',
-      path: '/repo/preflight-failure'
-    })
-    const sibling = makeCandidate({
-      executionHostId: 'local',
-      worktreeId: 'repo-1::/repo/waiting',
-      path: '/repo/waiting'
-    })
-    const failedIdentity = getWorkspaceCleanupCandidateIdentity(failed)
-    useAppStore.setState({
-      removeWorkspaceCleanupCandidates: ([worktreeId], options) => {
-        if (worktreeId === sibling.worktreeId) {
-          return new Promise(() => {})
+  it.each([true, false])(
+    'keeps overlapping attempts independent (retry settles first: %s)',
+    async (retryFirst) => {
+      const firstPath = retryFirst ? '/repo/retry-finishes-first' : '/repo/batch-finishes-first'
+      const failed = makeCandidate({
+        executionHostId: 'local',
+        worktreeId: `repo-1::${firstPath}`,
+        path: firstPath
+      })
+      const sibling = makeCandidate({
+        executionHostId: 'local',
+        worktreeId: 'repo-1::/repo/waiting',
+        path: '/repo/waiting'
+      })
+      const failedIdentity = getWorkspaceCleanupCandidateIdentity(failed)
+      const siblingIdentity = getWorkspaceCleanupCandidateIdentity(sibling)
+      const siblingRemoval = Promise.withResolvers<WorkspaceCleanupRemoveResult>()
+      const retryRemoval = Promise.withResolvers<WorkspaceCleanupRemoveResult>()
+      const finishBatch = Promise.withResolvers<void>()
+      let finishedRemovals = 0
+      vi.stubGlobal('api', {
+        workspaceCleanup: {
+          beginRemovalSnapshotPruneBatch: async () => {},
+          recordRemovalSnapshotPrune: async () => {},
+          finishRemovalSnapshotPruneBatch: () =>
+            ++finishedRemovals === 1 && !retryFirst ? finishBatch.promise : Promise.resolve()
         }
-        if (options?.unverifiedRemovalConsent) {
+      })
+      useAppStore.setState({
+        removeWorkspaceCleanupCandidates: ([worktreeId], options) => {
+          if (worktreeId === sibling.worktreeId) {
+            return siblingRemoval.promise
+          }
+          if (options?.unverifiedRemovalConsent) {
+            return retryRemoval.promise
+          }
           return Promise.resolve({
-            removedIds: [worktreeId],
-            removedIdentities: [failedIdentity],
-            failures: []
+            removedIds: [],
+            removedIdentities: [],
+            failures: [
+              {
+                worktreeId,
+                executionHostId: 'local',
+                displayName: failed.displayName,
+                message: 'Git status could not be verified',
+                canDeleteAnyway: true
+              }
+            ]
           })
         }
-        return Promise.resolve({
-          removedIds: [],
-          removedIdentities: [],
-          failures: [
-            {
-              worktreeId,
-              executionHostId: 'local',
-              displayName: failed.displayName,
-              message: 'Git status could not be verified',
-              canDeleteAnyway: true
-            }
-          ]
+      })
+      const { result } = renderHook(() =>
+        useWorkspaceCleanupRemoval({ onDeselect: () => {}, closeModal: () => {} })
+      )
+      const status = (identity: string) =>
+        useWorkspaceCleanupRunStore.getState().run?.rows.find((row) => row.identity === identity)
+          ?.status
+
+      act(() => result.current.confirmRemove([failed, sibling]))
+      await act(() => vi.advanceTimersByTimeAsync(0))
+      expect(status(failedIdentity)).toBe('failed')
+      expect(status(siblingIdentity)).toBe('deleting')
+
+      act(() => result.current.confirmUnverifiedRemoval(failed))
+      await act(() => vi.advanceTimersByTimeAsync(0))
+      if (retryFirst) {
+        retryRemoval.resolve({
+          removedIds: [failed.worktreeId],
+          removedIdentities: [failedIdentity],
+          failures: []
         })
+        await act(() => vi.advanceTimersByTimeAsync(0))
+        expect(status(failedIdentity)).toBe('deleted')
+        expect(status(siblingIdentity)).toBe('deleting')
       }
-    })
-    const { result } = renderHook(() =>
-      useWorkspaceCleanupRemoval({ onDeselect: () => {}, closeModal: () => {} })
+      siblingRemoval.resolve({
+        removedIds: [sibling.worktreeId],
+        removedIdentities: [siblingIdentity],
+        failures: [],
+        preservedBranches: [{ worktreeId: sibling.worktreeId, branchName: 'waiting' }]
+      })
+      await act(() => vi.advanceTimersByTimeAsync(0))
+      if (!retryFirst) {
+        expect(result.current.removalProgress?.processedCount).toBe(2)
+        expect(result.current.deletionPhaseByIdentity[failedIdentity]).toBe('deleting')
+        finishBatch.resolve()
+        await act(() => vi.advanceTimersByTimeAsync(0))
+        expect(result.current.deletionPhaseByIdentity).toEqual({ [failedIdentity]: 'deleting' })
+        expect(status(failedIdentity)).toBe('deleting')
+        expect(
+          isWorkspaceCleanupRemovalBusy(failed, useAppStore.getState().deleteStateByWorktreeId)
+        ).toBe(true)
+        retryRemoval.resolve({
+          removedIds: [failed.worktreeId],
+          removedIdentities: [failedIdentity],
+          failures: []
+        })
+        await act(() => vi.advanceTimersByTimeAsync(0))
+      }
+      expect(result.current.removalInFlight).toBe(false)
+      expect(result.current.deletionPhaseByIdentity).toEqual({})
+      expect(status(failedIdentity)).toBe('deleted')
+      expect(status(siblingIdentity)).toBe('deleted')
+      expect(toast.error).not.toHaveBeenCalled()
+      expect(toast.info).not.toHaveBeenCalled()
+      expect(toast.warning).toHaveBeenCalledWith(
+        '1 workspace removed, 1 branch kept',
+        expect.anything()
+      )
+    }
+  )
+
+  it('lets a retry clear its phase after an earlier attempt confirms the deletion', () => {
+    const attempts = new Map()
+    const identity = 'local:workspace'
+    const older = startWorkspaceCleanupRowAttempt(attempts, [identity])
+    const newer = startWorkspaceCleanupRowAttempt(attempts, [identity])
+
+    expect(older.settle({ removedIdentities: [identity], failures: [] }).removedIdentities).toEqual(
+      [identity]
     )
-    const status = (identity: string) =>
-      useWorkspaceCleanupRunStore.getState().run?.rows.find((row) => row.identity === identity)
-        ?.status
-
-    act(() => result.current.confirmRemove([failed, sibling]))
-    await act(() => vi.advanceTimersByTimeAsync(0))
-    expect(status(failedIdentity)).toBe('failed')
-    expect(status(getWorkspaceCleanupCandidateIdentity(sibling))).toBe('deleting')
-
-    act(() => result.current.confirmUnverifiedRemoval(failed))
-    await act(() => vi.advanceTimersByTimeAsync(0))
-    expect(status(failedIdentity)).toBe('deleted')
-    expect(status(getWorkspaceCleanupCandidateIdentity(sibling))).toBe('deleting')
+    expect(newer.owns(identity)).toBe(true)
+    expect(newer.canReportFailure(identity)).toBe(false)
   })
 
   it('guards a permanent retry against the busy marker for its own host', () => {
@@ -159,6 +231,10 @@ describe('useWorkspaceCleanupRemoval Browse failures', () => {
       act(() => submit(newer))
       await act(() => vi.advanceTimersByTimeAsync(0))
       expect(result.current.rowFailures[identity]).toEqual(newerFailure)
+      expect(toast.error).toHaveBeenCalledWith('Workspaces not removed: 1', {
+        description: newerFailure.message
+      })
+      vi.mocked(toast.error).mockClear()
       act(() => useWorkspaceCleanupRunStore.getState().dismissRun())
 
       pending.resolve({
@@ -174,6 +250,7 @@ describe('useWorkspaceCleanupRemoval Browse failures', () => {
       })
       await act(() => vi.advanceTimersByTimeAsync(0))
       expect(result.current.rowFailures[identity]).toEqual(newerFailure)
+      expect(toast.error).not.toHaveBeenCalled()
     }
   )
 

@@ -1,7 +1,7 @@
 // `orca bot reply --react`: the calling bot's emoji on the message that woke its run, as the bot.
 import { ConnectorReact } from '../../../../shared/rpc-contract/connectors/connector-params'
 import { defineMethod } from '../core'
-import { CONNECTOR_ACT_METHOD, ConnectorActError } from './connector-act'
+import { ConnectorActError, actAsBot } from './connector-act'
 import { readBotTurn } from './orchestration/messaging/bot-recipient'
 import type { BotRequestConversation, BotWakingPlace } from '../../../bots/bot-request-asker'
 
@@ -45,9 +45,10 @@ export const CONNECTOR_REACT_METHOD = defineMethod({
       throw new ConnectorActError('no_waking_message', NO_MESSAGE)
     }
     // The same path as any verb, so the bot, look-around and cloud checks hold.
-    const answer = await CONNECTOR_ACT_METHOD.handler(
+    const answer = await actAsBot(
       { sessionId, verb: 'react', ref, args: { emoji } },
-      context
+      context,
+      turn ?? undefined
     )
     if (!answer.ok) {
       throw new ConnectorActError('connector_refused', answer.message)

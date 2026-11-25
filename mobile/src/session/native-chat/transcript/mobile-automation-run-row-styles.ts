@@ -1,4 +1,4 @@
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
 export const styles = themedStyleSheet(() => ({
@@ -8,15 +8,7 @@ export const styles = themedStyleSheet(() => ({
   meta: { color: colors.textMuted, flexShrink: 1 },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.statusRed },
   heading: { color: colors.textMuted, marginTop: spacing.xs },
-  error: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
+  error: { color: colors.textPrimary },
   quote: {
     borderLeftWidth: 2,
     borderLeftColor: colors.borderSubtle,
@@ -29,5 +21,5 @@ export const styles = themedStyleSheet(() => ({
   link: { color: colors.textSecondary, textDecorationLine: 'underline' },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 32 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  sendAgainError: { color: colors.statusRed, marginTop: spacing.xs }
+  sendAgainError: { color: colors.statusRed }
 }))
