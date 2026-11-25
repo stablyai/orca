@@ -22,6 +22,7 @@ import { buildWorkspaceSessionPayload } from '../../workspace/persistence/worksp
 import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { applyLocalStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
+import { openStructuredAgentSessionProvisionalTab } from '../launch/structured-agent-session-launch-surface'
 
 const SHARED: SharedBotHostView = {
   environmentId: 'shared-env',
@@ -338,5 +339,94 @@ describe('a shared agent’s page keeps this account’s Home, as a local agent�
     await act(async () => {})
     expect(tabs()).toEqual([])
     expect(useAppStore.getState().activeWorktreeId).toBeNull()
+  })
+})
+
+describe('opening any agent shows this account’s Home chat, never a seeded terminal', () => {
+  afterEach(cleanup)
+  // A local agent; its host publishes the Home tab when asked, as main does.
+  const rex: Bot = {
+    ...ivy,
+    id: 'bot-2',
+    name: 'Rex',
+    folderWorkspaceId: 'rex-home',
+    chatSessionId: 'rex-chat'
+  }
+  const REX_KEY = folderWorkspaceKey('rex-home')
+  const localAsked: string[] = []
+  const showRexHome = () =>
+    openStructuredAgentSessionProvisionalTab({
+      worktreeId: REX_KEY,
+      executionHostId: 'local',
+      sessionId: 'rex-chat',
+      agent: 'claude'
+    })
+  const kinds = (key: string) =>
+    (useAppStore.getState().unifiedTabsByWorktree[key] ?? []).map(
+      (tab) => `${tab.contentType}:${tab.contentType === 'agent-session' ? tab.entityId : ''}`
+    )
+
+  beforeEach(() => {
+    localAsked.length = 0
+    vi.stubGlobal('api', {
+      ...window.api,
+      runtime: {
+        ...window.api.runtime,
+        call: async ({ method }: { method: string }) => {
+          localAsked.push(method)
+          if (method === 'bots.chat.open') {
+            showRexHome()
+          }
+          return {
+            id: method,
+            ok: true,
+            result:
+              method === 'bots.list'
+                ? { bots: [rex], threadReplies: false }
+                : { sessionId: 'rex-chat' },
+            _meta: { runtimeId: 'local' }
+          }
+        }
+      }
+    })
+    setBotHostListing({
+      hosts: [
+        { hostId: 'local', state: 'live' },
+        { hostId: HOST, state: 'live' }
+      ],
+      updateNeeded: []
+    })
+    publishBots([rex], { threadReplies: false, webhooks: undefined })
+    useAppStore.setState({
+      folderWorkspaces: [
+        home,
+        { ...home, id: 'rex-home', name: 'Rex', folderPath: '/user-data/bots/rex' }
+      ],
+      workspaceSessionReady: true
+    })
+  })
+
+  const open = async (bot: Bot, key: string) => {
+    expect(openBotHome(bot)).toBe(true)
+    render(<BotHomeChat workspaceId={key} />)
+    await act(async () => {})
+  }
+
+  it('a shared agent whose home here has no tabs', async () => {
+    await open(readHostBots(HOST)[0], HOME_KEY)
+    await vi.waitFor(() => expect(kinds(HOME_KEY)).toEqual(['agent-session:their-home-1']))
+  })
+
+  it('a local agent whose Home tab was closed', async () => {
+    await open(rex, REX_KEY)
+    await vi.waitFor(() => expect(kinds(REX_KEY)).toEqual(['agent-session:rex-chat']))
+    expect(localAsked).toContain('bots.chat.open')
+  })
+
+  it('a local agent with its Home tab, as before', async () => {
+    showRexHome()
+    await open(rex, REX_KEY)
+    expect(kinds(REX_KEY)).toEqual(['agent-session:rex-chat'])
+    expect(localAsked).not.toContain('bots.chat.open')
   })
 })

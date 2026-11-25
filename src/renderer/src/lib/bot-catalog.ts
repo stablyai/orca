@@ -63,7 +63,6 @@ import { isHome, type BotHomeOwner } from '../../../shared/bots/bot-homes'
 import { requestNativeChatComposerFocus } from '../components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/drafts/native-chat-draft-scope'
 import { botHomeHostId } from '../../../shared/bots/bot-home-host'
-import { sharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { closeSharedBotChat, openSharedBotChat } from './agent-session/open/shared-bot-chat-open'
 
 export { isHome, readBots, readHostBots, refreshBotHost, refreshBots, subscribeToBotChanges }
@@ -329,8 +328,8 @@ export function openBotHome(bot: Bot): boolean {
     executionHostId: botHomeHostId(bot),
     // Bots are not rows of the workspace list, so there is nothing there to reveal.
     revealInSidebar: false,
-    // A shared agent's home here holds only the teammate's chat tabs, never a terminal in its folder.
-    ...(sharedBotHostOf(bot.hostId) ? { providesInitialSurface: true } : {})
+    // Its surface is this account's Home chat, which BotHomeChat opens on the page: never a seeded terminal.
+    providesInitialSurface: true
   })
   return opened !== false
 }
