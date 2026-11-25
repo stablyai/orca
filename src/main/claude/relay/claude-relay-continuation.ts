@@ -107,8 +107,9 @@ export const CLAUDE_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
   // One row per relay and stream, not per cut: every app that continues a reply writes the same
   // row, which its final retires (a later reply's write revives it), so cuts leave no fragments.
   rekey: (line, tag) => {
+    // Finals too: one whose block streamed nothing after the cut is placed by its block stop.
     const frame = streamLine(line)
-    if (frame?.type !== 'stream_event') {
+    if (!frame) {
       return line
     }
     const stream = `${claudeText(frame.session_id) ?? ''}|${claudeText(frame.parent_tool_use_id) ?? ''}`

@@ -40,6 +40,14 @@ export type ClaudeStreamedBlockRegistry = {
     parentToolUseId: string | null
     messageId: string | null
   }) => StreamedBlock | null
+  /** A continuation's final with no streamed block (the cut fell after its last delta) is saved
+   *  under its own id; the stream's next `content_block_stop` names the saved row to move it to. */
+  holdUnplaced: (
+    frame: { sessionId: string; parentToolUseId: string | null; messageId: string },
+    place: (row: AgentJournalItemIdentity) => void
+  ) => void
+  /** Places a held final at this stream frame's block stop; dropped at its message's boundary. */
+  placeAt: (frame: Record<string, unknown>) => boolean
   /** Forget one stream's blocks; other streams keep theirs. */
   clearScope: (sessionId: string, parentToolUseId: string | null) => void
   clear: () => void
@@ -58,6 +66,10 @@ export function createClaudeStreamedBlockRegistry(
   blockType: 'text' | 'thinking' = 'text'
 ): ClaudeStreamedBlockRegistry {
   const messages = new Map<string, StreamedMessage>()
+  const unplaced = new Map<
+    string,
+    { messageId: string; place: (row: AgentJournalItemIdentity) => void }
+  >()
 
   const messageFor = (scope: string, frame: Record<string, unknown>): StreamedMessage => {
     let streamed = messages.get(scope)
@@ -178,9 +190,40 @@ export function createClaudeStreamedBlockRegistry(
       }
       return block
     },
+    holdUnplaced: (frame, place) => {
+      unplaced.set(scopeKey(frame.sessionId, frame.parentToolUseId), {
+        messageId: frame.messageId,
+        place
+      })
+    },
+    placeAt: (frame) => {
+      const sessionId = claudeText(frame.session_id)
+      const event = claudeRecord(frame.event)
+      if (unplaced.size === 0 || frame.type !== 'stream_event' || !event || !sessionId) {
+        return false
+      }
+      const scope = scopeKey(sessionId, claudeText(frame.parent_tool_use_id))
+      const held = unplaced.get(scope)
+      if (held && event.type !== 'content_block_delta') {
+        unplaced.delete(scope)
+      }
+      if (!held || event.type !== 'content_block_stop' || typeof event.index !== 'number') {
+        return false
+      }
+      held.place({
+        provider: 'claude',
+        sessionId,
+        uuid: claudeSourceBlockId(held.messageId, event.index)
+      })
+      return true
+    },
     clearScope: (sessionId, parentToolUseId) => {
       messages.delete(scopeKey(sessionId, parentToolUseId))
+      unplaced.delete(scopeKey(sessionId, parentToolUseId))
     },
-    clear: () => messages.clear()
+    clear: () => {
+      messages.clear()
+      unplaced.clear()
+    }
   }
 }

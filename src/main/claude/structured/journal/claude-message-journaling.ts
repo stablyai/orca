@@ -25,7 +25,10 @@ import {
   appendUnmodeledContent,
   type ClaudeProviderFrameFallback
 } from '../launch/claude-structured-provider-fallback'
-import type { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
+import {
+  CLAUDE_RELAY_CONTINUATION_KEY,
+  type createClaudeStreamedBlockRegistry
+} from './claude-streamed-block-identity'
 import type { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import type { ClaudeStreamedThinking } from './claude-streamed-thinking'
 import type { ClaudeProvisionalRowCorrections } from '../../subagents/claude-provisional-row-corrections'
@@ -64,6 +67,7 @@ export function journalClaudeStream(
   message: Record<string, unknown>,
   observedAt: number
 ): boolean {
+  const placed = ctx.streamedBlocks.placeAt(message)
   const delta = ctx.streamedBlocks.observe(message, observedAt)
   const thinking = ctx.streamedThinking.observe(message, observedAt)
   // Prefer message_start; use the first content delta for older streams that omit it.
@@ -73,7 +77,7 @@ export function journalClaudeStream(
   if (delta) {
     ctx.streamedText.append(delta.identity, delta.text, delta.parentToolUseId)
   }
-  return delta !== null || thinking
+  return placed || delta !== null || thinking
 }
 
 export function journalClaudeMessage(
@@ -153,6 +157,12 @@ export function journalClaudeMessage(
       writeClaudeTerminalFailure(ctx.sink, terminalIdentity, body)
     } else {
       ctx.sink.appendItem(identity, body, { ...stamp(identity, body), lifecycle: true })
+      if (!streamed && envelope.messageId && message[CLAUDE_RELAY_CONTINUATION_KEY]) {
+        ctx.streamedBlocks.holdUnplaced({ ...envelope, messageId: envelope.messageId }, (row) => {
+          ctx.sink.appendItem(row, body, { ...stamp(row, body), lifecycle: true })
+          ctx.sink.appendTombstone(identity, { lifecycle: true })
+        })
+      }
     }
     changed = true
   }

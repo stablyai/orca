@@ -91,3 +91,22 @@ describe("a background subagent's reply streaming past its turn's result", () =>
     expect(continuation!.done).toBe(true)
   })
 })
+
+describe("a continuation's final whose block streamed nothing after the cut", () => {
+  it('moves onto the saved row its block stop names', () => {
+    const blocks = createClaudeStreamedBlockRegistry()
+    const placed: unknown[] = []
+    const frame = { sessionId: 's', parentToolUseId: null, messageId: 'msg_1' }
+    expect(blocks.reconcile(frame)).toBeNull()
+    blocks.holdUnplaced(frame, (row) => placed.push(row))
+    const stop = (index: number) => ({
+      type: 'stream_event',
+      event: { type: 'content_block_stop', index },
+      ...scope,
+      uuid: `stop${index}`
+    })
+    expect(blocks.placeAt(stop(1))).toBe(true)
+    expect(blocks.placeAt(stop(2))).toBe(false)
+    expect(placed).toEqual([{ provider: 'claude', sessionId: 's', uuid: 'block:msg_1:1' }])
+  })
+})
