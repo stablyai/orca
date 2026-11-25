@@ -38,7 +38,6 @@ import {
   isBotShareStreamMethod
 } from '../../../runtime/rpc/methods/rpc-method-share'
 import { SharedBotPhoneGrants } from '../../../bots/shared-with-me/shared-bot-phone-grants'
-import { SharedBotHostStore } from '../../../bots/shared-with-me/shared-bot-host-store'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { registerRuntimeEnvironmentPassiveHandlers } from '../connectivity/runtime-environment-connectivity-handlers'
 import { subscribeRuntimeEnvironmentForDocument } from '../subscriptions/runtime-environment-document-subscription'

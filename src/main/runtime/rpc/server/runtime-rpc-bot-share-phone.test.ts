@@ -301,6 +301,7 @@ describe('a phone asking its own computer for a key', () => {
         ready: async () => {},
         reaches: () => false,
         views: () => [],
+        store,
         call: async () => {
           throw new Error('unused')
         },
