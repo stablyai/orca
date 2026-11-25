@@ -1,8 +1,14 @@
-import { closeSync, createReadStream, openSync, readdirSync, readSync, statSync } from 'node:fs'
+import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http'
-import { basename, extname, isAbsolute, join, posix, relative, resolve } from 'node:path'
+import { basename, extname, isAbsolute, posix, relative, resolve } from 'node:path'
 import { readBundledWebClientFiles } from '../../../../../shared/web-client/bundled-web-client-manifest'
+import {
+  resolveStaticWebIcon,
+  WEB_ICON_CONTENT_TYPES,
+  WEB_ICON_ROUTE,
+  type StaticWebIcon
+} from './static-web-client-icon'
 
 const STATIC_WEB_ALLOWED_PATHS = new Set([
   '/web-index.html',
@@ -11,37 +17,15 @@ const STATIC_WEB_ALLOWED_PATHS = new Set([
 ])
 const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/', '/cmaps/', '/standard_fonts/', '/wasm/']
 const STATIC_WEB_CONTENT_TYPES = new Map([
+  ...WEB_ICON_CONTENT_TYPES,
   ['.css', 'text/css; charset=utf-8'],
   ['.html', 'text/html; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'],
   ['.json', 'application/json; charset=utf-8'],
-  ['.png', 'image/png'],
-  ['.svg', 'image/svg+xml; charset=utf-8'],
   ['.wasm', 'application/wasm'],
-  ['.webp', 'image/webp'],
-  ['.ico', 'image/x-icon'],
   ['.woff2', 'font/woff2']
 ])
-const WEB_ICON_ROUTE = '/orca-web-icon'
 const WEB_MANIFEST_ROUTE = '/manifest.webmanifest'
-const WEB_ICON_ENV_VAR = 'ORCA_WEB_ICON'
-const WEB_ICON_EXTENSIONS = new Set(['.png', '.svg', '.ico', '.webp'])
-
-type StaticWebIconEntry = {
-  src: string
-  // Declared slots the image can serve: its real dimensions plus the
-  // installability sizes no larger than them (browsers scale down).
-  sizes: string
-  type: string
-}
-
-type StaticWebIcon = {
-  absolutePath: string
-  contentType: string
-  manifestIcons: StaticWebIconEntry[]
-}
-
-const INSTALLABILITY_ICON_EDGES = [192, 512]
 
 /** A server without a web client still answers plain HTTP, so callers fail fast instead of hanging. */
 export const answerWithoutWebClient: RequestListener = (_request, response) => {
@@ -61,7 +45,13 @@ export function createStaticWebClientHandler(staticRoot: string): RequestListene
   if (basename(resolvedRoot) === 'renderer' && !files) {
     return answerWithoutWebClient
   }
-  const icon = resolveStaticWebIcon(resolvedRoot, files, process.env[WEB_ICON_ENV_VAR])
+  // A failed lookup must not crash orcad through an unhandled rejection.
+  const icon = resolveStaticWebIcon(resolvedRoot, files, process.env.ORCA_WEB_ICON).catch(
+    (error: unknown) => {
+      console.warn(`[ws-transport] web client icon lookup failed: ${String(error)}`)
+      return undefined
+    }
+  )
   return (request, response) => {
     void handleStaticRequest(resolvedRoot, files, icon, request, response)
   }
@@ -70,7 +60,7 @@ export function createStaticWebClientHandler(staticRoot: string): RequestListene
 async function handleStaticRequest(
   staticRoot: string,
   files: ReadonlySet<string> | undefined,
-  icon: StaticWebIcon | undefined,
+  iconPromise: Promise<StaticWebIcon | undefined>,
   request: IncomingMessage,
   response: ServerResponse
 ): Promise<void> {
@@ -86,6 +76,10 @@ async function handleStaticRequest(
   const pathname = parseStaticPathname(request.url)
   if (!pathname) {
     writeHttpStatus(response, 400)
+    return
+  }
+  const icon = await iconPromise
+  if (response.destroyed) {
     return
   }
   if (pathname === WEB_ICON_ROUTE || pathname === WEB_MANIFEST_ROUTE) {
@@ -170,11 +164,7 @@ async function sendWebIndex(
   response.end(request.method === 'HEAD' ? undefined : body)
 }
 
-function writeJsonBody(
-  response: ServerResponse,
-  request: IncomingMessage,
-  value: unknown
-): void {
+function writeJsonBody(response: ServerResponse, request: IncomingMessage, value: unknown): void {
   const body = JSON.stringify(value)
   response.statusCode = 200
   response.setHeader('Content-Type', 'application/manifest+json; charset=utf-8')
@@ -306,110 +296,4 @@ function writeHttpStatus(response: ServerResponse, statusCode: number): void {
   }
   response.statusCode = statusCode
   response.end()
-}
-
-/** ORCA_WEB_ICON wins for custom branding; otherwise the bundled assets/icon-*.png becomes the default. */
-function resolveStaticWebIcon(
-  staticRoot: string,
-  files: ReadonlySet<string> | undefined,
-  envPath: string | undefined
-): StaticWebIcon | undefined {
-  const override = envPath?.trim()
-  if (override) {
-    const overrideExt = extname(override).toLowerCase()
-    const contentType = STATIC_WEB_CONTENT_TYPES.get(overrideExt)
-    if (!isAbsolute(override) || !contentType || !WEB_ICON_EXTENSIONS.has(overrideExt)) {
-      console.warn(
-        `[ws-transport] ${WEB_ICON_ENV_VAR} ignored: ${override} is not an absolute path to ${[...WEB_ICON_EXTENSIONS].join('/')}`
-      )
-    } else {
-      try {
-        if (statSync(override).isFile()) {
-          // Custom branding replaces the manifest icon list entirely.
-          return {
-            absolutePath: override,
-            contentType,
-            manifestIcons: [
-              {
-                src: WEB_ICON_ROUTE.slice(1),
-                sizes: manifestIconSizes(override),
-                type: contentType
-              }
-            ]
-          }
-        }
-      } catch {
-        // fall through to the bundled icon
-      }
-      console.warn(`[ws-transport] ${WEB_ICON_ENV_VAR} ignored: cannot read ${override}`)
-    }
-  }
-  const bundled = findBundledWebIcons(staticRoot, files)
-  if (bundled.length === 0) {
-    return undefined
-  }
-  const primary = bundled.find((file) => /^assets\/icon-[^/]*\.png$/.test(file)) ?? bundled[0]
-  return {
-    absolutePath: join(staticRoot, primary),
-    contentType: 'image/png',
-    // Larger alternates ship beside the default icon; listing each at its own
-    // path gives the manifest the 192/512 entries installability needs.
-    manifestIcons: bundled.map((file) => ({
-      src: file,
-      sizes: manifestIconSizes(join(staticRoot, file)),
-      type: 'image/png'
-    }))
-  }
-}
-
-/** Every branded icon the web bundle emits: icon-*.png plus the alternate app icons. */
-function findBundledWebIcons(
-  staticRoot: string,
-  files: ReadonlySet<string> | undefined
-): string[] {
-  const matches = (file: string) => /^assets\/(?:icon|orca)-[^/]*\.png$/.test(file)
-  if (files) {
-    return [...files].filter(matches).sort()
-  }
-  try {
-    return readdirSync(join(staticRoot, 'assets'))
-      .filter((entry) => matches(`assets/${entry}`))
-      .sort()
-      .map((entry) => `assets/${entry}`)
-  } catch {
-    return []
-  }
-}
-
-function manifestIconSizes(absolutePath: string): string {
-  const dimensions = readPngDimensions(absolutePath)
-  if (!dimensions) {
-    return 'any'
-  }
-  const sizes = new Set([`${dimensions.width}x${dimensions.height}`])
-  for (const edge of INSTALLABILITY_ICON_EDGES) {
-    if (edge <= Math.min(dimensions.width, dimensions.height)) {
-      sizes.add(`${edge}x${edge}`)
-    }
-  }
-  return [...sizes].sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).join(' ')
-}
-
-function readPngDimensions(absolutePath: string): { width: number; height: number } | undefined {
-  let fd: number | undefined
-  try {
-    const header = Buffer.alloc(24)
-    fd = openSync(absolutePath, 'r')
-    readSync(fd, header, 0, 24, 0)
-    if (header.readUInt32BE(0) !== 0x89504e47) {
-      return undefined
-    }
-    return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) }
-  } catch {
-    return undefined
-  } finally {
-    if (fd !== undefined) {
-      closeSync(fd)
-    }
-  }
 }

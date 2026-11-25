@@ -131,11 +131,7 @@ it('lists the installability sizes bundled icon alternates can serve', async () 
   writeFileSync(join(root, 'assets', 'orca-blue-large.png'), PNG_1024)
   writeFileSync(
     join(root, '.orca-web-client-files.json'),
-    JSON.stringify([
-      'web-index.html',
-      'assets/icon-bundled.png',
-      'assets/orca-blue-large.png'
-    ])
+    JSON.stringify(['web-index.html', 'assets/icon-bundled.png', 'assets/orca-blue-large.png'])
   )
   const url = await startServer()
 
