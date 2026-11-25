@@ -3,7 +3,10 @@ import type React from 'react'
 import { useMemo } from 'react'
 import { ProviderDetailsMenu } from '../usage/ProviderDetailsMenu'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
+import {
+  accountOwnerFor,
+  wslHostDistroForTarget
+} from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { useAppStore } from '../../../store/index'
 import type { ChatAccountAction } from './ProviderAccountChatButton'
 import { ClaudeSwitcherForOwner } from './ClaudeSwitcherForOwner'
@@ -59,7 +62,9 @@ function ChatClaudeSwitcherMenu(
   props: ClaudeSwitcherMenuProps & { chatAction: ChatAccountAction }
 ): React.JSX.Element | null {
   const target = props.chatAction.target
-  const owner = useMemo<AccountOwner>(() => ({ target, wslHostDistro: null }), [target])
+  // Why: a WSL host chat's accounts are this desktop's distro accounts, as in the status bar.
+  const distro = useAppStore((s) => wslHostDistroForTarget(target, s.runtimeEnvironments))
+  const owner = useMemo(() => accountOwnerFor(target, distro), [target, distro])
   const ownerUsage = useAccountOwnerUsage(
     owner,
     useAppStore((s) => s.rateLimits)
