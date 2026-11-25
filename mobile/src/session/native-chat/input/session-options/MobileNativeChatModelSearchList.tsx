@@ -13,8 +13,8 @@ import type {
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import {
-  nativeChatModelSearchMatcher,
-  nativeChatModelSearchText
+  nativeChatModelSearchIndex,
+  nativeChatModelSearchMatcher
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-model-search'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import {
@@ -58,26 +58,17 @@ export function MobileNativeChatModelSearchList({
   const [autoFocus] = useState(() => browsableCount(model) >= FOCUS_FROM)
   const choices = model.kind.type === 'select' ? model.kind.choices : []
   const matches = useMemo(() => nativeChatModelSearchMatcher(query), [query])
-  const searching = matches !== null
-  // Built only while searching, then once per listing, not on every keystroke.
-  const texts = useMemo(
-    () =>
-      searching
-        ? choices.map((choice) =>
-            nativeChatModelSearchText([
-              choice.value,
-              nativeChatSessionChoiceLabel(choice, say, model.id),
-              choice.description ?? ''
-            ])
-          )
-        : null,
-    [choices, model.id, searching]
-  )
   // A search lists every match, search-only and folded models included, as desktop does.
-  const items: SelectListItem[] =
-    matches && texts
-      ? choices.filter((_, index) => matches(texts[index]!))
-      : browsedSelectItems(model, moreChoices)
+  let items: SelectListItem[]
+  if (matches) {
+    // Built on a list's first search and reused after, not on every keystroke.
+    const texts = nativeChatModelSearchIndex(choices, (choice) =>
+      nativeChatSessionChoiceLabel(choice, say, model.id)
+    )
+    items = choices.filter((choice) => matches(texts.get(choice.value) ?? ''))
+  } else {
+    items = browsedSelectItems(model, moreChoices)
+  }
   const pick = (value: SessionOptionValue): void => {
     Keyboard.dismiss()
     onSetOption(value)

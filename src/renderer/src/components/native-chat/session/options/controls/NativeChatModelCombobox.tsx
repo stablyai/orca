@@ -16,6 +16,7 @@ import type {
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import {
+  nativeChatModelSearchIndex,
   nativeChatModelSearchMatcher,
   nativeChatModelSearchText
 } from '../../../../../../../shared/native-chat/input/session-options/native-chat-model-search'
@@ -59,23 +60,10 @@ export function NativeChatModelCombobox({
   const matcher = useMemo(() => nativeChatModelSearchMatcher(query), [query])
   // A query of only "/" or "-" filters nothing, so it browses rather than revealing search-only rows.
   const searching = matcher !== null
-  // Built only while searching, then once per listing; cmdk asks for every row on every keystroke.
-  const searchTexts = useMemo(
-    () =>
-      searching
-        ? new Map(
-            choices.map((choice) => [
-              choice.value,
-              nativeChatModelSearchText([
-                choice.value,
-                nativeChatSessionChoiceLabel(choice, say),
-                choice.description ?? ''
-              ])
-            ])
-          )
-        : null,
-    [choices, searching]
-  )
+  // Built on a list's first search and reused after; cmdk asks for every row on every keystroke.
+  const searchTexts = searching
+    ? nativeChatModelSearchIndex(choices, (choice) => nativeChatSessionChoiceLabel(choice, say))
+    : null
   // Why not cmdk's scorer: it matches scattered letters and reorders the host's list.
   const modelChoiceFilter = (value: string, search: string, keywords?: string[]): number => {
     const matches = search === query ? matcher : nativeChatModelSearchMatcher(search)

@@ -1,3 +1,5 @@
+import type { SessionOptionSelectChoice } from '../native-chat-session-options'
+
 // Spaces, dashes, slashes and dots inside a word read alike, so "anthropic/claude" and "gpt5" find their model.
 const SEPARATORS = /[\s\-_/.:]+/g
 // Between two digits a separator stays one mark, so "4.5" finds "4-5" but "5.1" never joins "4-20250514".
@@ -21,4 +23,24 @@ export function nativeChatModelSearchMatcher(query: string): ((text: string) => 
     return null
   }
   return (text) => terms.every((term) => text.includes(term))
+}
+
+const indexes = new WeakMap<readonly SessionOptionSelectChoice[], ReadonlyMap<string, string>>()
+
+/** Each choice's search text by value: built on the first search of a list, then reused until the list changes. */
+export function nativeChatModelSearchIndex(
+  choices: readonly SessionOptionSelectChoice[],
+  label: (choice: SessionOptionSelectChoice) => string
+): ReadonlyMap<string, string> {
+  let index = indexes.get(choices)
+  if (!index) {
+    index = new Map(
+      choices.map((choice) => [
+        choice.value,
+        nativeChatModelSearchText([choice.value, label(choice), choice.description ?? ''])
+      ])
+    )
+    indexes.set(choices, index)
+  }
+  return index
 }
