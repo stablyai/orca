@@ -86,7 +86,8 @@ export function keptProviderRelayAttachable(
  */
 async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRelayInfo[]) {
   for (const info of relays) {
-    if (!info.attached && info.agent !== null && !reattachableAgents.has(info.agent)) {
+    // A daemon from before agents were named lists none (undefined): its relays stay listed.
+    if (!info.attached && typeof info.agent === 'string' && !reattachableAgents.has(info.agent)) {
       await channel.close(info.relayId).catch(() => {})
       continue
     }

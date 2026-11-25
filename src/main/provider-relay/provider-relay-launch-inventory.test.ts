@@ -39,7 +39,15 @@ describe('kept relays whose agent ended while no app was attached', () => {
           closed.push(payload)
         }
         return type === 'relayList'
-          ? { relays: [ended('c', 'live-only', true), ended('d', 'live-only', false)] }
+          ? {
+              relays: [
+                ended('c', 'live-only', true),
+                ended('d', 'live-only', false),
+                // An integration this build can't reattach is ended; a daemon that names none isn't.
+                { ...ended('f', 'other', false), exit: null },
+                { ...ended('e', 'live-only', false), exit: null, agent: undefined }
+              ]
+            }
           : {}
       }
     }
@@ -49,6 +57,6 @@ describe('kept relays whose agent ended while no app was attached', () => {
     dropListedProviderRelay('c', true)
     dropListedProviderRelay('d', true)
     await new Promise((resolve) => setImmediate(resolve))
-    expect(closed).toEqual([{ relayId: 'r-d' }])
+    expect(closed).toEqual([{ relayId: 'r-f' }, { relayId: 'r-d' }])
   })
 })

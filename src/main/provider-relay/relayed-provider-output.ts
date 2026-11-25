@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import type { ProviderRelayDataEvent } from '../daemon/protocol/daemon-provider-relay-protocol'
+import { cutHeldOutput } from './relayed-provider-held-cap'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
 import { boundedCutKeys } from './relayed-provider-cut-keys'
 import type { RelayedProviderContinuation } from './relayed-provider-continuation'
@@ -61,6 +62,8 @@ type OutputOptions = {
   ack: (seq: number, keepFrom?: number, flags?: ProviderRelayAckFlags) => Promise<unknown>
   /** A shared tick for the next ack (one timer per daemon connection); its own timer otherwise. */
   scheduleAck?: (run: () => void) => () => void
+  /** Held output past its cap was let go through `through`: what follows may continue cut items. */
+  onHeldCut?: (through: number) => void
 }
 
 /**
@@ -92,6 +95,7 @@ export class RelayedProviderOutput {
   private held: { seq: number | null; line: string }[] | null
   /** How far a held replay has been handed on; it stays held until the slices reach the end. */
   private releasedTo = 0
+  private heldChars = 0
   private releasing: Promise<void> | null = null
   /** Set when a replay may start inside an open item: items cut by that move to continuation rows. */
   private continuation: RelayedProviderContinuation | null = null
@@ -123,6 +127,7 @@ export class RelayedProviderOutput {
     if (this.held) {
       this.held = []
       this.releasedTo = 0
+      this.heldChars = 0
     }
     this.deliveredSeq = this.pushedSeq
     return this.pushedSeq
@@ -259,6 +264,12 @@ export class RelayedProviderOutput {
       this.held.push({ seq, line: '' })
     } else {
       this.held.push({ seq, line: line ?? '' })
+      this.heldChars += line?.length ?? 0
+      const cut = !this.releasing && cutHeldOutput(this.held, this.heldChars)
+      if (cut) {
+        ;({ held: this.held, chars: this.heldChars } = cut)
+        this.options.onHeldCut?.(cut.through)
+      }
     }
   }
 

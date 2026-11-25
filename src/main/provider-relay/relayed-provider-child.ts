@@ -13,6 +13,7 @@ import { RelayedProviderOutput, type ProviderRelayAckFloor } from './relayed-pro
 import type { ProviderRelayRecordTaking } from './relayed-provider-consumption'
 import {
   attachContinuation,
+  RelayedProviderContinuation,
   type ProviderRelayItemContinuation
 } from './relayed-provider-continuation'
 
@@ -93,7 +94,12 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       scheduleAck: (run) => options.channel.scheduleAck(run),
       ...(options.durable ? { durable: options.durable } : {}),
       ...(options.passWhileHeld ? { passWhileHeld: options.passWhileHeld } : {}),
-      ...(options.ackFloor ? { ackFloor: options.ackFloor } : {})
+      ...(options.ackFloor ? { ackFloor: options.ackFloor } : {}),
+      onHeldCut: (through) =>
+        options.continuation &&
+        this.output.continueWith(
+          new RelayedProviderContinuation(options.continuation, options.relayId, through, through)
+        )
     })
     this.ready = new Promise((resolve, reject) => {
       this.resolveReady = resolve

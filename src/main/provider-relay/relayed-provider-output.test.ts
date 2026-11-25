@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { RelayedProviderOutput } from './relayed-provider-output'
+import { cutHeldOutput } from './relayed-provider-held-cap'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import { createProviderRecordReader } from '../provider-process/provider-record-reader'
 
@@ -394,5 +395,26 @@ describe('relayed provider output', () => {
     await output.flush()
     output.stop()
     expect(sent).toEqual(['1', '1 cut []'])
+  })
+
+  it('keeps held output under its cap: the oldest goes behind one cursor entry, held requests stay', () => {
+    const held = [
+      { seq: 1, line: 'aaaa' },
+      { seq: null, line: 'request' },
+      { seq: 2, line: 'bbbb' },
+      { seq: 3, line: 'cccc' },
+      { seq: 4, line: 'dddd' }
+    ]
+    expect(cutHeldOutput(held, 16, 16)).toBeNull()
+    const cut = cutHeldOutput(held, 16, 12)
+    expect(cut).toEqual({
+      held: [
+        { seq: null, line: 'request' },
+        { seq: 3, line: '' },
+        { seq: 4, line: 'dddd' }
+      ],
+      chars: 4,
+      through: 3
+    })
   })
 })
