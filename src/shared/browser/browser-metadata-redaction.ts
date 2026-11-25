@@ -76,10 +76,16 @@ export function redactBrowserMetadataGetter(what: unknown, value: unknown): unkn
   if (typeof value === 'string') {
     return redactKagiSessionToken(value)
   }
-  if (!value || typeof value !== 'object' || !(what in value)) {
+  if (!value || typeof value !== 'object') {
     return value
   }
-  const raw = value[what]
+  // Literal keys narrow `in` for every project's compiler settings.
+  let raw: unknown
+  if (what === 'url' && 'url' in value) {
+    raw = value.url
+  } else if (what === 'title' && 'title' in value) {
+    raw = value.title
+  }
   if (typeof raw !== 'string') {
     return value
   }
