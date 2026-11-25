@@ -29939,7 +29939,6 @@
         "cancel": "取消",
         "cancelRunning": "取消生成",
         "edit": "编辑描述",
-        "realPerson": "头像不能呈现真实人物。请改为描述一个角色",
         "signedOut": "{{agent}} 未登录。请先登录，然后重试",
         "usageLimit": "{{agent}} 已达到使用上限。请稍后重试",
         "noImage": "{{agent}} 未生成图片。请尝试换一种描述方式",
