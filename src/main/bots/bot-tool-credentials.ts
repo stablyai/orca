@@ -140,14 +140,12 @@ export function botToolCredentialsTransaction<T>(folder: string, work: () => Pro
 }
 
 /** One header or source credential, opened and checked against its folder and id; null for none or a sign-in. */
-export function readBotToolCredential(folder: string, id: string): BotToolCredential | null {
-  return botToolCredentialsReader(folder).credential(id)
-}
+export const readBotToolCredential = (folder: string, id: string) =>
+  botToolCredentialsReader(folder).credential(id)
 
 /** The sign-in a credential id holds, or null when it holds none or something else. */
-export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry | null {
-  return botToolCredentialsReader(folder).oauth(id)
-}
+export const readBotToolOAuth = (folder: string, id: string) =>
+  botToolCredentialsReader(folder).oauth(id)
 
 type BotToolCredentialsReader = {
   credential: (id: string) => BotToolCredential | null
@@ -173,6 +171,12 @@ function credentialOf(entry: Entry | null): BotToolCredential | null {
     ...(entry.kind === 'source' ? { source: entry.source } : {}),
     headers: { ...entry.headers }
   }
+}
+
+/** The id's sign-in, `'locked'` when its saved value doesn't open on this computer, or null. */
+export function readBotToolSignIn(folder: string, id: string): BotToolOAuthEntry | 'locked' | null {
+  const stored = readSealed(folder)
+  return Object.hasOwn(stored, id) && !stored[id].entry ? 'locked' : oauthOf(entryOf(stored, id))
 }
 
 function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
