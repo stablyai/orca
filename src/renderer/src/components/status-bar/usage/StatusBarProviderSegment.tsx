@@ -76,7 +76,11 @@ function WindowLabel({
       part.trim() ? <span className="text-[0.82em] opacity-60">{part}</span> : part
     return (
       <span className="tabular-nums">
-        {showLabel && labelFirst ? <span className="text-foreground/50">{`${label} `}</span> : ''}
+        {showLabel && labelFirst ? (
+          <span className="text-muted-foreground">{`${label} `}</span>
+        ) : (
+          ''
+        )}
         {at === -1 ? (
           <span className="font-semibold text-foreground">{text}</span>
         ) : (
@@ -86,7 +90,11 @@ function WindowLabel({
             {unit(text.slice(at + value.length))}
           </span>
         )}
-        {showLabel && !labelFirst ? <span className="text-foreground/50">{` ${label}`}</span> : ''}
+        {showLabel && !labelFirst ? (
+          <span className="text-muted-foreground">{` ${label}`}</span>
+        ) : (
+          ''
+        )}
       </span>
     )
   }
@@ -140,42 +148,6 @@ function OwnerNotSetUpLabel({
 export function isUsageUrgent(p: ProviderRateLimits): boolean {
   const tightest = getTightestUsageSection(p, undefined, 'all')
   return tightest !== null && clampUsedPercent(tightest.window.usedPercent) >= USAGE_WARNING_PERCENT
-}
-
-/** Stands in for the chips a narrow bar leaves out; its tooltip names them and the popover lists them. */
-export function UsageOverflowChip({
-  hidden,
-  providerCount,
-  display
-}: {
-  hidden: readonly ProviderRateLimits[]
-  providerCount: number
-  display: UsagePercentageDisplay
-}): React.JSX.Element {
-  const t = useTranslate()
-  const names = hidden
-    .map((p) => {
-      const tightest = getTightestUsageSection(p, t, 'all')
-      const name = getProviderDisplayName(p.provider)
-      return tightest
-        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, t)}`
-        : name
-    })
-    .join(', ')
-  return (
-    <span
-      title={t('auto.components.status.bar.StatusBar.hiddenUsageProviders', 'Also: {{value0}}', {
-        value0: names
-      })}
-      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground"
-    >
-      {/* Why: reserve the widest count so the measured width doesn't depend on how many are hidden. */}
-      <span aria-hidden="true" className="invisible col-start-1 row-start-1">
-        +{providerCount}
-      </span>
-      <span className="col-start-1 row-start-1">+{Math.max(1, hidden.length)}</span>
-    </span>
-  )
 }
 
 function getProviderLetter(provider: ProviderRateLimits['provider']): string {
@@ -269,6 +241,10 @@ type ProviderSegmentProps = {
   compact?: boolean
   display: UsagePercentageDisplay
   mode?: StatusBarUsageMode
+  /** The user's usage setting; the compact look follows it, not the width-driven `mode`. */
+  barMode?: StatusBarUsageMode
+  /** Remote host the readings come from; the chip tooltip would otherwise hide the row's. */
+  hostLabel?: string
   countdownActive?: boolean
 }
 
@@ -287,6 +263,8 @@ export function ProviderSegment({
   compact = false,
   display,
   mode = 'verbose',
+  barMode = mode,
+  hostLabel,
   countdownActive = true
 }: ProviderSegmentProps): React.JSX.Element {
   const t = useTranslate()
@@ -318,10 +296,10 @@ export function ProviderSegment({
           : []
   )
 
-  const compactBar = mode === 'compact'
+  const compactBar = barMode === 'compact'
   // Why: the compact bar dims icons so the numbers carry the row.
   const icon = compactBar ? (
-    <span className="inline-flex opacity-50">
+    <span className="inline-flex opacity-75">
       <ProviderIcon provider={provider} />
     </span>
   ) : (
@@ -374,14 +352,19 @@ export function ProviderSegment({
   const showGroupedPools =
     mode === 'verbose' && groupedBuckets.length > 0 && groupedBuckets.length === sections.length
 
-  // Why: the compact bar drops pool names ("Cursor Models") from the row; the tooltip keeps them.
+  // Why: the compact bar drops pool and window names from the row; the tooltip keeps them.
   const providerName = getProviderDisplayName(provider)
-  const pool = sections.find((section) => section.labelFirst)?.label
+  const name = sections.find((section) => section.label)?.label
   const subject =
-    !pool || pool.startsWith(providerName) ? (pool ?? providerName) : `${providerName} ${pool}`
+    !name || name.startsWith(providerName) ? (name ?? providerName) : `${providerName} ${name}`
   const compactTitle =
     compactBar && tightest
-      ? `${subject} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, t)}`
+      ? [
+          `${subject} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, t)}`,
+          hostLabel
+        ]
+          .filter(Boolean)
+          .join('\n')
       : undefined
 
   return (

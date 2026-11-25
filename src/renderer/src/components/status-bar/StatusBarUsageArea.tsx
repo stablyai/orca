@@ -19,9 +19,9 @@ import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
 import {
   ClippedRowProviderSegment,
   ProviderSegment,
-  UsageOverflowChip,
   isUsageUrgent
 } from './usage/StatusBarProviderSegment'
+import { UsageOverflowChip } from './usage/usage-overflow-chip'
 import {
   USAGE_ROW_LEVELS,
   chooseUsageRowLayout,
@@ -132,6 +132,8 @@ export function StatusBarUsageArea({
                       compact={usageCompact}
                       display={usagePercentageDisplay}
                       mode={usageMode}
+                      barMode={statusBarUsageMode}
+                      hostLabel={remoteOwner?.label}
                     />
                   ))}
                   {hiddenProviders.length > 0 ? (
@@ -139,6 +141,7 @@ export function StatusBarUsageArea({
                       hidden={hiddenProviders}
                       providerCount={rosterProviders.length}
                       display={usagePercentageDisplay}
+                      hostLabel={remoteOwner?.label}
                     />
                   ) : null}
                 </button>
@@ -274,6 +277,7 @@ export function StatusBarUsageArea({
                   compact={level.compact}
                   display={usagePercentageDisplay}
                   mode={levelMode(index)}
+                  barMode={statusBarUsageMode}
                   countdownActive={false}
                 />
               </span>
