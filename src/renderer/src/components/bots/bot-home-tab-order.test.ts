@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Bot } from '../../../../shared/bot-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { displayedTabOrder, homeBotLookupFor } from './bot-home-tab-order'
 import { storedIndexForDisplayedDrop } from '../tab-group/drag/tab-drop-displayed-order'
 
@@ -51,8 +53,26 @@ describe('displayedTabOrder', () => {
 })
 
 describe('homeBotLookupFor', () => {
-  const bot = (id: string, folderWorkspaceId: string, hostId: string): Bot =>
-    ({ id, folderWorkspaceId, hostId, chatSessionId: `${id}-chat` }) as unknown as Bot
+  // A host listing stamps its bots with that host, as the catalog does.
+  const bot = (id: string, folderWorkspaceId: string, hostId: ExecutionHostId): Bot =>
+    stampBotHost(hostId, {
+      id,
+      name: id,
+      hostId: 'local',
+      folder: id,
+      folderWorkspaceId,
+      agent: 'claude',
+      avatar: null,
+      paused: false,
+      notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
+      members: [],
+      slack: null,
+      linear: null,
+      github: null,
+      chatSessionId: `${id}-chat`,
+      createdAt: 0,
+      updatedAt: 0
+    })
 
   it('has no lookup for a strip no bot calls home, so the tab bar skips the Home search', () => {
     expect(homeBotLookupFor([], 'repo-a::/path/worktree')).toBeNull()
