@@ -53,7 +53,10 @@ async function waitFor(check: () => boolean, label: string): Promise<void> {
 
 /** The title must stay on one line at the toaster's width, in every locale. */
 function assertOneLineTitle(): void {
-  const title = document.querySelector<HTMLElement>(`${LIVE_TOAST} [data-title]`)
+  // Why innermost: Sonner wraps a custom card in its own [data-title], which holds the whole card.
+  const title = document.querySelector<HTMLElement>(
+    `${LIVE_TOAST} [data-title]:not(:has([data-title]))`
+  )
   if (!title) {
     throw new Error('The toast title is missing')
   }
