@@ -290,6 +290,8 @@ export type ConnectorBot = {
   sharedAppWorkspaces?: ConnectorBotWorkspace[]
   /** The Orca accounts and invited emails it is shared with; absent, it isn't shared. */
   sharedWith?: ConnectorBotShare[]
+  /** What it is for, shown to the people it is shared with; absent when it says nothing. */
+  botPurpose?: string
 }
 
 /** One event rule of a bot automation here; the cloud sends a match to this machine alone. */

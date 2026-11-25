@@ -74,6 +74,10 @@ function sharedWith(shares: readonly BotShare[] | undefined): { sharedWith?: Con
   return people.length > 0 ? { sharedWith: people } : {}
 }
 
+function purposeField(botPurpose: string | undefined): { botPurpose?: string } {
+  return botPurpose ? { botPurpose } : {}
+}
+
 /** A bot's GitHub people go on each installation, so a bot over its share drops installations from the end. */
 function withinBotBudget(bot: ConnectorBot): ConnectorBot {
   const workspaces = [...(bot.sharedAppWorkspaces ?? [])]
@@ -97,7 +101,9 @@ export function connectorBots(
   botsEnabled = true,
   gitHubInstallationIds: readonly string[] = [],
   /** What the cloud's last hello answer listed; null before one. */
-  cloudFeatures: ReadonlySet<string> | null = null
+  cloudFeatures: ReadonlySet<string> | null = null,
+  /** A shared bot's purpose (`ConnectorBotPurposes`); absent, none goes. */
+  purposeOf: (botId: string) => string | undefined = () => undefined
 ): ConnectorBot[] {
   const {
     maxHelloBots,
@@ -205,7 +211,8 @@ export function connectorBots(
             )
           : [])
       ]),
-      ...sharedWith(bot.shares)
+      ...sharedWith(bot.shares),
+      ...purposeField(purposeOf(bot.id))
     }))
     .map(withinBotBudget)
 }
