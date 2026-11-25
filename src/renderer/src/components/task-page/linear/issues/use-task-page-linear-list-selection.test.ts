@@ -3,7 +3,7 @@ import { renderHook } from '@testing-library/react'
 import { useLayoutEffect } from 'react'
 import { expect, it } from 'vitest'
 import type { LinearTeam } from '../../../../../../shared/linear/workspace-types'
-import type { TaskPageProviderMetadataModel } from '../../use-task-page-provider-metadata'
+import type { TaskPageGiteaListModel } from '../../gitea/use-task-page-gitea-list'
 import { useTaskPageLinearListSelectionPrelude } from './use-task-page-linear-list-selection'
 
 const backend: LinearTeam = { id: 'backend', name: 'Backend', key: 'B' }
@@ -14,10 +14,7 @@ const linearStatus = { credentialError: null }
 
 const stableIssues: never[] = []
 
-function preludeModel(
-  availableTeams: LinearTeam[],
-  linearIssues: never[]
-): TaskPageProviderMetadataModel {
+function preludeModel(availableTeams: LinearTeam[], linearIssues: never[]): TaskPageGiteaListModel {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the prelude reads only these fields; the full page model is not needed here.
   return {
     settings,
@@ -36,7 +33,7 @@ function preludeModel(
     selectedLinearCustomView: null,
     linearCustomViewIssuesResult: emptyCollection,
     availableTeams
-  } as unknown as TaskPageProviderMetadataModel
+  } as unknown as TaskPageGiteaListModel
 }
 
 it('reconciles the team selection in the commit that changes the team ids', () => {
