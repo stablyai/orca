@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream'
+import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import type {
   ProviderRelayAttachResult,
   ProviderRelayDataEvent
@@ -41,7 +42,11 @@ type OutputOptions = {
    */
   durable?: (force: boolean) => Promise<boolean>
   /** `keepFrom`: the daemon keeps lines from it on for a later attach, though `seq` is received. */
-  ack: (seq: number, keepFrom?: number, cut?: true) => Promise<unknown>
+  /**
+   * `cut`: this ack gives up an open kept span. `held`: the kept lines are a held replay the
+   * journal can't save yet. The reply's `ackedThrough` says how far the daemon really released.
+   */
+  ack: (seq: number, keepFrom?: number, flags?: { cut?: true; held?: true }) => Promise<unknown>
 }
 
 /**
@@ -351,17 +356,26 @@ export class RelayedProviderOutput {
         // Giving up an open kept span: the next attach must know its replay starts inside an item.
         this.pendingCut ||= this.options.ackFloor?.tookCut?.() === true
         const cut = this.pendingCut || (force && keepFrom === null && this.keptFrom !== null)
-        await (cut
-          ? this.options.ack(target, keepFrom ?? undefined, true)
-          : keepFrom !== null
-            ? this.options.ack(target, keepFrom)
-            : this.options.ack(target))
+        const flags = {
+          ...(cut ? { cut: true as const } : {}),
+          ...(heldFrom !== null ? { held: true as const } : {})
+        }
+        const reply = await (keepFrom === null && !cut
+          ? this.options.ack(target)
+          : this.options.ack(target, keepFrom ?? undefined, flags))
         this.ackedSeq = Math.max(this.ackedSeq, target)
         this.pendingCut = false
         this.keptFrom = keepFrom
         if (force && keepFrom === null) {
           this.releasedThrough = Math.max(this.releasedThrough, target)
           this.options.ackFloor?.released?.(target)
+        }
+        // The daemon let kept lines go at its file cap: they are given up, as a cut it records.
+        const ackedThrough = jsonProperty(reply, 'ackedThrough')
+        if (typeof ackedThrough === 'number' && keepFrom !== null && ackedThrough >= keepFrom) {
+          this.releasedThrough = Math.max(this.releasedThrough, ackedThrough)
+          this.keptFrom = null
+          this.options.ackFloor?.released?.(ackedThrough)
         }
       } catch {
         // Unacked output is replayed on the next attach; a later ack covers it.

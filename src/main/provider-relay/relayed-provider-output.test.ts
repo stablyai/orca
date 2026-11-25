@@ -94,8 +94,10 @@ describe('relayed provider output', () => {
       stdout: new Readable({ read() {} }),
       durable: async () => true,
       passWhileHeld: () => false,
-      ack: async (seq, keepFrom, cut) => {
-        acks.push(`${seq}${keepFrom === undefined ? '' : ` keep ${keepFrom}`}${cut ? ' cut' : ''}`)
+      ack: async (seq, keepFrom, flags) => {
+        acks.push(
+          `${seq}${keepFrom === undefined ? '' : ` keep ${keepFrom}`}${flags?.cut ? ' cut' : ''}`
+        )
       }
     })
     output.restartAt(10)
@@ -144,6 +146,28 @@ describe('relayed provider output', () => {
     expect(acks).toEqual([2, 4])
   })
 
+  it('learns from the ack reply when the daemon let a held replay go at its file cap', async () => {
+    const acks: string[] = []
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      durable: async () => true,
+      passWhileHeld: () => false,
+      ack: async (seq, keepFrom, flags) => {
+        acks.push(`${seq} keep ${keepFrom}${flags?.held ? ' held' : ''}`)
+        // The daemon's file cap released everything it was asked to keep.
+        return { ackedThrough: seq }
+      }
+    })
+    output.restartAt(10)
+    output.line('relayData', 11, 'event-11')
+    output.line('relayData', 12, 'event-12')
+    await output.settle(true)
+    output.line('relayData', 13, 'event-13')
+    // Kept from the first line still kept, never from below what the daemon already released.
+    await output.settle(true)
+    expect(acks).toEqual(['12 keep 11 held', '13 keep 13 held'])
+  })
+
   it('keeps a cut the ack floor reported until an ack carrying it succeeds', async () => {
     const sent: string[] = []
     let fail = true
@@ -160,8 +184,8 @@ describe('relayed provider output', () => {
           return took
         }
       },
-      ack: async (seq, keepFrom, cut) => {
-        sent.push(`${seq} keep ${keepFrom}${cut ? ' cut' : ''}`)
+      ack: async (seq, keepFrom, flags) => {
+        sent.push(`${seq} keep ${keepFrom}${flags?.cut ? ' cut' : ''}`)
         if (fail) {
           fail = false
           throw new Error('daemon busy')
