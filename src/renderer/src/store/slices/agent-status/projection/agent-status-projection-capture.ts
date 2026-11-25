@@ -15,6 +15,7 @@ export function captureProjectionState(
   captured.activeDashboardOwners = new Set(data.activeDashboardOwners)
   captured.dashboardTotals = data.dashboardTotals
   captured.inputs = data.inputs
+  captured.remoteRows = data.remoteRows
   captured.activeAgentCount = data.activeAgentCount
   for (const [tabId, bucket] of data.terminalTypes) {
     captured.terminalTypes.set(tabId, { leaves: new Map(bucket.leaves), output: bucket.output })
