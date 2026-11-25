@@ -30772,7 +30772,8 @@
       "stillUnconfirmed": "Still couldn't confirm",
       "outputTruncated": "Output preview is truncated. Open this run in Automations for full details.",
       "moreRunsFailed": "Couldn't read older runs. Try Show more again.",
-      "updateOrcaHistory": "Update Orca on {{host}} to read automation history in the panel or Automations page.",
+      "fullOutput": "Full output",
+      "updateOrcaHistory": "Update Orca on {{host}}.",
       "refreshBeforeOpen": "This computer changed. Refresh this automation before opening it.",
       "detailCapacity": "Open in Automations to read more details."
     }

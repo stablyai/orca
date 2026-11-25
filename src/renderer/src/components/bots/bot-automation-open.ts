@@ -1,7 +1,10 @@
 // Where an automation link opens: beside the bot that owns it, in its side panel, or the Automations
 // page. Bot surfaces pass the bot; anything without one, or asking for the page, goes to the page.
 import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
-import { evaluateAutomationOwner } from '../automations/hosts/automation-host-owner'
+import {
+  automationOwnerForHostId,
+  evaluateAutomationOwner
+} from '../automations/hosts/automation-host-owner'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { openBotHome } from '@/lib/bot-catalog'
@@ -28,7 +31,7 @@ export type BotAutomationOpen = {
   hostId?: ExecutionHostId | null
   /** The Activity row it was opened from, so Back returns focus there. */
   originRowKey?: string
-  owner?: AutomationOwnerRef | null
+  owner: AutomationOwnerRef | null
 }
 
 function openPage(open: BotAutomationOpen): void {
@@ -50,19 +53,26 @@ function activityScrollTop(): number | null {
 
 /** Opens an automation, or one of its runs: in its bot's panel when there is one, else the page. */
 export function openBotAutomation(open: BotAutomationOpen): void {
-  if ('owner' in open) {
-    const continuity = open.owner ? evaluateAutomationOwner(open.owner) : null
-    if (!continuity || (continuity.status !== 'same' && continuity.status !== 'continued')) {
-      toast.error(
-        translate(
-          'bots.automationPanel.refreshBeforeOpen',
-          'This computer changed. Refresh this automation before opening it.'
-        )
+  const continuity = open.owner ? evaluateAutomationOwner(open.owner) : null
+  const target = automationOwnerForHostId(
+    open.hostId ?? open.bot?.hostId ?? '',
+    useAppStore.getState()
+  )
+  if (
+    !continuity ||
+    (continuity.status !== 'same' && continuity.status !== 'continued') ||
+    !target ||
+    JSON.stringify(target) !== JSON.stringify(continuity.owner)
+  ) {
+    toast.error(
+      translate(
+        'bots.automationPanel.refreshBeforeOpen',
+        'This computer changed. Refresh this automation before opening it.'
       )
-      return
-    }
-    open = { ...open, owner: continuity.owner }
+    )
+    return
   }
+  open = { ...open, owner: continuity.owner }
   if (open.intent === 'page' || !open.bot) {
     openPage(open)
     return

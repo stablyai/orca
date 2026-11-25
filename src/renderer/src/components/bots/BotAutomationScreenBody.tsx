@@ -1,3 +1,5 @@
+import { automationRunAttempts } from '../automations/details/automation-run-attempts'
+import { useAutomationRunAttempt } from '../automations/details/use-automation-run-attempt'
 import React, { useState } from 'react'
 import { BotAutomationRunAgainDialog } from './BotAutomationRunAgainDialog'
 import { toast } from 'sonner'
@@ -25,10 +27,7 @@ import {
 import { BotAutomationInstructions } from './BotAutomationInstructions'
 import { automationWontFire } from '../automations/details/automation-wont-fire'
 import type { AutomationDetailsController } from '../automations/details/automation-details-controller'
-import {
-  automationActionOutcomeUnknown,
-  type AutomationDetailsSnapshot
-} from '../automations/details/automation-details-model'
+import type { AutomationDetailsSnapshot } from '../automations/details/automation-details-model'
 import {
   runAutomationNowForOwner,
   updateAutomationForOwner
@@ -45,7 +44,7 @@ import {
 } from './BotAutomationSections'
 import { BotAutomationSetup } from './BotAutomationSetup'
 import { BotAutomationRuns, botAutomationRunAction } from './BotAutomationRuns'
-import { useBotAutomationNotices, type RunNowAttempt } from './bot-automation-notices'
+import { useBotAutomationNotices } from './bot-automation-notices'
 
 type BodyProps = {
   bot: Bot
@@ -80,7 +79,7 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
   const offline = useBotHostOffline(bot.hostId)
   const hostLabel = useBotHostLabel(bot.hostId)
   const hostName = hostLabel ?? t('bots.host.thisComputer', 'this computer')
-  const [runAttempt, setRunNow] = useState<RunNowAttempt>(null)
+  const runAttempt = useAutomationRunAttempt(controller, snapshot)
   const [announcement, setAnnouncement] = useState('')
   const [confirmingRun, setConfirmingRun] = useState(false)
   const automation = snapshot.definition.value
@@ -99,7 +98,8 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
     (snapshot.acknowledgedRun &&
       getToneForAutomationRunStatus(snapshot.acknowledgedRun.status) === 'running')
   )
-  const runNow = runAttempt
+  const runNow =
+    !runAttempt || runAttempt.state === 'acknowledged' ? null : { state: runAttempt.state }
   const runningAction =
     latestRun && (!snapshot.acknowledgedRun || latestRun.id === snapshot.acknowledgedRun.id)
       ? botAutomationRunAction(bot, latestRun, owner)
@@ -131,8 +131,7 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
         setAnnouncement(t('bots.automationPanel.stillUnconfirmed', "Still couldn't confirm"))
       })
     },
-    onDismissRunNow: () =>
-      setRunNow((current) => (current ? { ...current, state: 'dismissed' } : null))
+    onDismissRunNow: () => automationRunAttempts.dismiss(owner, controller.automationId)
   })
   const blocked: AutomationControlState | null = offline
     ? { unavailable: true, describedBy: notices.ids.offline }
@@ -154,22 +153,30 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
   }
   const startRun = (current: Automation): void => {
     setAnnouncement('')
-    setRunNow({ state: 'starting' })
-    void controller
-      .startRun((o) => runAutomationNowForOwner(o, current.id))
+    if (controller.recheckOwner() !== 'same' || current.bot?.botId !== bot.id) {
+      return
+    }
+    void automationRunAttempts
+      .start(owner, current.id, () =>
+        controller.startRun((o) => runAutomationNowForOwner(o, current.id))
+      )
       .then(() => {
-        setRunNow(null)
         setAnnouncement(t('bots.automationPanel.runStarted', 'Run started'))
       })
       .catch((error: unknown) => {
-        if (automationActionOutcomeUnknown(error)) {
-          setRunNow({ state: 'unconfirmed' })
-          return
-        }
-        setRunNow(null)
         fail(error)
       })
   }
+  const history =
+    snapshot.continuity === 'retired' || snapshot.continuity === 'unpaired' ? null : (
+      <BotAutomationRuns
+        bot={bot}
+        automation={{ id: controller.automationId }}
+        snapshot={snapshot}
+        controller={controller}
+        now={now}
+      />
+    )
   if (!automation) {
     return (
       <>
@@ -179,6 +186,7 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
             {t('components.native-chat.automationSaved.loading', 'Loading')}
           </p>
         ) : null}
+        {history}
       </>
     )
   }
@@ -228,7 +236,7 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
                 bot,
                 automationId: automation.id,
                 hostId: bot.hostId,
-                runId: snapshot.selected?.runId ?? null,
+                runId: snapshot.expandedRunId ?? snapshot.selected?.runId ?? null,
                 owner,
                 intent: 'page'
               })
@@ -252,21 +260,15 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
         ]}
         limit={1}
       />
-      {unsupported ? null : (
-        <BotAutomationRuns
-          bot={bot}
-          automation={automation}
-          snapshot={snapshot}
-          controller={controller}
-          now={now}
-        />
-      )}
+      {history}
       <BotAutomationWhenSection {...sectionProps} />
       <BotAutomationResultsSection {...sectionProps} />
       <BotAutomationInstructions
         automation={automation}
         botName={bot.name}
-        askInChat={props.askInChat}
+        askInChat={
+          !foreign && !blocked && automation.bot?.botId === bot.id ? props.askInChat : null
+        }
       />
       <BotAutomationSetup automation={automation} hostName={hostName} botName={bot.name} />
       <BotAutomationRunAgainDialog

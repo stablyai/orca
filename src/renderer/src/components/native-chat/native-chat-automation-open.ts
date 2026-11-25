@@ -13,12 +13,7 @@ export function automationOpenFromCard(
 ): BotAutomationOpen {
   const hostId = owner ? getRuntimeTargetHostId(owner.target) : null
   return {
-    owner:
-      owner && 'automationOwner' in owner
-        ? owner.automationOwner
-        : owner?.target.kind === 'local'
-          ? { authority: { kind: 'desktop' }, selector: { kind: 'self' } }
-          : null,
+    owner: owner?.automationOwner ?? null,
     bot: automation.bot && hostId ? { hostId, id: automation.bot.botId } : null,
     automationId: automation.id,
     runId,

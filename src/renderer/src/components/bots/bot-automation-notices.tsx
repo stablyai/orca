@@ -131,11 +131,9 @@ export function useBotAutomationNotices({
       id: ids.oldHost,
       tone: 'amber',
       cause: 'host',
-      content: t(
-        'bots.automationPanel.updateOrcaHistory',
-        'Update Orca on {{host}} to read automation history in the panel or Automations page.',
-        { host: hostName }
-      )
+      content: t('bots.automationPanel.updateOrcaHistory', 'Update Orca on {{host}}.', {
+        host: hostName
+      })
     })
   }
   if (running) {

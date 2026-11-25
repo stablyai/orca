@@ -1,3 +1,4 @@
+import { inheritBotRecordOwner } from '../../automations/hosts/bot-automation-row-owner'
 // An item's links, one row layout for all: workers as the Chats tab draws them, then PRs and issues with
 // live state, other links, files. Every link opens on click or Enter: web links as the workspace card's
 // linked PR does (the link setting's popover or browser), files in Orca's editor, only from the bot's folder.
@@ -311,7 +312,13 @@ function Row({
   const t = useTranslate()
   switch (row.kind) {
     case 'worker':
-      return <BotChatTreeWorkerRow bot={bot} worker={botItemWorkerRow(row.link)} chat={chat} />
+      return (
+        <BotChatTreeWorkerRow
+          bot={bot}
+          worker={inheritBotRecordOwner(row.link, botItemWorkerRow(row.link))}
+          chat={chat}
+        />
+      )
     case 'github':
       return <GitHubRow row={row} />
     case 'server-pr':

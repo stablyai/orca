@@ -1,10 +1,10 @@
+import { useTranscriptBot } from '@/components/bots/bot-transcript-bot'
 import { useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/class-names'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
-import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { useBotActivity } from '@/components/bots/use-bot-activity'
 import { botErrorMessage, botRefusalText } from '@/components/bots/bot-presentation'
 import { structuredAgentSessionTargetPlace } from '@/components/native-chat/pane/ownership/use-structured-agent-session-host-label'
@@ -60,7 +60,7 @@ export function NativeChatAutomationSendAgain({
 }): React.JSX.Element | null {
   const { say } = wording
   const owner = useNativeChatVisualOwner()
-  const bot = useBotForWorkspace(owner?.worktreeId ?? null)
+  const bot = useTranscriptBot(owner)
   const [sending, setSending] = useState<'idle' | 'busy' | 'sent'>(
     resend === 'sent' ? 'sent' : 'idle'
   )
@@ -109,7 +109,7 @@ function RunActions({
 }): React.JSX.Element | null {
   const { say } = wording
   const owner = useNativeChatVisualOwner()
-  const bot = useBotForWorkspace(owner?.worktreeId ?? null)
+  const bot = useTranscriptBot(owner)
   const exists = useBotActivity(bot).automations.some(
     (row) => row.automation.id === run.automation.id
   )
@@ -126,6 +126,7 @@ function RunActions({
           onClick={() =>
             openBotAutomation({
               bot,
+              owner: owner?.automationOwner ?? null,
               automationId: run.automation.id,
               runId: run.runId,
               hostId: openOn

@@ -1,3 +1,4 @@
+import { captureBotRecordOwner } from '../automations/hosts/bot-automation-row-owner'
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { BOT_WORK_KINDS } from '../../../../shared/bots/bot-change-scope'
 import { useShallow } from 'zustand/react/shallow'
@@ -26,7 +27,21 @@ const chatTreeRead = createBotHostRead<BotChatTreeRead>(
   'Failed to read bot chats:',
   BOT_WORK_KINDS,
   CHAT_TREE_MIN_READ_GAP_MS,
-  true
+  true,
+  undefined,
+  (bot) => {
+    const qualify = captureBotRecordOwner(bot)
+    return (read) => ({
+      ...read,
+      chats: read.chats.map((chat) =>
+        qualify({
+          ...chat,
+          running: chat.running.map(qualify),
+          finished: chat.finished.map(qualify)
+        })
+      )
+    })
+  }
 )
 
 export type BotChatTree = {
@@ -229,6 +244,7 @@ export function useBotChatTree(bot: Bot | null): BotChatTree {
       const shown = chats.find((chat) => chat.chatId === chatId)?.finished ?? []
       const last = shown.at(-1)
       loading.current.add(chatId)
+      const qualify = captureBotRecordOwner({ hostId, id: botId })
       void callBotRpc<BotChatTreeRead>({ hostId }, 'bots.chatTree', {
         botId,
         chatId,
@@ -241,7 +257,10 @@ export function useBotChatTree(bot: Bot | null): BotChatTree {
           setPages((current) => {
             const base = current.botKey === botKey ? current.byChat : {}
             // What was on screen stays, so a worker finishing between pages never drops one.
-            return { botKey, byChat: { ...base, [chatId]: [...shown, ...page.finished] } }
+            return {
+              botKey,
+              byChat: { ...base, [chatId]: [...shown, ...page.finished.map(qualify)] }
+            }
           })
         })
         .catch((error: unknown) => console.error('Failed to read more of a bot chat:', error))

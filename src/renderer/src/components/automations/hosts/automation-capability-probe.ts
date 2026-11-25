@@ -132,19 +132,10 @@ function sharedCapabilityProbe(
   return started
 }
 
-export async function assertOwnerFencingSupported(
-  authority: AutomationAuthorityRef
-): Promise<void> {
-  await assertAuthorityCapability(
-    authority,
-    AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-    AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
-    { cacheConfirmation: false }
-  )
-}
-
-export async function assertAutomationHistorySupported(
-  authority: AutomationAuthorityRef
+async function assertReceiverCapability(
+  authority: AutomationAuthorityRef,
+  capability: RuntimeCapability,
+  message: string
 ): Promise<string | undefined> {
   if (authority.kind === 'desktop') {
     return undefined
@@ -155,15 +146,30 @@ export async function assertAutomationHistorySupported(
     undefined,
     { timeoutMs: REQUEST_TIMEOUT_MS, expectedEnvironmentPairingRevision: authority.pairingRevision }
   )
-  if (
-    !status.runtimeId ||
-    !status.capabilities?.includes(AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY)
-  ) {
-    throw new AutomationHostScopeUnsupportedError(
-      'Update Orca on this computer to read automation history in the panel or Automations page.'
-    )
+  if (!status.runtimeId || !status.capabilities?.includes(capability)) {
+    throw new AutomationHostScopeUnsupportedError(message)
   }
   return status.runtimeId
+}
+
+export function assertOwnerFencingSupported(
+  authority: AutomationAuthorityRef
+): Promise<string | undefined> {
+  return assertReceiverCapability(
+    authority,
+    AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+    AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE
+  )
+}
+
+export function assertAutomationHistorySupported(
+  authority: AutomationAuthorityRef
+): Promise<string | undefined> {
+  return assertReceiverCapability(
+    authority,
+    AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY,
+    'Update Orca on this computer to read automation history in the panel or Automations page.'
+  )
 }
 
 export async function assertAutomationCreateIdempotencySupported(

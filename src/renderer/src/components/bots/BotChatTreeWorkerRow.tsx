@@ -15,6 +15,10 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
+import {
+  botAutomationRowOwner,
+  actOnBotAutomationRow
+} from '../automations/hosts/bot-automation-row-owner'
 import { openBotAutomation } from './bot-automation-open'
 import { useBotHostLabel } from './use-bot-host-label'
 import { WorkerActivityRow } from './WorkerActivityRow'
@@ -128,28 +132,44 @@ export function botChatTreeWorkerOpen(
     return () =>
       openBotAutomation({
         bot,
+        owner: botAutomationRowOwner(worker),
         automationId: run.automationId,
         runId: run.runId,
         originRowKey: worker.key
       })
   }
   if (dispatchId && !worker.neverStarted) {
-    return () =>
-      openOrchestrationWorker(
-        {
-          dispatchId,
-          title: worker.title,
-          worktreeId: worktreeId ?? null,
-          chatSessionId: null,
-          host: worker.host
+    return () => {
+      void actOnBotAutomationRow(
+        botAutomationRowOwner(worker),
+        async () => {
+          openOrchestrationWorker(
+            {
+              dispatchId,
+              title: worker.title,
+              worktreeId: worktreeId ?? null,
+              chatSessionId: null,
+              host: worker.host
+            },
+            botTarget(bot)
+          )
         },
-        botTarget(bot)
-      )
+        bot
+      ).catch(() => undefined)
+    }
   }
   if (worktreeId) {
     const parsedHost = parseExecutionHostId(worker.hostId)
     const hostId = parsedHost?.kind === 'runtime' ? parsedHost.id : undefined
-    return () => revealWorkerPane(worktreeId, worker.paneKey ?? null, hostId)
+    return () => {
+      void actOnBotAutomationRow(
+        botAutomationRowOwner(worker),
+        async () => {
+          revealWorkerPane(worktreeId, worker.paneKey ?? null, hostId)
+        },
+        bot
+      ).catch(() => undefined)
+    }
   }
   return undefined
 }

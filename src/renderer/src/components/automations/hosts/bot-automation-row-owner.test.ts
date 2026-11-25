@@ -26,7 +26,7 @@ it('refuses a row read from a replaced pairing even when its bot and automation 
   const commit = captureBotAutomationOwners(bot)
   host.revision = 5
   host.state.runtimeEnvironments[0].pairingRevision = 5
-  commit({
+  const activity = commit({
     workers: [],
     inProgress: [],
     completed: [],
@@ -35,7 +35,7 @@ it('refuses a row read from a replaced pairing even when its bot and automation 
   })
   const action = vi.fn(async () => 'changed')
   await expect(
-    actOnBotAutomationRow(botAutomationRowOwner(automation, bot), action)
+    actOnBotAutomationRow(botAutomationRowOwner(activity.automations[0].automation, bot), action)
   ).rejects.toThrow('This computer changed.')
   expect(action).not.toHaveBeenCalled()
 })

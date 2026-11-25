@@ -176,6 +176,7 @@ function setup(
       }
     })
     setBotAutomationPlace({
+      owner: { authority: { kind: 'desktop' }, selector: { kind: 'self' } },
       bot: { hostId: fixtureCos.hostId, id: fixtureCos.id },
       automationId: digest.id,
       runId: scenario === 'update' ? 'unsupported-run' : runId,

@@ -30,6 +30,10 @@ import { structuredAgentSessionTabId } from '../../../../shared/agent-session/vi
 import { openAgentSessionHistoryModal } from '../right-sidebar/ai-vault/panel/agent-session-history-modal'
 import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
 import { BotChatPaging, FOLD_TOGGLE_CLASS, MENU_TAKES_PLACE } from './BotChatRowControls'
+import {
+  botAutomationRowOwner,
+  actOnBotAutomationRow
+} from '../automations/hosts/bot-automation-row-owner'
 import { openBotAutomation } from './bot-automation-open'
 import { revealWorkerPane } from '@/lib/open-orchestration-worker'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -37,16 +41,27 @@ import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
 import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
 import { openBotSession } from './bot-session-open'
 
-function openChat(bot: Bot, chat: BotChatTreeChat): void {
+export function openChat(bot: Bot, chat: BotChatTreeChat): void {
   const { run } = chat
   if (run) {
     // A terminal run has no chat: its terminal is what opens, else its run record.
     const host = parseExecutionHostId(bot.hostId)
     if (run.worktreeId && run.paneKey) {
-      revealWorkerPane(run.worktreeId, run.paneKey, host?.kind === 'runtime' ? host.id : undefined)
+      void actOnBotAutomationRow(
+        botAutomationRowOwner(chat),
+        async () => {
+          revealWorkerPane(
+            run.worktreeId!,
+            run.paneKey!,
+            host?.kind === 'runtime' ? host.id : undefined
+          )
+        },
+        bot
+      ).catch(() => undefined)
     } else {
       openBotAutomation({
         bot,
+        owner: botAutomationRowOwner(chat),
         automationId: run.automationId,
         runId: run.runId,
         originRowKey: `chat:${chat.chatId}`

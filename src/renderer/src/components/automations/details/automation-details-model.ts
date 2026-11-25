@@ -35,6 +35,10 @@ export type AutomationRunsSlice = {
   stale: boolean
   nextCursor: string | null
   loadingMore: boolean
+  capacityError?: AutomationReadProblem | null
+  olderError?: AutomationReadProblem | null
+  coverageIds?: readonly string[]
+  paged?: boolean
   /** Showing the most this surface keeps; older runs are on the Automations page. */
   capped: boolean
 }
@@ -49,12 +53,16 @@ export type AutomationSelectedRun = {
 export type AutomationDetailsContinuity = 'same' | 'checking' | 'retired' | 'unpaired'
 
 export type AutomationDetailsSnapshot = {
-  acknowledgedRun?: Pick<AutomationRun, 'id' | 'status'> | null
+  acknowledgedRun?:
+    | (Pick<AutomationRun, 'id' | 'status'> &
+        Partial<Pick<AutomationRun, 'createdAt' | 'scheduledFor' | 'title'>>)
+    | null
   owner: AutomationOwnerRef
   continuity: AutomationDetailsContinuity
   definition: AutomationDefinitionSlice
   runs: AutomationRunsSlice
   selected: AutomationSelectedRun | null
+  expandedRunId?: string | null
   /** A definition mutation (switch, save, delete) is in flight; others wait for it. */
   mutating: boolean
 }
@@ -143,21 +151,18 @@ export function reconcileAutomationRuns(
   previous: AutomationRunsSlice,
   recentLimit: number,
   paged: boolean,
-  acknowledgedRunIds: Set<string>
+  acknowledgedRunIds: ReadonlySet<string>
 ): AutomationRunsSlice {
   const firstPage = newestFirst(page.runs).slice(0, recentLimit)
   const ids = new Set(firstPage.map((run) => run.id))
   const acknowledged = previous.value.filter(
     (run) => acknowledgedRunIds.has(run.id) && !ids.has(run.id)
   )
-  const continuous =
-    paged &&
-    firstPage.some(
-      (run) => !acknowledgedRunIds.has(run.id) && previous.value.some((old) => old.id === run.id)
-    )
-  for (const id of ids) {
-    acknowledgedRunIds.delete(id)
-  }
+  const previousCoverage = new Set(
+    previous.coverageIds ??
+      previous.value.filter((run) => !acknowledgedRunIds.has(run.id)).map((run) => run.id)
+  )
+  const continuous = paged && firstPage.some((run) => previousCoverage.has(run.id))
   const covered = continuous && page.nextCursor ? mergeRuns(firstPage, previous.value) : firstPage
   const value = newestFirst([
     ...new Map([...acknowledged, ...covered].map((run) => [run.id, run])).values()
@@ -167,6 +172,11 @@ export function reconcileAutomationRuns(
     status: 'ready',
     value,
     error: null,
+    olderError: previous.olderError,
+    coverageIds: value
+      .filter((run) => ids.has(run.id) || (continuous && previousCoverage.has(run.id)))
+      .map((run) => run.id),
+    paged: continuous,
     stale: false,
     nextCursor,
     loadingMore: nextCursor === previous.nextCursor && previous.loadingMore,
@@ -193,4 +203,35 @@ export function automationActionOutcomeUnknown(error: unknown): boolean {
     return code.includes('timeout') || code === 'unavailable' || code === 'disconnected'
   }
   return true
+}
+
+export function acknowledgedAutomationRun(
+  snapshot: AutomationDetailsSnapshot,
+  automationId: string
+): AutomationRun | null {
+  const ack = snapshot.acknowledgedRun
+  if (!ack || snapshot.runs.value.some((run) => run.id === ack.id)) {
+    return null
+  }
+  return {
+    id: ack.id,
+    automationId,
+    title: ack.title ?? ack.id,
+    status: ack.status,
+    createdAt: ack.createdAt ?? 0,
+    scheduledFor: ack.scheduledFor ?? 0,
+    trigger: 'manual',
+    sessionKind: 'chat',
+    workspaceId: null,
+    chatSessionId: null,
+    terminalSessionId: null,
+    terminalPaneKey: null,
+    terminalPtyId: null,
+    outputSnapshot: null,
+    precheckResult: null,
+    usage: null,
+    error: null,
+    startedAt: null,
+    dispatchedAt: null
+  }
 }

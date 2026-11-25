@@ -3,7 +3,6 @@ import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-tar
 import { useTranslation } from 'react-i18next'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
-import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { useBotActivity } from '@/components/bots/use-bot-activity'
 import {
   AUTOMATION_RESULT_NOTE_COPY as COPY,
@@ -27,7 +26,7 @@ const NO_RULES = { dtstart: Number.MAX_SAFE_INTEGER, rrule: '' }
 /** Its automation's mark while the bot still has it; else what the note recorded. */
 function useResultMark(note: AutomationResultNote): AutomationRowMark {
   const owner = useNativeChatVisualOwner()
-  const bot = useBotForWorkspace(owner?.worktreeId ?? null)
+  const bot = useTranscriptBot(owner)
   const row = useBotActivity(bot).automations.find(
     (entry) => entry.automation.id === note.automationId
   )
@@ -93,6 +92,7 @@ export function NativeChatAutomationResultRow({
             onClick={() =>
               openBotAutomation({
                 bot,
+                owner: owner?.automationOwner ?? null,
                 automationId: note.automationId,
                 runId: note.runId,
                 hostId: owner ? getRuntimeTargetHostId(owner.target) : null

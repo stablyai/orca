@@ -22,9 +22,10 @@ import type {
 } from '../../../../../shared/automations/ownership/automation-owner-ref'
 /** The one classifier every client shares; re-exported so call sites keep importing it from here. */
 
-import type {
-  AutomationDestination,
-  AutomationOwnerPrecondition
+import {
+  toAutomationOwnerPrecondition,
+  type AutomationDestination,
+  type AutomationOwnerPrecondition
 } from '../../../../../shared/automations/ownership/automation-owner-precondition'
 import {
   toRuntimeAutomationCreateInput,
@@ -80,16 +81,7 @@ export const ORPHAN_OWNER_PRECONDITION: AutomationOwnerPrecondition = {
 }
 
 export function ownerPrecondition(owner: AutomationOwnerRef): AutomationOwnerPrecondition {
-  return {
-    selector:
-      owner.selector.kind === 'ssh'
-        ? {
-            kind: 'ssh',
-            targetId: owner.selector.targetId,
-            targetGeneration: owner.selector.targetGeneration
-          }
-        : { kind: 'self' }
-  }
+  return toAutomationOwnerPrecondition(owner.selector)
 }
 
 export async function callAuthority<TResult>(
@@ -236,14 +228,19 @@ async function updateFenced(
   expectedOwner: AutomationOwnerPrecondition,
   destination?: AutomationDestination
 ): Promise<Automation> {
-  await assertOwnerFencingSupported(authority)
+  const runtimeId = await assertOwnerFencingSupported(authority)
   const prepared = await prepareAutomationLaunchSetup(authority, updates)
-  const result = await callAuthority<{ automation: Automation }>(authority, 'automation.update', {
-    id,
-    updates: toRuntimeAutomationUpdateInput(prepared),
-    expectedOwner,
-    destination
-  })
+  const result = await callAuthority<{ automation: Automation }>(
+    authority,
+    'automation.update',
+    {
+      id,
+      updates: toRuntimeAutomationUpdateInput(prepared),
+      expectedOwner,
+      destination
+    },
+    runtimeId
+  )
   return result.automation
 }
 
@@ -252,8 +249,8 @@ async function deleteFenced(
   id: string,
   expectedOwner: AutomationOwnerPrecondition
 ): Promise<void> {
-  await assertOwnerFencingSupported(authority)
-  await callAuthority(authority, 'automation.delete', { id, expectedOwner })
+  const runtimeId = await assertOwnerFencingSupported(authority)
+  await callAuthority(authority, 'automation.delete', { id, expectedOwner }, runtimeId)
 }
 
 export async function updateAutomationForOwner(
@@ -309,12 +306,17 @@ export async function runAutomationNowForOwner(
   owner: AutomationOwnerRef,
   id: string
 ): Promise<AutomationRun> {
-  await assertOwnerFencingSupported(owner.authority)
+  const runtimeId = await assertOwnerFencingSupported(owner.authority)
   const expectedOwner = ownerPrecondition(owner)
-  const result = await callAuthority<{ run: AutomationRun }>(owner.authority, 'automation.runNow', {
-    id,
-    expectedOwner
-  })
+  const result = await callAuthority<{ run: AutomationRun }>(
+    owner.authority,
+    'automation.runNow',
+    {
+      id,
+      expectedOwner
+    },
+    runtimeId
+  )
   return result.run
 }
 
@@ -326,12 +328,17 @@ export async function createAutomationForDestination(
   if (input.creationKey) {
     await assertAutomationCreateIdempotencySupported(authority)
   }
-  await assertOwnerFencingSupported(authority)
+  const runtimeId = await assertOwnerFencingSupported(authority)
   // Why before create: a move is create-then-delete and must refuse before mutating anything.
   const prepared = await prepareAutomationLaunchSetup(authority, input)
-  const result = await callAuthority<{ automation: Automation }>(authority, 'automation.create', {
-    ...toRuntimeAutomationCreateInput(prepared),
-    destination
-  })
+  const result = await callAuthority<{ automation: Automation }>(
+    authority,
+    'automation.create',
+    {
+      ...toRuntimeAutomationCreateInput(prepared),
+      destination
+    },
+    runtimeId
+  )
   return result.automation
 }

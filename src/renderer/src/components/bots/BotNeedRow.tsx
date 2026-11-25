@@ -205,7 +205,7 @@ export const StoppedForSignInRow = memo(function StoppedForSignInRow({
         onOpen: () =>
           openBotAutomation({
             bot,
-            ...(bot ? { owner } : {}),
+            owner,
             automationId: automation.id,
             runId: latestRunId ?? null,
             hostId,

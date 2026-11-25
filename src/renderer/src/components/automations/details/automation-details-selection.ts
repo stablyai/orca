@@ -1,5 +1,6 @@
 import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import type { AutomationRunRead } from '../hosts/automation-owner-reads'
+import { AutomationExactRunReader } from './automation-exact-run-reader'
 import { admitAutomationDetailSnapshot } from './automation-detail-retention'
 import {
   DEFINITION_LOADING,
@@ -18,7 +19,8 @@ export abstract class AutomationDetailsSelection {
   protected epoch = 0
   protected ownerEpoch = 0
   protected runsEpoch = 0
-  protected readonly acknowledgedRunIds = new Set<string>()
+  protected exactVersion = 0
+  protected readonly exactRuns: AutomationExactRunReader
   protected selectedRead = 0
   private selectedNeedsDefinition = false
 
@@ -29,12 +31,16 @@ export abstract class AutomationDetailsSelection {
     protected readonly deps: AutomationDetailsDeps,
     runId: string | null
   ) {
+    this.exactRuns = new AutomationExactRunReader((owner, runId) =>
+      deps.readRun(owner, automationId, runId)
+    )
     this.snapshot = {
       owner,
       continuity: 'same',
       definition: DEFINITION_LOADING,
       runs: RUNS_LOADING,
       selected: runId ? { runId, status: 'loading', run: null } : null,
+      expandedRunId: runId,
       mutating: false
     }
   }
@@ -46,15 +52,14 @@ export abstract class AutomationDetailsSelection {
     return () => this.listeners.delete(listener)
   }
 
-  protected update(patch: Partial<AutomationDetailsSnapshot>): void {
+  protected update(patch: Partial<AutomationDetailsSnapshot>): boolean {
     if (this.disposed) {
-      return
+      return false
     }
-    this.snapshot = admitAutomationDetailSnapshot(this.retentionKey, this.snapshot, {
-      ...this.snapshot,
-      ...patch
-    })
+    const candidate = { ...this.snapshot, ...patch }
+    this.snapshot = admitAutomationDetailSnapshot(this.retentionKey, this.snapshot, candidate)
     this.listeners.forEach((listener) => listener())
+    return this.snapshot === candidate
   }
 
   abstract recheckOwner(): AutomationDetailsContinuity
@@ -67,16 +72,23 @@ export abstract class AutomationDetailsSelection {
     }
     this.selectedRead += 1
     this.selectedNeedsDefinition = false
-    this.update({ selected: runId ? { runId, status: 'loading', run: null } : null })
+    this.update({
+      selected: runId ? { runId, status: 'loading', run: null } : null,
+      expandedRunId: runId
+    })
     if (runId && this.snapshot.runs.status !== 'loading') {
       this.settleSelectedFromRuns()
     }
   }
 
+  toggleRun(runId: string): void {
+    this.update({ expandedRunId: this.snapshot.expandedRunId === runId ? null : runId })
+  }
+
   retrySelected(): void {
     const selected = this.snapshot.selected
     if (selected && this.recheckOwner() === 'same') {
-      this.update({ selected: { ...selected, status: 'loading', run: null } })
+      this.exactVersion += 1
       this.readSelected()
     }
   }
@@ -90,7 +102,7 @@ export abstract class AutomationDetailsSelection {
     if (inWindow) {
       this.selectedRead += 1
       this.update({ selected: { runId: selected.runId, status: 'in-window', run: inWindow } })
-    } else if (selected.status === 'loading' || selected.status === 'in-window') {
+    } else {
       this.readSelected()
     }
   }
@@ -101,9 +113,11 @@ export abstract class AutomationDetailsSelection {
       return
     }
     this.selectedNeedsDefinition = false
-    this.update({ selected: { ...selected, status: 'loading', run: null } })
+    if (!selected.run) {
+      this.update({ selected: { ...selected, status: 'loading', run: null } })
+    }
     const read = ++this.selectedRead
-    void this.deps.readRun(this.snapshot.owner, this.automationId, selected.runId).then(
+    void this.exactRuns.request(this.snapshot.owner, selected.runId, this.exactVersion).then(
       (result) => this.settleSelected(read, selected.runId, result),
       (error: unknown) => this.settleSelected(read, selected.runId, { kind: 'error', error })
     )
@@ -111,6 +125,7 @@ export abstract class AutomationDetailsSelection {
 
   private settleSelected(read: number, runId: string, result: AutomationRunRead): void {
     if (
+      this.disposed ||
       read !== this.selectedRead ||
       this.snapshot.selected?.runId !== runId ||
       this.recheckOwner() !== 'same'
@@ -126,7 +141,9 @@ export abstract class AutomationDetailsSelection {
         this.update({ selected: { runId, status: result.kind, run: null } })
         return
       case 'error':
-        this.update({ selected: { runId, status: 'error', run: null } })
+        this.update({
+          selected: { runId, status: 'error', run: this.snapshot.selected?.run ?? null }
+        })
         return
       case 'definition-missing':
         // Stays loading until one definition read decides: gone, or a run read that failed.

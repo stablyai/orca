@@ -20,6 +20,6 @@ export async function readBotHostDefault<T>(
   if (!live()) {
     return previous
   }
-  const value = reuseEqualJson(previous, pick(result, authority))
-  return commit ? commit(value) : value
+  const value = pick(result, authority)
+  return reuseEqualJson(previous, commit ? commit(value) : value)
 }

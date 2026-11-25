@@ -73,15 +73,16 @@ export function admitAutomationDetailSnapshot(
               stale: true
             }
           : next.definition,
+      acknowledgedRun:
+        next.runs !== previous.runs ? previous.acknowledgedRun : next.acknowledgedRun,
       runs:
         next.runs !== previous.runs
           ? {
               ...previous.runs,
               status: previous.runs.value.length ? 'ready' : 'error',
-              error,
-              stale: true,
+              capacityError: error,
               loadingMore: false,
-              capped: true
+              capped: previous.runs.capped
             }
           : next.runs,
       selected:

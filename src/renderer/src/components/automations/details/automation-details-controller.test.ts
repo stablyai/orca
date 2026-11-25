@@ -192,7 +192,10 @@ describe('AutomationDetailsController reads', () => {
     }))
     expect(h.controller.getSnapshot().acknowledgedRun).toEqual({
       id: 'oversized-ack',
-      status: 'dispatched'
+      status: 'dispatched',
+      title: 'oversized-ack',
+      createdAt: 20,
+      scheduledFor: 10
     })
     expect(h.controller.getSnapshot().runs.value).toEqual([])
     h.pages[0].resolve({
@@ -568,7 +571,8 @@ describe('AutomationDetailsController paging', () => {
   })
 
   it('settles an acknowledged run from an older page without duplicating it', async () => {
-    const h = harness()
+    const exact = deferred<AutomationRunRead>()
+    const h = harness({ readRun: () => exact.promise })
     await h.controller.startRun(async () => ({ ...run('ack', 6), status: 'dispatched' }))
     h.pages[0].resolve({
       runs: [11, 10, 9, 8, 7].map((id) => run(String(id), id)),

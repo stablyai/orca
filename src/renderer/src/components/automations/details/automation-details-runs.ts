@@ -12,16 +12,40 @@ import {
   DEFINITION_LOADING,
   reconcileAutomationRuns,
   newestFirst,
-  RUNS_LOADING
+  RUNS_LOADING,
+  type AutomationRunsSlice
 } from './automation-details-model'
 
 export type SliceRead = { inFlight: boolean; queued: boolean }
 
 export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
   private moreRead = 0
-  private paged = false
+  private moreFlight = false
+  private acknowledgedRead = 0
   private readonly runWaiters = new Set<(runs: AutomationRun[]) => void>()
   private readonly runsRead: SliceRead = { inFlight: false, queued: false }
+
+  protected publishRuns(runs: AutomationRunsSlice, authoritative: AutomationRun[]): boolean {
+    const ack = this.snapshot.acknowledgedRun
+    const seen = ack && authoritative.find((run) => run.id === ack.id)
+    const retained = seen ?? (ack && this.snapshot.runs.value.find((run) => run.id === ack.id))
+    let value = runs.value
+    if (retained) {
+      value = newestFirst([...value.filter((run) => run.id !== retained.id), retained])
+      if (value.length > AUTOMATION_DETAILS_MAX_RUNS) {
+        value = newestFirst([
+          ...value
+            .filter((run) => run.id !== retained.id)
+            .slice(0, AUTOMATION_DETAILS_MAX_RUNS - 1),
+          retained
+        ])
+      }
+    }
+    return this.update({
+      runs: { ...runs, value, capacityError: null },
+      acknowledgedRun: seen && isFinalAutomationRunStatus(seen.status) ? null : ack
+    })
+  }
 
   protected readRuns(): void {
     if (this.runsRead.inFlight) {
@@ -29,13 +53,15 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
       return
     }
     this.runsRead.inFlight = true
-    const owner = this.snapshot.owner
+    this.exactVersion += 1
     const ownerEpoch = this.ownerEpoch
     const runsEpoch = this.runsEpoch
-    void this.deps.listRunsPage(owner, this.automationId, { limit: this.recentLimit }).then(
-      (page) => this.settleRuns(ownerEpoch, runsEpoch, { page }),
-      (error: unknown) => this.settleRuns(ownerEpoch, runsEpoch, { error })
-    )
+    void this.deps
+      .listRunsPage(this.snapshot.owner, this.automationId, { limit: this.recentLimit })
+      .then(
+        (page) => this.settleRuns(ownerEpoch, runsEpoch, { page }),
+        (error: unknown) => this.settleRuns(ownerEpoch, runsEpoch, { error })
+      )
   }
 
   private settleRuns(
@@ -47,7 +73,6 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
     if (this.disposed) {
       return
     }
-    // Definition mutations don't invalidate history, but a retired owner does.
     if (
       ownerEpoch === this.ownerEpoch &&
       runsEpoch === this.runsEpoch &&
@@ -55,45 +80,27 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
     ) {
       const previous = this.snapshot.runs
       if ('page' in result) {
-        this.update({
-          runs: reconcileAutomationRuns(
-            result.page,
-            previous,
-            this.recentLimit,
-            this.paged,
-            this.acknowledgedRunIds
-          )
-        })
-        if (this.snapshot.runs.nextCursor !== previous.nextCursor) {
+        const ack = this.snapshot.acknowledgedRun
+        const next = reconcileAutomationRuns(
+          result.page,
+          previous,
+          this.recentLimit,
+          previous.paged ?? false,
+          new Set(ack ? [ack.id] : [])
+        )
+        const admitted = this.publishRuns(next, result.page.runs)
+        if (admitted && this.snapshot.runs.nextCursor !== previous.nextCursor) {
           this.moreRead += 1
         }
-        this.reconcileAcknowledged(result.page.runs)
-        const acknowledged = this.snapshot.acknowledgedRun
-        if (acknowledged && !result.page.runs.some((run) => run.id === acknowledged.id)) {
-          const readEpoch = this.runsEpoch
-          void this.deps.readRun(this.snapshot.owner, this.automationId, acknowledged.id).then(
-            (result) => {
-              if (
-                this.disposed ||
-                ownerEpoch !== this.ownerEpoch ||
-                readEpoch !== this.runsEpoch ||
-                this.recheckOwner() !== 'same'
-              ) {
-                return
-              }
-              if (result.kind === 'run') {
-                this.reconcileAcknowledged([result.run])
-              } else if (result.kind === 'run-missing') {
-                this.acknowledgedRunIds.delete(acknowledged.id)
-                this.update({ acknowledgedRun: null })
-              }
-            },
-            () => undefined
-          )
+        if (
+          this.snapshot.acknowledgedRun &&
+          !result.page.runs.some((run) => run.id === this.snapshot.acknowledgedRun?.id)
+        ) {
+          this.readAcknowledged()
         }
         this.settleSelectedFromRuns()
       } else {
-        const hasValue = previous.status === 'ready'
+        const hasValue = previous.value.length > 0
         this.update({
           runs: {
             ...previous,
@@ -102,9 +109,7 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
             stale: hasValue
           }
         })
-        if (this.snapshot.selected?.status === 'loading') {
-          this.readSelected()
-        }
+        this.settleSelectedFromRuns()
       }
     }
     if (this.runsRead.queued) {
@@ -116,6 +121,33 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
     }
     this.runWaiters.forEach((resolve) => resolve(this.snapshot.runs.value))
     this.runWaiters.clear()
+  }
+
+  private readAcknowledged(): void {
+    const ack = this.snapshot.acknowledgedRun
+    if (!ack) {
+      return
+    }
+    const ownerEpoch = this.ownerEpoch
+    const read = ++this.acknowledgedRead
+    void this.exactRuns.request(this.snapshot.owner, ack.id, this.exactVersion).then((result) => {
+      if (
+        this.disposed ||
+        ownerEpoch !== this.ownerEpoch ||
+        read !== this.acknowledgedRead ||
+        this.recheckOwner() !== 'same' ||
+        this.snapshot.acknowledgedRun?.id !== ack.id
+      ) {
+        return
+      }
+      if (result.kind === 'run') {
+        const value = newestFirst([
+          result.run,
+          ...this.snapshot.runs.value.filter((run) => run.id !== ack.id)
+        ]).slice(0, AUTOMATION_DETAILS_MAX_RUNS)
+        this.publishRuns({ ...this.snapshot.runs, value }, [result.run])
+      }
+    })
   }
 
   refreshRuns(): Promise<AutomationRun[]> {
@@ -130,10 +162,10 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
 
   protected releaseRuns(): void {
     this.moreRead += 1
-    this.paged = false
+    this.acknowledgedRead += 1
+    this.exactVersion += 1
     this.runWaiters.forEach((resolve) => resolve([]))
     this.runWaiters.clear()
-    this.acknowledgedRunIds.clear()
     releaseAutomationPayload(this.retentionKey)
     this.snapshot = {
       ...this.snapshot,
@@ -144,12 +176,12 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
     }
   }
 
-  /** The next older page, until the cap. */
   loadMore(): void {
     const runs = this.snapshot.runs
-    if (runs.loadingMore || !runs.nextCursor || runs.capped || this.recheckOwner() !== 'same') {
+    if (this.moreFlight || !runs.nextCursor || runs.capped || this.recheckOwner() !== 'same') {
       return
     }
+    this.moreFlight = true
     this.update({ runs: { ...runs, loadingMore: true } })
     const ownerEpoch = this.ownerEpoch
     const read = ++this.moreRead
@@ -161,6 +193,7 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
       })
       .then(
         (page) => {
+          this.moreFlight = false
           if (this.disposed || read !== this.moreRead || ownerEpoch !== this.ownerEpoch) {
             return
           }
@@ -169,54 +202,39 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
             return
           }
           const current = this.snapshot.runs
-          this.paged = true
           const value = newestFirst([
             ...new Map([...current.value, ...page.runs].map((run) => [run.id, run])).values()
           ]).slice(0, AUTOMATION_DETAILS_MAX_RUNS)
-          this.update({
-            runs: {
+          this.publishRuns(
+            {
               ...current,
               value,
-              error: null,
+              paged: true,
+              coverageIds: [
+                ...new Set([...(current.coverageIds ?? []), ...page.runs.map((run) => run.id)])
+              ].filter((id) => value.some((run) => run.id === id)),
+              olderError: null,
               nextCursor: page.nextCursor,
               loadingMore: false,
               capped: value.length >= AUTOMATION_DETAILS_MAX_RUNS
-            }
-          })
-          this.reconcileAcknowledged(page.runs)
+            },
+            page.runs
+          )
           this.settleSelectedFromRuns()
         },
         (error: unknown) => {
+          this.moreFlight = false
           if (this.disposed || read !== this.moreRead || ownerEpoch !== this.ownerEpoch) {
-            return
-          }
-          if (this.recheckOwner() !== 'same') {
-            this.update({ runs: { ...this.snapshot.runs, loadingMore: false } })
             return
           }
           this.update({
             runs: {
               ...this.snapshot.runs,
               loadingMore: false,
-              error: automationReadProblem(error)
+              olderError: automationReadProblem(error)
             }
           })
         }
       )
-  }
-
-  private reconcileAcknowledged(runs: AutomationRun[]): void {
-    const acknowledged = this.snapshot.acknowledgedRun
-    const seen = acknowledged && runs.find((run) => run.id === acknowledged.id)
-    if (seen && isFinalAutomationRunStatus(seen.status)) {
-      this.acknowledgedRunIds.delete(seen.id)
-      this.update({
-        acknowledgedRun: null,
-        runs: {
-          ...this.snapshot.runs,
-          value: this.snapshot.runs.value.map((run) => (run.id === seen.id ? seen : run))
-        }
-      })
-    }
   }
 }

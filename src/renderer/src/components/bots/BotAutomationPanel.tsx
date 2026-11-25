@@ -65,9 +65,7 @@ export function BotAutomationPanel({
   onBack: () => void
 }): React.JSX.Element {
   // Captured once: every read and action goes to the machine this was opened against.
-  const [owner] = useState(
-    () => place.owner ?? automationOwnerForHostId(bot.hostId, useAppStore.getState())
-  )
+  const [owner] = useState(() => place.owner ?? null)
   const t = useTranslate()
   const backRef = useRef<HTMLButtonElement>(null)
   const fallbackRegion = useRef<HTMLDivElement>(null)
@@ -94,6 +92,7 @@ export function BotAutomationPanel({
           onClick={() =>
             openBotAutomation({
               bot,
+              owner,
               automationId: place.automationId,
               runId: place.runId,
               intent: 'page'
@@ -138,8 +137,22 @@ function BotAutomationScreen({
   useEffect(() => {
     region.current?.focus({ preventScroll: true })
   }, [])
+  const canDraft = (): boolean => {
+    if (details.controller.recheckOwner() !== 'same') {
+      return false
+    }
+    const current = details.controller.getSnapshot()
+    const target = automationOwnerForHostId(bot.hostId, useAppStore.getState())
+    return Boolean(
+      current.definition.value?.bot?.botId === bot.id &&
+      target &&
+      JSON.stringify(target) === JSON.stringify(current.owner)
+    )
+  }
   const askInChat = (sentence: string): Promise<boolean> =>
-    openBotHomeTab(bot, { draft: sentence }).catch(() => false)
+    canDraft()
+      ? openBotHomeTab(bot, { draft: sentence, canContinue: canDraft }).catch(() => false)
+      : Promise.resolve(false)
   return (
     <div
       ref={region}

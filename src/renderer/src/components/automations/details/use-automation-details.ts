@@ -1,6 +1,9 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
-import { onRuntimeEnvironmentsRetired } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import {
+  onRuntimeEnvironmentsRetired,
+  onRuntimeEnvironmentRevisionsPublished
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import { subscribeAutomationHostInvalidation } from '../hosts/automation-host-invalidation-window-events'
 import { automationAuthorityCatalogKey } from '../hosts/automation-host-catalog-types'
@@ -79,7 +82,16 @@ export function useAutomationDetails(input: {
           }
         })
       : () => undefined
+    const unsubscribeRevisions = environmentId
+      ? onRuntimeEnvironmentRevisionsPublished(() => {
+          const before = controller.getSnapshot().continuity
+          if (controller.recheckOwner() === 'same' && before === 'checking') {
+            controller.reload()
+          }
+        })
+      : () => undefined
     return () => {
+      unsubscribeRevisions()
       unsubscribeChanges()
       unsubscribeContact()
       unsubscribeRetired()

@@ -90,13 +90,11 @@ function RecentRuns({
 
 function ReadyDetails({
   automation,
-  runs,
   controller,
   mutating,
   onEditInChat
 }: {
   automation: Automation
-  runs: AutomationRunsSlice
   controller: AutomationDetailsController
   mutating: boolean
   onEditInChat: (() => void) | null
@@ -147,19 +145,6 @@ function ReadyDetails({
             {automationAgentLabel(automation)}
           </NativeChatCardFact>
         </dl>
-        <div>
-          <RecentRuns automation={automation} runs={runs} />
-          {runs.error && runs.value.length > 0 ? (
-            <p role="status" className="text-sm text-muted-foreground">
-              {runs.error.message}
-            </p>
-          ) : null}
-          {runs.error ? (
-            <Button variant="link" size="inlineText" onClick={() => controller.reload()}>
-              {t('bots.automationPanel.retry', 'Retry')}
-            </Button>
-          ) : null}
-        </div>
       </div>
       {automation.prompt ? (
         <p className="mt-3 line-clamp-6 whitespace-pre-wrap break-words rounded-md border border-border px-3 py-2 text-sm text-foreground">
@@ -223,7 +208,14 @@ export function NativeChatAutomationCardDetails({
   const { definition, runs } = snapshot
   return (
     <div className="@container mt-3 border-t border-border pt-3">
-      {definition.status === 'loading' ? (
+      {snapshot.continuity === 'retired' || snapshot.continuity === 'unpaired' ? (
+        <p className="text-sm text-muted-foreground">
+          {t(
+            'bots.automationPanel.refreshBeforeOpen',
+            'This computer changed. Refresh this automation before opening it.'
+          )}
+        </p>
+      ) : definition.status === 'loading' ? (
         <Loader2
           className="size-4 animate-spin text-muted-foreground"
           aria-label={t('components.native-chat.automationSaved.loading', 'Loading')}
@@ -239,13 +231,35 @@ export function NativeChatAutomationCardDetails({
       ) : (
         <ReadyDetails
           automation={definition.value}
-          runs={runs}
           controller={controller}
           mutating={snapshot.mutating}
-          onEditInChat={onEditInChat}
+          onEditInChat={
+            onEditInChat &&
+            snapshot.continuity === 'same' &&
+            definition.value.bot?.botId === automation.bot?.botId
+              ? () => {
+                  if (
+                    controller.recheckOwner() === 'same' &&
+                    controller.getSnapshot().definition.value?.bot?.botId === automation.bot?.botId
+                  ) {
+                    onEditInChat?.()
+                  }
+                }
+              : null
+          }
         />
       )}
-      {definition.error && definition.value ? (
+      {snapshot.continuity === 'same' || snapshot.continuity === 'checking' ? (
+        <div className="mt-3">
+          <RecentRuns automation={definition.value ?? automation} runs={runs} />
+          {runs.error ? (
+            <Button variant="link" size="inlineText" onClick={() => void controller.refreshRuns()}>
+              {t('bots.automationPanel.retry', 'Retry')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {definition.error ? (
         <p role="status" className="mt-3 text-sm text-muted-foreground">
           {t('bots.automationPanel.settingsStale', "Couldn't read the latest settings.")}{' '}
           <Button variant="link" size="inlineText" onClick={() => controller.reload()}>

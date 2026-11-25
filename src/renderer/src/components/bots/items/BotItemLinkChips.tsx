@@ -1,3 +1,4 @@
+import { inheritBotRecordOwner } from '../../automations/hosts/bot-automation-row-owner'
 /* One link stays a chip. The rest share one count and a popover. */
 import { ChevronDown, FileText, GitPullRequest, Hourglass, Link2, Square } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
@@ -149,7 +150,7 @@ function WorkerChip({
   link: Extract<BotItemLinkRow, { kind: 'worker' }>['link']
 }): React.JSX.Element {
   const t = useTranslate()
-  const worker = botItemWorkerRow(link)
+  const worker = inheritBotRecordOwner(link, botItemWorkerRow(link))
   const open = botChatTreeWorkerOpen(bot, worker)
   const canStop = botChatTreeWorkerRunning(worker) && Boolean(worker.dispatchId)
   const { stopping, stop } = useWorkerStop(worker.dispatchId ?? '')

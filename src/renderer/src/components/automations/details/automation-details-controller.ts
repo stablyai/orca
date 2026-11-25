@@ -224,18 +224,7 @@ export class AutomationDetailsController extends AutomationDetailsRuns {
       const run = await action(owner)
       if (!this.disposed && this.recheckOwner() === 'same' && ownerEpoch === this.ownerEpoch) {
         this.runsEpoch += 1
-        this.acknowledgedRunIds.add(run.id)
-        this.update({
-          acknowledgedRun: { id: run.id, status: run.status },
-          runs: {
-            ...this.snapshot.runs,
-            status: 'ready',
-            value: newestFirst([
-              run,
-              ...this.snapshot.runs.value.filter((previous) => previous.id !== run.id)
-            ]).slice(0, AUTOMATION_DETAILS_MAX_RUNS)
-          }
-        })
+        this.acknowledgeRun(run)
       }
       return run
     } finally {
@@ -243,6 +232,32 @@ export class AutomationDetailsController extends AutomationDetailsRuns {
         this.readRuns()
       }
     }
+  }
+
+  acknowledgeRun(run: AutomationRun): void {
+    if (this.disposed || this.recheckOwner() !== 'same') {
+      return
+    }
+    this.update({
+      acknowledgedRun: {
+        id: run.id,
+        status: run.status,
+        title: run.title.slice(0, 256),
+        createdAt: run.createdAt,
+        scheduledFor: run.scheduledFor
+      }
+    })
+    this.publishRuns(
+      {
+        ...this.snapshot.runs,
+        status: 'ready',
+        value: newestFirst([
+          run,
+          ...this.snapshot.runs.value.filter((previous) => previous.id !== run.id)
+        ]).slice(0, AUTOMATION_DETAILS_MAX_RUNS)
+      },
+      [run]
+    )
   }
 
   /** An action that isn't a definition change (Run now); afterwards the runs are re-read. */
