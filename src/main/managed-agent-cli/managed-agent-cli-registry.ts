@@ -105,6 +105,20 @@ export function rememberManagedAgentRelease(agent: ManagedAgentCliId, folder: st
   }
 }
 
+const launchReleases = Promise.withResolvers<void>()
+let launchReleasesRecorded = false
+
+/** Launch reclaim has recorded every installed release, so lookups here are complete from now on. */
+export function noteLaunchReleasesRecorded(): void {
+  launchReleasesRecorded = true
+  launchReleases.resolve()
+}
+
+/** Settles once launch reclaim records every release; null once it has. */
+export function launchReleasesPending(): Promise<void> | null {
+  return launchReleasesRecorded ? null : launchReleases.promise
+}
+
 /** Whether Orca's copy of `agent` may replace `command`, the program a launch looks for. */
 export function managedAgentStandsInFor(agent: ManagedAgentCliId, command: string): boolean {
   const only = MANAGED_AGENT_CLIS[agent].standsInFor

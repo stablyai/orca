@@ -35,7 +35,8 @@ export function botRequestActsFor(
   return {
     askers: record.askers,
     ...(Array.isArray(record.askedBy) ? { askedBy: record.askedBy } : {}),
-    ...(record.origin ? { origin: record.origin } : {})
+    ...(record.origin ? { origin: record.origin } : {}),
+    ...(record.originPlace ? { originPlace: record.originPlace } : {})
   }
 }
 

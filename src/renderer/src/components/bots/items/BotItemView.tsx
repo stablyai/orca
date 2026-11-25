@@ -201,7 +201,7 @@ export function BotItemBody({
     )
   const notes = useBotItemStatusNotes((_items, to, note) => setStatus(to, note))
   const ChatIcon = item.chat.kind === 'home' ? House : MessageSquare
-  const pending = useBotItemPendingComments(bot, item.uid, view.events)
+  const pending = useBotItemPendingComments(bot, item.uid, view.events, view.retry)
   // The header and comment box paint first; the Activity, the costly part, renders right after.
   const activityMounted = useDeferredValue(true, false)
   const activityShown = view.eventsRead && activityMounted
@@ -209,7 +209,8 @@ export function BotItemBody({
     useBotTranscriptFollow({
       itemCount: view.events.length + pending.shown.length,
       isWorking: false,
-      isVisible: true
+      isVisible: true,
+      preserveReaderOnViewportResize: true
     })
   // From the comment box or a quick reply: shown at once, then sent to the host.
   const sendComment: Parameters<typeof useBotItemQuestionSteps>[3] = (

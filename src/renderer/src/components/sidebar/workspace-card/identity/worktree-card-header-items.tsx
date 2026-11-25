@@ -1,7 +1,8 @@
 import React from 'react'
 import { FolderMinus, House, Server, ServerOff, Star, Trash2 } from 'lucide-react'
 
-import { ProjectChip } from '@/components/repo/project-chip'
+import { ProjectPeekPopover } from '@/components/repo/project-peek/ProjectPeekPopover'
+import { RepoMark } from '@/components/repo/RepoMark'
 import { Badge } from '@/components/ui/badge'
 import { AgentCommandFailedChip } from '@/components/agent-command-failure/AgentCommandFailedChip'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -12,22 +13,54 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { formatSparseDirectoryPreview } from '../controller/worktree-card-model'
 
-export function WorktreeCardRepoChip({ repo }: { repo: Repo }): React.JSX.Element {
+export function WorktreeCardRepoChip({
+  repo,
+  card,
+  hasHoverDetails = false
+}: {
+  repo: Repo
+  card?: IdentityBadgeProps['card']
+  hasHoverDetails?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
+  const hover = card ? identityIndicatorHoverHandlers({ card, hasHoverDetails }) : null
+  const editorOpenRef = React.useRef(false)
+  const handleEditorOpenChange = (open: boolean): void => {
+    editorOpenRef.current = open
+    // The editor replaces the card details while it's open.
+    if (open) {
+      hover?.onPointerEnter()
+    }
+  }
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <ProjectChip
-          repo={repo}
-          aria-label={t('auto.components.sidebar.WorktreeCard.35ccfe2475', 'Project {{value0}}', {
-            value0: repo.displayName
-          })}
-        />
-      </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8}>
-        {repo.displayName}
-      </TooltipContent>
-    </Tooltip>
+    <ProjectPeekPopover repo={repo} onOpenChange={handleEditorOpenChange}>
+      {/* Why: the name squeezed titles out of narrow cards; the mark is kept distinct per project instead. */}
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-label={t('auto.components.sidebar.WorktreeCard.35ccfe2475', 'Project {{value0}}', {
+          value0: repo.displayName
+        })}
+        data-worktree-card-identity-indicator=""
+        // Why: the card activates on pointerdown; pressing the mark opens its editor instead.
+        onPointerDown={(event) => event.stopPropagation()}
+        onPointerMove={(event) => {
+          // Why: moving across the card toward the open editor must not pop the card details over it.
+          if (editorOpenRef.current) {
+            event.stopPropagation()
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.stopPropagation()
+          }
+        }}
+        onFocus={hover?.onFocus}
+        className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <RepoMark repo={repo} />
+      </button>
+    </ProjectPeekPopover>
   )
 }
 
@@ -116,11 +149,12 @@ type IdentityBadgeProps = {
   hasHoverDetails: boolean
 }
 
-function renderIdentityIcon(
-  { card, hasHoverDetails }: IdentityBadgeProps,
-  label: string,
-  icon: React.ReactNode
-): React.JSX.Element {
+// Why: an indicator's own popup replaces the card details while hovered, then hands hover back.
+function identityIndicatorHoverHandlers({ card, hasHoverDetails }: IdentityBadgeProps): {
+  onPointerEnter: () => void
+  onPointerLeave: (event: React.PointerEvent<HTMLSpanElement>) => void
+  onFocus: () => void
+} {
   const { detailsHoverControl } = card
   const closeDetails = (): void => detailsHoverControl.handleHoverOpenChange(false)
   const resumeDetails = (event: React.PointerEvent<HTMLSpanElement>): void => {
@@ -137,15 +171,21 @@ function renderIdentityIcon(
       detailsHoverControl.handleHoverOpenChange(true)
     }
   }
+  return { onPointerEnter: closeDetails, onPointerLeave: resumeDetails, onFocus: closeDetails }
+}
+
+function renderIdentityIcon(
+  props: IdentityBadgeProps,
+  label: string,
+  icon: React.ReactNode
+): React.JSX.Element {
   return (
     <span
       role="img"
       aria-label={label}
       tabIndex={0}
       data-worktree-card-identity-indicator=""
-      onPointerEnter={closeDetails}
-      onPointerLeave={resumeDetails}
-      onFocus={closeDetails}
+      {...identityIndicatorHoverHandlers(props)}
       className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {icon}

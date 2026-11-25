@@ -20,7 +20,8 @@ import { MAX_AVATAR_DESCRIPTION_CHARS } from '../../../../shared/avatar-generati
 import { BOT_EDIT_HINT } from './bot-edit-hint'
 import { FieldNoteLine, sameNote, type FieldNote } from './AvatarGenerateFieldNote'
 import { BotPictureRowFold } from './BotPictureRowFold'
-import { useAvatarGeneration, type GeneratedAvatar } from './use-avatar-generation'
+import { useAvatarGeneration } from './use-avatar-generation'
+import type { GeneratedAvatar, GenerateFaceOptions } from './use-avatar-generation'
 
 const TILE = 'size-28 rounded-xl'
 
@@ -34,25 +35,33 @@ export type GenerateFaceDraft = { value: string; onChange: (value: string) => vo
  * user's own picture (generated earlier, uploaded, pasted or dropped); it holds the slot unless a
  * newer picture was just made. `onStart` runs as a picture is asked for (once the description passes
  * its checks), so a picture taken earlier and still being read can't replace it.
+ *
+ * A host above the popover (New bot, Import, a bot's picture button) keeps the face, so a run goes on
+ * with the popover closed: `background`. Its other options: see useAvatarGeneration.
  */
 export function useGenerateFace(
-  /** False when a picture taken in since it was asked for keeps the slot. */
-  onResult: (result: GeneratedAvatar) => boolean,
+  /** False when a picture taken in since keeps the slot. `apply`: see AvatarRequestHost. */
+  onResult: (result: GeneratedAvatar, apply: boolean) => boolean,
   applied: SlotPicture | null,
   onStart?: () => void,
-  draft?: GenerateFaceDraft
+  options: GenerateFaceOptions & { draft?: GenerateFaceDraft } = {}
 ) {
   // A picture taken in after the last one made (an upload, an undo) wins the slot back.
   const [superseded, setSuperseded] = useState(false)
-  const generation = useAvatarGeneration((made) => {
-    setSuperseded(!onResult(made))
-  }, onStart)
+  const generation = useAvatarGeneration(
+    (made, apply) => {
+      setSuperseded(!onResult(made, apply))
+    },
+    onStart,
+    options
+  )
   const made = generation.result && !superseded ? generation.result : null
   const picture: SlotPicture | null = made
     ? { src: `data:image/png;base64,${made.png}`, description: made.description }
     : applied
-  const [ownDescription, setDescription] = useState('')
-  const description = draft?.value ?? ownDescription
+  const [ownDescription, setOwnDescription] = useState('')
+  const description = options.draft?.value ?? ownDescription
+  const setDescription = options.draft?.onChange ?? setOwnDescription
   // Editing reopens the description field under a picture already made.
   const [editing, setEditing] = useState(false)
   // Bumped to move focus into the field; `select` also selects its text for retyping.
@@ -61,9 +70,14 @@ export function useGenerateFace(
     select: false
   })
   // The field folds to one line of description while the slot holds a picture.
-  const folded = picture !== null && !editing && generation.run.kind === 'idle'
+  const folded =
+    picture !== null &&
+    !editing &&
+    (generation.run.kind === 'idle' || generation.run.kind === 'saving')
   return {
     ...generation,
+    /** The run goes on with the picker closed. */
+    background: options.background ?? false,
     /** The picture just made, unless another was taken in since. */
     made,
     picture,
@@ -71,11 +85,7 @@ export function useGenerateFace(
     supersede: () => setSuperseded(true),
     description,
     setDescription: (next: string) => {
-      if (draft) {
-        draft.onChange(next)
-      } else {
-        setDescription(next)
-      }
+      setDescription(next)
       generation.clearError()
     },
     editing,
@@ -88,8 +98,18 @@ export function useGenerateFace(
       setFocus((now) => ({ count: now.count + 1, select: true }))
     },
     generate: () => {
+      if (generation.run.kind === 'saving') {
+        return
+      }
       setEditing(false)
       generation.generate(description)
+    },
+    /** As if just mounted: a run still going is released, and the description cleared. */
+    reset: () => {
+      generation.reset()
+      setSuperseded(false)
+      setDescription('')
+      setEditing(false)
     }
   }
 }
@@ -170,6 +190,17 @@ export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.El
           </span>
           <span className={AT_REST}>{t('bots.avatar.generate.generating', 'Generating…')}</span>
           <span className={ON_HOVER}>{t('bots.avatar.generate.cancel', 'Cancel')}</span>
+          {face.background ? (
+            // Closing the picker doesn't stop the run; the picture lands on its own.
+            <span
+              className={cn(
+                '-mt-1 max-w-full px-2 text-center text-[11px] leading-4 text-balance text-muted-foreground',
+                AT_REST
+              )}
+            >
+              {t('bots.avatar.generate.closeAnytime', 'Close anytime')}
+            </span>
+          ) : null}
         </PromptTile>
       </button>
     )
@@ -291,9 +322,9 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
       box.setSelectionRange(box.value.length, box.value.length)
     }
   }, [count, select])
-  const ready = face.description.trim().length > 0 && !running
+  const ready = face.description.trim().length > 0 && !running && face.run.kind !== 'saving'
   return (
-    <div className="flex flex-col rounded-lg border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
+    <div className="flex flex-col rounded-md border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
       <textarea
         ref={ref}
         value={face.description}
@@ -314,7 +345,9 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
         // Two lines at rest, growing to six, then scrolling.
         className="scrollbar-sleek block max-h-[122px] min-h-[46px] w-full resize-none bg-transparent px-2.5 pt-2 text-[13px] leading-[19px] text-foreground outline-none [field-sizing:content] placeholder:text-muted-foreground read-only:text-muted-foreground"
       />
-      <div className="flex items-center justify-between px-1.5 pt-1 pb-1.5">
+      {/* The agent glyph and the send button's edge both sit at the text's 10px side inset; the
+          button's bottom matches the text's 8px top inset. */}
+      <div className="flex items-center justify-between pt-1 pr-2.5 pb-2 pl-1.5">
         <AgentMenu face={face} disabled={running} />
         <Button
           type="button"
@@ -375,7 +408,9 @@ export function GenerateField({ face }: { face: GenerateFace }): React.JSX.Eleme
           </Tooltip>
         </p>
       </BotPictureRowFold>
-      <BotPictureRowFold open={!face.folded} className="px-1 pt-2 pb-1">
+      {/* Inset by the popover's 12px content padding; the carousel's 4px of slack under its tiles
+          plus pt-2 makes the gap above 12px too. */}
+      <BotPictureRowFold open={!face.folded} className="px-3 pt-2 pb-3">
         <DescriptionField face={face} />
         <BotPictureRowFold open={note !== null}>
           {shownNote ? <FieldNoteLine note={shownNote} /> : null}

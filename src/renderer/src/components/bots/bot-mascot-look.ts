@@ -54,6 +54,20 @@ export function faceMascotSvg(svg: string, outfit: BotOutfitLayer): string {
     : trimmed
 }
 
+/** The mascot's SVG on `color` (null: its own sky blue), with the face `outfit` redraws, if any. */
+export function botMascotSvg(
+  id: BotMascotId,
+  color: string | null,
+  outfit?: BotOutfitLayer
+): string | null {
+  const svg = MASCOT_SVGS[`../../../../shared/bot-mascots/${id}.svg`]
+  if (!svg) {
+    return null
+  }
+  const tiled = color ? recolorMascotSvg(svg, color) : svg
+  return outfit ? faceMascotSvg(tiled, outfit) : tiled
+}
+
 function artSrc(art: string): string {
   return `data:image/webp;base64,${art}`
 }

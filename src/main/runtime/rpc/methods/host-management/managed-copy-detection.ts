@@ -7,9 +7,11 @@ import {
   installedManagedAgentCommand,
   installedManagedAgentLauncher,
   isManagedAgentCli,
+  launchReleasesPending,
   MANAGED_AGENT_CLI_IDS,
   managedAgentCli,
   managedAgentStandsInFor,
+  noteLaunchReleasesRecorded,
   type ManagedAgentCliId
 } from '../../../../managed-agent-cli/managed-agent-cli-registry'
 import { runtimeReleaseMayBePublished } from '../../../../node-runtime/managed-runtime-release'
@@ -52,9 +54,8 @@ export function managedCopyMayRun(
   return standInSpec(agent)?.managedCopyAllowed?.(runtime.requireStore().getSettings()) !== false
 }
 
-// Set once launch reclaim has read every release, which installs and removals then keep current.
-let releasesRead = false
-// What the disk check counted before that read, so the read can say when it disagrees.
+// What the disk check counted before launch reclaim read the releases, so that read can say when
+// it disagrees.
 let countedOnDisk: readonly ManagedAgentCliId[] = []
 let detectionSettings: ManagedCopySettingsSource | null = null
 
@@ -64,7 +65,6 @@ function rememberedManagedAgents(runtime: ManagedCopySettingsSource): ManagedAge
   )
 }
 
-const releasesReadOnce = Promise.withResolvers<void>()
 // Bounds how long a startup detection waits for the read before reporting no path.
 const RELEASE_READ_WAIT_MS = 10_000
 let releaseReadWait: Promise<void> | undefined
@@ -74,11 +74,12 @@ async function managedAgentLauncherOnceRead(agent: string): Promise<string | nul
   if (!isManagedAgentCli(agent)) {
     return null
   }
-  if (!releasesRead) {
+  const pending = launchReleasesPending()
+  if (pending !== null) {
     if (!releaseReadWait) {
       let timer: ReturnType<typeof setTimeout> | undefined
       releaseReadWait = Promise.race([
-        releasesReadOnce.promise,
+        pending,
         new Promise<void>((resolve) => {
           timer = setTimeout(resolve, RELEASE_READ_WAIT_MS)
         })
@@ -98,7 +99,8 @@ export function provideManagedAgentDetection(runtime: ManagedCopySettingsSource)
   detectionSettings = runtime
   provideInstalledManagedAgents(async () => {
     try {
-      if (releasesRead) {
+      // Once launch reclaim has read every release, installs and removals keep them current.
+      if (launchReleasesPending() === null) {
         return rememberedManagedAgents(runtime)
       }
       const dataDirectory = getProfileUserDataPath()
@@ -122,8 +124,7 @@ export function provideManagedAgentDetection(runtime: ManagedCopySettingsSource)
 /** Launch reclaim has read Orca's releases: detection answers from them from now on, and a copy the
  *  disk check counted that the read found unusable (damaged, another platform's) is announced. */
 export function noteManagedReleasesRead(): void {
-  releasesRead = true
-  releasesReadOnce.resolve()
+  noteLaunchReleasesRecorded()
   const counted = countedOnDisk
   countedOnDisk = []
   if (counted.length === 0 || !detectionSettings) {

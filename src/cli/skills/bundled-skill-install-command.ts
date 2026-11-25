@@ -1,6 +1,5 @@
 import { homedir } from 'node:os'
 import { realpath } from 'node:fs/promises'
-import { join } from 'node:path'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
 import { isLocalEnvironmentSelector } from '../hosts/local-environment-selector'
@@ -16,7 +15,10 @@ import type {
   BundledSkillPlan
 } from '../../shared/skills/bundled/bundled-skill-plan'
 import { isBundledSkillLeaveReason } from '../../shared/skills/bundled/bundled-skill-plan'
-import { collapseHomePath } from '../../shared/skills/bundled/bundled-skill-locations'
+import {
+  collapseHomePath,
+  skillBackupDirectory
+} from '../../shared/skills/bundled/bundled-skill-locations'
 import {
   BUNDLED_SKILL_LEAVE_REASON_TEXT,
   BUNDLED_SKILL_PLAN_OP_TEXT,
@@ -241,8 +243,9 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
       (name) =>
         `${name}: not installed, so skipped. Install it with: orca skills install --skill ${name}`
     )
+    // Why the home's own separator: path.join would mix them for a home from another OS.
     const backupFolder = collapseHomePath(
-      join(plan.homeDirectory, '.agents', '.orca-skill-backups'),
+      skillBackupDirectory(plan.homeDirectory),
       plan.homeDirectory
     )
     const forceHint = hasReplaceableLeave(plan)

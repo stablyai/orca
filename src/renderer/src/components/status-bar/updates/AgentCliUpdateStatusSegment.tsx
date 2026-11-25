@@ -36,6 +36,17 @@ function runRow(row: AgentCliUpdateRow): void {
   void useAppStore.getState().runAgentCliUpdate(agentCliUpdateHostTarget(row.hostKey), row.agent)
 }
 
+// A CLI the user updated in a terminal clears once its host is asked again.
+function checkGroupsOnOpen(open: boolean, groups: readonly AgentCliUpdateGroup[]): void {
+  if (!open) {
+    return
+  }
+  const { checkAgentCliUpdatesOnOpen } = useAppStore.getState()
+  for (const group of groups) {
+    void checkAgentCliUpdatesOnOpen(agentCliUpdateHostTarget(group.hostKey))
+  }
+}
+
 /** Shown while the user's own Claude Code or Codex CLI on a host has a newer release out. */
 export function AgentCliUpdateStatusSegment(): React.JSX.Element | null {
   const t = useTranslate()
@@ -90,7 +101,7 @@ export function AgentCliUpdateStatusSegment(): React.JSX.Element | null {
         }
 
   return (
-    <Popover>
+    <Popover onOpenChange={(open) => checkGroupsOnOpen(open, groups)}>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
