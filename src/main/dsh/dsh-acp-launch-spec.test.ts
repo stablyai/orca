@@ -57,25 +57,58 @@ describe('DSH ACP launch spec', () => {
     const undo = await result?.aroundNewSession?.(tempDir)
     expect(await readFile(instructionsPath, 'utf8')).toContain('Follow Orca bot rules.')
 
-    // A concurrent instruction-free launch waits until session/new finishes and calls undo.
-    let undoCompleted = false
-    const concurrentNoInstructions = acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
+    // A concurrent instruction-free launch waits until session/new finishes before clearing and
+    // holding the folder lock across its own session/new.
+    const noInstructionsLaunch = await acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
       sessionId: 'dsh-session-2',
       text: null,
       env: {},
       cwd: tempDir
-    }).then((res) => {
-      undoCompleted = true
-      return res
     })
+    expect(noInstructionsLaunch?.aroundNewSession).toBeTypeOf('function')
+
+    let noInstructionsEntered = false
+    const concurrentNoInstructions = noInstructionsLaunch
+      ?.aroundNewSession?.(tempDir)
+      .then((releaseLock) => {
+        noInstructionsEntered = true
+        return releaseLock
+      })
 
     await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(undoCompleted).toBe(false)
+    expect(noInstructionsEntered).toBe(false)
     expect(await readFile(instructionsPath, 'utf8')).toContain('Follow Orca bot rules.')
 
     await undo?.()
-    await expect(concurrentNoInstructions).resolves.toBeNull()
-    expect(undoCompleted).toBe(true)
+    const releaseNoInstructionsLock = await concurrentNoInstructions
+    expect(noInstructionsEntered).toBe(true)
+    await expect(stat(instructionsPath)).rejects.toThrow()
+
+    // Reverse order: while the instruction-free launch is in session/new, a concurrent launch with
+    // instructions waits to write AGENTS.local.md until the instruction-free launch releases the lock.
+    const blockedByNoInstructions = await acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
+      sessionId: 'dsh-session-2b',
+      text: 'Blocked bot rules.',
+      env: {},
+      cwd: tempDir
+    })
+    let blockedPlaced = false
+    const blockedPlacement = blockedByNoInstructions
+      ?.aroundNewSession?.(tempDir)
+      .then((nextUndo) => {
+        blockedPlaced = true
+        return nextUndo
+      })
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(blockedPlaced).toBe(false)
+    await expect(stat(instructionsPath)).rejects.toThrow()
+
+    await releaseNoInstructionsLock?.()
+    const blockedUndo = await blockedPlacement
+    expect(blockedPlaced).toBe(true)
+    expect(await readFile(instructionsPath, 'utf8')).toContain('Blocked bot rules.')
+    await blockedUndo?.()
     await expect(stat(instructionsPath)).rejects.toThrow()
 
     // Two concurrent launches with instructions serialize around session/new in the same folder.

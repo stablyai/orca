@@ -7,7 +7,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { ManagedRuntime } from '../../node-runtime/managed-runtime-release'
 import type { AcpSkillRootsLoader } from './acp-skill-roots'
-import type { AcpInstructionsDelivery } from './acp-instructions'
+import type { AcpInstructionsDelivery, AcpInstructionsLaunch } from './acp-instructions'
 import type {
   StructuredAgentSessionHistory,
   StructuredAgentTranscriptImport
@@ -99,7 +99,7 @@ export type AcpLaunchSpec = {
    *  with any cannot start. */
   instructions?: AcpInstructionsDelivery
   /** Takes what an earlier `instructions` wrote back out of the folder; a launch with none runs it. */
-  undoInstructions?: (input: { cwd: string }) => Promise<void>
+  undoInstructions?: (input: { cwd: string }) => Promise<AcpInstructionsLaunch | null | void>
   /** `instructions` writes into the chat's own folder, so Orca never adds any just for visuals. */
   instructionsInWorkspace?: true
   transcriptImport: StructuredAgentTranscriptImport | null

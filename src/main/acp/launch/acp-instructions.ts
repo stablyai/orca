@@ -251,17 +251,25 @@ export const deliverDshInstructions: AcpInstructionsDelivery = async ({ text }) 
   aroundNewSession: (cwd) => placeDshOpeningInstructions(cwd, text)
 })
 
-/** DSH reads the folder's AGENTS.local.md at session creation, so a launch that brings no
- *  instructions removes any stale block an earlier crashed launch left behind, after any
- *  in-flight `session/new` in the same folder finishes. */
-export const undoDshInstructions = async ({ cwd }: { cwd: string }): Promise<void> => {
+async function clearDshOpeningInstructions(cwd: string): Promise<() => Promise<void>> {
   const release = await acquireDshFolderLock(cwd)
   try {
     await removeFolderContextFile(cwd, 'AGENTS.local.md', 'DeepSeek Harness')
-  } finally {
+    return async () => {
+      release()
+    }
+  } catch (error) {
     release()
+    throw error
   }
 }
+
+/** DSH reads the folder's AGENTS.local.md at session creation, so a launch that brings no
+ *  instructions removes any stale block an earlier crashed launch left behind and holds the
+ *  folder lock across `session/new` so no concurrent launch writes instructions into it. */
+export const undoDshInstructions = async (): Promise<AcpInstructionsLaunch> => ({
+  aroundNewSession: (cwd) => clearDshOpeningInstructions(cwd)
+})
 
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
 // Only an instructions file applies at once: an AGENTS.md there counts as nested and loads on demand.
@@ -369,8 +377,9 @@ export async function makeAcpInstructionsFolder(
   return path
 }
 
-/** Null for a session without instructions; throws when the agent cannot take them, so the session
- *  never starts without them. */
+/** Null for a session without instructions (unless `undoInstructions` provides launch hooks such
+ *  as `aroundNewSession`); throws when the agent cannot take them, so the session never starts
+ *  without them. */
 export async function acpLaunchInstructions(
   spec: Pick<AcpLaunchSpec, 'agent' | 'instructions' | 'undoInstructions'>,
   dataDirectory: string,
@@ -384,8 +393,7 @@ export async function acpLaunchInstructions(
 ): Promise<AcpInstructionsLaunch | null> {
   const { text } = input
   if (!text) {
-    await spec.undoInstructions?.({ cwd: input.cwd })
-    return null
+    return (await spec.undoInstructions?.({ cwd: input.cwd })) ?? null
   }
   const delivered = await spec.instructions?.({
     text,
