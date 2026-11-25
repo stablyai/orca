@@ -12,10 +12,15 @@ export type StructuredAgentListedSelection = (
 
 export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   capabilities: AgentSessionCapabilities
+  /** Every start gives the agent its session's current standing instructions, a reopened
+   *  conversation included; otherwise a reopened one keeps those it began with. */
+  instructionsEachStart: boolean
   /** Absent means Orca never supplies this agent’s managed runtime. */
   managedRuntime?: () => boolean
   /** Whether a chat pinned to `home` runs a program the host has rather than the managed runtime. */
   runsHostProgram?: (home: AgentSessionAccountHome) => boolean
+  /** Chats pinned to `home` run on the host program's own login. */
+  usesOwnLogin?: (home: AgentSessionAccountHome) => boolean
   restingOptions: {
     acceptsKey: (key: string) => boolean
     /** Null means no fallback catalog. */

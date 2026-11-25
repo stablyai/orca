@@ -9,6 +9,8 @@ import {
 
 type ServerPortForwardState = Omit<WorktreeOperationRouteState, 'runtimeEnvironments'> & {
   runtimeEnvironments?: readonly { id: string; orcadDeployment?: OrcadDeploymentLink }[]
+  /** This desktop's own SSH targets; a paired server's targets live on that server. */
+  sshTargetLabels?: ReadonlyMap<string, string>
 }
 
 // The store registers itself so link routing need not import it.
@@ -26,11 +28,24 @@ export function serverSshForwardTargetId(environmentId: string): string | null {
   return (environment && getOrcadSshDeployment(environment)?.sshTargetId) || null
 }
 
-/** Whether this desktop can forward the paired server's localhost ports over its own connection, from its last probed status. */
-export function serverForwardsPorts(environmentId: string): boolean {
+/** Whether this desktop can forward an SSH host's localhost ports over its own connection to it. */
+export function sshForwardsPorts(targetId: string): boolean {
   return (
     typeof window !== 'undefined' &&
-    serverSshForwardTargetId(environmentId) === null &&
+    window.api?.ssh?.ensurePortForward !== undefined &&
+    readOwnerState?.()?.sshTargetLabels?.has(targetId) === true
+  )
+}
+
+/** Whether this desktop can forward the paired server's localhost ports: over SSH for a server
+ *  deployed that way, else over its own connection, from its last probed status. */
+export function serverForwardsPorts(environmentId: string): boolean {
+  const sshTargetId = serverSshForwardTargetId(environmentId)
+  if (sshTargetId !== null) {
+    return sshForwardsPorts(sshTargetId)
+  }
+  return (
+    typeof window !== 'undefined' &&
     window.api?.runtimeEnvironments?.portForwards !== undefined &&
     readCachedRuntimeEnvironmentCapability(
       environmentId,
