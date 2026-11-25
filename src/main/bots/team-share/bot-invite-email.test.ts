@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import type { Bot } from '../../../shared/bot-types'
 import { OrcaCloudRequestError } from '../../orca-profiles/cloud-auth/profile-cloud-client'
-import { postBotInvite } from './bot-invite-email'
+import { botInviteEmail, postBotInvite } from './bot-invite-email'
 
-const invite = { to: 'alice@example.com', agentName: 'Ada' }
+const invite = { to: 'alice@example.com', agentName: 'Ada', connectors: [] }
+
+const unlinked: Pick<
+  Bot,
+  'name' | 'avatar' | 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github'
+> = { name: 'Ada', avatar: null, slack: null, linear: null, github: null }
 
 function answering(status: number, body?: unknown): typeof fetch {
   return async () =>
@@ -48,5 +54,39 @@ describe('invite email', () => {
     const body = await sent[0]?.json()
     expect(body).toMatchObject(invite)
     expect(body.requestId).toMatch(/^[A-Za-z0-9_-]{16,64}$/)
+  })
+
+  it("names the bot's mascot, never an uploaded or emoji picture", () => {
+    expect(botInviteEmail({ ...unlinked, avatar: 'mascot:G1' }, 'a@example.com')).toEqual({
+      to: 'a@example.com',
+      agentName: 'Ada',
+      avatar: 'mascot:G1',
+      connectors: []
+    })
+    for (const avatar of ['upload:7', '🐙', 'mascot:Z9', null]) {
+      expect(botInviteEmail({ ...unlinked, avatar }, 'a@example.com')).not.toHaveProperty('avatar')
+    }
+  })
+
+  it('lists the services the bot answers on, Slack, GitHub then Linear', () => {
+    const slack = { appId: 'A1', teamId: 'T1', ownerUserId: 'u1' }
+    const linear = { workspaceId: 'w1', workspaceName: 'Acme', urlKey: 'acme', ownerUserId: 'u1' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the link's presence is read.
+    const linked = {
+      ...unlinked,
+      slackApps: [slack],
+      linearWorkspaces: [linear],
+      github: { ownerUserId: 'u1' }
+    } as unknown as typeof unlinked
+    expect(botInviteEmail(linked, 'a@example.com').connectors).toEqual([
+      'slack',
+      'github',
+      'linear'
+    ])
+    // A bot saved before several Slack workspaces.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the link's presence is read.
+    const legacy = { ...unlinked, slack } as unknown as typeof unlinked
+    expect(botInviteEmail(legacy, 'a@example.com').connectors).toEqual(['slack'])
+    expect(botInviteEmail(unlinked, 'a@example.com').connectors).toEqual([])
   })
 })
