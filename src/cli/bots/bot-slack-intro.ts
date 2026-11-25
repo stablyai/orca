@@ -4,6 +4,7 @@ import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { callerChat } from '../automations/automation-caller-chat'
 import { readInjectedBotToken } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import { BOT_SLACK_CHANNEL_HELLO_SET_METHOD } from '../../shared/rpc-contract/bots-slack-channel-hello-params'
 import { callBots, findBot } from './bot'
 
 type IntroAnswer = {
@@ -28,7 +29,7 @@ export const BOT_SLACK_INTRO_HANDLERS: Record<string, CommandHandler> = {
     const botToken = readInjectedBotToken()
     let answer: Awaited<ReturnType<typeof callBots<IntroAnswer>>>
     try {
-      answer = await callBots<IntroAnswer>(client, 'bots.slackChannelHello.set', {
+      answer = await callBots<IntroAnswer>(client, BOT_SLACK_CHANNEL_HELLO_SET_METHOD, {
         ...callerChat(),
         ...(botToken ? { botToken } : {}),
         ...(botId ? { botId } : {}),

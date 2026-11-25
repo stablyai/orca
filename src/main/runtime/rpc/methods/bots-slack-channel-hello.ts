@@ -44,7 +44,7 @@ function callingBot(
 /** Why Orca Cloud doesn't act on the switch here yet; null where it does. */
 function notApplied(bot: Bot, cloud: CloudTakes): string | null {
   return cloud === 'not_connected'
-    ? `${bot.name}’s Orca isn’t connected to Orca Cloud, so Orca Cloud may still post its Slack intro.`
+    ? `${bot.name}’s Orca isn’t connected to Orca Cloud right now, so Orca Cloud may still post its Slack intro.`
     : cloud === 'no'
       ? `Orca Cloud doesn’t take this switch yet, so ${bot.name} still posts an intro when added to a Slack channel.`
       : null
@@ -92,7 +92,9 @@ async function setSlackChannelHello(params: BotSlackChannelHelloSetParams, conte
   if (callerBot && callerBot.id !== bot.id) {
     throw new InvalidArgumentError('A bot can change only its own Slack intro.')
   }
-  const features = runtime.getConnectorCloud()?.cloudFeatures() ?? null
+  // Only a cloud the connector reaches now applies it; a cached answer from before a halt, a refused
+  // sign-in or an outage doesn't.
+  const features = runtime.getConnectorCloud()?.liveCloudFeatures() ?? null
   const cloud: CloudTakes =
     features === null
       ? 'not_connected'
@@ -106,9 +108,11 @@ async function setSlackChannelHello(params: BotSlackChannelHelloSetParams, conte
   if (why) {
     throw new InvalidArgumentError(`${why} Nothing was changed.`)
   }
-  // From a bot's chat or run, only a turn its owner asked for may change the owner's setting.
+  // From a bot's chat or run, only a turn its owner asked for may change the owner's setting, as the
+  // host verified it: a bot's command without that evidence (an older CLI, a WSL chat, a raw call)
+  // changes nothing.
   if (callerBot) {
-    const turnFor = caller ? await botTurnFor(runtime, caller, verified) : 'none'
+    const turnFor = verified ? await botTurnFor(runtime, verified, verified) : 'none'
     if (turnFor !== 'owner') {
       throw new InvalidArgumentError(
         'Only your owner can turn off your Slack intro. Ask them to, or to do it in Orca.'

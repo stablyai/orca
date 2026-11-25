@@ -16,8 +16,11 @@ vi.mock('../../../bots/bot-session-tabs', () => ({
     bots.list().find((bot) => bot.id === sessions.get(sessionId)?.bot) ?? null
 }))
 vi.mock('../../../bots/bot-turn-for', () => ({
-  botTurnFor: async (_runtime: unknown, sessionId: string) =>
-    sessions.get(sessionId)?.turnFor ?? 'someone_else'
+  // As the real one: a verified caller other than the session acts for no one.
+  botTurnFor: async (_runtime: unknown, sessionId: string, verified: string | undefined) =>
+    verified !== undefined && verified !== sessionId
+      ? 'none'
+      : (sessions.get(sessionId)?.turnFor ?? 'someone_else')
 }))
 vi.mock('../../../bots/bot-chat-status-line', () => ({ writeInChat: vi.fn() }))
 // A run's token names its bot; 'ended' is one Orca no longer knows.
@@ -64,7 +67,7 @@ function runtimeFor(options: { features?: string[] | null; look?: string } = {})
       update
     },
     lookAround: { botOfLook: (sessionId: string) => (sessionId === options.look ? 'scout' : null) },
-    getConnectorCloud: () => ({ cloudFeatures: () => (features ? new Set(features) : null) }),
+    getConnectorCloud: () => ({ liveCloudFeatures: () => (features ? new Set(features) : null) }),
     getRuntimeId: () => 'runtime-a',
     registerSubscriptionCleanup: () => {}
   }
@@ -87,7 +90,8 @@ function contextFor(
 
 describe('bots.slackChannelHello.set', () => {
   it('turns off a bot’s own intro in a turn its owner asked for, or a named bot’s from a terminal', async () => {
-    const fromChat = contextFor()
+    // The host verified the command came from the bot's chat, in a turn its owner asked for.
+    const fromChat = contextFor({ verified: 'scout-chat' })
     await expect(
       setIntro!.handler({ callerSessionId: 'scout-chat', off: true }, fromChat.context)
     ).resolves.toMatchObject({ bot: { id: 'scout' }, slackChannelHello: false, cloud: 'yes' })
@@ -100,32 +104,71 @@ describe('bots.slackChannelHello.set', () => {
   })
 
   it('refuses, and changes nothing, for every caller that may not turn it off', async () => {
-    const refused: [string, Parameters<typeof contextFor>[0], Record<string, unknown>][] = [
-      ['another bot’s chat', {}, { callerSessionId: 'scout-chat', botId: 'reviewer', off: true }],
-      ['a turn for someone else', {}, { callerSessionId: 'scout-slack', off: true }],
-      ['a look-around run', { look: 'scout-chat' }, { callerSessionId: 'scout-chat', off: true }],
+    const refused: [string, Parameters<typeof contextFor>[0], Record<string, unknown>, string][] = [
+      [
+        'another bot’s chat',
+        { verified: 'scout-chat' },
+        { callerSessionId: 'scout-chat', botId: 'reviewer', off: true },
+        'its own'
+      ],
+      [
+        'a turn for someone else',
+        { verified: 'scout-slack' },
+        { callerSessionId: 'scout-slack', off: true },
+        'Only your owner'
+      ],
+      // A bot's chat the host didn't verify (an older CLI, a WSL chat, a raw call).
+      [
+        'a declared chat alone',
+        {},
+        { callerSessionId: 'scout-chat', off: true },
+        'Only your owner'
+      ],
+      [
+        'a look-around run',
+        { look: 'scout-chat' },
+        { callerSessionId: 'scout-chat', off: true },
+        'can only read'
+      ],
       // The host-verified session wins over the one the command names.
       [
         'a verified turn for someone else',
         { verified: 'scout-slack' },
-        { callerSessionId: 'scout-chat', off: true }
+        { callerSessionId: 'scout-chat', off: true },
+        'Only your owner'
       ],
-      ['an ended token', {}, { botToken: 'ended', botId: 'scout', off: true }],
+      ['an ended token', {}, { botToken: 'ended', botId: 'scout', off: true }, 'token ended'],
       [
         'a token for another bot than the chat',
         {},
-        { botToken: 'reviewer-token', callerSessionId: 'scout-chat', off: true }
+        { botToken: 'reviewer-token', callerSessionId: 'scout-chat', off: true },
+        'its own'
       ],
       // A bot's token with no chat to check the turn in.
-      ['a token with no session', {}, { botToken: 'scout-token', off: true }],
+      ['a token with no session', {}, { botToken: 'scout-token', off: true }, 'Only your owner'],
       // A paired client's session claim names no chat, so it must name the bot.
-      ['a paired claim', { pairedDeviceId: 'phone' }, { callerSessionId: 'scout-chat', off: true }],
-      ['a cloud that doesn’t honour it', { features: [] }, { botId: 'scout', off: true }],
-      ['no connection to Orca Cloud', { features: null }, { botId: 'scout', off: true }]
+      [
+        'a paired claim',
+        { pairedDeviceId: 'phone' },
+        { callerSessionId: 'scout-chat', off: true },
+        'Name the bot'
+      ],
+      [
+        'a cloud that doesn’t honour it',
+        { features: [] },
+        { botId: 'scout', off: true },
+        'doesn’t take this switch'
+      ],
+      [
+        'no live connection to Orca Cloud',
+        { features: null },
+        { botId: 'scout', off: true },
+        'isn’t connected'
+      ]
     ]
-    for (const [why, options, params] of refused) {
+    for (const [why, options, params, refusal] of refused) {
       const { context, update, saved } = contextFor(options)
-      await expect(setIntro!.handler(params as never, context), why).rejects.toThrow()
+      await expect(setIntro!.handler(params as never, context), why).rejects.toThrow(refusal)
       expect(update, why).not.toHaveBeenCalled()
       expect(saved.get('scout')?.slackChannelHello, why).toBeUndefined()
       expect(saved.get('reviewer')?.slackChannelHello, why).toBeUndefined()

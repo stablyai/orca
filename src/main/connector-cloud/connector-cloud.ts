@@ -2,7 +2,7 @@
 import { connectorAccountName } from './connector-token-mint'
 import type { z } from 'zod'
 import type { ConnectorCloudStatus } from '../../shared/bots/connector-cloud-status'
-import { connectorCloudFeatureFacts } from './connector-cloud-feature-facts'
+import { connectorBotListFacts, type ConnectorBotListFacts } from './connector-cloud-feature-facts'
 import {
   connectorStopNeedsSignIn,
   SIGNED_OUT,
@@ -150,24 +150,15 @@ export class ConnectorCloud {
   }
 
   /** What `bots.list` says of this connection. */
-  botListFacts(): ReturnType<typeof connectorCloudFeatureFacts> & {
-    threadReplies: boolean
-    connectorStatus: ConnectorCloudStatus
-    connectorMessage?: string
-    connectorNeedsSignIn?: true
-  } {
-    const connectorStatus = this.status()
-    const needsSignIn = this.needsSignIn() || connectorStatus === 'needs-sign-in'
-    return {
+  botListFacts(): ConnectorBotListFacts {
+    return connectorBotListFacts({
+      status: this.status(),
+      needsSignIn: this.needsSignIn(),
+      refusal: this.reach.refusal,
       threadReplies: this.takesThreadReplies(),
-      ...connectorCloudFeatureFacts(this.cloudFeatures()),
-      connectorStatus,
-      ...((connectorStatus === 'refused' || connectorStatus === 'needs-sign-in') &&
-      this.reach.refusal
-        ? { connectorMessage: this.reach.refusal }
-        : {}),
-      ...(needsSignIn ? { connectorNeedsSignIn: true } : {})
-    }
+      features: this.cloudFeatures(),
+      live: this.liveCloudFeatures()
+    })
   }
 
   /**
@@ -290,8 +281,8 @@ export class ConnectorCloud {
         },
         onHalt: (reason) => {
           if (this.client === client) {
-            // What it took stops counting with it, so bots.list stops offering it.
-            const told = this.needsSignIn() || this.cloudFeatures() !== null
+            // What it took stops counting with it, so bots.list stops offering what it applies.
+            const told = this.needsSignIn() || this.liveCloudFeatures() !== null
             this.clientStop = reason
             if (told || this.needsSignIn()) {
               this.options.onStatusChanged?.()
@@ -323,10 +314,17 @@ export class ConnectorCloud {
     })
   }
 
-  /** What the cloud's last hello answer listed; null until one arrives, while no client runs, and
-   *  while the cloud has stopped this one, since nothing it takes reaches the cloud until then. */
+  /** What the cloud's last hello answer listed; null until one arrives or while no client runs. */
   cloudFeatures(): ReadonlySet<string> | null {
-    return this.clientStop === null ? (this.client?.cloudFeatures ?? null) : null
+    return this.client?.cloudFeatures ?? null
+  }
+
+  /** The same, only while a change said now reaches the cloud: none while the cloud stopped this
+   *  client, refuses its sign-in or can't be reached, though the last answer stays cached. */
+  liveCloudFeatures(): ReadonlySet<string> | null {
+    return this.clientStop === null && this.client && this.status() === 'ok'
+      ? this.cloudFeatures()
+      : null
   }
 
   /** The signed-in Orca account's name, as a mirrored Slack post names its author. */

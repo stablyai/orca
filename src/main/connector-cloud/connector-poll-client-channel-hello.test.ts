@@ -64,9 +64,24 @@ describe('what bots.list says of the Slack intro switch', () => {
     onStatusChanged.mockClear()
     h.fake.answerPoll({ status: 403, body: { error: 'recent_sign_in_required' } })
     await settle(30_000)
-    expect(cloud.cloudFeatures()).toBeNull()
+    expect(cloud.liveCloudFeatures()).toBeNull()
     expect(cloud.botListFacts().slackChannelHello).toBe(false)
     expect(onStatusChanged).toHaveBeenCalled()
+    stop()
+  })
+
+  it('stops offering it while the cloud can’t be reached, though its last answer stays cached', async () => {
+    h.fake.features = [CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE]
+    const { cloud, stop } = connector()
+    await settle()
+    expect(cloud.botListFacts().slackChannelHello).toBe(true)
+
+    h.fake.online = false
+    h.fake.answerPoll({ status: 503, body: {} })
+    await settle(30_000)
+    expect(cloud.status()).toBe('unreachable')
+    expect(cloud.cloudFeatures()?.has(CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE)).toBe(true)
+    expect(cloud.botListFacts().slackChannelHello).toBe(false)
     stop()
   })
 })
