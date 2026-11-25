@@ -20,9 +20,8 @@ export function useMobileNativeChatAskAnswers(
   questionKeys: readonly string[] | undefined,
   drafts: MobileNativeChatAskDrafts | undefined
 ) {
-  // `keys`: the lines being shown, which differ from `questionKeys` while a line is carried over.
-  const seed = (qi: number, keys = questionKeys): { picks: number[]; other: string } => {
-    const key = keys?.[qi]
+  const seed = (qi: number): { picks: number[]; other: string } => {
+    const key = questionKeys?.[qi]
     const saved = key === undefined ? undefined : drafts?.saved?.[key]
     return {
       picks: [...(saved?.picks ?? [])],
@@ -64,5 +63,12 @@ export function useMobileNativeChatAskAnswers(
     })
     save(qi, { other: value })
   }
-  return { selections, setSelections, setPicks, otherText, setOtherText, setOther, seed }
+  // What each of this render's questions opens with, for a line carried in when the prompt changes.
+  const seeds = prompt.questions.map((_, qi) => seed(qi))
+  // As useState gives them: React's own setters, which the card calls while carrying lines over.
+  return [
+    [selections, setSelections],
+    [otherText, setOtherText],
+    { setPicks, setOther, seeds }
+  ] as const
 }
