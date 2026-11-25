@@ -201,7 +201,7 @@ export async function settlePluginCliCandidate(
     request.nextSteps.push(
       previous
         ? `Nothing changed: ${pluginKey} ${previous.version} stays as it is until this is approved.`
-        : 'Nothing was installed.'
+        : 'Nothing was installed; it installs once approved.'
     )
     if (approvalFingerprint !== request.approvalFingerprint) {
       throw new PluginApprovalRequiredError(request, approvalFingerprint !== undefined)
