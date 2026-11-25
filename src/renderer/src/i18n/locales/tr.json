@@ -22611,6 +22611,7 @@
         "paused": "Duraklatıldı",
         "replied": "{{actor}} yanıtladı",
         "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenAt": "{{time}} zamanında bir kez çalışır",
         "thenLine": "Ardından",
         "thenOnce": "Gerçekleştiğinde bir kez çalışır",
         "thenOnceBy": "Bir kez çalışır; hiçbir şey gelmezse {{time}} zamanında",

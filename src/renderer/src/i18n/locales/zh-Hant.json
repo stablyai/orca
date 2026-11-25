@@ -20404,6 +20404,7 @@
         "paused": "已暫停",
         "replied": "{{actor}} 已回覆",
         "rowAccessibleName": "{{label}}：{{name}}。{{details}}",
+        "thenAt": "於 {{time}} 執行一次",
         "thenLine": "接著",
         "thenOnce": "事件發生時執行一次",
         "thenOnceBy": "執行一次；若無事件，則於 {{time}} 執行",

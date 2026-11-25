@@ -20976,6 +20976,7 @@
         "paused": "一時停止中",
         "replied": "{{actor}} が返信しました",
         "rowAccessibleName": "{{label}}: {{name}}。{{details}}",
+        "thenAt": "{{time}} に 1 回実行します",
         "thenLine": "その後",
         "thenOnce": "発生したときに 1 回実行します",
         "thenOnceBy": "1 回実行します。何も届かなければ {{time}} に実行します",

@@ -20713,6 +20713,7 @@
         "paused": "Pausiert",
         "replied": "{{actor}} hat geantwortet",
         "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenAt": "Läuft einmal um {{time}}",
         "thenLine": "Danach",
         "thenOnce": "Läuft einmal, sobald es eintritt",
         "thenOnceBy": "Läuft einmal; um {{time}}, falls bis dahin nichts eintritt",
