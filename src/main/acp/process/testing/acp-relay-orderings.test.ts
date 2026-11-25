@@ -319,6 +319,7 @@ async function run(
 }
 
 describe('ACP relay orderings', () => {
+  // Thousands of seeded runs take a few seconds, past the default on slow runners.
   it('saves every message whole across seeded orderings of output, acks, cuts and restarts', async () => {
     const failures: string[] = []
     for (let seed = 1; seed <= SEEDS && failures.length < 5; seed += 1) {
@@ -335,6 +336,5 @@ describe('ACP relay orderings', () => {
       }
     }
     expect(failures).toEqual([])
-    // Thousands of seeded runs take a few seconds, past the default on slow runners.
   }, 60_000)
 })
