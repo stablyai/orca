@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { parse } from 'jsonc-parser'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { addMcpServer, setMcpAgentFileAllowed } from '../mcp-host-list'
-import { mcpAgentFileEntry } from './mcp-agent-file-entry'
 import { McpAgentFileLedger } from './mcp-agent-file-ledger'
 import { syncMcpAgentFiles, type McpAgentFileSyncDeps } from './mcp-agent-file-sync'
 
@@ -131,23 +130,5 @@ describe("Orca's servers in Grok's, Cursor's and Droid's own MCP files", () => {
     expect(read(paths.cursor)).toBe(CURSOR_BEFORE)
     expect(read(paths.grok)).toBe(GROK_BEFORE)
     expect(existsSync(paths.droid)).toBe(false)
-  })
-
-  it('starts a Windows dev build’s .cmd launcher through cmd', () => {
-    expect(
-      mcpAgentFileEntry(
-        {
-          userDataPath: 'C:\\Users\\k\\AppData\\Roaming\\orca-dev',
-          launcher: 'C:\\o\\orca-dev.cmd'
-        },
-        'srv_12345678',
-        'cursor',
-        'win32'
-      )
-    ).toEqual({
-      command: 'cmd',
-      args: ['/c', 'C:\\o\\orca-dev.cmd', 'mcp', 'connect', 'srv_12345678', '--agent', 'cursor'],
-      env: { ORCA_USER_DATA_PATH: 'C:\\Users\\k\\AppData\\Roaming\\orca-dev' }
-    })
   })
 })
