@@ -1,5 +1,6 @@
 // A host's structured-session wiring for bots: preambles, own tools, the turn context, and look-around turns.
 import type { Bot } from '../../shared/bot-types'
+import { BoundedMap } from '../../shared/collections/bounded-map'
 import type { KnownPairedBotRoster } from './paired-bot-rosters'
 import type { StructuredAgentSessionRuntimeDeps } from '../runtime/agent-session/installation/structured-agent-session-runtime-contract'
 import { botHomeFolder, localBotHomeFilesystem } from './bot-home'
@@ -7,9 +8,13 @@ import type { BotChatRow } from '../../shared/bots/bot-chat-row'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { BotLookAroundStore } from './bot-look-around-store'
 import type { BotTurnNoteRead } from './bot-active-work'
-import { currentBotToolsRevision } from './bot-tools-file'
-import { sessionMcpLaunchTools } from '../mcp-servers/session-mcp-launch'
-import { botToolsEpoch, type BotLaunchedTools } from './bot-tools-revision'
+import {
+  sessionLaunchToolsChanged,
+  sessionLaunchToolsOutdated,
+  sessionMcpLaunchTools,
+  type SessionLaunchedTools
+} from '../mcp-servers/session-mcp-launch'
+import { sessionHostMcpDelivered } from '../mcp-servers/session-host-mcp-delivery'
 import { createBotTurnContext } from './bot-turn-context'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { BotChatJournal } from './bot-turn-rows'
@@ -90,8 +95,9 @@ export function botStructuredSessionWiring(deps: {
   }
   /** The projects each session's launch scanned, so a later link is told apart from them. */
   const launchScans = new Map<string, readonly string[] | null>()
-  /** The tools each chat's running agent launched with; a chat with none here never refreshes. */
-  const launchedTools = new Map<string, BotLaunchedTools>()
+  /** The tools each chat's running agent launched with; a chat with none here never refreshes.
+   *  Every chat that got host servers is here, so the oldest fall out past a bound. */
+  const launchedTools = new BoundedMap<string, SessionLaunchedTools>({ maxEntries: 2_000 })
   /** Chats whose agent loaded the bot's folder and rereads it: a change needs only the names. */
   const liveSkills = new Set<string>()
   const turnContext = createBotTurnContext(
@@ -202,12 +208,12 @@ export function botStructuredSessionWiring(deps: {
         const launched = launchedTools.get(sessionId)
         return (
           launched !== undefined &&
-          (await currentBotToolsRevision(launched.folder)) !== launched.revision
+          (await sessionLaunchToolsChanged(launched, sessionHostMcpDelivered(sessionId)))
         )
       },
       outdated: (sessionId) => {
         const launched = launchedTools.get(sessionId)
-        return launched !== undefined && botToolsEpoch(launched.folder) !== launched.epoch
+        return launched !== undefined && sessionLaunchToolsOutdated(launched)
       }
     },
     prepareSessionLinkedSkills: async (record) => {

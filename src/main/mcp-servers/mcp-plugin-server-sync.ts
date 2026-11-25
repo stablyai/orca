@@ -2,8 +2,10 @@
 // Orca's sign-in, the relay and every launch treat them as any other server. The user's switches on
 // one stay across plugin updates, and a sync that changes nothing writes nothing.
 import { randomUUID } from 'node:crypto'
+import { stat } from 'node:fs/promises'
 import { freeBotToolName, type BotToolServer } from '../../shared/bot-tools'
 import type { BotToolNewCredential } from '../bots/bot-tools-file'
+import { botToolsPath } from '../bots/bot-tools-path'
 import { sortAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
 import { changeHostEntries, readHostEntries, type HostEntry } from './mcp-host-list'
 import { mcpHostListFolder } from './mcp-host-list-folder'
@@ -149,16 +151,40 @@ const sameEntries = (a: readonly HostEntry[], b: readonly HostEntry[]): boolean 
 /** Stands for "nothing to write", so the file and its revision stay as they are. */
 class Unchanged extends Error {}
 
+/** The list file's identity, so an edit by anything else (another process, a restore) shows. */
+async function hostListFileStamp(folder: string): Promise<string> {
+  const file = await stat(botToolsPath(folder), { bigint: true }).catch(() => null)
+  return file ? `${file.ino}:${file.size}:${file.mtimeNs}:${file.ctimeNs}` : 'absent'
+}
+
+/** What a sync of `plugins` into `folder` depends on, read before the sync: equal versions sync to
+ *  the same entries. A sync's own write changes the stamp, so the next one checks once more. */
+export async function pluginMcpServersVersion(
+  plugins: PluginMcpServers,
+  folder = mcpHostListFolder()
+): Promise<string> {
+  return JSON.stringify([
+    folder,
+    await hostListFileStamp(folder),
+    plugins.declared,
+    [...plugins.held].sort()
+  ])
+}
+
+/** `settled`: the list matches `plugins` and every address is sorted, so the same plugins need no
+ *  sync again. False when aborted or when an address couldn't be reached and waits for a retry. */
+export type PluginMcpServerSyncResult = { wrote: boolean; settled: boolean }
+
 /**
  * Makes the host's plugin entries match `plugins`: adds new ones, replaces a changed definition
  * (keeping the entry's id, name and switches), leaves held plugins' entries alone and removes the
- * rest; nothing once `signal` aborts before the write. True when it wrote.
+ * rest; nothing once `signal` aborts before the write.
  */
 export async function syncPluginMcpServers(
   plugins: PluginMcpServers,
   { signal }: { signal?: AbortSignal } = {},
   folder = mcpHostListFolder()
-): Promise<boolean> {
+): Promise<PluginMcpServerSyncResult> {
   const { entries } = await readHostEntries(folder)
   const byKey = new Map(
     entries.flatMap((entry) => {
@@ -176,6 +202,7 @@ export async function syncPluginMcpServers(
   )
   // Filled by the change below and read by the write after it: the sign-ins its entries name.
   const credentials = new Map<string, BotToolNewCredential>()
+  let settled = false
   try {
     await changeHostEntries(
       folder,
@@ -186,6 +213,10 @@ export async function syncPluginMcpServers(
         }
         credentials.clear()
         const next = nextEntries(current, plugins, sorted, credentials)
+        settled = next.every((entry) => {
+          const mark = pluginMarkOf(entry.extras)
+          return !mark?.unsorted || plugins.held.has(mark.key)
+        })
         if (sameEntries(current, next)) {
           throw new Unchanged()
         }
@@ -195,9 +226,9 @@ export async function syncPluginMcpServers(
     )
   } catch (error) {
     if (error instanceof Unchanged) {
-      return false
+      return { wrote: false, settled }
     }
     throw error
   }
-  return true
+  return { wrote: true, settled }
 }

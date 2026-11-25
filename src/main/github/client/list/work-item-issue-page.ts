@@ -20,13 +20,14 @@ type IssueNode = {
   title: string
   state: string
   url: string
+  createdAt: string
   updatedAt: string
   author: Actor | null
   labels: { nodes: { name: string }[]; pageInfo: { hasNextPage: boolean } }
   assignees: { nodes: Actor[]; pageInfo: { hasNextPage: boolean } }
 }
 const ISSUE_NODE_SELECTION = `__typename ... on Issue {
-  number title state url updatedAt
+  number title state url createdAt updatedAt
   author { __typename login avatarUrl }
   labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
   assignees(first: 100) { nodes { __typename login avatarUrl } pageInfo { hasNextPage } }
