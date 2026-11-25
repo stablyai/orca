@@ -16665,8 +16665,6 @@
           "noRemote": "Local git repo · no remote",
           "openUpstream": "Open {{value0}} in browser",
           "forkOf": "Fork of {{value0}}",
-          "openSettingsPage": "Open settings page",
-          "done": "Done",
           "resetDone": "Icon and color reset",
           "undo": "Undo",
           "styleLetters": "Letters",
@@ -16676,7 +16674,8 @@
           "lettersInput": "Up to 2 letters",
           "lettersPlaceholder": "1–2 letters",
           "useLetters": "Use “{{value0}}”",
-          "usingGitHubAvatar": "Using the GitHub avatar"
+          "usingGitHubAvatar": "Using the GitHub avatar",
+          "openSettings": "Open Settings"
         }
       },
       "pet": {

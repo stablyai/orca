@@ -16644,8 +16644,6 @@
           "noRemote": "Yerel Git repository’si · remote yok",
           "openUpstream": "{{value0}} adresini tarayıcıda aç",
           "forkOf": "{{value0}} fork’u",
-          "openSettingsPage": "Ayarlar sayfasını aç",
-          "done": "Bitti",
           "resetDone": "Simge ve renk sıfırlandı",
           "undo": "Geri al",
           "styleLetters": "Harfler",
