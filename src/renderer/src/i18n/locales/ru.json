@@ -17216,7 +17216,7 @@
           "13822cdfda": "Обычный текст"
         },
         "RichMarkdownDocLinkMenu": {
-          "e17b987473": "↑↓ перемещение&nbsp;&nbsp;↵ выбор&nbsp;&nbsp;esc закрыть",
+          "e17b987473": "↑↓ перемещение  ↵ выбор  esc закрыть",
           "63ced7cb9b": "Документы не найдены",
           "0e8489bc11": "Ссылки на документы Markdown",
           "showingOfTotal": "Показано {{shown}} из {{total}}"

@@ -18274,7 +18274,7 @@
           "13822cdfda": "Plain text"
         },
         "RichMarkdownDocLinkMenu": {
-          "e17b987473": "↑↓ navigate&nbsp;&nbsp;↵ select&nbsp;&nbsp;esc dismiss",
+          "e17b987473": "↑↓ navigate  ↵ select  esc dismiss",
           "63ced7cb9b": "No documents found",
           "0e8489bc11": "Markdown document links",
           "showingOfTotal": "Showing {{shown}} of {{total}}"
