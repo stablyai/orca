@@ -1,5 +1,8 @@
 import { open, type FileHandle } from 'node:fs/promises'
-import type { BrowserServerDownloadCopyArgs } from '../../../shared/browser/downloads/browser-server-download-copy'
+import type {
+  BrowserServerDownloadCopyArgs,
+  BrowserServerDownloadCopyResult
+} from '../../../shared/browser/downloads/browser-server-download-copy'
 import {
   BROWSER_DOWNLOAD_COPY_FRAME_BYTES,
   BROWSER_DOWNLOAD_COPY_FRAME_KIND,
@@ -29,26 +32,37 @@ const COPY_START_TIMEOUT_MS = 60_000
 const COPY_PROGRESS_TIMEOUT_MS = 60_000
 const COPY_RELEASE_TIMEOUT_MS = 10_000
 
-// Running copies by copy id, for Cancel.
-const runningCopies = new Map<string, AbortController>()
+// Running copies by copy id, for Cancel; `finishing` once the file is being moved into Downloads.
+type RunningCopy = {
+  controller: AbortController
+  // Aborts on Cancel, a retired connection or the window going away, whichever comes first.
+  signal: AbortSignal
+  finishing: boolean
+  // Set only when Cancel is what stopped it: its own reason, so nothing else is taken for it.
+  cancelReason: Error | null
+}
+const runningCopies = new Map<string, RunningCopy>()
 
 /**
  * Copies a download a paired server saved into this computer's Downloads under a free name. The
  * server streams it as binary frames on the stream's own socket and sends each next one only once
  * this side has written it to disk, so memory stays one window whatever the file's size. A failure
- * or Cancel leaves nothing here; the server's copy stays either way.
+ * or Cancel before the move into Downloads leaves nothing here; the server's copy stays either way.
  */
 export async function copyBrowserServerDownloadHere(
   args: BrowserServerDownloadCopyArgs,
   rendererGone: AbortSignal
-): Promise<{ destinationPath: string }> {
+): Promise<BrowserServerDownloadCopyResult> {
   const { environmentId, copyId, expectedEnvironmentPairingRevision } = args
   if (runningCopies.has(copyId)) {
     throw new Error('This download is already being copied.')
   }
   const controller = new AbortController()
-  runningCopies.set(copyId, controller)
   const signal = AbortSignal.any([controller.signal, rendererGone])
+  const running: RunningCopy = { controller, signal, finishing: false, cancelReason: null }
+  runningCopies.set(copyId, running)
+  const isCancel = (error: unknown): boolean =>
+    running.cancelReason !== null && error === running.cancelReason
   // Removing or re-pairing the server retires its transport; this copy's socket goes with it.
   const stopRetirement = onRuntimeEnvironmentTransportGenerationRetired((retired) => {
     if (retired === environmentId) {
@@ -79,13 +93,15 @@ export async function copyBrowserServerDownloadHere(
     tempPath = createSiblingTransferPath(reserved.savePath, 'download')
     const file = await open(tempPath, 'wx')
     handle = file
-    await new Promise<void>((resolve, reject) => {
+    // Frames are written one after another. Once the stream stops none starts, but one already
+    // being written is waited for before the outcome is decided (below).
+    let writes: Promise<void> = Promise.resolve()
+    const streamFailure = await new Promise<void>((resolve, reject) => {
       let size: number | null = null
       let received = 0
       let written = 0
       let ended = false
       let settled = false
-      let writes = Promise.resolve()
       // A server whose socket stays up but whose file stops arriving frees everything here.
       const stall = setTimeout(
         () => fail(new Error('The server stopped sending the file.')),
@@ -128,10 +144,10 @@ export async function copyBrowserServerDownloadHere(
           return
         }
         writes = writes.then(async () => {
-          if (settled) {
-            return
-          }
           for (let offset = 0; offset < bytes.byteLength;) {
+            if (settled) {
+              return
+            }
             offset += (await file.write(bytes, offset, bytes.byteLength - offset)).bytesWritten
           }
           written += bytes.byteLength
@@ -200,12 +216,34 @@ export async function copyBrowserServerDownloadHere(
         },
         (error: unknown) => fail(error instanceof Error ? error : new Error(String(error)))
       )
-    })
+    }).then(
+      () => null,
+      (error: unknown) => error
+    )
     stream.subscription?.close()
     stream.subscription = null
-    await file.close()
+    const writeFailure = await writes.then(
+      () => null,
+      (error: unknown) => error
+    )
     handle = null
+    // Network shares and full disks can report a lost write only when the file closes.
+    const closeFailure = await file.close().then(
+      () => null,
+      (error: unknown) => error
+    )
+    // What stopped the stream is reported, unless it was Cancel: a write already under way or the
+    // close failing is the disk's own failure, which Cancel didn't cause and mustn't hide.
+    const failure =
+      streamFailure !== null && !isCancel(streamFailure)
+        ? streamFailure
+        : (writeFailure ?? closeFailure ?? streamFailure)
+    if (failure !== null) {
+      throw failure
+    }
     signal.throwIfAborted()
+    // Too late to cancel from here: a copy stopped partway into Downloads couldn't be safely removed.
+    running.finishing = true
     const destinationPath = await promoteDownloadedFileWithoutOverwrite(
       tempPath,
       reserved.savePath,
@@ -218,7 +256,13 @@ export async function copyBrowserServerDownloadHere(
       signal
     )
     saved = true
-    return { destinationPath }
+    return { canceled: false, destinationPath }
+  } catch (error) {
+    // Only Cancel's own reason counts: a failure it didn't cause still shows.
+    if (isCancel(error)) {
+      return { canceled: true }
+    }
+    throw error
   } finally {
     stopRetirement()
     runningCopies.delete(copyId)
@@ -244,9 +288,17 @@ export async function copyBrowserServerDownloadHere(
   }
 }
 
-/** Cancel: stops the copy and removes what it wrote here. */
+/**
+ * Cancel: stops the copy and removes what it wrote here. False when there is nothing to cancel,
+ * something else already stopped it, or the file is already being moved into Downloads; the copy
+ * then ends saved or failed as usual.
+ */
 export function cancelBrowserServerDownloadCopy(copyId: string): boolean {
-  const controller = runningCopies.get(copyId)
-  controller?.abort(new Error('Canceled.'))
-  return controller !== undefined
+  const running = runningCopies.get(copyId)
+  if (!running || running.finishing || running.signal.aborted) {
+    return false
+  }
+  running.cancelReason = new Error('Canceled.')
+  running.controller.abort(running.cancelReason)
+  return true
 }

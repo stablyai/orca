@@ -83,7 +83,6 @@ async function copyHere(
   { toastId, target, copyId, filename }: DownloadCopyOffer,
   expectedEnvironmentPairingRevision: number | undefined
 ): Promise<void> {
-  let canceled = false
   toast.loading(
     translate('browser.serverPage.download.copying', 'Downloading {{filename}} to this computer…', {
       filename
@@ -95,7 +94,7 @@ async function copyHere(
         label: translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel'),
         onClick: (event: ReactMouseEvent) => {
           event.preventDefault()
-          canceled = true
+          // Main refuses it once the file is being moved into Downloads; the copy then ends as usual.
           void window.api.browser.cancelServerDownloadCopy({ copyId })
         }
       }
@@ -103,7 +102,7 @@ async function copyHere(
   )
   try {
     // Main writes each slice straight to disk; no bytes pass through this window.
-    const { destinationPath } = await window.api.browser.copyServerDownload({
+    const result = await window.api.browser.copyServerDownload({
       environmentId: target.environmentId,
       copyId,
       filename,
@@ -111,6 +110,12 @@ async function copyHere(
         ? {}
         : { expectedEnvironmentPairingRevision })
     })
+    if (result.canceled) {
+      // The server's copy stays; nothing was left here.
+      toast.dismiss(toastId)
+      return
+    }
+    const { destinationPath } = result
     toast.success(
       translate('browser.serverPage.download.copied', 'Saved to {{path}}', {
         path: destinationPath
@@ -129,11 +134,6 @@ async function copyHere(
       }
     )
   } catch (error) {
-    if (canceled) {
-      // The server's copy stays; nothing was left here.
-      toast.dismiss(toastId)
-      return
-    }
     toast.error(
       translate(
         'browser.serverPage.download.copyFailed',
