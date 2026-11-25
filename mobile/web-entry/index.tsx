@@ -1,4 +1,6 @@
 // Web shell entry for the phone’s h/[hostId] route tree, packaged by build:mobile-web.
+// Must stay the first import: later modules use built-ins older WebViews lack.
+import './install-older-webview-polyfills'
 import { useEffect, type PropsWithChildren } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { QueryClient } from '@tanstack/react-query'

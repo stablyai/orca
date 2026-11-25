@@ -30,7 +30,9 @@ import java.io.ByteArrayInputStream
 /** Publish host and manifest map atomically/volatily: main-thread writes race Chromium’s interceptor. */
 private class MobileWebShellServed(
   val generation: MobileWebShellGeneration,
-  val originHost: String
+  val originHost: String,
+  /** No document-start scripts on this WebView: the document carries the blocker as its first script. */
+  val blockerInDocument: Boolean
 )
 
 /** Where a document's reports go: the view showing it, or the spare pool while it is parked. */
@@ -90,8 +92,14 @@ internal class MobileWebShellDocument(private val context: Context) {
       return
     }
     blocker?.remove()
-    blocker = installMobileWebShellNetworkApiBlocker(view, origin)
-    if (blocker == null) {
+    blocker = null
+    val fence = mobileWebShellNetworkFence(context)
+    if (fence == MobileWebShellNetworkFence.DOCUMENT_START_SCRIPT) {
+      blocker = installMobileWebShellNetworkApiBlocker(view, origin)
+    }
+    if (fence == MobileWebShellNetworkFence.UNAVAILABLE ||
+      (fence == MobileWebShellNetworkFence.DOCUMENT_START_SCRIPT && blocker == null)
+    ) {
       failPropUpdate(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE)
       return
     }
@@ -99,7 +107,7 @@ internal class MobileWebShellDocument(private val context: Context) {
       failPropUpdate(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE)
       return
     }
-    served = MobileWebShellServed(loaded, host)
+    served = MobileWebShellServed(loaded, host, fence == MobileWebShellNetworkFence.PAGE_SCRIPT)
     view.visibility = View.VISIBLE
     view.loadUrl("$origin/")
   }
@@ -201,7 +209,7 @@ internal class MobileWebShellDocument(private val context: Context) {
     view.destroy()
   }
 
-  // Keep explicit settings even where newer WebViews ignore deprecated options; the floor is Chromium 101.
+  // Keep explicit settings even where newer WebViews ignore deprecated options; the floor is Chromium 99.
   // B4 requires device proofs: no network, persistent state, file/content access, cleartext or navigation escape.
   @Suppress("DEPRECATION")
   private fun createWebView(): WebView {
@@ -300,8 +308,18 @@ internal class MobileWebShellDocument(private val context: Context) {
       val headers = mobileWebShellResponseHeaders(path, bytes.size)
       return WebResourceResponse("text/html", "utf-8", 200, "OK", headers, ByteArrayInputStream(bytes))
     }
+    if (path == MOBILE_WEB_SHELL_NETWORK_API_BLOCKER_PATH) {
+      val bytes = MOBILE_WEB_SHELL_NETWORK_API_BLOCKER_BYTES
+      val headers = mobileWebShellResponseHeaders(path, bytes.size)
+      return WebResourceResponse("text/javascript", "utf-8", 200, "OK", headers, ByteArrayInputStream(bytes))
+    }
     val asset = current.generation.entries[path] ?: return null
-    val bytes = runCatching { asset.file.readBytes() }.getOrNull() ?: return null
+    val stored = runCatching { asset.file.readBytes() }.getOrNull() ?: return null
+    val bytes = if (path == "/" && current.blockerInDocument) {
+      withMobileWebShellNetworkApiBlockerScript(stored)
+    } else {
+      stored
+    }
     val headers = mobileWebShellResponseHeaders(path, bytes.size)
     val (mimeType, charset) = splitMobileWebShellContentType(asset.contentType)
     return WebResourceResponse(mimeType, charset, 200, "OK", headers, ByteArrayInputStream(bytes))

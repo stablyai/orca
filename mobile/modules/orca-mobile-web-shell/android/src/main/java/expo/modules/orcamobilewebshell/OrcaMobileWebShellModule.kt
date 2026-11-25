@@ -9,7 +9,6 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.functions.Queues
@@ -76,8 +75,7 @@ class OrcaMobileWebShellModule : Module() {
       val info = WebViewCompat.getCurrentWebViewPackage(context) ?: return@Function null
       val version = info.versionName ?: return@Function null
       val name = info.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: info.packageName
-      val hasShellFeatures = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) &&
-        WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
+      val hasShellFeatures = mobileWebShellNetworkFence(context) != MobileWebShellNetworkFence.UNAVAILABLE
       mapOf("name" to name, "version" to version, "hasShellFeatures" to hasShellFeatures)
     }
 
