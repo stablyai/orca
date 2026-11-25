@@ -136,23 +136,35 @@ type ListRowProps = {
   subtitleMono?: boolean
   /** A subtitle that is a status to act on, e.g. "Needs sign-in", in its tone's colour. */
   subtitleColor?: string
-  /** A muted mark in a fixed-width column before the title, e.g. an item's `#35`. */
+  /** A status after the subtitle on its line, in its tone's colour: "Daily at 9 AM · Needs sign-in". */
+  subtitleNote?: { text: string; color: string }
+  /** A muted mark in a fixed-width column before the title, e.g. a step's number. */
   marker?: string
+  /** A muted mark inline before the title, e.g. an item's `#35`, so titles keep one start. */
+  titlePrefix?: string
   /** Lines the subtitle may take before it cuts; two by default. */
   subtitleLines?: number
+  /** A small mark before the subtitle, e.g. the agent a row runs. */
+  subtitleIcon?: ReactNode
   /** Richer content under the title, e.g. usage bars or a coloured status line. */
   detail?: ReactNode
   /** A slot for an icon or a status dot, 24 pt wide or as wide as its content. */
   leading?: ReactNode
   /** The current value in grey, e.g. "This computer". */
   value?: string
+  /** A small mark before the value, e.g. an agent's logo. */
+  valueIcon?: ReactNode
   /** Anything after the value: a switch, a badge, a spinner. */
   accessory?: ReactNode
   /** Draws a chevron: the row opens a picker or another screen. */
   navigates?: boolean
   /** Draws a check: the row is the picked option. */
   selected?: boolean
+  /** A checkbox row that draws its own tick: its state for screen readers. */
+  checked?: boolean
   destructive?: boolean
+  /** An action, not a setting (e.g. "Open sign-in page"): the title in the accent, like Home's "Pair a desktop". */
+  accent?: boolean
   /** Something new to read: the title bolder. */
   strong?: boolean
   onPress?: () => void
@@ -172,15 +184,21 @@ export function ListRow({
   subtitle,
   subtitleMono = false,
   subtitleColor,
+  subtitleNote,
   marker,
+  titlePrefix,
   subtitleLines = 2,
+  subtitleIcon,
   detail,
   leading,
   value,
+  valueIcon,
   accessory,
   navigates = false,
   selected,
+  checked,
   destructive = false,
+  accent = false,
   strong = false,
   onPress,
   onLongPress,
@@ -204,23 +222,32 @@ export function ListRow({
           listRowStyles.title,
           subtitle !== undefined && listRowStyles.titleEmphasis,
           strong && listRowStyles.titleStrong,
-          destructive && listRowStyles.titleDestructive
+          destructive && listRowStyles.titleDestructive,
+          accent && listRowStyles.titleAccent
         ]}
         numberOfLines={wrapTitle ? undefined : 1}
       >
+        {titlePrefix !== undefined ? (
+          <Text style={listRowStyles.titlePrefix}>{`${titlePrefix} `}</Text>
+        ) : null}
         {title}
       </Text>
       {subtitle !== undefined ? (
-        <Text
-          style={[
-            listRowStyles.subtitle,
-            subtitleMono && listRowStyles.subtitleMono,
-            subtitleColor !== undefined && { color: subtitleColor }
-          ]}
-          numberOfLines={subtitleLines}
-        >
-          {subtitle}
-        </Text>
+        <WithIcon icon={subtitleIcon}>
+          <Text
+            style={[
+              listRowStyles.subtitle,
+              subtitleMono && listRowStyles.subtitleMono,
+              subtitleColor !== undefined && { color: subtitleColor }
+            ]}
+            numberOfLines={subtitleLines}
+          >
+            {subtitle}
+            {subtitleNote ? (
+              <Text style={{ color: subtitleNote.color }}>{` · ${subtitleNote.text}`}</Text>
+            ) : null}
+          </Text>
+        </WithIcon>
       ) : null}
       {detail}
     </View>
@@ -239,9 +266,11 @@ export function ListRow({
         main
       )}
       {value !== undefined ? (
-        <Text style={listRowStyles.value} numberOfLines={1}>
-          {value}
-        </Text>
+        <WithIcon icon={valueIcon} shrink>
+          <Text style={listRowStyles.value} numberOfLines={1}>
+            {value}
+          </Text>
+        </WithIcon>
       ) : null}
       {accessory}
       {selected ? <Check size={17} color={colors.textPrimary} strokeWidth={2.4} /> : null}
@@ -271,13 +300,35 @@ export function ListRow({
       accessibilityRole={accessibilityRole ?? (selected === undefined ? 'button' : 'radio')}
       accessibilityLabel={accessibilityLabel ?? (value ? `${title}, ${value}` : title)}
       accessibilityState={
-        selected === undefined ? inertState : { ...inertState, checked: selected, selected }
+        selected === undefined
+          ? { ...inertState, ...(checked !== undefined && { checked }) }
+          : { ...inertState, checked: selected, selected }
       }
       testID={testID}
       style={({ pressed }) => [...rowStyle, pressed && listRowStyles.pressed]}
     >
       {content}
     </Pressable>
+  )
+}
+
+function WithIcon({
+  icon,
+  shrink = false,
+  children
+}: {
+  icon: ReactNode
+  shrink?: boolean
+  children: ReactNode
+}) {
+  if (icon === undefined || icon === null) {
+    return <>{children}</>
+  }
+  return (
+    <View style={[listRowStyles.withIcon, shrink && listRowStyles.shrink]}>
+      {icon}
+      {children}
+    </View>
   )
 }
 
@@ -305,10 +356,14 @@ const listRowStyles = themedStyleSheet(() => ({
   },
   title: { fontSize: 15, color: colors.textPrimary },
   titleEmphasis: { fontWeight: '500' },
+  titlePrefix: { color: colors.textMuted, fontVariant: ['tabular-nums'] },
   titleStrong: { fontWeight: '700' },
   titleDestructive: { color: colors.statusRed },
-  subtitle: { fontSize: 13, color: colors.textSecondary },
+  titleAccent: { color: colors.accentBlue },
+  subtitle: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
   subtitleMono: { fontFamily: typography.monoFamily },
   value: { fontSize: 15, color: colors.textSecondary, flexShrink: 1, maxWidth: 180 },
-  checkSpace: { width: 17 }
+  checkSpace: { width: 17 },
+  withIcon: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minWidth: 0 },
+  shrink: { flexShrink: 1 }
 }))

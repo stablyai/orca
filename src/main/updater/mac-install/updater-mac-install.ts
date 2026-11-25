@@ -16,6 +16,7 @@ export function registerMacUpdaterEvents({
   commitStagedMacInstall,
   finishMacStaging,
   failMacStaging,
+  isAwaitingMacStaging,
   shouldDeferMacQuitForInstall,
   sendStatus
 }: {
@@ -27,6 +28,7 @@ export function registerMacUpdaterEvents({
   commitStagedMacInstall: () => void
   finishMacStaging: () => string | null
   failMacStaging: (error: unknown) => void
+  isAwaitingMacStaging: () => boolean
   shouldDeferMacQuitForInstall: () => boolean
   sendStatus: (status: UpdateStatus) => void
 }): void {
@@ -34,7 +36,8 @@ export function registerMacUpdaterEvents({
     nativeUpdater.on('error', failMacStaging)
     nativeUpdater.on('update-downloaded', () => {
       // Interactive staging owns the feed until a native result, even after the UI times out.
-      const stagingVersion = finishMacStaging()
+      const stagingVersion =
+        finishMacStaging() ?? (isAwaitingMacStaging() ? getPendingInstallVersion() : null)
       if (shouldDeferMacQuitForInstall() && stagingVersion === null) {
         return
       }

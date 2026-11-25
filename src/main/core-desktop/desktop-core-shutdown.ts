@@ -72,6 +72,10 @@ function stopPluginsAndSessions(
   // Final stats flush closes working sessions synchronously; quit supplies no terminating hook to preserve their duration.
   core.starNag?.stop()
   core.automations?.stop()
+  core.stopTeamPolicyRefresh?.()
+  core.stopTeamPolicyRefresh = null
+  core.stopTeamPluginPolicy?.()
+  core.stopTeamPluginPolicy = null
   if (core.runtime) {
     getWorkspaceCleanupRunner(core.runtime)?.stop()
   }
@@ -168,6 +172,9 @@ export function beginDesktopCoreShutdown(
   // The connector was fenced at before-quit; its last turn ends and memory history rows land now.
   const connectorTurnEndsFlush = ConnectorTurnEvents.settled()
   const botMemoryHistoryFlush = runtime?.bots.memory.historySettled() ?? Promise.resolve()
+  // Which Slack drawing each bot shows, unsaved after a failed write: one bounded last try.
+  const botSlackIconRecordsFlush =
+    runtime?.bots.slackIcons.shownRecords.finalSave() ?? Promise.resolve()
   const browserJoins = native.retireBrowsers()
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
   const finalStore = profile.store
@@ -253,6 +260,7 @@ export function beginDesktopCoreShutdown(
     { name: 'stats', promise: statsFlush },
     { name: 'connector-turn-ends', promise: connectorTurnEndsFlush },
     { name: 'bot-memory-history', promise: botMemoryHistoryFlush },
+    { name: 'bot-slack-icon-records', promise: botSlackIconRecordsFlush },
     { name: 'state', promise: storeFlush }
   ]
 }

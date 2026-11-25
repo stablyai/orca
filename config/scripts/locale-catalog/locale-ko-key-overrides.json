@@ -1394,12 +1394,6 @@
   "auto.components.right.sidebar.FileExplorerRow.revealInFinder": {
     "ko": "Finder에서 보기"
   },
-  "auto.components.right.sidebar.GitHistoryPanel.8232c8b2f2": {
-    "ko": "{{value0}} 커밋 열기: {{value1}}"
-  },
-  "auto.components.right.sidebar.GitHistoryPanel.9289ba0cb9": {
-    "ko": "refs란 무엇인가요?"
-  },
   "auto.components.right.sidebar.GitHubPRStackMap.316039b5db": {
     "ko": "검사 결과 대기 중"
   },
@@ -1647,7 +1641,22 @@
     "ko": "라이트"
   },
   "auto.components.settings.AutoRenameBranchFromWorkSetting.d9b65054ef": {
-    "ko": ") 작업을 요약하는 짧은 이름으로 변경됩니다. Orca가 직접 이름 붙인 브랜치만 이름을 바꾸며, 푸시된 후에는 이름을 바꾸지 않습니다."
+    "ko": " 대신 작업을 요약하는 짧은 이름으로). Orca가 직접 이름 붙인 브랜치만 이름을 바꾸며, 푸시된 후에는 이름을 바꾸지 않습니다."
+  },
+  "auto.components.settings.BaseRefPicker.a5c16712c1": {
+    "ko": "여러 개의 원격이 감지되었습니다. 결과를 좁히려면 원격 이름(예:"
+  },
+  "auto.components.settings.BaseRefPicker.80f7c82303": {
+    "ko": ")이나 전체 참조(예:"
+  },
+  "auto.components.settings.BaseRefPicker.ade9a5bb03": {
+    "ko": ")를 입력하세요."
+  },
+  "auto.components.settings.ManageSessionKillDialog.8401328fed": {
+    "ko": "세션"
+  },
+  "auto.components.settings.ManageSessionKillDialog.ad9832aa26": {
+    "ko": "을(를) 강제 종료합니다. 해당 창에서 저장되지 않은 작업은 모두 손실됩니다. 이 작업은 되돌릴 수 없습니다."
   },
   "auto.components.settings.BaseRefPicker.915ad97875": {
     "ko": "upstream"
@@ -1809,7 +1818,7 @@
     "ko": "키 지우기"
   },
   "auto.components.settings.PrivacyPane.79a0f3c16c": {
-    "ko": "텔레메트리는 다음에 의해 비활성화됩니다."
+    "ko": "텔레메트리가"
   },
   "auto.components.settings.PrivacyPane.e3970bbbf5": {
     "ko": "CI 환경 변수가 설정되었기 때문에 텔레메트리가 비활성화되었습니다. 설정을 해제하고 다시 시작하세요."
@@ -1879,6 +1888,9 @@
   },
   "auto.components.settings.RepositoryHooksSection.a3fc966677": {
     "ko": "# 예: pnpm install cp \"$ORCA_ROOT_PATH/.env\" \"$ORCA_WORKTREE_PATH/.env\""
+  },
+  "auto.components.settings.RepositoryHooksSection.b113344b6a": {
+    "ko": "바꾸려면"
   },
   "auto.components.settings.RepositoryHooksSection.c5a55a2d2e": {
     "ko": "고급"
@@ -2043,7 +2055,7 @@
     "ko": "단축키가 겹칠 때 Orca와 포커스된 터미널 중 어느 쪽이 우선할지 선택합니다."
   },
   "auto.components.settings.ShortcutsPane.4b7ae34062": {
-    "ko": "직접."
+    "ko": "파일을 직접 편집하세요."
   },
   "auto.components.settings.SourceControlAiActionRecipeDefaults.2037c78a6f": {
     "ko": "템플릿"
@@ -2217,13 +2229,13 @@
     "ko": "Warp 테마를 Orca 터미널 테마로 가져옵니다."
   },
   "auto.components.settings.WarpThemeImportModal.found_in_source": {
-    "ko": "{{value0}}에서"
+    "ko": " ({{value0}})"
   },
   "auto.components.settings.WarpThemeImportModal.found_theme_one": {
     "ko": "테마 1개를 찾았습니다."
   },
   "auto.components.settings.WarpThemeImportModal.found_theme_other": {
-    "ko": "테마 {{value0}}개를 찾았습니다."
+    "ko": "테마 {{value0}}개를 찾았습니다"
   },
   "auto.components.settings.WarpThemeImportModal.import_theme_one": {
     "ko": "테마 1개 가져오기"
@@ -2260,6 +2272,9 @@
   },
   "auto.components.settings.WarpThemeImportModal.yaml_title": {
     "ko": "테마 YAML 가져오기"
+  },
+  "auto.components.settings.WarpThemeImportModal.found_theme": {
+    "ko": "테마 {{value0}}개를 찾았습니다"
   },
   "auto.components.settings.WorkspaceDirectorySetting.1a2b3c4d5e": {
     "ko": "클라이언트 기본값"
@@ -2484,10 +2499,10 @@
     "ko": "템플릿"
   },
   "auto.components.settings.computerUseSummary.checkingDescription": {
-    "ko": "Orca가 Computer Use 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다."
+    "ko": "Orca가 컴퓨터 사용 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다."
   },
   "auto.components.settings.computerUseSummary.checkingTitle": {
-    "ko": "Computer Use 액세스 확인 중입니다."
+    "ko": "컴퓨터 사용 액세스 확인 중입니다."
   },
   "auto.components.settings.computerUseSummary.permissionsRequired": {
     "ko": "에이전트가 앱 창을 조작하려면 먼저 {{value0}} 권한{{value1}}이 필요합니다."
@@ -2499,13 +2514,13 @@
     "ko": "요청하면 에이전트가 앱 창을 검사하고 조작할 수 있습니다."
   },
   "auto.components.settings.computerUseSummary.readyTitle": {
-    "ko": "Computer Use를 사용할 준비가 되었습니다."
+    "ko": "컴퓨터 사용 기능을 이용할 준비가 되었습니다."
   },
   "auto.components.settings.computerUseSummary.unavailableDescription": {
-    "ko": "{{value0}} 때문에 Computer Use 권한을 사용할 수 없습니다."
+    "ko": "{{value0}} 때문에 컴퓨터 사용 권한을 사용할 수 없습니다."
   },
   "auto.components.settings.computerUseSummary.unavailableTitle": {
-    "ko": "Computer Use를 사용할 수 없습니다."
+    "ko": "컴퓨터 사용 기능을 이용할 수 없습니다."
   },
   "auto.components.settings.developer.permissions.search.00e954319e": {
     "ko": "Whisper"
@@ -3225,7 +3240,7 @@
     "ko": "이 런타임에서는 아직 Gitea 상태를 사용할 수 없습니다."
   },
   "auto.components.settings.token.source.control.integration.cards.087feb92f1": {
-    "ko": ", 또는 설정"
+    "ko": ","
   },
   "auto.components.settings.token.source.control.integration.cards.0b5242f8a2": {
     "ko": "{{value0}} · PR 및 커밋 상태"
@@ -3255,22 +3270,25 @@
     "ko": "감지된 Azure Repos의 PR 및 빌드 상태"
   },
   "auto.components.settings.token.source.control.integration.cards.60708f23da": {
-    "ko": "Orca가 원격에서 API URL을 추론할 수 없는 경우에만 사용하세요."
+    "ko": "환경 변수를 설정하세요."
   },
   "auto.components.settings.token.source.control.integration.cards.6154b02093": {
     "ko": "Bitbucket 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰과 저장소 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요."
   },
   "auto.components.settings.token.source.control.integration.cards.6da9dfa5de": {
-    "ko": "비공개 저장소의 경우, 그리고"
+    "ko": "환경 변수를 설정하고, Orca가 원격에서 API URL을 추론할 수 없는 경우에만"
   },
   "auto.components.settings.token.source.control.integration.cards.793a06e899": {
     "ko": "다시 확인"
   },
+  "auto.components.settings.token.source.control.integration.cards.7bbc9c64f0": {
+    "ko": "다음 환경 변수 중 하나를 설정하세요:"
+  },
   "auto.components.settings.token.source.control.integration.cards.7bd345e3f6": {
-    "ko": "Orca가 Git 원격에서 API 기본 URL을 추론할 수 없는 경우에만 사용하세요."
+    "ko": "환경 변수를 설정하세요."
   },
   "auto.components.settings.token.source.control.integration.cards.b8a10b07c1": {
-    "ko": ". 설정하세요"
+    "ko": ". Orca가 Git 원격에서 API 기본 URL을 추론할 수 없는 경우에만"
   },
   "auto.components.settings.token.source.control.integration.cards.ea204f5e03": {
     "ko": "{{value0}} · PR 및 빌드 상태"
@@ -3279,7 +3297,7 @@
     "ko": "이 런타임에서는 아직 Azure DevOps 상태를 사용할 수 없습니다."
   },
   "auto.components.settings.token.source.control.integration.cards.fcbe0469fd": {
-    "ko": "공개 저장소는 Git 원격에서 감지됩니다. 설정하세요"
+    "ko": "공개 저장소는 Git 원격에서 감지됩니다. 비공개 저장소에는"
   },
   "auto.components.settings.useWarpThemeImport.import_failed": {
     "ko": "테마를 가져오지 못했습니다."
@@ -3683,6 +3701,9 @@
   "auto.components.stats.ClaudeUsagePane.rangeLast90Days": {
     "ko": "최근 90일"
   },
+  "auto.components.stats.ClaudeUsagePane.2d41fd45c6": {
+    "ko": " • 마지막 스캔 오류: {{value0}}"
+  },
   "auto.components.stats.CodexUsageDailyChart.1e6f62d7e3": {
     "ko": "추론"
   },
@@ -3704,6 +3725,9 @@
   "auto.components.stats.CodexUsagePane.rangeLast90Days": {
     "ko": "최근 90일"
   },
+  "auto.components.stats.CodexUsagePane.8a6655f7a2": {
+    "ko": " • 마지막 스캔 오류: {{value0}}"
+  },
   "auto.components.stats.OpenCodeUsagePane.349f7c3f5c": {
     "ko": "합계"
   },
@@ -3721,6 +3745,9 @@
   },
   "auto.components.stats.OpenCodeUsagePane.rangeLast90Days": {
     "ko": "최근 90일"
+  },
+  "auto.components.stats.OpenCodeUsagePane.6cc7782458": {
+    "ko": " • 마지막 스캔 오류: {{value0}}"
   },
   "auto.components.stats.UsageOverviewPane.6c00c46815": {
     "ko": "공급자를 활성화해 로컬 에이전트 로그를 스캔하고 통합 토큰 원장을 만드세요."
@@ -3798,7 +3825,7 @@
     "ko": "재설정 사용 중…"
   },
   "auto.components.status.bar.StatusBar.6d1042aa6f": {
-    "ko": "활성 계정의 Codex rate-limit 재설정 크레딧 1회를 사용해 재설정 가능한 사용량 창을 즉시 초기화합니다."
+    "ko": "활성 계정의 Codex 사용량 한도 재설정 크레딧 1회를 사용해 재설정 가능한 사용량 구간을 즉시 초기화합니다."
   },
   "auto.components.status.bar.StatusBar.972a1ff497": {
     "ko": "Codex 한도를 재설정할까요?"
@@ -4652,6 +4679,9 @@
   "auto.components.settings.ZcodePlanAccountsSection.detailsUnavailable": {
     "ko": "요금제 자격 증명 세부 정보는 Orca를 실행 중인 컴퓨터에서만 볼 수 있습니다."
   },
+  "auto.components.settings.ZcodePlanAccountsSection.resetIn": {
+    "ko": " — {{value0}} 후 초기화"
+  },
   "accounts.antigravity.changed": {
     "ko": "agy 자체 계정이 변경되었습니다. agy를 시작하기 전에 저장된 계정을 다시 선택하세요."
   },
@@ -4815,7 +4845,7 @@
     "ko": "기본 에이전트 사용"
   },
   "auto.components.settings.SourceControlAiActionRecipeDefaults.bf84dea6af": {
-    "ko": "Orca가 컨텍스트를 삽입하도록 하려는 경우에만 변수를 사용하십시오. 일반 에이전트 기본 설정을 따르려면 에이전트를 기본값으로 둡니다."
+    "ko": "Orca가 컨텍스트를 삽입하도록 하려는 경우에만 변수를 사용하세요. 일반 에이전트 기본 설정을 따르려면 에이전트를 기본값으로 두세요."
   },
   "auto.components.settings.SourceControlAiActionRecipeDefaults.cf01d41bce": {
     "ko": "각 소스 제어 AI 버튼에서 사용되는 에이전트, CLI 인수 및 명령 템플릿입니다."
@@ -5529,10 +5559,10 @@
     "ko": "이 워크스페이스와 모든 하위 워크스페이스의 활성 패널을 닫아 메모리와 CPU 사용량을 줄입니다."
   },
   "auto.components.stats.usage.overview.sections.statusOff": {
-    "ko": "비활성"
+    "ko": "꺼짐"
   },
   "auto.components.settings.contrast.off": {
-    "ko": "끔"
+    "ko": "꺼짐"
   },
   "auto.components.TaskPage.labelCountSingular": {
     "ko": "라벨 {{count}}개"
@@ -5581,5 +5611,23 @@
   },
   "rendererRecovery.quit": {
     "ko": "종료"
+  },
+  "auto.components.skills.install.rowNew": {
+    "ko": "새 스킬"
+  },
+  "auto.components.skills.SkillDelete.placementJoin": {
+    "ko": "와 "
+  },
+  "auto.components.right.sidebar.FileExplorerRow.a06551beee": {
+    "ko": "Enter"
+  },
+  "auto.components.right.sidebar.github.pr.stack.confirmation.84f6f5b9eb": {
+    "ko": "포함됨: {{numbers}}. "
+  },
+  "browser.history.enterKey": {
+    "ko": "Enter"
+  },
+  "components.native-chat.subagents.state.idle": {
+    "ko": "유휴"
   }
 }

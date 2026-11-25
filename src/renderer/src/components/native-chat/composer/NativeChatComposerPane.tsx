@@ -39,7 +39,6 @@ type ComposerHandle = C.NativeChatComposerHandle
 export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatComposerProps>(
   function NativeChatComposerPane(
     {
-      dock,
       terminalTabId,
       room,
       editSession,
@@ -112,7 +111,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       disabled ||
       (structuredTransport?.runtime === 'remote' && structuredTransport.sessionPending === true)
 
-    const { picker, orcaCommands } = useNativeChatComposerCommandPicker({
+    const { picker, orcaCommands, sideChat } = useNativeChatComposerCommandPicker({
       mode: editSession ? 'edit' : launchPrompt || pending ? 'launch' : undefined,
       agent,
       terminalTabId,
@@ -275,8 +274,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       sendPty,
       sendStructured,
       submitEmpty: launchPrompt?.onEmptySubmit,
-      consumeOrcaCommand: pending || launchPrompt ? undefined : orcaCommands.consume,
-      matchesOrcaCommand: pending || launchPrompt ? undefined : orcaCommands.matchesDraft,
+      orcaCommands: pending || launchPrompt ? undefined : orcaCommands,
       setDraft,
       setCaret
     })
@@ -367,10 +365,10 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       <div ref={root} data-native-chat-composer-scope={draftScopeKey}>
         <NativeChatComposerRoomProvider mentions={mentions}>
           <NativeChatComposerField
-            dock={dock}
             draftScopeKey={draftScopeKey}
             positionTarget={editSession ? undefined : terminalTabId}
             textareaRef={textareaRef}
+            sideChat={sideChat}
             draft={draft}
             disabled={disabled}
             hasPty={hasPty}

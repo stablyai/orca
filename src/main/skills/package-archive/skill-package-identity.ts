@@ -184,9 +184,11 @@ export async function observeSkillPackage(
 export async function checkSkillPackageShape(
   packageRoot: string,
   limits: SkillPackageObservationLimits = SKILL_PACKAGE_OBSERVATION_LIMITS,
-  skipDirectory?: (absolutePath: string) => Promise<boolean>
+  skipDirectory?: (absolutePath: string) => Promise<boolean>,
+  signal?: AbortSignal
 ): Promise<void> {
   await walkSkillPackage(packageRoot, limits, {
+    signal,
     platform: process.platform,
     inferShebangExecutables: false,
     skipDirectory,

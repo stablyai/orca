@@ -82,6 +82,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     stateHistory: [],
     ...(status.agentType ? { agentType: status.agentType } : {}),
     ...(status.terminalHandle ? { terminalHandle: status.terminalHandle } : {}),
+    ...(status.orchestration ? { orchestration: status.orchestration } : {}),
     ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
     ...(status.tabId ? { tabId: status.tabId } : {}),
     ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),

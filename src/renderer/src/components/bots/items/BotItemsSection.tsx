@@ -11,9 +11,7 @@ import {
   type BotItemFilter,
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
-import { cn } from '@/lib/class-names'
-import { BotAvatar } from '../BotAvatar'
-import { ALL_CLEAR_PICTURE, BotItemsAllClear } from './BotItemsAllClear'
+import { BotItemsAllClear } from './BotItemsAllClear'
 import { BotItemsList } from './BotItemsList'
 import { BotItemsLoading } from './BotItemsLoading'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
@@ -126,18 +124,7 @@ export function BotItemsSection({
     <>
       {/* Mounted in every read state, so an ask keeps its place and focus as items arrive. */}
       <BotItemsList
-        allClear={
-          allClear ? (
-            <BotItemsAllClear
-              picture={
-                <BotAvatar
-                  bot={bot}
-                  className={cn('size-10 rounded-[9px] text-base', ALL_CLEAR_PICTURE)}
-                />
-              }
-            />
-          ) : null
-        }
+        allClear={allClear ? <BotItemsAllClear /> : null}
         bot={bot}
         groups={groups}
         seenEventId={seenEventId ?? ''}

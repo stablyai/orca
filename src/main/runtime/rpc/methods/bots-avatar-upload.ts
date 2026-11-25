@@ -42,7 +42,9 @@ export const BOT_AVATAR_UPLOAD_METHOD = defineMethod({
       return {
         bot: await context.runtime.bots.setAvatarImage(
           params.botId,
-          Buffer.from(params.png, 'base64')
+          Buffer.from(params.png, 'base64'),
+          params.expectedAvatarRevision,
+          params.expectedAvatarEpoch
         )
       }
     }

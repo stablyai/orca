@@ -245,8 +245,7 @@ export abstract class UsageProviderStoreLifecycle<
           {
             path: usageSourceCachePath(this.config.resolveCacheFile()),
             schemaVersion: this.schemaVersion,
-            worktreeFingerprint,
-            reuse: this.state.worktreeFingerprint === worktreeFingerprint
+            worktreeFingerprint
           }
         )
         this.state.sessions = result.sessions

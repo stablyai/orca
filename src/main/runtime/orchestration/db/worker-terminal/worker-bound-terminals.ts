@@ -1,4 +1,5 @@
-// Terminals that close with a worker: the setup terminal and startup tabs its start opened.
+// Terminals that close with a worker: the setup terminal and startup tabs its start opened, and
+// terminals its agent created with `orca terminal create`.
 import type { OrchestrationDb } from '../orchestration-db'
 import { isEquivalentPaneKey, paneKeyMatchSuffix } from '../pane-key-match'
 import type { WorkerAutoCloseState } from '../../../../../shared/orchestration/workers/worker-auto-close'
@@ -9,7 +10,7 @@ CREATE TABLE IF NOT EXISTS worker_bound_terminals (
   -- The worker's first Dispatch: its terminal resource's origin_dispatch_id.
   dispatch_id     TEXT NOT NULL,
   pane_key        TEXT NOT NULL,
-  -- setup or configured_tab; no CHECK, so later roles need no table rebuild.
+  -- setup, configured_tab or created; no CHECK, so later roles need no table rebuild.
   role            TEXT NOT NULL,
   created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -17,7 +18,10 @@ CREATE INDEX IF NOT EXISTS idx_worker_bound_terminals_dispatch
   ON worker_bound_terminals(dispatch_id);
 `
 
-export type WorkerBoundTerminalRole = 'setup' | 'configured_tab'
+/** The runtime's live view of a setup terminal; the stored setup_state alone goes stale across a restart. */
+export type SetupTerminalLiveness = { isSetupTerminalRunning(handle: string): boolean }
+
+export type WorkerBoundTerminalRole = 'setup' | 'configured_tab' | 'created'
 
 export type WorkerBoundTerminalRow = {
   terminal_handle: string
@@ -89,6 +93,7 @@ export function unbindWorkerTerminal(db: OrchestrationDb, terminalHandle: string
  *  that worker), else null. */
 export function paneAutoCloseState(
   db: OrchestrationDb,
+  setupTerminals: SetupTerminalLiveness,
   paneKey: string
 ): WorkerAutoCloseState | null {
   const own = db.getWorkerAutoCloseState(paneKey)
@@ -96,8 +101,8 @@ export function paneAutoCloseState(
   if (!bound) {
     return own
   }
-  // A failed setup stays open after its worker closes, so it shows no countdown.
-  if (isFailedSetupBinding(db, bound)) {
+  // A failed or running setup stays open after its worker closes, so it shows no countdown.
+  if (setupBindingOutlivesWorker(db, setupTerminals, bound)) {
     return null
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the projection selects exactly these columns.
@@ -143,10 +148,22 @@ export function keepPaneOpen(db: OrchestrationDb, paneKey: string): void {
 
 const FAILED_SETUP_STATES = new Set(['failed', 'spawn_failed'])
 
-/** A setup terminal whose setup failed: it outlives its worker, to show the error. */
-export function isFailedSetupBinding(db: OrchestrationDb, bound: WorkerBoundTerminalRow): boolean {
-  return (
-    bound.role === 'setup' &&
-    FAILED_SETUP_STATES.has(db.getWorkerDispatch(bound.dispatch_id)?.setup_state ?? '')
-  )
+/** Why a setup terminal outlives its worker, or null when it closes with it: a failed setup stays
+ *  bound to show its error; one the runtime sees still running leaves the worker and keeps running,
+ *  as closing it would cut the install off partway. */
+export function setupBindingOutlivesWorker(
+  db: OrchestrationDb,
+  setupTerminals: SetupTerminalLiveness,
+  bound: WorkerBoundTerminalRow
+): 'failed' | 'running' | null {
+  if (bound.role !== 'setup') {
+    return null
+  }
+  const state = db.getWorkerDispatch(bound.dispatch_id)?.setup_state ?? ''
+  if (FAILED_SETUP_STATES.has(state)) {
+    return 'failed'
+  }
+  return state === 'running' && setupTerminals.isSetupTerminalRunning(bound.terminal_handle)
+    ? 'running'
+    : null
 }

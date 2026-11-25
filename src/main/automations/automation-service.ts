@@ -90,6 +90,7 @@ export class AutomationService {
       onRunRefused?: (automation: Automation, error: string) => void
       chatDispatcher?: Launch.AutomationLauncher
       terminalObserver?: AutomationRunTerminalObserver
+      isHostQuitting?: () => boolean
       onAutomationsChanged?: PublishAutomationsChanged
       runTerminalRetention?: (service: AutomationService) => RunTerminalRetention
     } = {}
@@ -110,7 +111,8 @@ export class AutomationService {
           observer: opts.terminalObserver,
           readRun: (automationId, runId) =>
             this.store.listAutomationRuns(automationId).find((entry) => entry.id === runId) ?? null,
-          markDispatchResult: (result) => this.markDispatchResult(result)
+          markDispatchResult: (result) => this.markDispatchResult(result),
+          isHostQuitting: opts.isHostQuitting
         })
       : null
     this.runTerminalRetention = opts.runTerminalRetention?.(this) ?? null

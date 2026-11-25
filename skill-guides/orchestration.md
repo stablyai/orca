@@ -79,10 +79,10 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
 - To talk to a worker, use
   `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body "<message>"`
   in any state: a working worker gets it when its current turn ends; a finished
-  or closed one gets it as a follow-up Task and reports with `worker_done`. The
-  receipt says which.
-  Except on a paired server: a finished worker there refuses `send`, so start
-  new work there with `worker-start --on <server>` (load
+  or closed one gets it as a follow-up Task and reports with `worker_done` (do
+  not pass `--on` for a Dispatch follow-up). The receipt says which.
+  If a legacy paired-server attachment refuses `send` with `dispatch_inactive`,
+  start new work there with `worker-start --on <server>` (load
   `references/placement-and-remote.md` first).
 
 Never:
@@ -103,8 +103,11 @@ Never:
   `ORCA orchestration reply --id <message_id> --body "<answer>"` when the answer
   follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
-  `worker_done`: steer it with `send`, stop and retry it, or tell the user.
-  `exited` or `lost` means it is gone: retry it or tell the user.
+  `worker_done`: for `lost`, inspect `worker-show` first — the original agent
+  may still be running, and `unverifiable` liveness does not authorize sending
+  mail or retrying (report the uncertainty instead); for `exited`, process exit
+  is confirmed — stop if needed, then retry it or tell the user; for other stop
+  reasons, steer it with `send`, stop and retry it, or tell the user.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.
@@ -113,9 +116,9 @@ Never:
 
 Finished workers close on their own unless `worker-list` gives one a `next`; follow
 it. Kept-open workers, including new-workspace ones, stay open for the user.
-A closing worker also closes the setup terminal and startup tabs its start opened
-(workers started before this version, or on a legacy paired host, have none); a failed
-setup stays open.
+A closing worker also closes the setup terminal and startup tabs its start opened,
+and terminals it created without `--keep-open` (workers started before this version,
+or on a legacy paired host, have none); a failed setup stays open.
 `send` reopens a closed worker when you need it again.
 Start a worker in your workspace with `--keep-open` when the user will keep using
 its chat after it reports: they want to watch it or talk to it. To keep one already
@@ -160,5 +163,6 @@ assignment does not prove its agent stopped.
 | Another project or machine, child worktrees, SSH, WSL, a connected server | `references/placement-and-remote.md` |
 | Group messages                                                            | `references/messaging-and-gates.md`  |
 | A failed or unknown worker; retry, stop, reset                            | `references/recovery-and-cleanup.md` |
+| How a worker ends: settled, ended, destroyed                              | `references/worker-teardown.md`      |
 | Several independent workers at once                                       | `references/parallel-start.md`       |
 | Custom argv or terminal layout                                            | `references/low-level-topology.md`   |

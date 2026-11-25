@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { ConnectorBotSlackState } from '../../../../../shared/connector-bot-slack-contract'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { BotSlackSetupDialog } from './BotSlackSetupDialog'
 
 // A bot on build-box (its own Orca account), set up from a desktop signed in as alex@example.com,
@@ -33,6 +34,8 @@ const mine: Bot = { ...base, id: 'bot-mine', name: 'Scout', slack: { appId: 'A0'
 const mineInLabs: Bot = { ...mine, id: 'bot-labs', slack: { appId: 'A2', teamId: 'T2' } }
 
 const AUTHORIZE = 'https://slack.com/oauth/v2/authorize?client_id=1&state=s'
+// This desktop, by the name other computers see.
+const USE_HERE = 'Use MacBook Pro’s sign-in'
 const ok = (value: unknown) => ({ ok: true, result: { ok: true, value } })
 const answered = (result: unknown) => ({ ok: true, result })
 
@@ -140,6 +143,7 @@ function stub(scene: Scene): void {
 }
 
 const store = {
+  settings: { ...getDefaultSettings('/home/fixture'), machineName: 'MacBook Pro' },
   runtimeEnvironments: [buildBox],
   runtimeStatusByEnvironmentId: new Map([
     [
@@ -268,8 +272,31 @@ export const sameAccount = scene(
   () => whenShown('Configuration refresh token')
 )
 
-// The option line, above today's dialog.
-export const offer = scene({ server: { state: 'not_created' } }, () => whenShown('Use it'))
+// First setup, one workspace: this desktop's sign-in first, the token form behind Set up another way.
+export const offer = scene({ server: { state: 'not_created' } }, () => whenShown(USE_HERE))
+
+export const offerAnotherWay = scene({ server: { state: 'not_created' } }, () =>
+  whenShown(USE_HERE, 'Set up another way')
+)
+
+// First setup: a token typed before this desktop's account is read keeps the form when the offer lands.
+export const offerLateWhileTyping = scene(
+  { server: { state: 'not_created' }, signedInLate: true },
+  async () => {
+    await whenShown('Configuration refresh token')
+    const field = document.querySelector<HTMLInputElement>('input[type="password"]')
+    field?.focus()
+    if (field) {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+        field,
+        'xoxe-1-made-up-example-token'
+      )
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    useAppStore.setState({ orcaProfileAuthStatus: store.orcaProfileAuthStatus })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+)
 
 // One line per workspace.
 export const offerTwoWorkspaces = scene(
@@ -277,26 +304,32 @@ export const offerTwoWorkspaces = scene(
   () => whenShown('Acme Labs')
 )
 
-// After Use it: the confirm line while the app is made.
+// After the offer is taken: the confirm line while the app is made.
 export const handingOff = scene(
   { server: { state: 'not_created' }, handOffPending: true },
   async () => {
-    await whenShown('Use it', 'Use it →')
+    await whenShown(USE_HERE, USE_HERE)
     await whenShown('Setting up your Slack app')
   }
 )
 
-// The install step: Approve in Slack, and the quiet Copy link.
+// The install step: Open Slack on the server, the link for another device folded away.
 export const ready = scene({ server: { state: 'created', teamId: 'T1', appId: 'A1' } }, () =>
-  whenShown('Approve in Slack')
+  whenShown('Open Slack on build-box')
 )
 
-// After Copy link: the dialog waits.
+export const readyOtherDevice = scene(
+  { server: { state: 'created', teamId: 'T1', appId: 'A1' } },
+  () => whenShown('Open Slack on build-box', 'Approve on another device')
+)
+
+// After Copy link: the same step, waiting on Slack.
 export const waitingCopied = scene(
   { server: { state: 'created', teamId: 'T1', appId: 'A1' } },
   async () => {
-    await whenShown('Approve in Slack', 'Copy link')
-    await whenShown('Link copied')
+    await whenShown('Open Slack on build-box', 'Approve on another device')
+    await whenShown('Copy link', 'Copy link')
+    await whenShown('Copied')
   }
 )
 
@@ -308,8 +341,9 @@ export const expired = scene(
 export const otherUser = scene(
   { server: { state: 'created', teamId: 'T1', appId: 'A1', oauthFailure: 'other_user' } },
   async () => {
-    await whenShown('Approve in Slack', 'Copy link')
-    await whenShown('Another Slack account')
+    await whenShown('Open Slack on build-box', 'Approve on another device')
+    await whenShown('Copy link', 'Copy link')
+    await whenShown('different Slack account')
   }
 )
 
@@ -338,38 +372,30 @@ export const tokenRejectedDetails = scene(rejected, async () => {
   await whenShown('Close', 'Details')
 })
 
-// The server's token lapsed in a workspace this desktop's own account has one for: Use it first.
+// The server's token lapsed in a workspace this desktop's own account has one for: its sign-in first.
 const lapsed: Scene = { server: { state: 'grant_expired', teamId: 'T1' } }
 const lapsedLong: Scene = { ...lapsed, long: true }
 // No working token anywhere: the server is on this desktop's own account, so nothing is offered.
 const lapsedNone: Scene = { ...lapsed, serverEmail: 'alex@example.com' }
 const lapsedNoneLong: Scene = { ...lapsedNone, long: true, serverEmail: LONG_EMAIL }
 
-export const reconnectUse = scene(lapsed, () => whenShown('Use it'), 480)
-export const reconnectUse340 = scene(lapsed, () => whenShown('Use it'), 340)
-export const reconnectUseLong340 = scene(lapsedLong, () => whenShown('Use it'), 340)
-export const reconnectUseLong480 = scene(lapsedLong, () => whenShown('Use it'), 480)
-export const reconnectUseWhy340 = scene(
-  lapsedLong,
-  async () => {
-    await whenShown('Use it')
-    await openWhy()
-  },
-  340
-)
+export const reconnectUse = scene(lapsed, () => whenShown(USE_HERE), 480)
+export const reconnectUse340 = scene(lapsed, () => whenShown(USE_HERE), 340)
+export const reconnectUseLong340 = scene(lapsedLong, () => whenShown(USE_HERE), 340)
+export const reconnectUseLong480 = scene(lapsedLong, () => whenShown(USE_HERE), 480)
 export const reconnectUsePaste340 = scene(
   lapsedLong,
   async () => {
-    await whenShown('Use it')
-    await clickButton(/Paste a token instead/)
+    await whenShown(USE_HERE)
+    await clickButton(/Sign in again/)
   },
   340
 )
 export const reconnectUsePaste480 = scene(
   lapsedLong,
   async () => {
-    await whenShown('Use it')
-    await clickButton(/Paste a token instead/)
+    await whenShown(USE_HERE)
+    await clickButton(/Sign in again/)
   },
   480
 )
@@ -387,7 +413,7 @@ async function typeThenSignIn(): Promise<void> {
     field.dispatchEvent(new Event('input', { bubbles: true }))
   }
   useAppStore.setState({ orcaProfileAuthStatus: store.orcaProfileAuthStatus })
-  await whenShown('Use it')
+  await whenShown(USE_HERE)
 }
 export const reconnectLateOffer340 = scene(lapsedLate, typeThenSignIn, 340)
 

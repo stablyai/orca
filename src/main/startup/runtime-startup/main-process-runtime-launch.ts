@@ -217,7 +217,7 @@ async function launchServeMode(
   await printServeReady(serveOptions)
   chatJournalHostServing()
   const store = state.store!
-  setupHeadlessServeAutoUpdater(state.nativeSettings!, {
+  setupHeadlessServeAutoUpdater(state.nativeSettings!, runtime, {
     onBeforeUpdateQuit: () =>
       preserveStateBeforeUpdateRestart({ codexRuntimeHome: state.core.codexRuntimeHome, store }),
     onBeforeUpdateQuitFailure: 'abort',

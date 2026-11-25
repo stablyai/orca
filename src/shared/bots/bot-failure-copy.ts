@@ -43,6 +43,8 @@ export const BOT_FAILURE_COPY = {
   toolCredentialsRaced: 'The bot’s tool credentials changed in another Orca. Try again.',
   toolSourceManaged: 'Orca manages this tool. Change it where you set it up.',
   toolValuesUnmoved: 'A tool still holds its saved values. Reopen the bot’s tools to move them.',
+  googleAccountsChanged:
+    'Its Google accounts changed since you opened them. Check them and save again.',
   toolCodexCheckFailed:
     'Codex could not check or connect the tools. Check its setup and try again.',
   toolCodexNoThread: 'Codex started no thread to check the tools in.',
@@ -52,6 +54,8 @@ export const BOT_FAILURE_COPY = {
   toolNameTaken: 'This bot already has a tool named {{name}}.',
   toolNameTakenByAgent:
     'Your {{agent}} already has a tool named {{name}}, which this bot gets too. Pick another name with --name.',
+  toolNameTakenByCodexStdio:
+    "Your Codex already has a local tool named {{name}}, so this bot's {{name}} can't run. Rename this bot's tool.",
   toolNotUpdated: 'The tool was not updated.',
   toolSignInAddressIncomplete: 'Paste the whole address the sign-in page ended on.',
   toolSignInAddressWrong:
@@ -79,6 +83,7 @@ export const BOT_FAILURE_COPY = {
   groupNeedsLocalBot: 'This group needs at least one bot on this computer.',
   groupNameTaken:
     '{{name}} is already in this group. Members need different names so mentions stay unambiguous.',
+  // Sent only by hosts from before phones and paired windows could post to such groups.
   groupPostFromHost: 'To post in a group with bots on other computers, use {{host}}.',
   groupPeerTooOld: 'Update Orca on {{host}} to add its bots to a group.',
   groupMentionAmbiguous: 'Correct the ambiguous bot mention before sending.',

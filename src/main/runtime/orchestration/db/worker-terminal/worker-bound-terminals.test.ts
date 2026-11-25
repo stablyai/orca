@@ -27,6 +27,7 @@ import {
   mintStructuredWorkerPaneKey
 } from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { structuredWorkerProcessIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-incarnation'
+import { bindTerminalToCallingWorker } from '../../workers/lifecycle/worker-created-terminal-owner'
 
 describe('terminals bound to a worker', () => {
   let directory: string
@@ -35,8 +36,12 @@ describe('terminals bound to a worker', () => {
   const botChat = createOrcaSessionId(randomUUID)
   const personChat = createOrcaSessionId(randomUUID)
   const isBotChat = (sessionId: string) => sessionId === botChat
+  // Setup terminals the runtime sees still running; empty after a restart.
+  const runningSetups = new Set<string>()
+  const setupTerminals = { isSetupTerminalRunning: (handle: string) => runningSetups.has(handle) }
 
   beforeEach(() => {
+    runningSetups.clear()
     directory = mkdtempSync(join(tmpdir(), 'orca-worker-bound-terminals-'))
     db = new OrchestrationDb(join(directory, 'orchestration.db'))
     runId = db.createRun({
@@ -52,7 +57,7 @@ describe('terminals bound to a worker', () => {
 
   function startWorker(
     creatorChat: OrcaSessionId,
-    setupState = 'running',
+    setupState = 'succeeded',
     creatorDispatchId?: string,
     chat = false
   ) {
@@ -83,6 +88,7 @@ describe('terminals bound to a worker', () => {
         ? structuredWorkerProcessIncarnation(session)
         : 'pty-live:22222222-2222-4222-8222-222222222222',
       worktreeId: 'repo::/worktrees/child',
+      hostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
       setupState,
       effects: [],
       terminalOwnership: 'created'
@@ -105,12 +111,16 @@ describe('terminals bound to a worker', () => {
 
   // The host's terminals: each bound handle still names its pane until closed.
   function host(...workers: ReturnType<typeof startWorker>[]) {
-    const panes = new Map(
-      workers.flatMap((worker) => [
+    const panes = new Map<string, string>([
+      ...workers.flatMap((worker): [string, string][] => [
         [worker.setup.terminalHandle, worker.setup.paneKey],
-        [worker.tab.terminalHandle, worker.tab.paneKey]
-      ])
-    )
+        [worker.tab.terminalHandle, worker.tab.paneKey],
+        [worker.agentHandle, worker.agentPaneKey]
+      ]),
+      ['term_opened', 'tab_opened:leaf-opened'],
+      ['term_kept', 'tab_kept:leaf-kept'],
+      ['term_person', 'tab_person:leaf-person']
+    ])
     const closed: string[] = []
     return {
       closed,
@@ -120,6 +130,8 @@ describe('terminals bound to a worker', () => {
         panes.delete(handle)
       },
       runtime: {
+        ...setupTerminals,
+        getExistingOrchestrationDb: () => db,
         getTerminalPaneKey: (handle: string) => panes.get(handle) ?? null,
         getTerminalHandleForPaneKey: (paneKey: string) =>
           [...panes].find(([, pane]) => pane === paneKey)?.[0] ?? null,
@@ -136,7 +148,7 @@ describe('terminals bound to a worker', () => {
   it('a worker a bot started is not kept open, and its setup terminal closes with it', async () => {
     const worker = startWorker(botChat)
     expect(workerKeepOpenByDefault(db, 'new-child', worker.dispatchId, isBotChat)).toBe(false)
-    const helper = startWorker(personChat, 'running', worker.dispatchId)
+    const helper = startWorker(personChat, 'succeeded', worker.dispatchId)
     expect(workerKeepOpenByDefault(db, 'new-child', helper.dispatchId, isBotChat)).toBe(false)
 
     const { runtime, closed } = host(worker)
@@ -145,8 +157,8 @@ describe('terminals bound to a worker', () => {
   })
 
   it("a chat worker a bot's home chat started, and the chat workers under it, close with their terminals", async () => {
-    const worker = startWorker(botChat, 'running', undefined, true)
-    const helper = startWorker(personChat, 'running', worker.dispatchId, true)
+    const worker = startWorker(botChat, 'succeeded', undefined, true)
+    const helper = startWorker(personChat, 'succeeded', worker.dispatchId, true)
     expect(db.getDispatchContextById(helper.dispatchId)?.chat_lineage).toBe(1)
     expect(workerKeepOpenByDefault(db, 'new-child', worker.dispatchId, isBotChat)).toBe(false)
     expect(workerKeepOpenByDefault(db, 'new-child', helper.dispatchId, isBotChat)).toBe(false)
@@ -166,13 +178,61 @@ describe('terminals bound to a worker', () => {
 
   it('a failed setup terminal stays open, with no countdown, until a retry succeeds', async () => {
     const worker = startWorker(botChat, 'failed')
-    expect(paneAutoCloseState(db, worker.setup.paneKey)).toBeNull()
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toBeNull()
     const { runtime, closed } = host(worker)
     await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.tab.terminalHandle])
 
     await closeRetriedFailedSetup(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.tab.terminalHandle, worker.setup.terminalHandle])
+  })
+
+  it('a stop during a running setup leaves it running, and no longer bound to the worker', async () => {
+    const worker = startWorker(botChat, 'running')
+    runningSetups.add(worker.setup.terminalHandle)
+    // It shows no closes-soon countdown while it runs, since the worker's close leaves it open.
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toBeNull()
+    const { runtime, closed } = host(worker)
+    await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.tab.terminalHandle])
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toBeNull()
+
+    // Finishing later does not close it with a worker that is gone.
+    runningSetups.clear()
+    db.updateWorkerSetupEvidence({
+      dispatchId: worker.dispatchId,
+      setupState: 'succeeded',
+      effects: []
+    })
+    await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.tab.terminalHandle])
+  })
+
+  it('a running setup shows the countdown again once it finishes', () => {
+    const worker = startWorker(botChat, 'running')
+    runningSetups.add(worker.setup.terminalHandle)
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toBeNull()
+    runningSetups.clear()
+    db.updateWorkerSetupEvidence({
+      dispatchId: worker.dispatchId,
+      setupState: 'succeeded',
+      effects: []
+    })
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toMatchObject({
+      kept: false,
+      boundTo: { paneKey: worker.agentPaneKey }
+    })
+  })
+
+  it('a setup still recorded running that the runtime no longer sees running closes with its worker', async () => {
+    // Orca restarted, or setup finished while nothing watched it: the stored state never moved on.
+    const worker = startWorker(botChat, 'running')
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toMatchObject({
+      boundTo: { paneKey: worker.agentPaneKey }
+    })
+    const { runtime, closed } = host(worker)
+    await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle])
   })
 
   it('a retry that becomes ready closes the failed setups of every attempt before it', async () => {
@@ -228,8 +288,11 @@ describe('terminals bound to a worker', () => {
   it('Keep open on a bound terminal keeps only that one', async () => {
     const worker = startWorker(botChat)
     // A bound terminal shows the worker's own countdown and names the worker's pane.
-    expect(paneAutoCloseState(db, worker.agentPaneKey)).toEqual({ kept: false, closesAt: null })
-    expect(paneAutoCloseState(db, worker.setup.paneKey)).toEqual({
+    expect(paneAutoCloseState(db, setupTerminals, worker.agentPaneKey)).toEqual({
+      kept: false,
+      closesAt: null
+    })
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toEqual({
       kept: false,
       closesAt: null,
       boundTo: {
@@ -241,12 +304,33 @@ describe('terminals bound to a worker', () => {
     })
 
     keepPaneOpen(db, worker.setup.paneKey)
-    expect(paneAutoCloseState(db, worker.setup.paneKey)).toBeNull()
-    expect(paneAutoCloseState(db, worker.agentPaneKey)).toEqual({ kept: false, closesAt: null })
+    expect(paneAutoCloseState(db, setupTerminals, worker.setup.paneKey)).toBeNull()
+    expect(paneAutoCloseState(db, setupTerminals, worker.agentPaneKey)).toEqual({
+      kept: false,
+      closesAt: null
+    })
 
     const { runtime, closed } = host(worker)
     await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.tab.terminalHandle])
+  })
+
+  it('a cleanup that fails partway never rejects, and the next call closes what is left', async () => {
+    const worker = startWorker(botChat)
+    const { runtime, closed } = host(worker)
+    const failing = {
+      ...runtime,
+      getTerminalPaneKey: (handle: string) => {
+        if (handle === worker.tab.terminalHandle) {
+          throw new Error('lookup failed')
+        }
+        return runtime.getTerminalPaneKey(handle)
+      }
+    }
+    await expect(closeWorkerBoundTerminals(failing, db, worker.dispatchId)).resolves.toBeUndefined()
+    expect(closed).toEqual([worker.setup.terminalHandle])
+    await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle])
   })
 
   it('never closes a handle that now names another pane', async () => {
@@ -264,5 +348,63 @@ describe('terminals bound to a worker', () => {
       worker.dispatchId
     )
     expect(closed).toEqual([worker.setup.terminalHandle])
+  })
+
+  it('a terminal its agent opened closes with the worker, unless opened with --keep-open', async () => {
+    const worker = startWorker(botChat)
+    const { runtime, closed } = host(worker)
+    const agent = {
+      caller: { kind: 'local-cli' as const },
+      orchestrationCompatibilityEvidence: { terminalHandle: worker.agentHandle }
+    }
+    bindTerminalToCallingWorker(runtime, agent, 'term_opened', false)
+    bindTerminalToCallingWorker(runtime, agent, 'term_kept', true)
+    // People's windows name no caller; another agent names a terminal that is no worker.
+    bindTerminalToCallingWorker(runtime, { caller: { kind: 'desktop' } }, 'term_person', false)
+    bindTerminalToCallingWorker(
+      runtime,
+      {
+        caller: agent.caller,
+        orchestrationCompatibilityEvidence: { terminalHandle: 'term_person' }
+      },
+      'term_person',
+      false
+    )
+
+    await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle, 'term_opened'])
+  })
+
+  it('a terminal a chat worker opens closes with it', async () => {
+    const worker = startWorker(botChat, 'succeeded', undefined, true)
+    const { runtime, closed } = host(worker)
+    // A chat names itself by its session, which leads to its worker's record.
+    bindTerminalToCallingWorker(
+      runtime,
+      {
+        caller: { kind: 'local-cli' },
+        orchestrationCompatibilityEvidence: { agentSessionId: worker.session }
+      },
+      'term_opened',
+      false
+    )
+    await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toContain('term_opened')
+  })
+
+  it('a worker whose shell outlived an Orca restart still owns what it opens', async () => {
+    const worker = startWorker(botChat)
+    const { runtime, closed, remint } = host(worker)
+    // The shell keeps its pre-restart handle; Orca knows the pane by a new one.
+    remint(worker.agentHandle, 'term_agent_after_restart')
+    const evidence = { terminalHandle: worker.agentHandle, paneKey: worker.agentPaneKey }
+    bindTerminalToCallingWorker(
+      runtime,
+      { caller: { kind: 'local-cli' }, orchestrationCompatibilityEvidence: evidence },
+      'term_opened',
+      false
+    )
+    await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toContain('term_opened')
   })
 })

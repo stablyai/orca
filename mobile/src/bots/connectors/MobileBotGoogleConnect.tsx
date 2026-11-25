@@ -1,7 +1,7 @@
 // Connect Google as a page inside the bot's settings: the desktop's Add connector › Google. With the
 // host signed in, Google turns on (confirmed when others can ask). With no Google app there, the
 // desktop's GoogleHostChoiceDialog: Continue starts the setup in the bot's chat, where its cards carry
-// on. With an app but no sign-in, the setup starts at its sign-in card, which the computer finishes.
+// on. With an app but no sign-in, Google's sign-in opens here, then Google turns on.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { FileUp } from 'lucide-react-native'
 import {
@@ -17,7 +17,6 @@ import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useMediaPicker } from '../../platform/media-picking/media-picker'
-import { googleSetupAnswer } from '../../session/native-chat/transcript/bot-cards/mobile-bot-card-operations'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { colors } from '../../theme/mobile-theme'
 import { decodeBase64Bytes } from '../../transport/encryption/base64-byte-codec'
@@ -28,7 +27,11 @@ import {
   googleClientImport,
   googleSetupStart
 } from './bot-connector-account-operations'
-import type { PhoneGoogle } from './MobileBotGooglePage'
+import { googleSetupAnswer } from '../../session/native-chat/transcript/bot-cards/mobile-bot-card-operations'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
+import { BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
+import type { GoogleSignInAsk } from './connector-pages'
+import type { PhoneGoogle } from './phone-google-accounts'
 
 export function MobileBotGoogleConnect(props: {
   client: RpcClient | null
@@ -42,9 +45,12 @@ export function MobileBotGoogleConnect(props: {
   onOn: () => void
   /** The setup carries on in the bot's chat; null while no chat shows. */
   onOpenChat: (() => void) | null
+  /** An app but no sign-in: Google's sign-in, then this page again to turn Google on; null once back. */
+  onSignIn: ((ask: GoogleSignInAsk) => void) | null
 }) {
   const t = useMobileTranslation()
   const { bot, client } = props
+  const signsIn = useRouteCapability(BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY)
   const [busy, setBusy] = useState(false)
   const picker = useMediaPicker()
   useBackClaim(() => {
@@ -83,6 +89,7 @@ export function MobileBotGoogleConnect(props: {
       .then(props.onOn, fail)
       .finally(() => setBusy(false))
   }
+  // `signIn`: an older host's app is here, so the setup starts at its own sign-in card.
   const startInChat = (signIn: boolean) => {
     if (!client) {
       return
@@ -96,7 +103,6 @@ export function MobileBotGoogleConnect(props: {
           { failWhenDisconnected: true }
         )
       )
-      // The app is here: only the owner's sign-in is left, on the setup's own sign-in card.
       if (signIn) {
         googleSetupAnswer.interpret(
           await googleSetupAnswer.request(
@@ -143,9 +149,15 @@ export function MobileBotGoogleConnect(props: {
   }
 
   // Signed in, nobody else asks: Google turns on with no question; with an app only, the setup's sign-in.
+  // Only on a status read since this opened, not one another surface kept.
+  const [openedAt] = useState(Date.now)
+  const { refresh } = props.google
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
   const started = useRef(false)
   useEffect(() => {
-    if (started.current || !props.online) {
+    if (started.current || !props.online || props.google.readAt < openedAt) {
       return
     }
     if (host === 'connected' && !warning) {
@@ -153,7 +165,16 @@ export function MobileBotGoogleConnect(props: {
       turnOn()
     } else if (host === 'signed-out' || host === 'reconnect') {
       started.current = true
-      startInChat(true)
+      // Only Google ended the sign-in: the one account signs in again.
+      const accounts = status?.accounts ?? []
+      const only = accounts.length === 1 ? accounts[0]?.email : undefined
+      if (!signsIn) {
+        startInChat(true)
+      } else if (props.onSignIn) {
+        props.onSignIn(only ? { account: only } : {})
+      } else {
+        setFailed(true)
+      }
     }
   })
 
@@ -180,7 +201,7 @@ export function MobileBotGoogleConnect(props: {
       <>
         {cancelHeader}
         {props.banner}
-        {failed || (status === null && props.google.unread) ? (
+        {failed || (props.google.unread && (status === null || props.google.readAt < openedAt)) ? (
           <MobileStateView
             title={t('bots.errors.generic', 'Something went wrong. Try again.')}
             action={
@@ -224,36 +245,17 @@ export function MobileBotGoogleConnect(props: {
       <SettingsSection>
         <ListRow
           title={t('bots.google.hostChoice.self', 'Self hosted')}
-          subtitle={t(
-            'bots.google.hostChoice.selfNote',
-            'You make your own Google Cloud app, so your sign-in stays on your computer. About 10 minutes.'
-          )}
-          subtitleLines={3}
+          subtitle={t('bots.google.hostChoice.selfNote', 'Your own Google app.')}
           selected
           accessibilityRole="radio"
         />
         <ListRow
           title={t('bots.google.hostChoice.orca', 'Orca hosted')}
-          subtitle={t('bots.google.hostChoice.orcaNote', 'Sign in with Google. Nothing to set up.')}
-          value={t('bots.google.hostChoice.comingSoon', 'Coming soon')}
+          subtitle={t('bots.google.hostChoice.orcaNote', 'Sign in with Google.')}
+          value={t('bots.google.hostChoice.soon', 'Soon')}
           disabled
           accessibilityRole="radio"
         />
-      </SettingsSection>
-      <SettingsSection title={t('bots.google.hostChoice.steps', 'Steps')}>
-        {[
-          t('bots.google.hostChoice.stepApp', '{{bot}} opens Google Cloud and sets up the app', {
-            bot: bot.name
-          }),
-          t('bots.google.hostChoice.stepSignIn', 'You tick Google’s terms box and sign in'),
-          t(
-            'bots.google.hostChoice.stepCheck',
-            '{{bot}} checks that Gmail, Calendar and Drive work',
-            { bot: bot.name }
-          )
-        ].map((line, index) => (
-          <ListRow key={line} marker={String(index + 1)} title={line} wrapTitle />
-        ))}
       </SettingsSection>
       <SettingsSection>
         <ListRow

@@ -3,6 +3,7 @@ import type { WorkerStopReceipt } from '../../../../shared/orchestration/workers
 import { archiveWorkerOutputBeforeStop } from '../../rpc/methods/orchestration/worker/stop/worker-stop-archive'
 import { describeUnconfirmedAgentStop } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { inspectRemoteAttachment } from './federation-attachment-observation'
+import { closeStoppedWorkerTerminals } from '../../rpc/methods/orchestration/worker/release/worker-bound-terminal-close'
 
 /** Close the exact attached worker this host runs for its home. */
 export async function stopRemoteAttachment(
@@ -59,6 +60,7 @@ export async function stopRemoteAttachment(
       }
     }
     const attachment = db.settleRemoteAttachmentStop(params.dispatchId)
+    await closeStoppedWorkerTerminals(runtime, db, params.dispatchId)
     return {
       dispatchId: params.dispatchId,
       state: attachment.state,

@@ -17,12 +17,18 @@ export const WORKER_STOP_SUBJECTS: Record<WorkerTurnStopReason, string> = {
   'start-unconfirmed': "Worker's brief may not have been submitted",
   'start-blocked': 'Worker needs a person before it can start',
   'never-ready': 'Worker never became ready',
+  'start-failed': "Worker couldn't start",
   'background-wait': 'Worker is still waiting on its background task'
 }
 
 /** The worker went away, or its start ended without it: never deliberate. */
 export function isWorkerGone(reason: WorkerTurnStopReason): boolean {
-  return reason === 'exited' || reason === 'lost' || reason === 'never-ready'
+  return (
+    reason === 'exited' ||
+    reason === 'lost' ||
+    reason === 'never-ready' ||
+    reason === 'start-failed'
+  )
 }
 
 /** A start's own rest, before any turn of its worker ran. */
@@ -100,9 +106,11 @@ export function describeStop(stop: WorkerTurnStop, context: StopContext): string
               : `Worker ${stop.from} is stopped at a prompt that needs a person (approval or a question) while running task ${task}.`
             : stop.reason === 'exited'
               ? `Worker ${stop.from} exited (${cause ?? 'process ended'}) without sending worker_done for task ${task}.`
-              : stop.reason === 'lost'
-                ? `Worker ${stop.from} is gone (${cause ?? 'cause unknown'}) without sending worker_done for task ${task}.`
-                : `Worker ${stop.from} ended its turn ${stop.reason === 'errored' ? 'on an error ' : ''}without sending worker_done for task ${task}.`
+              : stop.reason === 'start-failed'
+                ? `Worker ${stop.from} couldn't start task ${task}: ${cause ?? 'its start failed'}`
+                : stop.reason === 'lost'
+                  ? `Worker ${stop.from} is gone (${cause ?? 'cause unknown'}) without sending worker_done for task ${task}.`
+                  : `Worker ${stop.from} ended its turn ${stop.reason === 'errored' ? 'on an error ' : ''}without sending worker_done for task ${task}.`
   const output = redact(stop.lastOutput)?.trim()
   return [
     what,

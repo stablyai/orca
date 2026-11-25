@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { Event as ParcelWatcherEvent } from '@parcel/watcher'
 import { startShallowFileWatcher } from './parcel-watcher-shallow-file-subscription'
 import { closeFileSystemWatcher } from './rebinding-file-watch'
+import { watchedDirectoryDeletionCheck } from './windows-deleted-directory-watch'
 import { watcherDirectoryIdentity } from '../root-paths/watcher-directory-identity'
 
 export type ShallowWatcherSubscription = {
@@ -79,9 +80,24 @@ export function startShallowDirectoryWatcher(
       void closeFileSystemWatcher(existing)
     }
     const directoryPath = join(rootPath, parent)
+    const isDirectoryDeleted = watchedDirectoryDeletionCheck(directoryPath)
     try {
       const watcher = watch(directoryPath, { persistent: false }, (eventType, fileName) => {
         if (disposed) {
+          return
+        }
+        if (isDirectoryDeleted(eventType, fileName)) {
+          if (watchers.get(parent) === watcher) {
+            watchers.delete(parent)
+            boundIdentities.delete(parent)
+          }
+          void closeFileSystemWatcher(watcher)
+          if (parent === '') {
+            reportError(new Error('File watcher root was deleted'))
+          } else {
+            // The rebind sweep re-attaches when Git recreates this directory.
+            emitUpdates(parent, fileNames)
+          }
           return
         }
         const name = fileName?.toString()

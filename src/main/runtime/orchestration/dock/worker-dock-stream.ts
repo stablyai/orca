@@ -1,7 +1,6 @@
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { readWorkerDock, workerDockSession } from './worker-dock-read'
 import type { WorkerDockSnapshot } from '../../../../shared/orchestration/dock/worker-dock'
-
 type Producer = {
   listeners: Map<(value: WorkerDockSnapshot) => void, boolean>
   snapshot: WorkerDockSnapshot
@@ -10,6 +9,7 @@ type Producer = {
   close: () => void
 }
 const producers = new WeakMap<OrchestrationDb, Map<string, Producer>>()
+
 type ActivitySource = {
   refresh: () => number | null
   subscribe: (wake: () => void) => () => void
@@ -21,15 +21,17 @@ export function subscribeWorkerDock(
   party: string,
   emit: (value: WorkerDockSnapshot) => void,
   activity?: ActivitySource,
-  includeRows = true
+  includeRows = true,
+  currentOnly = false
 ): () => void {
   const source = workerDockSession(party)
+  const key = currentOnly ? `current:${party}` : party
   let sources = producers.get(db)
   if (!sources) {
     sources = new Map()
     producers.set(db, sources)
   }
-  let producer = sources.get(party)
+  let producer = sources.get(key)
   if (!producer) {
     let expiry: ReturnType<typeof setTimeout> | undefined
     const refresh = () => {
@@ -55,20 +57,47 @@ export function subscribeWorkerDock(
     const held: Producer = {
       listeners: new Map(),
       detailed: includeRows,
-      snapshot: readWorkerDock(db, { party, direction: 'around', includeRows }),
+      snapshot: readWorkerDock(db, { party, direction: 'around', includeRows, currentOnly }),
       upgrade: () => {
-        held.snapshot = readWorkerDock(db, { party, direction: 'around', includeRows: true })
+        held.snapshot = readWorkerDock(db, {
+          party,
+          direction: 'around',
+          includeRows: true,
+          currentOnly
+        })
         seen = db.workerDockSources.version(source)
+        armAging()
         publish()
       },
       close: () => {}
     }
     let seen = db.workerDockSources.version(source)
+    // Schedule the nearest expiry so idle sources need no periodic reads.
+    let aging: ReturnType<typeof setTimeout> | undefined
+    function armAging(snapshot: WorkerDockSnapshot = held.snapshot) {
+      clearTimeout(aging)
+      const deadline = snapshot.nextExpiry
+      if (deadline !== undefined) {
+        aging = setTimeout(
+          () => {
+            db.workerDockSources.invalidate(source, false)
+            schedule()
+          },
+          Math.max(1, deadline - Date.now())
+        )
+      }
+    }
+    armAging()
     let unwatchActivity: (() => void) | undefined
     const watchActivity = () => {
-      const live = held.snapshot.identities.some(
-        (row) => !['failed', 'unexpected', 'saving'].includes(row.state)
-      )
+      const live =
+        held.snapshot.hasUnverifiedWorkers ||
+        held.snapshot.identities.some(
+          // An unsettled stopped row is an exited worker whose chat can be continued.
+          (row) =>
+            !['failed', 'unexpected', 'saving'].includes(row.state) ||
+            (row.state === 'unexpected' && !row.settlement)
+        )
       if (live && !unwatchActivity) {
         unwatchActivity = activity?.subscribe(() => {
           activityChanged = true
@@ -102,9 +131,11 @@ export function subscribeWorkerDock(
           const next = readWorkerDock(db, {
             party,
             direction: 'around',
-            includeRows: held.detailed
+            includeRows: held.detailed,
+            currentOnly
           })
           seen = version
+          armAging(next)
           if (JSON.stringify(next) !== JSON.stringify(held.snapshot)) {
             held.snapshot = next
             watchActivity()
@@ -129,8 +160,9 @@ export function subscribeWorkerDock(
       unwatchDb()
       unwatchActivity?.()
       clearTimeout(expiry)
+      clearTimeout(aging)
     }
-    sources.set(party, held)
+    sources.set(key, held)
     producer = held
   }
   const held = producer
@@ -145,7 +177,7 @@ export function subscribeWorkerDock(
     held.listeners.delete(emit)
     if (!held.listeners.size) {
       held.close()
-      sources.delete(party)
+      sources.delete(key)
     } else if (held.detailed && ![...held.listeners.values()].some(Boolean)) {
       held.detailed = false
       held.snapshot = { ...held.snapshot, rows: [] }

@@ -123,8 +123,8 @@ export function usePhoneBotItemView({
   }, [client, uid])
 
   const own = loaded?.uid === uid ? loaded : null
-  // The waiting question is read even when older than the loaded page (an ask a later question left
-  // open can be): earlier pages load until it shows.
+  // The waiting question is read even when older than the loaded page (later comments can push it
+  // back): earlier pages load until it shows.
   const waitingOn = own ? (own.item.waitingAsk ?? own.item.question?.eventId) : undefined
   const waitingUnread =
     waitingOn !== undefined && !own?.events.some((event) => event.id === waitingOn)

@@ -21,6 +21,8 @@ import { NativeChatBotItemNoteRow } from '../../bot-items/NativeChatBotItemNoteR
 import { NativeChatAutomationRunRow } from '../../automation-run/NativeChatAutomationRunRow'
 import { mergedRunFailures } from '../../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
+import { NativeChatSubagentEndingRow } from '../../subagents/NativeChatSubagentEndingRow'
+import { isNativeChatSubagentEndingPresentation } from '../../subagents/native-chat-subagent-ending'
 import { NativeChatBotCreatedRow, NativeChatTookOverRow } from '../../NativeChatBotCreatedRow'
 import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
@@ -30,6 +32,10 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
 import { useNativeChatRowNavigation } from '../actions/use-native-chat-row-navigation'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  NativeChatGalleryMessageContext,
+  nativeChatGalleryMessageId
+} from '../../media/images/gallery/native-chat-image-gallery-context'
 
 /** Unconfirmed sending status or a failed-delivery notice with an optional dismissal. */
 export type NativeChatDeliveryNotice =
@@ -102,9 +108,17 @@ function rowHasContent(content: ReturnType<typeof deriveNativeChatRowContent>): 
 }
 
 /** Memoize settled block identities so stream frames rerender only changed rows. */
-export const MessageRow = memo(function MessageRow(
-  props: MessageRowProps
-): React.JSX.Element | null {
+export const MessageRow = memo(function MessageRow(props: MessageRowProps): React.JSX.Element {
+  return (
+    <NativeChatGalleryMessageContext
+      value={nativeChatGalleryMessageId(props.message, props.activeTurnIsWorking)}
+    >
+      <MessageRowContent {...props} />
+    </NativeChatGalleryMessageContext>
+  )
+}, sameMessageRowProps)
+
+function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
   const t = useTranslate()
   const {
     message,
@@ -145,6 +159,7 @@ export const MessageRow = memo(function MessageRow(
           automation={message.automationSaved.automation}
           once={message.automationSaved.automation.once}
           ended={message.savedWaitEnded}
+          endedOn={message.savedWaitEndedOn}
           timestamp={message.timestamp}
         />
       </div>
@@ -300,12 +315,17 @@ export const MessageRow = memo(function MessageRow(
   if (notice) {
     return (
       <div ref={rowRef}>
-        <NativeChatNoticeRow
-          block={notice}
-          messageId={message.id}
-          timestamp={message.timestamp}
-          agentName={agentName}
-        />
+        {/* A subagent's last word, shown in its sheet. */}
+        {isNativeChatSubagentEndingPresentation(notice.presentation) ? (
+          <NativeChatSubagentEndingRow block={notice} messageId={message.id} />
+        ) : (
+          <NativeChatNoticeRow
+            block={notice}
+            messageId={message.id}
+            timestamp={message.timestamp}
+            agentName={agentName}
+          />
+        )}
       </div>
     )
   }
@@ -355,7 +375,7 @@ export const MessageRow = memo(function MessageRow(
       scrollToTop={scrollToTop}
     />
   )
-}, sameMessageRowProps)
+}
 
 /** A rebuilt transcript hands every run a fresh member list; same messages, same row. */
 function sameMessageRowProps(previous: MessageRowProps, next: MessageRowProps): boolean {

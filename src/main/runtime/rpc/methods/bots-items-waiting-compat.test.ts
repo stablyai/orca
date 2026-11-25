@@ -3,6 +3,7 @@ import { BOTS_ITEM_WAITING_CAPABILITY } from '../../../../shared/bot-runtime-cap
 import { makeTestBotItem } from '../../../../shared/bots/bot-item.test-fixture'
 import type { BotItemEvent, BotItemStatus } from '../../../../shared/bots/bot-items'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
+import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/runtime-client/desktop-renderer-runtime-capabilities'
 import { BotItemsStore } from '../../../bots/bot-items-store'
 import type { RpcContext } from '../core'
 import {
@@ -41,7 +42,13 @@ describe('Waiting for a client that predates it', () => {
     expect(botItemStatusesForClient(['working'], current)).toEqual(['working'])
   })
 
-  it('is read by the paired desktop and phone', () => {
+  it('is read by this desktop, the paired desktop and the phone', () => {
+    const desktop = {
+      clientKind: 'runtime' as const,
+      clientCapabilities: [...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES]
+    }
+    expect(botItemsForClient([item], desktop)[0]!.status).toBe('waiting')
+    expect(botItemEventsForClient([moved], desktop)[0]!.data).toMatchObject({ to: 'waiting' })
     expect(remoteRuntimeClientCapabilities()).toContain(BOTS_ITEM_WAITING_CAPABILITY)
   })
 

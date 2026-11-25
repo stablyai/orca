@@ -150,18 +150,22 @@ class AgentPickerAcquisition {
     })
   }
 
-  /** Reads an agent's models again while the picker stays open, as reopening it would. */
-  retry(agent: AgentPickerEntry['agent']) {
+  /** Reads an agent's models again while the picker stays open, as reopening it would; with
+   *  `relist`, the host lists them again first. */
+  retry(agent: string, relist = false) {
     if (this.observers.size) {
-      this.requeueCatalogs((view) => view.agent === agent)
+      this.requeueCatalogs((view) => view.agent === agent, relist)
       this.publish()
       this.admit('catalog')
     }
   }
 
-  private requeueCatalogs(matches: (view: AgentPickerEntry) => boolean) {
+  /** With `relist`, a read already running may answer from before the Refresh: it no longer counts. */
+  private requeueCatalogs(matches: (view: AgentPickerEntry) => boolean, relist = false) {
     for (const [index, job] of this.jobs.entries()) {
-      if (this.entries[job.index].catalogRead !== 'pending' && matches(this.entries[job.index])) {
+      const view = this.entries[job.index]
+      if ((relist || view.catalogRead !== 'pending') && matches(view)) {
+        this.jobs[index] = relist ? { ...job, relist } : job
         this.queued.refresh.delete(index)
         this.queued.catalog.add(index)
         this.entries = updateAgentPickerCatalog(this.entries, job, { catalogRead: 'pending' })
@@ -189,13 +193,15 @@ class AgentPickerAcquisition {
       })
   }
 
-  private async readCatalog(entry: AgentPickerEntry, index: number, waitForListing: boolean) {
+  private async readCatalog(entry: AgentPickerEntry, index: number, wait: boolean) {
     const job = this.jobs[index]
     const signal = this.demand!.signal
-    const catalog = await this.reads.catalog(entry, waitForListing, signal)
+    // A Refresh waits for the listing it starts, or the answer is the catalog from before it.
+    const catalog = await this.reads.catalog(entry, wait || !!job.relist, signal, job.relist)
     if (job !== this.jobs[index] || (signal.aborted && this.observers.size > 0) || !catalog) {
       return
     }
+    delete job.relist
     // An open picker waits on a running listing, and again when a wait used its whole budget.
     const refresh =
       !signal.aborted &&
@@ -305,8 +311,8 @@ export function observeAgentPickerAcquisition(
   return resource.observe(observer)
 }
 
-export function retryAgentPickerCatalog(key: string, agent: AgentPickerEntry['agent']) {
-  pending.get(key)?.retry(agent)
+export function retryAgentPickerCatalog(key: string, agent: string, relist = false) {
+  pending.get(key)?.retry(agent, relist)
 }
 
 export function currentAgentPickerAcquisition(key: string) {

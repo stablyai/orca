@@ -11,6 +11,11 @@ import {
 import { PluginService } from '../plugin-service'
 import { listPluginsForClients } from '../discovery/plugin-client-list'
 import { readPluginCurrentPointer } from './plugin-current-pointer'
+import { installStagedPluginTree } from './plugin-install-staging'
+import { getRequiredTeamPlugins } from './plugin-team-install-policy'
+import { createDefaultLocalOrcaProfile } from '../../../shared/orca-profiles/orca-profiles'
+import { initializeActiveTeamProfile } from '../../orca-profiles/cloud-auth/active-team-capabilities'
+import { loadPluginDevFolder } from '../development/plugin-dev-folders'
 
 const roots: string[] = []
 
@@ -255,6 +260,196 @@ describe('installPluginFromLocalPath', () => {
 })
 
 describe('removeInstalledPlugin', () => {
+  it('blocks development folders under team rules and keeps the installed required plugin discoverable', async () => {
+    const userDataPath = await tempRoot('orca-dev-policy-')
+    const source = await tempRoot('orca-dev-policy-source-')
+    const pluginsDir = join(userDataPath, 'plugins')
+    const pluginKey = 'samples.demo'
+    const localProfile = createDefaultLocalOrcaProfile(1)
+    initializeActiveTeamProfile(userDataPath, localProfile)(undefined)
+    await writePluginSource(source)
+    const installed = await installPluginFromLocalPath({
+      pluginsDir,
+      sourcePath: source,
+      hostVersion: '1.4.0'
+    })
+    if (!installed.ok) {
+      throw new Error(installed.error)
+    }
+    const cloud = {
+      userId: 'member',
+      cloudProfileId: 'member-profile',
+      email: 'member@example.test',
+      linkedAt: 1
+    }
+    const applyTeamPolicy = (memberSources: boolean, requiredPlugins: string[]) =>
+      initializeActiveTeamProfile(userDataPath, { ...localProfile, cloud })({
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        expiresAt: 2,
+        identity: cloud,
+        capabilities: {
+          refreshedAt: 1,
+          flags: { team_settings: true, 'plugins.memberSources': memberSources },
+          teamPolicy: { orgIds: ['acme'], requiredPlugins }
+        }
+      })
+    const devPaths = [source]
+    const consents: Record<string, string> = {}
+    const service = new PluginService({
+      userDataPath,
+      hostVersion: '1.4.0',
+      isPluginSystemEnabled: () => true,
+      getDisabledPlugins: () => [],
+      getRequiredPlugins: getRequiredTeamPlugins,
+      getPluginConsents: () => consents,
+      getDevPluginPaths: () => devPaths
+    })
+    try {
+      await service.initialize()
+      const development = service.findValidPlugin(pluginKey)
+      if (!development?.isDev) {
+        throw new Error('Development folder did not load for the local profile')
+      }
+      consents[pluginKey] = development.consentFingerprint
+      expect(service.findApprovedPlugin(pluginKey)?.isDev).toBe(true)
+
+      applyTeamPolicy(false, [])
+      expect(service.findApprovedPlugin(pluginKey)).toBeNull()
+      await expect(
+        loadPluginDevFolder({
+          service,
+          writes: {
+            setDevPluginPaths: (paths) => devPaths.splice(0, devPaths.length, ...paths),
+            applyConsent: async () => {}
+          },
+          path: source,
+          caller: undefined
+        })
+      ).rejects.toThrow('Your team manages which plugin catalogs you can install from.')
+      await service.refresh()
+      expect(service.findValidPlugin(pluginKey)?.isDev).toBe(false)
+
+      applyTeamPolicy(true, [pluginKey])
+      await service.refresh()
+      expect(service.findValidPlugin(pluginKey)?.isDev).toBe(false)
+      expect(devPaths).toEqual([source])
+    } finally {
+      await service.dispose()
+      initializeActiveTeamProfile(userDataPath, localProfile)(undefined)
+    }
+  })
+
+  it('revokes activation for an approved install that conflicts with a team release rule', async () => {
+    const userDataPath = await tempRoot('orca-required-plugin-')
+    const stagingDir = await tempRoot('orca-required-plugin-source-')
+    const pluginsDir = join(userDataPath, 'plugins')
+    const pluginKey = 'samples.demo'
+    const requiredCatalog = {
+      kind: 'git',
+      url: 'https://git.example.test/acme/catalog.git',
+      ref: 'main'
+    } as const
+    const oldCatalog = { ...requiredCatalog, url: 'https://git.example.test/other/catalog.git' }
+    const pluginSource = { url: 'https://git.example.test/samples/demo.git', ref: 'main' }
+    const install = (catalog: typeof pluginSource) =>
+      installStagedPluginTree({
+        pluginsDir,
+        stagingDir,
+        hostVersion: '1.4.0',
+        source: {
+          kind: 'marketplace',
+          marketplace: { ...catalog, resolvedCommit: 'a'.repeat(40) },
+          plugin: pluginSource
+        },
+        resolvedCommit: 'b'.repeat(40),
+        identity: { pluginKey }
+      })
+    await writePluginSource(stagingDir)
+    const first = await install(oldCatalog)
+    if (!first.ok) {
+      throw new Error(first.error)
+    }
+
+    const cloud = {
+      userId: 'member',
+      cloudProfileId: 'member-profile',
+      email: 'member@example.test',
+      linkedAt: 1
+    }
+    const localProfile = createDefaultLocalOrcaProfile(1)
+    const applyRequirement = (version: string) =>
+      initializeActiveTeamProfile(userDataPath, { ...localProfile, cloud })({
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        expiresAt: 2,
+        identity: cloud,
+        capabilities: {
+          refreshedAt: 1,
+          flags: { team_settings: true },
+          teamPolicy: {
+            orgIds: ['acme'],
+            internalCatalogs: [requiredCatalog],
+            requiredPlugins: [pluginKey],
+            requiredPluginRules: [{ pluginKey, catalog: requiredCatalog, version }]
+          }
+        }
+      })
+    const clearRequirement = () =>
+      initializeActiveTeamProfile(userDataPath, localProfile)(undefined)
+    const disabled: string[] = []
+    const consents = { [pluginKey]: first.consentFingerprint }
+
+    const service = new PluginService({
+      userDataPath,
+      hostVersion: '1.4.0',
+      isPluginSystemEnabled: () => true,
+      getDisabledPlugins: () => disabled,
+      getRequiredPlugins: getRequiredTeamPlugins,
+      getPluginConsents: () => consents,
+      getDevPluginPaths: () => []
+    })
+    const remove = () =>
+      removeInstalledPlugin({
+        pluginsDir,
+        pluginsDataDir: join(userDataPath, 'plugins-data'),
+        pluginKey
+      })
+    try {
+      await service.initialize()
+      expect(service.findApprovedPlugin(pluginKey)).not.toBeNull()
+
+      applyRequirement('^1.0.0')
+      expect(service.findApprovedPlugin(pluginKey)).toBeNull()
+      await service.refresh()
+      expect(service.findValidPlugin(pluginKey)).not.toBeNull()
+      expect(service.findApprovedPlugin(pluginKey)).toBeNull()
+
+      clearRequirement()
+      expect(service.findApprovedPlugin(pluginKey)).not.toBeNull()
+      expect(disabled).toEqual([])
+      expect(consents).toEqual({ [pluginKey]: first.consentFingerprint })
+
+      applyRequirement('^1.0.0')
+      await remove()
+      expect(await readPluginLockfile(pluginsDir)).toEqual({ version: 1, plugins: {} })
+
+      disabled.push(pluginKey)
+      expect(await install(requiredCatalog)).toMatchObject({ ok: true })
+      await service.refresh()
+      expect(service.findApprovedPlugin(pluginKey)).not.toBeNull()
+      await expect(remove()).rejects.toThrow('required by your team')
+
+      disabled.pop()
+      applyRequirement('^2.0.0')
+      expect(service.findApprovedPlugin(pluginKey)).toBeNull()
+      await remove()
+    } finally {
+      await service.dispose()
+      clearRequirement()
+    }
+  })
+
   it('rejects a resolved uninstall target outside its root', async () => {
     const pluginsDir = await tempRoot('orca-plugin-installs-')
     const pluginsDataDir = await tempRoot('orca-plugin-data-')

@@ -36,12 +36,16 @@ export function normalizeKiroEvent(
   }
 
   const resetOnNewTurn = isNewTurnEvent('kiro', eventName)
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('kiro', eventName, hookPayload),
-    { resetOnNewTurn }
-  )
+  const update = extractToolFields('kiro', eventName, hookPayload)
+  // A done event with no reply must not show the turn's last tool output instead.
+  if (
+    stateName === 'done' &&
+    update.lastAssistantMessage === undefined &&
+    state.lastToolByPaneKey.get(paneKey)?.lastAssistantMessageIsToolOutput
+  ) {
+    update.clearLastAssistantMessage = true
+  }
+  const snapshot = resolveToolState(state, paneKey, update, { resetOnNewTurn })
 
   return normalizeAgentStatusPayload({
     state: stateName,

@@ -14,6 +14,7 @@ import { recordProcessGoneCrash } from './main-window/main-window-lifecycle-flag
 import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import { mainProcessState as state } from './main-process-state'
+import { isNativeUpdateInstallUnderWay } from '../updater/updater-service'
 import { initializeMainProcessObservers, startUsageBackend } from './main-process-observers'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
@@ -85,6 +86,7 @@ function startThemeAndSpeech(store: Store, fallbackMs: number): void {
 function desktopCoreNative(store: Store): DesktopCoreNative {
   return {
     isQuitting: () => state.isQuitting,
+    isNativeUpdateInstallUnderWay,
     isServeMode: () => state.isServeMode,
     servedOrcaProfileId: () => state.activeOrcaProfile?.profile.id,
     openExternal: (url) => shell.openExternal(url),

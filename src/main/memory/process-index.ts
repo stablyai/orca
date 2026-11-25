@@ -102,7 +102,9 @@ export function executableBasename(value: string | undefined): string | undefine
 export function collectSubtree(
   index: Pick<ProcIndex, 'byPid' | 'childrenOf'>,
   root: number,
-  excludedPids?: ReadonlySet<number>
+  excludedPids?: ReadonlySet<number>,
+  /** Skip children created before their parent (a reused parent PID); needs Windows start times. */
+  checkStartOrder = false
 ): number[] {
   const result: number[] = []
   const seen = new Set<number>()
@@ -117,12 +119,32 @@ export function collectSubtree(
       continue
     }
     seen.add(pid)
-    if (index.byPid.has(pid)) {
+    if (!checkStartOrder) {
+      if (index.byPid.has(pid)) {
+        result.push(pid)
+      }
+      const kids = index.childrenOf.get(pid)
+      if (kids) {
+        for (const kid of kids) {
+          queue.push(kid)
+        }
+      }
+      continue
+    }
+    const row = index.byPid.get(pid)
+    if (row) {
       result.push(pid)
     }
     const kids = index.childrenOf.get(pid)
-    if (kids) {
-      for (const kid of kids) {
+    if (!kids) {
+      continue
+    }
+    const parentStart = row?.startTicks
+    // Only Windows reports start times; elsewhere children are taken without further lookups.
+    for (const kid of kids) {
+      const kidStart = parentStart === undefined ? undefined : index.byPid.get(kid)?.startTicks
+      // Created before its parent: the parent PID was reused, so this is an unrelated process.
+      if (parentStart === undefined || kidStart === undefined || kidStart >= parentStart) {
         queue.push(kid)
       }
     }

@@ -1,6 +1,5 @@
 import type React from 'react'
 import { cn } from '@/lib/class-names'
-import { SettingsScrollList } from './SettingsScrollList'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 
 // The card's side inset. Content that must span to the card edges cancels it with the bleed
@@ -20,7 +19,6 @@ type SettingsGroupProps = {
   children?: React.ReactNode
   className?: string
   bodyClassName?: string
-  scrollLabel?: string
   bodyRef?: React.Ref<HTMLDivElement>
   /** Anchors the card, the same element a search for the group title lands on. */
   id?: string
@@ -37,7 +35,6 @@ export function SettingsGroup({
   children,
   className,
   bodyClassName,
-  scrollLabel,
   bodyRef,
   onHeaderClick
 }: SettingsGroupProps): React.JSX.Element {
@@ -61,7 +58,7 @@ export function SettingsGroup({
         bodyClassName
       )}
     >
-      {scrollLabel ? <SettingsScrollList label={scrollLabel}>{body}</SettingsScrollList> : body}
+      {body}
     </div>
   )
   return (

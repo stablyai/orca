@@ -1,38 +1,30 @@
-// The card Orca leaves in the owner's chat when its bot asks or hands work to another bot: who it went
-// to, how it stands and its answer, read from the host as that bot's row changes.
+// The row Orca leaves in the owner's chat when its bot asks or hands work to another bot: who it went
+// to, how it stands and its answer, read from the host as that bot's row changes. One sent to an agent
+// on a computer paired to the chat's host names that computer and rereads with the host's changes.
 import { useEffect, useState } from 'react'
-import { Text } from 'react-native'
-import { ArrowUpRight } from 'lucide-react-native'
-import {
-  botRequestCardView,
-  type BotRequestCardView
-} from '../../../../../../src/shared/bots/bot-request-card-view'
+import { Pressable, Text } from 'react-native'
+import { ArrowUpRight, Send } from 'lucide-react-native'
+import { botRequestCardView } from '../../../../../../src/shared/bots/bot-request-card-view'
 import type {
   BotRequestCard,
   BotRequestCardReading
 } from '../../../../../../src/shared/bots/bot-request-card'
 import { useHostBotById, useHostBotStatus } from '../../../../bots/host-bot-store'
-import { mobileBotAvatarSource } from '../../../../bots/host-bot-row-facts'
-import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
 import { publishBotLink } from '../../../../bots/pending-bot-link'
-import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, typography } from '../../../../theme/mobile-theme'
+import { colors, pressedStyle, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
+import { subscribeSharedClientEvents } from '../../../../transport/connection/shared-client-events'
+import {
+  MobileNativeChatEventName,
+  MobileNativeChatEventRow
+} from '../messages/MobileNativeChatEventRow'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
-import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
-import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
 import { mobileBotRequestSay } from './mobile-bot-card-copy'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
 import { botRequestOutcomeRead } from './mobile-bot-card-operations'
 import { foldMobileBotRequestMail } from './mobile-bot-request-folded-mail'
-import {
-  BOT_CARD_AVATAR_SIZE,
-  MobileBotCardActions,
-  MobileBotCardFrame,
-  MobileBotCardMeta
-} from './MobileBotCardFrame'
 
 const UNREAD: Pick<BotRequestCardReading, 'outcome' | 'answer' | 'chatId'> = {
   outcome: null,
@@ -40,80 +32,155 @@ const UNREAD: Pick<BotRequestCardReading, 'outcome' | 'answer' | 'chatId'> = {
   chatId: null
 }
 
-/** How the asked bot stands, after its name, in the mock's words. */
-export function mobileBotRequestStatus(
-  view: BotRequestCardView,
-  purpose: BotRequestCard['purpose'],
-  t: Translate
-): string | null {
-  if (!view.sent) {
-    return null
-  }
-  switch (view.dot) {
-    case 'done':
-      return purpose === 'question'
-        ? t('chat.botCards.request.answered', '✓ answered')
-        : t('chat.botCards.request.done', '✓ done')
-    case 'interrupted':
-      return t('chat.botCards.request.notAnswered', 'not answered')
-    case 'permission':
-      return t('chat.botCards.request.waitingOnYou', 'waiting on you')
-    case 'working':
-      return purpose === 'question'
-        ? t('chat.botCards.request.working', 'working…')
-        : t('chat.botCards.request.hasIt', 'has it')
-    case null:
-      return t('chat.botCards.request.hasIt', 'has it')
-  }
-}
-
-/** The host's reading of a sent request; reread as the asked bot's row changes, until it's answered. */
+/** The host's reading of a sent request; reread as the asked bot's row changes, until it's answered.
+ *  `onClient`: asked of an agent on a paired computer, read from the host's record of the ask with each
+ *  bot change and returned peer mail there, until it ends, as the desktop does. */
 function useRequestReading(
   client: RpcClient | null,
   messageId: string | undefined,
-  rereadKey: string
+  rereadKey: string,
+  onClient = false
 ): Pick<BotRequestCardReading, 'outcome' | 'answer' | 'chatId'> {
   const [reading, setReading] = useState(UNREAD)
-  const settled = reading.outcome === 'answered' && reading.answer !== null
+  const settled = onClient
+    ? reading.outcome !== null
+    : reading.outcome === 'answered' && reading.answer !== null
   useEffect(() => {
     if (settled || !messageId || !client) {
       return
     }
     let live = true
-    void botRequestOutcomeRead
-      .request(client, { messageId })
-      .then((response) => {
-        const result = botRequestOutcomeRead.interpret(response)
-        foldMobileBotRequestMail(result.mailIds ?? [])
-        if (live) {
-          setReading({
-            outcome: result.outcome,
-            answer: result.answer,
-            chatId: result.chatId ?? null
-          })
-        }
-      })
-      // Unread, the card shows what it was sent with; the next change reads again.
-      .catch(() => {})
+    const read = (): void =>
+      void botRequestOutcomeRead
+        .request(client, onClient ? { messageId, onClient } : { messageId })
+        .then((response) => {
+          const result = botRequestOutcomeRead.interpret(response)
+          foldMobileBotRequestMail(result.mailIds ?? [])
+          if (live) {
+            setReading({
+              outcome: result.outcome,
+              answer: result.answer,
+              chatId: result.chatId ?? null
+            })
+          }
+        })
+        // Unread, the card shows what it was sent with; the next change reads again.
+        .catch(() => {})
+    if (!onClient) {
+      read()
+      return () => {
+        live = false
+      }
+    }
+    // Its answer comes back as peer mail, also on a host with no bots to announce a change.
+    const stop = subscribeSharedClientEvents(client, (event) => {
+      if (
+        event.type === 'ready' ||
+        event.type === 'botsChanged' ||
+        event.type === 'peerMailReturned'
+      ) {
+        read()
+      }
+    })
     return () => {
       live = false
+      stop()
     }
-  }, [client, messageId, rereadKey, settled])
+  }, [client, messageId, rereadKey, settled, onClient])
   return reading
 }
 
-export function MobileBotRequestCard({
-  card,
-  cardId,
-  fallback,
-  fontScale
-}: {
+const SEND_ICON = <Send size={14} color={colors.textMuted} strokeWidth={2} />
+
+type RequestRowProps = {
   card: BotRequestCard
   cardId: string
+  timestamp: number | null
+  fontScale: number
+}
+
+/** A request to an agent on a computer paired to the chat's host: the same row, naming that computer,
+ *  in the desktop's words for how it stands (NativeChatClientAskRequestCard). */
+function ClientAskRequestRow({
+  card,
+  client,
+  cardId,
+  timestamp,
+  fontScale
+}: RequestRowProps & { client: NonNullable<BotRequestCard['client']> }): React.JSX.Element {
+  const t = useMobileTranslation()
+  const reading = useRequestReading(
+    useMobileBotCardHost()?.client ?? null,
+    card.messageId,
+    '',
+    true
+  )
+  const computer = client.computer || t('chat.botCards.request.pairedComputer', 'Paired computer')
+  const view = botRequestCardView(card, reading, '', mobileBotRequestSay(t))
+  const state = !view.sent
+    ? t('chat.botCards.request.notConnected', 'Wasn’t connected')
+    : reading.outcome === 'dropped'
+      ? // A notice that it went unanswered shows as its details instead.
+        view.answer
+        ? null
+        : t('chat.botCards.request.declined', 'Declined')
+      : reading.outcome === null
+        ? t('chat.botCards.request.waitingOn', 'Waiting for approval on {{computer}}', {
+            computer
+          })
+        : null
+  const text = scaledType(typography.bodySize, fontScale)
+  return (
+    <MobileNativeChatEventRow
+      testID={`bot-request-card:${cardId}`}
+      icon={SEND_ICON}
+      badge={
+        !view.sent || reading.outcome === 'dropped' ? 'failed' : reading.outcome ? null : 'running'
+      }
+      label={[`${view.heading} ${card.toBotName}`, card.subject, state].filter(Boolean).join(' · ')}
+      timestamp={timestamp}
+      disclosureKey={cardId ? `bot-request:${cardId}` : undefined}
+      fontScale={fontScale}
+      details={
+        view.answer ? (
+          <Text selectable style={[styles.answer, text]}>
+            {view.answer}
+          </Text>
+        ) : card.subject ? (
+          <Text style={[styles.subject, text]}>{card.subject}</Text>
+        ) : null
+      }
+    >
+      {view.heading} <MobileNativeChatEventName>{card.toBotName}</MobileNativeChatEventName>
+      {` · ${computer}`}
+      {card.subject ? ` · ${card.subject}` : null}
+      {state ? ` · ${state}` : null}
+    </MobileNativeChatEventRow>
+  )
+}
+
+export function MobileBotRequestCard({
+  fallback,
+  ...props
+}: RequestRowProps & {
   /** The host's line, for a bot this phone doesn't list. */
   fallback: string
-  fontScale: number
 }): React.JSX.Element {
+  // The asked agent lives on the paired computer, never in this host's list.
+  return props.card.client ? (
+    <ClientAskRequestRow {...props} client={props.card.client} />
+  ) : (
+    <HostBotRequestRow {...props} fallback={fallback} />
+  )
+}
+
+function HostBotRequestRow({
+  card,
+  cardId,
+  timestamp,
+  fallback,
+  fontScale
+}: RequestRowProps & { fallback: string }): React.JSX.Element {
   const t = useMobileTranslation()
   const host = useMobileBotCardHost()
   const bot = useHostBotById(card.toBotId)
@@ -123,52 +190,71 @@ export function MobileBotRequestCard({
     card.messageId,
     `${status}:${bot?.paused}:${bot?.chatSessionId}`
   )
-  const [open, setOpen] = useMobileNativeChatDisclosure(`bot-request:${cardId}`, false)
   if (!bot) {
     return (
-      <Text style={[styles.fallback, scaledType(typography.bodySize, fontScale)]}>{fallback}</Text>
+      <MobileNativeChatEventRow
+        icon={SEND_ICON}
+        badge={card.messageId ? null : 'failed'}
+        label={fallback}
+        timestamp={timestamp}
+        fontScale={fontScale}
+      >
+        {fallback}
+      </MobileNativeChatEventRow>
     )
   }
   const view = botRequestCardView(card, reading, status ?? '', mobileBotRequestSay(t))
-  const state = mobileBotRequestStatus(view, card.purpose, t)
+  const subject = view.sent ? card.subject : ''
+  const answer = scaledType(typography.bodySize, fontScale)
+  // The request's own chat when the host names one other than Home; else Home.
+  const openChat = () =>
+    reading.chatId && reading.chatId !== bot.chatSessionId && host
+      ? host.openBotChat(bot, reading.chatId)
+      : publishBotLink({ kind: 'bot', botId: bot.id })
   return (
-    <MobileBotCardFrame
-      avatar={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={BOT_CARD_AVATAR_SIZE} />}
-      heading={view.heading}
-      title={state ? `${bot.name} · ${state}` : bot.name}
-      meta={<MobileBotCardMeta fontScale={fontScale}>{view.line}</MobileBotCardMeta>}
-      fontScale={fontScale}
-      {...(view.answer ? { onToggle: () => setOpen(!open), expanded: open } : {})}
+    <MobileNativeChatEventRow
       testID={`bot-request-card:${cardId}`}
+      icon={SEND_ICON}
+      badge={view.badge}
+      label={[`${view.heading} ${bot.name}`, subject].filter(Boolean).join(' · ')}
+      action={
+        view.sent ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('chat.agentMessage.open', 'Open {{name}}', { name: bot.name })}
+            hitSlop={12}
+            onPress={openChat}
+            style={({ pressed }) => pressed && pressedStyle}
+          >
+            <ArrowUpRight size={14} color={colors.textMuted} />
+          </Pressable>
+        ) : null
+      }
+      timestamp={timestamp}
+      disclosureKey={cardId ? `bot-request:${cardId}` : undefined}
+      fontScale={fontScale}
+      details={
+        view.sent ? (
+          view.answer ? (
+            <Text selectable style={[styles.answer, answer]}>
+              {view.answer}
+            </Text>
+          ) : null
+        ) : (
+          <>
+            <Text style={[styles.answer, answer]}>{view.line}</Text>
+            {card.subject ? <Text style={[styles.subject, answer]}>{card.subject}</Text> : null}
+          </>
+        )
+      }
     >
-      {view.answer ? (
-        <Text
-          selectable
-          numberOfLines={open ? undefined : 4}
-          style={[styles.answer, scaledType(typography.bodySize, fontScale)]}
-        >
-          {view.answer}
-        </Text>
-      ) : null}
-      {view.sent ? (
-        <MobileBotCardActions>
-          <MobileNativeChatNoticePill
-            label={t('chat.botCards.request.openChat', 'Open its chat')}
-            Icon={ArrowUpRight}
-            onPress={() =>
-              // The request's own chat when the host names one other than Home; else Home.
-              reading.chatId && reading.chatId !== bot.chatSessionId && host
-                ? host.openBotChat(bot, reading.chatId)
-                : publishBotLink({ kind: 'bot', botId: bot.id })
-            }
-          />
-        </MobileBotCardActions>
-      ) : null}
-    </MobileBotCardFrame>
+      {view.heading} <MobileNativeChatEventName>{bot.name}</MobileNativeChatEventName>
+      {subject ? ` · ${subject}` : null}
+    </MobileNativeChatEventRow>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  fallback: { color: colors.textMuted },
-  answer: { color: colors.textPrimary }
+  answer: { color: colors.textPrimary },
+  subject: { color: colors.textMuted }
 }))

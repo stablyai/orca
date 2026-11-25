@@ -30,8 +30,10 @@ const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 // that was busy at every launch may still hold its only copy, and a merge keeps conflicting
 // copies (and set-aside rollout forms, listed in the cleanup manifest) beside the links; all of
 // it outlives the login. A home that was shared (it has the manifest) keeps its own databases
-// too: deleting them waits for a later release that has seen the shared store work.
+// too: deleting them waits for a later release that has seen the shared store work. The prompt
+// history stays as well: it may be the only copy of prompts never merged into the shared history.
 const KEPT_HISTORY = [
+  'history.jsonl',
   'sessions',
   'archived_sessions',
   SET_ASIDE_ROLLOUTS_DIR,

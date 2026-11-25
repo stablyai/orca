@@ -5,6 +5,7 @@ import {
   botGroupOwnerMessageBlocks,
   type BotGroupMessage
 } from '../../../src/shared/bots/bot-group'
+import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { MobileNativeChatMessage } from '../session/native-chat/transcript/messages/MobileNativeChatMessage'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from './host-bots-operations'
@@ -34,7 +35,11 @@ export function MobileBotGroupPost({
           message={{
             id: message.id,
             role: 'user',
-            blocks: botGroupOwnerMessageBlocks(message),
+            // The photos show under the words, so the [Image #N] the send wrote go, as on desktop.
+            blocks: botGroupOwnerMessageBlocks({
+              ...message,
+              text: stripSentImagePromptMarkers(message.text, message.images?.length ?? 0)
+            }),
             timestamp: message.createdAt,
             source: 'transcript',
             ...(message.automationRun ? { automationRun: message.automationRun } : {})

@@ -4,7 +4,7 @@ import { AgentSurfaceStep } from './AgentSurfaceStep'
 import { AgentStep } from './AgentStep'
 import { ChatModeTerminalTip } from './AgentStepSurfaceSections'
 
-const detected = new Set<TuiAgent>(['claude', 'codex', 'aider', 'gemini'])
+const detected = new Set<TuiAgent>(['claude', 'codex', 'aider', 'antigravity'])
 const chatAgents: TuiAgent[] = ['claude', 'codex', 'pi', 'grok', 'opencode', 'antigravity']
 
 export const chooseChat = defineFixture({

@@ -123,6 +123,7 @@ export class RuntimeBrowserCommands {
   readonly browserProfileImportFromBrowser: RuntimeBrowserProfiles['browserProfileImportFromBrowser']
   readonly browserProfileClearGoogleCookies: RuntimeBrowserProfiles['browserProfileClearGoogleCookies']
   readonly browserProfileClearDefaultCookies: RuntimeBrowserProfiles['browserProfileClearDefaultCookies']
+  readonly browserProfileClearCookies: RuntimeBrowserProfiles['browserProfileClearCookies']
 
   constructor(host: RuntimeBrowserCommandHost) {
     const targets = new RuntimeBrowserCommandTargets(host)
@@ -153,6 +154,7 @@ export class RuntimeBrowserCommands {
     this.browserProfileClearGoogleCookies = profiles.browserProfileClearGoogleCookies.bind(profiles)
     this.browserProfileClearDefaultCookies =
       profiles.browserProfileClearDefaultCookies.bind(profiles)
+    this.browserProfileClearCookies = profiles.browserProfileClearCookies.bind(profiles)
 
     this.browserSnapshot = targets.browserSnapshot.bind(targets)
     this.browserClick = navigation.browserClick.bind(navigation)

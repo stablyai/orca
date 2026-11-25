@@ -1,23 +1,86 @@
+import { useState } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { BotItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
 import { BotItemQuestionStep } from './BotItemQuestionStep'
 import type { BotItemQuestionSteps, BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
-const RECOMMENDED = 'I rotated it; purge the transcript'
-const shape: BotItemQuestionShape = {
+const two: BotItemQuestionShape = {
   body: '',
   decisions: [
     {
-      question: 'Is the token rotated?',
+      question: 'Ship the new sidebar to everyone?',
       replies: [
-        { label: RECOMMENDED, recommended: true },
-        { label: 'Not yet', recommended: false },
-        { label: 'Keep the transcript', recommended: false }
+        { label: 'Ship it', recommended: true },
+        { label: 'Beta first', recommended: false }
       ]
     },
-    { question: 'Close the item?', replies: [{ label: 'Close it', recommended: false }] }
+    {
+      question: 'Keep the old layout as an option?',
+      replies: [
+        { label: 'Yes, for a month', recommended: true },
+        { label: 'No', recommended: false }
+      ]
+    }
   ]
 }
+const four: BotItemQuestionShape = {
+  body: '',
+  decisions: [
+    ...two.decisions,
+    {
+      question: 'Who reviews the follow-up?',
+      replies: [
+        { label: 'Design', recommended: false },
+        { label: 'Me', recommended: true }
+      ]
+    },
+    {
+      question: 'When should it go out?',
+      replies: [
+        { label: 'Today', recommended: false },
+        { label: 'Next release', recommended: true },
+        { label: 'After the beta', recommended: false }
+      ]
+    }
+  ]
+}
+const long: BotItemQuestionShape = {
+  body: '',
+  decisions: [
+    {
+      question:
+        'Ship the new sidebar to everyone now that the checks are green and both reviews passed on the same build?',
+      replies: [
+        { label: 'Ship it', recommended: true },
+        { label: 'Beta first', recommended: false }
+      ]
+    },
+    two.decisions[1]!
+  ]
+}
+// A long answer: past 60% it gives way too, so the question still reads.
+const longAnswer: BotItemQuestionShape = {
+  body: '',
+  decisions: [
+    {
+      question: long.decisions[0]!.question,
+      replies: [
+        {
+          label: 'Beta first, then everyone after two weeks of feedback from the testers',
+          recommended: false
+        },
+        { label: 'Ship it', recommended: true }
+      ]
+    },
+    two.decisions[1]!
+  ]
+}
+// A question with no quick replies: answered in your own words.
+const ownWords: BotItemQuestionShape = {
+  body: '',
+  decisions: [two.decisions[0]!, { question: 'Anything to tell the testers?', replies: [] }]
+}
+
 const actions: BotItemQuickReplyActions = {
   send: () => {},
   edit: () => {},
@@ -25,78 +88,124 @@ const actions: BotItemQuickReplyActions = {
   type: () => {}
 }
 
-// A line reopened after an answer: the pick stands out, the recommended reply keeps its star.
-function Reopened({ held }: { held: string }): React.JSX.Element {
+/** The card with its picks kept here, so a fixture's clicks pick, swap and clear as in the app.
+ *  `answered`: lines a posted comment, or a send on its way, answered. */
+function Card({
+  shape,
+  picked,
+  answered = shape.decisions.map(() => null)
+}: {
+  shape: BotItemQuestionShape
+  picked: readonly (string | null)[]
+  answered?: readonly (string | null)[]
+}): React.JSX.Element {
+  const [picks, setPicks] = useState(picked)
+  const lines = shape.decisions.flatMap((_, index) => (answered[index] ? [] : [index]))
   const steps: BotItemQuestionSteps = {
     askId: 'q1',
     shape,
-    held: [held, 'Close it'],
-    current: 0,
-    lines: [0, 1],
-    go: () => {},
-    answer: () => {},
-    heldCount: 1,
-    sendHeld: () => {}
+    picks: picks.map((words, index) => (lines.includes(index) ? words : null)),
+    lines,
+    pick: (index, words) =>
+      setPicks((previous) =>
+        previous.map((held, at) => (at === index ? (held === words ? null : words) : held))
+      ),
+    bind: () => {},
+    send: () => (picks.some(Boolean) ? 'sent' : lines.length > 0 ? 'empty' : 'none'),
+    sending: false
   }
   return (
-    <div className="bg-card px-4 py-3">
-      <BotItemQuestionStep shape={shape} answered={[null, null]} steps={steps} actions={actions} />
+    <div className="bg-card px-3.5 py-3">
+      <BotItemQuestionStep shape={shape} answered={answered} steps={steps} actions={actions} />
     </div>
   )
 }
 
-export const reopenedPickedRecommended = defineFixture({
-  width: 340,
-  render: () => <Reopened held={RECOMMENDED} />
-})
-export const reopenedPickedOther = defineFixture({
-  width: 340,
-  render: () => <Reopened held="Not yet" />
-})
+const none = (shape: BotItemQuestionShape) => shape.decisions.map(() => null)
 
-const three: BotItemQuestionShape = {
-  body: '',
-  decisions: [
-    ...shape.decisions,
-    { question: 'Tell the reporter?', replies: [{ label: 'Yes', recommended: true }] }
-  ]
-}
-
-// Answers held on this device ahead of the last line, with the row that sends them sooner.
-function Held({ count }: { count: 1 | 2 }): React.JSX.Element {
-  const steps: BotItemQuestionSteps = {
-    askId: 'q1',
-    shape: three,
-    held: count === 1 ? [RECOMMENDED, null, null] : [RECOMMENDED, 'Close it', null],
-    current: count,
-    lines: [0, 1, 2],
-    go: () => {},
-    answer: () => {},
-    heldCount: count,
-    sendHeld: () => {}
+export const twoNone = defineFixture({
+  width: 300,
+  render: () => <Card shape={two} picked={none(two)} />
+})
+export const twoPartial = defineFixture({
+  width: 300,
+  render: () => <Card shape={two} picked={['Ship it', null]} />
+})
+export const twoAll = defineFixture({
+  width: 300,
+  render: () => <Card shape={two} picked={['Beta first', 'No']} />
+})
+export const twoPartialWide = defineFixture({
+  width: 600,
+  render: () => <Card shape={two} picked={['Ship it', null]} />
+})
+export const fourNone = defineFixture({
+  width: 300,
+  render: () => <Card shape={four} picked={none(four)} />
+})
+export const fourPartial = defineFixture({
+  width: 300,
+  render: () => <Card shape={four} picked={['Ship it', null, 'Me', null]} />
+})
+export const fourAll = defineFixture({
+  width: 300,
+  render: () => <Card shape={four} picked={['Ship it', 'No', 'Design', 'After the beta']} />
+})
+export const fourNoneWide = defineFixture({
+  width: 600,
+  render: () => <Card shape={four} picked={none(four)} />
+})
+export const fourPartialWide = defineFixture({
+  width: 600,
+  render: () => <Card shape={four} picked={['Ship it', null, 'Me', null]} />
+})
+export const fourAllWide = defineFixture({
+  width: 600,
+  render: () => <Card shape={four} picked={['Ship it', 'No', 'Design', 'After the beta']} />
+})
+// A long question folds to one row: the question gives way, the answer stays whole.
+export const longFolded = defineFixture({
+  width: 300,
+  render: () => <Card shape={long} picked={['Beta first', null]} />
+})
+export const longFoldedWide = defineFixture({
+  width: 600,
+  render: () => <Card shape={long} picked={['Beta first', null]} />
+})
+// A folded pick reopened: the pick is solid with its check, the recommended reply loses its star.
+export const reopened = defineFixture({
+  width: 300,
+  render: () => <Card shape={two} picked={['Beta first', null]} />,
+  interact: (frame) => {
+    frame.querySelector<HTMLButtonElement>('button[title^="Ship the new sidebar"]')?.click()
   }
-  return (
-    <div className="bg-card px-4 py-3">
-      <BotItemQuestionStep
-        shape={three}
-        answered={[null, null, null]}
-        steps={steps}
-        actions={actions}
-      />
-    </div>
+})
+// A line answered, or sent and on its way, folds and stays; the count is of all lines.
+export const oneSent = defineFixture({
+  width: 300,
+  render: () => (
+    <Card shape={four} picked={[null, 'No', null, null]} answered={['Ship it', null, null, null]} />
   )
-}
-
-export const heldOneNarrow = defineFixture({ width: 340, render: () => <Held count={1} /> })
-export const heldTwoNarrow = defineFixture({ width: 340, render: () => <Held count={2} /> })
-export const heldOneWide = defineFixture({ width: 600, render: () => <Held count={1} /> })
-export const heldTwoWide = defineFixture({ width: 600, render: () => <Held count={2} /> })
-// The keyboard ring on the control that sends the held answers: the row's last button.
-export const heldSendFocused = defineFixture({
-  width: 340,
-  render: () => <Held count={2} />,
+})
+export const typeYourAnswer = defineFixture({
+  width: 300,
+  render: () => <Card shape={ownWords} picked={['Ship it', null]} />
+})
+// The keyboard ring on Send.
+export const sendFocused = defineFixture({
+  width: 300,
+  render: () => <Card shape={four} picked={['Ship it', null, 'Me', null]} />,
   interact: (frame) => {
     const buttons = [...frame.querySelectorAll<HTMLButtonElement>('button')]
     buttons.at(-1)?.focus({ focusVisible: true })
   }
+})
+export const longAnswerFolded = defineFixture({
+  width: 300,
+  render: () => (
+    <Card
+      shape={longAnswer}
+      picked={['Beta first, then everyone after two weeks of feedback from the testers', null]}
+    />
+  )
 })

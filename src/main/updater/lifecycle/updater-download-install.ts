@@ -9,14 +9,22 @@ import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { isExternallyManagedLinuxInstall } from '../linux-package/linux-update-package-type'
 import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
-import { MAC_DEFERRED_STAGING_TIMEOUT_MS, QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
-import { UpdaterRemoteStatus } from './updater-remote-status'
+import {
+  AUTO_UPDATE_RETRY_INTERVAL_MS,
+  MAC_DEFERRED_STAGING_TIMEOUT_MS,
+  QUIT_AND_INSTALL_DELAY_MS
+} from './updater-state'
+import { UpdaterRequiredRestart } from './updater-required-restart'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
+import type { UpdateInstallTrigger } from './updater-state'
 
-export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
+export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
   private macStagingTimer: ReturnType<typeof setTimeout> | null = null
 
-  protected quitAndInstall(automatic = false): void {
+  protected quitAndInstall(
+    trigger: UpdateInstallTrigger = 'manual',
+    isCurrentTeamRestart?: () => boolean
+  ): void {
     if (
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
@@ -27,7 +35,12 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       return
     }
 
-    if (this.deferHeadlessServeInstall('install', this.getPendingInstallVersion())) {
+    const version = this.getPendingInstallVersion()
+    if (this.holdUpdateForTeamPolicy(version)) {
+      this.sendToMainWindow('updater:quitAndInstallAborted')
+      return
+    }
+    if (this.deferHeadlessServeInstall('install', version)) {
       return
     }
     // A queued check must not repoint the feed while native staging or installation is pending.
@@ -50,7 +63,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     }
     // Defer quit one tick so the renderer can flush state before windows close.
     this.pendingQuitAndInstallTimer = setTimeout(() => {
-      void this.performQuitAndInstall(automatic)
+      void this.performRecordedInstall(trigger, isCurrentTeamRestart)
     }, QUIT_AND_INSTALL_DELAY_MS)
   }
 
@@ -58,6 +71,14 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     status: UpdateStatus,
     { eligible, backgroundCheck }: { eligible: boolean; backgroundCheck: boolean }
   ): void {
+    if (status.state === 'available' && this.holdUpdateForTeamPolicy(status.version)) {
+      return
+    }
+    const required = status.state === 'available' && this.isRequiredTeamUpdate(status.version)
+    if (status.state === 'available' && this.autoUpdater && this.implicitInstallOnQuit) {
+      this.macTeamDownloadDeferred = this.shouldDeferTeamMacStaging()
+      this.autoUpdater.autoInstallOnAppQuit = !required && !this.macTeamDownloadDeferred
+    }
     this.automaticDownloadOfferVersion =
       eligible && backgroundCheck && status.state === 'available' ? status.version : null
     const autoDownload =
@@ -65,8 +86,16 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       this.pendingUserInitiatedCheckAfterInFlight === null &&
       status.state === 'available' &&
       this.canDownloadAutomatically(status.version)
-    this.sendStatus(autoDownload ? { ...status, automaticDownload: true } : status)
-    if (autoDownload) {
+    this.sendStatus(
+      required
+        ? { ...status, ...this.requiredUpdateStatusFields() }
+        : autoDownload
+          ? { ...status, automaticDownload: true }
+          : status
+    )
+    if (required && status.state === 'available' && !status.externallyManaged) {
+      this.downloadUpdate()
+    } else if (autoDownload) {
       this.downloadAvailableUpdateAutomatically()
     }
   }
@@ -82,6 +111,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
         // Squirrel may still finish this attempt. Keep its version fenced until a native result.
         this.sendStatus({
           state: 'error',
+          failurePhase: 'download',
           version,
           retryable: false,
           ...updaterCodedMessage('macStagingTimeout')
@@ -101,8 +131,19 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
   }
 
   protected publishDownloadStatus(status: UpdateStatus): void {
+    if (status.state === 'downloading' && this.isRequiredTeamUpdate(status.version)) {
+      this.sendStatus({ ...status, ...this.requiredUpdateStatusFields() })
+      return
+    }
     if (status.state === 'downloaded') {
       this.finishMacStaging()
+      if (this.holdUpdateForTeamPolicy(status.version)) {
+        return
+      }
+      if (this.isRequiredTeamUpdate(status.version)) {
+        this.publishRequiredDownload(status)
+        return
+      }
     }
     if (status.state !== 'downloaded' || status.version !== this.automaticDownloadVersion) {
       this.sendStatus(status)
@@ -114,7 +155,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     const automatic = this.getAutomaticUpdates?.() === true
     this.sendStatus(automatic ? { ...status, installing: true } : status, { force: true })
     if (automatic) {
-      this.quitAndInstall(true)
+      this.quitAndInstall('automatic')
     }
   }
 
@@ -132,7 +173,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     return (
       app.isPackaged &&
       this.getAutomaticUpdates?.() === true &&
-      this.autoUpdater?.autoInstallOnAppQuit === true &&
+      this.implicitInstallOnQuit &&
       this.automaticDownloadOfferVersion === version &&
       this.activeUpdateSource === 'release' &&
       !this.isPinnedBuildActive
@@ -160,7 +201,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     }
     const version =
       this.currentStatus.state === 'available' ? this.currentStatus.version : this.availableVersion
-    if (!version) {
+    if (!version || this.holdUpdateForTeamPolicy(version)) {
       return
     }
     // Enforce host installability in main for older renderers and direct IPC callers.
@@ -188,8 +229,18 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     const localBuildDownload = this.activeUpdateSource === 'local'
     beginMacUpdateDownload()
     // Acknowledge acceptance before setup delays progress events so the card responds immediately.
-    this.sendStatus({ state: 'downloading', percent: 0, version })
+    const required = this.isRequiredTeamUpdate(version)
+    this.sendStatus({
+      state: 'downloading',
+      percent: 0,
+      version,
+      ...(required ? this.requiredUpdateStatusFields() : {})
+    })
     const startDownload = (): void => {
+      if (this.holdUpdateForTeamPolicy(version)) {
+        this.downloadInFlight = false
+        return
+      }
       this.getAutoUpdater()
         .downloadUpdate()
         .catch((err) => {
@@ -199,6 +250,9 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
             this.sendLocalBuildErrorAndRestore(message)
           } else {
             this.sendErrorStatus(message)
+            if (this.isRequiredTeamUpdate(version)) {
+              this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
+            }
           }
         })
     }
@@ -215,5 +269,10 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
 
   protected isQuittingForUpdate(): boolean {
     return this.quittingForUpdate
+  }
+
+  /** True once the native updater is closing windows to install; false during preflight, cleanup or deferred staging. */
+  isNativeUpdateInstallUnderWay(): boolean {
+    return this.quitAndInstallNativeInvoked && !this.isAwaitingMacStaging()
   }
 }

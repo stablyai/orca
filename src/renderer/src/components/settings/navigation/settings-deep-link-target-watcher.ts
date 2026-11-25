@@ -27,10 +27,9 @@ export function watchForSettingsDeepLinkTarget(args: {
   let observer: MutationObserver | null = null
   let timeout: number | null = null
   let frame: number | null = null
-  const scrollPositions = new Map<Element, { top: number; left: number }>()
-  for (const element of [root, ...root.querySelectorAll('[data-settings-scroll-list]')]) {
-    scrollPositions.set(element, { top: element.scrollTop, left: element.scrollLeft })
-  }
+  const scrollPositions = new Map<Element, { top: number; left: number }>([
+    [root, { top: root.scrollTop, left: root.scrollLeft }]
+  ])
   const interactionEvents = args.cancelOnInteraction
     ? ['pointerdown', 'click', 'keydown', 'input', 'focusin', 'scroll']
     : args.cancelOnUserInput

@@ -4,10 +4,8 @@ import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-
 import { useAppStore } from '../../../store/index'
 import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import {
-  emptyCodexAccountsState,
-  selectCodexProviderAccount
-} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { emptyCodexAccountsState } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
 import { useProviderAccountList } from './use-provider-account-list'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -96,6 +94,10 @@ export function useCodexSwitcherController(
     ? { runtime: 'wsl' as const, wslDistro: wslHostDistro }
     : usageTarget
   const accountState = resolveCodexStatusAccountState(settings, roster, activeRuntimeEnvironmentId)
+  const requestedTarget = toCodexStatusRuntimeTarget(codexTarget)
+  const selectedRuntimeKey = getCodexStatusRuntimeKey(
+    normalizeCodexStatusRuntimeTarget(accountState, requestedTarget)
+  )
 
   useEffect(() => {
     mountedRef.current = true
@@ -178,10 +180,7 @@ export function useCodexSwitcherController(
     })
 
   const handleSelectRuntime = async (group: CodexStatusSwitchGroup): Promise<void> => {
-    const currentKey = getCodexStatusRuntimeKey(
-      normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
-    )
-    if (hasActiveRuntimeEnvironment || wslHostDistro !== null || group.key === currentKey) {
+    if (hasActiveRuntimeEnvironment || wslHostDistro !== null || group.key === selectedRuntimeKey) {
       return
     }
     try {
@@ -207,26 +206,28 @@ export function useCodexSwitcherController(
     [fetchInactiveCodexAccountUsage, hasActiveRuntimeEnvironment, loadAccounts]
   )
 
-  const selectedRuntimeKey = getCodexStatusRuntimeKey(
-    normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
-  )
   // A focused WSL host's accounts are this desktop's for its distro, so that group always shows.
   const fallbackWslDistro =
     wslHostDistro ??
     getStatusBarPreferredWslDistro(settings, windowsTerminalCapabilities.wslDistros)
-  const switchGroups = buildCodexStatusSwitchGroups(
-    accountState,
-    toCodexStatusRuntimeTarget(codexTarget),
-    {
-      fallbackWslDistro,
-      includeFallbackWsl:
-        wslHostDistro !== null ||
-        (!hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings)),
-      hostLabel: providerAccountHostLabel
-    }
-  )
+  const switchGroups = buildCodexStatusSwitchGroups(accountState, requestedTarget, {
+    fallbackWslDistro,
+    includeFallbackWsl:
+      wslHostDistro !== null ||
+      (!hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings)),
+    hostLabel: providerAccountHostLabel
+  })
+  const authFailureAccount = codex.usageMetadata?.authFailureAccount
+  // A default WSL reading can identify a concrete recovery account without pinning the runtime.
+  const accountRuntimeKey =
+    requestedTarget.runtime === 'wsl' &&
+    !requestedTarget.wslDistro &&
+    authFailureAccount?.runtime === 'wsl' &&
+    authFailureAccount.wslDistro
+      ? getCodexStatusRuntimeKey(authFailureAccount)
+      : selectedRuntimeKey
   const selectedGroup =
-    switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
+    switchGroups.find((group) => group.key === accountRuntimeKey) ?? switchGroups[0]
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
   const reset = useCodexResetAction(
     codex,

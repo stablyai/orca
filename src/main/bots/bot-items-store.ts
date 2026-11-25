@@ -3,6 +3,7 @@
 import SyncDatabase from '../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../sqlite/harden-database-files'
 import { BotItemError } from './bot-item-error'
+import { ensureKeptWaitingAsks } from './bot-item-waiting-ask-keep'
 import { migrateBotItems } from './bot-items-schema'
 import { BotItemsOwner } from './bot-items-owner'
 
@@ -15,6 +16,9 @@ export class BotItemsStore extends BotItemsOwner {
     db.pragma('journal_mode = WAL')
     db.pragma('busy_timeout = 5000')
     const writable = migrateBotItems(db)
+    if (writable) {
+      ensureKeptWaitingAsks(db)
+    }
     if (path !== ':memory:') {
       hardenSqliteDatabaseFiles(path)
     }

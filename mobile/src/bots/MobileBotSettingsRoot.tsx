@@ -40,11 +40,12 @@ export type SettingsRootPage =
   | 'who-can-ask'
   | 'tools'
   | 'skills'
+  | 'original'
 
 /** A row a feature adds to the list: the group it sits in, in the desktop's order within it. */
 export type SettingsSlotRow = {
   key: string
-  group: 'schedule' | 'soul-and-memory' | 'access' | 'sharing'
+  group: 'identity' | 'schedule' | 'soul-and-memory' | 'access' | 'sharing'
   node: ReactNode
 }
 
@@ -160,7 +161,6 @@ export function MobileBotSettingsRoot(props: {
             subtitle={[agent, state, props.hostName].join(' · ')}
             subtitleLines={1}
             navigates
-            disabled={!props.online}
             onPress={() => props.open('identity')}
             accessibilityLabel={t(
               'bots.settings.editIdentity',
@@ -170,6 +170,7 @@ export function MobileBotSettingsRoot(props: {
               }
             )}
           />
+          {rowsIn('identity')}
         </Section>
         <Section title={t('bots.settings.agent', 'Agent')}>
           <DrillRow
