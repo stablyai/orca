@@ -23614,7 +23614,11 @@
         "promptSuggestionsTitle": "Suggested prompts",
         "promptSuggestionsCopy": "After Claude or Codex replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward that agent's usage.",
         "promptSuggestionsSearchNext": "next prompt",
-        "promptSuggestionsSearchGhost": "ghost text"
+        "promptSuggestionsSearchGhost": "ghost text",
+        "wrapCodeBlocksTitle": "Wrap long lines in code blocks",
+        "wrapCodeBlocksCopy": "Code blocks in chats start with their lines wrapped instead of a horizontal scrollbar. Each block’s wrap button still overrides this for that block.",
+        "wrapCodeBlocksSearchWrap": "wrap",
+        "wrapCodeBlocksSearchScroll": "horizontal scroll"
       },
       "voice": {
         "dictationLanguage": {
