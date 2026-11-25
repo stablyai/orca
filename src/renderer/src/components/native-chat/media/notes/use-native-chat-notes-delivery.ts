@@ -16,11 +16,12 @@ import {
   afterComposerRender,
   announceNativeChatNotesHandOff,
   attachNativeChatNotes,
-  detachNativeChatNotes,
   nativeChatNotesComposer,
   nativeChatNotesScopeKey,
   nativeChatNotesStillInDraft,
   NativeChatNotesSupersededError,
+  settleNativeChatNotesReplacement,
+  submitNativeChatNotesIfAdmitted,
   NativeChatNotesUnsavedError,
   type NativeChatNotesComposer
 } from './native-chat-notes-handoff'
@@ -161,13 +162,7 @@ export function useNativeChatNotesDelivery({
           offset,
           frame: async () => ({ image: loaded.image, ...loaded.size })
         })
-        const restore = onAttached?.(ids) ?? undefined
-        // The image these notes replace left the draft meanwhile (sent, or replaced from another
-        // viewer): adding the marked copy now would bring back what is already gone.
-        if (restore === false) {
-          detachNativeChatNotes(composer.scopeKey, ids)
-          throw new NativeChatNotesSupersededError()
-        }
+        const restore = settleNativeChatNotesReplacement(composer.scopeKey, ids, onAttached?.(ids))
         handed = true
         if (heldIn.current) {
           releaseHeldNativeChatNotes(heldIn.current, mediaKey)
@@ -175,15 +170,7 @@ export function useNativeChatNotesDelivery({
         }
         if (send) {
           await afterComposerRender()
-          // Sent only if this box still takes these notes as a message, as when Send was pressed.
-          const now = nativeChatNotesComposer(opener.current)
-          if (
-            now?.scopeKey === composer.scopeKey &&
-            now.handle.notesBlocked?.() === null &&
-            nativeChatNotesStillInDraft(composer.scopeKey, ids)
-          ) {
-            now.handle.submit?.()
-          }
+          submitNativeChatNotesIfAdmitted(opener, composer.scopeKey, ids)
           await afterComposerRender()
         }
         // Sent, the images have left the draft; when the box held the send back, say where they are.

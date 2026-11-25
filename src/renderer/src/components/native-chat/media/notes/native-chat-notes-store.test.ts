@@ -152,7 +152,7 @@ it('a write keeps notes another window saved meanwhile', () => {
 
 it('a write storage refused is retried without undoing what another window saved or removed', () => {
   setNativeChatAttachmentNotes(SCOPE, 'removed-elsewhere', record([note(1)]))
-  const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+  const setItem = vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
     throw new Error('QuotaExceededError')
   })
   expect(setNativeChatAttachmentNotes(SCOPE, 'img-1', record([note(1)]))).toBe(false)

@@ -8,6 +8,35 @@ export function useNativeChatMediaViewerFocusSession(): RefObject<NativeChatMedi
   return useRef<NativeChatMediaViewerFocusSession>({ opener: null, bodies: 0 })
 }
 
+function enterBody(session: NativeChatMediaViewerFocusSession): () => void {
+  session.bodies += 1
+  return () => {
+    session.bodies -= 1
+  }
+}
+
+function openBody(session: NativeChatMediaViewerFocusSession, event: Event): void {
+  // The first image records the opener; a stepped-to image finds focus already inside the viewer.
+  if (session.opener === null) {
+    session.opener = document.activeElement
+  }
+  event.preventDefault()
+}
+
+function closeBody(session: NativeChatMediaViewerFocusSession, event: Event): void {
+  if (session.bodies > 0) {
+    // Stepped to another image: its body has focus now.
+    event.preventDefault()
+    return
+  }
+  const previous = session.opener
+  session.opener = null
+  if (previous instanceof HTMLElement && previous.isConnected) {
+    event.preventDefault()
+    previous.focus({ preventScroll: true })
+  }
+}
+
 /** Focus for one image's body: it starts on the media, and only closing the viewer (not stepping to
  *  another image) returns it to what opened the viewer. */
 export function useNativeChatMediaViewerFocus(
@@ -17,32 +46,12 @@ export function useNativeChatMediaViewerFocus(
   onOpenAutoFocus: (event: Event) => void
   onCloseAutoFocus: (event: Event) => void
 } {
-  useLayoutEffect(() => {
-    const current = session.current
-    current.bodies += 1
-    return () => {
-      current.bodies -= 1
-    }
-  }, [session])
+  useLayoutEffect(() => enterBody(session.current), [session])
   return {
     onOpenAutoFocus: (event) => {
-      // The first image records the opener; a stepped-to image finds focus already inside the viewer.
-      session.current.opener ??= document.activeElement
-      event.preventDefault()
+      openBody(session.current, event)
       focusMedia()
     },
-    onCloseAutoFocus: (event) => {
-      if (session.current.bodies > 0) {
-        // Stepped to another image: its body has focus now.
-        event.preventDefault()
-        return
-      }
-      const previous = session.current.opener
-      session.current.opener = null
-      if (previous instanceof HTMLElement && previous.isConnected) {
-        event.preventDefault()
-        previous.focus({ preventScroll: true })
-      }
-    }
+    onCloseAutoFocus: (event) => closeBody(session.current, event)
   }
 }

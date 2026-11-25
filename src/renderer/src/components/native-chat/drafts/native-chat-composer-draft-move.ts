@@ -18,8 +18,21 @@ import {
   moveNativeChatStagedFiles,
   reconcileNativeChatStagedDraft
 } from './native-chat-draft-attachment-staging'
-import { moveNativeChatAttachmentNotes } from '../media/notes/native-chat-attachment-notes'
-import { moveNativeChatHeldNotes } from '../media/notes/native-chat-held-notes'
+import {
+  clearNativeChatAttachmentNotesWhere,
+  moveNativeChatAttachmentNotes
+} from '../media/notes/native-chat-attachment-notes'
+import {
+  clearNativeChatHeldNotesWhere,
+  moveNativeChatHeldNotes
+} from '../media/notes/native-chat-held-notes'
+import { setMovedNativeChatDraftSourceRelease } from './native-chat-moved-draft-release'
+
+// A moved draft's source keeps its copy of the notes until the destination is saved; then they go.
+setMovedNativeChatDraftSourceRelease((sourceScope) => {
+  clearNativeChatAttachmentNotesWhere((scope) => scope === sourceScope)
+  clearNativeChatHeldNotesWhere((scope) => scope === sourceScope)
+})
 
 /** Transfer the live draft synchronously; storage acknowledgement only governs source cleanup. */
 export function moveNativeChatComposerDraft(

@@ -50,6 +50,38 @@ export class NativeChatNotesSupersededError extends Error {
   }
 }
 
+/** What a hand-off's `onAttached` returned, settled: false means the image these notes replace left
+ *  the draft meanwhile (sent, or replaced from another viewer), so the marked copy is taken back out
+ *  rather than bring back what is already gone. */
+export function settleNativeChatNotesReplacement(
+  scopeKey: string,
+  ids: readonly string[],
+  restore: (() => void) | void | false
+): (() => void) | undefined {
+  if (restore === false) {
+    detachNativeChatNotes(scopeKey, ids)
+    throw new NativeChatNotesSupersededError()
+  }
+  return restore ?? undefined
+}
+
+/** Sends the message the notes went into, only if the chat's message box (found again from
+ *  `opener`) is still the same one and still takes them as a message, as when Send was pressed. */
+export function submitNativeChatNotesIfAdmitted(
+  opener: { readonly current: Element | null },
+  scopeKey: string,
+  ids: readonly string[]
+): void {
+  const now = nativeChatNotesComposer(opener.current)
+  if (
+    now?.scopeKey === scopeKey &&
+    now.handle.notesBlocked?.() === null &&
+    nativeChatNotesStillInDraft(scopeKey, ids)
+  ) {
+    now.handle.submit?.()
+  }
+}
+
 /** A drawable frame of the media and its natural size. */
 export type NativeChatNotesFrameSource = (
   time: number | undefined
