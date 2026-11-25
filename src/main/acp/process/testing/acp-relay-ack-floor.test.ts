@@ -190,7 +190,7 @@ describe('ACP relay ack floor', () => {
       await send(chunk('t', `n${at}`))
       await output.settle(true)
     }
-    const named = cutKeys.at(-1) as string[]
+    const named = cutKeys.at(-1)
     expect(named).toHaveLength(16)
     expect(named).toContain(JSON.stringify(['s', 'n39']))
     expect(named).not.toContain(JSON.stringify(['s', 'n0']))
