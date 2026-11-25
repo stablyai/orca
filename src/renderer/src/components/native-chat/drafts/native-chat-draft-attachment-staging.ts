@@ -224,6 +224,26 @@ export function releaseNativeChatStagedFiles(scope: string): void {
   }
 }
 
+/**
+ * No send will hand these files back any more (the recipient chat was discarded before it existed): stop
+ * waiting for custody and keep only what a recorded draft still references.
+ */
+export function abandonNativeChatPendingStagedLeases(scope: string): void {
+  const files = staged.get(scope)
+  if (!files?.pendingLeases.size) {
+    return
+  }
+  for (const lease of files.pendingLeases) {
+    files.leases.delete(lease)
+    files.heldInputs.delete(lease)
+  }
+  files.pendingLeases.clear()
+  if (!files.draft) {
+    files.draftPaths.clear()
+  }
+  pruneFiles(files)
+}
+
 export function stageNativeChatPendingImage(
   scope: string,
   id: string | null,

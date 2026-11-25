@@ -142,6 +142,8 @@ export type StructuredPromptDeliveryResult = {
   recipientOwned?: true
   /** Nobody could confirm it went: the host may hold it. */
   unconfirmed?: true
+  /** With `unconfirmed`: resolves if the host later records this exact send (by reply or journal). */
+  whenRecorded?: Promise<void>
   /** Another send of the chat held its one slot, so this one never went. */
   busy?: true
 }

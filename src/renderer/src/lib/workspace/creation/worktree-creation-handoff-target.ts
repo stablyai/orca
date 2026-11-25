@@ -75,6 +75,7 @@ export function moveWorktreeCreationDraftToTarget(
  * (the original itself, as a refused send returns it, or a live host upload of it), now or at a later
  * draft change. A moved draft alone proves nothing, and an undelivered send to a stale chat keeps them
  * for Retry; dismissing the pending creation, or deleting the draft that now holds them, releases them.
+ * An unconfirmed send that the host records later, by reply or journal, is a recorded delivery too.
  */
 export function releaseFirstSendFilesWhenHeld(
   delivery: Promise<StructuredPromptDeliveryResult> | undefined,
@@ -84,8 +85,11 @@ export function releaseFirstSendFilesWhenHeld(
   void delivery?.then((result) => {
     if (result.delivered) {
       files.release()
-    } else if (draftTransferred()) {
+      return
+    }
+    if (draftTransferred()) {
       files.releaseWhenHeld()
     }
+    void result.whenRecorded?.then(() => files.release())
   })
 }

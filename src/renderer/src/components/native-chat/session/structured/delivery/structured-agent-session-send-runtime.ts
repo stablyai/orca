@@ -33,12 +33,30 @@ type SendRuntime = {
 }
 
 export const runtimes = new Map<string, SendRuntime>()
+// A send whose first outcome was `unconfirmed` can still be recorded later, by its reply or the journal.
+const recordedLater = new Map<string, Set<() => void>>()
+
+/** Resolves if this send, first reported unconfirmed, is later recorded; never if it ends otherwise. */
+export function whenStructuredAgentSessionSendRecorded(clientMessageId: string): Promise<void> {
+  return new Promise((resolve) => {
+    const waiting = recordedLater.get(clientMessageId) ?? new Set()
+    recordedLater.set(clientMessageId, waiting)
+    waiting.add(resolve)
+  })
+}
 
 export function finish(
   entry: StructuredAgentSessionPendingSend,
   outcome: StructuredAgentSessionSendOutcome,
   keep?: Partial<StructuredAgentSessionPendingSend>
 ): void {
+  if (outcome !== 'unconfirmed') {
+    const waiting = recordedLater.get(entry.clientMessageId)
+    recordedLater.delete(entry.clientMessageId)
+    if (outcome === 'recorded') {
+      waiting?.forEach((resolve) => resolve())
+    }
+  }
   const runtime = runtimes.get(entry.clientMessageId)
   if (runtime) {
     runtime.activity.settle(false)

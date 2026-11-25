@@ -14,6 +14,7 @@ import type {
 } from './native-chat-composer-draft-storage'
 import { moveNativeChatPendingAttachments } from '../attachments/chips/native-chat-pending-attachment-cache'
 import { nativeChatPastedTextOperations } from '../paste/native-chat-pasted-text-reference'
+import { repairNativeChatExpiredUploads } from './native-chat-expired-upload-repair'
 import {
   moveNativeChatStagedFiles,
   reconcileNativeChatStagedDraft
@@ -45,5 +46,7 @@ export function moveNativeChatComposerDraft(
     }
   }
   reconcileNativeChatStagedDraft(destinationScope, records.get(destinationScope))
+  // A send refused for expired uploads before this move could not restore their originals: it can now.
+  repairNativeChatExpiredUploads(destinationScope)
   deleteNativeChatComposerDraft(sourceScope)
 }

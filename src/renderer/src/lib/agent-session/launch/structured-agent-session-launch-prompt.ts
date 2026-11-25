@@ -13,6 +13,26 @@ import {
   type StructuredLaunchPromptOptions
 } from './structured-agent-session-staged-prompt'
 import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
+import {
+  whenStructuredAgentSessionSendRecorded,
+  type StructuredAgentSessionSendOutcome
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime'
+
+/** An unconfirmed send can still be recorded later; callers holding its files wait for that too. */
+function unconfirmedDelivery(
+  outcome: StructuredAgentSessionSendOutcome,
+  clientMessageId: string | undefined
+): Pick<StructuredPromptDeliveryResult, 'unconfirmed' | 'whenRecorded'> {
+  if (outcome !== 'unconfirmed') {
+    return {}
+  }
+  return {
+    unconfirmed: true,
+    ...(clientMessageId
+      ? { whenRecorded: whenStructuredAgentSessionSendRecorded(clientMessageId) }
+      : {})
+  }
+}
 
 function promptDeliveryResult(outcome: StagedDelivery): StructuredPromptDeliveryResult {
   return {
@@ -44,7 +64,7 @@ function sendStagedPrompt(
           return {
             delivered: false,
             inComposer: !prompt.callerKeepsText && outcome === 'returned',
-            ...(outcome === 'unconfirmed' ? { unconfirmed: true as const } : {})
+            ...unconfirmedDelivery(outcome, prompt.slot?.clientMessageId)
           }
         }
       } catch (error) {
@@ -57,7 +77,7 @@ function sendStagedPrompt(
           return {
             delivered: false,
             inComposer: !prompt.callerKeepsText && outcome === 'returned',
-            ...(outcome === 'unconfirmed' ? { unconfirmed: true as const } : {})
+            ...unconfirmedDelivery(outcome, prompt.slot?.clientMessageId)
           }
         }
         unstageStructuredLaunchPrompt(prompt)
@@ -87,7 +107,7 @@ function sendStagedPrompt(
       return {
         delivered: outcome === 'recorded',
         inComposer: !prompt.callerKeepsText && outcome === 'returned',
-        ...(outcome === 'unconfirmed' ? { unconfirmed: true as const } : {})
+        ...unconfirmedDelivery(outcome, sent.clientMessageId)
       }
     } finally {
       unstageStructuredLaunchPrompt(prompt)

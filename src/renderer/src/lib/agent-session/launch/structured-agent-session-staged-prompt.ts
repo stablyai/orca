@@ -12,6 +12,8 @@ import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/n
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { StructuredAgentSessionSendInput } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-slot'
 import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
+import { abandonNativeChatPendingStagedLeases } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 
 type LaunchMessage = Pick<StructuredAgentSessionSendInput, 'text' | 'attachments' | 'skills'>
 
@@ -132,6 +134,8 @@ export function discardStructuredLaunchPrompts(sessionId: string): void {
 export function discardStructuredAgentSessionChatSends(sessionId: string): void {
   discardStructuredLaunchPrompts(sessionId)
   dropStructuredAgentSessionSends(sessionId)
+  // Nothing it was sending will be handed back now: a moved first send stops waiting for this draft.
+  abandonNativeChatPendingStagedLeases(structuredAgentSessionDraftScopeKey(sessionId))
 }
 
 // Prepublication Stop returns unsent text to the composer while allowing chat startup to continue.

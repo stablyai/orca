@@ -2,6 +2,7 @@ import { agentSessionAttachmentUploadIdOfPath } from '../../../../../../../share
 import { formatNativeChatFileReference } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { nativeChatTextAttachmentParts } from '../../../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import { restoreNativeChatExpiredUploads } from '../../../drafts/native-chat-staged-input'
+import { noteNativeChatUnrestoredExpiredUploads } from '../../../drafts/native-chat-expired-upload-repair'
 import type { AgentJournalMessageItem } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatComposerDraftImage } from '../../../drafts/native-chat-composer-draft-storage'
 import { appendToNativeChatComposerDraft } from '../../../drafts/native-chat-composer-draft-store'
@@ -74,6 +75,18 @@ export function returnMessageToComposer(
       )
       .join(''),
     imageIds
+  )
+  // Not this draft's yet (a first send refused before its draft moved in): repaired when they arrive.
+  noteNativeChatUnrestoredExpiredUploads(
+    composerScopeKey,
+    blocks.flatMap((block, index) =>
+      block.type === 'image-ref' && block.path && expired(block.path) && !restored.has(block.path)
+        ? [[`${attachmentIdPrefix}-${index}`, block.path] as const]
+        : []
+    ),
+    nativeChatTextAttachmentParts(messageText, true, expired).flatMap((part) =>
+      part.path && !restored.has(part.path) ? [part.path] : []
+    )
   )
   if (text === '' && images.length === 0) {
     return true
