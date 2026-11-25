@@ -32,6 +32,7 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     // The request
     'requestMalformed',
     'operationIdInvalid',
+    'receiptMissing',
     'messageIdReused',
     'operationRefusedEarlier',
     'journalWriteFailed',

@@ -36,6 +36,7 @@ const QuestionAnswer = z
 export const RespondToQuestionParams = z
   .object({
     envelope: MutationEnvelope,
+    replayOnly: z.literal(true).optional(),
     itemId: Identifier('Invalid item id'),
     expectedRevision: z.number().int().positive(),
     /** An answer packed into one id, from clients that predate `answers`. */

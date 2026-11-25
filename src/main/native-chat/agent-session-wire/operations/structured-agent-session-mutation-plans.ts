@@ -92,6 +92,8 @@ export type MutationPlan<TValue> = {
 /** Insert acceptance with its effect, if absent. */
 export type MutationCommandReceipt<TValue> = {
   binding: JournalReceiptRowBinding
+  /** Return only this durable result without opening or recovering the conversation. */
+  replayOnly?: (receipt: CommandReceiptResult) => TValue | null
   /** Resolve inside the effect transaction; draft writes have no journal row. */
   result: (row: JournalRow | undefined) => CommandReceiptResult
   /** Commit a standalone receipt before answering a row-free result; null records nothing. */

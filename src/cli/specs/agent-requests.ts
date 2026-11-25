@@ -29,13 +29,13 @@ export const AGENT_REQUEST_COMMAND_SPECS: CommandSpec[] = [
     path: ['agent', 'requests', 'answer'],
     summary: 'Answer one inspected native request using an exact JSON file',
     usage:
-      'orca agent requests answer --worktree <selector> --session <id> --request-file <path> [--turn <turnItemId>] [--retry <operationUUID>] [--json]',
+      'orca agent requests answer --worktree <selector> --session <id> --request-file <path> [--turn <turnItemId>] [--retry <operationId>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'session', 'turn', 'request-file', 'retry'],
     notes: [
       ...NOTES,
-      'The UTF-8 JSON file must include workspaceId, sessionId, expectedRuntimeId, expectedRequests (the complete list marker), itemId, kind, expectedRuntimeFence, expectedRevision, and a caller-chosen clientOperationId UUID. It selects one optionId or the exact structured question answers. Optional turnItemId restricts ownership.',
+      'The UTF-8 JSON file must include workspaceId, sessionId, expectedRuntimeId, expectedRequests (the complete list marker), itemId, kind, expectedRuntimeFence, expectedRevision, and a clientOperationId made from a 13-digit Unix timestamp in milliseconds, a hyphen, and 32 lowercase hex digits. It selects one optionId or the exact structured question answers. Optional turnItemId restricts ownership.',
       'An initial answer requires the inspected runtime, workspace, session, fence, marker and item revision to remain current. The host finally enforces its existing lease, item revision and current provider ownership rules; newer hosts do not enforce the envelope fence themselves.',
-      '--retry must equal the file UUID and resends only that same operation and payload once, allowing the host to replay its receipt even when the prompt is no longer pending. Never replace an unknown operation with a fresh UUID or retry automatically.',
+      '--retry takes the original file’s clientOperationId. The host first looks up its receipt. If the host confirms the receipt is absent, the CLI checks the current request and turn before submitting the original answer. Retrying requires a host that supports receipt lookup.',
       'A session no longer identifiable in this explicit workspace is refused even for replay. Older hosts lacking the native current-request contract are refused without mutation.'
     ]
   }

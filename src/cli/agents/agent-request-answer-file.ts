@@ -1,4 +1,3 @@
-import { readFile, stat } from 'node:fs/promises'
 import { TextDecoder } from 'node:util'
 import { z } from 'zod'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -6,6 +5,8 @@ import { AgentRequestMarkerSchema } from './agent-request-inventory'
 import { RespondParams } from '../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import { RespondToQuestionParams } from '../../shared/rpc-contract/structured-agent-session/structured-agent-session-question-params'
 import { structuredAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
+import { parseAgentSessionOperationTimestamp } from '../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import { readNodeFileWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 
 const AnswerFile = z
   .object({
@@ -17,7 +18,7 @@ const AnswerFile = z
     kind: z.enum(['approval', 'question']),
     expectedRuntimeFence: z.number().int().positive(),
     expectedRevision: z.number().int().positive(),
-    clientOperationId: z.string().uuid(),
+    clientOperationId: z.string().refine((id) => parseAgentSessionOperationTimestamp(id) !== null),
     turnItemId: z.string().min(1).optional(),
     optionId: z.string().optional(),
     answers: z.unknown().optional()
@@ -28,14 +29,9 @@ export type AgentRequestAnswerFile = z.infer<typeof AnswerFile>
 /** Loads size-checked JSON using strict UTF-8, allowing one leading BOM and rejecting invalid bytes. */
 export async function readAgentRequestAnswerFile(path: string): Promise<AgentRequestAnswerFile> {
   try {
-    const info = await stat(path)
-    if (!info.isFile() || info.size > 128 * 1024) {
-      throw new Error('size')
-    }
-    const bytes = await readFile(path)
-    if (bytes.byteLength > 128 * 1024) {
-      throw new Error('size')
-    }
+    const { buffer: bytes } = await readNodeFileWithinLimit(path, 128 * 1024, {
+      regularFileOnly: true
+    })
     const content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
     return parseAgentRequestAnswerFile(JSON.parse(content.replace(/^\uFEFF/, '')))
   } catch {

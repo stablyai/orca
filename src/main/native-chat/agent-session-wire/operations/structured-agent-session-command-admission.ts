@@ -68,6 +68,15 @@ export async function admitCommandReceiptMutation<TValue>(
   if (read.verdict !== 'absent') {
     return answerCommandReceipt(request, hostFingerprint, read)
   }
+  if (commandReceipt.replayOnly) {
+    return refuseAgentSessionMutation(
+      agentSessionLedgerRefusal(envelope, {
+        decision: 'refused',
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'receiptMissing' }
+      })
+    )
+  }
   store.requireWritableRecord(envelope.sessionId)
   const prepared = await request.prepareSession?.(
     'admit',
@@ -155,6 +164,24 @@ async function answerCommandReceipt<TValue>(
   const record = request.store.getConversation(envelope.sessionId)
   if (!record) {
     return unknown(request)
+  }
+  const receiptOnly = plan.commandReceipt?.replayOnly
+  if (receiptOnly) {
+    const value = receiptOnly(receipt.result)
+    if (value === null || !request.readReceiptCursor) {
+      return unknown(request)
+    }
+    try {
+      return {
+        ok: true,
+        replayed: true,
+        fence: record.currentFence,
+        cursor: await request.readReceiptCursor(),
+        value
+      }
+    } catch {
+      return unknown(request)
+    }
   }
   const prepared = await request.prepareSession?.('replay', record)
   if (prepared && !prepared.ok) {

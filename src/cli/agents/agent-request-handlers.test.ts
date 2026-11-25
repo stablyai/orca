@@ -7,6 +7,7 @@ import { parseAgentRequestAnswerFile } from './agent-request-answer-file'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { RuntimeClient } from '../runtime/client'
 import {
+  REQUEST_OPERATION_ID,
   REQUEST_SESSION,
   REQUEST_WORKSPACE,
   answerFile,
@@ -80,7 +81,7 @@ describe('public scoped native-request commands', () => {
       '--request-file',
       'answer.json',
       '--retry',
-      '33333333-3333-4333-8333-333333333333',
+      REQUEST_OPERATION_ID,
       '--json'
     ]
     const parsed = parseArgs(
@@ -90,7 +91,7 @@ describe('public scoped native-request commands', () => {
     )
     validateCommandAndFlags(AGENT_REQUEST_COMMAND_SPECS, parsed)
     expect(parsed.commandPath).toEqual(['agent', 'requests', 'answer'])
-    expect(parsed.flags.get('retry')).toBe('33333333-3333-4333-8333-333333333333')
+    expect(parsed.flags.get('retry')).toBe(REQUEST_OPERATION_ID)
   })
 
   it.each(['--yes', '--all', '--force', '--text', '--approve-all'])(

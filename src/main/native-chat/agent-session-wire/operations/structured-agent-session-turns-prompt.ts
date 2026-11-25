@@ -31,6 +31,7 @@ import {
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
 export type AgentSessionPromptRequest = {
+  replayOnly?: true
   itemId: string
   expectedRevision: number
   kind: 'approval' | 'question'

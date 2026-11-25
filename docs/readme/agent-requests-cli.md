@@ -40,7 +40,7 @@ the runtime, workspace and session fence.
 
 Copy the identities, marker and revision from the inspected result. Choose one offered approval
 `optionId`, or supply structured question `answers`. Do not invent an option, rewrite a question
-ID, trim typed answers or repurpose an operation UUID. The UTF-8 file is limited to 128 KiB and
+ID, trim typed answers or reuse an operation ID for a different answer. The UTF-8 file is limited to 128 KiB and
 rejects unknown top-level keys. Its required fields are:
 
 ```json
@@ -61,9 +61,17 @@ rejects unknown top-level keys. Its required fields are:
   "kind": "approval",
   "expectedRuntimeFence": 7,
   "expectedRevision": 1,
-  "clientOperationId": "33333333-3333-4333-8333-333333333333",
+  "clientOperationId": "1795600000000-33333333333343338333333333333333",
   "optionId": "exact-offered-id"
 }
+```
+
+Generate a fresh `clientOperationId` for the initial answer and save it in the file. It uses
+the current Unix time in milliseconds, a hyphen, and 32 lowercase hexadecimal digits.
+For example, this Node.js command prints one ID:
+
+```sh
+node -p "Date.now() + '-' + require('node:crypto').randomUUID().replaceAll('-', '')"
 ```
 
 For a question use `"kind": "question"` and replace `optionId` with:
@@ -109,19 +117,21 @@ been committed before the provider connection failed. Acceptance is therefore no
 provider resumption or task completion; follow subsequent authoritative status separately.
 
 After a lost response, inspect the session first. If deliberately replaying the same operation,
-reuse the exact original file and pass its UUID:
+reuse the exact original file and pass its operation ID:
 
 ```text
-orca agent requests answer --worktree id:<workspaceId> --session <sessionId> --request-file answer.json --retry <same-operationUUID> --json
+orca agent requests answer --worktree id:<workspaceId> --session <sessionId> --request-file answer.json --retry <same-operationId> --json
 ```
 
-`--retry` must equal the file UUID. It sends that same native operation once and allows the
-host's existing receipt-first replay even when the original prompt is no longer pending, its
-marker changed or its fence advanced. Runtime, session and workspace must still match. The CLI
-does not generate a fresh operation, retry automatically, choose another pending question or
-claim that an unknown outcome failed. Explicit host refusals retain their code; uncertain
-transport or mismatched receipts remain unknown. A closed tab whose workspace identity can no
-longer be proved is refused even for replay.
+`--retry` must match the file’s `clientOperationId`. The CLI first asks the same host for
+the recorded outcome of that operation and payload. An existing receipt can be replayed
+after the prompt closes or the marker changes. Only a confirmed missing receipt allows a
+first submission. The CLI then rechecks the pending item, revision, fence, complete marker
+and requested turn, just as it does for an initial answer. An uncertain lookup stops the
+retry. Keep the original ID when checking an unknown outcome.
+
+Retries require a host that advertises receipt lookup for prompt responses. The session
+must still be identifiable in the same workspace and runtime.
 
 No permission rejection, human-only platform requirement or unsupported native workflow is
 bypassed by these commands. Update the execution host when its native contracts are missing.

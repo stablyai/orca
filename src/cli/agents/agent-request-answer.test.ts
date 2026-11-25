@@ -19,6 +19,8 @@ import {
 import { RuntimeRpcFailureError } from '../runtime/connection/types'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { AGENT_REQUEST_CLI_CAPABILITIES } from './agent-request-capabilities'
+import { refuse } from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import { RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
 
 const scope = { worktree: `id:${REQUEST_WORKSPACE}`, sessionId: REQUEST_SESSION }
 const ok = (result: unknown) => ({
@@ -252,16 +254,182 @@ describe('native answer JSON and admission', () => {
       }
       return undefined
     })
-    const input = parseAgentRequestAnswerFile({ ...answerFile(), expectedRuntimeFence: 6 })
+    const input = parseAgentRequestAnswerFile({
+      ...answerFile(),
+      expectedRuntimeFence: 6,
+      turnItemId: 'finished-turn'
+    })
     const result = await answerAgentRequest(client, scope, input, input.clientOperationId)
     expect(result.result.result.replayed).toBe(true)
     expect(
       call.mock.calls.filter(([method]) => method === 'agentSession.currentRequests')
     ).toHaveLength(0)
-    expect(call.mock.calls.filter(([method]) => isMutation(method))).toHaveLength(1)
+    const mutations = call.mock.calls.filter(([method]) => isMutation(method))
+    expect(mutations).toHaveLength(1)
+    expect(mutations[0]?.[1]).toEqual({ ...nativeAnswerParams(input), replayOnly: true })
+    expect(mutations[0]?.[2]).toEqual({
+      expectedRuntimeSource: { sourceId: REQUEST_SOURCE, runtimeId: REQUEST_RUNTIME }
+    })
     await expect(
       answerAgentRequest(client, scope, input, '44444444-4444-4444-8444-444444444444')
     ).rejects.toMatchObject({ code: 'invalid_argument' })
+  })
+
+  it('refuses retry on a host without receipt-only support before sending', async () => {
+    const { client, call } = requestFixtureClient((method) =>
+      method === 'status.get'
+        ? ok({
+            runtimeId: REQUEST_RUNTIME,
+            capabilities: [
+              ...AGENT_REQUEST_CLI_CAPABILITIES,
+              RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY
+            ],
+            hostDescriptor: { installationId: REQUEST_SOURCE }
+          })
+        : undefined
+    )
+    const input = parseAgentRequestAnswerFile(answerFile())
+    await expect(
+      answerAgentRequest(client, scope, input, input.clientOperationId)
+    ).rejects.toMatchObject({
+      code: 'incompatible_runtime'
+    })
+    expect(call.mock.calls.filter(([method]) => isMutation(method))).toHaveLength(0)
+  })
+
+  it('sends once after an exact receipt miss and successful current-request validation', async () => {
+    const { client, call } = requestFixtureClient((method, params) => {
+      if (
+        isMutation(method) &&
+        typeof params === 'object' &&
+        params !== null &&
+        'replayOnly' in params
+      ) {
+        return ok({
+          ok: false,
+          refusal: refuse(
+            'agent_session_operation_invalid',
+            { reason: 'receiptMissing' },
+            'No recorded receipt.'
+          )
+        })
+      }
+      return undefined
+    })
+    const input = parseAgentRequestAnswerFile(answerFile())
+    const result = await answerAgentRequest(client, scope, input, input.clientOperationId)
+    expect(result.result.result.replayed).toBe(false)
+    const mutations = call.mock.calls.filter(([method]) => isMutation(method))
+    expect(mutations.map(([, params]) => params)).toEqual([
+      { ...nativeAnswerParams(input), replayOnly: true },
+      nativeAnswerParams(input)
+    ])
+    expect(mutations.map(([, , options]) => options)).toEqual([
+      { expectedRuntimeSource: { sourceId: REQUEST_SOURCE, runtimeId: REQUEST_RUNTIME } },
+      { expectedRuntimeSource: { sourceId: REQUEST_SOURCE, runtimeId: REQUEST_RUNTIME } }
+    ])
+    const methods = call.mock.calls.map(([method]) => method)
+    expect(methods.indexOf('agentSession.currentRequests')).toBeGreaterThan(
+      methods.indexOf('agentSession.respondToApproval')
+    )
+  })
+
+  it.each(['pending', 'turn', 'fence', 'marker', 'option'])(
+    'never executes a missing retry receipt with an invalid current %s',
+    async (kind) => {
+      const { client, call } = requestFixtureClient((method, params) => {
+        if (isMutation(method)) {
+          return ok({
+            ok: false,
+            refusal: refuse(
+              'agent_session_operation_invalid',
+              { reason: 'receiptMissing' },
+              'No recorded receipt.'
+            )
+          })
+        }
+        if (
+          kind === 'pending' &&
+          method === 'agentSession.currentRequests' &&
+          typeof params === 'object' &&
+          params !== null &&
+          'version' in params &&
+          params.version === REQUEST_MARKER.version
+        ) {
+          return ok({ marker: REQUEST_MARKER, json: '[]', nextCursor: null })
+        }
+        return undefined
+      })
+      const input = parseAgentRequestAnswerFile({
+        ...answerFile(),
+        ...(kind === 'turn' ? { turnItemId: 'other-turn' } : {}),
+        ...(kind === 'fence' ? { expectedRuntimeFence: 6 } : {}),
+        ...(kind === 'marker' ? { expectedRequests: { ...REQUEST_MARKER, revision: 2 } } : {}),
+        ...(kind === 'option' ? { optionId: 'unoffered' } : {})
+      })
+      await expect(
+        answerAgentRequest(client, scope, input, input.clientOperationId)
+      ).rejects.toMatchObject({
+        code: kind === 'option' ? 'invalid_argument' : 'agent_request_unverifiable'
+      })
+      const mutations = call.mock.calls.filter(([method]) => isMutation(method))
+      expect(mutations).toHaveLength(1)
+      expect(mutations[0]?.[1]).toEqual({ ...nativeAnswerParams(input), replayOnly: true })
+    }
+  )
+
+  it.each([
+    'transport',
+    'rpc-miss',
+    'other-refusal',
+    'malformed-miss',
+    'malformed-success',
+    'not-replayed'
+  ])('does not send after an unproven receipt miss: %s', async (kind) => {
+    const { client, call } = requestFixtureClient((method) => {
+      if (!isMutation(method)) {
+        return undefined
+      }
+      if (kind === 'transport') {
+        throw new Error('response lost')
+      }
+      if (kind === 'rpc-miss') {
+        throw new RuntimeRpcFailureError({
+          id: 'test',
+          ok: false,
+          error: { code: 'agent_session_operation_invalid', message: 'receiptMissing' },
+          _meta: { runtimeId: REQUEST_RUNTIME }
+        })
+      }
+      if (kind === 'malformed-success') {
+        return ok({ ok: true, replayed: true })
+      }
+      if (kind === 'not-replayed') {
+        return undefined
+      }
+      return ok({
+        ok: false,
+        refusal: {
+          code:
+            kind === 'other-refusal'
+              ? 'agent_session_operation_unknown'
+              : 'agent_session_operation_invalid',
+          details: { reason: 'receiptMissing', unexpected: true }
+        }
+      })
+    })
+    const input = parseAgentRequestAnswerFile(answerFile())
+    await expect(
+      answerAgentRequest(client, scope, input, input.clientOperationId)
+    ).rejects.toMatchObject({
+      code: ['rpc-miss', 'malformed-miss'].includes(kind)
+        ? 'agent_session_operation_invalid'
+        : 'agent_session_operation_unknown'
+    })
+    expect(call.mock.calls.filter(([method]) => isMutation(method))).toHaveLength(1)
+    expect(
+      call.mock.calls.filter(([method]) => method === 'agentSession.currentRequests')
+    ).toHaveLength(0)
   })
 
   it('retains a definitive permission refusal instead of calling it a timeout', async () => {
@@ -301,7 +469,7 @@ describe('native answer JSON and admission', () => {
     expect(call.mock.calls.filter(([method]) => isMutation(method))).toHaveLength(1)
   })
 
-  it.each(['item', 'choice', 'revision', 'malformed'])(
+  it.each(['item', 'choice', 'revision', 'malformed', 'retry-item', 'retry-choice'])(
     'does not label a mismatched %s receipt accepted',
     async (kind) => {
       const { client } = requestFixtureClient((method) => {
@@ -313,15 +481,15 @@ describe('native answer JSON and admission', () => {
         }
         return ok({
           ok: true,
-          replayed: false,
+          replayed: kind.startsWith('retry-'),
           fence: 7,
           cursor: { epoch: REQUEST_MARKER.epoch, sequence: 2 },
           value: {
-            itemId: kind === 'item' ? 'different-item' : answerFile().itemId,
+            itemId: kind.endsWith('item') ? 'different-item' : answerFile().itemId,
             revision: kind === 'revision' ? 0 : 2,
             resolution: {
               state: 'resolved',
-              selectedOptionId: kind === 'choice' ? 'deny' : 'approve',
+              selectedOptionId: kind.endsWith('choice') ? 'deny' : 'approve',
               resolvedBy: 'caller',
               resolvedAt: 100
             }
@@ -329,7 +497,12 @@ describe('native answer JSON and admission', () => {
         })
       })
       await expect(
-        answerAgentRequest(client, scope, parseAgentRequestAnswerFile(answerFile()))
+        answerAgentRequest(
+          client,
+          scope,
+          parseAgentRequestAnswerFile(answerFile()),
+          kind.startsWith('retry-') ? answerFile().clientOperationId : undefined
+        )
       ).rejects.toMatchObject({ code: 'agent_session_operation_unknown' })
     }
   )

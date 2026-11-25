@@ -42,7 +42,7 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     ...AGENT_REQUEST_SCOPE_HELP,
     'request-file':
       '--request-file <path>   UTF-8 JSON file containing the inspected request and answer',
-    retry: '--retry <operationUUID> Resubmit the same operation ID and answer'
+    retry: '--retry <operationId>   Recover the original answer using its operation ID'
   },
   'agent show': { id: AGENT_ID_FLAG_HELP },
   'agent read': {

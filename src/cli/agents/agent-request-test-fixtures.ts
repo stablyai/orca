@@ -5,8 +5,13 @@ import { vi } from 'vitest'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { AgentRequestClient } from './agent-request-inventory'
 import { AGENT_REQUEST_CLI_CAPABILITIES } from './agent-request-capabilities'
+import { AGENT_SESSION_RESPONSE_REPLAY_ONLY_RUNTIME_CAPABILITY } from '../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
 
+export const REQUEST_OPERATION_ID = createStructuredAgentSessionOperationId(
+  () => '33333333-3333-4333-8333-333333333333'
+)
 export const REQUEST_SESSION = 'chat_session_01'
 export const REQUEST_WORKSPACE = 'repo-id::C:/projects/example'
 export const REQUEST_RUNTIME = 'runtime-test'
@@ -53,7 +58,7 @@ export function answerFile() {
     kind: 'approval' as const,
     expectedRuntimeFence: 7,
     expectedRevision: 1,
-    clientOperationId: '33333333-3333-4333-8333-333333333333',
+    clientOperationId: REQUEST_OPERATION_ID,
     optionId: 'approve'
   }
 }
@@ -87,7 +92,11 @@ export function requestFixtureClient(
     if (method === 'status.get') {
       result = {
         runtimeId: REQUEST_RUNTIME,
-        capabilities: [...AGENT_REQUEST_CLI_CAPABILITIES, RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY],
+        capabilities: [
+          ...AGENT_REQUEST_CLI_CAPABILITIES,
+          RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY,
+          AGENT_SESSION_RESPONSE_REPLAY_ONLY_RUNTIME_CAPABILITY
+        ],
         hostDescriptor: { installationId: REQUEST_SOURCE }
       }
     } else if (method === 'session.tabs.list') {

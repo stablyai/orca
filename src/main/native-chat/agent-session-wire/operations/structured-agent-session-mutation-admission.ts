@@ -1,3 +1,4 @@
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 // Validate fingerprints centrally. Prepare ledger replays without admitting writes; first runs
@@ -73,6 +74,7 @@ export type AgentSessionMutationRequest<TValue> = {
   plan: MutationPlan<TValue>
   /** Read after preparation; absent if no conversation is held. */
   journal: () => AgentSessionJournal | undefined
+  readReceiptCursor?: () => Promise<AgentJournalCursor>
   currentWork?: () => Promise<StructuredAgentSessionCurrentWork | null>
   readWork?: JournalWorkReader
   /** Prepare between ledger evaluation and lease admission; return any terminal refusal. */

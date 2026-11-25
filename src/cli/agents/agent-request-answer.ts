@@ -20,7 +20,10 @@ import type {
   AgentSessionMutationResult,
   AgentSessionPromptResult
 } from '../../shared/agent-session/agent-session-wire'
-import { AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY } from '../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import {
+  AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_RESPONSE_REPLAY_ONLY_RUNTIME_CAPABILITY
+} from '../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import { isAgentJournalResolution } from '../../shared/agent-session/journal/agent-session-journal-schemas'
 import type { AgentJournalResolution } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -42,8 +45,15 @@ const RefusedAnswer = z.object({
   ok: z.literal(false),
   refusal: z.object({ code: z.string().min(1), details: z.unknown().optional() })
 })
+const MissingReceipt = z.object({
+  ok: z.literal(false),
+  refusal: z.object({
+    code: z.literal('agent_session_operation_invalid'),
+    details: z.object({ reason: z.literal('receiptMissing') }).strict()
+  })
+})
 /**
- * Submits a pinned answer; retry resubmits the same operation and may execute it for the first time.
+ * Submits a pinned answer; retry checks its receipt before validating any first execution.
  * A matching receipt proves acceptance, not provider resumption.
  */
 export async function answerAgentRequest(
@@ -101,7 +111,7 @@ export async function answerAgentRequest(
       )
     }
   }
-  if (retryOperationId === undefined) {
+  async function validateCurrentRequest(): Promise<void> {
     const inventory = await listAgentRequests(client, constrainedScope, runtimeId)
     const prompt = inventory.requests.find((request) => request.itemId === input.itemId)
     if (
@@ -135,6 +145,9 @@ export async function answerAgentRequest(
       )
     }
   }
+  if (retryOperationId === undefined) {
+    await validateCurrentRequest()
+  }
   const pinStatus = await client.call<RuntimeStatus>('status.get')
   requireSameRuntime(pinStatus, runtimeId)
   const sourceId = pinStatus.result.hostDescriptor?.installationId
@@ -147,6 +160,16 @@ export async function answerAgentRequest(
       'This host cannot atomically fence native answers to the inspected runtime. Nothing was sent.'
     )
   }
+  if (
+    retryOperationId !== undefined &&
+    !pinStatus.result.capabilities?.includes(AGENT_SESSION_RESPONSE_REPLAY_ONLY_RUNTIME_CAPABILITY)
+  ) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This host cannot safely replay native answer receipts. Update the execution host. Nothing was sent.'
+    )
+  }
+  const expectedRuntimeSource = { sourceId, runtimeId }
   const recovery = {
     clientOperationId: input.clientOperationId,
     expectedRuntimeId: runtimeId,
@@ -154,37 +177,49 @@ export async function answerAgentRequest(
     workspaceId,
     resumed: 'unverified' as const
   }
-  let response: RuntimeRpcSuccess<unknown>
-  try {
-    response = await client.call<unknown>(
-      input.kind === 'approval'
-        ? 'agentSession.respondToApproval'
-        : 'agentSession.respondToQuestion',
-      params,
-      { expectedRuntimeSource: { sourceId, runtimeId } }
-    )
-    requireSameRuntime(response, runtimeId)
-  } catch (error) {
-    if (
-      (error instanceof RuntimeRpcFailureError && error.code !== 'internal_error') ||
-      (error instanceof RuntimeClientError &&
-        ['runtime_source_mismatch', 'runtime_source_unverifiable', 'incompatible_runtime'].includes(
-          error.code
-        ))
-    ) {
-      throw new RuntimeClientError(error.code, 'The execution host refused the native answer.', {
-        ...recovery,
-        outcome: error.code === 'agent_session_operation_unknown' ? 'unknown' : 'refused'
-      })
-    }
-    throw new RuntimeClientError(
-      'agent_session_operation_unknown',
-      'Native answer outcome is unknown. Do not create a new operation or automatically resend it.',
-      {
-        ...recovery,
-        outcome: 'unknown'
+  async function sendAnswer(replayOnly: boolean): Promise<RuntimeRpcSuccess<unknown>> {
+    let response: RuntimeRpcSuccess<unknown>
+    try {
+      response = await client.call<unknown>(
+        input.kind === 'approval'
+          ? 'agentSession.respondToApproval'
+          : 'agentSession.respondToQuestion',
+        replayOnly ? { ...params, replayOnly: true } : params,
+        { expectedRuntimeSource }
+      )
+      requireSameRuntime(response, runtimeId)
+    } catch (error) {
+      if (
+        (error instanceof RuntimeRpcFailureError && error.code !== 'internal_error') ||
+        (error instanceof RuntimeClientError &&
+          [
+            'runtime_source_mismatch',
+            'runtime_source_unverifiable',
+            'incompatible_runtime'
+          ].includes(error.code))
+      ) {
+        throw new RuntimeClientError(error.code, 'The execution host refused the native answer.', {
+          ...recovery,
+          outcome: error.code === 'agent_session_operation_unknown' ? 'unknown' : 'refused'
+        })
       }
-    )
+      throw new RuntimeClientError(
+        'agent_session_operation_unknown',
+        'Native answer outcome is unknown. Do not create a new operation or automatically resend it.',
+        {
+          ...recovery,
+          outcome: 'unknown'
+        }
+      )
+    }
+    return response
+  }
+  let probingReceipt = retryOperationId !== undefined
+  let response = await sendAnswer(probingReceipt)
+  if (probingReceipt && MissingReceipt.safeParse(response.result).success) {
+    await validateCurrentRequest()
+    probingReceipt = false
+    response = await sendAnswer(false)
   }
   const refused = RefusedAnswer.safeParse(response.result)
   if (refused.success) {
@@ -200,7 +235,7 @@ export async function answerAgentRequest(
     )
   }
   const accepted = AcceptedAnswer.safeParse(response.result)
-  if (!accepted.success) {
+  if (!accepted.success || (probingReceipt && !accepted.data.replayed)) {
     throw new RuntimeClientError(
       'agent_session_operation_unknown',
       'The native answer response is invalid; acceptance is unknown.',

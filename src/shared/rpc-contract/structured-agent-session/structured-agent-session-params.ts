@@ -173,6 +173,7 @@ export const QueuedMessagesResumeParams = z.object({ envelope: MutationEnvelope 
 export const RespondParams = z
   .object({
     envelope: MutationEnvelope,
+    replayOnly: z.literal(true).optional(),
     itemId: Identifier('Invalid item id'),
     /** Compare-and-set: the revision the client had on screen. */
     expectedRevision: z.number().int().positive(),
