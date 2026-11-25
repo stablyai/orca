@@ -133,11 +133,7 @@ export async function getWindowsEncryptionKey(
 
   try {
     const localStateKey = await readChromiumLocalStateDpapiKey(join(root, 'Local State'))
-    if (localStateKey.status === 'unreadable') {
-      diag('  Windows DPAPI key extraction failed: Local State is unreadable or malformed')
-      return null
-    }
-    if (localStateKey.status === 'absent') {
+    if (localStateKey.status !== 'ok') {
       return null
     }
 
