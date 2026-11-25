@@ -1259,7 +1259,10 @@
           "checkAgain": "重新检查",
           "executionContextOnHost": "{{agent}} · {{host}}",
           "commandWarningOnHost": "该命令会在 {{host}} 上该 bot 的主文件夹中运行。添加或保存时，原生检查可能会启动它。请只添加你信任的软件"
-        }
+        },
+        "hostMcpNone": "此主机上暂无",
+        "hostMcp": "你的 MCP 服务器",
+        "hostMcpAndMore": "你的 MCP 服务器，{{rest}}"
       },
       "editPicture": "编辑 bot 头像",
       "retry": "重试",
@@ -1323,7 +1326,10 @@
       "soulEdit": "编辑",
       "soulStats": "{{lines}} 行 · {{words}} 个词",
       "soulDoubleClickHint": "双击以编辑",
-      "soulEmpty": "还没有指令。双击或选择“编辑”开始撰写"
+      "soulEmpty": "还没有指令。双击或选择“编辑”开始撰写",
+      "muteNotifications": "静音通知",
+      "muteNotificationsDescription": "不再发送系统通知。未读圆点仍会显示。",
+      "teamDisabled": "你的团队已关闭 bots。"
     },
     "automaticUpdates": {
       "title": "自动更新",
@@ -27726,7 +27732,47 @@
         "setUpInFirstChat": "在首次聊天中设置"
       },
       "identityWatches": "关注{{what}}",
-      "identityReports": "汇报：{{what}}"
+      "identityReports": "汇报：{{what}}",
+      "outfitArtist": "艺术家",
+      "outfitDetective": "侦探",
+      "outfitHardHat": "安全帽",
+      "outfitNightShift": "夜班",
+      "outfitNone": "无装扮",
+      "outfitParty": "派对",
+      "outfitReviewer": "审阅者",
+      "outfitScientist": "科学家",
+      "outfitSecurity": "安保",
+      "outfitTie": "领带",
+      "pictureOutfit": "装扮",
+      "wslSetupFailedShort": "设置未完成",
+      "wslSettingUp": "正在设置…",
+      "wslSetup": {
+        "waiting": "正在等待 {{distro}}…",
+        "starting": "正在启动 {{distro}}",
+        "installing": "正在 ~/.orca-remote 中安装 Orca 服务器",
+        "connecting": "正在连接",
+        "findingAgents": "正在 {{distro}} 中查找智能体",
+        "installingHint": "首次设置还会下载 Linux 版 Node 运行时。",
+        "failedTitle": "无法设置 {{distro}}",
+        "details": "详情",
+        "retry": "重试",
+        "chooseAnother": "选择其他电脑",
+        "title": "正在将 {{distro}} 设置为主机",
+        "subtitle": "首次大约需要一分钟。你的 Windows 文件和其他发行版不会受到影响。",
+        "cancel": "取消",
+        "failedGeneric": "Orca 服务器未能在发行版中启动。请查看详情了解原因。"
+      },
+      "wslNoAgent": {
+        "field": "{{distro}} 中没有智能体",
+        "title": "在 {{distro}} 中安装智能体",
+        "body": "安装在 Windows 上的智能体无法在 WSL 中运行。请在发行版中安装一个智能体并登录，它就会显示在这里。",
+        "copied": "已复制",
+        "copy": "复制",
+        "checking": "正在重新检查…"
+      },
+      "hostSleeping": "休眠中 · 使用时唤醒",
+      "wslWaking": "正在唤醒 {{distro}}…",
+      "hostWaking": "正在唤醒…"
     },
     "googleSetup": {
       "otherAccount": "切换账号",
