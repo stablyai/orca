@@ -183,7 +183,7 @@ const workerAgentRows: [string, string, string, AgentStatusEntry['state']][] = [
   ['sweep', 'sweep-1', 'claude', 'working'],
   ['sweep', 'sweep-2', 'claude', 'working'],
   ['sweep', 'sweep-3', 'codex', 'working'],
-  ['sweep', 'sweep-4', 'gemini', 'blocked'],
+  ['sweep', 'sweep-4', 'antigravity', 'blocked'],
   ['sweep', 'sweep-5', 'grok', 'working'],
   ['pair', 'pair-1', 'claude', 'working'],
   ['pair', 'pair-2', 'codex', 'working']

@@ -173,8 +173,15 @@ const CLOCK = { hour: 'numeric', minute: '2-digit' } as const
 /** How a wait's deadline reads: "2:14 AM" today, "Fri 5 PM" within the week, "Nov 14, 5 PM"
  *  further; minutes only off the hour. Each app formats with its own locale. */
 export function botWaitTimeFormat(at: number, now: number): Intl.DateTimeFormatOptions {
-  const time = new Date(at).getMinutes() === 0 ? { hour: 'numeric' as const } : CLOCK
-  if (new Date(at).toDateString() === new Date(now).toDateString()) {
+  const date = new Date(at)
+  // A reminder set to the second keeps its seconds; a whole hour stays short ("5 PM").
+  const time =
+    date.getSeconds() !== 0
+      ? { ...CLOCK, second: '2-digit' as const }
+      : date.getMinutes() === 0
+        ? { hour: 'numeric' as const }
+        : CLOCK
+  if (date.toDateString() === new Date(now).toDateString()) {
     return time
   }
   return Math.abs(at - now) < 6 * DAY_MS

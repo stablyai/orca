@@ -93,7 +93,6 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     installCommand: 'curl -fsSL https://mimo.xiaomi.com/install | bash',
     windowsInstallScript: 'https://mimo.xiaomi.com/install.ps1'
   },
-  { agent: 'gemini', loginCommand: ['gemini'], slashCommand: '/auth' },
   {
     agent: 'droid',
     loginCommand: ['droid'],

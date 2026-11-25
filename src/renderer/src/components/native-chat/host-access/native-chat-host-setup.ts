@@ -27,6 +27,7 @@ import {
 import type { AgentCliUpdateView } from '@/components/agent-cli-update/use-agent-cli-update'
 import { useNativeChatCliUpdate } from './native-chat-cli-update'
 import { openAgentSettingsAction } from '@/components/settings/navigation/open-agent-settings'
+import { useNativeChatAgySignIn } from './native-chat-agy-sign-in'
 
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
   'notSignedIn',
@@ -196,6 +197,8 @@ function useNativeChatSignIn(
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
   const login = useNativeChatSignInCommand(input)
+  // agy signs in from Orca, so its terminal command (`system`) never runs from here.
+  const antigravity = useNativeChatAgySignIn(input.agent, input.account, input.target)
   const { agent } = input
   const viaTerminal = useMemo(
     () =>
@@ -209,7 +212,7 @@ function useNativeChatSignIn(
     [agent, login, terminal]
   )
   // A managed account owns sign-in: a terminal login after it succeeds would sign in another account.
-  return accountId ? managed : viaTerminal
+  return accountId ? managed : (antigravity ?? viaTerminal)
 }
 
 function useNativeChatInstall(

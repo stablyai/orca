@@ -46,11 +46,14 @@ export function renderTabBarItems({
   dropIndicatorByVisibleId,
   includeTopTabBorder,
   activeClientHostedBrowserRowId,
-  segments
+  segments,
+  itemOffset = 0
 }: {
   items: TabBarItem[]
-  /** Mounted runs of `items`; gaps render as fixed-width spacers. */
+  /** Mounted runs of `items` from `itemOffset` on; gaps render as fixed-width spacers. */
   segments: readonly TabStripSegment[]
+  /** Items before the strip, such as a pinned Home: segment indices start after them. */
+  itemOffset?: number
   /** The whole group in strip order; close-others/left/right act on hidden tabs too. */
   groupItems?: readonly TabBarItem[]
   props: TabBarItemSurfaceProps
@@ -178,7 +181,7 @@ export function renderTabBarItems({
       )
       continue
     }
-    for (let index = segment.start; index < segment.end; index++) {
+    for (let index = segment.start + itemOffset; index < segment.end + itemOffset; index++) {
       rows.push(renderRow(items[index]))
     }
   }

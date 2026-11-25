@@ -140,7 +140,7 @@ const WORKERS: Agent[] = [
   },
   {
     name: 'worker-task_e5',
-    agent: 'gemini',
+    agent: 'antigravity',
     status: 'working',
     task: 'Update the CLI reference for the new flags',
     message: 'Updated 6 of 9 flag sections',
