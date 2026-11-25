@@ -46,9 +46,9 @@ export async function routeRemoteGroupMail(
   groups: BotGroupRuntime,
   groupId: string
 ): Promise<void> {
-  const lines = await runKeyedSerializedOperation(groups.queues, groupId, async () => {
+  const stored: BotGroupMessage[] = []
+  const drained = runKeyedSerializedOperation(groups.queues, groupId, async () => {
     const db = groups.runtime.getOrchestrationDb()
-    const stored: BotGroupMessage[] = []
     for (const { mailId, requestId, isPost } of groups.store.routes.pendingMailRoutes(groupId)) {
       const post = groups.store.remoteAskMessage(requestId)
       const ask = post?.remoteAsks?.find((candidate) => candidate.requestId === requestId)
@@ -97,7 +97,6 @@ export async function routeRemoteGroupMail(
         }))
       )
     }
-    return stored
   })
-  deliverGroupLines(groups, lines)
+  await drained.finally(() => deliverGroupLines(groups, stored))
 }

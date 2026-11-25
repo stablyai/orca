@@ -61,21 +61,23 @@ export function withNamingReply(
   context: string,
   speaker: { id: string; name: string },
   reply: GroupMemberReply,
-  mentionAt: number
+  mention: { start: number; end: number }
 ): string {
   const lines: unknown[] = JSON.parse(context)
   const author = { kind: 'bot', ...speaker }
   const savedFrom = reply.full.length - reply.saved.length
-  const inSaved = mentionAt >= savedFrom
+  const inSaved = mention.start >= savedFrom
   const source = inSaved ? reply.saved : reply.full
-  const at = inSaved ? mentionAt - savedFrom : mentionAt
-  let before = inSaved ? at : EXCERPT_BEFORE
-  let after = inSaved ? source.length - at : EXCERPT_AFTER
-  let text = excerpt(source, at, before, after)
+  const offset = inSaved ? savedFrom : 0
+  const start = mention.start - offset
+  const end = mention.end - offset
+  let before = inSaved ? start : EXCERPT_BEFORE
+  let after = inSaved ? source.length - end : EXCERPT_AFTER
+  let text = excerpt(source, start, before, end - start + after)
   while (JSON.stringify([{ author, text }]).length > BOT_GROUP_CONTEXT_MAX) {
     before = Math.floor(before / 2)
     after = Math.floor(after / 2)
-    text = excerpt(source, at, before, after)
+    text = excerpt(source, start, before, end - start + after)
   }
   const index = lines.findIndex(
     (line) =>

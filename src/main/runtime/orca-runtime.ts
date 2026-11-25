@@ -214,7 +214,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     announceAgentCliUpdatesFinished((event) => this.emitClientEvent(event))
     this.botSessions = botSessionHooks(this)
     this.botChatTreeIndex = runtimeBotChatTreeIndex(this)
-    this.automation.botChat = botGroups.withGroupRoomChats(this, this.automation.botChat)
+    botGroups.configureBotGroupChats(this, this.automation, this.store)
     syncPRAutoRefreshCadence(this.store)
   }
 

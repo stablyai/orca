@@ -56,6 +56,7 @@ export async function deliverPeerMailToBot(
     return { to: params.to }
   }
   db.assertPeerMailConversation(params.conversationId, peerFingerprint)
+  let admitted = false
   const link = () => {
     if (group?.kind === 'question') {
       peerGroupHome(runtime, group.botId, params.chat)
@@ -69,6 +70,7 @@ export async function deliverPeerMailToBot(
       ...(pulled ? { environmentId: pulled.environmentId } : {})
     })
     pulled?.alsoOnAdmitted()
+    admitted = true
   }
   // A retry while the first attempt is still admitted is refused, never answered for mail that may yet fail.
   if (admitting.has(params.messageId)) {
@@ -120,7 +122,7 @@ export async function deliverPeerMailToBot(
         onAdmitted: link
       }
     )
-    if (group?.kind === 'question' && !('receipt' in routed)) {
+    if (group?.kind === 'question' && !admitted) {
       throw new OrchestrationError(
         'request_mismatch',
         'The group question was not admitted by its bot.',
@@ -130,7 +132,9 @@ export async function deliverPeerMailToBot(
     if (!('receipt' in routed)) {
       return routed
     }
-    link()
+    if (!admitted) {
+      link()
+    }
     return 'delivered'
   } finally {
     admitting.delete(params.messageId)

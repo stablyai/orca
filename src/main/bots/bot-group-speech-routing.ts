@@ -154,7 +154,8 @@ export async function routeSpeech(
         )
       }
     }
-    for (const { id, start } of named) {
+    for (const mention of named) {
+      const { id, start } = mention
       const target = remote.get(id)
       const turn = turns.find((candidate) => candidate.botId === id)
       if (!target && !turn) {
@@ -188,7 +189,7 @@ export async function routeSpeech(
       if (turn) {
         const context = contexts.get(turn.operationId)
         if (context !== undefined) {
-          contexts.set(turn.operationId, withNamingReply(context, who, reply, start))
+          contexts.set(turn.operationId, withNamingReply(context, who, reply, mention))
         }
       }
       stored.push(

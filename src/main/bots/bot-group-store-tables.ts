@@ -12,7 +12,6 @@ import type { BotGroup } from '../../shared/bots/bot-group'
 const KEPT_FIELDS = [
   ['bot_groups', 'remoteMembers'],
   ['bot_groups', 'remoteStops'],
-  ['bot_groups', 'legacyRemoteCutoff'],
   ['bot_group_messages', 'images'],
   ['bot_group_messages', 'remoteAsks'],
   ['bot_group_messages', 'remoteAuthor'],
@@ -119,7 +118,9 @@ function indexRemoteAsks(db: Database): boolean {
 
 /** Whether older posts' questions are all indexed. */
 export function createBotGroupTables(db: Database): boolean {
-  db.exec(`CREATE TABLE IF NOT EXISTS bot_groups (id TEXT PRIMARY KEY, record TEXT NOT NULL);
+  try {
+    db.exec(`SAVEPOINT bot_group_schema;
+    CREATE TABLE IF NOT EXISTS bot_groups (id TEXT PRIMARY KEY, record TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS bot_group_messages (
       sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
       group_id TEXT NOT NULL, record TEXT NOT NULL);
@@ -136,15 +137,6 @@ export function createBotGroupTables(db: Database): boolean {
     CREATE TABLE IF NOT EXISTS bot_group_remote_asks (request_id TEXT PRIMARY KEY, message_id TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS bot_group_remote_asks_message ON bot_group_remote_asks(message_id);
     CREATE TABLE IF NOT EXISTS bot_group_remote_asks_scanned (id INTEGER PRIMARY KEY CHECK (id = 1), sequence INTEGER NOT NULL);
-    CREATE TRIGGER IF NOT EXISTS bot_groups_fence_legacy_room_write AFTER UPDATE OF record ON bot_groups
-      WHEN json_type(NEW.record, '$.remoteStopWriter') IS NULL
-        AND NEW.record ->> '$.revision' > OLD.record ->> '$.revision'
-      BEGIN
-        UPDATE bot_groups SET record = json_set(record, '$.legacyRemoteCutoff', max(
-          coalesce(OLD.record ->> '$.legacyRemoteCutoff', 0),
-          coalesce((SELECT max(sequence) FROM bot_group_messages WHERE group_id = NEW.id), 0)
-        )) WHERE id = NEW.id;
-      END;
     ${keepRouteFields(
       'bot_groups',
       'remoteMembers',
@@ -156,9 +148,32 @@ export function createBotGroupTables(db: Database): boolean {
       'remoteAsks',
       ['requestId'],
       ['pairing', 'conversationId', 'interactive']
-    )}`)
-  for (const [table, field] of KEPT_FIELDS) {
-    db.exec(keepFieldTrigger(table, field))
+    )}
+    ${KEPT_FIELDS.map(([table, field]) => keepFieldTrigger(table, field)).join('\n')}
+    -- One trigger owns the cutoff regardless of the order SQLite runs triggers in.
+    DROP TRIGGER IF EXISTS bot_groups_keep_legacyRemoteCutoff;
+      DROP TRIGGER IF EXISTS bot_groups_fence_legacy_room_write;
+      CREATE TRIGGER IF NOT EXISTS bot_groups_preserve_remote_cutoff AFTER UPDATE OF record ON bot_groups
+        WHEN (json_type(NEW.record, '$.legacyRemoteCutoff') IS NULL
+              AND json_type(OLD.record, '$.legacyRemoteCutoff') IS NOT NULL)
+          OR (json_type(NEW.record, '$.remoteStopWriter') IS NULL
+              AND NEW.record ->> '$.revision' > OLD.record ->> '$.revision')
+        BEGIN
+          UPDATE bot_groups SET record = json_set(record, '$.legacyRemoteCutoff', max(
+            coalesce(record ->> '$.legacyRemoteCutoff', 0),
+            coalesce(OLD.record ->> '$.legacyRemoteCutoff', 0),
+            CASE WHEN json_type(NEW.record, '$.remoteStopWriter') IS NULL
+              AND NEW.record ->> '$.revision' > OLD.record ->> '$.revision'
+              THEN coalesce((SELECT max(sequence) FROM bot_group_messages WHERE group_id = NEW.id), 0)
+              ELSE 0 END
+          )) WHERE id = NEW.id;
+        END;
+      RELEASE bot_group_schema;`)
+  } catch (error) {
+    if (db.isTransaction) {
+      db.exec('ROLLBACK TO bot_group_schema; RELEASE bot_group_schema;')
+    }
+    throw error
   }
   return indexRemoteAsks(db)
 }

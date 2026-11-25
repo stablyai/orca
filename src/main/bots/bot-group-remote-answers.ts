@@ -31,10 +31,10 @@ export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGro
     const turns = message.turns.some((turn) => turn.answer)
       ? message.turns.map((turn) => (turn.answer ? { ...turn, answer: take(turn.answer) } : turn))
       : message.turns
+    const postText =
+      message.remoteAuthor || message.continuation ? take(message.text) : message.text
     const post =
-      message.remoteAuthor || message.continuation
-        ? { ...message, text: take(message.text) }
-        : message
+      postText.length < message.text.length ? { ...message, text: `${postText}…` } : message
     if (!message.remoteAsks?.length) {
       shown.set(message.id, { ...post, turns })
       continue
@@ -97,6 +97,7 @@ export function collectRemoteAnswers(
   )
   const updated = new Map<string, BotGroupMessage>()
   const read: string[] = []
+  const roomsToRoute = new Set<string>()
   groups.store.transaction(() => {
     for (const { id } of open) {
       const current = groups.store.message(id)
@@ -127,6 +128,7 @@ export function collectRemoteAnswers(
         if (answer) {
           if (ask.interactive) {
             groups.store.routes.stageMailRoute(answer.id, current.groupId, ask.requestId, false)
+            roomsToRoute.add(current.groupId)
           }
           changed = true
           return {
@@ -152,6 +154,9 @@ export function collectRemoteAnswers(
       }
     }
   })
+  for (const groupId of roomsToRoute) {
+    drainRoomRoutes(groups, groupId)
+  }
   if (read.length > 0) {
     db.markAsRead(read, { kind: 'orca' })
   }

@@ -46,14 +46,26 @@ import { noteGroupTurnMailed } from './bot-group-mention-handoffs'
 import { botGroupRoomChat } from './bot-group-automation-run'
 import { nameBotGroupMemberChats } from './bot-group-member-chat-names'
 import type { BotChatLookup } from '../runtime/integrations/automations/runtime-automation-target'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 
 const runtimes = new WeakMap<OrcaRuntimeService, BotGroupRuntime>()
-/** `homeChat`, also finding the group rooms a bot is a member of, where its automations may run. */
-export function withGroupRoomChats(
+export function configureBotGroupChats(
   runtime: OrcaRuntimeService,
-  homeChat: BotChatLookup
-): BotChatLookup {
-  return async (bot, id) =>
+  automation: { botChat: BotChatLookup },
+  store: Pick<RuntimeStore, 'onSettingsChanged'> | null
+): void {
+  store?.onSettingsChanged?.((updates) => {
+    const groups = runtimes.get(runtime)
+    if (updates.botsEnabled === true && groups?.store.db.isOpen) {
+      try {
+        groups.resumePending()
+      } catch (error) {
+        console.warn('[bot-groups] could not resume pending deliveries', error)
+      }
+    }
+  })
+  const homeChat = automation.botChat
+  automation.botChat = async (bot, id) =>
     botGroupRoomChat(runtimeBotGroups(runtime), bot, id) ?? homeChat(bot, id)
 }
 

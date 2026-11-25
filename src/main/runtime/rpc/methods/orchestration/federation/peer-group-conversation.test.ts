@@ -2,13 +2,14 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { expect, it, vi } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import type { z } from 'zod'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_GROUP_CONVERSATION_RUNTIME_CAPABILITY
 } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { BotGroup } from '../../../../../../shared/bots/bot-group'
+import { botGroupRoomMailAddress } from '../../../../../../shared/bots/bot-group-room-mail'
 import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
@@ -18,7 +19,16 @@ import {
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { handOffGroupMentions } from '../../../../../bots/bot-group-mention-handoffs'
-import { settleStoredRoomMail } from '../../../../../bots/bot-group-remote-answers'
+import { isRemoteAskInFlight } from '../../../../../bots/bot-group-peer-delivery'
+import {
+  remoteRoomMailArrived,
+  settleStoredRoomMail
+} from '../../../../../bots/bot-group-remote-answers'
+import { Store } from '../../../../../persistence/loading-store/store'
+import {
+  closeTestStores,
+  createSqliteTestStore
+} from '../../../../../persistence/persistence-test-harness'
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -43,13 +53,22 @@ vi.mock(
   })
 )
 
-function start(path: string, transport?: OrchestrationEnvironmentTransport) {
+function start(path: string, store: Store | null, transport?: OrchestrationEnvironmentTransport) {
   const db = new OrchestrationDb(path)
-  const runtime = new OrcaRuntimeService(null, undefined, {
+  let runtime: OrcaRuntimeService | undefined
+  onTestFinished(() => {
+    runtime?.stopOrchestrationFederationRelay()
+    if (db.db.isOpen) {
+      db.close()
+    }
+  })
+  runtime = new OrcaRuntimeService(store, undefined, {
     orchestrationEnvironmentTransport: transport
   })
   runtime.setOrchestrationDb(db)
-  vi.spyOn(runtime.bots, 'enabled').mockReturnValue(true)
+  if (!store) {
+    vi.spyOn(runtime.bots, 'enabled').mockReturnValue(true)
+  }
   vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
   vi.spyOn(runtime, 'publishStructuredAgentSessionTab').mockResolvedValue()
   return { db, runtime, dispatcher: new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS }) }
@@ -76,6 +95,10 @@ function botContext(
 
 it('keeps two remote Homes and the local member in the same group request without duplicate or post-Stop wakes', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-group-conversation-'))
+  onTestFinished(async () => {
+    await closeTestStores()
+    rmSync(directory, { recursive: true, force: true })
+  })
   const atlas = makeTestBot({ id: 'same-bot-id', name: 'Atlas', chatSessionId: randomUUID() })
   const docs = makeTestBot({ id: atlas.id, name: 'Docs', chatSessionId: randomUUID() })
   const local = makeTestBot({ name: 'Scout' })
@@ -90,6 +113,7 @@ it('keeps two remote Homes and the local member in the same group request withou
     })
   })
   const deliveredLocally = new Map<string, string>()
+  const nativeSends: { id: string; text: string }[] = []
   let admission:
     | {
         entered: PromiseWithResolvers<void>
@@ -141,15 +165,17 @@ it('keeps two remote Homes and the local member in the same group request withou
       input.beforeRun?.()
       const id = input.envelope.clientOperationId
       deliveredLocally.set(id, input.body.blocks[0].text)
+      nativeSends.push({ id, text: input.body.blocks[0].text })
       return { ok: true, value: { clientMessageId: id } }
     },
     cancel: async () => ({ ok: true })
   }
+  onTestFinished(() => setStructuredAgentSessionHost(null))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only native reads, send, and cancel are used by this fixture.
   setStructuredAgentSessionHost(native as unknown as StructuredAgentSessionHost)
   const hosts = new Map([
-    ['atlas', start(join(directory, 'atlas.db'))],
-    ['docs', start(join(directory, 'docs.db'))]
+    ['atlas', start(join(directory, 'atlas.db'), null)],
+    ['docs', start(join(directory, 'docs.db'), null)]
   ])
   const atlasHost = hosts.get('atlas')!
   const docsHost = hosts.get('docs')!
@@ -158,6 +184,9 @@ it('keeps two remote Homes and the local member in the same group request withou
   let legacyRoom = false
   let interruptAnswer = false
   let probeFailed = false
+  let holdProbe: PromiseWithResolvers<void> | undefined
+  let probing = false
+  let muteRoom = false
   let blockProbe = false
   let loseAnswerReceipt = false
   let interruptedId: string | undefined
@@ -172,9 +201,13 @@ it('keeps two remote Homes and the local member in the same group request withou
     call: async (selector, method, params) => {
       const host = hosts.get(selector)!
       if (method === 'status.get') {
+        if (holdProbe && selector === 'atlas') {
+          probing = true
+          await holdProbe.promise
+        }
         if (blockProbe && selector === 'atlas') {
           probeFailed = true
-          throw new OrchestrationError('remote_runtime_unavailable', 'test: no capability response')
+          throw new OrchestrationError('runtime_unavailable', 'test: status transport retired')
         }
         const status = host.runtime.getStatus()
         return {
@@ -262,14 +295,23 @@ it('keeps two remote Homes and the local member in the same group request withou
       return response
     }
   }
-  vi.spyOn(atlasHost.runtime.bots, 'list').mockReturnValue([atlas])
+  const atlasList = vi.spyOn(atlasHost.runtime.bots, 'list').mockReturnValue([atlas])
   vi.spyOn(docsHost.runtime.bots, 'list').mockReturnValue([docs])
-  let host = start(join(directory, 'room.db'), transport)
+  const roomPrefs = createSqliteTestStore(Store, {
+    dataFile: join(directory, 'room', 'state.json')
+  })
+  roomPrefs.updateSettings({ botsEnabled: true })
+  let host = start(join(directory, 'room.db'), roomPrefs, transport)
   function roomRuntime() {
     vi.spyOn(host.runtime.bots, 'list').mockReturnValue([local])
+    const notify = host.runtime.notifyMessageArrived.bind(host.runtime)
+    vi.spyOn(host.runtime, 'notifyMessageArrived').mockImplementation((to, type) => {
+      if (!muteRoom || to !== botGroupRoomMailAddress(group.id)) {
+        notify(to, type)
+      }
+    })
     return runtimeBotGroups(host.runtime)
   }
-  let groups = roomRuntime()
   const threadId = randomUUID()
   const group: BotGroup = {
     id: randomUUID(),
@@ -301,6 +343,7 @@ it('keeps two remote Homes and the local member in the same group request withou
       }
     })
   }
+  let groups = roomRuntime()
   const rows = () => groups.read(group.id, undefined, threadId).messages
   const inbox = (side: typeof host, sessionId: string) =>
     side.db.getInbox(100).filter((mail) => mail.to_handle === `orca_session_id:${sessionId}`)
@@ -321,7 +364,7 @@ it('keeps two remote Homes and the local member in the same group request withou
   const restartRoom = () => {
     host.runtime.stopOrchestrationFederationRelay()
     host.db.close()
-    host = start(join(directory, 'room.db'), transport)
+    host = start(join(directory, 'room.db'), roomPrefs, transport)
     groups = roomRuntime()
     settleStoredRoomMail(groups)
     groups.resumePending()
@@ -332,9 +375,8 @@ it('keeps two remote Homes and the local member in the same group request withou
     const root = await post('@Atlas @Scout Test only: verify the room relay.')
     await vi.waitFor(() => expect(aMail()[0]?.body).toContain('verify the room relay'))
     const first = aMail()[0]!.id
-    await expect(
-      answer(first, '@Scout verify step 1. `@Docs` is quoted code.', aContext)
-    ).resolves.toBeTruthy()
+    const longReply = `${'x'.repeat(63_990)} @Scout`
+    await expect(answer(first, longReply, aContext)).resolves.toBeTruthy()
     await expect(answer(first, 'Different answer.', aContext)).rejects.toMatchObject({
       code: 'already_answered',
       message: expect.stringContaining('group-post')
@@ -346,7 +388,7 @@ it('keeps two remote Homes and the local member in the same group request withou
       .roomMessages(group.id, threadId)
       .find((row) => row.requester?.name === 'Atlas')!
     await vi.waitFor(() =>
-      expect(deliveredLocally.get(localAsk.turns[0]!.operationId)).toContain('verify step 1')
+      expect(deliveredLocally.get(localAsk.turns[0]!.operationId)).toContain('x @Scout')
     )
     interruptAnswer = true
     blockProbe = true
@@ -428,6 +470,16 @@ it('keeps two remote Homes and the local member in the same group request withou
     expect(banner).toContain('Signature verified.')
     expect(banner).toContain('context only')
     expect(banner).not.toContain('orchestration reply')
+    for (const authority of ['legacy_compatibility', 'legacy_recovery_replay'] as const) {
+      const options = {
+        peerMail: atlasHost.db,
+        authority,
+        supportedActionHints: ['orca orchestration reply --id example']
+      }
+      const legacyBanner = formatMessageBannerWithContent(continuation, options).text
+      expect(legacyBanner).toContain('context only')
+      expect(legacyBanner).not.toContain('Supported action')
+    }
     await expect(answer(continuation.id, 'Not a request.', aContext)).rejects.toMatchObject({
       code: 'invalid_argument'
     })
@@ -469,14 +521,24 @@ it('keeps two remote Homes and the local member in the same group request withou
       saved: '@Docs verify the archive too.'
     })
     await vi.waitFor(() => expect(bMail()[0]?.body).toContain('verify the archive'))
+    muteRoom = true
     await answer(bMail()[0]!.id, 'Archive verified.', bContext)
+    // Lose the arrival nudge after import; the reader must still route the answer to the asker.
     await vi.waitFor(() =>
-      expect(
-        [...deliveredLocally.values()].some(
-          (text) => text.includes('For context only: Docs') && text.includes('Archive verified.')
-        )
-      ).toBe(true)
+      expect(host.db.getUnreadMessages(botGroupRoomMailAddress(group.id))).toContainEqual(
+        expect.objectContaining({ body: 'Archive verified.' })
+      )
     )
+    rows()
+    const archiveSends = () =>
+      nativeSends.filter(
+        ({ text }) => text.includes('For context only: Docs') && text.includes('Archive verified.')
+      )
+    await vi.waitFor(() => expect(archiveSends()).toHaveLength(1))
+    muteRoom = false
+    settleStoredRoomMail(groups)
+    await groups.queues.get(group.id)
+    expect(archiveSends()).toHaveLength(1)
 
     const separately = await post('@Atlas Start the attestation review.')
     await vi.waitFor(() => expect(aMail()[0]?.body).toContain('attestation review'))
@@ -498,8 +560,11 @@ it('keeps two remote Homes and the local member in the same group request withou
     const largePost = ORCHESTRATION_GROUP_POST_METHOD.handler(fits, aContext)
     expect(largePost).toMatchObject({ status: 'queued' })
     await vi.waitFor(() =>
-      expect(groups.store.message(`group-post:${largePost.messageId}`)?.text).toBe(fits.body)
+      expect(rows().find((row) => row.id === `group-post:${largePost.messageId}`)?.text).toBe(
+        `${fits.body.slice(0, 16_000)}…`
+      )
     )
+    expect(groups.store.message(`group-post:${largePost.messageId}`)?.text).toBe(fits.body)
 
     const stopped = await post('@Atlas Older question still in progress.')
     await vi.waitFor(() => expect(aMail()[0]?.body).toContain('Older question'))
@@ -656,13 +721,73 @@ it('keeps two remote Homes and the local member in the same group request withou
         })
       )
     }
+
+    holdProbe = Promise.withResolvers<void>()
+    const paused = await post('@Atlas Dispatch after settings enablement.')
+    const pausedId = paused.remoteAsks![0].requestId
+    await vi.waitFor(() => expect(probing).toBe(true))
+    roomPrefs.updateSettings({ botsEnabled: false }, { notifyListeners: true })
+    holdProbe.resolve()
+    holdProbe = undefined
+    await vi.waitFor(() => expect(isRemoteAskInFlight(pausedId)).toBe(false))
+    expect(groups.store.routes.pendingRemoteDeliveries(group.id)).toContainEqual(
+      expect.objectContaining({ id: pausedId, messageId: paused.id })
+    )
+    expect(atlasHost.db.getMessageById(pausedId)).toBeUndefined()
+    const receivingNotify = atlasHost.runtime.notifyMessageArrived.bind(atlasHost.runtime)
+    const replacedHome = { ...atlas, chatSessionId: randomUUID() }
+    const afterAdmission = vi
+      .spyOn(atlasHost.runtime, 'notifyMessageArrived')
+      .mockImplementationOnce((to, type) => {
+        receivingNotify(to, type)
+        atlasList.mockReturnValue([replacedHome])
+      })
+    roomPrefs.updateSettings({ botsEnabled: true }, { notifyListeners: true })
+    await vi.waitFor(() =>
+      expect(groups.store.message(paused.id)?.remoteAsks?.[0]?.state).toBe('sent')
+    )
+    expect(aMail().filter((row) => row.id === pausedId)).toHaveLength(1)
+    afterAdmission.mockRestore()
+    atlasList.mockReturnValue([atlas])
+    await answer(pausedId, 'Ready for the two follow-ups.', aContext)
+    await vi.waitFor(() =>
+      expect(groups.store.message(paused.id)?.remoteAsks?.[0]?.reply?.kind).toBe('answer')
+    )
+
+    muteRoom = true
+    const acceptedPost = ORCHESTRATION_GROUP_POST_METHOD.handler(
+      { id: pausedId, body: '@Scout route the committed post.' },
+      aContext
+    )
+    const rejectedPost = ORCHESTRATION_GROUP_POST_METHOD.handler(
+      { id: pausedId, body: '@Scout route this post after recovery.' },
+      aContext
+    )
+    await vi.waitFor(() =>
+      expect(
+        host.db.getUnreadMessages(botGroupRoomMailAddress(group.id)).map(({ id }) => id)
+      ).toEqual([acceptedPost.messageId, rejectedPost.messageId])
+    )
+    host.db.db.exec(`CREATE TRIGGER reject_one_route BEFORE DELETE ON bot_group_pending
+      WHEN OLD.operation_id = 'remote-room-mail:${rejectedPost.messageId}'
+      BEGIN SELECT RAISE(ABORT, 'test: second route cannot commit'); END;`)
+    remoteRoomMailArrived(groups, group.id)
+    await vi.waitFor(() =>
+      expect(
+        nativeSends.filter(({ text }) => text.includes('route the committed post.'))
+      ).toHaveLength(1)
+    )
+    expect(groups.store.message(`group-post:${rejectedPost.messageId}`)).toBeNull()
+    host.db.db.exec('DROP TRIGGER reject_one_route')
+    muteRoom = false
+    remoteRoomMailArrived(groups, group.id)
+    await vi.waitFor(() =>
+      expect(nativeSends.some(({ text }) => text.includes('route this post after recovery.'))).toBe(
+        true
+      )
+    )
   } finally {
     admission?.release.resolve()
-    setStructuredAgentSessionHost(null)
-    for (const side of [host, ...hosts.values()]) {
-      side.runtime.stopOrchestrationFederationRelay()
-      side.db.close()
-    }
-    rmSync(directory, { recursive: true, force: true })
+    holdProbe?.resolve()
   }
 })

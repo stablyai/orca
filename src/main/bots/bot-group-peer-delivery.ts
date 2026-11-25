@@ -39,6 +39,9 @@ export async function deliverRemoteAsks(
   message: BotGroupMessage,
   attempt = 1
 ): Promise<void> {
+  if (!groups.runtime.bots.enabled()) {
+    return
+  }
   const queued = groups.store.routes
     .pendingRemoteDeliveries(message.groupId, message.id)
     .filter(({ id }) => !sending.has(id))
@@ -67,11 +70,7 @@ export async function deliverRemoteAsks(
   if (results.some(Boolean)) {
     const db = groups.runtime.getOrchestrationDb()
     setTimeout(() => {
-      if (
-        db.db.isOpen &&
-        groups.runtime.getOrchestrationDb() === db &&
-        groups.runtime.bots.enabled()
-      ) {
+      if (db.db.isOpen && groups.runtime.getOrchestrationDb() === db) {
         void deliverRemoteAsks(groups, message, attempt + 1).catch((error: unknown) => {
           console.warn('[bot-groups] could not retry remote group mail', error)
         })
@@ -103,6 +102,9 @@ async function deliverRoomMail(
     const pairing = peerMailPairing(server)
     const machine = groups.runtime.readMachineName()
     const pending = await runKeyedSerializedOperation(groups.queues, message.groupId, async () => {
+      if (!groups.runtime.bots.enabled()) {
+        return { paused: true }
+      }
       const current = groups.store.message(message.id)
       if (!current) {
         return {}
@@ -246,6 +248,9 @@ async function deliverRoomMail(
         })
       }
     })
+    if (pending.paused) {
+      return groups.runtime.bots.enabled()
+    }
     if (pending.sent) {
       await pending.sent
       groups.runtime.ensureOrchestrationPeerMailRelay(environmentId)
@@ -258,6 +263,9 @@ async function deliverRoomMail(
     groups.store.routes.settleRemoteDelivery(id)
     return false
   } catch (error) {
+    if (!onWire && !groups.runtime.bots.enabled()) {
+      return false
+    }
     const retry = retryGroupDelivery(error)
     if (ask && (!retry || onWire)) {
       await settleAsk(groups, message, id, {
@@ -292,16 +300,10 @@ async function settleAsk(
     groups.store.update({
       ...current,
       remoteAsks: current.remoteAsks.map((ask) =>
-        ask.requestId === requestId && !ask.reply ? newOutcome(ask, outcome) : ask
+        ask.requestId === requestId && !ask.reply
+          ? { ...ask, error: undefined, failure: undefined, ...outcome }
+          : ask
       )
     })
   })
-}
-
-function newOutcome(
-  ask: BotGroupRemoteAsk,
-  { state, error, failure }: Pick<BotGroupRemoteAsk, 'state' | 'error' | 'failure'>
-): BotGroupRemoteAsk {
-  const { failure: _failure, error: _error, ...rest } = ask
-  return { ...rest, state, ...(error ? { error } : {}), ...(failure ? { failure } : {}) }
 }

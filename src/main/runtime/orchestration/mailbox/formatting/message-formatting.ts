@@ -167,18 +167,18 @@ export function formatMessageBannerWithContent(
     return [start, start + value.length]
   }
   const subject = appendField(msg.subject, 'Subject: ')
-  if (authority !== 'current') {
+  const contextOnly =
+    msg.payload === GROUP_ANSWER_CONTEXT_PAYLOAD &&
+    options.peerMail?.getPeerMailMessage(msg.id)?.sender_label === msg.from_handle
+  if (authority === 'legacy_read_only' || (authority !== 'current' && !contextOnly)) {
     appendLegacyGuidance(lines, authority, options.supportedActionHints ?? [])
   }
 
   const body = msg.body ? appendField(msg.body) : undefined
-  const contextOnly =
-    msg.payload === GROUP_ANSWER_CONTEXT_PAYLOAD &&
-    options.peerMail?.getPeerMailMessage(msg.id)?.sender_label === msg.from_handle
   const payload =
     msg.payload && !contextOnly ? appendField(msg.payload, '[Payload: ', ']') : undefined
 
-  if (authority === 'current' && contextOnly) {
+  if (contextOnly) {
     lines.push('[Group answer for context only; no reply is expected.]')
   } else if (authority === 'current' && options.followUp) {
     lines.push(`[${formatReportFollowUpLine(options.followUp, options.cliCommand ?? 'orca')}]`)

@@ -140,11 +140,13 @@ export async function requireRemoteComputer(groups: BotGroupRuntime, environment
     if (error instanceof OrchestrationError && error.code === 'server_mail_unsupported') {
       throw new BotFailureError('groupPeerTooOld', { host: name })
     }
-    // Only no answer at all may clear by itself; an unpaired computer or a refusal won't.
+    // Status verification may lose or retire its connection while the pairing stays valid.
     throw new RemoteComputerRefusal(
       name,
       error instanceof Error ? error.message : String(error),
-      isRemoteServerUnreachable(error)
+      isRemoteServerUnreachable(error) ||
+        (error instanceof OrchestrationError &&
+          (error.code === 'runtime_unavailable' || error.code === 'runtime_environment_changed'))
     )
   }
 }

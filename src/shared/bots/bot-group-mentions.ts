@@ -141,16 +141,16 @@ export function botGroupReplyMentions(
   group: RoomRoster,
   bots: readonly Named[],
   speakerId: string
-): { id: string; start: number }[] {
+): { id: string; start: number; end: number }[] {
   const unquoted = prose.replace(QUOTED_ROOM_HISTORY, (quoted) => ' '.repeat(quoted.length))
-  const named = new Map<string, number>()
+  const named = new Map<string, { id: string; start: number; end: number }>()
   for (const mention of roomMentions(unquoted, group, bots, REPLY_MENTION_END, QUOTED_STRINGS)) {
     const [id] = mention.ids
     if (mention.match === 'member' && id !== undefined && id !== speakerId && !named.has(id)) {
-      named.set(id, mention.start)
+      named.set(id, { id, start: mention.start, end: mention.end })
     }
   }
-  return [...named].map(([id, start]) => ({ id, start }))
+  return [...named.values()]
 }
 
 /** Who the room's reply mode reaches when no one is mentioned; a default that left reaches no one. */
