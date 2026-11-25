@@ -15,7 +15,9 @@ export type ComposerFocusText = { append: string } | { revealDraft: true }
 type ComposerReclaim = (
   onlyIfFocusUnclaimed?: boolean,
   sourceOverlays?: readonly HTMLElement[],
-  text?: ComposerFocusText
+  text?: ComposerFocusText,
+  /** Checked before each focus attempt, including the reveal's later retries. */
+  stillWanted?: () => boolean
 ) => void
 const revealedComposerReclaims = new Map<
   string,
@@ -106,7 +108,7 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
     if (destination) {
       cancel()
       if (pending.stillWanted?.() !== false) {
-        destination.reclaim(false, sources, pending.text)
+        destination.reclaim(false, sources, pending.text, pending.stillWanted)
       }
     }
   }

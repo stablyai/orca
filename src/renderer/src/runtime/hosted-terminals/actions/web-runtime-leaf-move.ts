@@ -10,6 +10,8 @@ import { runtimeEnvironmentCapabilityProof } from '../../rpc/compatibility/runti
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { isWebRuntimeSessionActive } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
+import { isCurrentSessionTabsRuntimeFrame } from '../../web-session-tabs-sync/tracking/publisher-identity-fences'
+import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { focusTerminalTabSurface } from '../../../components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import {
@@ -40,12 +42,20 @@ export type PaneMoveHostAuthority = {
   worktreeId: string
 }
 
+/**
+ * The admitted host still serves the worktree: same pairing, the worktree still routes to it, and
+ * this window has not seen another runtime publish for it (a restart on the same pairing).
+ */
 export function isCurrentPaneMoveHost(authority: PaneMoveHostAuthority): boolean {
   return (
     getRuntimeEnvironmentRevision(authority.environmentId) === authority.pairingRevision &&
-    runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), authority.worktreeId) ===
-      authority.environmentId
+    routedEnvironmentId(authority.worktreeId) === authority.environmentId &&
+    isCurrentSessionTabsRuntimeFrame(authority.environmentId, authority.runtimeId)
   )
+}
+
+function routedEnvironmentId(worktreeId: string): string | null {
+  return runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), worktreeId)
 }
 
 /** Main refuses before sending when the host's runtime or pairing no longer matches. */
@@ -76,10 +86,18 @@ function answeredByAnotherHost(
   )
 }
 
-/** Ordinary reconciliation with whatever host serves the worktree now; nothing move-specific. */
-function reconcileWithHost(environmentId: string, worktreeId: string): Promise<void> {
-  return refreshWebRuntimeSessionTabsSnapshot(environmentId, worktreeId, {
-    acceptCurrentSnapshot: true
+/**
+ * Ordinary reconciliation with whichever host serves the worktree now, nothing move-specific. Its
+ * frame applies only while the worktree still routes to that host.
+ */
+async function reconcileWithCurrentHost(worktreeId: string): Promise<void> {
+  const environmentId = routedEnvironmentId(worktreeId)
+  if (!environmentId) {
+    return
+  }
+  await refreshWebRuntimeSessionTabsSnapshot(environmentId, worktreeId, {
+    acceptCurrentSnapshot: true,
+    isCurrent: () => routedEnvironmentId(worktreeId) === environmentId
   })
 }
 
@@ -184,16 +202,12 @@ async function hostHoldsMovedPane(
   if (answeredByAnotherHost(authority, response)) {
     return 'superseded'
   }
-  if (!response.ok) {
+  if (!response.ok || !isSessionTabsInventory(response.result)) {
     return 'unaskable'
   }
   const listed = response.result
   const hostTargetTabId = toHostSessionTabId(request.targetTabId)
-  const tabs =
-    typeof listed === 'object' && listed !== null && 'tabs' in listed && Array.isArray(listed.tabs)
-      ? listed.tabs
-      : []
-  return tabs.some(
+  const held = listed.tabs.some(
     (tab: unknown) =>
       typeof tab === 'object' &&
       tab !== null &&
@@ -202,8 +216,33 @@ async function hostHoldsMovedPane(
       tab.parentTabId === hostTargetTabId &&
       tab.leafId === request.leafId
   )
-    ? 'held'
-    : 'absent'
+  if (held) {
+    return 'held'
+  }
+  // Absence counts only from the host's published inventory of this worktree: a host with nothing
+  // published yet (just restarted, say) lists it empty without attesting anything.
+  return listed.worktree === request.worktreeId && hostSnapshotAffirmsWorktreeContents(listed)
+    ? 'absent'
+    : 'unaskable'
+}
+
+function isSessionTabsInventory(value: unknown): value is {
+  worktree: unknown
+  publicationEpoch?: string
+  snapshotVersion: number
+  tabs: unknown[]
+} {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'tabs' in value &&
+    Array.isArray(value.tabs) &&
+    'snapshotVersion' in value &&
+    typeof value.snapshotVersion === 'number' &&
+    (!('publicationEpoch' in value) ||
+      value.publicationEpoch === undefined ||
+      typeof value.publicationEpoch === 'string')
+  )
 }
 
 export type HostPaneMoveSettleHooks = {
@@ -239,7 +278,7 @@ export async function settleHostPaneMove(
           ? 'held'
           : 'absent'
   if (custody === 'superseded' || !isCurrentPaneMoveHost(authority)) {
-    await reconcileWithHost(authority.environmentId, request.worktreeId)
+    await reconcileWithCurrentHost(request.worktreeId)
     return
   }
   if (custody === 'unaskable') {
@@ -248,7 +287,7 @@ export async function settleHostPaneMove(
   }
   if (custody === 'held') {
     if (!movedHere) {
-      await reconcileWithHost(authority.environmentId, request.worktreeId)
+      await reconcileWithCurrentHost(request.worktreeId)
     }
     return
   }
@@ -262,7 +301,7 @@ export async function settleHostPaneMove(
     }
     return
   }
-  await reconcileWithHost(authority.environmentId, request.worktreeId)
+  await reconcileWithCurrentHost(request.worktreeId)
 }
 
 function recheckLostReply(
@@ -280,7 +319,7 @@ function recheckLostReply(
       ) {
         return
       }
-      await reconcileWithHost(authority.environmentId, request.worktreeId)
+      await reconcileWithCurrentHost(request.worktreeId)
     })().catch((error: unknown) =>
       console.warn('[web-runtime-session] pane move recheck failed', error)
     )
@@ -311,7 +350,7 @@ async function revertRefusedPaneMove(
     remoteCloseOwnedByHost: true,
     localPtyTeardownOwnedExternally: true
   })
-  await reconcileWithHost(authority.environmentId, request.worktreeId)
+  await reconcileWithCurrentHost(request.worktreeId)
   if (!userWasOnMovedTab) {
     return
   }

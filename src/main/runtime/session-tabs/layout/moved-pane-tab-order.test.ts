@@ -12,6 +12,16 @@ describe('placing a moved pane tab in the host order', () => {
     ])
   })
 
+  it('goes after every pinned tab, even one pinned behind an unpinned tab', () => {
+    // Pinning B leaves the order as it was: [A, B, C] with only B pinned.
+    expect(insertUnpinnedTab(['A', 'B', 'C'], 'NEW', 0, new Set(['B']))).toEqual([
+      'A',
+      'B',
+      'NEW',
+      'C'
+    ])
+  })
+
   it('keeps a legal requested gap and appends without one', () => {
     expect(insertUnpinnedTab(['A', 'B', 'C'], 'NEW', 2, new Set(['A']))).toEqual([
       'A',

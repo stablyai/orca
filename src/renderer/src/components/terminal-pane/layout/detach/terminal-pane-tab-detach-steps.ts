@@ -38,9 +38,9 @@ export type SourcePaneBinding = {
 }
 
 /**
- * One reading of the moving pane: the tab's current manager, the leaf's pane in it, and that pane's
- * binding, all taken at once. A remount can replace the manager and a reconnect can rebind the leaf
- * while the move waits, so every step takes a fresh sample and acts only on it.
+ * One reading of the moving pane: the tab's current mount and manager, the leaf's pane in it, and
+ * that pane's binding, all taken at once. A remount can replace the mount and a reconnect can rebind
+ * the leaf while the move waits, so every step takes a fresh sample and acts only on it.
  */
 export type SourcePaneSample = SourcePaneBinding & {
   manager: TerminalPaneTabDetachManager
@@ -76,10 +76,14 @@ export type DetachTerminalPaneToNewTab = (
 
 export type DetachTerminalPaneToTabArgs = {
   getStore: () => TerminalPaneTabDetachStore
-  /** The tab's pane manager now; a remount replaces it. */
-  getManager: () => TerminalPaneTabDetachManager | null
-  /** A pane's binding now, read from the same manager's transports and cwd records. */
-  readPane: (paneId: number) => SourcePaneBinding
+  /**
+   * The source tab's mount now (its manager and pane bindings); a remount replaces it and a parked
+   * tab has none.
+   */
+  getMount: () => {
+    manager: TerminalPaneTabDetachManager
+    readPane: (paneId: number) => SourcePaneBinding
+  } | null
   persistLayoutSnapshot: () => void
   sourcePaneId: number
   sourceTabId: string
@@ -96,14 +100,15 @@ export function sampleSourcePane(
   args: DetachTerminalPaneToTabArgs,
   leafId: string
 ): SourcePaneSample | null {
-  const manager = args.getManager()
+  const mount = args.getMount()
+  const manager = mount?.manager
   const panes = manager?.getPanes() ?? []
   const paneId = panes.find((pane) => manager?.getLeafId(pane.id) === leafId)?.id
-  if (!manager || paneId === undefined) {
+  if (!mount || !manager || paneId === undefined) {
     return null
   }
   return {
-    ...args.readPane(paneId),
+    ...mount.readPane(paneId),
     manager,
     paneId,
     paneCount: panes.length,
@@ -141,8 +146,11 @@ export function isSourceTabShown(args: DetachTerminalPaneToTabArgs): boolean {
   return isTerminalTabShown(args.getStore(), args.worktreeId, args.sourceTabId)
 }
 
-/** Where a group's unpinned tabs begin; the moved pane's tab is never pinned, so it goes no earlier. */
-export function firstUnpinnedIndex(
+/**
+ * The first gap after every pinned tab in a group; the moved pane's tab is never pinned, so it goes
+ * no earlier. Pins need not form a prefix of the order.
+ */
+export function indexAfterPinnedTabs(
   store: Pick<TerminalPaneTabDetachStore, 'groupsByWorktree' | 'unifiedTabsByWorktree'>,
   worktreeId: string,
   groupId: string,
@@ -156,8 +164,13 @@ export function firstUnpinnedIndex(
       .filter((tab) => tab.isPinned)
       .map((tab) => tab.id)
   )
-  const first = order.findIndex((id) => !pinnedIds.has(id))
-  return first === -1 ? order.length : first
+  let afterLastPin = 0
+  order.forEach((id, at) => {
+    if (pinnedIds.has(id)) {
+      afterLastPin = at + 1
+    }
+  })
+  return afterLastPin
 }
 
 /**
@@ -178,7 +191,7 @@ export function newTabIndexNow(
   if (requested === undefined) {
     return undefined
   }
-  const pinnedEnd = firstUnpinnedIndex(store, target.worktreeId, target.groupId, excludeTabId)
+  const pinnedEnd = indexAfterPinnedTabs(store, target.worktreeId, target.groupId, excludeTabId)
   return Math.min(Math.max(requested, pinnedEnd), order.length)
 }
 

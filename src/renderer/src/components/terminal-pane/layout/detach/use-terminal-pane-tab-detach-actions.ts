@@ -2,7 +2,15 @@ import { useCallback, useEffect } from 'react'
 import type { PaneExternalDropTarget } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '../../../../store/index'
 import { detachTerminalPaneToTab } from './terminal-pane-tab-detach'
-import { firstUnpinnedIndex, type TerminalPaneNewTabTarget } from './terminal-pane-tab-detach-steps'
+import {
+  indexAfterPinnedTabs,
+  type SourcePaneBinding,
+  type TerminalPaneNewTabTarget
+} from './terminal-pane-tab-detach-steps'
+import {
+  currentTerminalPaneMoveMount,
+  registerTerminalPaneMoveMount
+} from './terminal-pane-move-mounts'
 import {
   isTerminalTabStripDropTarget,
   resolveTerminalTabStripDropTarget
@@ -59,26 +67,36 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
         groupsByWorktree: state.groupsByWorktree,
         worktreeId,
         // The preview only offers gaps the new (unpinned) tab can take.
-        firstUnpinnedIndex: (groupId) => firstUnpinnedIndex(state, worktreeId, groupId)
+        firstUnpinnedIndex: (groupId) => indexAfterPinnedTabs(state, worktreeId, groupId)
       })
     },
     [getPaneMoveReadiness, worktreeId, managerRef]
+  )
+  const readPane = useCallback(
+    (paneId: number): SourcePaneBinding => {
+      const transport = paneTransportsRef.current.get(paneId)
+      const sourcePaneCwd = paneCwdRef.current.get(paneId)
+      return {
+        livePtyId: transport?.getPtyId() ?? null,
+        ...(sourcePaneCwd ? { sourcePaneCwd } : {}),
+        connectPending: transport?.isConnectPending?.() ?? false
+      }
+    },
+    [paneCwdRef, paneTransportsRef]
+  )
+  // A move started here can outlive this mount; it reads the tab through whichever mount draws it.
+  useEffect(
+    () =>
+      registerTerminalPaneMoveMount(worktreeId, tabId, () =>
+        managerRef.current ? { manager: managerRef.current, readPane } : null
+      ),
+    [managerRef, readPane, tabId, worktreeId]
   )
   const detachPaneToNewTab = useCallback(
     (sourcePaneId: number, target: TerminalPaneNewTabTarget) =>
       detachTerminalPaneToTab({
         getStore: useAppStore.getState,
-        // Read at every step of the move: a remount replaces the manager, a reconnect rebinds the pane.
-        getManager: () => managerRef.current,
-        readPane: (paneId) => {
-          const transport = paneTransportsRef.current.get(paneId)
-          const sourcePaneCwd = paneCwdRef.current.get(paneId)
-          return {
-            livePtyId: transport?.getPtyId() ?? null,
-            ...(sourcePaneCwd ? { sourcePaneCwd } : {}),
-            connectPending: transport?.isConnectPending?.() ?? false
-          }
-        },
+        getMount: () => currentTerminalPaneMoveMount(worktreeId, tabId),
         persistLayoutSnapshot,
         sourcePaneId,
         sourceTabId: tabId,
@@ -88,7 +106,7 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
         ...(target.targetTabId ? { targetTabId: target.targetTabId } : {}),
         worktreeId
       }),
-    [persistLayoutSnapshot, tabId, worktreeId, managerRef, paneCwdRef, paneTransportsRef]
+    [persistLayoutSnapshot, tabId, worktreeId]
   )
   const handleExternalPaneDrop = useCallback(
     (sourcePaneId: number, target: PaneExternalDropTarget): boolean => {

@@ -66,21 +66,54 @@ async function readTabs(page: Page): Promise<TabState> {
   })
 }
 
-/** The tab now holding a leaf, with that leaf's PTY there. */
+/** The tab whose pane tree holds a leaf, with that leaf's PTY there and the tree's leaf count. */
 async function readLeafHome(
   page: Page,
   leafId: string
 ): Promise<{ tabId: string; ptyId: string | undefined; leafCount: number } | null> {
   return page.evaluate((leafId) => {
+    type PaneNode =
+      | { type: 'leaf'; leafId: string }
+      | { type: 'split'; first: PaneNode; second: PaneNode }
+    const leavesOf = (node: PaneNode | null | undefined): string[] =>
+      !node
+        ? []
+        : node.type === 'leaf'
+          ? [node.leafId]
+          : [...leavesOf(node.first), ...leavesOf(node.second)]
     const layouts = window.__store!.getState().terminalLayoutsByTabId
     for (const [tabId, layout] of Object.entries(layouts)) {
-      const ptyId = layout?.ptyIdsByLeafId?.[leafId]
-      if (ptyId) {
-        return { tabId, ptyId, leafCount: Object.keys(layout.ptyIdsByLeafId ?? {}).length }
+      const leaves = leavesOf(layout?.root)
+      if (leaves.includes(leafId)) {
+        return { tabId, ptyId: layout?.ptyIdsByLeafId?.[leafId], leafCount: leaves.length }
       }
     }
     return null
   }, leafId)
+}
+
+/** The terminal tabs that have a mounted pane for this leaf: one, the tab that holds it. */
+async function mountedLeafOwners(page: Page, leafId: string): Promise<(string | null)[]> {
+  return page.evaluate(
+    (leafId) =>
+      [...document.querySelectorAll(`.pane[data-leaf-id="${CSS.escape(leafId)}"]`)].map(
+        (pane) =>
+          pane.closest('[data-terminal-tab-id]')?.getAttribute('data-terminal-tab-id') ?? null
+      ),
+    leafId
+  )
+}
+
+/**
+ * Runs a command whose output is not in the bytes typed (they hold the two halves apart), so
+ * seeing it proves the shell ran it, not just that the PTY echoed the keys.
+ */
+async function runInShell(page: Page, ptyId: string, label: string): Promise<string> {
+  const stamp = `${Date.now()}`
+  await page.keyboard.type(`printf '%s_%s\\n' ${label} ${stamp}\r`)
+  const output = `${label}_${stamp}`
+  await waitForTerminalOutputForPtyId(page, ptyId, output, 10_000)
+  return output
 }
 
 async function splitWithMarker(
@@ -96,10 +129,8 @@ async function splitWithMarker(
   if (!leafId || !ptyId) {
     throw new Error(`No bound active pane in ${JSON.stringify(snapshot)}`)
   }
-  const marker = `MOVE_SCROLLBACK_${Date.now()}`
   await focusActiveTerminalInput(page)
-  await page.keyboard.type(`echo ${marker}\r`)
-  await waitForTerminalOutputForPtyId(page, ptyId, marker, 10_000)
+  const marker = await runInShell(page, ptyId, 'MOVE_SCROLLBACK')
   return { leafId, ptyId, marker }
 }
 
@@ -114,11 +145,10 @@ async function expectMovedToOwnTab(
   const home = await readLeafHome(page, moved.leafId)
   expect(home).toEqual({ tabId: expect.any(String), ptyId: moved.ptyId, leafCount: 1 })
   await expect.poll(async () => (await readTabs(page)).activeTabId).toBe(home!.tabId)
-  // Same shell: the scrollback is still there and new input reaches it.
+  await expect.poll(() => mountedLeafOwners(page, moved.leafId)).toEqual([home!.tabId])
+  // Same shell: the scrollback is still there, and it runs what is typed in the new tab.
   await waitForTerminalOutputForPtyId(page, moved.ptyId, moved.marker, 10_000)
-  const typed = `MOVE_FOCUS_${Date.now()}`
-  await page.keyboard.type(`echo ${typed}\r`)
-  await waitForTerminalOutputForPtyId(page, moved.ptyId, typed, 10_000)
+  await runInShell(page, moved.ptyId, 'MOVE_FOCUS')
   return home!.tabId
 }
 
@@ -189,12 +219,27 @@ async function expectChatMovedToOwnTab(
       { tabId: home!.tabId, worktreeId: chat.before.worktreeId }
     )
   ).toBe('chat')
-  await expect(
-    page
-      .locator(`[data-terminal-tab-id="${home!.tabId}"] [data-native-chat-window]`)
-      .getByText(chat.reply)
-  ).toBeVisible({ timeout: 30_000 })
+  const destination = page.locator(`[data-terminal-tab-id="${home!.tabId}"]`)
+  await expect(destination.locator('[data-native-chat-window]').getByText(chat.reply)).toBeVisible({
+    timeout: 30_000
+  })
+  await expect.poll(() => mountedLeafOwners(page, chat.moved.leafId)).toEqual([home!.tabId])
   await waitForTerminalOutputForPtyId(page, chat.moved.ptyId, chat.moved.marker, 10_000)
+  // The moved conversation takes a fresh draft in its new tab.
+  const draft = `MOVE_DRAFT_${Date.now()}`
+  const editor = destination
+    .locator('[data-native-chat-composer-scope]')
+    .locator('textarea, [contenteditable="true"]')
+    .first()
+  await editor.click()
+  await page.keyboard.type(draft)
+  await expect
+    .poll(() =>
+      editor.evaluate((element) =>
+        element instanceof HTMLTextAreaElement ? element.value : (element.textContent ?? '')
+      )
+    )
+    .toContain(draft)
 }
 
 // Why: keep the suite serial so headful pane tests never open multiple Electron windows at once.

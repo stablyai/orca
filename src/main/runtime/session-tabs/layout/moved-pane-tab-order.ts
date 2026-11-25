@@ -1,6 +1,6 @@
 /**
- * Inserts an unpinned tab at `index` (the end when absent), never ahead of a pinned tab: the
- * client's index was chosen before the commit, and pins may have changed since.
+ * Inserts an unpinned tab at `index` (the end when absent), never ahead of any pinned tab: pins
+ * need not form a prefix of the order, and the client's index was chosen before the commit.
  */
 export function insertUnpinnedTab(
   tabOrder: readonly string[],
@@ -9,8 +9,12 @@ export function insertUnpinnedTab(
   pinnedTabIds: ReadonlySet<string>
 ): string[] {
   const order = tabOrder.filter((id) => id !== tabId)
-  const firstUnpinned = order.findIndex((id) => !pinnedTabIds.has(id))
-  const pinnedEnd = firstUnpinned === -1 ? order.length : firstUnpinned
-  const at = Math.min(Math.max(index ?? order.length, pinnedEnd), order.length)
+  let afterLastPin = 0
+  order.forEach((id, at) => {
+    if (pinnedTabIds.has(id)) {
+      afterLastPin = at + 1
+    }
+  })
+  const at = Math.min(Math.max(index ?? order.length, afterLastPin), order.length)
   return [...order.slice(0, at), tabId, ...order.slice(at)]
 }

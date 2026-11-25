@@ -4,6 +4,7 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../
 import type { TerminalLeafMoveRequest } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import { commitTerminalSurfaceClose } from '@/store/terminals/retirement/terminal-surface-close-intent'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
+import { holdTerminalPaneMount } from '../split/terminal-pane-split-request-routing'
 import { moveLeafThroughLayoutOwner } from './terminal-pane-detach-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import {
@@ -42,14 +43,18 @@ const leavesMovingToNewTab = new Set<string>()
 export async function detachTerminalPaneToTab(
   args: DetachTerminalPaneToTabArgs
 ): Promise<DetachedTerminalPaneTab | null> {
-  const leafId = args.getManager()?.getLeafId(args.sourcePaneId)
+  const leafId = args.getMount()?.manager.getLeafId(args.sourcePaneId)
   if (!leafId || leavesMovingToNewTab.has(leafId)) {
     return null
   }
   leavesMovingToNewTab.add(leafId)
+  // Held for the whole move: parking the source tab mid-move would unmount the pane main may
+  // already have committed.
+  const releaseMount = holdTerminalPaneMount(args.sourceTabId, args.worktreeId)
   try {
     return await moveLeafToNewTab(args, leafId)
   } finally {
+    releaseMount()
     leavesMovingToNewTab.delete(leafId)
   }
 }
@@ -85,18 +90,19 @@ async function moveLeafToNewTab(
   const targetTabId = paneMoveHost
     ? toWebTerminalSurfaceTabId(createBrowserUuid())
     : (args.targetTabId ?? createBrowserUuid())
-  const hostIndex = newTabIndexNow(args.getStore(), {
+  const newTabTarget = {
     worktreeId: args.worktreeId,
     groupId: args.targetGroupId,
     ...(args.targetIndex !== undefined ? { index: args.targetIndex } : {}),
     ...(args.afterTabId ? { afterTabId: args.afterTabId } : {})
-  })
+  }
+  // The gap is read from the same order the host mapping translates, after its await.
   const placement = paneMoveHost
     ? await resolveHostTabDropTarget(paneMoveHost.environmentId, {
         worktreeId: args.worktreeId,
         tabId: targetTabId,
         targetGroupId: args.targetGroupId,
-        ...(hostIndex !== undefined ? { index: hostIndex } : {})
+        index: (state) => newTabIndexNow(state, newTabTarget)
       })
     : null
   // The last reversible point: one reading of the pane, its binding and its destination, after
@@ -146,7 +152,7 @@ async function moveLeafToNewTab(
     ORCA_LAYOUT_OWNER_IS_MAIN
       ? moveLeafThroughLayoutOwner(
           request,
-          { groupId: args.targetGroupId, index: hostIndex },
+          { groupId: args.targetGroupId, index: newTabIndexNow(args.getStore(), newTabTarget) },
           source.sourcePaneCwd?.cwd
         )
       : window.api.pty.moveLeafToNewTab(request)

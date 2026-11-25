@@ -228,11 +228,14 @@ export function movePaneToNewTab(
   const ordinal = getNextTerminalOrdinal(
     terminals.map((entry) => ({ defaultTitle: entry.terminal.defaultTitle, title: '' }))
   )
+  // The tab is named after the pane it carries in the same commit that creates it, as the other
+  // committers name it, so no later rename races a user's edit.
+  const paneTitle = workspace.leaves?.[leafId]?.title?.trim() || null
   const moved: LayoutTerminalTab = {
     id,
     entityId: id,
     createdAt: context.now(),
-    customTitle: null,
+    customTitle: paneTitle,
     color: null,
     ...(tab.panes.chatLeafId === leafId ? { viewMode: 'chat' as const } : {}),
     kind: 'terminal',

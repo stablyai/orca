@@ -126,6 +126,7 @@ async function hostDropResolvers(
   movingTabId: string,
   targetGroupId: string
 ): Promise<{
+  state: ReturnType<typeof useAppStore.getState>
   targetGroup: DesktopGroup | undefined
   targetHostGroupId: string
   resolveHostBackedTabId: (tabId: string) => string | null
@@ -156,7 +157,7 @@ async function hostDropResolvers(
   const resolveHostBackedTabId = (tabId: string): string | null =>
     resolveHostSessionTabIdForWebSessionTab(state, { environmentId, worktreeId, tabId }) ??
     (isWebTerminalSurfaceTabId(tabId) ? toHostSessionTabId(tabId) : null)
-  return { targetGroup, targetHostGroupId, resolveHostBackedTabId }
+  return { state, targetGroup, targetHostGroupId, resolveHostBackedTabId }
 }
 
 // Why: web groups can contain local-only tabs, so host insertion indexes count only the filtered host-backed order.
@@ -173,17 +174,27 @@ function hostBackedIndex(
     : index
 }
 
-/** A new tab's drop into a desktop group, named as the host names the group and its position. */
+/**
+ * A new tab's drop into a desktop group, named as the host names the group and its position.
+ * `index` may be read from the same state the mapping reads, so the gap and its host translation
+ * come from one order.
+ */
 export async function resolveHostTabDropTarget(
   environmentId: string,
-  args: { worktreeId: string; tabId: string; targetGroupId: string; index?: number }
+  args: {
+    worktreeId: string
+    tabId: string
+    targetGroupId: string
+    index?: number | ((state: ReturnType<typeof useAppStore.getState>) => number | undefined)
+  }
 ): Promise<{ targetGroupId: string; index?: number }> {
-  const { targetGroup, targetHostGroupId, resolveHostBackedTabId } = await hostDropResolvers(
+  const { state, targetGroup, targetHostGroupId, resolveHostBackedTabId } = await hostDropResolvers(
     environmentId,
     args.worktreeId,
     args.tabId,
     args.targetGroupId
   )
-  const index = hostBackedIndex(targetGroup, args.index, resolveHostBackedTabId)
+  const desktopIndex = typeof args.index === 'function' ? args.index(state) : args.index
+  const index = hostBackedIndex(targetGroup, desktopIndex, resolveHostBackedTabId)
   return { targetGroupId: targetHostGroupId, ...(index !== undefined ? { index } : {}) }
 }

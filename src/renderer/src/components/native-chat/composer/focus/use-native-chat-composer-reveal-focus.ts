@@ -56,6 +56,8 @@ export function useNativeChatComposerRevealFocus({
   // An explicit tab activation takes focus from inside the pane too, short of a text field.
   const explicitRef = useRef(false)
   const sourceOverlaysRef = useRef<readonly HTMLElement[]>([])
+  // The reclaiming caller's own condition; a later attempt gives up once it no longer holds.
+  const stillWantedRef = useRef<(() => boolean) | undefined>(undefined)
   const [reclaimCount, setReclaimCount] = useState(0)
 
   useLayoutEffect(
@@ -63,6 +65,7 @@ export function useNativeChatComposerRevealFocus({
       claimedRef.current = false
       explicitRef.current = false
       sourceOverlaysRef.current = []
+      stillWantedRef.current = undefined
     },
     []
   )
@@ -81,8 +84,10 @@ export function useNativeChatComposerRevealFocus({
     const reclaim = (
       onlyIfFocusUnclaimed = false,
       sourceOverlays: readonly HTMLElement[] = [],
-      text?: ComposerFocusText
+      text?: ComposerFocusText,
+      stillWanted?: () => boolean
     ): void => {
+      stillWantedRef.current = stillWanted
       if (text && 'append' in text) {
         composerRef.current?.appendText(text.append, { glow: true })
       } else if (text?.revealDraft) {
@@ -141,6 +146,7 @@ export function useNativeChatComposerRevealFocus({
       claimedRef.current = false
       explicitRef.current = false
       sourceOverlaysRef.current = []
+      stillWantedRef.current = undefined
       return
     }
     if (claimedRef.current) {
@@ -167,6 +173,7 @@ export function useNativeChatComposerRevealFocus({
       claimedRef.current = true
       explicitRef.current = false
       sourceOverlaysRef.current = []
+      stillWantedRef.current = undefined
       stopWatchingUserIntent()
     }
     ownerDocument?.addEventListener('pointerdown', cancelForPointer, true)
@@ -179,7 +186,11 @@ export function useNativeChatComposerRevealFocus({
         stopWatchingUserIntent()
         return
       }
-      if (userInteracted || getOverlayFocusOwners(rootRef.current ?? undefined).length > 0) {
+      if (
+        userInteracted ||
+        stillWantedRef.current?.() === false ||
+        getOverlayFocusOwners(rootRef.current ?? undefined).length > 0
+      ) {
         finish()
         return
       }
