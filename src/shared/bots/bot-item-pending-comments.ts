@@ -119,10 +119,11 @@ export type BotItemPendingCommentDelivery = {
   /** Says why a comment wasn't sent; it stays with Retry, unless it answered a question the agent
    *  has since replaced (`replaced`): that one goes, as a Retry would fail the same way. */
   failed: (error: unknown, replaced: boolean) => void
-  /** A replaced question's reply, dropped: its words go back to the comment box if it is empty. */
+  /** A replaced question's reply, dropped: what `botItemRefusedReplyText` gives back of it goes to
+   *  the comment box. */
   returnText: (text: string, entry: BotItemPendingComment) => void
-  /** Re-reads the item after a replaced question's refusal, so the box names the ask that replaced it
-   *  even when the view missed the change. */
+  /** Re-reads the item after a replaced question's refusal, so the box names the ask the host waits
+   *  on (its read's `waitingAsk`) even when the loaded events missed the change. */
   refresh: () => void
   /** The host dedupes comments by request id, so a Retry never posts twice. */
   requestIds: boolean
