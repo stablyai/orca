@@ -12,6 +12,7 @@ import type { NativeChatMessage } from '../../../../../shared/native-chat/native
 import { resolveNativeChatInteractivePromptCard } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { sayNativeChatApprovalTranslated } from './native-chat-interactive-prompt'
 import type { InteractivePromptCard } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import type { NativeChatInteractiveSend } from '../session/terminal/send/use-native-chat-interactive-send'
 
 export function useNativeChatInteractivePromptCard({
   paneKey,
@@ -85,6 +86,28 @@ function useWaitingScreenChoice(readTerminalScreen: (() => string | null) | unde
   }, [readTerminalScreen])
   // A result read through an earlier reader is stale once the reader changes or goes away.
   return readTerminalScreen && read?.reader === readTerminalScreen ? read.choice : null
+}
+
+/** A screen-read card answers only the menu it was read from: once the terminal moved on, its digit is refused. */
+export function useScreenChoiceGuardedSend(
+  send: NativeChatInteractiveSend,
+  card: InteractivePromptCard | null,
+  readTerminalScreen: (() => string | null) | undefined
+): NativeChatInteractiveSend {
+  const screenMenu = card?.kind === 'approval' ? card.approval.screenMenu : undefined
+  return useMemo(() => {
+    if (!screenMenu) {
+      return send
+    }
+    return {
+      ...send,
+      sendRawVerified: (raw, requireStartupDialog) =>
+        readTerminalScreen &&
+        parseTerminalChoicePrompt(readTerminalScreen())?.screenMenu === screenMenu
+          ? send.sendRawVerified(raw, requireStartupDialog)
+          : Promise.resolve(false)
+    }
+  }, [send, screenMenu, readTerminalScreen])
 }
 
 export function useNativeChatTerminalPromptCard(args: {

@@ -53,10 +53,11 @@ export function parseTerminalChoicePrompt(screen: string | null | undefined): Ch
   if (!question?.endsWith('?')) {
     return null
   }
+  // The block above the question (the command and why it needs a yes) ends at the first blank line.
   const context: string[] = []
   for (let index = questionIndex - 1; index >= 0 && context.length < 24; index -= 1) {
     const line = lines[index] ?? ''
-    if (RULE.test(line) && context.some((entry) => entry.trim())) {
+    if (!line.trim() && context.some((entry) => entry.trim())) {
       break
     }
     if (!RULE.test(line)) {
@@ -67,6 +68,7 @@ export function parseTerminalChoicePrompt(screen: string | null | undefined): Ch
   return {
     title: question,
     ...(detail ? { detail } : {}),
-    options: options.map((option) => ({ label: option.label, send: option.number }))
+    options: options.map((option) => ({ label: option.label, send: option.number })),
+    screenMenu: JSON.stringify([question, ...options.map((option) => option.label)])
   }
 }

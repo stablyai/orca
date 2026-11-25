@@ -26,6 +26,7 @@ describe('parseTerminalChoicePrompt', () => {
       { label: "Yes, and don't ask again for: cd *", send: '2' },
       { label: 'No', send: '3' }
     ])
+    expect(card?.detail).toContain('helm upgrade --install csi csi/csi --wait')
     expect(card?.detail).toContain('Auto mode needs your confirmation for this command.')
   })
 

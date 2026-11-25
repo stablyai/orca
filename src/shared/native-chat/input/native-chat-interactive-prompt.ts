@@ -28,6 +28,8 @@ export type ChatApproval = {
    * Return would answer the dialog), and the host writes a choice only while its screen still reads as it.
    */
   startupDialog?: string
+  /** The terminal menu this card was read from; a choice is sent only while the screen still shows it. */
+  screenMenu?: string
   /** No option is styled as the default: the agent's own consent choices are shown as equals. */
   neutralOptions?: true
 }
