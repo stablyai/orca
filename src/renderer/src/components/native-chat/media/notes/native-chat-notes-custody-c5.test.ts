@@ -39,6 +39,7 @@ import {
   settleNativeChatHeldHandOff,
   submitNativeChatNotesIfApproved
 } from './native-chat-notes-handoff'
+import { claimNativeChatNotesEdit } from './native-chat-notes-edit-claims'
 import {
   nativeChatDraftHasEditingImage,
   restoreNativeChatCleanImage,
@@ -72,6 +73,18 @@ const record = (notes: NativeChatMediaNote[]): NativeChatAttachmentNotes => ({
 })
 const cold = (key: string, scope: string, id: string): unknown =>
   createNativeChatNotesStorage(key, (value) => value).get(`${scope}\u0000${id}`) ?? null
+const coldWords = (key: string, scope: string, id: string): string[] => {
+  const value = cold(key, scope, id)
+  const notes =
+    typeof value === 'object' && value !== null && 'notes' in value && Array.isArray(value.notes)
+      ? value.notes
+      : []
+  return notes.flatMap((entry: unknown) =>
+    typeof entry === 'object' && entry !== null && 'text' in entry && typeof entry.text === 'string'
+      ? [entry.text]
+      : []
+  )
+}
 const refuseStorageWrites = () =>
   vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
     throw new DOMException('full', 'QuotaExceededError')
@@ -121,10 +134,11 @@ it('a reused source lets go of only the moved draft’s notes, never the new dra
   updateNativeChatComposerDraft(SCOPE, { text: 'confirm' }, 'immediate')
   await nativeChatComposerDraftSaved(SCOPE)
   await nativeChatComposerDraftSaved(SOURCE)
-  expect(cold(NOTES_KEY, SCOPE, 'old')).not.toBeNull()
+  // Both generations recover their exact words after a restart.
+  expect(coldWords(NOTES_KEY, SCOPE, 'old')).toEqual(['moved words'])
   expect(cold(NOTES_KEY, SOURCE, 'old')).toBeNull()
-  expect(cold(NOTES_KEY, SOURCE, 'new')).not.toBeNull()
-  expect(cold(HELD_KEY, SOURCE, MEDIA)).not.toBeNull()
+  expect(coldWords(NOTES_KEY, SOURCE, 'new')).toEqual(['new words'])
+  expect(coldWords(HELD_KEY, SOURCE, MEDIA)).toEqual(['new hold'])
 })
 
 it('Send refuses a message whose line breaks or indents changed during export', () => {
@@ -261,14 +275,55 @@ it('held notes coming back to a source that grew past 33 megapixels are refused 
   expect(attach).not.toHaveBeenCalled()
 })
 
-it('another window editing a marked image holds this window’s Send, until its marker goes stale', () => {
+// Web Locks as the browser keeps them: held until released, or until the holder goes away.
+const heldLocks = new Set<string>()
+function installLocks(): void {
+  Object.defineProperty(globalThis.navigator, 'locks', {
+    configurable: true,
+    value: {
+      request: async (name: string, hold: () => Promise<void>) => {
+        heldLocks.add(name)
+        try {
+          await hold()
+        } finally {
+          heldLocks.delete(name)
+        }
+      },
+      query: async () => ({ held: [...heldLocks].map((name) => ({ name })) })
+    }
+  })
+}
+const EDIT_PREFIX = `orca.nativeChat.notesEditing.v2:${encodeURIComponent(`${SCOPE}\u0000img`)}:`
+
+it('another window’s edit holds Send for as long as it lasts, and closing one of two editors keeps it held', async () => {
+  installLocks()
   appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'img', path: '/i.png' }] })
-  const item = `orca.nativeChat.notesEditing.v1:${encodeURIComponent(`${SCOPE}\u0000img`)}`
-  localStorage.setItem(item, '4000000000000')
+  const first = claimNativeChatNotesEdit(SCOPE, 'img')
+  const second = claimNativeChatNotesEdit(SCOPE, 'img')
+  // Far past any time limit: a live edit still counts.
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const item = localStorage.key(index)
+    if (item?.startsWith(EDIT_PREFIX)) {
+      localStorage.setItem(item, '1')
+    }
+  }
+  await Promise.resolve()
   expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(true)
-  // A marker left by a window that went away long ago.
-  localStorage.setItem(item, '1')
+  first()
+  await Promise.resolve()
+  expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(true)
+  second()
+  await Promise.resolve()
   expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(false)
+})
+
+it('a claim left by a window that went away is cleared, and the next Send goes ahead', async () => {
+  installLocks()
+  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'img', path: '/i.png' }] })
+  // Its window closed: the marker is there, its lock is not.
+  localStorage.setItem(`${EDIT_PREFIX}gone-window-1`, '1')
+  expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(true)
+  await vi.waitFor(() => expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(false))
 })
 
 it('a viewer that goes away without closing keeps its new notes for the chat and media', () => {
