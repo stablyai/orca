@@ -109,17 +109,10 @@ const scenarios: Record<string, AutomationRun> = {
 }
 
 function fixedPicker(open: boolean, options = MODELS): typeof AutomationRunModelPicker {
-  return function FixedPicker({ currentModel, failureParams, disabled, onPick, renderNotice }) {
+  return function FixedPicker({ renderNotice, ...picker }) {
     return renderNotice(
       options.length ? (
-        <AutomationRunModelSelect
-          options={options}
-          currentModel={currentModel}
-          failureParams={failureParams}
-          disabled={disabled}
-          defaultOpen={open}
-          onPick={onPick}
-        />
+        <AutomationRunModelSelect {...picker} options={options} defaultOpen={open} />
       ) : undefined
     )
   }

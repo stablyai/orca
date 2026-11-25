@@ -87,7 +87,8 @@ export function AutomationRunFailureNotice({
       agent={modelFix.agent}
       currentModel={modelFix.currentModel}
       failureParams={modelFix.failureParams}
-      disabled={modelRead !== 'ready' || isModelFixPending || isRerunPending}
+      disabled={modelRead !== 'ready' || isRerunPending}
+      busy={isModelFixPending}
       renderNotice={renderFailureNotice}
       onPick={onPickModel}
     />

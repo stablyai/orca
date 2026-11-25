@@ -1,5 +1,5 @@
 // The failure banner's model picker: the models the editor's Agent field offers for this agent.
-import React, { useId } from 'react'
+import React, { useId, useState } from 'react'
 import { useBotAgentMenu } from '@/components/bots/use-bot-agent-choices'
 import { useAgentLaunchPickerInventory } from '@/components/agent/use-agent-launch-picker-inventory'
 import {
@@ -56,7 +56,7 @@ function useAutomationRunModelOptions(
 }
 
 /** One menu row: the label loses its middle when it doesn't fit; a failed row keeps "Failed" visible
- *  and is disabled. The full name stays in the title and the accessible name. */
+ *  and is disabled. The full name stays in the title and in the name assistive tech reads. */
 function ModelOption({
   value,
   label,
@@ -72,20 +72,21 @@ function ModelOption({
       disabled={failedText !== undefined}
       textValue={label}
       title={label}
-      aria-label={failedText ? `${label} ${failedText}` : label}
       className="*:[span]:last:min-w-0 *:[span]:last:flex-1"
     >
+      {/* Why: the row is named by this text, so it carries the whole name; the shortened copy is
+          visual only. */}
+      <span className="sr-only">{label}</span>
       {/* Why: a disabled row ignores the pointer, so the label opts back in to show its title. The
           hidden copy sizes the menu by the full name, so shortening the label can't shrink the menu
           and re-shorten the label in a loop. */}
       <span
+        aria-hidden="true"
         className="pointer-events-auto grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)]"
         title={label}
       >
         <MiddleEllipsisLabel text={label} />
-        <span aria-hidden="true" className="invisible h-0 overflow-hidden whitespace-pre">
-          {label}
-        </span>
+        <span className="invisible h-0 overflow-hidden whitespace-pre">{label}</span>
       </span>
       {failedText ? <span className="shrink-0 text-foreground">{failedText}</span> : null}
     </SelectItem>
@@ -97,6 +98,7 @@ export function AutomationRunModelSelect({
   currentModel,
   failureParams,
   disabled,
+  busy = false,
   defaultOpen,
   onPick
 }: {
@@ -106,9 +108,12 @@ export function AutomationRunModelSelect({
   currentModel?: string
   failureParams?: AutomationRun['errorParams']
   disabled: boolean
+  /** A pick is saving: the trigger keeps focus but can't open. */
+  busy?: boolean
   onPick: (model: AutomationRunModelOption) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const [open, setOpen] = useState(defaultOpen ?? false)
   const nameId = useId()
   const valueId = useId()
   const currentLabel = options.find((option) => option.id === currentModel)?.label ?? currentModel
@@ -126,7 +131,9 @@ export function AutomationRunModelSelect({
     <Select
       value={currentModel ? `model:${currentModel}` : ''}
       disabled={disabled}
-      defaultOpen={defaultOpen}
+      // Why: natively disabling the focused trigger while saving would drop focus to the page.
+      open={open && !busy}
+      onOpenChange={(next) => setOpen(next && !busy)}
       onValueChange={(next) => {
         const option = options.find((candidate) => `model:${candidate.id}` === next)
         if (
@@ -143,6 +150,8 @@ export function AutomationRunModelSelect({
         variant="destructive"
         aria-labelledby={`${nameId} ${valueId}`}
         title={currentLabel}
+        aria-disabled={busy || undefined}
+        data-automation-model-picker=""
         className="max-w-[45%] min-w-0 @max-[33rem]:max-w-none"
       >
         <span id={nameId} className="sr-only">
@@ -161,6 +170,7 @@ export function AutomationRunModelSelect({
         align="end"
         // Why: a long model id would otherwise stretch the menu far past the run page.
         className="max-w-[min(24rem,calc(100vw-16px))]"
+        data-automation-model-picker=""
       >
         {historicalLabel ? (
           <ModelOption value="historical" label={historicalLabel} failedText={failedText} />
@@ -186,6 +196,7 @@ export function AutomationRunModelPicker({
   currentModel,
   failureParams,
   disabled,
+  busy,
   renderNotice,
   onPick
 }: {
@@ -194,6 +205,7 @@ export function AutomationRunModelPicker({
   currentModel?: string
   failureParams?: AutomationRun['errorParams']
   disabled: boolean
+  busy?: boolean
   renderNotice: (picker?: React.ReactNode) => React.JSX.Element
   onPick: (model: AutomationRunModelOption) => void
 }): React.JSX.Element {
@@ -208,6 +220,7 @@ export function AutomationRunModelPicker({
         currentModel={currentModel}
         failureParams={failureParams}
         disabled={disabled}
+        busy={busy}
         onPick={onPick}
       />
     ) : undefined

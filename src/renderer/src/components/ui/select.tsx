@@ -41,7 +41,8 @@ const selectTriggerVariants = cva('', {
     variant: {
       default: '',
       destructive:
-        'border-destructive/30 bg-background text-foreground data-[placeholder]:text-foreground dark:bg-background *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate'
+        // aria-disabled: busy but still focusable, styled like disabled.
+        'border-destructive/30 bg-background text-foreground data-[placeholder]:text-foreground dark:bg-background *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate aria-disabled:cursor-not-allowed aria-disabled:opacity-50'
     }
   },
   defaultVariants: { density: 'default', variant: 'default' }

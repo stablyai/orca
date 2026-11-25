@@ -26,6 +26,7 @@ import {
 import { AutomationRunStatusLabel } from './AutomationRunStatusDot'
 import { AutomationRunToolbar } from './AutomationRunToolbar'
 import { AutomationRunModelConfirmationNotice } from './AutomationRunModelConfirmationNotice'
+import { useModelPickFocusHandoff } from './use-model-pick-focus-handoff'
 import { formatAutomationCost, formatAutomationTokens } from './automation-usage-model'
 import {
   RUN_START_DRIFT_LABEL_MS,
@@ -136,6 +137,7 @@ export function AutomationRunDetailsPage({
   const { newer, older } = getAutomationRunNeighbors(runs, listedRun.id)
   const needsCredentials = run.status === 'skipped_needs_interactive_auth'
   const [isModelFixPending, setIsModelFixPending] = useState(false)
+  const pickFocus = useModelPickFocusHandoff()
   const stepRef = useRef({ newer, older, onSelectRun })
   useEffect(() => {
     stepRef.current = { newer, older, onSelectRun }
@@ -327,7 +329,10 @@ export function AutomationRunDetailsPage({
             ) : null}
           </div>
         ) : modelConfirmation ? (
-          <AutomationRunModelConfirmationNotice confirmation={modelConfirmation} />
+          <AutomationRunModelConfirmationNotice
+            confirmation={modelConfirmation}
+            focusRef={pickFocus.takeFocus}
+          />
         ) : failed ? (
           <AutomationRunFailureNotice
             run={run}
@@ -344,6 +349,7 @@ export function AutomationRunDetailsPage({
             onPickModel={
               onPickModel
                 ? (model) => {
+                    pickFocus.arm()
                     setIsModelFixPending(true)
                     void onPickModel(model).finally(() => setIsModelFixPending(false))
                   }
