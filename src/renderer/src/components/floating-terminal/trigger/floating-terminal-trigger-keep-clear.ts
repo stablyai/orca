@@ -109,15 +109,19 @@ export function useKeepFloatingTerminalTriggerClear(
   }, [element, enabled])
 }
 
-function subscribe(listener: () => void): () => void {
+export function subscribeToFloatingTerminalTriggerKeepClearRects(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
 
+export function getFloatingTerminalTriggerKeepClearRects(): readonly FloatingTerminalTriggerKeepClearRect[] {
+  return rects
+}
+
 export function useFloatingTerminalTriggerKeepClearRects(): readonly FloatingTerminalTriggerKeepClearRect[] {
   return useSyncExternalStore(
-    subscribe,
-    () => rects,
+    subscribeToFloatingTerminalTriggerKeepClearRects,
+    getFloatingTerminalTriggerKeepClearRects,
     () => NONE
   )
 }

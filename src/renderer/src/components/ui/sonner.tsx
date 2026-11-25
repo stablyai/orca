@@ -5,9 +5,8 @@ import {
   OctagonXIcon,
   TriangleAlertIcon
 } from 'lucide-react'
-import { useRef, useSyncExternalStore, type SyntheticEvent } from 'react'
+import { useRef, type SyntheticEvent } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
-import { useFloatingTerminalTriggerKeepClearRects } from '@/components/floating-terminal/trigger/floating-terminal-trigger-keep-clear'
 import { useAppStore } from '@/store/index'
 import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/overlay-interaction/body-overlay-attributes'
 import {
@@ -15,7 +14,7 @@ import {
   NOTIFICATION_CARD_STACK_HEIGHT_VAR
 } from '@/lib/notifications/notification-card-stack-height'
 import { useNotificationCardLayoutVarReader } from '@/lib/notifications/notification-card-layout-vars'
-import { getToasterBottomLift } from './toaster-bottom-lift'
+import { useToasterBottomLift } from './toaster-bottom-lift'
 import { useToasterModalLayer } from './toaster-modal-layer'
 
 // Why: a short outcome reads best with its action beside it; the toaster's default wraps actions below.
@@ -48,18 +47,10 @@ function blockModalToastInteraction(event: SyntheticEvent): void {
   }
 }
 
-const TOASTER_RIGHT_INSET_REM = 1
-const TOASTER_MAX_WIDTH_REM = 26
-const SONNER_MOBILE_BREAKPOINT = 600
-const SONNER_MOBILE_INSET = 16
-const SONNER_TOP_CLEARANCE = 24
-// Reserve room for the collapsed resume report without depending on Sonner's rendered list.
-const COLLAPSED_TOAST_HEIGHT = 100
-
 const TOASTER_OFFSET = {
   bottom: `calc(${NOTIFICATION_CARD_STACK_BOTTOM} + env(safe-area-inset-bottom, 0px) + var(${NOTIFICATION_CARD_STACK_HEIGHT_VAR}, 0px))`,
   // Why 1rem: the cards' right edge, so a toast above them lines up instead of jutting left.
-  right: `${TOASTER_RIGHT_INSET_REM}rem`
+  right: '1rem'
 }
 
 const TOASTER_STYLE: React.CSSProperties & Record<`--${string}`, string> = {
@@ -67,48 +58,16 @@ const TOASTER_STYLE: React.CSSProperties & Record<`--${string}`, string> = {
   '--normal-text': 'var(--popover-foreground)',
   '--normal-border': 'var(--notice-border)',
   '--border-radius': 'var(--radius)',
-  '--width': `min(${TOASTER_MAX_WIDTH_REM}rem, calc(100vw - ${2 * TOASTER_RIGHT_INSET_REM}rem))`
-}
-
-function subscribeToViewportResize(onChange: () => void): () => void {
-  window.addEventListener('resize', onChange)
-  return () => window.removeEventListener('resize', onChange)
-}
-
-function readToasterBottomLift(
-  rects: ReturnType<typeof useFloatingTerminalTriggerKeepClearRects>
-): number {
-  if (rects.length === 0) {
-    return 0
-  }
-  const { innerWidth, innerHeight } = window
-  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
-  const mobile = innerWidth <= SONNER_MOBILE_BREAKPOINT
-  const inset = mobile ? SONNER_MOBILE_INSET : TOASTER_RIGHT_INSET_REM * rem
-  const availableWidth = innerWidth - 2 * inset
-  const width = mobile ? availableWidth : Math.min(TOASTER_MAX_WIDTH_REM * rem, availableWidth)
-  const right = innerWidth - inset
-  const topClearance = mobile ? SONNER_MOBILE_INSET : SONNER_TOP_CLEARANCE
-  return getToasterBottomLift(
-    rects,
-    innerHeight,
-    { left: right - width, right },
-    0.5 * rem,
-    COLLAPSED_TOAST_HEIGHT + topClearance
-  )
+  '--width': 'min(26rem, calc(100vw - 2rem))'
 }
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const theme = useAppStore((s) => s.settings?.theme) || 'system'
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const sectionRef = useRef<HTMLElement>(null)
   useNotificationCardLayoutVarReader(wrapperRef)
   const { raised, trackActionOverModal } = useToasterModalLayer(wrapperRef)
-  const keepClearRects = useFloatingTerminalTriggerKeepClearRects()
-  const bottomLift = useSyncExternalStore(
-    subscribeToViewportResize,
-    () => readToasterBottomLift(keepClearRects),
-    () => 0
-  )
+  const bottomLift = useToasterBottomLift(sectionRef)
   const offset = bottomLift
     ? { ...TOASTER_OFFSET, bottom: `max(${TOASTER_OFFSET.bottom}, ${bottomLift}px)` }
     : TOASTER_OFFSET
@@ -143,6 +102,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       onContextMenuCapture={raised ? undefined : blockModalToastInteraction}
     >
       <Sonner
+        ref={sectionRef}
         theme={theme as ToasterProps['theme']}
         position="bottom-right"
         offset={offset}
