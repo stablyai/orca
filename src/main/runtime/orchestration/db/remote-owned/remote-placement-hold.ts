@@ -22,7 +22,7 @@ export type RemoteStartCreator = Pick<
   'creatorHandle' | 'creatorOrcaSessionId' | 'creatorTurnSource'
 >
 
-/** Each reservation names who asked for it; a placement's Dispatch copies it when first recorded. */
+/** A new reservation names who asked for it, in its own transaction; its Dispatch copies it when first recorded. */
 export function recordPlacementCreator(
   db: OrchestrationDb,
   taskId: string,
@@ -47,6 +47,16 @@ export type RemoteStartCreatorColumns = {
   creator_handle: string | null
   creator_orca_session_id: OrcaSessionId | null
   creator_turn_source: 'connector' | null
+}
+
+export function getRemotePlacement(
+  db: OrchestrationDb,
+  taskId: string
+): RemotePlacementRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
+  return db.db.prepare('SELECT * FROM remote_placements WHERE task_id = ?').get(taskId) as
+    | RemotePlacementRow
+    | undefined
 }
 
 /**

@@ -10,7 +10,6 @@ import type { OrchestrationWorkerServer } from '../../federation/environment-tra
 import { importRemoteOwnedItem } from './remote-owned-import'
 import { recordRemoteStart, reserveRemotePlacement } from './remote-placements'
 import { openRemoteRunLink, remoteServerPin } from './remote-run-links'
-import { recordPlacementCreator } from './remote-placement-hold'
 import {
   reportNeverReadyWorkerStart,
   START_BLOCKED_FENCE
@@ -50,8 +49,10 @@ function newDb(): OrchestrationDb {
 }
 
 /** The coordinator's read of the mail: whether its answer goes to the conversation the start came from. */
-function answersThread(db: OrchestrationDb, runId: string) {
-  const mail = db.getAllMessagesForHandle(`run:${runId}`)
+function answersThread(db: OrchestrationDb, runId: string, dispatchId?: string) {
+  const mail = db
+    .getAllMessagesForHandle(`run:${runId}`)
+    .filter((message) => !dispatchId || message.from_handle === `dispatch:${dispatchId}`)
   expect(mail).toHaveLength(1)
   const message = mail[0]!
   const from = structuredMailSource({
@@ -117,7 +118,15 @@ function failLocally(creator: DispatchCreator, failure: Failure) {
 
 /** worker-start --on: the server answers 'starting', or its answer is lost, then the start fails there
  *  and its queue carries the report home. */
-function failOnServer(creator: DispatchCreator, failure: Failure, answer: 'starting' | 'lost') {
+function failOnServer(
+  creator: DispatchCreator,
+  failure: Failure,
+  answer: 'starting' | 'lost',
+  /** A same-request retry of the start, from another turn, before any answer came home. */
+  retriedBy?: DispatchCreator,
+  /** The server then starts the Task again by itself, and that attempt fails too. */
+  serverRetries?: true
+) {
   const home = newDb()
   const server = newDb()
   const homeRunId = home.createRun({
@@ -130,9 +139,17 @@ function failOnServer(creator: DispatchCreator, failure: Failure, answer: 'start
     link,
     taskId: TASK,
     requestKey: 'start-key',
-    create: { spec: 'work' }
+    create: { spec: 'work' },
+    creator: recordedCreatorIdentity(creator)
   })
-  recordPlacementCreator(home, TASK, recordedCreatorIdentity(creator))
+  if (retriedBy) {
+    reserveRemotePlacement(home, {
+      link,
+      taskId: TASK,
+      requestKey: 'start-key',
+      creator: recordedCreatorIdentity(retriedBy)
+    })
+  }
   const peerRunId = server.admitPeerRun({
     peerFingerprint: 'fp_home',
     peerRun: { runId: homeRunId, conversationId: link.conversation_id, label: 'home' }
@@ -154,6 +171,18 @@ function failOnServer(creator: DispatchCreator, failure: Failure, answer: 'start
     })
   }
   fail(server, dispatch.id, failure)
+  const judged = serverRetries
+    ? server.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
+        taskId: TASK,
+        retryOf: dispatch.id,
+        startOptions: {}
+      }).dispatch.id
+    : undefined
+  if (judged) {
+    fail(server, judged, 'never-ready')
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SELECT names exactly these columns.
   const items = server.db
     .prepare(
@@ -172,7 +201,7 @@ function failOnServer(creator: DispatchCreator, failure: Failure, answer: 'start
       conversationId: link.conversation_id
     })
   }
-  return answersThread(home, homeRunId)
+  return answersThread(home, homeRunId, judged)
 }
 
 describe("a paired server's failed or stalled start reaches its coordinator as a local one does", () => {
@@ -190,6 +219,17 @@ describe("a paired server's failed or stalled start reaches its coordinator as a
     const local = failLocally(ORCA_TURN, failure)
     expect(local.toThread).toBe(false)
     expect(failOnServer(ORCA_TURN, failure, answer)).toEqual(local)
+  })
+
+  it('keeps the first ask when a later thread turn retries the same start', () => {
+    expect(failOnServer(ORCA_TURN, 'never-ready', 'lost', THREAD_TURN).toThread).toBe(false)
+    expect(failOnServer(THREAD_TURN, 'never-ready', 'lost', ORCA_TURN).toThread).toBe(true)
+  })
+
+  it("keeps an attempt the server started by itself in Orca, not as the first ask's", () => {
+    expect(failOnServer(THREAD_TURN, 'never-ready', 'starting', undefined, true).toThread).toBe(
+      false
+    )
   })
 
   it('stays in Orca when someone other than the coordinator started it from a thread', () => {

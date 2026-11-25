@@ -26,7 +26,6 @@ import {
 } from '../../db/remote-owned/remote-placements'
 import {
   markRemotePlacementNeverSent,
-  recordPlacementCreator,
   refuseTaskOfClosedPairing
 } from '../../db/remote-owned/remote-placement-hold'
 import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
@@ -166,6 +165,10 @@ export async function startRemoteOwnedWorker(
     taskId,
     requestKey: forward.key,
     retryOf: params.retryOf,
+    // As a local start's Dispatch records it, so the server's reports go where the start was asked.
+    creator: recordedCreatorIdentity(
+      resolveDispatchCreator(runtime, params.from, ctx.orchestrationCaller)
+    ),
     create: existingTask
       ? undefined
       : {
@@ -178,12 +181,6 @@ export async function startRemoteOwnedWorker(
           createdByRunGeneration: run.consumer_generation
         }
   })
-  // Before the send, as a local start's Dispatch records it: the server's reports go where the start was asked.
-  recordPlacementCreator(
-    db,
-    task.id,
-    recordedCreatorIdentity(resolveDispatchCreator(runtime, params.from, ctx.orchestrationCaller))
-  )
   // Its queue has a reader from the start, so mail sent before the answer still comes home.
   runtime.ensureOrchestrationFederationRelay(run.id)
   const options = serverStartOptions(params)

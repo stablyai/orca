@@ -107,14 +107,10 @@ export function ensureRemoteDispatchRecord(
   link: RemoteRunLinkRow,
   identity: { dispatchId: string; taskId: string; agent?: string | null }
 ): RemoteDispatchRow {
-  // The placement it answers names who started it; a server-only Task's Dispatch has none.
   db.db
     .prepare(
-      `INSERT INTO remote_dispatches (dispatch_id, conversation_id, run_id, environment_id, task_id, agent,
-         creator_handle, creator_orca_session_id, creator_turn_source)
-       SELECT ?, ?, ?, ?, ?, ?, p.creator_handle, p.creator_orca_session_id, p.creator_turn_source
-       FROM (SELECT 1) LEFT JOIN remote_placements p ON p.task_id = ? AND p.conversation_id = ?
-       WHERE true
+      `INSERT INTO remote_dispatches (dispatch_id, conversation_id, run_id, environment_id, task_id, agent)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(dispatch_id) DO UPDATE SET agent = COALESCE(remote_dispatches.agent, excluded.agent)`
     )
     .run(
@@ -123,11 +119,30 @@ export function ensureRemoteDispatchRecord(
       link.run_id,
       link.environment_id,
       identity.taskId,
-      identity.agent ?? null,
-      identity.taskId,
-      link.conversation_id
+      identity.agent ?? null
     )
   return writtenRow(getRemoteDispatch(db, identity.dispatchId), `Dispatch ${identity.dispatchId}`)
+}
+
+/** The attempt that answers this Orca's own reservation was asked by its creator, as a local
+ *  Dispatch records; one the server started by itself names no one here. */
+export function recordRemoteAttemptCreator(
+  db: OrchestrationDb,
+  dispatchId: string,
+  placement: RemoteStartCreatorColumns
+): void {
+  db.db
+    .prepare(
+      `UPDATE remote_dispatches
+       SET creator_handle = ?, creator_orca_session_id = ?, creator_turn_source = ?
+       WHERE dispatch_id = ?`
+    )
+    .run(
+      placement.creator_handle,
+      placement.creator_orca_session_id,
+      placement.creator_turn_source,
+      dispatchId
+    )
 }
 
 /** The server's state for the Dispatch, applied in its queue order. A terminal state sends any stop owed at once: its receipt is now the proof. */
