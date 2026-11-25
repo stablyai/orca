@@ -75,15 +75,33 @@ export function getWorktreeCardModeProperties(mode: WorktreeCardMode): WorktreeC
     : [...DEFAULT_WORKTREE_CARD_PROPERTIES]
 }
 
-export function getWorktreeCardModeUpdates(mode: WorktreeCardMode): {
+/** The current list is a mode's preset, so a layout switch applies the next mode's preset too. */
+export function isWorktreeCardModePresetProperties(
+  properties: readonly unknown[] | null | undefined
+): boolean {
+  return (
+    matchesWorktreeCardProperties(properties, COMPACT_WORKTREE_CARD_PROPERTIES) ||
+    matchesWorktreeCardProperties(properties, NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES) ||
+    matchesWorktreeCardProperties(properties, DEFAULT_WORKTREE_CARD_PROPERTIES)
+  )
+}
+
+export function getWorktreeCardModeUpdates(
+  mode: WorktreeCardMode,
+  /** The list as it stands; a custom set survives the layout switch. */
+  current?: readonly unknown[] | null
+): {
   settings: Pick<GlobalSettings, 'compactWorktreeCards'>
   ui: Pick<PersistedUIState, 'worktreeCardProperties' | '_worktreeCardModeDefaulted'>
 } {
+  const applyPreset = isWorktreeCardModePresetProperties(current)
   return {
     settings: { compactWorktreeCards: mode === 'Compact' },
     ui: {
-      worktreeCardProperties: getWorktreeCardModeProperties(mode),
-      _worktreeCardModeDefaulted: true
+      worktreeCardProperties: applyPreset
+        ? getWorktreeCardModeProperties(mode)
+        : normalizeWorktreeCardProperties(current),
+      _worktreeCardModeDefaulted: applyPreset
     }
   }
 }

@@ -212,13 +212,16 @@ export function useHostViewSettings(args: {
     [persistViewSettings]
   )
 
-  // Layout presets also reset shown properties; write settings first so refusal cannot leave the other layout’s preset.
+  // A custom property set survives the layout switch; write settings first so refusal cannot leave the other layout’s preset.
   const setCardLayout = useCallback(
     (layout: 'detailed' | 'compact') => {
       if (!client) {
         return
       }
-      const updates = getWorktreeCardModeUpdates(layout === 'compact' ? 'Compact' : 'Default')
+      const updates = getWorktreeCardModeUpdates(
+        layout === 'compact' ? 'Compact' : 'Default',
+        viewRef.current.worktreeCardProperties
+      )
       void (async () => {
         try {
           const reply = await hostCardLayoutWrite.request(client, updates.settings)
@@ -233,7 +236,7 @@ export function useHostViewSettings(args: {
             worktreeCardProperties: updates.ui.worktreeCardProperties,
             compactWorktreeCards: updates.settings.compactWorktreeCards
           },
-          { cardLayoutPreset: true }
+          { cardLayoutPreset: updates.ui._worktreeCardModeDefaulted === true }
         )
       })()
     },

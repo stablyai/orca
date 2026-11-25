@@ -7,6 +7,7 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { SettingsGroupNestedRows, SettingsGroupSubsection } from '../section-layout/SettingsGroup'
 import { useAppStore } from '../../../store/index'
+import { selectDrawsNewWorktreeCards } from '../../../store/appearance/worktree-card-style'
 import {
   SettingsRow,
   SettingsSegmentedControl,
@@ -85,6 +86,7 @@ export function AppearanceWindowSidebarSection({
   const setUsagePercentageDisplay = useAppStore((state) => state.setUsagePercentageDisplay)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const setWorktreeCardMode = useAppStore((state) => state.setWorktreeCardMode)
+  const newCardStyle = useAppStore(selectDrawsNewWorktreeCards)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
   const statusBarUsageFormatEntry = getStatusBarUsageFormatEntry()
@@ -237,41 +239,43 @@ export function AppearanceWindowSidebarSection({
             <SettingsGroupSubsection
               title={t('auto.components.settings.AppearancePane.dc29f3cc0d', 'Sidebar')}
             >
-              <SearchableSetting
-                title={workspaceCardLayoutEntry.title}
-                description={workspaceCardLayoutEntry.description}
-                keywords={workspaceCardLayoutEntry.keywords}
-              >
-                <SettingsRow
-                  label={workspaceCardLayoutEntry.title}
+              {newCardStyle ? null : (
+                <SearchableSetting
+                  title={workspaceCardLayoutEntry.title}
                   description={workspaceCardLayoutEntry.description}
-                  control={
-                    <SettingsSegmentedControl
-                      value={settings.compactWorktreeCards ? 'compact' : 'detailed'}
-                      onChange={(value) =>
-                        setWorktreeCardMode(value === 'compact' ? 'Compact' : 'Default')
-                      }
-                      ariaLabel={workspaceCardLayoutEntry.title}
-                      options={[
-                        {
-                          value: 'detailed',
-                          label: t(
-                            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.cc17bd443b',
-                            'Detailed'
-                          )
-                        },
-                        {
-                          value: 'compact',
-                          label: t(
-                            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb',
-                            'Compact'
-                          )
+                  keywords={workspaceCardLayoutEntry.keywords}
+                >
+                  <SettingsRow
+                    label={workspaceCardLayoutEntry.title}
+                    description={workspaceCardLayoutEntry.description}
+                    control={
+                      <SettingsSegmentedControl
+                        value={settings.compactWorktreeCards ? 'compact' : 'detailed'}
+                        onChange={(value) =>
+                          setWorktreeCardMode(value === 'compact' ? 'Compact' : 'Default')
                         }
-                      ]}
-                    />
-                  }
-                />
-              </SearchableSetting>
+                        ariaLabel={workspaceCardLayoutEntry.title}
+                        options={[
+                          {
+                            value: 'detailed',
+                            label: t(
+                              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.cc17bd443b',
+                              'Detailed'
+                            )
+                          },
+                          {
+                            value: 'compact',
+                            label: t(
+                              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb',
+                              'Compact'
+                            )
+                          }
+                        ]}
+                      />
+                    }
+                  />
+                </SearchableSetting>
+              )}
 
               <SearchableSetting
                 title={t('auto.components.settings.AppearancePane.e0f9902e18', 'Show tasks button')}
