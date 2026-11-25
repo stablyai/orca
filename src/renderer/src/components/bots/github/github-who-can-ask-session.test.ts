@@ -73,10 +73,10 @@ describe('one Add picker open on GitHub', () => {
     session.onUpdate?.(told)
     // The list matches: its rows go out now, with the exact lookup still on its way.
     expect(names(await session.search('brennan'))).toEqual(['brennanb2025'])
-    expect(told).not.toHaveBeenCalled()
+    expect(told.mock.calls.filter(([refresh]) => refresh)).toHaveLength(0)
     held.resolve(stranger)
     await vi.advanceTimersByTimeAsync(0)
-    expect(told).toHaveBeenCalledOnce()
+    expect(told.mock.calls.filter(([refresh]) => refresh)).toHaveLength(1)
     // Asked again, the fuller answer carries the exact match, from the same one lookup.
     expect(names(await session.search('brennan'))).toEqual(['brennanb2025', 'brennan'])
     expect(users).toHaveBeenCalledOnce()
@@ -124,7 +124,7 @@ describe('one Add picker open on GitHub', () => {
     expect(result.ok && result.value.members[0]?.id).toBe('77')
     expect(updated).toHaveBeenCalledWith(true, {
       current: [{ id: '77', name: 'jinwoo-h' }],
-      superseded: ['5']
+      superseded: [{ id: '5', name: 'jinwoo-h' }]
     })
   })
 
@@ -146,7 +146,7 @@ describe('one Add picker open on GitHub', () => {
     await vi.advanceTimersByTimeAsync(0)
     // Only the latest listener is told, and only once.
     expect(replaced).not.toHaveBeenCalled()
-    expect(told).toHaveBeenCalledOnce()
+    expect(told.mock.calls.filter(([refresh]) => refresh)).toHaveLength(1)
     expect(names(await session.search('brennan'))).toEqual(['brennanb2025', 'brennan'])
     expect(users).toHaveBeenCalledOnce()
     // A changed query still gets its own exact answer.
@@ -171,7 +171,7 @@ describe('one Add picker open on GitHub', () => {
     // Every search answered and let go of the roster, which is still on its way.
     expect(session.waiters).toBe(0)
     for (const answer of await Promise.all(answers)) {
-      expect(answer.ok && answer.value.empty?.title).toBe('Still loading your repos')
+      expect(answer.ok && answer.value.empty?.title).toBe('Still loading people')
     }
   })
 

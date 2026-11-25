@@ -49,7 +49,7 @@ export type BotWhoCanAskFound = {
 /** A successful username lookup can correct a picked identity after the user changes the query. */
 export type BotWhoCanAskIdentityUpdate = {
   current: { id: string; name: string }[]
-  superseded: string[]
+  superseded: { id: string; name: string }[]
 }
 
 /** One picker open's search. `onUpdate` keeps one listener and returns its unsubscribe. */
@@ -58,6 +58,7 @@ export type BotWhoCanAskSession = {
   onUpdate?: (
     listener: (refresh: boolean, identities?: BotWhoCanAskIdentityUpdate) => void
   ) => () => void
+  isCheckingIdentities?: () => boolean
   /** Forget what failed in the last search (only when the owner asks), so asking again retries. */
   retry?: () => void
 }

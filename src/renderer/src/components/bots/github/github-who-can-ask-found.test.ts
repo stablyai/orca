@@ -114,7 +114,7 @@ describe('the GitHub picker’s reading of a search', () => {
     expect(after(note({ cut: { people: true, members: false, repositories: true } }))).toBe(
       'Some lists were only partly read.'
     )
-    expect(after(note({ omitted: true }))).toBe('Not every connected repo was read.')
+    expect(after(note({ omitted: true }))).toBe('Some connected sources were skipped.')
     // Only the shown-list cap is helped by typing.
     const many = Array.from({ length: 40 }, (_, index) => ({
       id: String(100 + index),
@@ -128,21 +128,21 @@ describe('the GitHub picker’s reading of a search', () => {
 
   it('never says no one was found while the roster is still loading', () => {
     expect(value(answer(loading, null, 'neil par')).empty).toEqual({
-      title: 'Still loading your repos',
+      title: 'Still loading people',
       detail: 'Results appear when they load.'
     })
     expect(value(answer(loading, none)).empty).toEqual({
-      title: 'Still loading your repos',
-      detail: 'No exact username match. Repos still coming.'
+      title: 'Still loading people',
+      detail: 'No exact username match. List still loading.'
     })
     // A useful exact match shows now, tagged as not yet checked against the repos.
     expect(value(answer(loading, found)).members).toEqual([
-      { id: '9', name: 'brennan', tag: 'Repos still loading' }
+      { id: '9', name: 'brennan', tag: 'People list still loading' }
     ])
     // A failed exact lookup waits for the roster rather than failing the whole search.
     // No list yet, so no dated line: one sentence per line.
     expect(value(answer(loading, failed)).note).toBe(
-      'Still loading your repos.\nUsername check failed.'
+      'People list still loading.\nUsername check failed.'
     )
   })
 
@@ -170,18 +170,18 @@ describe('the GitHub picker’s reading of a search', () => {
     )
     // Nothing readable asked for: nothing spent, and no gh advice.
     expect(empty({ status: 'unavailable', spent: false }, null, 'neil par')?.detail).toBe(
-      'No readable repos to search.'
+      'No readable sources for the people list.'
     )
     // The host never answered: a new open asks again.
     expect(empty({ status: 'unreached' }, null, 'neil par')?.detail).toBe(
       'Couldn’t get the people list.'
     )
     expect(empty({ status: 'unavailable', spent: true }, none)?.detail).toBe(
-      'Couldn’t read repos. Check gh, restart Orca.'
+      'Couldn’t read people. Check gh, restart Orca.'
     )
     expect(empty({ status: 'unavailable', spent: true }, null, 'neil par')).toEqual({
       title: 'Couldn’t search for “neil par”',
-      detail: 'Couldn’t read repos. Check gh, restart Orca.'
+      detail: 'Couldn’t read people. Check gh, restart Orca.'
     })
     expect(empty({ status: 'skipped' }, null, 'neil par')?.detail).toBe('Try an exact username.')
   })
@@ -299,7 +299,7 @@ describe('the GitHub picker’s reading of a search', () => {
 
   it('points restart advice at the computer that read the list', () => {
     expect(value(answer({ status: 'unavailable', spent: true }, none, 'zed', 'remote')).note).toBe(
-      'Couldn’t read repos. Check the bot’s computer.'
+      'Couldn’t read the people list. Check the host.'
     )
     const old = read({ reused: true, readAt: new Date(2026, 10, 1).getTime() })
     expect(value(answer(old, none, 'brennan', 'remote')).note).toBe(
@@ -309,7 +309,7 @@ describe('the GitHub picker’s reading of a search', () => {
 
   it('names a different gh account, and not the same one', () => {
     expect(after(value(answer(read({ searchedAs: 'someone-else' }), none)).note)).toBe(
-      'Repos read as @someone-else.'
+      'People list read as @someone-else.'
     )
     expect(after(value(answer(read({ searchedAs: 'OWNER' }), none)).note)).toBeUndefined()
   })

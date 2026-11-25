@@ -84,6 +84,8 @@ export function gitHubWhoCanAskSession(
   // The last valid query's exact lookup: one entry, so asking again for that same query never
   // repeats it (a failure included) unless the owner asks to retry; a different query is its own.
   let lastExact: ExactLookup | null = null
+  // Lookups for previous queries can still correct picks in this session.
+  let pendingIdentities = 0
   // Set by an asked-for retry: the next search waits for the whole list answer (the picker keeps
   // its rows on screen meanwhile) rather than going out at ROSTER_WAIT_MS.
   let patient = false
@@ -123,9 +125,13 @@ export function gitHubWhoCanAskSession(
         failed: false,
         refresh: false
       }
+      lastExact = entry
+      pendingIdentities += 1
+      listener?.(false)
       void entry.answer.then((answer) => {
         entry.settled = true
         entry.failed = !answer.ok
+        pendingIdentities -= 1
         const refresh = entry.refresh && lastExact === entry
         const current = answer.ok ? answer.value.members : []
         if (settled?.status === 'read' && current.length > 0) {
@@ -133,11 +139,10 @@ export function gitHubWhoCanAskSession(
             current,
             superseded: supersededGitHubPeople(settled.people, current)
           })
-        } else if (refresh) {
-          listener?.(true)
+        } else {
+          listener?.(refresh)
         }
       })
-      lastExact = entry
     }
     return lastExact
   }
@@ -149,6 +154,7 @@ export function gitHubWhoCanAskSession(
     get waiters() {
       return waiting.size
     },
+    isCheckingIdentities: () => pendingIdentities !== 0,
     search: async (query) => {
       const loading = load()
       const exact = exactFor(query.trim().replace(/^@/, ''))

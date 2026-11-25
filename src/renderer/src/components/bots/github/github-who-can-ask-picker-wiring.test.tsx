@@ -101,7 +101,7 @@ describe('the Add picker on a GitHub session', () => {
       target: { value: 'brennan' }
     })
     await act(() => vi.advanceTimersByTimeAsync(300 + ROSTER_WAIT_MS))
-    expect(screen.getByText('Repos still loading')).toBeTruthy()
+    expect(screen.getByText('People list still loading')).toBeTruthy()
     expect(screen.queryByText(/No one found/)).toBeNull()
 
     const searching = vi.fn()

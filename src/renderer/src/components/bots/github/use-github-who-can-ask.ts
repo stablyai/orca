@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
+import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { useBotGitHubRead } from '@/lib/bot-github-state'
@@ -65,18 +66,21 @@ export function useGitHubWhoCanAsk(
     [scopeKey]
   )
   const withOrganizations = (scope?.owners.length ?? 0) > 0
-  return useMemo((): BotWhoCanAskService => {
-    const session = () =>
+  const producer =
+    hostId === LOCAL_EXECUTION_HOST_ID && !isPairedWebClientWindow() ? 'local' : 'remote'
+  const begin = useCallback(
+    () =>
       gitHubWhoCanAskSession(botGitHubCalls(hostId), {
         scope,
         ownerLogin: rosterOwner,
         linkedLogins,
-        // Routing, not a friendly name, decides whose Orca holds the list: this window's own
-        // computer only for a local bot outside a paired web window.
-        producer:
-          hostId === LOCAL_EXECUTION_HOST_ID && !isPairedWebClientWindow() ? 'local' : 'remote',
-        t
-      })
+        producer,
+        t: translate
+      }),
+    [hostId, scope, rosterOwner, linkedLogins, producer]
+  )
+  const search = useCallback((query: string) => begin().search(query), [begin])
+  return useMemo((): BotWhoCanAskService => {
     return {
       listed: (members) =>
         installationId === undefined
@@ -87,9 +91,8 @@ export function useGitHubWhoCanAsk(
           ? { source: 'github' }
           : { source: 'github', workspaceId: installationId },
       max: CONNECTOR_CLIENT_LIMITS.maxBotWorkspaceMembers,
-      search: (query) => session().search(query),
-      // One roster read per picker open, filtered as the owner types.
-      begin: () => session(),
+      search,
+      begin,
       errorMessage: (code) => botGitHubErrorMessage(code, hostName),
       searchPlaceholder: t('bots.github.whoCanAsk.searchPeople', 'Search by name or username'),
       peopleHeading: t('bots.github.whoCanAsk.found', 'People on GitHub'),
@@ -126,17 +129,15 @@ export function useGitHubWhoCanAsk(
       )
     }
   }, [
-    hostId,
     hostName,
     linked,
     installationId,
     ownerId,
     otherOwnerIds,
     ownerName,
-    rosterOwner,
-    linkedLogins,
-    scope,
     withOrganizations,
+    begin,
+    search,
     t
   ])
 }

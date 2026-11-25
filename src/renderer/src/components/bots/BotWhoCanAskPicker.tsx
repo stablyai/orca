@@ -92,10 +92,21 @@ export function BotWhoCanAskPicker({
   // the name: a status tag (a dated list's "not in it", "still loading") held only for the answer
   // that drew it, so a remembered one would outlive what it described.
   const [pickedNames, setPickedNames] = useState<Readonly<Record<string, string>>>({})
-  const { search, retry, retryInPlace, retrying, identities } = useMemberSearch(service, query)
+  const {
+    search,
+    retry,
+    retryInPlace,
+    retrying,
+    identities,
+    checkingIdentities,
+    isCheckingIdentities
+  } = useMemberSearch(service, query)
   const inputRef = useRef<HTMLInputElement>(null)
   const retryRef = useRef<HTMLButtonElement>(null)
   const restoreRetryFocus = useRef(false)
+  useLayoutEffect(() => {
+    restoreRetryFocus.current = false
+  }, [query, service.begin, service.search])
   useLayoutEffect(() => {
     if (retrying || search.status === 'loading' || !restoreRetryFocus.current) {
       return
@@ -103,7 +114,8 @@ export function BotWhoCanAskPicker({
     restoreRetryFocus.current = false
     const input = inputRef.current
     if (input && input.ownerDocument.activeElement === input.ownerDocument.body) {
-      ;(retryRef.current ?? input).focus()
+      const target = retryRef.current ?? input
+      target.focus()
     }
   }, [retrying, search])
   const rememberRetryFocus = (action: () => void): void => {
@@ -178,6 +190,10 @@ export function BotWhoCanAskPicker({
   const unsorted = grouped ? addable.filter((person) => person.group === undefined) : addable
   const note = search.status === 'ready' ? search.found.note : undefined
   const labels = search.status === 'ready' ? search.found.labels : undefined
+  const searching =
+    search.status === 'loading' && search.announce
+      ? t('bots.whoCanAsk.searching', 'Searching…')
+      : ''
 
   /** `handle`: the muted text beside the name; `realName`: what else a search may match them by. */
   const pickRow = (
@@ -205,12 +221,13 @@ export function BotWhoCanAskPicker({
       </CommandItem>
     )
   }
-  // Ticked people the current search doesn't show stay on top while they still match it, so a
-  // search never lists someone it doesn't match; the footer keeps counting everyone ticked.
+  // GitHub filters Selected with the query; other connectors keep every pick visible.
   const offScreen = picks.filter(
     (member) =>
       !addable.some((person) => person.id === member.id) &&
-      (matches(member.name || member.id, needle) || matches(pickedNames[member.id] ?? '', needle))
+      (service.kind !== 'github' ||
+        matches(member.name || member.id, needle) ||
+        matches(pickedNames[member.id] ?? '', needle))
   )
   const selectedGroup =
     offScreen.length > 0 ? (
@@ -246,23 +263,18 @@ export function BotWhoCanAskPicker({
     <PickerNote title={idle.title} detail={note ?? idle.detail} action={retryAction} />
   ) : search.status === 'failed' ? (
     <div role="alert" className="flex items-center gap-2 p-3 text-sm">
-      <span className="min-w-0 flex-1 text-destructive">{search.error}</span>
+      <span className="min-w-0 flex-1 text-destructive">{service.errorMessage(search.error)}</span>
       <Button
         size="xs"
         variant="outline"
         ref={retryRef}
+        disabled={retrying}
         onKeyDown={keepButtonEnter}
         onClick={() => rememberRetryFocus(retry)}
       >
         {t('bots.whoCanAsk.retry', 'Try again')}
       </Button>
     </div>
-  ) : search.status === 'loading' ? (
-    search.announce ? (
-      <p role="status" className="p-3 text-sm text-muted-foreground">
-        {t('bots.whoCanAsk.searching', 'Searching…')}
-      </p>
-    ) : null
   ) : addable.length > 0 ? (
     <>
       {scoped.length > 0 ? (
@@ -329,23 +341,27 @@ export function BotWhoCanAskPicker({
     ) : null
 
   return (
-    <Command shouldFilter={false}>
+    <Command
+      shouldFilter={false}
+      onFocusCapture={(event) => {
+        if (event.target !== retryRef.current) {
+          restoreRetryFocus.current = false
+        }
+      }}
+    >
       <CommandInput
         ref={inputRef}
         autoFocus
         value={query}
         onValueChange={setQuery}
-        placeholder={
-          (search.status === 'ready'
-            ? search.found.searchPlaceholder
-            : search.status === 'loading'
-              ? search.searchPlaceholder
-              : undefined) ?? service.searchPlaceholder
-        }
+        placeholder={search.searchPlaceholder ?? service.searchPlaceholder}
       />
       <CommandList>
         {selectedGroup}
         {selectedGroup && peopleGroup ? <CommandSeparator className="mx-0" /> : null}
+        <p role="status" className={searching ? 'p-3 text-sm text-muted-foreground' : 'sr-only'}>
+          {searching}
+        </p>
         {peopleGroup}
         {(selectedGroup || peopleGroup) && accessGroup ? (
           <CommandSeparator className="mx-0" />
@@ -388,12 +404,21 @@ export function BotWhoCanAskPicker({
               count: picks.length
             })}
           </span>
-          <Button size="sm" onKeyDown={keepButtonEnter} onClick={() => onPicked(picks)}>
-            {picks.length === 1
-              ? t('bots.whoCanAsk.addOne', 'Add 1 person')
-              : t('bots.whoCanAsk.addMany', 'Add {{count}} people', {
-                  count: picks.length
-                })}
+          <Button
+            size="sm"
+            disabled={checkingIdentities}
+            onKeyDown={keepButtonEnter}
+            onClick={() => {
+              if (!isCheckingIdentities()) {
+                onPicked(picks)
+              }
+            }}
+          >
+            {checkingIdentities
+              ? t('bots.github.whoCanAsk.checkingUsername', 'Checking username…')
+              : picks.length === 1
+                ? t('bots.whoCanAsk.addOne', 'Add 1 person')
+                : t('bots.whoCanAsk.addMany', 'Add {{count}} people', { count: picks.length })}
           </Button>
         </div>
       ) : null}

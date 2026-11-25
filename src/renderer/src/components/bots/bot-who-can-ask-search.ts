@@ -11,10 +11,17 @@ import type { BotSlackResult } from '../../../../shared/connector-bot-slack-cont
 
 const SEARCH_DEBOUNCE_MS = 250
 
-export type Search =
-  | { status: 'loading'; announce: boolean; searchPlaceholder?: string }
+export type Search = (
+  | { status: 'loading'; announce: boolean }
   | { status: 'ready'; found: BotWhoCanAskFound }
   | { status: 'failed'; error: string }
+) & { searchPlaceholder?: string }
+
+function applySearchResult(previous: Search, result: BotSlackResult<BotWhoCanAskFound>): Search {
+  return result.ok
+    ? { status: 'ready', found: result.value, searchPlaceholder: result.value.searchPlaceholder }
+    : { status: 'failed', error: result.error, searchPlaceholder: previous.searchPlaceholder }
+}
 
 /** What live lookups confirmed during this picker open: current names by id, and ids whose
  *  listed name was given to someone else. A later confirmation of an id clears its doubt. */
@@ -26,8 +33,11 @@ const NO_IDENTITIES: Identities = { names: {}, superseded: new Set() }
 
 function learnIdentities(known: Identities, confirmed: BotWhoCanAskIdentityUpdate): Identities {
   const superseded = new Set(known.superseded)
-  for (const id of confirmed.superseded) {
-    superseded.add(id)
+  for (const { id, name } of confirmed.superseded) {
+    const current = known.names[id]
+    if (!current || current.toLowerCase() === name.toLowerCase()) {
+      superseded.add(id)
+    }
   }
   const names = { ...known.names }
   for (const { id, name } of confirmed.current) {
@@ -46,17 +56,17 @@ export function useMemberSearch(
   retryInPlace: () => void
   retrying: boolean
   identities: Identities
+  checkingIdentities: boolean
+  isCheckingIdentities: () => boolean
 } {
   const [search, setSearch] = useState<Search>({ status: 'loading', announce: false })
   const [identities, setIdentities] = useState<Identities>(NO_IDENTITIES)
-  // Try again starts a fresh session (and with it a fresh read of what the service lists).
-  const [session, setSession] = useState(0)
-  const { errorMessage, kind } = service
+  const [attempt, setAttempt] = useState(0)
+  const { begin, search: runSearch, kind } = service
   // One search session per picker open, kept across keystrokes.
   const active = useMemo(
-    (): BotWhoCanAskSession =>
-      session >= 0 && service.begin ? service.begin() : { search: service.search },
-    [service, session]
+    (): BotWhoCanAskSession => (attempt >= 0 && begin ? begin() : { search: runSearch }),
+    [begin, runSearch, attempt]
   )
   // Bumped whenever the query or session changes, or the picker closes: an in-place retry paints
   // only if nothing changed since it was asked for (it never repaints an old query).
@@ -66,31 +76,25 @@ export function useMemberSearch(
   // The ref answers a second click before React re-renders; the state disables the button.
   const retryAsked = useRef<number | null>(null)
   const [retrying, setRetrying] = useState(false)
+  const [checkingIdentities, setCheckingIdentities] = useState(false)
+  const isCheckingIdentities = (): boolean => active.isCheckingIdentities?.() ?? false
   useEffect(() => {
     generation.current += 1
     const mine = generation.current
     let current = true
     const show = (result: BotSlackResult<BotWhoCanAskFound>): void => {
       if (current) {
-        setSearch(
-          result.ok
-            ? { status: 'ready', found: result.value }
-            : { status: 'failed', error: errorMessage(result.error) }
-        )
+        setSearch((previous) => applySearchResult(previous, result))
       }
     }
     setSearch((previous) => ({
       status: 'loading',
       announce: kind !== 'github',
-      searchPlaceholder:
-        previous.status === 'ready'
-          ? previous.found.searchPlaceholder
-          : previous.status === 'loading'
-            ? previous.searchPlaceholder
-            : undefined
+      searchPlaceholder: previous.searchPlaceholder
     }))
     // A retry asked for the previous query no longer speaks for this one.
     setRetrying(false)
+    setCheckingIdentities(active.isCheckingIdentities?.() ?? false)
     // When more of the search lands (a list still loading, a username check an early answer went
     // out without), ask again for this same query in place: the rows stay up until the fuller
     // answer replaces them. One listener per query, dropped when the query changes or the picker
@@ -98,11 +102,15 @@ export function useMemberSearch(
     let issued = false
     const stopWatching =
       active.onUpdate?.((refresh, confirmed) => {
-        if (current && confirmed) {
+        if (!current) {
+          return
+        }
+        setCheckingIdentities(active.isCheckingIdentities?.() ?? false)
+        if (confirmed) {
           setIdentities((known) => learnIdentities(known, confirmed))
         }
         // A held in-place retry owns this query's next answer; it waits for the whole of it.
-        if (current && issued && refresh && retryAsked.current !== mine) {
+        if (issued && refresh && retryAsked.current !== mine) {
           void active.search(query.trim()).then(show)
         }
       }) ?? (() => {})
@@ -122,35 +130,33 @@ export function useMemberSearch(
       clearTimeout(announce)
       stopWatching()
     }
-  }, [active, errorMessage, kind, query])
+  }, [active, kind, query])
+  // Keep the answered part of the current search, including when no rows could be shown.
+  const retryInPlace = (): void => {
+    const asked = generation.current
+    if (retryAsked.current === asked) {
+      return
+    }
+    retryAsked.current = asked
+    setRetrying(true)
+    active.retry?.()
+    void active.search(query.trim()).then((result) => {
+      if (retryAsked.current === asked) {
+        retryAsked.current = null
+      }
+      if (generation.current === asked) {
+        setSearch((previous) => applySearchResult(previous, result))
+        setRetrying(false)
+      }
+    })
+  }
   return {
     search,
-    retry: () => setSession((count) => count + 1),
+    retry: active.retry ? retryInPlace : () => setAttempt((count) => count + 1),
+    retryInPlace,
     retrying,
     identities,
-    // Try again for a part that failed: the same query asked once more, in place (no
-    // "Searching…"), so the rows, picks and count stay until its answer replaces the rows.
-    retryInPlace: () => {
-      const asked = generation.current
-      if (retryAsked.current === asked) {
-        return
-      }
-      retryAsked.current = asked
-      setRetrying(true)
-      active.retry?.()
-      void active.search(query.trim()).then((result) => {
-        if (retryAsked.current === asked) {
-          retryAsked.current = null
-        }
-        if (generation.current === asked) {
-          setSearch(
-            result.ok
-              ? { status: 'ready', found: result.value }
-              : { status: 'failed', error: errorMessage(result.error) }
-          )
-          setRetrying(false)
-        }
-      })
-    }
+    checkingIdentities,
+    isCheckingIdentities
   }
 }

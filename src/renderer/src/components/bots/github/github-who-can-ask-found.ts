@@ -51,14 +51,14 @@ export const STALE_LIST_MS = 60 * 60_000
 export function supersededGitHubPeople(
   people: readonly GitHubPerson[],
   live: ConnectorGitHubUsersResponse['members']
-): string[] {
+): { id: string; name: string }[] {
   const liveIds = new Map(live.map(({ id, name }) => [name.toLowerCase(), id]))
   return people
     .filter(({ login, id }) => {
       const current = liveIds.get(login.toLowerCase())
       return current !== undefined && current !== id
     })
-    .map(({ id }) => id)
+    .map(({ id, login }) => ({ id, name: login }))
 }
 
 /** When a list was read: the time today, the date otherwise (date and time wouldn't fit one line). */
@@ -151,7 +151,9 @@ export function gitHubWhoCanAskAnswer(
   // The live lookup is current: a listed person whose login it now gives to someone else is a
   // stale identity (they renamed, another took the name), so the list's entry for them leaves.
   const live = exact?.ok ? exact.value.members : []
-  const superseded = new Set(read && live.length ? supersededGitHubPeople(read.people, live) : [])
+  const superseded = new Set(
+    read && live.length ? supersededGitHubPeople(read.people, live).map(({ id }) => id) : []
+  )
   const ranked = read
     ? rankGitHubPeople(
         read.people.filter((person) => !superseded.has(person.id)),
@@ -165,12 +167,12 @@ export function gitHubWhoCanAskAnswer(
   const whole = read !== null && read.complete && !read.omitted && !cut && !historical
   const uncheckedTag =
     roster.status === 'loading'
-      ? t('bots.github.whoCanAsk.reposLoading', 'Repos still loading')
+      ? t('bots.github.whoCanAsk.reposLoading', 'People list still loading')
       : historical
         ? t('bots.github.whoCanAsk.notInEarlierList', 'Not in the earlier list')
         : read
           ? t('bots.github.whoCanAsk.notAllLoaded', 'Not all people loaded')
-          : t('bots.github.whoCanAsk.reposNotChecked', 'Repos not checked')
+          : t('bots.github.whoCanAsk.reposNotChecked', 'People list unavailable')
   const members: BotWhoCanAskFound['members'] = shown.map((person) => ({
     id: person.id,
     name: person.login,
@@ -199,21 +201,24 @@ export function gitHubWhoCanAskAnswer(
   const remote = producer === 'remote'
   const rosterLine =
     roster.status === 'loading'
-      ? t('bots.github.whoCanAsk.loading', 'Still loading your repos.')
+      ? t('bots.github.whoCanAsk.loading', 'People list still loading.')
       : roster.status === 'unavailable' && !roster.spent
         ? // Nothing readable was asked for: no gh ran and nothing was used up.
-          t('bots.github.whoCanAsk.noReadable', 'No readable repos to search.')
+          t('bots.github.whoCanAsk.noReadable', 'No readable sources for the people list.')
         : roster.status === 'unavailable'
           ? remote
             ? t(
                 'bots.github.whoCanAsk.unavailableRemote',
-                'Couldn’t read repos. Check the bot’s computer.'
+                'Couldn’t read the people list. Check the host.'
               )
-            : t('bots.github.whoCanAsk.unavailable', 'Couldn’t read repos. Check gh, restart Orca.')
+            : t(
+                'bots.github.whoCanAsk.unavailable',
+                'Couldn’t read people. Check gh, restart Orca.'
+              )
           : roster.status === 'unreached'
             ? t('bots.github.whoCanAsk.unreached', 'Couldn’t get the people list.')
             : roster.status === 'none'
-              ? t('bots.github.whoCanAsk.localNone', 'No repos connected.')
+              ? t('bots.github.whoCanAsk.localNone', 'No connected repos or orgs.')
               : null
   // The unavailable line already explains the missing list, and a third sentence would wrap.
   const exactOnly =
@@ -252,7 +257,7 @@ export function gitHubWhoCanAskAnswer(
         : t('bots.github.whoCanAsk.listFrom', 'People list from {{time}}.', { time })
       : null,
     read?.omitted && !historical
-      ? t('bots.github.whoCanAsk.omitted', 'Not every connected repo was read.')
+      ? t('bots.github.whoCanAsk.omitted', 'Some connected sources were skipped.')
       : null,
     read && !historical ? cutLine(read.cut, t) : null,
     read && !read.complete && !historical
@@ -267,7 +272,7 @@ export function gitHubWhoCanAskAnswer(
     !(linkedLogins ?? [ownerLogin]).some(
       (login) => login.toLowerCase() === searchedAs.toLowerCase()
     )
-      ? t('bots.github.whoCanAsk.searchedAs', 'Repos read as @{{login}}.', {
+      ? t('bots.github.whoCanAsk.searchedAs', 'People list read as @{{login}}.', {
           login: searchedAs
         })
       : null
@@ -293,9 +298,9 @@ export function gitHubWhoCanAskAnswer(
   const empty =
     roster.status === 'loading'
       ? {
-          title: t('bots.github.whoCanAsk.loadingTitle', 'Still loading your repos'),
+          title: t('bots.github.whoCanAsk.loadingTitle', 'Still loading people'),
           detail: exactSearched
-            ? t('bots.github.whoCanAsk.noExactYet', 'No exact username match. Repos still coming.')
+            ? t('bots.github.whoCanAsk.noExactYet', 'No exact username match. List still loading.')
             : t('bots.github.whoCanAsk.resultsComing', 'Results appear when they load.')
         }
       : !read && !exactSearched
