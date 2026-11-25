@@ -14,6 +14,10 @@ import { waitForActiveTerminalManager, waitForPaneCount } from './terminal-pane-
 import { dragPaneOutToTabStrip } from '../../layout/publication/terminal-layout-journeys'
 import { getTerminalContentForPtyId } from '../lifecycle/terminal-pty-readiness'
 import {
+  enableNativeChatSetting,
+  toggleTerminalTabToChatView
+} from '../../agents/session-fixtures/native-chat-transcript-fixture'
+import {
   ensureTerminalVisible,
   waitForActiveWorktree,
   waitForSessionReady
@@ -34,6 +38,10 @@ async function waitForTerminalOutputForPtyId(
 }
 
 const SPLIT_RIGHT_CHORD = process.platform === 'darwin' ? 'Meta+d' : 'Control+Shift+d'
+const SEARCH_EVERYTHING_CHORD = process.platform === 'darwin' ? 'Meta+k' : 'Control+k'
+// The move has no default chord; a user binds one. F9 keeps clear of Alt's character remapping.
+const MOVE_PANE_BINDING = 'Mod+Shift+F9'
+const MOVE_PANE_CHORD = process.platform === 'darwin' ? 'Meta+Shift+F9' : 'Control+Shift+F9'
 
 type TabState = { worktreeId: string; activeTabId: string | null; order: string[] }
 
@@ -221,7 +229,8 @@ test.describe('Move a terminal pane to a new tab', () => {
     const moved = await splitWithMarker(orcaPage)
     const before = await readTabs(orcaPage)
 
-    await orcaPage.evaluate(() => window.__store!.getState().openModal('worktree-palette'))
+    await focusActiveTerminalInput(orcaPage)
+    await orcaPage.keyboard.press(SEARCH_EVERYTHING_CHORD)
     const palette = orcaPage.getByRole('dialog', { name: 'Jump to...' })
     await expect(palette).toBeVisible()
     await palette.locator('[cmdk-input]').fill('Move Pane to New Tab')
@@ -230,5 +239,74 @@ test.describe('Move a terminal pane to a new tab', () => {
     await expect(palette).toHaveCount(0)
 
     await expectMovedToOwnTab(orcaPage, moved, before.activeTabId!)
+  })
+
+  test('a shortcut the user binds moves the active pane, and does nothing unbound or alone', async ({
+    orcaPage
+  }) => {
+    const moved = await splitWithMarker(orcaPage)
+    const before = await readTabs(orcaPage)
+
+    // Unbound by default: the chord moves nothing.
+    await focusActiveTerminalInput(orcaPage)
+    await orcaPage.keyboard.press(MOVE_PANE_CHORD)
+    await orcaPage.waitForTimeout(500)
+    expect(await readTabs(orcaPage)).toEqual(before)
+
+    await orcaPage.evaluate(
+      (binding) =>
+        window.__store!.getState().setKeybindingOverride('terminal.movePaneToNewTab', [binding]),
+      MOVE_PANE_BINDING
+    )
+    try {
+      await focusActiveTerminalInput(orcaPage)
+      await orcaPage.keyboard.press(MOVE_PANE_CHORD)
+      const newTabId = await expectMovedToOwnTab(orcaPage, moved, before.activeTabId!)
+
+      // The moved pane is alone in its tab now: the same chord leaves it there.
+      await orcaPage.keyboard.press(MOVE_PANE_CHORD)
+      await orcaPage.waitForTimeout(500)
+      expect((await readLeafHome(orcaPage, moved.leafId))?.tabId).toBe(newTabId)
+    } finally {
+      await orcaPage.evaluate(() =>
+        window.__store!.getState().resetKeybindingOverride('terminal.movePaneToNewTab')
+      )
+    }
+  })
+
+  test('the chat view pane menu moves a pane into a new tab that opens in chat view', async ({
+    orcaPage
+  }) => {
+    await enableNativeChatSetting(orcaPage)
+    const moved = await splitWithMarker(orcaPage)
+    const before = await readTabs(orcaPage)
+    await toggleTerminalTabToChatView(orcaPage, {
+      tabId: before.activeTabId!,
+      worktreeId: before.worktreeId
+    })
+    const chatLeafId = await orcaPage.evaluate(
+      (tabId) => window.__store!.getState().terminalLayoutsByTabId[tabId]?.chatLeafId ?? null,
+      before.activeTabId!
+    )
+    expect(chatLeafId).toBe(moved.leafId)
+
+    await orcaPage.locator(`.pane[data-leaf-id="${moved.leafId}"]`).click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Move to New Tab' }).click()
+
+    await expect
+      .poll(async () => (await readLeafHome(orcaPage, moved.leafId))?.tabId ?? null)
+      .not.toBe(before.activeTabId)
+    const home = await readLeafHome(orcaPage, moved.leafId)
+    expect(home).toEqual({ tabId: expect.any(String), ptyId: moved.ptyId, leafCount: 1 })
+    expect(
+      await orcaPage.evaluate(
+        ({ tabId, worktreeId }) =>
+          window
+            .__store!.getState()
+            .unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.entityId === tabId)?.viewMode,
+        { tabId: home!.tabId, worktreeId: before.worktreeId }
+      )
+    ).toBe('chat')
+    await waitForTerminalOutputForPtyId(orcaPage, moved.ptyId, moved.marker, 10_000)
   })
 })
