@@ -42,7 +42,7 @@ export function useBotAutomationNotices({
   snapshot,
   controller,
   offline,
-  unsupported,
+  oldHost,
   runNow,
   running,
   runningAction,
@@ -58,7 +58,8 @@ export function useBotAutomationNotices({
   snapshot: AutomationDetailsSnapshot
   controller: AutomationDetailsController
   offline: boolean
-  unsupported: boolean
+  /** The host is too old: to read or act on this automation, or only to edit its settings here. */
+  oldHost: 'read' | 'edit' | null
   runNow: RunNowAttempt
   running: boolean
   runningAction: { label: string; onOpen: () => void } | null
@@ -131,16 +132,26 @@ export function useBotAutomationNotices({
       })
     })
   }
-  if (unsupported) {
+  if (oldHost) {
     list.push({
       key: 'old-host',
       id: ids.oldHost,
       tone: 'amber',
       cause: 'host',
+      // Edit alone being unavailable never hides what the automation is doing (Running, a failure).
+      ...(oldHost === 'edit' ? { minor: true as const } : {}),
       content: (
         <>
           <span className="font-medium">
-            {t('bots.automationPanel.updateOrca', 'Update Orca on {{host}}', { host: hostName })}
+            {oldHost === 'edit'
+              ? t(
+                  'bots.automationPanel.updateOrcaToEdit',
+                  'Update Orca on {{host}} to edit here.',
+                  {
+                    host: hostName
+                  }
+                )
+              : t('bots.automationPanel.updateOrca', 'Update Orca on {{host}}', { host: hostName })}
           </span>
           <Button
             type="button"
@@ -239,7 +250,7 @@ export function useBotAutomationNotices({
     })
   }
   // A read problem the host's own notices don't already explain.
-  if (definition.error && !offline && !unsupported && continuity === 'same') {
+  if (definition.error && !offline && oldHost !== 'read' && continuity === 'same') {
     list.push({
       key: 'definition-read',
       tone: automation ? 'info' : 'red',

@@ -101,6 +101,9 @@ function setup(scenario: Scenario): () => void {
           }
           return { ok: true, result: status(scenario === 'pending') }
         }
+        if (method === 'bots.list') {
+          return { ok: true, result: { bots: [bot] } }
+        }
         if (method === 'automation.show') {
           return { ok: true, result: { automation: digest } }
         }

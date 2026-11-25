@@ -66,11 +66,12 @@ function run(id: string, createdAt: number, status: AutomationRun['status']): Au
 }
 
 const host = vi.hoisted(() => ({
+  // Typed by a return, so tests can set any answer.
+  guard: ((): 'unknown' | 'supported' | 'unsupported' => 'unknown')(),
   show: vi.fn(),
   readRun: vi.fn(),
   listRunsPage: vi.fn(),
-  update: vi.fn(),
-  guard: 'unknown' as 'unknown' | 'supported' | 'unsupported'
+  update: vi.fn()
 }))
 
 vi.mock('@/runtime/rpc/compatibility/use-runtime-environment-capability', () => ({
