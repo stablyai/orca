@@ -366,13 +366,21 @@ export class RelayedProviderOutput {
         if (force && keepFrom === null) {
           this.releasedThrough = Math.max(this.releasedThrough, target)
         }
-        // The daemon let kept lines go at its file cap: they are given up, as a cut it records.
+        // The daemon let kept lines go at a cap: they are given up, as a cut it records.
         const ackedThrough = jsonProperty(reply, 'ackedThrough')
-        if (typeof ackedThrough === 'number' && keepFrom !== null && ackedThrough >= keepFrom) {
+        const truncated = jsonProperty(reply, 'truncatedThrough')
+        const released = Math.max(
+          typeof ackedThrough === 'number' && keepFrom !== null && ackedThrough >= keepFrom
+            ? ackedThrough
+            : 0,
+          typeof truncated === 'number' ? truncated : 0
+        )
+        if (released > this.releasedThrough) {
           // keptFrom stays: the daemon still keeps, so the next ack without a floor must reach it.
-          this.releasedThrough = Math.max(this.releasedThrough, ackedThrough)
+          this.releasedThrough = released
           // The next ack records it as a cut naming exactly what it split, maybe nothing.
           this.pendingCut = true
+          this.scheduleAck()
         }
       } catch {
         // Unacked output is replayed on the next attach; a later ack covers it.

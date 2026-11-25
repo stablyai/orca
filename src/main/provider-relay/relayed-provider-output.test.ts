@@ -350,4 +350,28 @@ describe('relayed provider output', () => {
     await output.flush()
     expect(sent).toEqual(['2 keep 1', '2 keep undefined cut []'])
   })
+
+  it('records a release the daemon made on an append, learned from a plain ack, as a cut', async () => {
+    const sent: string[] = []
+    let truncated = 0
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      durable: async () => true,
+      ackFloor: { observe: () => {}, floor: () => null, tookCut: () => false, cutKeys: () => [] },
+      ack: async (seq, keepFrom, flags) => {
+        sent.push(
+          `${seq} keep ${keepFrom}${flags?.cut ? ` cut ${JSON.stringify(flags.cutKeys)}` : ''}`
+        )
+        return { ackedThrough: seq, truncatedThrough: truncated }
+      }
+    })
+    output.restartAt(0)
+    output.line('relayData', 1, 'line-1')
+    // The spool's memory cap let lines go through 1 as line 2 arrived, after the call ended.
+    truncated = 1
+    output.line('relayData', 2, 'line-2')
+    await output.settle()
+    await output.flush()
+    expect(sent).toEqual(['2 keep undefined', '2 keep undefined cut []'])
+  })
 })

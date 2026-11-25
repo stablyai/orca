@@ -51,6 +51,8 @@ export type ProviderRelayRequest =
    * from a later line), so a later attach reports `truncatedThrough`. `held` marks the kept lines as
    * a replay the client holds unsaved: past the memory cap they go to the file. The reply's
    * `ackedThrough` is how far the daemon released, which passes `keepFrom` after a file-cap release.
+   * `truncatedThrough` is how far the spool let kept lines go on its own (at its memory or file cap,
+   * on an ack or an append), so the client records each such release as a cut. Older daemons omit it.
    * `cutKeys` (with `cut`, opaque to the daemon) name the items the cut split; each cut ack replaces
    * them, and a later attach reports them next to `truncatedThrough`. Older daemons ignore them.
    */

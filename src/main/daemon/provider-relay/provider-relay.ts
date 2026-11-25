@@ -233,9 +233,11 @@ export class ProviderRelay {
   }
 
   /** How far the spool released; past `keepFrom` once its file cap let a held replay go. */
-  ack(seq: number, keepFrom?: number, options: ProviderRelayAckOptions = {}): number {
+  /** `truncatedThrough`: how far the spool let kept lines go on its own, at either cap. */
+  ack(seq: number, keepFrom?: number, options: ProviderRelayAckOptions = {}) {
     this.cut.record(seq, keepFrom, options)
-    return this.spool.ack(seq, keepFrom, options.held === true)
+    const ackedThrough = this.spool.ack(seq, keepFrom, options.held === true)
+    return { ackedThrough, truncatedThrough: this.spool.truncatedThrough }
   }
 
   stopIdle(): Promise<unknown> {
