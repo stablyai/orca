@@ -86,6 +86,8 @@ const markersFor = new WeakMap<RelayedProviderChild, ProviderRelayWorkMarkers>()
 const carriedFor = new WeakMap<RelayedProviderChild, ProviderRelayCarriedWork>()
 /** Attached children that kept running from before this app started. */
 const reattachedChildren = new WeakSet<RelayedProviderChild>()
+/** Chats whose reattached agent went back to the daemon unopened: its end here ends nothing. */
+const handedBack = new Set<string>()
 let quitting = false
 let durableFor: ((chatKey: string, force: boolean) => Promise<boolean> | undefined) | null = null
 
@@ -202,6 +204,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
       forgetKeptProviderRelay(launch.chatKey, relay)
       reattachedChildren.add(child)
       noteProviderRelayReattachedFromLastRun(launch.chatKey)
+      handedBack.delete(launch.chatKey)
       carriedFor.get(child)?.take(child.attachResult?.openWork)
       track(launch.chatKey, child, launch.markers)
       const keep = async (): Promise<void> => {
@@ -213,6 +216,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
           attached.delete(launch.chatKey)
         }
         rememberKeptProviderRelay(launch.chatKey, relay)
+        handedBack.add(launch.chatKey)
       }
       return { managed: relayedManagedProcess(child), child, reattached: true, keep }
     }
@@ -310,6 +314,11 @@ export function providerRelayDetachesSettled(shutdown: Promise<unknown>): Promis
     QUIT_DETACH_WAIT_MS,
     undefined
   )
+}
+
+/** The chat's agent was handed back to the daemon still running: its local end settles no work. */
+export function providerRelayHandedBack(chatKey: string): boolean {
+  return handedBack.has(chatKey)
 }
 
 /** The chat's attached agent kept running from before this app started (same writer, same turn). */

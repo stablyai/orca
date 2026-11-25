@@ -7,6 +7,10 @@ import { codexSubagentPathLabel } from '../../../../shared/agent-hook-listener/p
 export const MAX_SNAPSHOT_THREADS = 65
 /** Idle children the app-server still holds, most recently active first, read beside the rest. */
 const MAX_IDLE_LOADED_CHILDREN = 16
+/** Loaded threads looked at, in pages; every one is checked so a running child is never missed. */
+const MAX_LOADED_THREADS = 512
+/** Metadata reads in flight at once, so a large list never floods the agent. */
+const LOADED_READ_CONCURRENCY = 16
 /** A short bound for reads that only add to the snapshot (and for the chat thread's retry). */
 export const SOFT_READ_TIMEOUT_MS = 5_000
 
@@ -54,42 +58,61 @@ export async function loadedThreadIds(
     const page = readRecord(
       await connection.request(
         'thread/loaded/list',
-        { cursor, limit: MAX_SNAPSHOT_THREADS },
+        { cursor, limit: MAX_LOADED_THREADS - ids.length },
         { timeoutMs }
       )
     )
     ids.push(...(Array.isArray(page.data) ? page.data.filter((id) => typeof id === 'string') : []))
     cursor = typeof page.nextCursor === 'string' ? page.nextCursor : null
-  } while (cursor !== null && ids.length < MAX_SNAPSHOT_THREADS)
+  } while (cursor !== null && ids.length < MAX_LOADED_THREADS)
   return ids
+}
+
+/** Runs `read` over `items` with at most `limit` in flight, keeping their order. */
+async function readBounded<T, R>(
+  items: readonly T[],
+  limit: number,
+  read: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = []
+  let next = 0
+  const worker = async (): Promise<void> => {
+    for (let at = next++; at < items.length; at = next++) {
+      results[at] = await read(items[at]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
 }
 
 /**
  * Loaded threads nothing else named: only spawned agents count, running ones first, then the most
- * recently active idle ones (a child that ended while no app was attached is among them).
+ * recently active idle ones (a child that ended while no app was attached is among them). One
+ * whose metadata can't be read is still followed, after the running ones, by its turns alone.
  */
 export async function loadedChildren(input: {
   connection: Connection
   ids: readonly string[]
   room: number
   onError: (threadId: string, error: unknown) => void
-}): Promise<{ threadId: string; source: ChildSource }[]> {
-  const read = await Promise.all(
-    input.ids.slice(0, MAX_SNAPSHOT_THREADS).map((threadId) =>
-      readSource(input.connection, threadId, SOFT_READ_TIMEOUT_MS).then(
-        (source) => ({ threadId, source }),
-        (error: unknown) => {
-          input.onError(threadId, error)
-          return null
-        }
-      )
+}): Promise<{ threadId: string; source: ChildSource | null }[]> {
+  const read = await readBounded(input.ids, LOADED_READ_CONCURRENCY, (threadId) =>
+    readSource(input.connection, threadId, SOFT_READ_TIMEOUT_MS).then(
+      (source) => ({ threadId, source }),
+      (error: unknown) => {
+        input.onError(threadId, error)
+        return { threadId, source: null }
+      }
     )
   )
-  const children = read.flatMap((child) => (child?.source.spawned ? [child] : []))
-  const active = children.filter(({ source }) => source.active)
-  const idle = children
+  const known = read.flatMap((child) =>
+    child.source?.spawned ? [{ ...child, source: child.source }] : []
+  )
+  const unknown = read.filter((child) => child.source === null)
+  const active = known.filter(({ source }) => source.active)
+  const idle = known
     .filter(({ source }) => !source.active)
     .sort((a, b) => b.source.updatedAt - a.source.updatedAt)
     .slice(0, MAX_IDLE_LOADED_CHILDREN)
-  return [...active, ...idle].slice(0, Math.max(0, input.room))
+  return [...active, ...unknown, ...idle].slice(0, Math.max(0, input.room))
 }

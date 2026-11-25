@@ -26,6 +26,9 @@ export type KeptCodexTurn = {
   turnId: string
   status: string | null
   items: CodexThreadItem[]
+  /** Codex's own times (seconds), when it reports them. */
+  startedAt?: number | null
+  completedAt?: number | null
   /** Its commands still running, seeded into the translator under these rows. */
   running?: { itemId: string; identity: AgentJournalItemIdentity }[]
 }
@@ -123,11 +126,16 @@ export function restateKeptCodexBackgroundWork(
   spawns.forEach(announce)
   const restated = new Set<string>()
   const endedHere = new Set(ended.map(([threadId, itemId]) => `${threadId}\u0000${itemId}`))
-  for (const { threadId, turnId, status, items } of turns) {
+  for (const { threadId, turnId, status, items, completedAt } of turns) {
     const turn = { id: turnId, status: status ?? 'inProgress' }
-    // A child that finished while no app was attached is seen working first, so its end settles
-    // its row and card as a live end does.
-    if (status === 'inProgress' || threadId !== tracker.primaryThreadId) {
+    // A child that finished during the chat's latest turn (while no app was attached, say) is seen
+    // working first, so its end settles its row and card as a live end does. One that finished
+    // earlier was retired with the turn it ran in and is left so.
+    if (
+      status === 'inProgress' ||
+      (threadId !== tracker.primaryThreadId &&
+        endedLately(turns, completedAt, tracker.primaryThreadId))
+    ) {
       const started = { id: turnId, status: 'inProgress' }
       tracker.observe({ method: 'turn/started', threadId, params: { turn: started } })
     }
@@ -159,6 +167,16 @@ export function restateKeptCodexBackgroundWork(
     }
   }
   tracker.publishChildWork()
+}
+
+/** Ended at or after the chat's latest turn started; unknown times count as late. */
+function endedLately(
+  turns: readonly KeptCodexTurn[],
+  completedAt: number | null | undefined,
+  primaryThreadId: string
+): boolean {
+  const since = turns.find((turn) => turn.threadId === primaryThreadId)?.startedAt
+  return typeof completedAt !== 'number' || typeof since !== 'number' || completedAt >= since
 }
 
 function openHere(open: readonly (readonly string[])[], threadId: string, itemId: string): boolean {

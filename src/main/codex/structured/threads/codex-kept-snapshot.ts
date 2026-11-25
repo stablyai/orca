@@ -94,7 +94,18 @@ async function readKeptThread(input: {
   const items = (Array.isArray(turn.items) ? turn.items : []).flatMap(
     (value) => readCodexThreadItem(value) ?? []
   )
-  return { turn: { threadId, turnId: turn.id, status, items }, source }
+  const at = (field: string) => (typeof turn[field] === 'number' ? turn[field] : null)
+  return {
+    turn: {
+      threadId,
+      turnId: turn.id,
+      status,
+      items,
+      startedAt: at('startedAt'),
+      completedAt: at('completedAt')
+    },
+    source
+  }
 }
 
 /** A child as the tracker learns of it from a spawn, so Stop reaches it and its end settles it. */
@@ -168,8 +179,12 @@ export async function readKeptCodexSnapshot(input: {
         return []
       })
     : Promise.resolve([])
-  const readWave = async (wave: { threadId: string; source?: ChildSource }[]) => {
-    const fresh = wave.filter(({ threadId }) => !seen.has(threadId))
+  const readWave = async (wave: { threadId: string; source?: ChildSource | null }[]) => {
+    // Once per thread: the chat's own can be named twice (directly and by carried root work).
+    const fresh = wave.filter(
+      ({ threadId }, at) =>
+        !seen.has(threadId) && wave.findIndex((other) => other.threadId === threadId) === at
+    )
     const room = MAX_SNAPSHOT_THREADS - seen.size
     if (fresh.length > room) {
       console.warn(`[codex] a reattach follows ${room} more threads; ${fresh.length - room} left`)
@@ -183,7 +198,7 @@ export async function readKeptCodexSnapshot(input: {
           translator: input.translator,
           threadId,
           primary: threadId === input.threadId,
-          ...(source ? { source } : {}),
+          ...(source !== undefined ? { source } : {}),
           timeoutMs: input.timeoutMs,
           onError: input.onError
         })

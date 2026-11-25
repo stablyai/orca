@@ -402,6 +402,7 @@ describe('codex rows across a reattach', () => {
       main: {
         id: 'turn-2',
         status: 'completed',
+        startedAt: 100,
         items: [
           { type: 'userMessage', id: 'u2' },
           { type: 'agentMessage', id: 'm2' }
@@ -418,19 +419,23 @@ describe('codex rows across a reattach', () => {
       },
       grand: { id: 'turn-g', status: 'inProgress', items: [] },
       // Finished while no app was attached.
-      done: { id: 'turn-d', status: 'completed', items: [] }
+      done: { id: 'turn-d', status: 'completed', items: [], completedAt: 150 },
+      // Finished before the chat's latest turn began: retired then, and left so.
+      old: { id: 'turn-o', status: 'completed', items: [], completedAt: 50 },
+      // Running, but its metadata read fails: still followed by its turns.
+      lost: { id: 'turn-l', status: 'inProgress', items: [] }
     }
     const request = async (method: string, params?: unknown) => {
       const threadId = String(readRecord(params).threadId)
       // Only the app-server's loaded threads name the child: no carried work does.
       if (method === 'thread/loaded/list') {
-        return { data: ['main', 'child', 'grand', 'done', 'review'] }
+        return { data: ['main', 'child', 'grand', 'done', 'old', 'review', 'lost'] }
       }
       // Loaded, but not a spawned agent: never one of the chat's children.
       if (method === 'thread/read' && threadId === 'review') {
         return { thread: { id: threadId, source: { subAgent: 'review' } } }
       }
-      if (method === 'thread/read' && threadId === 'grand') {
+      if (method === 'thread/read' && (threadId === 'grand' || threadId === 'lost')) {
         throw new Error('timed out')
       }
       if (method === 'thread/read') {
@@ -466,6 +471,15 @@ describe('codex rows across a reattach', () => {
     })
     restateKeptCodexBackgroundWork(tracker, turns, [], [], spawns)
     expect(turns.map(({ threadId }) => threadId)).not.toContain('review')
+    expect(tracker.subagentStopTargets(['lost']).turns).toEqual([
+      { threadId: 'lost', turnId: 'turn-l' }
+    ])
+    expect(evidence).not.toContainEqual(
+      expect.objectContaining({
+        type: 'live',
+        child: expect.objectContaining({ handle: expect.objectContaining({ id: 'old' }) })
+      })
+    )
     // A running child keeps the name it was spawned under.
     expect(JSON.stringify(tracker.state)).toContain('child_agent')
     // A child that finished while closed is settled, not left working.
