@@ -1,0 +1,206 @@
+// `orca mcp connect`'s stdio side: the agent starts it as an MCP server and it becomes the host's
+// server (its HTTP address, through Orca's relay when Orca holds the sign-in, or its command). A
+// server that's off for the session answers as one with no tools and stays up, so the agent never
+// shows it failing. Each message is forwarded as it arrives: the agent's stdio may cross WSL interop.
+import type { McpServerConnection } from '../../shared/mcp-servers/mcp-servers'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Server } from '@modelcontextprotocol/sdk/server/index.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { ListToolsRequestSchema, type JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js'
+import { spawnProcess } from '@orca/process-host'
+
+type Connect = () => Promise<McpServerConnection>
+type HttpConnection = Extract<McpServerConnection, { url: string }>
+
+const stdinEnded = (): Promise<void> =>
+  new Promise((resolve) => {
+    process.stdin.once('end', resolve)
+    process.stdin.once('close', resolve)
+  })
+
+/** Bridges until the agent closes stdin (or the command ends); resolves to the exit code. */
+export async function bridgeMcpServer(connect: Connect, version: string): Promise<number> {
+  const connection = await connect()
+  if (!connection.on) {
+    await serveNoTools(version)
+    return 0
+  }
+  if ('command' in connection) {
+    return await runCommand(connection)
+  }
+  const bridge = new HttpBridge(new StdioServerTransport(), connection, connect)
+  await bridge.run()
+  return 0
+}
+
+async function serveNoTools(version: string): Promise<void> {
+  const server = new Server({ name: 'orca', version }, { capabilities: { tools: {} } })
+  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [] }))
+  const ended = stdinEnded()
+  await server.connect(new StdioServerTransport())
+  await ended
+  await server.close()
+}
+
+/** The command takes the agent's stdio itself; the bridge only waits for it and passes signals on. */
+async function runCommand(
+  connection: Extract<McpServerConnection, { command: string }>
+): Promise<number> {
+  const child = spawnProcess({
+    program: connection.command,
+    args: connection.args,
+    cwd: process.cwd(),
+    env: { ...process.env, ...connection.env },
+    stdio: 'inherit'
+  })
+  const forward = (signal: NodeJS.Signals) => () => child.kill(signal)
+  process.on('SIGINT', forward('SIGINT'))
+  process.on('SIGTERM', forward('SIGTERM'))
+  return await new Promise<number>((resolve) => {
+    child.once('error', (error) => {
+      process.stderr.write(
+        `orca mcp connect: couldn't start ${connection.command}: ${error.message}\n`
+      )
+      resolve(1)
+    })
+    child.once('exit', (code) => resolve(code ?? 1))
+  })
+}
+
+const isRequest = (
+  message: JSONRPCMessage
+): message is JSONRPCMessage & {
+  id: string | number
+  method: string
+} => 'method' in message && 'id' in message
+const isInitialize = (message: JSONRPCMessage): boolean =>
+  isRequest(message) && message.method === 'initialize'
+const isInitialized = (message: JSONRPCMessage): boolean =>
+  'method' in message && !('id' in message) && message.method === 'notifications/initialized'
+
+/**
+ * stdio to a Streamable HTTP server. When a send fails (Orca restarted, so its relay moved and its
+ * token changed, or the server dropped the session), it asks the host again, replays the agent's
+ * handshake on a fresh session and sends the message once more.
+ */
+class HttpBridge {
+  private upstream: StreamableHTTPClientTransport | null = null
+  private generation = 0
+  private reopening: Promise<void> | null = null
+  private handshake: Promise<void> = Promise.resolve()
+  private initialize: (JSONRPCMessage & { id: string | number }) | null = null
+  private initialized = false
+  private readonly replies = new Map<string | number, (message: JSONRPCMessage) => void>()
+
+  constructor(
+    private readonly stdio: StdioServerTransport,
+    private readonly first: HttpConnection,
+    private readonly connect: Connect
+  ) {}
+
+  async run(): Promise<void> {
+    await this.open(this.first)
+    const ended = stdinEnded()
+    this.stdio.onmessage = (message) => {
+      // The handshake goes in order; everything after it goes as it comes, so a long call never
+      // holds up a cancellation.
+      if (isInitialize(message) || isInitialized(message)) {
+        this.handshake = this.handshake.then(() => this.forward(message))
+      } else {
+        void this.handshake.then(() => this.forward(message))
+      }
+    }
+    await this.stdio.start()
+    await ended
+    const upstream = this.upstream
+    await upstream?.terminateSession().catch(() => {})
+    await upstream?.close().catch(() => {})
+    await this.stdio.close()
+  }
+
+  private async open(connection: HttpConnection): Promise<void> {
+    const upstream = new StreamableHTTPClientTransport(new URL(connection.url), {
+      requestInit: { headers: connection.headers }
+    })
+    upstream.onmessage = (message) => this.fromServer(upstream, message)
+    // A dropped notification stream reconnects by itself; a failed send is handled where it's made.
+    upstream.onerror = () => {}
+    await upstream.start()
+    const previous = this.upstream
+    this.upstream = upstream
+    this.generation += 1
+    await previous?.close().catch(() => {})
+  }
+
+  private fromServer(upstream: StreamableHTTPClientTransport, message: JSONRPCMessage): void {
+    const id = 'id' in message ? message.id : undefined
+    const reply = id !== undefined && !('method' in message) ? this.replies.get(id) : undefined
+    if (reply) {
+      this.replies.delete(id!)
+      reply(message)
+      return
+    }
+    const version =
+      'result' in message && id === this.initialize?.id ? message.result.protocolVersion : undefined
+    if (typeof version === 'string') {
+      upstream.setProtocolVersion(version)
+    }
+    void this.stdio.send(message).catch(() => {})
+  }
+
+  private async forward(message: JSONRPCMessage): Promise<void> {
+    if (isInitialize(message) && isRequest(message)) {
+      this.initialize = message
+    }
+    if (isInitialized(message)) {
+      this.initialized = true
+    }
+    const sentOn = this.generation
+    try {
+      await this.upstream!.send(message)
+      return
+    } catch {
+      // Retried below on a fresh session.
+    }
+    try {
+      if (this.generation === sentOn) {
+        this.reopening ??= this.reopen(message).finally(() => {
+          this.reopening = null
+        })
+      }
+      await this.reopening
+      await this.upstream!.send(message)
+    } catch (error) {
+      if (isRequest(message)) {
+        const reason = error instanceof Error ? error.message : String(error)
+        void this.stdio
+          .send({ jsonrpc: '2.0', id: message.id, error: { code: -32000, message: reason } })
+          .catch(() => {})
+      }
+    }
+  }
+
+  private async reopen(failed: JSONRPCMessage): Promise<void> {
+    const connection = await this.connect()
+    if (!connection.on || !('url' in connection)) {
+      throw new Error('This server is no longer on for this session.')
+    }
+    await this.open(connection)
+    const handshake = this.initialize
+    if (!handshake || failed === handshake) {
+      return
+    }
+    // The agent's own handshake, again on the new session; its answer stays here.
+    const id = `orca-reconnect-${this.generation}`
+    const answered = new Promise<JSONRPCMessage>((resolve) => this.replies.set(id, resolve))
+    await this.upstream!.send({ ...handshake, id })
+    const answer = await answered
+    const version = 'result' in answer ? answer.result.protocolVersion : undefined
+    if (typeof version === 'string') {
+      this.upstream!.setProtocolVersion(version)
+    }
+    if (this.initialized) {
+      await this.upstream!.send({ jsonrpc: '2.0', method: 'notifications/initialized' })
+    }
+  }
+}
