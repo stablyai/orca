@@ -71,15 +71,12 @@ export function BotChatsPersonFilter({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="ghost"
+              variant="muted-field-icon"
               size="icon-xs"
               aria-label={fullLabel}
-              className={cn(
-                'absolute top-1/2 right-1 size-5.5 -translate-y-1/2 rounded',
-                on ? 'text-foreground' : 'text-muted-foreground'
-              )}
+              className="absolute top-1/2 right-0.5 size-5.5 -translate-y-1/2"
             >
-              <ListFilter className="size-3.5" />
+              <ListFilter className={cn('size-3.5', on && 'text-foreground')} />
               {on ? (
                 <span
                   aria-hidden
