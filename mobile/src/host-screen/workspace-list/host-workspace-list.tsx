@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { Animated, Platform, RefreshControl, View } from 'react-native'
 import { isBotsListRow, useMobileBotsListParts } from '../../bots/use-mobile-bots-list-parts'
 import { TransientToast, useTransientToast } from '../../components/feedback/TransientToast'
@@ -86,14 +86,22 @@ export function HostWorkspaceList({
   const toast = useTransientToast()
   const { showToast } = toast
   // Notices and action errors are one-line toasts, not banners stacked over the title.
-  // A sheet over the list would hide the toast, so an error waits until the sheets close.
+  // Taken at once, since a later refresh clears it; a sheet over the list would hide the toast, so
+  // it shows once the sheets close.
+  const [heldError, setHeldError] = useState('')
   const sheetOpen = state.showWorkspaceOptions || state.actionTarget !== null
   useEffect(() => {
-    if (state.actionError !== '' && !sheetOpen) {
-      showToast(state.actionError)
+    if (state.actionError !== '') {
+      setHeldError(state.actionError)
       state.setActionError('')
     }
-  }, [state, showToast, sheetOpen])
+  }, [state])
+  useEffect(() => {
+    if (heldError !== '' && !sheetOpen) {
+      showToast(heldError)
+      setHeldError('')
+    }
+  }, [heldError, sheetOpen, showToast])
   useEffect(() => {
     if (state.serverNotice) {
       showToast(state.serverNotice)
