@@ -65,6 +65,7 @@ describe('Claude relay ack floor', () => {
     // The turn's end is saved: a replay starting before it would settle the next turn with it.
     floor.observe(5, frame({ type: 'result', session_id: 's' }))
     expect(floor.floor()).toBe(6)
+    expect(floor.tookCut?.()).toBe(false)
     floor.observe(
       6,
       frame({
@@ -84,5 +85,14 @@ describe('Claude relay ack floor', () => {
     expect(floor.floor()).toBe(1)
     floor.observe(2, toolResult('agent-2'))
     expect(floor.floor()).toBe(null)
+  })
+
+  it("reports a cut once when a turn's end lifts the floor past a streaming subagent message", () => {
+    const floor = claudeRelayAckFloor()
+    floor.observe(1, stream('message_start', 'agent-1'))
+    floor.observe(2, frame({ type: 'result', session_id: 's' }))
+    expect(floor.floor()).toBe(3)
+    expect(floor.tookCut?.()).toBe(true)
+    expect(floor.tookCut?.()).toBe(false)
   })
 })

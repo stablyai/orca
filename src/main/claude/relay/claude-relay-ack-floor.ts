@@ -64,7 +64,12 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
   /** A root result ends its turn, which the chat has saved: a replay never starts before it, so
    *  work still open past it (a background subagent's) is kept from the line after; a reattach
    *  restores such a running tool call from its saved row. */
+  /** A lift past a still-streaming message's start: the next ack reports the cut. */
+  let cut = false
   const keepAfter = (seq: number): void => {
+    for (const from of open.values()) {
+      cut ||= from <= seq
+    }
     for (const map of [open, starts]) {
       for (const [scope, from] of map) {
         map.set(scope, Math.max(from, seq + 1))
@@ -75,6 +80,11 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
     }
   }
   return {
+    tookCut: () => {
+      const took = cut
+      cut = false
+      return took
+    },
     observe: (seq, line) => {
       // One prefix read and at most one scan per line: the CLI writes `type` first. Only stream
       // starts and stops, tool calls, tool results, task ends and results matter.
