@@ -83,4 +83,10 @@ export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetSt
   notifyPullRequestChangedForRemoteClients(change: PullRequestChange): void {
     this.emitClientEvent({ type: 'pullRequestChanged', ...change })
   }
+
+  /** This host's MCP server list changed; its windows and every other client re-read it. */
+  notifyMcpServersChanged(): void {
+    this.notifier?.mcpServersChanged?.()
+    this.emitClientEvent({ type: 'mcpServersChanged' })
+  }
 }

@@ -1,0 +1,21 @@
+/** A host's own MCP server list, which a phone shows and edits on the host it names; spread into the
+ *  execution-host routes. Gated on mcp-servers.v1; a host with its switch off refuses each one. */
+export const MOBILE_MCP_SERVER_RPC_METHODS = [
+  'mcpServers.add',
+  'mcpServers.agentFiles.allow',
+  'mcpServers.copy',
+  'mcpServers.details',
+  'mcpServers.discover',
+  'mcpServers.list',
+  'mcpServers.move',
+  'mcpServers.problems',
+  'mcpServers.remove',
+  'mcpServers.setAgentEnabled',
+  'mcpServers.setSharedProcess',
+  'mcpServers.setWorkspaces',
+  'mcpServers.signIn.cancel',
+  'mcpServers.signIn.finish',
+  'mcpServers.signIn.start',
+  'mcpServers.signIn.wait',
+  'mcpServers.update'
+] as const

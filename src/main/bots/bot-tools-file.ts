@@ -22,6 +22,7 @@ import {
 } from './bot-tools-revision'
 import { botToolRelay, type BotToolRelay } from './tool-relay/bot-tool-relay'
 import { botToolsPath } from './bot-tools-path'
+import { botToolEntryExtras, type BotToolEntry } from './bot-tool-entry-extras'
 import {
   botToolCredentialsTransaction,
   changeBotToolCredentials,
@@ -44,7 +45,7 @@ const stale = () =>
 
 export { botToolsPath }
 
-type BotToolsSnapshot = {
+export type BotToolsSnapshot = {
   text: string | null
   file: z.infer<typeof BotToolsFile>
   servers: BotToolServer[]
@@ -100,11 +101,21 @@ const credentialsOf = (servers: readonly BotToolServer[]): Set<string> =>
     servers.flatMap((server) => ('url' in server && server.credential ? [server.credential] : []))
   )
 
-/** Writes `servers`, moving any header values into the host's credential store. */
+/** Each server with its extra keys; `file.servers` and `servers` list the same entries in order. */
+export const botToolEntries = (snapshot: BotToolsSnapshot): BotToolEntry[] =>
+  snapshot.servers.map((server, i) => ({
+    server,
+    extras: botToolEntryExtras(snapshot.file.servers[i])
+  }))
+
+/**
+ * Writes `entries`, moving any header values into the host's credential store. An entry's `extras`
+ * replaces its server's kept extra keys; without them they carry over from its previous entry.
+ */
 function writeServers(
   folder: string,
   snapshot: BotToolsSnapshot,
-  servers: readonly BotToolServer[],
+  entries: readonly BotToolChange[],
   rename?: { from: string; to: string },
   credentials: ReadonlyMap<string, BotToolNewCredential> = new Map()
 ): void {
@@ -118,13 +129,11 @@ function writeServers(
       added.set(id, credential)
     }
   }
-  const stored = servers.map((server): Record<string, unknown> => {
+  const stored = entries.map(({ server, extras }): Record<string, unknown> => {
     const previous = snapshot.file.servers.find(
       (entry) => entry.name === (rename?.to === server.name ? rename.from : server.name)
     )
-    const unknown = Object.fromEntries(
-      Object.entries(previous ?? {}).filter(([key]) => !KNOWN_KEYS.includes(key))
-    )
+    const unknown = botToolEntryExtras(extras ?? previous)
     if (!('url' in server)) {
       return { ...unknown, ...server }
     }
@@ -199,8 +208,6 @@ function writeServers(
   revokeBotToolSignIns(changeBotToolCredentials(folder, new Map(), removed))
 }
 
-const KNOWN_KEYS = ['name', 'url', 'transport', 'headers', 'credential', 'command', 'args', 'env']
-
 /** The file as it stands; header values an older Orca left inline move to the credential store first. */
 async function readMigratedSnapshot(folder: string): Promise<BotToolsSnapshot> {
   const snapshot = await readRawSnapshot(folder)
@@ -208,7 +215,7 @@ async function readMigratedSnapshot(folder: string): Promise<BotToolsSnapshot> {
     return snapshot
   }
   await mkdir(dirname(botToolsPath(folder)), { recursive: true })
-  writeServers(folder, snapshot, snapshot.servers)
+  writeServers(folder, snapshot, botToolEntries(snapshot))
   return readRawSnapshot(folder)
 }
 
@@ -231,14 +238,36 @@ export function changeBotToolServers(
   rename?: { from: string; to: string },
   credentials?: ReadonlyMap<string, BotToolNewCredential>
 ): Promise<void> {
+  const changeServers = (entries: BotToolEntry[]) =>
+    change(entries.map((entry) => entry.server)).map((server) => ({ server }))
+  return changeBotToolEntries(folder, changeServers, { expectedVersion, rename, credentials })
+}
+
+/** A server to write; with `extras`, they replace the ones its entry kept. */
+type BotToolChange = { server: BotToolServer; extras?: Record<string, unknown> }
+
+/** As `changeBotToolServers`, and the change can also set each server's extra keys. */
+export function changeBotToolEntries(
+  folder: string,
+  change: (entries: BotToolEntry[]) => BotToolChange[],
+  {
+    expectedVersion,
+    rename,
+    credentials
+  }: {
+    expectedVersion?: string
+    rename?: { from: string; to: string }
+    credentials?: ReadonlyMap<string, BotToolNewCredential>
+  } = {}
+): Promise<void> {
   return botToolCredentialsTransaction(folder, async () => {
     const snapshot = await readMigratedSnapshot(folder)
     if (expectedVersion !== undefined && expectedVersion !== snapshot.version) {
       throw stale()
     }
-    const servers = change(snapshot.servers)
+    const entries = change(botToolEntries(snapshot))
     await mkdir(dirname(botToolsPath(folder)), { recursive: true })
-    writeServers(folder, snapshot, servers, rename, credentials)
+    writeServers(folder, snapshot, entries, rename, credentials)
     advanceBotToolsEpoch(folder)
   })
 }
