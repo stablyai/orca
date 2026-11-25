@@ -31,13 +31,6 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     globalSegments: ['.cursor', 'skills'],
     workspaceSegments: null
   },
-  // Gemini CLI also reads ~/.agents/skills and warns when ~/.gemini/skills repeats a name.
-  {
-    id: 'gemini',
-    displayName: 'Gemini CLI',
-    globalSegments: null,
-    workspaceSegments: null
-  },
   {
     id: 'droid',
     displayName: 'Droid',

@@ -1,25 +1,16 @@
-// The item view's comment box: chat's prompt editor and attachment pieces. Idle and empty it is one
-// compact row (text and send), so Activity keeps the pane; with focus or anything in it, the text has its
-// own row above the tools (attach, the arrows, mic, send). While the agent's question waits, "Replying
-// to" names it above the text. Enter sends, Shift+Enter
+// The item view's comment box: chat's prompt editor and attachment pieces in one row (attach, text, mic,
+// send), the text on its own row above them from its second line; while the agent's question waits,
+// "Replying to" names it and the text opens on its own row, four lines tall. Enter sends, Shift+Enter
 // adds a line; images paste, drop or attach as thumbnails with an "Image #N" pill at the caret, other
 // files as `@path` pills. Uploads go to the item's chat on the bot's host, which then holds them as its own.
-import {
-  use,
-  useCallback,
-  useImperativeHandle,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type Ref
-} from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { ArrowUp } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { NativeChatComposerPrimaryButton } from '../../native-chat/composer/controls/NativeChatComposerPrimaryButton'
 import { NativeChatAttachButton } from '../../native-chat/composer/controls/NativeChatAttachButton'
+import { NativeChatDictationButton } from '../../native-chat/composer/controls/NativeChatDictationButton'
 import { useNativeChatDictation } from '../../native-chat/composer/editor/use-native-chat-dictation'
 import { NativeChatComposerNotices } from '../../native-chat/composer/controls/NativeChatComposerNotices'
 import { useNativeChatComposerNotice } from '../../native-chat/composer/controls/use-native-chat-composer-notice'
@@ -31,7 +22,6 @@ import type { NativeChatComposerInput } from '../../native-chat/composer/editor/
 import { useNativeChatComposerHandle } from '../../native-chat/composer/editor/use-native-chat-composer-handle'
 import { useNativeChatDraftEvents } from '../../native-chat/composer/editor/use-native-chat-draft-events'
 import type { NativeChatComposerHandle } from '../../native-chat/composer/native-chat-composer-types'
-import { composerQuoteTarget } from '../../native-chat/selection-quotes/NativeChatSelectionQuote'
 import { NativeChatImageAttachmentPreview } from '../../native-chat/attachments/chips/NativeChatImageAttachmentPreview'
 import { useNativeChatComposerAttachments } from '../../native-chat/attachments/chips/use-native-chat-composer-attachments'
 import { useNativeChatFileDrops } from '../../native-chat/attachments/intake/use-native-chat-file-drops'
@@ -46,38 +36,31 @@ import {
   projectNativeChatPastedText
 } from '../../native-chat/paste/native-chat-composer-pasted-text-references'
 import { imageReferencesToPromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import { botItemHeldAnswersLimitNotice } from './bot-item-held-answers'
+import {
+  useBotItemCommentBoxHandle,
+  type BotItemCommentBoxHandle
+} from './use-bot-item-comment-box-handle'
+
+export type { BotItemCommentBoxHandle }
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
 import { botItemCommentDraftScope } from './bot-item-comment-draft'
 import { useKeepFloatingTerminalTriggerClear } from '../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
-import { BOT_ITEM_TOOL_ROW_TOUCH_FIT, BotItemSteppingContext } from './BotItemStepper'
+import { BOT_ITEM_TOOL_ROW_TOUCH_FIT } from './BotItemStepper'
 import {
   BotItemReplyingTo,
   useBotItemReplyMark,
   type BotItemWaitingQuestion
 } from './BotItemReplyingTo'
 import { cn } from '@/lib/class-names'
-import { useBotItemCommentCompact } from './use-bot-item-comment-compact'
-import { BotItemCommentMic, isBotItemCommentPaddingClick } from './bot-item-comment-box-parts'
+import { useBotItemCommentStacked } from './use-bot-item-comment-stacked'
 import { BotItemCommentRoom, useBotItemCommentPickers } from './bot-item-comment-pickers'
 import type { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 import {
   useBotItemCommentAttachments,
   type BotItemCommentAttachTarget
 } from './use-bot-item-comment-attachments'
-
-export type BotItemCommentBoxHandle = ReturnType<typeof composerQuoteTarget> & {
-  focus: () => void
-  /** Focus the box with the caret after its text, as when coming back to a draft. */
-  focusEnd: () => void
-  /** Focus the box and type `text` at its caret. */
-  type: (text: string) => void
-  /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
-   *  of its own, with "Replying to" hidden; else as the answer, naming the question. */
-  fill: (text: string, plain?: boolean) => void
-  /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
-  answer: () => void
-}
 
 const NO_TARGET = () => null
 
@@ -227,49 +210,20 @@ function BotItemCommentField({
   }, [draft, ime])
 
   const reply = useBotItemReplyMark(box, question ?? null, scopeKey, onShowQuestion)
+  // Replying to a question, the text has its own row and room for an answer from the start.
+  const { field, stacked, height } = useBotItemCommentStacked(draft, reply.quote !== null)
+  const caretToEnd = useBotItemCommentBoxHandle(ref, {
+    scopeKey,
+    input: () => input.current,
+    composer,
+    reply,
+    setDraft
+  })
   const images = attachments.imageAttachments
-  const pending = images.some((image) => image.pending) || attachments.pastedTextSaving
-  const empty = !draft.trim() && images.length === 0
-  // Idle and empty, the box is one row (its "Replying to" above it); it opens to the full box with focus,
-  // and stays open while it holds anything.
-  const { compact, handlers: compactHandlers } = useBotItemCommentCompact(
-    box,
-    draft.length > 0 ||
-      images.length > 0 ||
-      pending ||
-      dictation.isDictating ||
-      mentions.autocomplete.mode !== 'none',
-    use(BotItemSteppingContext)
-  )
-  // One line growing to six, then it scrolls (an answer to a question, eleven); a short pane caps it
-  // (`cqh` is the item pane's height), so Activity and Send stay in view.
-  const height = reply.quote ? 'max-h-[min(232px,25cqh)]' : 'max-h-[min(132px,25cqh)]'
-  const caretToEnd = (): void => {
-    const node = input.current
-    node?.focus()
-    node?.setSelectionRange(node.value.length, node.value.length)
-  }
-  useImperativeHandle(ref, () => ({
-    focus: () => input.current?.focus(),
-    focusEnd: caretToEnd,
-    ...composerQuoteTarget(composer),
-    type: (typed) => void composer.current?.insertTypedText(typed),
-    answer: () => {
-      reply.show()
-      composer.current?.focus({ caretAtEnd: true, glow: true })
-    },
-    fill: (text, plain) => {
-      const mark = plain ? reply.hide : reply.show
-      mark()
-      setDraft(`${text} `)
-      if (input.current) {
-        input.current.value = `${text} `
-      }
-      caretToEnd()
-    }
-  }))
   // The thumbnails' order numbers their pills, as in chat.
   const imageRow = useMemo(() => images.map(({ id }) => id), [images])
+  const pending = images.some((image) => image.pending) || attachments.pastedTextSaving
+  const empty = !draft.trim() && images.length === 0
   const send = (): void => {
     if (empty || pending || mentions.sendHeld) {
       return
@@ -289,11 +243,16 @@ function BotItemCommentField({
     if (!skills) {
       return
     }
+    // Refused, the comment stays in the box, saying why.
+    const limit = onSend(text, paths, reply.quote?.id ?? null, skills)
+    if (limit) {
+      setNotice(botItemHeldAnswersLimitNotice(t, limit))
+      return
+    }
     if (clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)) {
       attachments.clearImageAttachments()
     }
     setNotice(null)
-    onSend(text, paths, reply.quote?.id ?? null, skills)
   }
   // Stable identities let the memoized editor skip the per-keystroke render, as in chat.
   const editorChange = useLatestHandler((node: NativeChatComposerInput) => {
@@ -345,9 +304,22 @@ function BotItemCommentField({
     }
   })
   const focusAtEnd = (event: React.MouseEvent<HTMLDivElement>): void => {
-    if (input.current && isBotItemCommentPaddingClick(event)) {
-      caretToEnd()
+    const target = event.target
+    const control =
+      target instanceof Element
+        ? target.closest(
+            '[contenteditable], textarea, button, a, input, select, [role="button"], [tabindex]'
+          )
+        : null
+    if (
+      !input.current ||
+      // Only controls inside the card keep the click; the item pane around it is focusable too.
+      (control && event.currentTarget.contains(control)) ||
+      window.getSelection()?.toString()
+    ) {
+      return
     }
+    caretToEnd()
   }
   return (
     // Click-to-focus for the padding; the editor itself stays the keyboard target.
@@ -357,13 +329,8 @@ function BotItemCommentField({
         ref={box}
         data-native-chat-composer-scope={scopeKey}
         onClick={focusAtEnd}
-        {...compactHandlers}
-        data-bot-item-comment=""
-        data-compact={compact || undefined}
         className={cn(
-          'mx-3 mb-3 mt-2 flex shrink-0 cursor-text flex-col rounded-xl border border-chat-composer-border bg-chat-composer-surface px-1.5 shadow-xs',
-          // The text starts at the same place compact or open.
-          compact ? 'py-1' : 'pb-1.5 pt-1',
+          'mx-3 mb-3 mt-2 flex shrink-0 cursor-text flex-col rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs',
           reply.glowing && 'native-chat-composer-glow'
         )}
       >
@@ -393,8 +360,8 @@ function BotItemCommentField({
           </div>
         ) : null}
         <div className={cn('flex flex-wrap items-end gap-0.5', nav && BOT_ITEM_TOOL_ROW_TOUCH_FIT)}>
-          {/* Open, the text has its own row whatever its length, so the tools never shift it. */}
-          <div className={cn('min-w-0 flex-1', !compact && 'basis-full')}>
+          {session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
+          <div ref={field} className={cn('min-w-0 flex-1', stacked && 'order-first basis-full')}>
             <NativeChatPromptEditor
               key={scopeKey}
               scopeKey={scopeKey}
@@ -415,16 +382,20 @@ function BotItemCommentField({
               onCompositionStart={editorCompositionStart}
               onCompositionEnd={editorCompositionEnd}
               onBlur={editorBlur}
-              className={`scrollbar-sleek block overflow-y-auto bg-transparent px-1 py-1.5 text-sm leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate min-h-8 ${height}`}
+              className={`scrollbar-sleek block overflow-y-auto bg-transparent px-1 py-1.5 text-sm leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate ${height}`}
             />
           </div>
-          {compact ? null : (
-            <>
-              {session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
-              {nav}
-              <BotItemCommentMic dictation={dictation} />
-            </>
-          )}
+          {nav}
+          <span className="ml-auto flex shrink-0">
+            <NativeChatDictationButton
+              disabled={dictation.dictationDisabled}
+              isDictating={dictation.isDictating}
+              isHoldMode={dictation.isDictationHoldMode}
+              onToggle={dictation.toggleDictation}
+              onHoldStart={dictation.startHoldDictation}
+              onHoldEnd={dictation.stopHoldDictation}
+            />
+          </span>
           <NativeChatComposerPrimaryButton
             aria-label={t('bots.items.comment.submit', 'Comment')}
             disabled={empty || pending || mentions.sendHeld}

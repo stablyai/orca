@@ -166,8 +166,8 @@ export function botEventTriggerRefusal(
       'or'
     )} connector, so ${events.join(', ')} would never start it.`,
     heard.length > 0
-      ? `It can start on ${connectorNames(heard, 'and')} events or on a schedule; \`orca automations trigger-options --bot "${bot.name}"\` lists them.`
-      : 'It has no connectors, so it can start only on a schedule.',
+      ? `It can start on ${connectorNames(heard, 'and')} events, on a schedule, or once at a time (\`--once --by\`); \`orca automations trigger-options --bot "${bot.name}"\` lists them.`
+      : 'It has no connectors, so it can start only on a schedule or once at a time (`--once --by`).',
     "Its owner can add a connector in the bot's settings."
   ].join(' ')
 }

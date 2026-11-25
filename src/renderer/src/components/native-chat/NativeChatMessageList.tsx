@@ -114,7 +114,7 @@ export function NativeChatMessageList({
   journalHostWork?: StructuredAgentSessionHostWork
   /** Every subagent the session's rosters named, whether or not its roster row is loaded. */
   subagentRoster?: StructuredAgentSubagentRoster
-  /** The subagent shown in place of the conversation (its own rows, no turns), and how to open one. */
+  /** The subagent a sheet shows instead of the conversation (its own rows, no turns), and how to open one. */
   subagentView?: NativeChatSubagentView
   /** User messages older than the loaded window, from the host's outline. */
   railOutline?: readonly NativeChatRailOutlineEntry[] | null
@@ -366,7 +366,7 @@ export function NativeChatMessageList({
     <NativeChatBotHomeScope kickoff={botHome} isVisible={isVisible}>
       <NativeChatPullRequestChangeContext.Provider value={openedPullRequests.latestChangeKey}>
         <div className="relative flex min-h-0 flex-1 flex-col bg-chat-pane">
-          {scope.bar}
+          {scope.header}
           <NativeChatTranscriptViewport
             scrollRef={scrollRef}
             scrollerProps={{ onScroll: onTranscriptScroll, ...readerInput.scrollerProps }}
@@ -397,7 +397,7 @@ export function NativeChatMessageList({
                 loadingEarlier={loadingEarlier}
               />
             ) : null}
-            <div className={nativeChatTranscriptOuterClass(rail.visible)}>
+            <div className={nativeChatTranscriptOuterClass(rail.visible, scope.inSheet)}>
               <NativeChatTranscriptColumn ref={measureContent}>
                 {scope.lead}
                 <NativeChatTranscriptItems

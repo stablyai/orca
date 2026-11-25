@@ -34,6 +34,11 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/paste-files/native-chat-paste-files.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',
+  // The check:changed slot queue is node:sqlite, which Bun does not provide.
+  'config/scripts/preflight/changed-checks/check-changed-slot.test.mjs',
+  'config/scripts/preflight/changed-checks/check-changed-slot-recovery.test.mjs',
+  'config/scripts/preflight/changed-checks/check-changed-slot-faults.test.mjs',
+  'config/scripts/preflight/changed-checks/check-changed-slot-degraded.test.mjs',
   // Bun on macOS fails its read-only directory case with ENOTEMPTY; Node passes it.
   ...(process.platform === 'darwin'
     ? ['config/scripts/worktree-storage/reclaim-worktree-generated-files.test.mjs']

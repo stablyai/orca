@@ -1210,7 +1210,7 @@
       "pairingInvalid": "ペアリングが無効です。デスクトップと再度ペアリングしてください。",
       "rePairDetail": "デスクトップと再度ペアリングしてください。",
       "reconnecting": "再接続中…",
-      "relayAccessExpired": "{{host}} のリレーアクセスの有効期限が切れています",
+      "relayAccessRefused": "{{host}} へのリレーアクセスが拒否されました",
       "relayConnectFailed": "リレー経由で接続できません",
       "relayUnreachable": "リレーに接続できません",
       "signInDetail": "再接続するには、デスクトップで Orca にサインインしてください。",
@@ -4419,6 +4419,12 @@
                 "message": "Claude の使用状況は、次に Claude を実行したときに更新されます。"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Codex の実行時に更新",
+                "message": "Codex の使用状況は、次に Codex を実行したときに更新されます。"
+              }
+            },
             "1804cd8c3f": "サインインを更新中",
             "bf2e739f18": "サインインを利用できません",
             "f8f0f9d8cc": "ネットワークの問題",
@@ -4487,10 +4493,6 @@
           "grokBillingUsageMissing": "Grok の課金レスポンスにクレジット使用量が含まれていませんでした",
           "grokUsageUnauthorizedHttp": "Grok の使用量リクエストが認証されていません（HTTP {{status}}）",
           "grokUsageFailedHttp": "Grok の使用量リクエストに失敗しました（HTTP {{status}}）",
-          "geminiOauthDisabled": "Gemini CLI の OAuth は設定で無効になっています",
-          "geminiCredentialsNotFound": "Gemini CLI の認証情報が見つかりません",
-          "geminiProjectIdNotFound": "Gemini のプロジェクト ID が見つかりません",
-          "tokenRefreshFailed": "トークンの更新に失敗しました",
           "codexNotSignedIn": "Codex にサインインしていません",
           "codexHomeUnavailable": "Codex のホームディレクトリを利用できません",
           "wslCodexHomeUnavailable": "{{distro}} の WSL Codex ホームディレクトリを利用できません",
@@ -4509,9 +4511,6 @@
           "ptyUsageTimeout": "PTY がタイムアウトしました — /usage パネルが表示されませんでした",
           "cliExitedBeforeUsage": "/usage が表示される前に CLI が終了しました",
           "cliExitedBeforeStatus": "ステータスを取得する前に CLI が終了しました",
-          "quotaFetchFailed": "クォータの取得に失敗しました（{{status}}）",
-          "geminiProjectIdLoadFailed": "Gemini のプロジェクト ID を読み込めませんでした（HTTP {{status}}）",
-          "geminiProjectIdMissingInResponse": "API レスポンスに Gemini のプロジェクト ID が見つかりません",
           "minimaxUsageFetchFailed": "MiniMax の使用量の取得に失敗しました（{{status}}）",
           "minimaxReturnedError": "MiniMax がエラーを返しました",
           "minimaxInvalidUsageResponse": "MiniMax の使用量レスポンスが無効です",
@@ -4702,7 +4701,9 @@
       "ask": {
         "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
         "replacedByNewer": "新しい質問に置き換えられました",
-        "skipped": "スキップ済み"
+        "skipped": "スキップ済み",
+        "heldImagesLimit": "回答は1件のコメントとして送信され、写真は{{max}}枚までです。いくつか削除して、もう一度お試しください。",
+        "heldSkillsLimit": "回答は1件のコメントとして送信され、スキルは{{max}}個までです。いくつか削除して、もう一度お試しください。"
       }
     },
     "needs": {
@@ -5201,7 +5202,13 @@
         "github": "Issue と PR でのメンションとイベント",
         "slack": "メッセージとメンション",
         "linear": "割り当てられた Issue とメンション",
-        "google": "あなたとして Gmail、カレンダー、ドライブを使う"
+        "google": "あなたとして Gmail、カレンダー、ドライブを使う",
+        "clickup": "タスク、リスト、ドキュメントを管理",
+        "airtable": "ベース、テーブル、レコードを照会・編集",
+        "todoist": "タスクを追加、整理、完了",
+        "zapier": "Zapier で設定したアプリでアクションを実行",
+        "granola": "会議メモと文字起こしを検索",
+        "intercom": "会話、連絡先、記事を検索"
       },
       "composioLine": {
         "outlook": "メール、カレンダー、連絡先",
@@ -5250,11 +5257,17 @@
       "continuesAt": "{{time}} に再開",
       "continues": "{{time}} に再開",
       "hitLimit": "上限に到達 · {{time}} にリセット"
+    },
+    "new": {
+      "purposeTooLongForHost": "{{host}} の Orca では、用途は 200 文字までです。短くするか、{{host}} の Orca を更新してください。"
     }
   },
   "sidebar": {
     "cardSlot": {
       "working": "作業中"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "組織の Claude 設定によりブロックされています"
   }
 }

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
-import { access, readFile, realpath, stat } from 'node:fs/promises'
-import { constants } from 'node:fs'
+import { readFile, realpath, stat } from 'node:fs/promises'
 import { basename, delimiter, isAbsolute, resolve } from 'node:path'
+import { isRunnableCommandAsync } from '../../../shared/shell/command-resolution/cli-fs-reads'
 import {
   getExecutableNames,
   normalizePathEntry
@@ -50,11 +50,10 @@ export async function agentModelCatalogInputStamp(input: {
       const directory = normalizePathEntry(process.platform, entry)
       for (const name of getExecutableNames(process.platform, input.command)) {
         const candidate = resolve(input.cwd, directory, name)
-        try {
-          await access(candidate, process.platform === 'win32' ? constants.F_OK : constants.X_OK)
+        if (await isRunnableCommandAsync(process.platform, candidate)) {
           executable = candidate
           break search
-        } catch {}
+        }
       }
     }
   }
