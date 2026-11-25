@@ -4,18 +4,18 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { BotShareIdSchema } from '../../../shared/bots/bot-team-shares'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import { botsProjectGroupId, type HomeStore } from '../bot-home-workspace'
+import {
+  botsHomeCreateInput,
+  type BotsHomeCreateInput,
+  type HomeStore
+} from '../bot-home-workspace'
 import type { SharedBotHostStore } from './shared-bot-host-store'
 
 export type SharedBotHomeDeps = {
   userDataPath: string
   botsRoot: () => string
   store: HomeStore & { getFolderWorkspaces: () => readonly Pick<FolderWorkspace, 'id'>[] }
-  createFolderWorkspace: (input: {
-    projectGroupId: string
-    name: string
-    folderPath: string
-  }) => Promise<Pick<FolderWorkspace, 'id'>>
+  createFolderWorkspace: (input: BotsHomeCreateInput) => Promise<Pick<FolderWorkspace, 'id'>>
   /** The app's own delete: its tabs, terminals and session state go with it. */
   deleteFolderWorkspace: (id: string) => Promise<unknown>
 }
@@ -39,11 +39,12 @@ export class SharedBotHomes {
   async make(share: SharedBotHomeShare): Promise<string> {
     const folderPath = sharedBotHomeFolder(this.deps.userDataPath, share.shareId)
     await mkdir(folderPath, { recursive: true })
-    const workspace = await this.deps.createFolderWorkspace({
-      projectGroupId: botsProjectGroupId(this.deps.store, this.deps.botsRoot()),
-      name: share.botName,
-      folderPath
-    })
+    const workspace = await this.deps.createFolderWorkspace(
+      botsHomeCreateInput(this.deps.store, this.deps.botsRoot(), {
+        name: share.botName,
+        folderPath
+      })
+    )
     return workspace.id
   }
 

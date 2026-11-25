@@ -33,7 +33,7 @@ import {
   readBotHomePicture,
   writeBotAvatarImage
 } from './bot-avatar-revision'
-import { makeBotsHome } from './bot-home-workspace'
+import { makeBotsHome, type BotsHomeCreateInput } from './bot-home-workspace'
 import { newBotRecord } from './bot-new-record'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 
@@ -46,12 +46,7 @@ export type BotControllerDependencies = {
    *  or removed with it, which the project catalog also announces. */
   notifyBotsWritten: (catalogChanged: boolean) => void
   /** The project-group controller's own create, so path checks match any folder workspace's. */
-  createFolderWorkspace: (input: {
-    projectGroupId: string
-    name: string
-    folderPath: string
-    createdWithAgent: Bot['agent']
-  }) => Promise<FolderWorkspace>
+  createFolderWorkspace: (input: BotsHomeCreateInput) => Promise<FolderWorkspace>
   /** Ends the work held in the workspace (terminals, agent status) before it is forgotten. */
   deleteFolderWorkspace: (folderWorkspaceId: string) => Promise<unknown>
   /** Removes the automations that run as the bot, as their own delete does. */

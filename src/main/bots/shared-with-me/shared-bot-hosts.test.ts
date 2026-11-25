@@ -541,7 +541,8 @@ describe('a shared agent’s home on this computer', () => {
         id: home,
         name: 'Ivy',
         folderPath: join(dir, 'shared-agents', 'share-1'),
-        projectGroupId: memory.groups[0]?.id
+        projectGroupId: memory.groups[0]?.id,
+        agentLaunchMode: 'structured'
       },
       expect.objectContaining({ folderPath: join(dir, 'shared-agents', 'share-2') })
     ])

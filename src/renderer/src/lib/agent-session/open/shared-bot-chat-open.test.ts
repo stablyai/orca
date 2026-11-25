@@ -184,7 +184,7 @@ describe('a shared agent’s chats on this computer', () => {
     ])
   })
 
-  it('opens its home here from Home, reading only this computer’s workspaces and never its owner’s Home Chat', async () => {
+  it('opens its home here from Home on this account’s own chat, reading only this computer’s workspaces and never its owner’s Home Chat', async () => {
     call.mockClear()
     const fetchFolderWorkspaces = vi.fn(async () => {})
     useAppStore.setState({ fetchFolderWorkspaces })
@@ -192,11 +192,19 @@ describe('a shared agent’s chats on this computer', () => {
     expect(await openBotHomeTab(bot)).toBe(true)
     expect(useAppStore.getState().activeWorktreeId).toBe(HOME_KEY)
     expect(fetchFolderWorkspaces).toHaveBeenCalledWith({ runtimeEnvironmentId: null })
-    // The owner's Home Chat is theirs: the share refuses it here, and no tab of it opens.
+    // The owner's Home Chat is theirs: the share refuses it here. With no chat of this account's
+    // yet, a new one opens, and never a terminal in the home's folder.
     const asked = call.mock.calls.map(([request]) => request.method)
     expect(asked).not.toContain('folderWorkspaces.list')
     expect(asked).not.toContain('bots.chat.open')
-    expect(tabs()).toEqual([])
+    expect(asked).toContain('bots.session.start')
+    expect(tabs()).toEqual([
+      expect.objectContaining({
+        contentType: 'agent-session',
+        entityId: 'shared-new-1',
+        worktreeId: HOME_KEY
+      })
+    ])
   })
 
   it('opens a new chat started while the owner’s computer is away, and moves it to the chat the host starts once back', async () => {
