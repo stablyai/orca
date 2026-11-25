@@ -19,7 +19,11 @@ import {
 } from '../../claude/cli-capabilities/claude-cli-flag-support'
 import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import { RELAY_AUTHORIZATION } from './codex-terminal-mcp-args'
-import { terminalMcpCliSupports, type TerminalMcpCliRequirement } from './terminal-mcp-cli-support'
+import {
+  terminalMcpCliSupports,
+  terminalMcpCliSupportsInWsl,
+  type TerminalMcpCliRequirement
+} from './terminal-mcp-cli-support'
 import { writeTerminalMcpLaunchFile, wslGuestDrivePath } from './terminal-mcp-launch-files'
 
 /** One terminal launch, with the servers it gets already shaped for a terminal. */
@@ -36,7 +40,11 @@ export type TerminalMcpLaunch = {
   envToDelete?: readonly string[]
   cwd: string | undefined
   /** Set when the agent runs in a WSL distro (null: the default one). */
-  wsl?: { distro: string | null }
+  wsl?: {
+    distro: string | null
+    /** Its servers that run the guest's `orca`, which reaches Windows over interop. */
+    interop?: ReadonlySet<string>
+  }
 }
 
 /** How one agent's CLI takes servers for one run. */
@@ -61,6 +69,8 @@ export type TerminalMcpDelivery =
       env?: Record<string, string>
       /** The CLI reads the token from `ORCA_MCP_TOKEN` in its env. */
       tokenInEnv: boolean
+      /** Why some of its servers didn't make it, for every launch of this CLI (too old for them). */
+      problem?: string
     }
   | {
       delivered: false
@@ -120,7 +130,17 @@ export async function launchFilePath(
   agent: string,
   config: unknown
 ): Promise<string | null> {
-  const path = await writeTerminalMcpLaunchFile(agent, config)
+  return launchTextFilePath(launch, agent, 'json', `${JSON.stringify(config, null, 2)}\n`)
+}
+
+/** `launchFilePath` for a file of any kind (a Pi extension's source). */
+export async function launchTextFilePath(
+  launch: TerminalMcpLaunch,
+  agent: string,
+  extension: string,
+  contents: string
+): Promise<string | null> {
+  const path = await writeTerminalMcpLaunchFile(agent, contents, extension)
   return launch.wsl ? wslGuestDrivePath(launch.wsl.distro, path) : path
 }
 
@@ -162,11 +182,10 @@ export async function cliRefusal(
   requirement: TerminalMcpCliRequirement,
   tooOld: string
 ): Promise<TerminalMcpDelivery | null> {
-  // A WSL distro's CLI can't be asked from here yet, so a route that needs a check isn't used there.
-  if (launch.wsl) {
-    return skip('its CLI in WSL can’t be checked yet')
-  }
-  const fact = await terminalMcpCliSupports(executable, requirement, cliEnv(launch), launch.cwd)
+  // A WSL distro's CLI is asked in the distro, as its login PATH finds it.
+  const fact = launch.wsl
+    ? await terminalMcpCliSupportsInWsl(executable, requirement, launch.wsl.distro, launch.cwd)
+    : await terminalMcpCliSupports(executable, requirement, cliEnv(launch), launch.cwd)
   return fact === 'supported'
     ? null
     : fact === 'unsupported'

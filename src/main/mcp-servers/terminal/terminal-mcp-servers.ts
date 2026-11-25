@@ -56,7 +56,7 @@ function throughOrcaExec(
     entry.id,
     '--agent',
     launch.agent,
-    ...(launch.workspaceId ? ['--workspace', launch.workspaceId] : [])
+    ...(launch.workspaceId ? ['--workspace', launch.workspaceId] : ['--outside-workspace'])
   ]
   // A dev build's Windows launcher is a .cmd, which Node-based agents can only start through cmd.
   const viaCmd = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cli.launcher)

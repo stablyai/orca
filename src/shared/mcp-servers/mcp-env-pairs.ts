@@ -15,7 +15,7 @@ export function encodeMcpEnvPairs(env: Readonly<Record<string, string>>): string
 
 /**
  * The guest wrapper, run as `bash -c <script> orca-mcp-env <launcher> <id> <agent> <workspace>
- * <command> <args…>` (workspace empty for none). It has no single quote or newline, so every shell
+ * <command> <args…>` (workspace empty for none, which the launch chose the server by). It has no single quote or newline, so every shell
  * and config format carries it as one literal string.
  */
 export const MCP_ENV_WRAPPER_SCRIPT = [
@@ -26,8 +26,9 @@ export const MCP_ENV_WRAPPER_SCRIPT = [
   'set +x',
   '__orca_l=$1 __orca_i=$2 __orca_a=$3 __orca_w=$4',
   'shift 4',
-  '__orca_e=0 __orca_pairs=()',
-  `while IFS= read -r -d "" __orca_p; do if [ "$__orca_p" = ${MCP_ENV_END} ]; then __orca_e=1; else __orca_pairs+=("$__orca_p"); fi; done < <("$__orca_l" mcp env "$__orca_i" --agent "$__orca_a" \${__orca_w:+--workspace "$__orca_w"} </dev/null)`,
+  '__orca_e=0 __orca_pairs=() __orca_ws=(--outside-workspace)',
+  '[ -z "$__orca_w" ] || __orca_ws=(--workspace "$__orca_w")',
+  `while IFS= read -r -d "" __orca_p; do if [ "$__orca_p" = ${MCP_ENV_END} ]; then __orca_e=1; else __orca_pairs+=("$__orca_p"); fi; done < <("$__orca_l" mcp env "$__orca_i" --agent "$__orca_a" "\${__orca_ws[@]}" </dev/null)`,
   '[ "$__orca_e" = 1 ] || { echo "Orca could not read this MCP server environment." >&2; exit 1; }',
   '[ "${#__orca_pairs[@]}" = 0 ] || export "${__orca_pairs[@]}"',
   'exec "$@"'

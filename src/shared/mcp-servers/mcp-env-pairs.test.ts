@@ -1,6 +1,6 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
 import { encodeMcpEnvPairs, mcpEnvWrapperCommand } from './mcp-env-pairs'
@@ -19,17 +19,21 @@ function fakeOrca(answer: string): string {
   writeFileSync(join(dir, 'answer'), answer)
   const launcher = join(dir, 'orca')
   // Like the interop bridge, it would read whatever stdin it's given before answering.
-  writeFileSync(launcher, `#!/bin/sh\ncat >/dev/null\ncat '${join(dir, 'answer')}'\n`)
+  writeFileSync(
+    launcher,
+    `#!/bin/sh\nprintf '%s\\n' "$@" > '${join(dir, 'args')}'\ncat >/dev/null\ncat '${join(dir, 'answer')}'\n`
+  )
   chmodSync(launcher, 0o755)
   return launcher
 }
 
 async function runWrapped(
   launcher: string,
-  input = ''
+  input = '',
+  workspaceId: string | null = 'repo-1::/r'
 ): Promise<{ code: number | null; stdout: string }> {
   const { command, args } = mcpEnvWrapperCommand(
-    { launcher, id: 'id-pg-000001', agent: 'claude', workspaceId: 'repo-1::/r' },
+    { launcher, id: 'id-pg-000001', agent: 'claude', workspaceId },
     // The server: prints the env values it was started with.
     {
       command: 'bash',
@@ -65,6 +69,33 @@ describe.skipIf(process.platform === 'win32')(
       const { code, stdout } = await runWrapped(fakeOrca(whole.slice(0, whole.indexOf('ORCA'))))
       expect(code).toBe(1)
       expect(stdout).toBe('')
+    })
+
+    it('names the workspace the launch chose the server by, or that it chose by none', async () => {
+      const launcher = fakeOrca(encodeMcpEnvPairs({}))
+      const argsOf = (): string[] =>
+        readFileSync(join(dirname(launcher), 'args'), 'utf8')
+          .trim()
+          .split('\n')
+      await runWrapped(launcher)
+      expect(argsOf()).toEqual([
+        'mcp',
+        'env',
+        'id-pg-000001',
+        '--agent',
+        'claude',
+        '--workspace',
+        'repo-1::/r'
+      ])
+      await runWrapped(launcher, '', null)
+      expect(argsOf()).toEqual([
+        'mcp',
+        'env',
+        'id-pg-000001',
+        '--agent',
+        'claude',
+        '--outside-workspace'
+      ])
     })
   }
 )

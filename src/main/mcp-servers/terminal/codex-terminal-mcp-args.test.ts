@@ -68,3 +68,20 @@ describe('a WSL terminal’s guest wrapper in Codex overrides', () => {
     )
   })
 })
+
+describe('a WSL server that runs the guest’s orca under Codex', () => {
+  it('passes on the interop variables Codex would otherwise leave out', () => {
+    const connect = {
+      name: 'linear',
+      command: '/mnt/c/Users/A/orca-ide',
+      args: ['mcp', 'connect', 'id-linear-01', '--agent', 'codex']
+    }
+    const plain = { name: 'fs', command: 'npx', args: ['fs-mcp'] }
+    const { args } = codexTerminalMcpArgs([connect, plain], 'posix', {
+      names: new Set(['linear']),
+      vars: ['WSL_INTEROP', 'WSL_DISTRO_NAME']
+    })
+    expect(args).toContain("mcp_servers.linear.env_vars=['WSL_INTEROP','WSL_DISTRO_NAME']")
+    expect(args.some((arg) => arg.startsWith('mcp_servers.fs.env_vars'))).toBe(false)
+  })
+})
