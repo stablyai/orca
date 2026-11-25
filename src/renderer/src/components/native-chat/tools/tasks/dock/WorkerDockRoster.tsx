@@ -98,7 +98,7 @@ export function WorkerDockRoster(props: {
     (row) => workerDockClearable(row) && props.pending.has(row.id)
   )
   const clearable = props.identities.filter(workerDockClearable).length
-  const { mixed, total, count } = workerDockSummary(
+  const { mixed, total, count, label } = workerDockSummary(
     props.countIdentities ?? props.identities,
     props.rows,
     t
@@ -238,156 +238,170 @@ export function WorkerDockRoster(props: {
         }
       }}
     >
-      {props.expanded ? (
-        <div
-          ref={card}
-          data-worker-dock-card=""
-          className={cn(
-            WORKER_DOCK_SURFACE_CLASS,
-            'absolute inset-x-0 bottom-9 mx-auto flex w-[min(320px,calc(100%-24px))] flex-col rounded-[10px] p-1 shadow-floating animate-in fade-in-0 slide-in-from-bottom-1 duration-120 motion-reduce:animate-none'
-          )}
-          onPointerEnter={hold}
-          onPointerLeave={release}
-          onFocusCapture={(event) => {
-            hold()
-            const row =
-              event.target instanceof Element
-                ? event.target.closest<HTMLElement>('[data-worker-dock-row]')
-                : null
-            if (row) {
-              const rowId = row.dataset.workerDockRow ?? null
-              setFocused(rowId)
-              if (rowId) {
-                rememberFocus(rowId, row.closest('[data-native-chat-root]'))
-              }
-              row.scrollIntoView({ block: 'nearest' })
+      {/* One box for the chip and the open panel, so the chip turns into the panel's header in
+          place and keeps focus. */}
+      <div
+        ref={card}
+        data-worker-dock-card={props.expanded ? '' : undefined}
+        className={cn(
+          'absolute bottom-0 left-3 flex flex-col sm:left-4 [[data-native-chat-dock-fit~=dock]_&]:static',
+          props.expanded
+            ? cn(
+                WORKER_DOCK_SURFACE_CLASS,
+                'right-3 gap-1 rounded-[10px] p-1 shadow-floating sm:right-4'
+              )
+            : // Leaves Jump to latest's 26px and an 8px gap free at the row's end.
+              'pointer-events-none max-w-[calc(100%-58px)] sm:max-w-[calc(100%-66px)] [&>*]:pointer-events-auto'
+        )}
+        onPointerEnter={hold}
+        onPointerLeave={release}
+        onFocusCapture={(event) => {
+          hold()
+          const row =
+            event.target instanceof Element
+              ? event.target.closest<HTMLElement>('[data-worker-dock-row]')
+              : null
+          if (row) {
+            const rowId = row.dataset.workerDockRow ?? null
+            setFocused(rowId)
+            if (rowId) {
+              rememberFocus(rowId, row.closest('[data-native-chat-root]'))
+            }
+            row.scrollIntoView({ block: 'nearest' })
+          }
+        }}
+        onBlurCapture={() =>
+          queueMicrotask(() => {
+            if (!root.current?.contains(document.activeElement)) {
+              forgetFocus()
+            }
+            setFocused(
+              document.activeElement?.closest<HTMLElement>('[data-worker-dock-row]')?.dataset
+                .workerDockRow ?? null
+            )
+            release()
+          })
+        }
+      >
+        <WorkerDockPill
+          pill={pill}
+          glyph={
+            top
+              ? workerDockGlyph({ ...top, retired: topRow?.retired })
+              : unlisted
+                ? 'running'
+                : 'queued'
+          }
+          label={top ? label : workerDockEmptyCopy(t, unlisted).title}
+          latest={topRow ? workerDockRowTitle(topRow) : count}
+          total={total}
+          expanded={props.expanded}
+          listId={id}
+          onToggle={() => {
+            setHeld(null)
+            props.onExpandedChange(!props.expanded)
+          }}
+          onKeyDown={(event) => {
+            if (
+              props.expanded &&
+              items.length &&
+              (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+            ) {
+              event.preventDefault()
+              focusRow(event.key === 'ArrowUp' ? items.length - 1 : 0)
             }
           }}
-          onBlurCapture={() =>
-            queueMicrotask(() => {
-              if (!root.current?.contains(document.activeElement)) {
-                forgetFocus()
-              }
-              setFocused(
-                document.activeElement?.closest<HTMLElement>('[data-worker-dock-row]')?.dataset
-                  .workerDockRow ?? null
-              )
-              release()
-            })
-          }
-        >
-          <div
-            ref={viewport}
-            id={id}
-            role="region"
-            aria-label={t('components.native-chat.workerDock.workersRegion', 'Workers')}
-            className="scrollbar-sleek min-h-0 overflow-y-auto overscroll-contain"
-            style={{ maxHeight: budget, maskImage: fade }}
-            onScroll={(event) => {
-              anchor.current =
-                workerDockScrollAnchorAt(
-                  event.currentTarget,
-                  small ? null : virtual.getVirtualItems(),
-                  items
-                ) ?? anchor.current
-              hold()
-              loadVisibleWindow()
-              refade()
-            }}
-            onKeyDown={(event) => {
-              const row =
-                event.target instanceof Element
-                  ? event.target.closest<HTMLElement>('[data-worker-dock-row]')
-                  : null
-              const index = items.findIndex((item) => item.id === row?.dataset.workerDockRow)
-              const next =
-                index === -1 ? null : workerDockRowKeyTarget(event.key, index, items.length)
-              if (next === null) {
-                return
-              }
-              event.preventDefault()
-              // The pill sits just below the card, so moving down past the last row lands on it.
-              if (next >= items.length) {
-                pill.current?.focus()
-              } else {
-                focusRow(next)
-              }
-            }}
-          >
-            <div style={{ height: small ? 'auto' : rowWindow.totalSize, position: 'relative' }}>
-              {visibleItems.map((item) => {
-                const identity = items[item.index]
-                const row = props.rows.get(identity.id)
-                return (
-                  <div
-                    key={identity.id}
-                    data-index={item.index}
-                    ref={small ? undefined : rowWindow.measureRow}
-                    style={{
-                      position: small ? 'relative' : 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      transform: small ? undefined : `translateY(${item.start}px)`
-                    }}
-                  >
-                    {/* One component either way, so focus on a loading row survives its details arriving. */}
-                    <WorkerDockRow
-                      id={identity.id}
-                      row={row}
-                      mixed={mixed}
-                      visible={props.visible}
-                      pending={row ? props.pending.has(row.id) : false}
-                      onOpen={onOpen}
-                      onAction={onAction}
-                    />
-                  </div>
-                )
-              })}
+        />
+        {props.expanded ? (
+          <>
+            <div
+              ref={viewport}
+              id={id}
+              role="region"
+              aria-label={t('components.native-chat.workerDock.workersRegion', 'Workers')}
+              className="scrollbar-sleek min-h-0 overflow-y-auto overscroll-contain"
+              style={{ maxHeight: budget, maskImage: fade }}
+              onScroll={(event) => {
+                anchor.current =
+                  workerDockScrollAnchorAt(
+                    event.currentTarget,
+                    small ? null : virtual.getVirtualItems(),
+                    items
+                  ) ?? anchor.current
+                hold()
+                loadVisibleWindow()
+                refade()
+              }}
+              onKeyDown={(event) => {
+                const row =
+                  event.target instanceof Element
+                    ? event.target.closest<HTMLElement>('[data-worker-dock-row]')
+                    : null
+                const index = items.findIndex((item) => item.id === row?.dataset.workerDockRow)
+                const next =
+                  index === -1 ? null : workerDockRowKeyTarget(event.key, index, items.length)
+                if (next === null) {
+                  return
+                }
+                event.preventDefault()
+                // The header sits above the first row, so moving up past it lands there.
+                if (event.key === 'ArrowUp' && index === 0) {
+                  pill.current?.focus()
+                } else {
+                  focusRow(Math.min(next, items.length - 1))
+                }
+              }}
+            >
+              <div style={{ height: small ? 'auto' : rowWindow.totalSize, position: 'relative' }}>
+                {visibleItems.map((item) => {
+                  const identity = items[item.index]
+                  const row = props.rows.get(identity.id)
+                  return (
+                    <div
+                      key={identity.id}
+                      data-index={item.index}
+                      ref={small ? undefined : rowWindow.measureRow}
+                      style={{
+                        position: small ? 'relative' : 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: small ? undefined : `translateY(${item.start}px)`
+                      }}
+                    >
+                      {/* One component either way, so focus on a loading row survives its details arriving. */}
+                      <WorkerDockRow
+                        id={identity.id}
+                        ordinal={item.index + 1}
+                        row={row}
+                        mixed={mixed}
+                        visible={props.visible}
+                        pending={row ? props.pending.has(row.id) : false}
+                        onOpen={onOpen}
+                        onAction={onAction}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+              {unlisted || unread ? (
+                <p className="flex h-[30px] items-center px-2 text-xs text-muted-foreground">
+                  {workerDockEmptyCopy(t, unlisted).note}
+                </p>
+              ) : null}
             </div>
-            {unlisted || unread ? (
-              <p className="flex h-[30px] items-center px-2 text-xs text-muted-foreground">
-                {workerDockEmptyCopy(t, unlisted).note}
-              </p>
-            ) : null}
-          </div>
-          <WorkerDockCardFooter
-            stopAll={props.stopAll}
-            clearable={clearable}
-            clearing={clearing}
-            onClearAll={() => {
-              props.onClearAll()
-              pill.current?.focus()
-            }}
-          />
-        </div>
-      ) : null}
-      <WorkerDockPill
-        pill={pill}
-        glyph={
-          top
-            ? workerDockGlyph({ ...top, retired: topRow?.retired })
-            : unlisted
-              ? 'running'
-              : 'queued'
-        }
-        title={
-          topRow ? workerDockRowTitle(topRow) : top ? count : workerDockEmptyCopy(t, unlisted).title
-        }
-        total={total}
-        expanded={props.expanded}
-        listId={id}
-        onToggle={() => {
-          setHeld(null)
-          props.onExpandedChange(!props.expanded)
-        }}
-        onKeyDown={(event) => {
-          if (props.expanded && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-            event.preventDefault()
-            focusRow(event.key === 'ArrowUp' ? items.length - 1 : 0)
-          }
-        }}
-      />
+            <WorkerDockCardFooter
+              stopAll={props.stopAll}
+              clearable={clearable}
+              clearing={clearing}
+              onClearAll={() => {
+                props.onClearAll()
+                pill.current?.focus()
+              }}
+            />
+          </>
+        ) : null}
+      </div>
       <span className="sr-only" role="status" aria-live="polite">
         {count}
       </span>

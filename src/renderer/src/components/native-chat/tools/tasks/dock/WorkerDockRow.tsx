@@ -2,7 +2,6 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { workerDockKindLabel, workerDockStateLabel } from './worker-dock-labels'
 import { memo } from 'react'
 import { cn } from '@/lib/class-names'
-import { ArrowRight } from 'lucide-react'
 import { WorkerDockRowAction } from './WorkerDockRowAction'
 import { WorkerDockGlyph } from './WorkerDockGlyph'
 import { workerDockGlyph } from './worker-dock-card-order'
@@ -31,20 +30,19 @@ function Age({ at, visible }: { at: number | null; visible: boolean }) {
     visible && at !== null
   )
   return at === null ? null : (
-    <span
-      className="shrink-0 text-xs tabular-nums text-muted-foreground"
-      title={new Date(at).toLocaleString(locale)}
-    >
+    <span className="tabular-nums" title={new Date(at).toLocaleString(locale)}>
       {label}
     </span>
   )
 }
 
-/** One 30px card row: status mark, title, time; on hover or focus Stop or Clear and an arrow cover the time.
+/** One panel row: status mark, "Worker N" and the full title, then model and time; on hover or
+ *  focus Stop or Clear cover the row's end.
  *  The open button stretches over the whole row, so a press anywhere but the action opens it. A row
  *  whose details have not arrived yet keeps the same button, so focus on it survives their arrival. */
 export const WorkerDockRow = memo(function WorkerDockRow({
   id,
+  ordinal,
   row,
   mixed,
   visible,
@@ -54,6 +52,8 @@ export const WorkerDockRow = memo(function WorkerDockRow({
 }: {
   /** The identity's id, for a row whose details are still loading. */
   id?: string
+  /** The row's place in the panel, 1-based: "Worker 3". */
+  ordinal?: number
   row: WorkerDockRowView | undefined
   mixed: boolean
   visible: boolean
@@ -99,7 +99,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     <div
       data-worker-dock-row={rowId}
       data-worker-dock-state={row?.state ?? 'loading'}
-      className="group/worker relative flex h-[30px] min-w-0 items-center rounded-md pr-2 text-foreground hover:bg-accent has-focus-visible:bg-accent"
+      className="group/worker relative flex min-w-0 rounded-md pr-2 text-foreground hover:bg-accent has-focus-visible:bg-accent"
     >
       <button
         type="button"
@@ -107,18 +107,38 @@ export const WorkerDockRow = memo(function WorkerDockRow({
         aria-label={label}
         aria-disabled={row ? undefined : true}
         title={tooltip}
-        className="flex h-full min-w-0 flex-1 items-center gap-2 pl-2 text-left text-sm after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring aria-disabled:text-muted-foreground"
+        className="flex min-w-0 flex-1 items-start gap-2 py-1 pl-2 text-left text-sm after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring aria-disabled:text-muted-foreground"
         onClick={(event) => {
           if (row) {
             onOpen(row, event.currentTarget)
           }
         }}
       >
-        <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
-        <span className="min-w-0 flex-1 truncate">{title}</span>
-        {row ? <Age at={row.changedAt} visible={visible} /> : null}
+        <span className="flex h-5 shrink-0 items-center">
+          <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="line-clamp-2 break-words">
+            {ordinal ? (
+              <span className="text-muted-foreground">
+                {t('components.native-chat.workerDock.ordinal', '{{kind}} {{number}}', {
+                  kind: workerDockKindLabel(t, row?.kind ?? 'worker'),
+                  number: ordinal
+                })}{' '}
+              </span>
+            ) : null}
+            {title}
+          </span>
+          {row && (row.model || row.changedAt !== null) ? (
+            <span className="truncate text-xs text-muted-foreground">
+              {row.model}
+              {row.model && row.changedAt !== null ? ' · ' : null}
+              <Age at={row.changedAt} visible={visible} />
+            </span>
+          ) : null}
+        </span>
       </button>
-      {/* Over the time on hover or focus, so at rest the title has the row's whole width. At rest it
+      {/* Over the row's end on hover or focus, so at rest the title has the row's whole width. At rest it
           is transparent and takes no presses (a press there opens the row), but stays in the
           accessibility tree and the tab order; focus inside the row shows it. */}
       <div
@@ -131,11 +151,6 @@ export const WorkerDockRow = memo(function WorkerDockRow({
         )}
       >
         {row ? <WorkerDockRowAction row={row} pending={pending} onAction={onAction} /> : null}
-        <ArrowRight
-          aria-hidden="true"
-          data-worker-dock-arrow=""
-          className="pointer-events-none size-3 shrink-0 text-muted-foreground"
-        />
       </div>
     </div>
   )

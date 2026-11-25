@@ -20,8 +20,8 @@ const loaded = (page, id) =>
 export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
   await check('incomplete monitoring with no listed rows keeps the pill and Stop all', () =>
     scene('unlistedOpen720', {}, async (page) => {
-      const title = await page.locator('[data-worker-dock-pill-title]').textContent()
-      assert(title === 'Background work running', `pill shows "${title}"`)
+      const title = await toggle(page).getAttribute('aria-label')
+      assert(title === 'Background work running', `pill says "${title}"`)
       assert(!(await card(page).textContent()).includes('unavailable'), 'card says unavailable')
       await page.getByRole('button', { name: 'Stop all' }).click()
       assert(
@@ -129,7 +129,10 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
         await toggle(page).click()
         await page.waitForTimeout(200)
         const [b, p] = await Promise.all([jump.boundingBox(), toggle(page).boundingBox()])
-        assert(Math.abs(p.y - (b.y + b.height) - 8) <= 1, 'Jump did not settle back over the pill')
+        assert(
+          Math.abs(p.y + p.height - (b.y + b.height)) <= 1 && b.x >= p.x + p.width,
+          'Jump did not settle back onto the chip row'
+        )
         await jump.click()
         await page.waitForTimeout(200)
         const atEnd = await page.evaluate(() => {

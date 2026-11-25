@@ -22937,7 +22937,8 @@
         "unlistedDetail": "Some background work isn’t listed here",
         "unlisted": "Background work running",
         "unread": "Workers couldn’t load",
-        "unreadDetail": "Workers will show here once they load"
+        "unreadDetail": "Workers will show here once they load",
+        "ordinal": "{{kind}} {{number}}"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",

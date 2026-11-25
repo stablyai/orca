@@ -422,3 +422,35 @@ export const queue320 = stack(320, 'queue')
 export const both720 = stack(720, 'both')
 export const both390 = stack(390, 'both')
 export const both320 = stack(320, 'both')
+// Scrolled up with a queued message: the chip, Jump to latest at its row's end, then the queue.
+const scrollAway = async () => {
+  const transcript = document.querySelector<HTMLElement>('[data-fixture-transcript]')
+  transcript?.scrollTo({ top: 0 })
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+export const queuedJumpFolded390 = defineFixture({
+  width: 390,
+  render: () => workerDockFixturePane(<Harness count={3} failed={0} />, 'queue'),
+  interact: scrollAway
+})
+export const queuedJumpOpen390 = defineFixture({
+  width: 390,
+  render: () => workerDockFixturePane(<Harness count={3} failed={0} open />, 'queue'),
+  interact: scrollAway
+})
+export const queuedJumpFolded320 = defineFixture({
+  width: 320,
+  render: () => workerDockFixturePane(<Harness count={3} failed={0} />, 'queue'),
+  interact: scrollAway
+})
+export const queuedJumpOpen320 = defineFixture({
+  width: 320,
+  render: () => workerDockFixturePane(<Harness count={3} failed={0} open />, 'queue'),
+  interact: scrollAway
+})
+// Wider than the chat column: the panel and Jump to latest still line up with the message box.
+export const queuedJumpOpen1000 = defineFixture({
+  width: 1000,
+  render: () => workerDockFixturePane(<Harness count={3} failed={0} open />, 'queue'),
+  interact: scrollAway
+})

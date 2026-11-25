@@ -44,6 +44,7 @@ export function workerDockSummary(
     needsYou,
     mixed: kinds.size > 1,
     total,
+    label: countLabel,
     count: [countLabel, status].filter(Boolean).join(' · ')
   }
 }
