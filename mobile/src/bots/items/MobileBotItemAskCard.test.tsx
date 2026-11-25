@@ -132,13 +132,16 @@ function open(
   })
 }
 
+// Mocked native leaves render as host strings.
+const isHost = (node: { type: unknown }, name: string): boolean => node.type === name
+
 const otherInput = (): ReactTestInstance | undefined =>
-  tree!.root.findAll((node) => node.type === 'MessageBox')[0]
+  tree!.root.findAll((node) => isHost(node, 'MessageBox'))[0]
 
 const pressable = (label: string): ReactTestInstance =>
   tree!.root.find(
     (node) =>
-      node.type === 'Pressable' && node.findAll((n) => n.props.children === label).length > 0
+      isHost(node, 'Pressable') && node.findAll((n) => n.props.children === label).length > 0
   )
 
 function typeOther(text: string): void {
