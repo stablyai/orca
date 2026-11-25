@@ -17,6 +17,7 @@ import {
 import {
   acquireWatchRoot,
   releaseWatchRoot,
+  retryFailedWatchRoot,
   type HeldWatchRoots,
   type WatchRootArgs
 } from './editor-external-watch-local-roots'
@@ -147,6 +148,10 @@ export class SymlinkedTabFolderWatches {
   // Why never swap a working watch for a new outer one: releasing it drops its queued events, and the new one may fail.
   private joinWatch(folder: TabFolder, link: string, heldWatchRoots: HeldWatchRoots): void {
     const plan = this.planWatch(folder, link)
+    // Why: only a folder's own-path watch is returned failed; joining it retries it, as a fresh request would.
+    if (plan.watch?.failed) {
+      this.retryWatch(plan.watch, folder.target, heldWatchRoots)
+    }
     const watch = plan.watch ?? this.startWatch(plan.startAt, folder.target, heldWatchRoots)
     folder.watch = watch
     watch.folders.add(folder)
@@ -187,7 +192,13 @@ export class SymlinkedTabFolderWatches {
     const path = folder.path.replace(windowsSyntax ? /[\\/]+$/ : /\/+$/, '')
     const relative = relativePathInsideRoot(link, path)
     // Why WSL: its watcher polls two levels below the root instead of watching recursively, so a watch covers only its own folder.
-    if (relative === null || isWslUncPath(path) || !path.endsWith(relative)) {
+    // Why the slash form: a Windows suffix comes back slash-separated while tab folders keep backslashes.
+    const suffix = relative === null ? '' : path.slice(path.length - relative.length)
+    if (
+      relative === null ||
+      isWslUncPath(path) ||
+      (windowsSyntax ? suffix.replace(/\\/g, '/') : suffix) !== relative
+    ) {
       return {
         watch: this.watches.get(normalizeRuntimePathForComparison(folder.path)),
         startAt: folder.path
@@ -241,6 +252,18 @@ export class SymlinkedTabFolderWatches {
       this.onWatchError(owner, error)
     })
     return watch
+  }
+
+  private retryWatch(
+    watch: FolderWatch,
+    owner: EditorExternalWatchTarget,
+    heldWatchRoots: HeldWatchRoots
+  ): void {
+    watch.failed = false
+    retryFailedWatchRoot(heldWatchRoots, toWatchRoot(watch.path), (error) => {
+      watch.failed = true
+      this.onWatchError(owner, error)
+    })
   }
 }
 
