@@ -104,6 +104,8 @@ function ViewerBody({
   const openerFocus = useRef<Element | null>(null)
   // Set when the close prompt is answered: the viewer closes once the answered note is settled.
   const closeRequested = useRef(false)
+  // Set when Clear's prompt is answered: the notes clear once the answered note is settled.
+  const clearRequested = useRef(false)
   const { setCanvas, canvasHandlers, cursor, scale, offset: viewOffset } = panZoom
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const t = useTranslate()
@@ -155,6 +157,13 @@ function ViewerBody({
         }
       : null
 
+  useEffect(() => {
+    if (clearRequested.current && !editor.hasUnadded && !editor.confirm) {
+      clearRequested.current = false
+      editor.clear()
+      viewportRef.current?.focus({ preventScroll: true })
+    }
+  }, [editor])
   useEffect(() => {
     if (closeRequested.current && !editor.hasUnadded && !editor.confirm) {
       closeRequested.current = false
@@ -382,6 +391,8 @@ function ViewerBody({
               if (reason === 'close') {
                 // Closes on the next render, once the answered note is added or gone.
                 closeRequested.current = true
+              } else if (reason === 'clear') {
+                clearRequested.current = true
               } else if (reason === 'done') {
                 setAnnotating(false)
               } else {

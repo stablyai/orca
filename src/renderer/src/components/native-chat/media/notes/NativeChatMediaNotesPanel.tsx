@@ -14,7 +14,7 @@ import {
   NATIVE_CHAT_NOTE_TEXT_MAX,
   type NativeChatMediaNote
 } from './native-chat-media-notes'
-import type { NativeChatNotesEditor } from './use-native-chat-notes-editor'
+import type { NativeChatNotesConfirm, NativeChatNotesEditor } from './use-native-chat-notes-editor'
 
 /** The note editor shows its length from here on. */
 const NOTE_TEXT_WARN = NATIVE_CHAT_NOTE_TEXT_MAX - 200
@@ -35,7 +35,7 @@ export function NativeChatMediaNotesPanel({
   narrow: boolean
   onHide: () => void
   /** The prompt was answered with Add/Save or Discard; the viewer finishes what asked for it. */
-  onConfirmed: (reason: 'close' | 'done' | 'replace' | 'cancel') => void
+  onConfirmed: (reason: NativeChatNotesConfirm['reason']) => void
   /** Focus goes back to the media once the editor closes. */
   onEditorClosed: () => void
   /** The Send button, shown at the bottom of the sheet when narrow. */
@@ -329,7 +329,7 @@ function ConfirmPrompt({
   onConfirmed
 }: {
   editor: NativeChatNotesEditor
-  onConfirmed: (reason: 'close' | 'done' | 'replace' | 'cancel') => void
+  onConfirmed: (reason: NativeChatNotesConfirm['reason']) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const keep = useRef<HTMLButtonElement>(null)

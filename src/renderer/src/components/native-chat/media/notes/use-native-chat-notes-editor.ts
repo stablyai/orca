@@ -8,7 +8,7 @@ import {
 } from './native-chat-media-notes'
 
 /** What the panel's prompt asks about: an unadded note, or an unsaved change to one. */
-export type NativeChatNotesConfirm = { reason: 'close' | 'done' | 'replace' | 'cancel' }
+export type NativeChatNotesConfirm = { reason: 'close' | 'done' | 'replace' | 'cancel' | 'clear' }
 
 export type NativeChatNotesStatus =
   | { kind: 'removed'; count: number }
@@ -163,9 +163,10 @@ export function useNativeChatNotesEditor(initial: {
     if (notes.length === 0 || lockedRef.current) {
       return
     }
-    // Words not yet added would be lost with no Undo: they are added or discarded first.
+    // Words not yet added would be lost with no Undo: they are added or discarded first, then Clear
+    // goes on (the viewer finishes it once the answered note is settled).
     if (hasUnadded) {
-      setConfirm({ reason: 'replace' })
+      setConfirm({ reason: 'clear' })
       return
     }
     record(notes)
