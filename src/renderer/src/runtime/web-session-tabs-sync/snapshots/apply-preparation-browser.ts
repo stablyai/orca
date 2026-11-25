@@ -29,6 +29,12 @@ import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/agent-session
 import { executionHostIdForSessionTabsOwner } from '../../native-chat/local-sessions/local-structured-session-owner'
 import { isAgentSessionTabOfAnotherHost } from '../identity/mirror-row-ownership'
 import { isUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
+import {
+  automaticCloseKeepsAtAdoption,
+  forgetAutomaticCloseConsent,
+  hasAutomaticCloseConsents
+} from '../closing/automatic-close-consents'
+import { revealAutomaticallyClosedChat } from '../closing/automatic-close-reveal'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
@@ -200,12 +206,18 @@ export function prepareWebSessionTabsSnapshotBrowser(
       ) {
         return true
       }
+      if (hasAutomaticCloseConsents() && publishedAgentSessionIds.has(tab.entityId)) {
+        forgetAutomaticCloseConsent(worktreeId, tab.entityId)
+      }
       // Matching host identity replaces provisional tabs immediately or both panes render before lifecycle publication.
       return (
         !publishedAgentSessionIds.has(tab.entityId) &&
         (!agentSessionsAffirmed ||
           shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
-          isUnlistedCreatedChat(worktreeId, tab.entityId))
+          isUnlistedCreatedChat(worktreeId, tab.entityId) ||
+          // Orca's own close is decided again here, at removal: a person who used the tab since keeps it.
+          (hasAutomaticCloseConsents() &&
+            automaticCloseKeepsAtAdoption(state, worktreeId, tab, revealAutomaticallyClosedChat)))
       )
     }
     if (tab.contentType === 'browser') {

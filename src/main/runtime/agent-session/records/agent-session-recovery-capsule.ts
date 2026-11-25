@@ -35,7 +35,8 @@ type StoredRecords = Pick<RecoveryCapsuleState, 'entries' | 'failed'>
 
 /** Durable, per-session restart offers. Listing never spends an offer. */
 export class AgentSessionRecoveryCapsule {
-  private readonly filePath: string
+  /** Read-only outside: passive readers (agent-session-recovery-capsule-custody.ts) take its lock. */
+  readonly filePath: string
 
   constructor(stateDirectory: string) {
     this.filePath = join(stateDirectory, AGENT_SESSION_RECOVERY_CAPSULE_FILE)

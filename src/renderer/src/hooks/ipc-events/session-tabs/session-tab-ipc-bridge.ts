@@ -8,7 +8,7 @@ import {
   SESSION_TAB_CLOSE_TIMEOUT_ERROR,
   SESSION_TAB_CLOSE_KEPT_ERROR
 } from '../../../../../shared/workspace-layout/client-views/session-tab-close'
-import { automaticSessionTabCloseKept } from './automatic-session-tab-close'
+import { answerAutomaticSessionTabClose } from './automatic-session-tab-close'
 import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
@@ -60,12 +60,13 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         if (automatic) {
           // Orca's own close asks first and closes nothing here: the host hides the chat and this window
           // drops the tab from its snapshot. A tab closed here would retire as a person's close does.
-          const kept = automaticSessionTabCloseKept(
-            useAppStore.getState(),
-            worktreeId,
-            resolveWindowTabIdForHostTab(worktreeId, tabId),
-            automatic
-          )
+          const kept =
+            answerAutomaticSessionTabClose(
+              useAppStore.getState(),
+              worktreeId,
+              resolveWindowTabIdForHostTab(worktreeId, tabId),
+              automatic
+            ) === 'kept'
           window.api.ui.respondSessionTabClose({
             requestId,
             ...(kept ? { error: SESSION_TAB_CLOSE_KEPT_ERROR } : {})

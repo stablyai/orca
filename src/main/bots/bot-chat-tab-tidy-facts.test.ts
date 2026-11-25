@@ -149,3 +149,66 @@ describe('readBotChatTabFacts', () => {
     }
   })
 })
+
+describe('readBotChatTabFacts, Run and paired work', () => {
+  function withRun(coordinatorGeneration: number): OrchestrationDb {
+    const store = open()
+    store.db.pragma('foreign_keys = OFF')
+    store.db
+      .prepare(
+        `INSERT INTO runs (id, objective, consumer_generation, coordinator_orca_session_id,
+           coordinator_orca_session_id_generation) VALUES ('run-1', 'o', 2, ?, ?)`
+      )
+      .run(MIDDLE, coordinatorGeneration)
+    return store
+  }
+
+  it('holds a chat whose Run (it coordinates now) has a pending question, even with its workers done', () => {
+    const store = withRun(2)
+    store.db
+      .prepare(
+        `INSERT INTO question_threads (message_id, run_id, dispatch_id, asker_handle)
+         VALUES ('q1', 'run-1', 'd1', 'worker')`
+      )
+      .run()
+    expect(facts(store).holds).toEqual(['run-question'])
+  })
+
+  it('holds a Run remote question not ended, and unread mail to the Run', () => {
+    const remote = withRun(2)
+    remote.db
+      .prepare(
+        `INSERT INTO remote_owned_questions (message_id, conversation_id, run_id, environment_id, dispatch_id)
+         VALUES ('r1', 'c1', 'run-1', 'e1', 'd1')`
+      )
+      .run()
+    expect(facts(remote).holds).toEqual(['run-question'])
+    const inbox = withRun(2)
+    mail(inbox, { id: 'to-run', to: 'run:run-1', read: false })
+    expect(facts(inbox).holds).toEqual(['run-question'])
+  })
+
+  it('does not count a Run it coordinated at an older generation', () => {
+    const store = withRun(1)
+    store.db
+      .prepare(
+        `INSERT INTO question_threads (message_id, run_id, dispatch_id, asker_handle)
+         VALUES ('q1', 'run-1', 'd1', 'worker')`
+      )
+      .run()
+    expect(facts(store).holds).toEqual([])
+  })
+
+  it('holds a question it asked a paired computer until its answer or notice comes back', () => {
+    const store = open()
+    store.db
+      .prepare(
+        `INSERT INTO peer_questions_out (message_id, conversation_id, environment_id, peer_fingerprint, asker, awaiting)
+         VALUES ('p1', 'c1', 'e1', 'f1', ?, 1)`
+      )
+      .run(address(LIVE))
+    expect(facts(store).holds).toEqual(['peer-question'])
+    store.db.prepare(`UPDATE peer_questions_out SET awaiting = NULL`).run()
+    expect(facts(store).holds).toEqual([])
+  })
+})

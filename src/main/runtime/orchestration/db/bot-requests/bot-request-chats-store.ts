@@ -13,6 +13,24 @@ export function markBotRequestChat(db: Pick<OrchestrationDb, 'db'>, sessionId: s
   db.db.prepare('INSERT OR IGNORE INTO bot_request_chats (session_id) VALUES (?)').run(sessionId)
 }
 
+/** Up to `limit` marked chats after `after`, in session id order (a primary key range). */
+export function pageBotRequestChats(
+  db: Pick<OrchestrationDb, 'db'>,
+  after: string,
+  limit: number
+): string[] {
+  return db.db
+    .prepare(
+      'SELECT session_id FROM bot_request_chats WHERE session_id > ? ORDER BY session_id LIMIT ?'
+    )
+    .all(after, limit)
+    .flatMap((row: unknown) =>
+      row && typeof row === 'object' && 'session_id' in row && typeof row.session_id === 'string'
+        ? [row.session_id]
+        : []
+    )
+}
+
 export function isMarkedBotRequestChat(
   db: Pick<OrchestrationDb, 'db'>,
   sessionId: string

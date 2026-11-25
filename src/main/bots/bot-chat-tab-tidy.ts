@@ -2,61 +2,67 @@
 // chat keeps its transcript, draft, address and restart recovery, keeps running if anything comes,
 // stays in the bot's Chats and Session History, and opens again from there. A request sent with
 // `--chat new` opens a tab no one ever closed, so every finished or failed request stayed in the bot's
-// sidebar for good. A person's own chats are never touched.
-import type { Bot } from '../../shared/bot-types'
-import type { BotChatTreeChat } from '../../shared/bots/bot-chat-tree'
-import { isBotGroupMemberSession } from '../../shared/bots/bot-group'
-import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
+// sidebar for good. Only chats carrying the request mark are looked at; a person's own never are.
 
 /** How long a chat sits untouched (no turn, no mail, its tab not focused or reopened) before its tab closes. */
 export const BOT_CHAT_TAB_IDLE_MS = 24 * 60 * 60 * 1000
 /** Between passes. */
 export const BOT_CHAT_TAB_TIDY_EVERY_MS = 60 * 60 * 1000
-/** From the first tick to the first pass; also the wait before the next pass while a budget ran out. */
+/** From the first tick to the first pass; also the wait before the next pass while marks remain unread. */
 export const BOT_CHAT_TAB_TIDY_SOON_MS = 10 * 60 * 1000
-/** Close attempts one pass makes at most (each asks the window and writes the hide). */
+/** Marked chats one pass looks at (one page of the mark table). */
+export const BOT_CHAT_TAB_TIDY_MAX_LOOKS = 50
+/** Close attempts one pass makes (each asks the window, then writes the hide). */
 export const BOT_CHAT_TAB_TIDY_MAX_CLOSES = 40
-/** Candidates one pass reads the records of at most. */
-export const BOT_CHAT_TAB_TIDY_MAX_LOOKS = 200
+/** Repairs one pass makes, and how many a hide that went wrong is tried. */
+export const BOT_CHAT_TAB_TIDY_MAX_REPAIRS = 20
+export const BOT_CHAT_TAB_REPAIR_TRIES = 3
+export const BOT_CHAT_TAB_REPAIR_QUEUE_MAX = 100
 
-/** A chat tab in the bot's home, as one snapshot of the host's tabs lists it. */
-export type BotChatTabTidyTab = {
-  sessionId: string
+/** A request chat with one tab in its bot's home, every session of its lineage, and the tab. */
+export type BotChatTabCandidate = {
+  chatId: string
+  botId: string
+  workspaceId: string
+  lineage: readonly string[]
+  tabSessionId: string
   tabId: string
-  /** In front of its tab group. */
-  isActive: boolean
-  isPinned?: true
 }
 
-/** The host's verdict on one candidate from its records: keep, or go with the check the hide's write
- *  runs again (it throws when anything changed). */
-export type BotChatTabAdmission = { kind: 'keep'; why: string } | { kind: 'go'; admit: () => void }
+/** A chat tab in a bot's home, as one snapshot of the host's tabs lists it. */
+export type BotChatTabRow = { sessionId: string; tabId: string; isActive: boolean; isPinned?: true }
+/** Each home's tab snapshot, read once per pass. */
+export type BotChatTabPassTabs = Map<string, Promise<readonly BotChatTabRow[]>>
 
-export type BotChatTabConsent = 'consent' | 'kept' | 'error'
-export type BotChatTabHide = 'committed' | 'refused' | 'error'
+export type BotChatTabKeep = { kind: 'keep'; why: string }
+export type BotChatTabLocated = BotChatTabKeep | ({ kind: 'candidate' } & BotChatTabCandidate)
+/** `check` runs again inside the hide's write and throws when anything changed. */
+export type BotChatTabAdmission = BotChatTabKeep | { kind: 'go'; check: () => void }
+/** What the host's own records say of the tab after a hide was tried. */
+export type BotChatTabState = 'visible' | 'background' | 'unknown'
+/** sessionId -> what the restart recovery capsule holds for it; null when it could not be read. */
+export type BotChatTabCustody = ReadonlyMap<string, string> | null
 
 export type BotChatTabTidyHost = {
-  bots: () => readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[]
-  /** The bot's chats as its sidebar reads them, and the chat (/clear root) each session belongs to. */
-  chats: (
-    botId: string
-  ) => Promise<{ chats: readonly BotChatTreeChat[]; rootOf: (sessionId: string) => string }>
-  tabs: (workspaceId: string) => Promise<readonly BotChatTabTidyTab[]>
-  /** When a person last focused the tab, from the saved layout; null when never or unknown. */
-  lastFocusedAt: (workspaceId: string, tab: BotChatTabTidyTab) => number | null
-  /** Provenance, lineage, holds, items, activity, recovery and rest, read now. */
-  admission: (
-    botId: string,
-    chat: BotChatTreeChat,
-    tab: BotChatTabTidyTab
-  ) => Promise<BotChatTabAdmission>
+  /** Marked chats after `after`, in id order. */
+  page: (after: string, limit: number) => string[]
+  /** Record, bot, lineage and the chat's one tab; `tabs` caches each home's tab snapshot for a pass. */
+  locate: (chatId: string, tabs: BotChatTabPassTabs) => Promise<BotChatTabLocated>
+  /** Activity, holds, items, rest and held input, read now. */
+  admit: (candidate: BotChatTabCandidate) => Promise<BotChatTabAdmission>
+  custody: () => Promise<BotChatTabCustody>
   /** The window that owns the layout says whether the tab may go; it closes nothing. */
-  consent: (workspaceId: string, tab: BotChatTabTidyTab) => Promise<BotChatTabConsent>
-  /** The background hide, keeping restart recovery, committed only if `admit` passes in its write. */
-  hide: (tab: BotChatTabTidyTab, admit: () => void) => Promise<BotChatTabHide>
-  /** The bots whose chat tabs this pass hid, so their lists read again. */
+  consent: (candidate: BotChatTabCandidate) => Promise<'consent' | 'kept' | 'error'>
+  /** The background hide, keeping restart recovery; may throw, the state is read back after. */
+  hide: (candidate: BotChatTabCandidate, check: () => void) => Promise<void>
+  state: (candidate: BotChatTabCandidate) => BotChatTabState
+  /** The host's tab snapshot still lists the tab after the hide committed. */
+  listed: (candidate: BotChatTabCandidate) => Promise<boolean>
+  /** Retires a committed hide's leftover snapshot row and saved tab. */
+  retireListing: (candidate: BotChatTabCandidate) => Promise<void>
+  /** Shows the same chat's tab again (identity-safe: a newer show already there is left as it is). */
+  reveal: (candidate: BotChatTabCandidate) => Promise<void>
   changed: (botIds: readonly string[]) => void
-  /** Lets other work run between closes. */
   pause: () => Promise<void>
   now: () => number
   warn: (message: string, error: unknown) => void
@@ -64,204 +70,235 @@ export type BotChatTabTidyHost = {
 
 export type BotChatTabTidyPass = {
   closed: string[]
-  /** The window kept it, the write refused it, or a step failed: tried again on a later lap. */
+  /** Kept by the window, refused by the write, or handed back: tried again on a later lap. */
   refused: string[]
-  /** A budget ran out before every candidate was looked at. */
+  /** Hidden, then shown again because something held it once the hide committed. */
+  revealed: string[]
   more: boolean
 }
 
-/** Where a pass stopped, so the next one resumes after it: across bots, then oldest first. */
-export type BotChatTabCursor = { botId: string; at: number; chatId: string }
+type RepairEntry = { candidate: BotChatTabCandidate; tries: number }
 
-/** Side chats open in a tab (never Home, a thread, a group room or an automation run), not ended, idle
- *  with no worker running or waiting, with no turn for a day. */
-export function botChatTabsDue(
-  chats: readonly BotChatTreeChat[],
-  now: number,
-  idleMs: number = BOT_CHAT_TAB_IDLE_MS
-): BotChatTreeChat[] {
-  return chats.filter(
-    (chat) =>
-      chat.origin === 'side' &&
-      !chat.run &&
-      !isBotGroupMemberSession(chat.chatId) &&
-      !chat.closed &&
-      chat.tab === true &&
-      chat.live === 'idle' &&
-      chat.runningTotal === 0 &&
-      now - chat.lastActiveAt >= idleMs
-  )
-}
+const holdsIn = (custody: BotChatTabCustody, lineage: readonly string[]): boolean =>
+  custody === null || lineage.some((id) => custody.has(id))
 
-/** A tab a person keeps: pinned, in front, or focused within the idle window. */
-export function botChatTabHeld(
-  tab: BotChatTabTidyTab,
-  lastFocusedAt: number | null,
-  now: number,
-  idleMs: number = BOT_CHAT_TAB_IDLE_MS
-): boolean {
-  return (
-    tab.isPinned === true ||
-    tab.isActive ||
-    (lastFocusedAt !== null && now - lastFocusedAt < idleMs)
-  )
-}
-
-type Candidate = {
-  bot: Pick<Bot, 'id' | 'folderWorkspaceId'>
-  chat: BotChatTreeChat
-  rootOf: (sessionId: string) => string
-  key: BotChatTabCursor
-}
-
-function compareKeys(a: BotChatTabCursor, b: BotChatTabCursor): number {
-  if (a.botId !== b.botId) {
-    return a.botId < b.botId ? -1 : 1
-  }
-  if (a.at !== b.at) {
-    return a.at - b.at
-  }
-  return a.chatId < b.chatId ? -1 : a.chatId > b.chatId ? 1 : 0
-}
-
-/** Every bot's due chats in one stable order, starting just after `cursor` and wrapping. */
-async function orderedCandidates(
-  host: BotChatTabTidyHost,
-  cursor: BotChatTabCursor | null
-): Promise<Candidate[]> {
-  const all: Candidate[] = []
-  const now = host.now()
-  for (const bot of host.bots()) {
-    try {
-      const { chats, rootOf } = await host.chats(bot.id)
-      for (const chat of botChatTabsDue(chats, now)) {
-        all.push({
-          bot,
-          chat,
-          rootOf,
-          key: { botId: bot.id, at: chat.lastActiveAt, chatId: chat.chatId }
-        })
-      }
-    } catch (error) {
-      host.warn('[bots] could not read chats to tidy', error)
-    }
-  }
-  all.sort((a, b) => compareKeys(a.key, b.key))
-  const start = cursor ? all.findIndex((entry) => compareKeys(entry.key, cursor) > 0) : 0
-  return start <= 0 ? all : [...all.slice(start), ...all.slice(0, start)]
-}
-
-type PassState = {
-  pass: BotChatTabTidyPass
-  closes: number
-  looks: number
-  tabsByWorkspace: Map<string, Promise<readonly BotChatTabTidyTab[]>>
-}
-
-/** One pass over every bot on this host, resuming after `cursor`. Returns where it stopped. */
+/** One pass: repairs first, then one page of marked chats after `cursor`. */
 export async function tidyBotChatTabs(
   host: BotChatTabTidyHost,
-  cursor: BotChatTabCursor | null = null,
-  budget: { closes: number; looks: number } = {
-    closes: BOT_CHAT_TAB_TIDY_MAX_CLOSES,
-    looks: BOT_CHAT_TAB_TIDY_MAX_LOOKS
+  options: {
+    cursor: string
+    repairs: RepairEntry[]
+    stopped?: () => boolean
+    budget?: { looks: number; closes: number; repairs: number }
   }
-): Promise<BotChatTabTidyPass & { cursor: BotChatTabCursor | null }> {
-  const state: PassState = {
-    pass: { closed: [], refused: [], more: false },
-    closes: budget.closes,
-    looks: budget.looks,
-    tabsByWorkspace: new Map()
+): Promise<BotChatTabTidyPass & { cursor: string }> {
+  const budget = {
+    ...(options.budget ?? {
+      looks: BOT_CHAT_TAB_TIDY_MAX_LOOKS,
+      closes: BOT_CHAT_TAB_TIDY_MAX_CLOSES,
+      repairs: BOT_CHAT_TAB_TIDY_MAX_REPAIRS
+    })
   }
+  const pass: BotChatTabTidyPass = { closed: [], refused: [], revealed: [], more: false }
   const changed = new Set<string>()
-  let last = cursor
-  for (const candidate of await orderedCandidates(host, cursor)) {
-    if (state.closes <= 0 || state.looks <= 0) {
-      state.pass.more = true
+  const stopped = options.stopped ?? (() => false)
+  await runRepairs(host, options.repairs, budget, changed)
+  let custody: BotChatTabCustody | undefined
+  const custodyNow = async () => (custody ??= await host.custody().catch(() => null))
+  const tabs: BotChatTabPassTabs = new Map()
+  const pageSize = budget.looks
+  const page = host.page(options.cursor, pageSize)
+  let cursor = options.cursor
+  for (const chatId of page) {
+    if (stopped() || budget.closes <= 0) {
+      pass.more = true
       break
     }
-    last = candidate.key
+    budget.looks -= 1
+    cursor = chatId
     try {
-      if (await tidyCandidate(host, candidate, state)) {
-        changed.add(candidate.bot.id)
-      }
+      await tidyOne(host, chatId, {
+        tabs,
+        custodyNow,
+        budget,
+        pass,
+        changed,
+        repairs: options.repairs
+      })
     } catch (error) {
       host.warn('[bots] could not tidy a chat tab', error)
     }
   }
+  // A full page means more marks may follow; a short one ends the lap.
+  if (!pass.more && pageSize > 0 && page.length >= pageSize) {
+    pass.more = true
+  }
+  if (!pass.more) {
+    cursor = ''
+  }
   if (changed.size > 0) {
     host.changed([...changed])
   }
-  return { ...state.pass, cursor: state.pass.more ? last : null }
+  return { ...pass, cursor }
 }
 
-/** True when the hide committed. */
-async function tidyCandidate(
-  host: BotChatTabTidyHost,
-  { bot, chat, rootOf }: Candidate,
-  state: PassState
-): Promise<boolean> {
-  const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
-  const listTabs = (): Promise<readonly BotChatTabTidyTab[]> => {
-    let tabs = state.tabsByWorkspace.get(workspaceId)
-    if (!tabs) {
-      tabs = host.tabs(workspaceId)
-      state.tabsByWorkspace.set(workspaceId, tabs)
-    }
-    return tabs
+type OneState = {
+  tabs: BotChatTabPassTabs
+  custodyNow: () => Promise<BotChatTabCustody>
+  budget: { closes: number }
+  pass: BotChatTabTidyPass
+  changed: Set<string>
+  repairs: RepairEntry[]
+}
+
+async function tidyOne(host: BotChatTabTidyHost, chatId: string, state: OneState): Promise<void> {
+  const located = await host.locate(chatId, state.tabs)
+  if (located.kind === 'keep') {
+    return
   }
-  const held = (tab: BotChatTabTidyTab) =>
-    botChatTabHeld(tab, host.lastFocusedAt(workspaceId, tab), host.now())
-  // Exactly one tab for the chat: more than one surface is a person's doing, and stays.
-  const mine = (await listTabs()).filter((tab) => rootOf(tab.sessionId) === chat.chatId)
-  if (mine.length !== 1 || held(mine[0])) {
-    return false
+  const candidate: BotChatTabCandidate = located
+  const admission = await host.admit(candidate)
+  if (admission.kind === 'keep' || holdsIn(await state.custodyNow(), candidate.lineage)) {
+    return
   }
-  state.looks -= 1
-  const admission = await host.admission(bot.id, chat, mine[0])
-  if (admission.kind === 'keep') {
-    return false
+  state.budget.closes -= 1
+  const consent = await host.consent(candidate)
+  if (consent !== 'consent') {
+    state.pass.refused.push(chatId)
+    return
   }
-  // The tab as it is now: brought forward, pinned or replaced since keeps it.
-  const fresh = (await host.tabs(workspaceId)).filter(
-    (tab) => rootOf(tab.sessionId) === chat.chatId
-  )
-  if (fresh.length !== 1 || fresh[0].tabId !== mine[0].tabId || held(fresh[0])) {
-    return false
+  try {
+    await host.hide(candidate, admission.check)
+  } catch (error) {
+    host.warn('[bots] a chat tab hide failed; reading back its state', error)
   }
-  state.closes -= 1
-  const consent = await host.consent(workspaceId, fresh[0])
-  const outcome = consent === 'consent' ? await host.hide(fresh[0], admission.admit) : consent
+  await settleHide(host, candidate, state)
   await host.pause()
-  if (outcome === 'committed') {
-    state.pass.closed.push(chat.chatId)
-    return true
-  }
-  state.pass.refused.push(chat.chatId)
-  return false
 }
 
-/** Runs a pass when one is due; never two at once. The first pass comes a while after launch; while a
- *  budget runs out, the next comes sooner and resumes where it stopped. */
+/** After a hide was tried, whatever it returned: the host's own state decides what happened. */
+async function settleHide(
+  host: BotChatTabTidyHost,
+  candidate: BotChatTabCandidate,
+  { pass, changed, repairs }: Pick<OneState, 'pass' | 'changed' | 'repairs'>
+): Promise<void> {
+  const after = host.state(candidate)
+  if (after === 'visible') {
+    pass.refused.push(candidate.chatId)
+    return
+  }
+  if (after === 'unknown') {
+    enqueueRepair(repairs, candidate)
+    pass.refused.push(candidate.chatId)
+    return
+  }
+  changed.add(candidate.botId)
+  // Committed: the decision is read once more, in full. Anything that arrived meanwhile (an item
+  // reopened, mail, a start, a recovery offer, a turn) wins, and the same chat's tab comes back.
+  const again = await host
+    .admit(candidate)
+    .catch((): BotChatTabAdmission => ({ kind: 'keep', why: 'unreadable' }))
+  const custody = await host.custody().catch(() => null)
+  if (again.kind === 'keep' || holdsIn(custody, candidate.lineage)) {
+    try {
+      await host.reveal(candidate)
+      pass.revealed.push(candidate.chatId)
+    } catch (error) {
+      host.warn('[bots] could not show a chat tab again', error)
+      enqueueRepair(repairs, candidate)
+    }
+    return
+  }
+  pass.closed.push(candidate.chatId)
+  if (await host.listed(candidate).catch(() => true)) {
+    enqueueRepair(repairs, candidate)
+  }
+}
+
+function enqueueRepair(repairs: RepairEntry[], candidate: BotChatTabCandidate): void {
+  if (
+    repairs.length < BOT_CHAT_TAB_REPAIR_QUEUE_MAX &&
+    !repairs.some((entry) => entry.candidate.tabSessionId === candidate.tabSessionId)
+  ) {
+    repairs.push({ candidate, tries: 0 })
+  }
+}
+
+/** Each queued hide that went wrong, by the identity it was tried with: a newer show wins. */
+async function runRepairs(
+  host: BotChatTabTidyHost,
+  repairs: RepairEntry[],
+  budget: { repairs: number },
+  changed: Set<string>
+): Promise<void> {
+  for (const entry of repairs.slice()) {
+    if (budget.repairs <= 0) {
+      return
+    }
+    budget.repairs -= 1
+    entry.tries += 1
+    const { candidate } = entry
+    const drop = () => repairs.splice(repairs.indexOf(entry), 1)
+    try {
+      const now = host.state(candidate)
+      if (now === 'visible') {
+        drop()
+        continue
+      }
+      if (now === 'background') {
+        const again = await host.admit(candidate)
+        const custody = await host.custody().catch(() => null)
+        if (again.kind === 'keep' || holdsIn(custody, candidate.lineage)) {
+          await host.reveal(candidate)
+        } else if (await host.listed(candidate)) {
+          await host.retireListing(candidate)
+        }
+        changed.add(candidate.botId)
+        drop()
+        continue
+      }
+    } catch (error) {
+      host.warn('[bots] a chat tab repair failed', error)
+    }
+    if (entry.tries >= BOT_CHAT_TAB_REPAIR_TRIES) {
+      drop()
+    }
+  }
+}
+
+/** Runs a pass when one is due; never two at once; the pass holds everything it started until it
+ *  settles. The first pass comes a while after launch; while marks remain unread, the next comes sooner. */
 export class BotChatTabTidyTicker {
   private firstTickAt: number | null = null
   private nextAt: number | null = null
   private running: Promise<BotChatTabTidyPass> | null = null
-  private cursor: BotChatTabCursor | null = null
+  private cursor = ''
+  private readonly repairs: RepairEntry[] = []
+  private stopped = false
 
   constructor(private readonly host: () => BotChatTabTidyHost) {}
+
+  /** Later ticks do nothing; a running pass stops before its next chat. */
+  stop(): Promise<void> {
+    this.stopped = true
+    return this.running ? this.running.then(() => undefined) : Promise.resolve()
+  }
 
   tick(now: number): Promise<BotChatTabTidyPass> {
     this.firstTickAt ??= now
     const nextAt = this.nextAt ?? this.firstTickAt + BOT_CHAT_TAB_TIDY_SOON_MS
-    if (this.running || now < nextAt) {
-      return Promise.resolve({ closed: [], refused: [], more: false })
+    if (this.stopped || this.running || now < nextAt) {
+      return Promise.resolve({ closed: [], refused: [], revealed: [], more: false })
     }
     this.nextAt = now + BOT_CHAT_TAB_TIDY_EVERY_MS
-    const run = tidyBotChatTabs(this.host(), this.cursor)
+    const run = tidyBotChatTabs(this.host(), {
+      cursor: this.cursor,
+      repairs: this.repairs,
+      stopped: () => this.stopped
+    })
       .then(({ cursor, ...pass }) => {
         this.cursor = cursor
-        if (pass.more) {
+        if (pass.more || this.repairs.length > 0) {
           this.nextAt = now + BOT_CHAT_TAB_TIDY_SOON_MS
         }
         return pass

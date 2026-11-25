@@ -24,6 +24,7 @@ import {
   structuredSendAnswer
 } from '../delivery/structured-agent-session-queued-send-answer'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import { structuredAgentSessionConversationClosable } from '../termination/structured-agent-session-host-lifetime'
 import type { JournalMailAttempt } from '../../agent-session-journal/journal-mail-observation'
 import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 
@@ -229,6 +230,10 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
         !runtimeState.acquireAborts.has(id)
       )
     },
+    /** Input the chat holds for later: a hand-over still finalizing, queued or pending sends, or a
+     *  reopen mark. Opens the chat's journal, as opening the chat would; an attached agent counts. */
+    heldInput: async (id: string): Promise<boolean> =>
+      !(await structuredAgentSessionConversationClosable(await context().conversation(id), true)),
     /** A decided start's acquire is still out, and no later start's child is attached. */
     startWindingDown: (id: string): boolean => {
       const { runtimeState, sessions } = context()

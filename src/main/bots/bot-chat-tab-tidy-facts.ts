@@ -7,6 +7,7 @@ import {
 } from '../../shared/agent-session/identity/orca-session-address'
 import { isMarkedBotRequestChat } from '../runtime/orchestration/db/bot-requests/bot-request-chats-store'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import { currentRunCoordinatorOrcaSessionIdSql } from '../runtime/orchestration/db/runs/run-coordinator-orca-session'
 
 /** Why a chat keeps its tab, from its records. */
 export type BotChatTabHold =
@@ -15,6 +16,7 @@ export type BotChatTabHold =
   | 'owed-question'
   | 'dispatch-question'
   | 'run-question'
+  | 'peer-question'
   | 'own-request'
   | 'incoming-mail'
 
@@ -88,16 +90,32 @@ function holdsOf(db: Db, rootChatId: string, ids: readonly string[]): BotChatTab
   ) {
     holds.add('dispatch-question')
   }
-  // A pending question in a Run it coordinates (idx_runs_coordinator_orca_session_id,
-  // idx_question_threads_run), its workers finished or not.
+  // Work of a Run it coordinates now (the generation rule; idx_runs_coordinator_orca_session_id), its
+  // workers finished or not: a pending question (idx_question_threads_run), a remote question not
+  // ended (idx_remote_owned_questions_run), or unread mail to the Run (idx_inbox).
+  const coordinated = `SELECT r.id FROM runs r WHERE r.coordinator_orca_session_id = ?
+     AND ${currentRunCoordinatorOrcaSessionIdSql('r')} = r.coordinator_orca_session_id`
   if (
     any(
       ids,
-      `SELECT 1 FROM runs r JOIN question_threads q ON q.run_id = r.id
-        WHERE r.coordinator_orca_session_id = ? AND q.status = 'pending'`
+      `SELECT 1 FROM question_threads q WHERE q.run_id IN (${coordinated}) AND q.status = 'pending'`
+    ) ||
+    any(
+      ids,
+      `SELECT 1 FROM remote_owned_questions o WHERE o.run_id IN (${coordinated}) AND o.ended IS NULL`
+    ) ||
+    any(
+      ids,
+      `SELECT 1 FROM messages m WHERE m.to_handle IN (SELECT 'run:' || id FROM (${coordinated}))
+         AND m.read = 0`
     )
   ) {
     holds.add('run-question')
+  }
+  // A question it asked an agent on a paired computer, still awaiting its answer or notice
+  // (idx_peer_questions_out_awaiting holds only awaiting rows).
+  if (any(addresses, 'SELECT 1 FROM peer_questions_out WHERE asker = ? AND awaiting = 1')) {
+    holds.add('peer-question')
   }
   // Its own question or handoff to a bot with no outcome yet (idx_messages_crew_from).
   if (

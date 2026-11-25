@@ -12,6 +12,7 @@ import {
   AGENT_SESSION_RECOVERY_CAPSULE_FILE
 } from './agent-session-recovery-capsule'
 import type { AgentSessionResumeFailureInput } from './agent-session-recovery-capsule-entries'
+import { readRecoveryCapsuleCustody } from './agent-session-recovery-capsule-custody'
 
 let directory: string
 let filePath: string
@@ -224,4 +225,29 @@ describe('durable restart offers', () => {
   })
 
   // Offers expire only by user action, never TTL or clock drift.
+})
+
+describe('custody, the passive read', () => {
+  it('names each session the capsule holds, and how, without changing the file', async () => {
+    await capsule.record([marker()], NOW)
+    await capsule.record([marker({ sessionId: 'session-pending-2' })], NOW)
+    await capsule.beginResume([SESSION], 'operation-a', NOW)
+    const before = await readFile(filePath, 'utf8')
+    const held = await readRecoveryCapsuleCustody(capsule, NOW)
+    expect(held.get(SESSION)).toBe('in-progress')
+    expect(held.get('session-pending-2')).toBe('pending')
+    expect(held.has('session-never-cut')).toBe(false)
+    expect(await readFile(filePath, 'utf8')).toBe(before)
+  })
+
+  it('names a filed failure', async () => {
+    await capsule.record([marker()], NOW)
+    await fileFailure()
+    expect((await readRecoveryCapsuleCustody(capsule, NOW)).get(SESSION)).toBe('failed')
+  })
+
+  it('throws when the file cannot be read, so the caller treats custody as unknown', async () => {
+    await writeFile(filePath, '{not json')
+    await expect(readRecoveryCapsuleCustody(capsule, NOW)).rejects.toThrow()
+  })
 })
