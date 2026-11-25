@@ -9,6 +9,7 @@ import type {
 } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RELAY_WRITE_CHUNK_CHARS } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayChannel } from './provider-relay-channel'
+import { RelayInputBackoff, RELAY_INPUT_FULL } from './provider-relay-input-backoff'
 import { RelayedProviderOutput, type ProviderRelayAckFloor } from './relayed-provider-output'
 import type { ProviderRelayRecordTaking } from './relayed-provider-consumption'
 import {
@@ -16,10 +17,6 @@ import {
   RelayedProviderContinuation,
   type ProviderRelayItemContinuation
 } from './relayed-provider-continuation'
-
-/** The daemon refuses input past its queue cap; the write is offered again after this. */
-const INPUT_FULL_RETRY_MS = 50
-const INPUT_FULL = 'Relay input is full'
 
 /** How long an attach waits for its preamble's stream events after the reply. */
 const PREAMBLE_WAIT_MS = 10_000
@@ -245,6 +242,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   }
 
   private async send(data: string): Promise<void> {
+    const backoff = new RelayInputBackoff()
     for (;;) {
       if (this.state === 'detached') {
         return
@@ -256,14 +254,14 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
         await this.options.channel.write(this.relayId, data)
         return
       } catch (error) {
-        if (!(error instanceof Error) || !error.message.includes(INPUT_FULL)) {
+        if (!(error instanceof Error) || !error.message.includes(RELAY_INPUT_FULL)) {
           if (this.state === 'reattaching' || this.state === 'attaching') {
             await Promise.all([this.ready.catch(() => {}), this.reattached])
             continue
           }
           throw error
         }
-        await new Promise((resolve) => setTimeout(resolve, INPUT_FULL_RETRY_MS))
+        await backoff.wait()
       }
     }
   }
