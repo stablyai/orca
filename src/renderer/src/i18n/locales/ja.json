@@ -5927,8 +5927,7 @@
           "strandedDescription": "編集内容はまだ {{value0}} にあります。再度アップデートする前に、安全な場所にコピーしてください。",
           "preservedTitle": "{{value0}} に加えた編集内容は別に保存されました",
           "preservedDescription": "Orca はスキルを更新し、編集内容を {{value0}} に保存しました。",
-          "uncertainTitle": "{{value0}} でのスキルの更新を確認できませんでした",
-          "uncertainDescription": "Orca は {{value0}} 上のスキルを更新した可能性がありますが、結果を確認できませんでした。更新中にスキルを編集した場合、そのコピーは {{value1}} にあります。"
+          "uncertainTitle": "{{value0}} でのスキルの更新を確認できませんでした"
         },
         "SkillBackupPathLine": {
           "movedTo": "古いコピーの移動先:",

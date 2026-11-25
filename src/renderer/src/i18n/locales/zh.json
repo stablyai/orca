@@ -6356,8 +6356,7 @@
           "strandedDescription": "你的修改仍在 {{value0}} 中，请在再次更新前将其复制到安全的位置",
           "preservedTitle": "你对 {{value0}} 的修改已单独保存",
           "preservedDescription": "Orca 已更新该技能，并将你的修改保存到 {{value0}}",
-          "uncertainTitle": "Orca 无法确认 {{value0}} 上的技能更新",
-          "uncertainDescription": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}"
+          "uncertainTitle": "Orca 无法确认 {{value0}} 上的技能更新"
         },
         "SkillBackupPathLine": {
           "movedTo": "旧副本已移动到：",

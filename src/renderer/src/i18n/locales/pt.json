@@ -14962,8 +14962,7 @@
           "strandedDescription": "Suas edições ainda estão em {{value0}}. Copie-as para um local seguro antes de atualizar novamente.",
           "preservedTitle": "Suas edições em {{value0}} foram salvas separadamente",
           "preservedDescription": "O Orca atualizou a skill e salvou suas edições em {{value0}}.",
-          "uncertainTitle": "O Orca não conseguiu confirmar a atualização da skill em {{value0}}",
-          "uncertainDescription": "O Orca pode ter atualizado as skills em {{value0}}, mas não conseguiu confirmar o resultado. Se você editou uma skill durante a atualização, sua cópia está em {{value1}}."
+          "uncertainTitle": "O Orca não conseguiu confirmar a atualização da skill em {{value0}}"
         },
         "SkillBackupPathLine": {
           "movedTo": "Cópia antiga movida para:",

@@ -1,0 +1,105 @@
+// Automatic-update toasts for a refused cross-drive backup (item 1126), backups and a lost reply.
+import { useEffect } from 'react'
+import { toast } from 'sonner'
+import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { Toaster } from '../../ui/sonner'
+import type {
+  BundledSkillInstallResult,
+  BundledSkillOpOutcome
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
+import { reportPreservedEdits, reportUncertainOutcome } from './skill-freshness-auto-update'
+
+const SKILLS = '/Users/sam/.agents/skills'
+const BACKUPS = '/Users/sam/.agents/.orca-skill-backups'
+const ASIDE = `${SKILLS}/.electron.orca-old-7b1d44e0`
+
+function result(ops: Record<string, BundledSkillOpOutcome>): BundledSkillInstallResult {
+  return {
+    scope: 'global',
+    skills: Object.entries(ops).map(([name, op]) => ({ name, status: 'ran' as const, ops: [op] }))
+  }
+}
+
+function Toasts({ show }: { show: () => void }): React.JSX.Element {
+  useEffect(() => {
+    show()
+    return () => {
+      toast.dismiss()
+    }
+  }, [show])
+  return (
+    <>
+      <div className="h-[260px]" />
+      <Toaster toastOptions={{ className: 'font-sans text-sm' }} />
+    </>
+  )
+}
+
+const movedAside = result({
+  electron: {
+    path: `${SKILLS}/electron`,
+    kind: 'update',
+    status: 'failed',
+    error: 'EXDEV',
+    contentApplied: true,
+    strandedPath: ASIDE,
+    backupRefusal: { path: ASIDE, source: 'moved-aside' }
+  }
+})
+const putBack = result({
+  'orca-cli': {
+    path: `${SKILLS}/orca-cli`,
+    kind: 'keep',
+    status: 'failed',
+    error: 'EXDEV',
+    currentConfirmed: true,
+    backupRefusal: {
+      path: '/Users/sam/.gemini/skills/orca-cli',
+      source: 'in-place',
+      onlyNotice: true
+    }
+  }
+})
+const backups = result({
+  'orca-plan': {
+    path: `${SKILLS}/orca-plan`,
+    kind: 'keep',
+    status: 'done',
+    backupPath: `${BACKUPS}/orca-plan-2026-11-24T10-00-00-000Z-1`
+  },
+  orchestration: {
+    path: `${SKILLS}/orchestration`,
+    kind: 'update',
+    status: 'done',
+    backupPath: `${BACKUPS}/orchestration-2026-11-24T10-00-00-000Z-2`
+  }
+})
+
+const LOCAL: BundledSkillTarget = { kind: 'local' }
+const REMOTE: BundledSkillTarget = { kind: 'ssh', targetId: 'build-box' }
+
+export const refusedMovedAside = defineFixture({
+  render: () => <Toasts show={() => reportPreservedEdits(movedAside)} />,
+  width: 420
+})
+export const refusedPutBack = defineFixture({
+  render: () => <Toasts show={() => reportPreservedEdits(putBack)} />,
+  width: 420
+})
+export const backupOnlyAndUpdated = defineFixture({
+  render: () => <Toasts show={() => reportPreservedEdits(backups)} />,
+  width: 420
+})
+export const uncertainLocal = defineFixture({
+  render: () => (
+    <Toasts show={() => reportUncertainOutcome(LOCAL, { homeDirectory: '/Users/sam' })} />
+  ),
+  width: 420
+})
+export const uncertainRemote = defineFixture({
+  render: () => (
+    <Toasts show={() => reportUncertainOutcome(REMOTE, { homeDirectory: '/home/sam' })} />
+  ),
+  width: 420
+})

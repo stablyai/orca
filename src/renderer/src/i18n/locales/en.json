@@ -7142,13 +7142,22 @@
           "strandedDescription": "Your edits are still in {{value0}}. Copy them somewhere safe before updating again.",
           "preservedTitle": "Your edits to {{value0}} were saved separately",
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
+          "preservedBackupOnly": "Orca saved your edits to {{value0}}.",
           "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
-          "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
+          "uncertainDescriptionKept": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}} or still in the skills folder."
         },
         "SkillBackupPathLine": {
           "movedTo": "Old copy moved to:",
           "movedToOnHost": "Old copy moved to {{host}}:",
           "showFolder": "Show folder"
+        },
+        "skillBackupRefusal": {
+          "inPlaceReason": "Can't back it up: it's on another drive.",
+          "tryAgain": "Move it out of the skills folder, then try again.",
+          "leftoverReason": "Can't back up the left-over copy: it's on another drive.",
+          "movedAsideReason": "Couldn't back up the old copy: it's on another drive.",
+          "keepIt": "Move it out of the skills folder to keep it.",
+          "noReminder": "Move it out of the skills folder. Orca won't remind you."
         }
       },
       "sidebar": {
