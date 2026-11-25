@@ -43,6 +43,7 @@ import { supportsAcpStructuredLocation } from './acp-structured-location-support
 import { acpAcquireFailure } from './start/acp-startup-outcome'
 import { openAcpStart } from './start/acp-structured-start-open'
 import { admitStructuredAgentSessionInput } from '../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
+import { orchestrationMailNotice } from '../../../shared/agent-session/journal/agent-session-message-source'
 
 export class AcpStructuredSessionAdapter implements SessionAdapter {
   readonly atRestCommands: AcpStructuredSessionAdapterDeps['atRestCommands']
@@ -141,11 +142,14 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       await input.beforeDispatch?.()
       input.signal?.throwIfAborted()
       const commit = fallback.admitting(() =>
-        session.turns.dispatch({
-          clientMessageId: input.clientMessageId,
-          prompt,
-          requestedAt: input.requestedAt ?? this.now()
-        })
+        session.turns.dispatch(
+          {
+            clientMessageId: input.clientMessageId,
+            prompt,
+            requestedAt: input.requestedAt ?? this.now()
+          },
+          orchestrationMailNotice(input.body.from) !== null
+        )
       )
       await admitStructuredAgentSessionInput(input.admitFreshInput, commit)
       // Admission precedes provider confirmation of the send.
@@ -247,6 +251,13 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   holdsDispatch = (sessionId: string): boolean => {
     const session = this.children.sessions.get(sessionId)
     return session ? childState.isAcpReadySession(session) && session.turns.running : false
+  }
+
+  steeringMode: SessionAdapter['steeringMode'] = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    return childState.isAcpReadySession(session) && session.turns.canInjectSteering
+      ? 'inject'
+      : 'queue'
   }
 
   confirmIdle: NonNullable<SessionAdapter['confirmIdle']> = (sessionId) => {

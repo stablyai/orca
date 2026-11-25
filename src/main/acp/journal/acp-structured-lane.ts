@@ -104,6 +104,10 @@ export class AcpStructuredLane {
     return this.assembler.openTurnId
   }
 
+  get openTurnIdentity() {
+    return this.assembler.openTurnIdentity
+  }
+
   beginCommand(command: StructuredAgentSessionCommandRun): void {
     if (this.failed || this.disposed || this.backlog.length > 0) {
       throw new Error('ACP timeline has not drained for this command')
@@ -262,10 +266,7 @@ export class AcpStructuredLane {
   }
 
   private queueSubagentWork(evidence: AgentChildWorkEvidence[]): boolean {
-    if (this.ended) {
-      return true
-    }
-    return this.queuePublication(() => this.publishSubagentWork(evidence))
+    return this.ended || this.queuePublication(() => this.publishSubagentWork(evidence))
   }
 
   private queuePublication(onPublished: () => void): boolean {

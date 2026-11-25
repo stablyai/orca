@@ -4,15 +4,23 @@ import type { AgentJournalItemIdentity } from '../../../shared/agent-session/jou
 import type { AcpAgentError } from '../transport/acp-errors'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredLane } from '../journal/acp-structured-lane'
+import type { AgentJournalAnsweredTurnIdentity } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { ContentBlock } from '../generated/acp-protocol.generated'
 
 export type AcpDispatchSettlement = { clientMessageId: string } & (
-  | { providerIdentity: AgentJournalItemIdentity }
+  | {
+      providerIdentity: AgentJournalItemIdentity
+      answeredInTurn?: AgentJournalAnsweredTurnIdentity
+    }
   | ({ state: 'rejected' } & AgentJournalDispatchRejection)
   | { state: 'unknown'; reason: string }
 )
 
+export type AcpTurnSend = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
+
 export type AcpStructuredTurnsDeps = {
-  connection: Pick<AcpStructuredConnection, 'prompt' | 'cancel'>
+  connection: Pick<AcpStructuredConnection, 'prompt' | 'cancel' | 'requestExtension'>
+  steeringSessionId?: string
   withdrawRequests: () => void
   lane: AcpStructuredLane
   agentName: string

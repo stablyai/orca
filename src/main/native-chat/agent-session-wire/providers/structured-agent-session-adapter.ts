@@ -275,6 +275,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
+  /** Narrow declared steering to the live acquisition's negotiated support. */
+  steeringMode?(sessionId: string): 'inject' | 'queue' | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */
   requiresModelTransitionRestart?(input: {
     sessionId: string

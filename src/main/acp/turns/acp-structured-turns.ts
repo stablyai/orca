@@ -1,11 +1,5 @@
-import type { AcpStructuredTurnsDeps } from './acp-turn-dispatch-contract'
-// Steers wait for the active prompt to answer cancellation; agent-initiated turns accept sends directly.
-
-import {
-  agentSessionFailureFact,
-  type SubmissionRejectionFact
-} from '../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AcpStructuredTurnsDeps, AcpTurnSend as Send } from './acp-turn-dispatch-contract'
+import { AcpPendingSteers } from './acp-pending-steers'
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
@@ -17,16 +11,14 @@ import {
   AcpConnectionClosedError
 } from '../transport/acp-errors'
 import { acpPromptRejection } from './acp-prompt-failure'
-import type { ContentBlock } from '../generated/acp-protocol.generated'
-
-type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
+import { acpPromptTurnId } from '../timeline/acp-prompt-turns'
+import { spellProviderTimelineKey } from '../../native-chat/agent-session-timeline/provider-timeline-identity'
 
 export class AcpStructuredTurns {
   private active: Send | null = null
   // One cancel per prompt; failed writes allow a later steer to retry.
   private steerCancelled: Send | null = null
-  private readonly steers: Send[] = []
-  private readonly unsettled = new Set<string>()
+  private readonly steers: AcpPendingSteers
   private readonly idleWaiters = new Set<() => void>()
   private ended = false
   private stopAt: number | null = null
@@ -35,7 +27,23 @@ export class AcpStructuredTurns {
   // Counts Stops: finish() clears stopAt before a preparing steer can see it.
   private withdrawals = 0
 
-  constructor(private readonly deps: AcpStructuredTurnsDeps) {}
+  constructor(private readonly deps: AcpStructuredTurnsDeps) {
+    this.steers = new AcpPendingSteers(deps, {
+      running: () => this.running,
+      joinableTurn: () => {
+        if (!this.active || !this.acceptsRequests || deps.steeringSessionId === undefined) {
+          return null
+        }
+        const turnId = spellProviderTimelineKey(deps.steeringSessionId, {
+          source: 'provider',
+          value: acpPromptTurnId(this.active.clientMessageId)
+        })
+        return deps.lane.openTurnId === turnId ? deps.lane.openTurnIdentity : null
+      },
+      start: (send) => this.start(send),
+      cancel: () => this.cancelForSteer()
+    })
+  }
 
   capturePendingSend(clientMessageId: string): () => boolean {
     const send = this.active?.clientMessageId === clientMessageId ? this.active : null
@@ -44,6 +52,10 @@ export class AcpStructuredTurns {
 
   get running(): boolean {
     return this.active !== null
+  }
+
+  get canInjectSteering(): boolean {
+    return this.active !== null && this.deps.steeringSessionId !== undefined
   }
 
   /** Interactive requests wait for the person, including in turns the agent began itself, unless Stop or a steer cuts them short. */
@@ -56,11 +68,11 @@ export class AcpStructuredTurns {
   }
 
   get heldSends(): ReadonlySet<string> {
-    return this.unsettled
+    return this.steers.unsettled
   }
 
   get holdsSteers(): boolean {
-    return this.steers.length > 0 || this.preparingSteers > 0
+    return this.steers.held || this.preparingSteers > 0
   }
 
   get withdrawalEpoch(): number {
@@ -89,7 +101,8 @@ export class AcpStructuredTurns {
         })
       }
     }
-    return this.withdrawSteers()
+    this.withdrawals += 1
+    return this.steers.stop()
   }
 
   /** Earlier admitted steers retain their native queue and settlement while the host holds new input. */
@@ -131,19 +144,18 @@ export class AcpStructuredTurns {
     return this.ended ? 'ended' : this.withdrawals === epoch ? null : 'stopped'
   }
 
-  dispatch(send: Send): void {
-    this.unsettled.add(send.clientMessageId)
-    if (this.active) {
-      this.steers.push(send)
-      this.cancelForSteer()
+  dispatch(send: Send, inject: boolean): void {
+    this.steers.unsettled.add(send.clientMessageId)
+    if (!this.active && !this.steers.held) {
+      this.start(send)
       return
     }
-    this.start(send)
+    this.steers.submit(send, inject)
   }
 
   /** The host owns compaction-message settlement; reuse its open command turn. */
   async compact(command: StructuredAgentSessionCommandRun): Promise<AgentSessionCommandAdmission> {
-    if (this.active || this.ended) {
+    if (this.active || this.steers.held || this.ended) {
       throw new Error(`${this.deps.agentName} is still working`)
     }
     const { lane } = this.deps
@@ -151,7 +163,7 @@ export class AcpStructuredTurns {
     // A backed-up journal admits the agent turn's end later; adopt the command after it.
     if (lane.agentTurn.end() && agentTurn !== null) {
       await lane.whenTurnLeaves(agentTurn)
-      if (this.active || this.ended) {
+      if (this.active || this.steers.held || this.ended) {
         throw new Error(`${this.deps.agentName} is still working`)
       }
     }
@@ -178,37 +190,18 @@ export class AcpStructuredTurns {
   }
 
   accept(clientMessageId: string): void {
-    if (this.unsettled.delete(clientMessageId)) {
-      this.deps.settle({
-        clientMessageId,
-        providerIdentity: { provider: 'orca', clientMessageId }
-      })
-    }
-  }
-
-  private withdrawSteers(): boolean {
-    this.withdrawals += 1
-    const withdrawn = this.steers.splice(0)
-    for (const send of withdrawn) {
-      this.reject(
-        send.clientMessageId,
-        agentSessionFailureFact('cancelled', { neverReachedAgent: true })
-      )
-    }
-    return withdrawn.length > 0
+    this.steers.accept(clientMessageId)
   }
 
   /** Teardown rejects held steers; an unconfirmed active send remains unknown. */
   end(reason: string, cause?: Error): void {
     this.ended = true
-    for (const send of this.steers.splice(0)) {
-      this.reject(send.clientMessageId, agentSessionFailureFact('providerExited'))
-    }
+    this.steers.end(reason)
     const active = this.active
     if (active && cause instanceof AcpAuthRequiredError) {
       this.agentFailed(active, cause)
-    } else if (active && this.unsettled.delete(active.clientMessageId)) {
-      this.deps.settle({ clientMessageId: active.clientMessageId, state: 'unknown', reason })
+    } else if (active) {
+      this.steers.unknown(active.clientMessageId, reason)
     }
     this.active = null
     this.steerCancelled = null
@@ -233,8 +226,10 @@ export class AcpStructuredTurns {
       ? { promptId, requestId: promptId }
       : undefined
     const answered = this.deps.connection.prompt(send.prompt, meta)
-    if (this.steers.length > 0 || this.preparingSteers > 0) {
+    if (this.preparingSteers > 0) {
       this.cancelForSteer()
+    } else {
+      this.steers.advance()
     }
     answered.then(
       (result) => {
@@ -279,7 +274,7 @@ export class AcpStructuredTurns {
     const noModel = this.deps.modelRefusal?.(error)
     if (refusal !== null) {
       const signedOut = lane.translator.authenticationRequired(error)
-      this.reject(send.clientMessageId, acpPromptRejection(refusal, signedOut, noModel))
+      this.steers.reject(send.clientMessageId, acpPromptRejection(refusal, signedOut, noModel))
     } else {
       lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))
     }
@@ -303,10 +298,10 @@ export class AcpStructuredTurns {
     if (this.steerCancelled === send) {
       this.steerCancelled = null
     }
-    const next = this.ended ? undefined : this.steers.shift()
-    if (next) {
-      this.start(next)
-    } else if (!this.active) {
+    if (!this.ended) {
+      this.steers.advance()
+    }
+    if (!this.active) {
       this.notifyIdle()
     }
   }
@@ -335,16 +330,5 @@ export class AcpStructuredTurns {
       wake()
     }
     this.idleWaiters.clear()
-  }
-
-  private reject(clientMessageId: string, fact: SubmissionRejectionFact): void {
-    if (!this.unsettled.delete(clientMessageId)) {
-      return
-    }
-    this.deps.settle({
-      clientMessageId,
-      state: 'rejected',
-      ...agentSessionFailureWords(fact, { surface: 'rejection', agentName: this.deps.agentName })
-    })
   }
 }

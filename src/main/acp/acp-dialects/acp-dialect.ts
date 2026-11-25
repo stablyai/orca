@@ -163,6 +163,8 @@ export type AcpListedChatModel = {
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
+  /** The session steering extension can join a prompt without cancelling it. */
+  sessionSteering?: (initialized: InitializeResponse) => boolean
   /** Effort replaces part of the native composite model selection. */
   effortChangesModel?: true
   subagentStop?: {

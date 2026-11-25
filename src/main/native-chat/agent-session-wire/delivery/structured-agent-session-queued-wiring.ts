@@ -67,7 +67,9 @@ export function wireStructuredAgentSessionQueuedMessages(
               : { kind: 'codex-unavailable' },
         // A provider that takes input mid-turn only by cancelling its prompt gets mail after the turn.
         mailJoinsTurn:
-          !record || ctx.deps.agents.capabilities(record.provider)?.steering !== 'queue'
+          !record ||
+          (ctx.deps.adapter.steeringMode?.(sessionId) ??
+            ctx.deps.agents.capabilities(record.provider)?.steering) !== 'queue'
       }
     },
     submissionReceipt: (sessionId) => context().deps.store.submissionReceipt(sessionId),
