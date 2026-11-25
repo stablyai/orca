@@ -6,6 +6,7 @@ import type { BotRequestAsker } from '../../../shared/bots/bot-acts-for'
 import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
 import { BotChatTreeReadSchema } from '../../../shared/bots/bot-chat-tree-schema'
 import { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
+import { botHomePlaceholderId } from '../../../shared/bots/bot-home-of'
 import { withBotChatPeople } from './bot-share-chats'
 
 const SHARES: NonNullable<Bot['shares']> = [
@@ -90,6 +91,25 @@ describe('whose chat each of the owner’s chats is', () => {
       undefined,
       undefined,
       undefined
+    ])
+  })
+
+  it('names the person of a Home not made yet, and no one whose share was declined', () => {
+    const declined = SHARES.map((share) =>
+      share.kind === 'account' && share.accountId === 'acc-alice'
+        ? { ...share, declinedAt: 2 }
+        : share
+    )
+    const read = withBotChatPeople(
+      sources(),
+      { shares: declined },
+      {
+        chats: [chat('alice'), chat(botHomePlaceholderId('acc-bo'))]
+      }
+    )
+    expect(read.chats.map((entry) => entry.person)).toEqual([
+      undefined,
+      { accountId: 'acc-bo', name: 'bo@x.dev' }
     ])
   })
 
