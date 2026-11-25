@@ -11,6 +11,7 @@ import type { CommandHandler } from '../dispatch/dispatch'
 import { getRequiredStringFlag } from '../arguments/flags'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
+import { isLaunchedByAnotherRuntime } from '../runtime/connection/runtime-source-fence'
 import { resolveCurrentWorktreeSelection } from '../workspace-selection/workspace-selector'
 import { readOrcaCliVersion } from '../cli-version'
 import { bridgeMcpServer } from './mcp-connect-bridge'
@@ -40,6 +41,11 @@ async function readConnection(
   client: RuntimeClient,
   params: { id: string; agent: string; cwd: string }
 ): Promise<McpServerConnection> {
+  if (isLaunchedByAnotherRuntime(process.env, client.userDataPath)) {
+    // Another Orca's session (its pane, chat or bot) also loads this Orca's entries from the shared
+    // file; its workspace and caller ids mean nothing here, so it gets that Orca's servers only.
+    return { on: false }
+  }
   const botToken = readInjectedBotToken()
   const callerSessionId = readInjectedAgentSessionId()
   try {

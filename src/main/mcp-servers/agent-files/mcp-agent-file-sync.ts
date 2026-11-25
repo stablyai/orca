@@ -132,10 +132,15 @@ async function syncFileOnce(
   deps: McpAgentFileSyncDeps
 ): Promise<boolean> {
   const record = (await deps.ledger.read()).files[path] ?? null
-  if (!record && wanted.size === 0) {
+  // Without a record a JSON entry can't be told from the user's; a TOML block's markers still can.
+  const nothingToDo = !record && wanted.size === 0
+  if (nothingToDo && edit.format === 'json') {
     return true
   }
   const current = await readAgentConfigText(path)
+  if (nothingToDo && !current?.includes(edit.markers.startMarker)) {
+    return true
+  }
   if (current !== null && mcpAgentFileServerNames(edit, current) === null) {
     deps.log(`[mcp-servers] ${path} doesn't parse, so Orca leaves it as it is`)
     return true

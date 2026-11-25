@@ -17,6 +17,7 @@ type HttpConnection = Extract<McpServerConnection, { url: string }>
 
 /** A replayed handshake that gets no answer fails the message instead of holding every later one. */
 const HANDSHAKE_TIMEOUT_MS = 30_000
+const RECONNECT_ID = 'orca-reconnect-'
 
 const stdinEnded = (): Promise<void> =>
   new Promise((resolve) => {
@@ -117,7 +118,7 @@ class HttpBridge {
   ) {}
 
   async run(): Promise<void> {
-    await this.open(this.first)
+    this.install(await this.create(this.first))
     const ended = stdinEnded()
     this.stdio.onmessage = (message) => {
       // The handshake goes in order; everything after it goes as it comes, so a long call never
@@ -136,7 +137,7 @@ class HttpBridge {
     await this.stdio.close()
   }
 
-  private async open(connection: HttpConnection): Promise<void> {
+  private async create(connection: HttpConnection): Promise<StreamableHTTPClientTransport> {
     const upstream = new StreamableHTTPClientTransport(new URL(connection.url), {
       requestInit: { headers: connection.headers }
     })
@@ -144,18 +145,28 @@ class HttpBridge {
     // A dropped notification stream reconnects by itself; a failed send is handled where it's made.
     upstream.onerror = () => {}
     await upstream.start()
+    return upstream
+  }
+
+  /** Messages go to `upstream` from now on; only a session whose handshake is done gets here. */
+  private install(upstream: StreamableHTTPClientTransport): void {
     const previous = this.upstream
     this.upstream = upstream
     this.generation += 1
-    await previous?.close().catch(() => {})
+    void previous?.close().catch(() => {})
   }
 
   private fromServer(upstream: StreamableHTTPClientTransport, message: JSONRPCMessage): void {
     const id = 'id' in message ? message.id : undefined
-    const reply = id !== undefined && !('method' in message) ? this.replies.get(id) : undefined
+    const answer = id !== undefined && !('method' in message)
+    const reply = answer ? this.replies.get(id) : undefined
     if (reply) {
       this.replies.delete(id!)
       reply(message)
+      return
+    }
+    if (answer && typeof id === 'string' && id.startsWith(RECONNECT_ID)) {
+      // A replayed handshake's answer after it timed out: the agent never sent that id.
       return
     }
     const version =
@@ -173,6 +184,8 @@ class HttpBridge {
     if (isInitialized(message)) {
       this.initialized = true
     }
+    // A message that comes in while the session is being replaced waits for the new one.
+    await this.reopening?.catch(() => {})
     const sentOn = this.generation
     try {
       await this.upstream!.send(message)
@@ -212,13 +225,25 @@ class HttpBridge {
     if (!connection.on || !('url' in connection)) {
       throw new Error('This server is no longer on for this session.')
     }
-    await this.open(connection)
-    const handshake = this.initialize
-    if (!handshake || failed === handshake) {
-      return
+    const upstream = await this.create(connection)
+    try {
+      if (this.initialize && failed !== this.initialize) {
+        await this.replayHandshake(upstream, this.initialize)
+      }
+    } catch (error) {
+      // The old session stays in place, so the next message fails the same way and tries again.
+      await upstream.close().catch(() => {})
+      throw error
     }
-    // The agent's own handshake, again on the new session; its answer stays here.
-    const id = `orca-reconnect-${this.generation}`
+    this.install(upstream)
+  }
+
+  /** The agent's own handshake, again on the new session; its answer stays here. */
+  private async replayHandshake(
+    upstream: StreamableHTTPClientTransport,
+    handshake: JSONRPCMessage & { id: string | number }
+  ): Promise<void> {
+    const id = `${RECONNECT_ID}${this.generation + 1}`
     let timer: ReturnType<typeof setTimeout> | undefined
     const answered = new Promise<JSONRPCMessage>((resolve, reject) => {
       this.replies.set(id, resolve)
@@ -229,7 +254,7 @@ class HttpBridge {
     })
     let answer: JSONRPCMessage
     try {
-      await this.upstream!.send({ ...handshake, id })
+      await upstream.send({ ...handshake, id })
       answer = await answered
     } finally {
       clearTimeout(timer)
@@ -237,10 +262,10 @@ class HttpBridge {
     }
     const version = 'result' in answer ? answer.result.protocolVersion : undefined
     if (typeof version === 'string') {
-      this.upstream!.setProtocolVersion(version)
+      upstream.setProtocolVersion(version)
     }
     if (this.initialized) {
-      await this.upstream!.send({ jsonrpc: '2.0', method: 'notifications/initialized' })
+      await upstream.send({ jsonrpc: '2.0', method: 'notifications/initialized' })
     }
   }
 }
