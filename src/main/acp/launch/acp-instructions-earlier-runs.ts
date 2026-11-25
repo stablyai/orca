@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises'
+import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nativeChatScratchFolderName } from '../../native-chat/conversation-files/native-chat-scratch-folder'
 import { listProviderRelaysAtLaunch } from '../../provider-relay/app-provider-relays'
@@ -14,6 +14,40 @@ const launched = new Set<string>()
 /** Per root: whether its clear ran, or the attempt in flight. */
 const cleared = new Map<string, Promise<boolean>>()
 
+/** Per-launch folders (`<chat>-<uuid>`) of each chat but its newest, which its one live agent
+ *  (kept, or launched since) reads. */
+async function olderLaunches(root: string, names: string[]): Promise<string[]> {
+  const length = nativeChatScratchFolderName('').length
+  const launches = names.filter((name) => name.charAt(length) === '-')
+  const newest = new Map<string, { name: string; at: number }>()
+  const older: string[] = []
+  for (let at = 0; at < launches.length; at += REMOVE_BATCH) {
+    const batch = launches.slice(at, at + REMOVE_BATCH)
+    const times = await Promise.all(
+      batch.map((name) =>
+        lstat(join(root, name)).then(
+          (stats) => stats.mtimeMs,
+          () => 0
+        )
+      )
+    )
+    batch.forEach((name, index) => {
+      const chat = name.slice(0, length)
+      const seen = newest.get(chat)
+      const mine = { name, at: times[index] ?? 0 }
+      if (seen && seen.at >= mine.at) {
+        older.push(name)
+      } else {
+        if (seen) {
+          older.push(seen.name)
+        }
+        newest.set(chat, mine)
+      }
+    })
+  }
+  return older
+}
+
 /** An earlier run's leftovers go, except those of chats whose agent the terminal host kept running
  *  (that agent still reads them) and of chats this run launched. One host holds a profile. */
 async function clearEarlierRuns(root: string, remove: (path: string) => Promise<void>) {
@@ -28,7 +62,11 @@ async function clearEarlierRuns(root: string, remove: (path: string) => Promise<
   const length = nativeChatScratchFolderName('').length
   const keptBy = (name: string): boolean =>
     kept.has(name.slice(0, length)) && ['', '.', '-'].includes(name.charAt(length))
-  const gone = (await readdir(root).catch(() => [])).filter((name) => !keptBy(name))
+  const names = await readdir(root).catch(() => [])
+  const gone = [
+    ...names.filter((name) => !keptBy(name)),
+    ...(await olderLaunches(root, names.filter(keptBy)))
+  ]
   for (let at = 0; at < gone.length; at += REMOVE_BATCH) {
     await Promise.all(gone.slice(at, at + REMOVE_BATCH).map((name) => remove(join(root, name))))
   }

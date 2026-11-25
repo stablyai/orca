@@ -88,7 +88,7 @@ describe('relayed provider output', () => {
     expect(acks).toEqual([12])
   })
 
-  it("answers the daemon's ask while a replay is held by keeping it, so the agent the open waits on resumes", async () => {
+  it("answers the daemon's ask while a replay is held by keeping it, never letting it go unsaved", async () => {
     const acks: string[] = []
     const output = new RelayedProviderOutput({
       stdout: new Readable({ read() {} }),
@@ -107,7 +107,11 @@ describe('relayed provider output', () => {
     // The daemon's ask (its memory cap): received, but kept for a later attach.
     await output.settle(true)
     expect(acks).toEqual(['12 keep 11'])
-    // Its ask while keeping (the file cap) lets them go, said as a cut so the next attach knows.
+    // Unsaved held lines are never let go: another ask keeps them still, and the daemon spools them.
+    await output.settle(true)
+    expect(acks).toEqual(['12 keep 11'])
+    // Once handed on, an ask while keeping (the file cap) lets them go, said as a cut.
+    await output.release()
     await output.settle(true)
     expect(acks).toEqual(['12 keep 11', '12 cut'])
   })

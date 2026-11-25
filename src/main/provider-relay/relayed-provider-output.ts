@@ -334,7 +334,9 @@ export class RelayedProviderOutput {
       const floor = this.options.ackFloor?.floor() ?? null
       const usable = floor !== null && floor > this.releasedThrough && floor <= target
       const keepAt = usable ? Math.min(floor, heldFrom ?? floor) : heldFrom
-      const keepFrom = keepAt !== null && !(force && this.keptFrom !== null) ? keepAt : null
+      // Held lines the journal hasn't saved are never let go; the daemon spools them instead.
+      const releasing = force && this.keptFrom !== null && heldFrom === null
+      const keepFrom = keepAt !== null && !releasing ? keepAt : null
       if ((target <= this.ackedSeq && keepFrom === this.keptFrom) || this.stopped) {
         return
       }

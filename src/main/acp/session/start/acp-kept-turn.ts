@@ -111,8 +111,9 @@ export async function carryOnKeptAcpAgent<Opened>(
   } else {
     // A turn the agent began itself, which this run's translator doesn't know: it ends as the open
     // app ends one when the agent goes quiet, and the agent's further work opens a turn of its own.
+    // One the agent names (Grok's background reports) stays open: its replay carries it on and ends it.
     const { lane } = child
-    if (turn !== null && clientMessageId === null && lane) {
+    if (turn?.startsWith('agent:') && clientMessageId === null && lane) {
       const at = Date.now()
       lane.apply(
         acpTurnEndEvents(lane.translator.providerSessionId, turn, { stopReason: 'end_turn', at })

@@ -46,8 +46,10 @@ export class ProviderRelaySpool {
   private ackAskedSeq = 0
   /** The highest seq the client said it received; acked may stay below it while lines are kept. */
   private clientAcked = 0
-  /** The client's last ack named a floor to keep (an open streamed item), so lines go to the file too. */
+  /** The client's last ack named a floor to keep (an open streamed item), held in memory first. */
   private keeping = false
+  /** The kept span outgrew memory and moved to the file. */
+  private spilled = false
   /** The last seq of kept lines dropped at the file cap, so an attach can say its replay starts mid-item. */
   private truncatedThroughSeq = 0
   private disposed = false
@@ -133,11 +135,9 @@ export class ProviderRelaySpool {
     this.keptTail.ackThrough(through)
     const floor = keepFrom !== undefined && Number.isSafeInteger(keepFrom) ? keepFrom : null
     this.keeping = floor !== null
+    this.spilled &&= this.keeping
     // A floor past `seq` keeps nothing the client has; with a broken file, kept lines stay in memory.
     this.releaseThrough(floor === null ? through : Math.min(floor, through + 1) - 1)
-    if (this.keepingLive) {
-      this.spillMemory()
-    }
     this.file.compactIfWasteful(this.fileCap)
     // An answer to the last ask that leaves half the cap held asks again, so the client never stalls.
     this.ackAsked = this.ackAsked && this.clientAcked < this.ackAskedSeq
@@ -150,19 +150,15 @@ export class ProviderRelaySpool {
       ? null
       : this.keptTail.after(this.clientAcked, this.memory.after(this.clientAcked, 0) ?? [])
 
-  /** Attached and keeping: new and still-held lines go to the file as well as to the client. */
+  /** Attached and keeping past the memory cap: new and held lines go to the file as well. */
   private get keepingLive(): boolean {
-    return this.keeping && this.mode === 'attached' && !this.file.failed
+    return this.keeping && this.spilled && this.mode === 'attached' && !this.file.failed
   }
 
   /** Memory records the client hasn't released move to the file in seq order, as on detach. */
   private spillMemory(): void {
     for (const record of this.memory.takeAll()) {
-      if (this.file.failed) {
-        this.memory.push(record)
-      } else {
-        this.writeToFile(record)
-      }
+      void (this.file.failed ? this.memory.push(record) : this.writeToFile(record))
     }
   }
 
@@ -321,6 +317,11 @@ export class ProviderRelaySpool {
 
   /** Pause at the cap, resume below half of it, so acks near the cap don't flap the agent's stdout. */
   private updatePressure(): void {
+    // A kept span stays in memory while attached; past the memory cap it moves to the file.
+    if (this.keeping && !this.keepingLive && this.mode === 'attached') {
+      this.spilled = this.memory.bytes >= this.memoryCap && !this.file.failed
+      void (this.spilled && this.spillMemory())
+    }
     // A kept span is released through the live client's own acks only when it alone holds the
     // agent paused (or would pause it): queued writes drain by themselves, and lines the client hasn't
     // acked can't be released. Only this client's acks count, so a takeover never loses lines.
@@ -340,7 +341,8 @@ export class ProviderRelaySpool {
     // Only while streaming live: during a replay the client has nothing new to ack yet. While
     // keeping, lines are on disk, so the ask comes near the file cap rather than the memory cap.
     // An ask with nothing new since the last one is skipped, and asked again once output arrives.
-    const ackWanted = this.mode === 'attached' && held >= cap / 2
+    // A kept span still in memory spills at the cap rather than asking the client to let it go.
+    const ackWanted = this.mode === 'attached' && held >= cap / 2 && (!this.keeping || this.spilled)
     if (!ackWanted) {
       this.ackAsked = false
     } else if (!this.ackAsked && this.nextSeqValue - 1 > this.ackAskedSeq) {

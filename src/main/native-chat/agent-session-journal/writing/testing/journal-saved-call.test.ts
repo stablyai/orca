@@ -34,6 +34,11 @@ describe('a call update whose start a cut replay lost', () => {
     expect(
       resolveJournalGuardedItem(view, { ...resolution, keepsSavedCall: true }, thread)
     ).toEqual({ kind: 'resolved', item: { identity, body: { ...saved, state: 'completed' } } })
+    // An input the update gives stands.
+    const given = { ...bare, input: { prompt: 'review the whole diff' } }
+    expect(
+      resolveJournalGuardedItem(view, { ...resolution, body: given, keepsSavedCall: true }, thread)
+    ).toEqual({ kind: 'resolved', item: { identity, body: { ...given, name: 'task' } } })
     // Without the mark the update's own fields stand, as for any provider.
     expect(resolveJournalGuardedItem(view, resolution, thread)).toEqual({
       kind: 'resolved',

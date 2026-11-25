@@ -122,6 +122,26 @@ describe('ACP relay ack floor', () => {
     await send(update('plan', { entries: [] }))
     await send(chunk('d', 'm2'))
     expect(cuts).toEqual([2, 3])
+    // Nor does a released message outlast the next message: a replay would move that one instead.
+    await output.settle(true)
+    await send(chunk('e', 'm2'))
+    await send(chunk('f', 'm3'))
+    expect(cuts).toEqual([2, 3, 5, 6])
+  })
+
+  it("holds an OpenCode child's open message until its session reports a status", async () => {
+    const { send } = rig()
+    const child = (params: Record<string, unknown>): string =>
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'opencode/session/child_update',
+        params: { rootSessionId: 's', childSessionId: 'c', ...params }
+      })
+    const text = { type: 'text', text: 'x' }
+    const update = { sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: text }
+    await send(child({ type: 'update', update }))
+    expect(await send(child({ type: 'update', update }))).toEqual([])
+    expect(await send(child({ type: 'status', status: 'completed' }))).toEqual([3])
   })
 
   it('reads a long update from its ends without parsing its payload', async () => {
