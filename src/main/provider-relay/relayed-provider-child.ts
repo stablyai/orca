@@ -170,6 +170,9 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
         this.output.stop()
         this.unbind?.()
         this.unbind = null
+        // One the daemon finished after this app gave up is handed back under its policy (sent
+        // before any later attach on this connection, so it never detaches that one).
+        void this.options.channel.detach(this.relayId, this.options.policy()).catch(() => {})
       }
       this.end({ code: null, signal: null }, true)
       throw failure

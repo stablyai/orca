@@ -180,6 +180,10 @@ export class ProviderRelayIdleStop {
     this.lastActivityAt = Date.now()
     if (this.armed && this.work && this.reader) {
       this.reader.read(line).forEach((change) => this.work?.apply(change))
+      // Lost count of while detached: the cap counts it even with the idle stop off.
+      if (this.work.unaccounted && this.unaccounted) {
+        this.host.idleUnread?.()
+      }
     } else if (this.handed && this.reader) {
       // Only ends matter: the app's own view (replayed from its cursor) holds what started since.
       for (const change of this.reader.read(line)) {

@@ -86,9 +86,10 @@ export async function continueStructuredAgentSessionsAtLaunch(
   // A kept agent that ended before its reattach takes the ordinary crash cut, after the offers.
   const goneCut: Promise<ReadonlySet<string>> = Promise.all([rebinds, continued.catch(() => null)])
     .then(async () => {
+      const held = new Set(gone.size > 0 ? deps.store.listHeldSessionIds() : [])
       const cuts = [...gone].flatMap((sessionId) => {
         const replaced = deps.store.replacedRuntime(sessionId)
-        return deps.store.listHeldSessionIds().includes(sessionId) && replaced?.runtime
+        return held.has(sessionId) && replaced?.runtime
           ? [{ sessionId, crashedRuntime: replaced.runtime }]
           : []
       })

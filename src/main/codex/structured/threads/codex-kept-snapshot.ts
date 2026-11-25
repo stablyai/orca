@@ -151,10 +151,14 @@ export async function readKeptCodexSnapshot(input: {
     timeoutMs = input.timeoutMs
   ) => {
     // Once per thread: the chat's own can be named twice (directly and by carried root work).
-    const fresh = wave.filter(
-      ({ threadId }, at) =>
-        !seen.has(threadId) && wave.findIndex((other) => other.threadId === threadId) === at
-    )
+    const inWave = new Set<string>()
+    const fresh = wave.filter(({ threadId }) => {
+      if (seen.has(threadId) || inWave.has(threadId)) {
+        return false
+      }
+      inWave.add(threadId)
+      return true
+    })
     const room = MAX_SNAPSHOT_THREADS - seen.size
     if (fresh.length > room) {
       console.warn(`[codex] a reattach follows ${room} more threads; ${fresh.length - room} left`)
