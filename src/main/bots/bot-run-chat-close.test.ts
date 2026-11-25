@@ -48,13 +48,15 @@ function closerWith(input: {
     bots: () => input.bots,
     hostDefault: () => '24h',
     ready: async () => {},
-    chat: (_bot, sessionId) => {
+    chat: (_bot, sessionId, reopened) => {
       reads += 1
       const chat = input.chats[sessionId]
-      return chat ? { ...chat, inUse: inUse.has(sessionId) } : null
+      // A chat in `inUse` stands for one with an open tab, which an agent's reopen doesn't count.
+      return chat ? { ...chat, inUse: inUse.has(sessionId) && !reopened } : null
     },
     automationChats: () => new Set(input.busy?.slice(0, 1)),
     rootOf: (sessionId) => sessionId,
+    wasRunChat: () => true,
     busy: async (_bot, sessionId, automationChats) =>
       automationChats.has(sessionId) || input.busy?.includes(sessionId)
         ? 'busy'
@@ -238,5 +240,28 @@ describe('BotRunChatCloser', () => {
     expect(launchReads).toBe(2)
     expect(secondReads).toBe(0)
     expect(afterCheck).toBe(54 * HOUR)
+  })
+
+  it("an agent's reopen tracks a run chat again from its next turn, despite the tab it opened", async () => {
+    const bots = [botOf('follows')]
+    const run = closerWith({
+      bots,
+      chats: { reopened: { lastActivityAt: 0, kept: false } },
+      inUse: ['reopened']
+    })
+    run.closer.reopened(bots[0], 'reopened')
+    await run.closer.sweep()
+    const beforeTurn = run.closer.nextSweepAt()
+    run.at(HOUR)
+    run.closer.wake(['reopened'])
+    await run.closer.sweep()
+    const afterTurn = run.closer.nextSweepAt()
+    run.at(26 * HOUR)
+    await run.closer.sweep()
+    run.closer.clear()
+
+    expect(beforeTurn).toBeUndefined()
+    expect(afterTurn).toBe(25 * HOUR)
+    expect(run.closed).toEqual(['reopened'])
   })
 })

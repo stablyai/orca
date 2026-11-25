@@ -158,6 +158,22 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   )
   expect(sessionAwaitsMail(db, ['two'])).toBe(false)
 
+  // A follow-up in the same thread, sent the same second the first answer came: that earlier answer
+  // doesn't settle it.
+  delivered(
+    db.insertMessage({
+      from: 'orca_session_id:two',
+      to: 'orca_session_id:b',
+      subject: 'And?',
+      type: 'question',
+      threadId: 'job'
+    }).id
+  )
+  db.db
+    .prepare("UPDATE messages SET created_at = '2026-01-01 00:00:00' WHERE thread_id = 'job'")
+    .run()
+  expect(sessionAwaitsMail(db, ['two'])).toBe(true)
+
   // A report waiting in the Run the chat coordinates.
   const coordinator = testOrcaSessionId('00000000-0000-4000-8000-0000000c0de0')
   const run = db.createRun({
@@ -174,6 +190,18 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   })
   expect(sessionAwaitsMail(db, [coordinator])).toBe(true)
   delivered(report.id)
+  expect(sessionAwaitsMail(db, [coordinator])).toBe(false)
+
+  // A worker that Run placed on a paired server, still being started or running there.
+  const remoteTask = db.createTask({ runId: run, spec: 'Build on the server' })
+  db.db
+    .prepare(
+      `INSERT INTO remote_placements (task_id, run_id, environment_id, conversation_id, state,
+         request_key, prior_task_status) VALUES (?, ?, 'server', 'conversation', 'reserved', 'key', 'ready')`
+    )
+    .run(remoteTask.id, run)
+  expect(sessionAwaitsMail(db, [coordinator])).toBe(true)
+  db.db.prepare('DELETE FROM remote_placements WHERE task_id = ?').run(remoteTask.id)
   expect(sessionAwaitsMail(db, [coordinator])).toBe(false)
 
   // A worker the chat started reports back to it.
@@ -194,7 +222,7 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   // Looked up by sender and recipient, never by scanning the mail.
   const plan = db.db
     .prepare(`EXPLAIN QUERY PLAN ${sessionAwaitsMailSql(2)}`)
-    .all('x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y')
+    .all('x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y')
     .map((row) => String(row.detail))
   expect(plan.filter((detail) => detail.startsWith('SCAN'))).toEqual([])
 })

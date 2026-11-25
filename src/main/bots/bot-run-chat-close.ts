@@ -30,8 +30,10 @@ export type BotRunChatCloseDeps = RunChatListFile & {
   hostDefault: () => BotRunChatCloseAfter
   /** Throws while chat records can't be read, so a sweep then never mistakes a chat for gone. */
   ready: () => Promise<void>
-  /** Reads this one chat's record. */
-  chat: (bot: Bot, sessionId: string) => BotRunChatState | null
+  /** Reads this one chat's record; for one an agent reopened, its own tab doesn't count as in use. */
+  chat: (bot: Bot, sessionId: string, reopened: boolean) => BotRunChatState | null
+  /** An automation that starts a new conversation each run made this chat. */
+  wasRunChat: (sessionId: string) => boolean
   /** The chats automations run in, read once per sweep. */
   automationChats: () => ReadonlySet<string>
   /** Busy: a turn or a usage-limit wait, or an automation that runs in it; `item`: it owns an open
@@ -79,6 +81,23 @@ export class BotRunChatCloser {
     })
   }
 
+  /** An agent reopened one of the bot's closed chats: a run's chat is tracked again, and its countdown
+   *  starts with its next turn (or this launch's check, if it never takes one). */
+  reopened(bot: Bot, sessionId: string): void {
+    if (this.closeAfterMs(bot) === null || !this.deps.wasRunChat(sessionId)) {
+      return
+    }
+    const entry: Entry = {
+      sessionId,
+      botId: bot.id,
+      since: this.deps.now(),
+      parked: true,
+      reopened: true
+    }
+    this.checkedThisLaunch.add(sessionId)
+    void this.serial(() => this.list.save([entry]))
+  }
+
   /** What held these chats open ended (a turn, a viewer leaving): each parked one counts down again. */
   wake(sessionIds: readonly string[]): void {
     void this.serial(async () => {
@@ -117,9 +136,7 @@ export class BotRunChatCloser {
 
   private async unpark(entries: readonly Entry[]): Promise<void> {
     const now = this.deps.now()
-    const woken = entries.flatMap(({ sessionId, botId, parked }) =>
-      parked ? [{ sessionId, botId, since: now }] : []
-    )
+    const woken = entries.flatMap((entry) => (entry.parked ? [restarted(entry, now)] : []))
     woken.forEach(({ sessionId }) => this.checkedThisLaunch.delete(sessionId))
     await this.list.save(woken)
     for (const entry of woken) {
@@ -221,7 +238,7 @@ export class BotRunChatCloser {
     automationChats: ReadonlySet<string>
   ): Promise<Entry | null> {
     const waiting = (): Entry | 'due' | null => {
-      const chat = this.deps.chat(bot, entry.sessionId)
+      const chat = this.deps.chat(bot, entry.sessionId, entry.reopened === true)
       if (!chat || chat.kept) {
         return null
       }
@@ -232,10 +249,7 @@ export class BotRunChatCloser {
       const current = this.deps.bots().find((candidate) => candidate.id === bot.id)
       const ms = current ? this.closeAfterMs(current) : null
       const since = Math.max(entry.since, chat.lastActivityAt)
-      const { sessionId, botId } = entry
-      return ms === null || since + ms > now + SWEEP_COALESCE_MS
-        ? { sessionId, botId, since }
-        : 'due'
+      return ms === null || since + ms > now + SWEEP_COALESCE_MS ? restarted(entry, since) : 'due'
     }
     const first = waiting()
     if (first !== 'due') {
@@ -263,7 +277,7 @@ export class BotRunChatCloser {
 
   private parked(entry: Entry, parked: NonNullable<Entry['parked']>): Entry {
     this.checkedThisLaunch.add(entry.sessionId)
-    return { sessionId: entry.sessionId, botId: entry.botId, since: this.deps.now(), parked }
+    return { ...restarted(entry, this.deps.now()), parked }
   }
 
   /** Parked and already checked this launch: only what ends its hold brings it back. */
@@ -333,4 +347,10 @@ export class BotRunChatCloser {
       this.deps.bots().map((bot) => [bot.id, bot.runChatsCloseAfter ?? null])
     ])
   }
+}
+
+/** The entry counting down from `since`, unparked; an agent's reopen stays marked. */
+function restarted(entry: Entry, since: number): Entry {
+  const { sessionId, botId, reopened } = entry
+  return { sessionId, botId, since, ...(reopened ? { reopened } : {}) }
 }

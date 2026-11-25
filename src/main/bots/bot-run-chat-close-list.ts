@@ -8,7 +8,9 @@ const EntrySchema = z.object({
   since: z.number(),
   /** Held open by something that ends on its own (a viewer, an answer, or `item`: an open item): it
    *  sets no timer until what ends the hold wakes it, besides one check per launch. */
-  parked: z.union([z.literal(true), z.literal('item')]).optional()
+  parked: z.union([z.literal(true), z.literal('item')]).optional(),
+  /** An agent reopened it: the tab that reopen published doesn't keep it open. */
+  reopened: z.literal(true).optional()
 })
 export type Entry = z.infer<typeof EntrySchema>
 // A later line that takes a chat off the list.

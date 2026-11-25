@@ -60,7 +60,7 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
         throw new Error('chat records unavailable')
       }
     },
-    chat: (bot, sessionId) => {
+    chat: (bot, sessionId, reopened) => {
       const records = readAgentSessionRecordStore()
       const record = records?.getRecord(sessionId)
       if (!records || !record) {
@@ -81,12 +81,23 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
         // A wake or any later write counts: it only ever keeps the chat open longer.
         lastActivityAt: Math.max(live.lastTurn?.at ?? 0, live.updatedAt),
         kept: home || linked || reach.kind === 'other-host',
-        // Someone has it up: closing would take it away from them.
+        // Someone has it up: closing would take it away from them. An agent's reopen opened a tab
+        // nobody asked for, so only viewing it counts.
         inUse:
           reach.kind === 'unverifiable' ||
           host?.reads.viewed(live.sessionId) === true ||
-          host?.isSessionTabVisible(live.sessionId) === true
+          (!reopened && host?.isSessionTabVisible(live.sessionId) === true)
       }
+    },
+    wasRunChat: (sessionId) => {
+      const newEachRun = new Set(
+        (store.listAutomations?.() ?? []).flatMap((automation) =>
+          automation.bot?.runsIn === 'new' ? [automation.id] : []
+        )
+      )
+      return (store.listAutomationRuns?.() ?? []).some(
+        (run) => run.chatSessionId === sessionId && newEachRun.has(run.automationId)
+      )
     },
     automationChats: () =>
       new Set(
