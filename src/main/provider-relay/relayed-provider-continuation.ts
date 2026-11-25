@@ -6,8 +6,10 @@ import type { ProviderRelayAckFloor } from './relayed-provider-output'
  * its kept start at the file cap): it can't be rewritten whole, so its lines go to a continuation row.
  */
 export type ProviderRelayItemContinuation = {
-  /** The streamed item a line belongs to, and whether the line starts it or ends it. */
-  item(line: string): { key: string; start: boolean; end: boolean } | null
+  /** The streamed item a line belongs to, and whether the line starts it or ends it. `follows`:
+   *  a line that may also be a whole item by itself, so an item seen only through such lines
+   *  holds the continuation open no longer than its replay. */
+  item(line: string): { key: string; start: boolean; end: boolean; follows?: boolean } | null
   /** The line with its item moved to the continuation named by `tag` (stable across attaches). */
   rekey(line: string, tag: string): string
   /** A start of that continuation, as the ack floor reads one, so it is kept from its first line. */
@@ -48,6 +50,8 @@ export class RelayedProviderContinuation {
   }
 
   private lastSeq = 0
+  /** Moved items seen only through `follows` lines: maybe whole already, so they hold nothing open. */
+  private readonly whole = new Set<string>()
 
   /**
    * Nothing is left to move: past the replay with no item moved and none named still to come (a
@@ -56,7 +60,9 @@ export class RelayedProviderContinuation {
    */
   get done(): boolean {
     return (
-      (this.lastSeq >= this.replayThrough && this.moved.size === 0 && this.awaited.size === 0) ||
+      (this.lastSeq >= this.replayThrough &&
+        this.moved.size === this.whole.size &&
+        this.awaited.size === 0) ||
       (this.open !== null && this.open.size === 0)
     )
   }
@@ -78,7 +84,10 @@ export class RelayedProviderContinuation {
       return [line]
     }
     if (item.start) {
+      // One item per key at a time: a new start ends whatever was moved under it.
       this.started.add(item.key)
+      this.moved.delete(item.key)
+      this.whole.delete(item.key)
       return [line]
     }
     let tag = this.moved.get(item.key)
@@ -88,10 +97,15 @@ export class RelayedProviderContinuation {
       }
       tag = `relay:${this.relayId}:${seq}`
       this.moved.set(item.key, tag)
+      this.whole.add(item.key)
       floor?.observe(seq, this.hook.start(line, tag))
+    }
+    if (!item.follows) {
+      this.whole.delete(item.key)
     }
     if (item.end) {
       this.moved.delete(item.key)
+      this.whole.delete(item.key)
       this.started.add(item.key)
       return this.hook.finish?.(line, tag) ?? [this.hook.rekey(line, tag)]
     }
