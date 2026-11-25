@@ -2,7 +2,9 @@
 // the host list. Only reached through mcpServers.*, which refuses while the switch is off.
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { BotToolServer } from '../../../../shared/bot-tools'
 import { MCP_FILE_AGENTS, type McpServer } from '../../../../shared/mcp-servers/mcp-servers'
+import { agentMcpServerMergeKey } from '../../../../shared/mcp/agent-mcp-config-entry'
 import {
   isRepoOnCatalogHost,
   parseExecutionHostId
@@ -23,11 +25,14 @@ import { hasMcpAgentProblem } from '../../../mcp-servers/mcp-agent-problems'
 import { terminalMcpAdapterFor } from '../../../mcp-servers/terminal/terminal-mcp-adapters'
 import {
   addMcpServer,
+  readHostEntries,
   readMcpAgentFiles,
   removeMcpServer,
   setMcpServerAgentEnabled,
-  setMcpServerWorkspaces
+  setMcpServerWorkspaces,
+  storedView
 } from '../../../mcp-servers/mcp-host-list'
+import { mcpHostListFolder } from '../../../mcp-servers/mcp-host-list-folder'
 import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
@@ -89,6 +94,16 @@ function editFailure(error: AgentMcpConfigEditError): string {
   }
 }
 
+/** Orca's server with this one's definition (URL or command line), whatever its name. */
+async function hostServerLike(server: BotToolServer): Promise<McpServer | null> {
+  const folder = mcpHostListFolder()
+  const definition = agentMcpServerMergeKey('', server)
+  const same = (await readHostEntries(folder)).entries.find(
+    (entry) => agentMcpServerMergeKey('', entry.server) === definition
+  )
+  return same ? storedView(folder, same.id) : null
+}
+
 type AgentMcpImport = (
   host: AgentMcpImportHost,
   key: string,
@@ -103,6 +118,12 @@ export async function importAgentMcpServer(
 ): Promise<{ server: McpServer }> {
   let added = false
   const add: AddImportedMcpServer<McpServer> = async (server, { workspaces, agentsOff }) => {
+    // Already Orca's (moved or copied before, while an agent Orca's list doesn't reach kept its
+    // copy): Move takes the reached copies out, and nothing is added twice.
+    const existing = await hostServerLike(server)
+    if (existing) {
+      return existing
+    }
     let saved = await addMcpServer(server, { nameGiven: false, signal: context.signal })
     try {
       if (workspaces) {
