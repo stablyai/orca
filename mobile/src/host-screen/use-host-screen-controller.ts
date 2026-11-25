@@ -30,6 +30,7 @@ import { useHostScreenState } from './use-host-screen-state'
 import { useHostViewSettings } from './view-settings/use-host-view-settings'
 import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { useHostWorktreeActions } from './workspace-actions/use-host-worktree-actions'
+import { useHostListDeleteIntent } from './workspace-actions/use-host-list-delete-intent'
 import { useHostWorktreeCatalog } from './catalog/use-host-worktree-catalog'
 import { useHostDisplay } from '../host-descriptors/use-host-display'
 import { classifyConnection } from '../transport/connection/connection-health'
@@ -135,6 +136,7 @@ export function useHostScreenController({
     state,
     hostPlatform
   )
+  useHostListDeleteIntent({ embedded, hostId, rows: displayWorktrees, state })
   // Row identities, so a workspace swapped for another of the same count still rereads the bots.
   const botRowsKey = useMemo(
     () => displayWorktrees.map((row) => `${row.hostId ?? ''}|${row.worktreeId}`).join('\n'),
