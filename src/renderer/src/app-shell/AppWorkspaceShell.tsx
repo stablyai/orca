@@ -47,6 +47,11 @@ const HandToBotFlow = lazy(() =>
   }))
 )
 const BotTemplatesDialog = lazy(() => import('../components/bots/templates/BotTemplatesDialog'))
+const SharedBotRequestPageMount = lazy(() =>
+  import('../components/bots/sharing/SharedBotRequestPage').then((module) => ({
+    default: module.SharedBotRequestPageMount
+  }))
+)
 const BotShareReceiveFlow = lazy(() =>
   import('../components/bots/sharing/BotShareReceiveFlow').then((module) => ({
     default: module.BotShareReceiveFlow
@@ -149,6 +154,9 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       {activeView === 'activity' ? <ActivityPrototypePage /> : null}
       {activeView === 'space' ? <WorkspaceSpacePage /> : null}
       {activeView === 'mobile' ? <MobilePage /> : null}
+      <Suspense fallback={null}>
+        <SharedBotRequestPageMount />
+      </Suspense>
       <BotShareReceiveMount />
       <BotTemplatesMount />
       <HandToBotMount />

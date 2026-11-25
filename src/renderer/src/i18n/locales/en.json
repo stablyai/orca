@@ -29763,7 +29763,9 @@
       "requestFailed": "Couldn’t answer the request. Try again.",
       "requestLine": "{{owner}} shared {{agent}} with you",
       "accept": "Accept",
-      "decline": "Decline"
+      "decline": "Decline",
+      "requestPageTitle": "{{owner}} shared {{agent}} with you",
+      "requestRunsOn": "Runs on {{owner}}’s computer"
     },
     "apps": {
       "title": "Add to {{bot}}",
