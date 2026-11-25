@@ -160,6 +160,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     reason: expected ? (close?.reason ?? null) : exit.reason,
     ...(startFailure ? { failure: startFailure } : {}),
     duringStartup: exitedDuringStartup,
+    ...(exit.endedBeforeAcquire ? { endedBeforeAcquire: true as const } : {}),
     rootGone: true,
     ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {}),
     ...(expected && close ? { endedAt: close.requestedAt } : {})
@@ -221,9 +222,11 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       submissions: () => before.submissions,
       itemFence: (id) => beforeFences.get(id)
     })
-    // Quiet idle starts owe no failure row unless work was handed to them.
+    // Quiet idle starts owe no failure row unless work was handed to them; nothing reached a
+    // kept agent that had ended before its acquisition.
     const startFailed =
       exitedDuringStartup &&
+      !exit.endedBeforeAcquire &&
       (!expected || (startClose === 'host-stop' && unfinishedWork.hadUnsettledSubmissions))
     // Fold Stop before fallback turn-end classification.
     await close?.recorded

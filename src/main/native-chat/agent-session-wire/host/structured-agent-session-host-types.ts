@@ -141,6 +141,8 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     /** Defaults to provider exit without details. */
     failure?: SubmissionRejectionFact
     duringStartup: boolean
+    /** A kept agent that had ended before its acquisition: queued sends never reached it. */
+    endedBeforeAcquire?: true
     startedFor?: string
     /** Order exit against acceptance; requested closes retain their original Stop boundary. */
     endedAt: AgentJournalCursor
