@@ -119,13 +119,19 @@ export class FeishuCardStore {
       )
       .run(JSON.stringify({ ...data, note }), account, id)
   }
-  closePrompts(account: string, external: string, keep: string | null, note: string) {
+  closePrompts(
+    account: string,
+    external: string,
+    keep: string | null,
+    note: string,
+    kind: 'prompt' | 'async-question' = 'prompt'
+  ) {
     for (const raw of this.db
       .prepare("SELECT * FROM feishu_cards WHERE account=? AND external=? AND state='open'")
       .all(account, external)) {
       const card = row.parse(raw),
         data = cardData.parse(JSON.parse(card.body))
-      if (data.kind === 'prompt' && data.promptId !== keep) {
+      if (data.kind === kind && data.promptId !== keep) {
         this.close(account, card.id, note)
       }
     }

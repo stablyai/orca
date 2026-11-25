@@ -32,9 +32,10 @@ export class FeishuMessageIngress {
         this.botOpenId = z
           .object({
             ok: z.literal(true),
-            data: z.object({ bot: z.object({ open_id: z.string() }) })
+            identity: z.literal('bot'),
+            data: z.object({ open_id: z.string() })
           })
-          .parse(response).data.bot.open_id
+          .parse(response).data.open_id
       }
       if (!m.mentions?.some((mention) => mention.id === this.botOpenId)) {
         return

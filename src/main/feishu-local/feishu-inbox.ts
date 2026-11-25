@@ -67,11 +67,15 @@ export class FeishuInbox {
   claimCard(account: string, message: string, chat: string, option: string) {
     return this.cards.claim(account, message, chat, option)
   }
-  closeCard(account: string, id: string, note: string) {
-    this.cards.close(account, id, note)
-  }
-  closePrompts(account: string, external: string, keep: string | null, note: string) {
-    this.cards.closePrompts(account, external, keep, note)
+  closeCard = (...args: Parameters<FeishuCardStore['close']>) => this.cards.close(...args)
+  closePrompts(
+    account: string,
+    external: string,
+    keep: string | null,
+    note: string,
+    kind: 'prompt' | 'async-question' = 'prompt'
+  ) {
+    this.cards.closePrompts(account, external, keep, note, kind)
   }
   sendingCard(account: string, id: string, now: number) {
     return this.cards.sending(account, id, now)

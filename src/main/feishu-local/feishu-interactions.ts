@@ -1,3 +1,8 @@
+import {
+  promptPublicationFor,
+  type PromptPublication
+} from '../external-conversations/external-conversation-prompt-publication'
+import { FeishuAsyncQuestions } from './feishu-async-questions'
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
@@ -8,7 +13,7 @@ import type {
 import { dmKey, type Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
 import { cardData } from './feishu-card-data'
-import { feishuControlCard } from './feishu-card-render'
+import { feishuControlCard, feishuPromptData } from './feishu-card-render'
 import { feishuCommand, consumeFeishuEvent } from './feishu-cli'
 import { setTimeout as delay } from 'node:timers/promises'
 import { replyFeishu } from './feishu-replies'
@@ -16,6 +21,7 @@ import { readFeishuClick } from './feishu-card-events'
 
 export class FeishuInteractions {
   private events: Promise<void> = Promise.resolve()
+  private readonly asyncQuestions: FeishuAsyncQuestions
   constructor(
     private readonly runtime: OrcaRuntimeService,
     private readonly store: FeishuStore,
@@ -23,7 +29,9 @@ export class FeishuInteractions {
     private readonly signal: AbortSignal,
     private readonly active: () => boolean,
     private readonly wake: () => void
-  ) {}
+  ) {
+    this.asyncQuestions = new FeishuAsyncQuestions(runtime, store, b, signal, active, wake)
+  }
 
   async listen(checkProfile: () => Promise<void>): Promise<void> {
     while (!this.signal.aborted) {
@@ -61,17 +69,23 @@ export class FeishuInteractions {
     await this.store.claimCard(this.b.account, click.message_id, click.chat_id, click.option)
     this.wake()
   }
-  private async record(event: ConversationEvent | ConversationSnapshot): Promise<void> {
+  private async record(
+    event: ConversationEvent | ConversationSnapshot,
+    publication?: PromptPublication
+  ): Promise<void> {
     if (!this.active()) {
       return
     }
     if (event.kind === 'snapshot') {
       for (const entry of event.conversations) {
-        await this.record({
-          ...entry,
-          kind: 'prompt',
-          prompt: entry.prompt ?? { kind: 'unsupported', promptId: 'none' }
-        })
+        await this.record(
+          {
+            ...entry,
+            kind: 'prompt',
+            prompt: entry.prompt ?? { kind: 'unsupported', promptId: 'none' }
+          },
+          promptPublicationFor(entry)
+        )
         await this.status(
           entry.conversation.source,
           entry.conversation.externalId,
@@ -88,6 +102,7 @@ export class FeishuInteractions {
     if (!route) {
       return
     }
+    this.asyncQuestions.track(externalId)
     if (event.kind === 'prompt') {
       const prompt = event.prompt
       const supported =
@@ -102,26 +117,23 @@ export class FeishuInteractions {
         event.answered ? '已在 Orca 中回答' : '此问题已结束'
       )
       if (supported) {
-        const text =
-          prompt.kind === 'approval' ? `${prompt.tool}\n${prompt.summary ?? ''}` : prompt.question
-        await this.store.putCard(
-          this.b.account,
-          `prompt:${externalId}:${prompt.promptId}`,
-          externalId,
-          route.root,
-          route.chat,
-          {
-            kind: 'prompt',
-            promptId: prompt.promptId,
-            text: [
-              text,
-              ...prompt.options.flatMap((option) =>
-                option.description ? [`${option.label}: ${option.description}`] : []
-              )
-            ].join('\n'),
-            options: prompt.options.map((o) => ({ id: o.id, label: o.label }))
-          }
-        )
+        const settled = (publication ?? promptPublicationFor(event))?.start(prompt)
+        await this.store
+          .putCard(
+            this.b.account,
+            `prompt:${externalId}:${prompt.promptId}`,
+            externalId,
+            route.root,
+            route.chat,
+            feishuPromptData(prompt)
+          )
+          .then(
+            () => settled?.(200),
+            (error) => {
+              settled?.('network')
+              throw error
+            }
+          )
       }
       await this.status(
         source,
@@ -174,6 +186,7 @@ export class FeishuInteractions {
   }
   async drain(botName: string): Promise<void> {
     await this.events
+    await this.asyncQuestions.flush()
     const b = this.b
     for (const card of await this.store.pendingCards(b.account)) {
       if (!this.active()) {
@@ -186,7 +199,14 @@ export class FeishuInteractions {
           await this.store.closeCard(b.account, card.id, '选项已失效')
           continue
         }
-        if (data.kind === 'choices' && card.message) {
+        if ((data.kind === 'choices' || data.kind === 'async-question') && card.message) {
+          if (
+            data.kind === 'async-question' &&
+            !this.asyncQuestions.isCurrent(data, card.external)
+          ) {
+            await this.store.closeCard(b.account, card.id, '此问题已结束')
+            continue
+          }
           const route = await this.store.laneRoute(b.account, card.external)
           if (!route) {
             await this.store.closeCard(b.account, card.id, '会话已结束')
@@ -202,7 +222,7 @@ export class FeishuInteractions {
             message_id: card.message,
             chat_id: card.chat,
             sender_id: b.owner!,
-            content: option.label
+            content: option.answer ?? option.label
           })
           await this.store.closeCard(b.account, card.id, `已选择：${option.label}`)
         } else if (data.kind === 'prompt' && data.promptId) {

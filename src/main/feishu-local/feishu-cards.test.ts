@@ -50,6 +50,16 @@ it('persists one answer per card, rejects cross-chat and invalid options, and ne
     store.putCard(b.account, 'p2', 'lane', 'om_origin', 'oc_chat', { ...data, promptId: 'p2' })
     store.closePrompts(b.account, 'lane', null, 'Moved on')
     expect(store.pendingCards(b.account).every((card) => card.state === 'closed')).toBe(true)
+    store.putCard(b.account, 'async:p1', 'lane', 'om_origin', 'oc_chat', {
+      ...data,
+      kind: 'async-question',
+      sessionId: 'session',
+      options: [{ id: '0', label: 'A', answer: '> Pick one\n\nA' }]
+    })
+    store.closePrompts(b.account, 'lane', null, 'Blocking turn ended')
+    expect(store.pendingCards(b.account).find((c) => c.id === 'async:p1')?.state).toBe('open')
+    store.closePrompts(b.account, 'lane', null, 'Answered elsewhere', 'async-question')
+    expect(store.pendingCards(b.account).find((c) => c.id === 'async:p1')?.state).toBe('closed')
     store.putCard(b.account, 'new', 'lane', 'om_origin', 'oc_chat', {
       kind: 'status',
       text: 'Working',

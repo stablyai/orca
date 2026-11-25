@@ -1,3 +1,4 @@
+import type { ConnectorPrompt } from '../../shared/connectors/connector-cloud-contract'
 import type { FeishuCardData } from './feishu-card-data'
 
 export function feishuControlCard(data: FeishuCardData, botName: string, open: boolean) {
@@ -35,5 +36,23 @@ export function feishuControlCard(data: FeishuCardData, botName: string, open: b
         }))
       ]
     }
+  }
+}
+
+export function feishuPromptData(
+  prompt: Exclude<ConnectorPrompt, { kind: 'unsupported' }>
+): FeishuCardData {
+  const text =
+    prompt.kind === 'approval' ? `${prompt.tool}\n${prompt.summary ?? ''}` : prompt.question
+  return {
+    kind: 'prompt',
+    promptId: prompt.promptId,
+    text: [
+      text,
+      ...prompt.options.flatMap((option) =>
+        option.description ? [`${option.label}: ${option.description}`] : []
+      )
+    ].join('\n'),
+    options: prompt.options.map((o) => ({ id: o.id, label: o.label }))
   }
 }
