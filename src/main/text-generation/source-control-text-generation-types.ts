@@ -71,13 +71,7 @@ export type CommitMessageGenerationTarget =
     }
 
 export type InternalTextGenerationResult =
-  | {
-      success: true
-      rawOutput: string
-      agentLabel?: string
-      /** Codex refused this model, so its own default wrote the answer. */
-      refusedModel?: string
-    }
+  | { success: true; rawOutput: string; agentLabel?: string }
   | ({
       success: false
       canceled?: boolean

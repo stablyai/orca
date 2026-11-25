@@ -138,9 +138,8 @@ export async function runGenerationRequest(input: {
     const retry = codexUnavailableModelRetryPlan(plan, params, result.failureOutput)
     if (retry) {
       const rerun = await execute(retry.plan)
-      result = rerun.success
-        ? { ...rerun, refusedModel: retry.refusedModel }
-        : rerun.canceled
+      result =
+        rerun.success || rerun.canceled
           ? rerun
           : {
               ...rerun,
