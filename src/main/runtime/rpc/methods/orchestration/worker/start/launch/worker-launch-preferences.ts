@@ -1,3 +1,4 @@
+import type { AgentLaunchMode } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { checkAgentLaunchModelPreferences } from '../../../../../../../../shared/agent-launch/choices/agent-launch-model-preferences'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../../../shared/orchestration/orchestration-runtime-capabilities'
@@ -105,11 +106,30 @@ export function assertWorkerLaunchPreferencesCreateTerminal(args: {
   terminal?: string
   model?: string
   effort?: string
+  additionalDirectories?: readonly string[]
 }): void {
   if (args.terminal && (args.model || args.effort)) {
     throw new OrchestrationError(
       'invalid_argument',
       '--model and --effort cannot be applied when reusing an existing terminal.'
+    )
+  }
+  if (args.terminal && args.additionalDirectories?.length) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      '--add-dir cannot be applied when reusing an existing terminal.'
+    )
+  }
+}
+
+export function assertWorkerAdditionalDirectoriesMode(
+  additionalDirectories: readonly string[] | undefined,
+  effectiveMode: AgentLaunchMode
+): void {
+  if (additionalDirectories?.length && effectiveMode !== 'structured') {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `--add-dir (${additionalDirectories.join(', ')}) cannot be used in ${effectiveMode} mode because terminal launches do not receive additionalDirectories.`
     )
   }
 }

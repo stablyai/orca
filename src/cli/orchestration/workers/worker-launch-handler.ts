@@ -1,11 +1,22 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printResult } from '../../output/command-result-output'
 import { withReceiptNext } from '../receipt-next-text'
-import { getOptionalStringFlag, getPresentStringFlag } from '../../arguments/flags'
+import {
+  getOptionalStringFlag,
+  getPresentStringFlag,
+  getRepeatedStringFlag
+} from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
+import {
+  isAbsoluteDirectoryPath,
+  resolveAdditionalDirectoriesFromLaunch
+} from '../../../shared/agent-session/lifecycle/records/agent-session-additional-directories'
 import type { RuntimeClient } from '../../runtime/client'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
+import {
+  ORCHESTRATION_WORKER_ADDITIONAL_DIRECTORIES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
+} from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from '../numeric-flags'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
@@ -34,16 +45,49 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     const terminal = getPresentStringFlag(flags, 'terminal')
     const model = getOptionalStringFlag(flags, 'model')
     const effort = getOptionalStringFlag(flags, 'effort')
-    if (model || effort) {
-      const status = await client.call<RuntimeStatus>('status.get')
-      if (
-        !status.result.capabilities?.includes(
-          ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
+    const on = getOptionalStringFlag(flags, 'on')
+    const rawAdditionalDirectories = getRepeatedStringFlag(flags, 'add-dir')
+    let additionalDirectories: string[] = []
+    if (rawAdditionalDirectories.length > 0) {
+      if (on && rawAdditionalDirectories.some((dir) => !isAbsoluteDirectoryPath(dir.trim()))) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--add-dir requires absolute directory paths when targeting --on <server>.'
         )
+      }
+      try {
+        additionalDirectories =
+          resolveAdditionalDirectoriesFromLaunch(
+            rawAdditionalDirectories,
+            undefined,
+            on ? undefined : cwd
+          ) ?? []
+      } catch (error) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
+    if (model || effort || additionalDirectories.length > 0) {
+      const status = await client.call<RuntimeStatus>('status.get')
+      const capabilities = status.result.capabilities
+      if (
+        (model || effort) &&
+        !capabilities?.includes(ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY)
       ) {
         throw new RuntimeClientError(
           'incompatible_runtime',
           'The connected Orca runtime does not support worker model or effort overrides. Update or restart Orca and try again.'
+        )
+      }
+      if (
+        additionalDirectories.length > 0 &&
+        !capabilities?.includes(ORCHESTRATION_WORKER_ADDITIONAL_DIRECTORIES_RUNTIME_CAPABILITY)
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime does not support worker --add-dir. Update or restart Orca and try again.'
         )
       }
     }
@@ -63,7 +107,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       // The host checks the caller is a bot's own chat and the item is open, then records it.
       ...(item ? { origin: `bot-item:${item}` } : {}),
       ...(forQuestion ? { forQuestion } : {}),
-      on: getOptionalStringFlag(flags, 'on'),
+      on,
       worktree: getOptionalStringFlag(flags, 'worktree'),
       name: getOptionalStringFlag(flags, 'name'),
       repo: getOptionalStringFlag(flags, 'repo'),
@@ -74,6 +118,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       agent: getOptionalStringFlag(flags, 'agent'),
       model,
       effort,
+      ...(additionalDirectories.length > 0 ? { additionalDirectories } : {}),
       terminal,
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),

@@ -54,6 +54,9 @@ export function createLocalWorkerStartDispatch(
     baseBranch: params.baseBranch ?? null,
     terminal: params.terminal ?? null,
     agent: agent ?? null,
+    ...(params.additionalDirectories?.length
+      ? { additionalDirectories: params.additionalDirectories }
+      : {}),
     // Mail from a reuse start that never binds still names the agent already running there.
     launch: params.terminal
       ? reusedWorkerLaunchReceipt(

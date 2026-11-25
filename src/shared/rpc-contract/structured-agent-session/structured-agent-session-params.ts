@@ -124,7 +124,8 @@ export const CreateIntentParams = z
       .strict()
       .optional(),
     options: AgentSessionOptions.optional(),
-    optionsMode: z.literal('replace-model-selection').optional()
+    optionsMode: z.literal('replace-model-selection').optional(),
+    additionalDirectories: z.array(z.string().min(1).max(4096)).max(64).optional()
   })
   .strict()
 

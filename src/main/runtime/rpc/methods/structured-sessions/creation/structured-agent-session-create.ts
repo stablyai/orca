@@ -69,6 +69,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  additionalDirectories?: readonly string[]
   /** Use the caller-reserved tab id at publication; absent, derive the legacy id. Keep it outside launch fingerprints. */
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
@@ -105,7 +106,13 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   const attachFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
     sessionId: args.envelope.sessionId,
-    fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
+    fields: attachFingerprintFields({
+      ...resolved,
+      envelope: args.envelope,
+      ...(args.additionalDirectories?.length
+        ? { additionalDirectories: [...args.additionalDirectories] }
+        : {})
+    })
   })
   host ??= await args.ensureHost()
   const priorOperation =
@@ -148,6 +155,9 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     attachParams: {
       ...resolvedAttach,
       ...(picked ? { options: picked } : {}),
+      ...(args.additionalDirectories?.length
+        ? { additionalDirectories: [...args.additionalDirectories] }
+        : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,
@@ -279,6 +289,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
   activate: boolean
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  additionalDirectories?: readonly string[]
   tabId?: string
   /** Create without starting the agent; its first message starts it. */
   atRest?: true

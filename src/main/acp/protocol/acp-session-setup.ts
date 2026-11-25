@@ -53,15 +53,21 @@ export async function setupAcpSession(
       resumePreference,
       authMethodId: _auth,
       authMethodUnavailableMessage: _unavailable,
-      ...params
+      additionalDirectories,
+      ...restParams
     } = options
+    const capabilities = initialized.agentCapabilities
+    const params =
+      additionalDirectories?.length &&
+      capabilities?.sessionCapabilities?.additionalDirectories != null
+        ? { ...restParams, additionalDirectories }
+        : restParams
     if (sessionId === undefined) {
       const response = await request('session/new', params, newSessionSchema, (response) =>
         received?.({ kind: 'new', sessionId: response.sessionId, response })
       )
       return { kind: 'new', sessionId: response.sessionId, response }
     }
-    const capabilities = initialized.agentCapabilities
     const load = capabilities?.loadSession === true
     const resume = capabilities?.sessionCapabilities?.resume != null
     if (load && (resumePreference !== 'resume' || !resume)) {

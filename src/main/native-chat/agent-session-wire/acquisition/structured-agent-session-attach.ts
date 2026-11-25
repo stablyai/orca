@@ -63,6 +63,7 @@ export type AgentSessionAttachParams = {
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
   launchArgs?: string[]
+  additionalDirectories?: string[]
   /** Omit only for create intent; fingerprint the client wire form before adapter proof. */
   providerHandle?: AgentSessionWireProviderHandle
   /** Host-only adoption seeds resume/import. Ordinary ensure handles must not imply adoption. */
@@ -95,6 +96,9 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     accountHome: params.accountHome,
     runtimeKind: params.runtimeKind,
     providerHandle: params.providerHandle,
+    additionalDirectories: params.additionalDirectories?.length
+      ? params.additionalDirectories
+      : undefined,
     // Adoption changes identity; transcript location is transient and excluded.
     adoptedProviderHandle: params.adopt?.providerHandle,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
@@ -220,6 +224,9 @@ export function reserveRequestFor(input: {
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
+    ...(params.additionalDirectories?.length
+      ? { additionalDirectories: [...params.additionalDirectories] }
+      : {}),
     ...(params.adopt
       ? {
           // New records begin at fence 1, matching the owner probe’s required head fence.

@@ -26,7 +26,10 @@ export type StructuredAgentSessionStartupAttempt = {
   readonly fence: number
   readonly spawnToken: string
   /** Pinned launch identity/location; adapters must not re-resolve. */
-  readonly launch: Pick<AgentSessionRecord, 'location' | 'accountHome' | 'launchDirectory'>
+  readonly launch: Pick<
+    AgentSessionRecord,
+    'location' | 'accountHome' | 'launchDirectory' | 'additionalDirectories'
+  >
   /** Saved launch intent, never catalog guesses. */
   readonly options?: Readonly<Record<string, string>>
   readonly permissionMode?: AgentChatPermissionChoice

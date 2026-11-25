@@ -1,8 +1,13 @@
+import { refuseUnmatchedWorkerSelector } from '../worker-start-selector-refusal'
 import {
   prepareFederationConfiguredWorkerStart,
   resolveWorkerConfiguredAgentParams
 } from './worker-configured-agent-preflight'
-import type { prepareFederationAttachmentWorkerStart } from './worker-start-validation'
+import {
+  prepareLocalWorkerStart,
+  type prepareFederationAttachmentWorkerStart
+} from './worker-start-validation'
+import type { WorkerStartInput } from '../worker-start-input'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 
 export async function probeWorkerOpenCodeModelLaunchSupport(
@@ -33,4 +38,26 @@ export async function prepareFederationWorkerLaunchOnHost(
       worktree: params.worktree
     }))
   return prepareFederationConfiguredWorkerStart({ ...args, params, openCodeModelLaunchSupported })
+}
+
+export async function prepareLocalWorkerStartWithPreflight(args: {
+  runtime: OrcaRuntimeService
+  launchParams: WorkerStartInput
+  createsWorktree: boolean
+  existingWorktree: string | undefined
+  targetLabel: Parameters<typeof refuseUnmatchedWorkerSelector>[0]
+}) {
+  const { runtime, launchParams, createsWorktree, existingWorktree, targetLabel } = args
+  let openCodeModelLaunchSupported = false
+  if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
+    openCodeModelLaunchSupported = await refuseUnmatchedWorkerSelector(targetLabel, () =>
+      probeWorkerOpenCodeModelLaunchSupport(runtime, launchParams, { worktree: existingWorktree })
+    )
+  }
+  return prepareLocalWorkerStart({
+    params: launchParams,
+    createsWorktree,
+    runtime,
+    openCodeModelLaunchSupported
+  })
 }

@@ -1,6 +1,6 @@
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
-import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
+import { prepareLocalWorkerStartWithPreflight } from './launch/worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './launch/worker-configured-agent-preflight'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
@@ -16,8 +16,7 @@ import {
   refuseUnmatchedWorkerSelector,
   workerStartTargetLabel
 } from './worker-start-selector-refusal'
-import { resolveWorkerStartModeOnHost } from '../../structured-workers/orchestration-worker-start-mode'
-import { lineageModeForResolvedAgent } from './worker-chat-lineage'
+import { resolveLocalWorkerStartMode } from './worker-chat-lineage'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
 import { resolveExistingWorkerWorkspace } from './placement/folder-worktree-placement'
@@ -33,14 +32,13 @@ import {
   explicitWorkerWorkspace
 } from './placement/explicit-worker-terminal-validation'
 import { resolveDispatchAssigneeParty } from '../../../../../orchestration/addressing/orchestration-party'
-import { chatAssigneeOf, chatWorkerMode } from '../../chat-assignee-admission'
+import { chatAssigneeOf } from '../../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './placement/created-worker-terminal-custody'
 import {
   closeFailedSetupOnceRetryReady,
   releaseRetriedWorkerTerminal
 } from '../release/retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
-import { prepareLocalWorkerStart } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
 import { handOverWhenReady } from './readiness/placed-worker-readiness'
 import type { WorkerStartMutation } from './worker-start-mutation'
@@ -101,18 +99,12 @@ export async function startLocalWorker(args: {
         : { worktree: existingWorktree }
     )
   )
-  let openCodeModelLaunchSupported = false
-  if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
-    openCodeModelLaunchSupported = await refuseUnmatchedWorkerSelector(targetLabel, () =>
-      probeWorkerOpenCodeModelLaunchSupport(runtime, launchParams, { worktree: existingWorktree })
-    )
-  }
-
-  const { agent, launch } = prepareLocalWorkerStart({
-    params: launchParams,
-    createsWorktree,
+  const { agent, launch } = await prepareLocalWorkerStartWithPreflight({
     runtime,
-    openCodeModelLaunchSupported
+    launchParams,
+    createsWorktree,
+    existingWorktree,
+    targetLabel
   })
 
   const creationTarget = createsWorktree
@@ -132,9 +124,16 @@ export async function startLocalWorker(args: {
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
-  const decided = lineageModeForResolvedAgent(runtime, args.mode, { ...args, params, agent })
-  const hostMode = resolveWorkerStartModeOnHost(runtime, decided, resolvedWorktree?.id, agent)
-  let mode = chatWorkerMode(await hostMode, chat)
+  let mode = await resolveLocalWorkerStartMode({
+    runtime,
+    mode: args.mode,
+    chatLineage: args.chatLineage,
+    params,
+    agent,
+    worktreeId: resolvedWorktree?.id,
+    chat,
+    createsWorktree
+  })
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
   refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)

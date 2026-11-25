@@ -26,6 +26,8 @@ import {
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { isAgentSessionAdditionalDirectories } from '../../../../shared/agent-session/lifecycle/records/agent-session-additional-directories'
+import { withPinnedReservationFields } from './agent-session-reservation-pinning'
 import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/records/agent-session-launch-args'
 import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type {
@@ -53,6 +55,8 @@ export type AgentSessionReserveRequest = {
   forkedFrom?: AgentSessionRecord['forkedFrom']
   /** Host-resolved floating directory committed with the first owner reservation. */
   launchDirectory?: string
+  /** Extra workspace directories persisted on the session record. */
+  additionalDirectories?: string[]
   sessionId: string
   location: AgentSessionExecutionLocation
   provider: StructuredAgentId
@@ -151,6 +155,12 @@ export function validateAgentSessionReservationInput(request: AgentSessionReserv
   if (request.launchArgs && !isAgentSessionLaunchArgs(request.launchArgs)) {
     throw new Error('agent_session_launch_args_invalid')
   }
+  if (
+    request.additionalDirectories &&
+    !isAgentSessionAdditionalDirectories(request.additionalDirectories)
+  ) {
+    throw new Error('agent_session_additional_directories_invalid')
+  }
   if (request.options && !isAgentSessionOptions(request.options)) {
     throw new Error('agent_session_options_invalid')
   }
@@ -205,11 +215,7 @@ export function applyAgentSessionReservation(
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
   assertReservedTabUnheld(state, request, legacyIds)
-  const pinned = {
-    ...existing,
-    ...(!existing.launchArgs && request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
-    ...(!existing.launchArgs && request.launchArgs ? { updatedAt: request.now } : {})
-  }
+  const pinned = withPinnedReservationFields(existing, request)
   return reserveAgentSessionOwner({
     record: pinned,
     expectedFence: request.expectedFence ?? existing.lease.runtimeFence,
