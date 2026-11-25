@@ -4,10 +4,10 @@ import { WorkerPlacementCatalogOwner } from './worker-placement-catalog-owner'
 import * as resolution from '../../../../workspaces/execution-host/local-project-runtime-resolution'
 import { projectSetupsWithWorkerExecutionTargets } from './worker-execution-target'
 import {
-  partialRuntimeStore,
+  catalogRuntimeStore,
   storeProject,
   storeRepo
-} from '../../../construction/test-context/runtime-store-partial-fixture'
+} from '../../../construction/test-context/runtime-catalog-store.test-fixture'
 import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
 import {
   pairedOrchestrationPeers,
@@ -351,7 +351,7 @@ it('indexes a full-size shared project once and resolves a shared worktree scope
     workspaceDir: '\\\\wsl.localhost\\Ubuntu\\worktrees',
     nestWorkspaces: false
   }))
-  const store = partialRuntimeStore({ getProjects, getSettings })
+  const store = catalogRuntimeStore({ getProjects, getSettings })
   const setups: ProjectHostSetup[] = repos.map((repo) => ({
     id: `setup-${repo.id}`,
     projectId: 'project',

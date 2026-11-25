@@ -6,10 +6,10 @@ import {
 } from '../../../terminal/launch/agent-launch-scope-runtime'
 import { executionRuntimePlatform } from '../../../../../shared/agent-launch/startup/agent-launch-runtime'
 import {
-  partialRuntimeStore,
+  catalogRuntimeStore,
   storeProject,
   storeRepo
-} from '../../../construction/test-context/runtime-store-partial-fixture'
+} from '../../../construction/test-context/runtime-catalog-store.test-fixture'
 import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
 
 vi.mock('../../../../wsl/discovery/distro-catalog', () => ({
@@ -108,7 +108,7 @@ it.each([
     sourceRepoIds: ['repo'],
     localWindowsRuntimePreference: row.preference
   })
-  const store = partialRuntimeStore({
+  const store = catalogRuntimeStore({
     getProjects: () => [project],
     getRepo: () => repo,
     getSettings: () => ({
@@ -131,7 +131,7 @@ it.each([
 it('refuses original host twins and conflicting project associations', () => {
   const repo = storeRepo({ id: 'repo', path: 'C:\\src\\repo' })
   const project = storeProject({ id: 'github:team/repo', sourceRepoIds: ['repo'] })
-  const store = partialRuntimeStore({ getProjects: () => [project] })
+  const store = catalogRuntimeStore({ getProjects: () => [project] })
   expect(
     projectSetupsWithWorkerExecutionTargets(
       store,
@@ -145,7 +145,7 @@ it('refuses original host twins and conflicting project associations', () => {
   ).toEqual({ kind: 'unknown' })
   expect(
     projectSetupsWithWorkerExecutionTargets(
-      partialRuntimeStore({
+      catalogRuntimeStore({
         getProjects: () => [project, storeProject({ id: 'repo', sourceRepoIds: [] })]
       }),
       [repo],
@@ -227,7 +227,7 @@ it.each([
   'requires original hosts before producing evidence: $name',
   ({ repoHost, setupHost, target }) => {
     const repo = storeRepo({ id: 'repo', path: 'C:\\src\\repo', ...repoHost })
-    const store = partialRuntimeStore({
+    const store = catalogRuntimeStore({
       getProjects: () => [storeProject({ id: setup.projectId, sourceRepoIds: ['repo'] })]
     })
     expect(
@@ -240,7 +240,7 @@ it.each([
 it('preserves native launch policy on non-Windows owners', () => {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
   const repo = storeRepo({ id: 'repo', path: '/src/repo' })
-  const store = partialRuntimeStore({
+  const store = catalogRuntimeStore({
     getProjects: () => [
       storeProject({
         id: setup.projectId,

@@ -1,9 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import {
-  partialRuntimeStore,
+  catalogRuntimeStore,
   storeRepo
-} from '../../construction/test-context/runtime-store-partial-fixture'
+} from '../../construction/test-context/runtime-catalog-store.test-fixture'
 import * as probing from '../../../workspaces/catalog/repo-git-remote-identity'
 import type { GitRemoteIdentityProbe } from '../../../workspaces/catalog/repo-git-remote-identity'
 
@@ -23,7 +23,7 @@ it('repeated list reads publish one completion per runtime after the real sweep 
   )
   const repo = storeRepo({ id: 'repo', path: '/catalog-subscription-repo' })
   const runtime = new OrcaRuntimeService(
-    partialRuntimeStore({
+    catalogRuntimeStore({
       getRepos: () => [repo],
       getRepo: () => repo,
       updateRepo: (_target, updates) => Object.assign(repo, updates)
