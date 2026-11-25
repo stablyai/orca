@@ -22,6 +22,9 @@ const FULL_SUITE_TRIGGER =
 // Only module-graph files can make Vitest's `related` selection meaningful.
 const IMPORTABLE = /\.(?:[cm]?[jt]sx?|json|css|scss|svg|html|wasm|ya?ml|txt|sql)$/
 const UNIT_TEST_FILE = /\.test\.[cm]?[jt]sx?$/
+const COLOCATED_TEST_STEMS = new Map([
+  ['config/scripts/preflight/changed-checks/check-changed-slot-processes.mjs', 'check-changed-slot']
+])
 
 const SOURCE_ROOTS = ['src/', 'mobile/', 'tests/', 'config/']
 const TEST_FILE = /\.(?:test|spec|e2e|bench)\.[cm]?[jt]sx?$/
@@ -467,7 +470,7 @@ export function splitUnitTestInputs(files, listDirectory = () => []) {
     }
     const slash = file.lastIndexOf('/')
     const directory = file.slice(0, slash + 1)
-    const stem = file.slice(slash + 1).replace(/\.[^.]+$/, '')
+    const stem = COLOCATED_TEST_STEMS.get(file) ?? file.slice(slash + 1).replace(/\.[^.]+$/, '')
     for (const name of listDirectory(directory).map(String)) {
       if (UNIT_TEST_FILE.test(name) && name.startsWith(`${stem}.`)) {
         colocated.add(directory + name)
