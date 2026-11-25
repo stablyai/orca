@@ -7,8 +7,18 @@ export type WorkerThreadChildSpec = {
   terminationBarrier?: true
 }
 
+export type WorkerThreadProviderOwnerSpec = {
+  nonce: string
+  path: string
+  program: string
+  args: string[]
+  cwd: string
+  env: Record<string, string>
+}
+
 export type WorkerThreadChildRequest =
   | { type: 'spawn'; id: number; spec: WorkerThreadChildSpec }
+  | { type: 'spawn-provider-owner'; id: number; spec: WorkerThreadProviderOwnerSpec }
   | { type: 'stdin-write'; id: number; data: string | Uint8Array }
   | { type: 'stdin-end'; id: number }
   | { type: 'output-consumed'; id: number; bytes: number }
@@ -43,6 +53,9 @@ export type WorkerThreadChildEvent =
   // 'spawn-error': process creation threw, so no exit or close will follow.
   | { type: 'error' | 'spawn-error'; id: number; error: WorkerThreadChildErrorPayload }
   | { type: 'exit'; id: number; code: number | null; signal: NodeJS.Signals | null }
+  | { type: 'provider-owner-spawned'; id: number; pid: number }
+  | { type: 'provider-owner-exit'; id: number }
+  | { type: 'provider-owner-error'; id: number; error: WorkerThreadChildErrorPayload }
   // 'retained': the worker still tracks the child (an owned POSIX group) until main sends 'release'.
   | {
       type: 'close'
