@@ -419,6 +419,10 @@ describe('codex rows across a reattach', () => {
     }
     const request = async (method: string, params?: unknown) => {
       const threadId = String(readRecord(params).threadId)
+      // Only the app-server's loaded threads name the child: no carried work does.
+      if (method === 'thread/loaded/list') {
+        return { data: ['main', 'child', 'grand'] }
+      }
       if (method === 'thread/read' && threadId === 'grand') {
         throw new Error('timed out')
       }
@@ -443,7 +447,7 @@ describe('codex rows across a reattach', () => {
       connection: { request },
       translator,
       threadId: 'main',
-      carriedThreadIds: ['child', 'grand'],
+      carriedThreadIds: [],
       timeoutMs: 1_000,
       onError: () => {}
     })

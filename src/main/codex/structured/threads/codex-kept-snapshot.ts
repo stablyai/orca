@@ -105,6 +105,24 @@ async function readKeptThread(input: {
   }
 }
 
+/** Threads the app-server holds in memory, a page at a time. */
+async function loadedThreadIds(connection: Connection, timeoutMs: number): Promise<string[]> {
+  const ids: string[] = []
+  let cursor: string | null = null
+  do {
+    const page = readRecord(
+      await connection.request(
+        'thread/loaded/list',
+        { cursor, limit: MAX_SNAPSHOT_THREADS },
+        { timeoutMs }
+      )
+    )
+    ids.push(...(Array.isArray(page.data) ? page.data.filter((id) => typeof id === 'string') : []))
+    cursor = typeof page.nextCursor === 'string' ? page.nextCursor : null
+  } while (cursor !== null && ids.length < MAX_SNAPSHOT_THREADS)
+  return ids
+}
+
 /** A child as the tracker learns of it from a spawn, so Stop reaches it and its end settles it. */
 function spawnOf(parentThreadId: string, childThreadId: string): KeptCodexSpawn {
   return {
@@ -139,8 +157,8 @@ function parentsFirst(spawns: KeptCodexSpawn[], primaryThreadId: string): KeptCo
 
 /**
  * The terminal daemon's model for a kept agent: before its replay, the app learns the live state
- * from the agent itself — the chat's thread and every thread the daemon carried a turn of (known
- * after a crash too), plus children their latest turns spawned. Threads are read in parallel waves.
+ * from the agent itself — the chat's thread and every other thread its app-server has loaded (its
+ * agents), plus any the daemon carried or a latest turn spawned. Threads are read in parallel waves.
  * The translator is seeded with each thread's turns (a replayed start of a finished one writes
  * nothing) and numbering; the caller registers the children and restates the running work.
  */
@@ -160,7 +178,14 @@ export async function readKeptCodexSnapshot(input: {
   const spawns: KeptCodexSpawn[] = []
   /** Children whose parent couldn't be read: placed under the chat only if no read turn spawned them. */
   const unparented: string[] = []
-  let wave = [input.threadId, ...(input.carriedThreadIds ?? [])]
+  // The kept app-server is this chat's own: every other thread it has loaded is one of its agents.
+  const loaded = await loadedThreadIds(input.connection, input.timeoutMs).catch(
+    (error: unknown) => {
+      input.onError(input.threadId, error)
+      return []
+    }
+  )
+  let wave = [input.threadId, ...(input.carriedThreadIds ?? []), ...loaded]
   while (wave.length > 0) {
     const threads = [...new Set(wave)].filter((id) => !seen.has(id))
     const room = MAX_SNAPSHOT_THREADS - seen.size
