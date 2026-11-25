@@ -193,25 +193,31 @@ function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
  * address and sign-in for an app Orca signs in to, so a refreshed token restarts no chat.
  */
 export function botToolCredentialsFingerprint(folder: string, ids: ReadonlySet<string>): string {
-  return JSON.stringify([...botToolCredentialFingerprints(folder, ids)])
+  return JSON.stringify([...botToolCredentialFingerprints(folder, ids)()])
 }
 
-/** `botToolCredentialsFingerprint`'s part for each credential, by id, from one read of the store. */
+/**
+ * `botToolCredentialsFingerprint`'s part for each credential, by id, from one read of the store taken
+ * now; its entries are opened only the first time the answer is asked for, so a reader that never
+ * needs it opens none.
+ */
 export function botToolCredentialFingerprints(
   folder: string,
   ids: ReadonlySet<string>
-): Map<string, unknown> {
+): () => Map<string, unknown> {
   const sealed = readSealed(folder)
-  return new Map(
-    [...ids].sort().map((id) => {
-      const slot = sealed[id]
-      const entry = slot?.entry
-      return [
-        id,
-        entry?.kind === 'oauth' ? [entry.kind, entry.url, entry.grant] : (slot?.envelope ?? null)
-      ]
-    })
-  )
+  let fingerprints: Map<string, unknown> | undefined
+  return () =>
+    (fingerprints ??= new Map(
+      [...ids].sort().map((id) => {
+        const slot = sealed[id]
+        const entry = slot?.entry
+        return [
+          id,
+          entry?.kind === 'oauth' ? [entry.kind, entry.url, entry.grant] : (slot?.envelope ?? null)
+        ]
+      })
+    ))
 }
 
 /** Header names only, for an editor that shows which values are saved. */

@@ -1,6 +1,6 @@
-// Guards PR #49123: listing or checking a host's MCP servers or a bot's tools, or flipping one server's
-// switch, opens each saved credential a fixed number of times, not once per credentialed server. A
-// switch already where it's set writes nothing, and a paste of many servers is one write.
+// Guards PR #49123: listing or checking a host's MCP servers or a bot's tools opens each saved
+// credential once, not once per credentialed server, and flipping one server's switch opens only its
+// own. A switch already where it's set writes nothing, and a paste of many servers is one write.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -66,26 +66,26 @@ async function opensFor(count: number, work: (folder: string) => Promise<unknown
   return opened
 }
 
-// The list's read of the file, and one read for every server's sign-in.
-it('opens each credential twice per list, however many servers hold one', async () => {
+// Each server's sign-in; the file's version, which a list doesn't use, opens none.
+it('opens each credential once per list, however many servers hold one', async () => {
   const list = (folder: string) => listMcpServers(folder)
-  expect(await opensFor(10, list)).toBe(20)
-  expect(await opensFor(100, list)).toBe(200)
+  expect(await opensFor(10, list)).toBe(10)
+  expect(await opensFor(100, list)).toBe(100)
 })
 
-// The write's read, its sign-in check and the answer's read; the answer's sign-in opens only its own.
-it('opens each credential three times per switch, plus the switched one', async () => {
+// The answer's sign-in. The write checks no unchanged server's sign-in, and neither read needs a version.
+it('opens only the switched server’s credential per switch', async () => {
   const flip = async (folder: string) => {
     const [first] = await listMcpServers(folder)
     opened = 0
     await setMcpServerAgentEnabled(first!.id, 'claude', false, folder)
   }
-  expect(await opensFor(10, flip)).toBe(31)
-  expect(await opensFor(100, flip)).toBe(301)
+  expect(await opensFor(10, flip)).toBe(1)
+  expect(await opensFor(100, flip)).toBe(1)
 })
 
 // Each write moves the list's epoch, which tells every client to re-read it; these move it 0 times.
-// Each call still opens each credential four times: the write's read and sign-in check, and its answer.
+// Each call opens only the answer's own credential.
 it('writes nothing for a switch already where it is set', async () => {
   const writes = new Map<number, number>()
   const again = (count: number) => async (folder: string) => {
@@ -98,12 +98,12 @@ it('writes nothing for a switch already where it is set', async () => {
     await setMcpServerWorkspaces(first!.id, ALL_MCP_SERVER_WORKSPACES, { folder })
     writes.set(count, botToolsEpoch(folder) - epoch)
   }
-  expect(await opensFor(10, again(10))).toBe(120)
-  expect(await opensFor(100, again(100))).toBe(1200)
+  expect(await opensFor(10, again(10))).toBe(3)
+  expect(await opensFor(100, again(100))).toBe(3)
   expect(Object.fromEntries(writes)).toEqual({ 10: 0, 100: 0 })
 })
 
-// The write's read and sign-in check, and the read of its answer, which opens no other row's sign-in.
+// Command servers hold no credential, and nothing else's is opened.
 it('adds a paste of many servers in one write and one read back', async () => {
   const writes = new Map<number, number>()
   const paste = (count: number) => async (folder: string) => {
@@ -116,8 +116,8 @@ it('adds a paste of many servers in one write and one read back', async () => {
     expect(await addMcpServers(servers, { nameGiven: false }, folder)).toHaveLength(count)
     writes.set(count, botToolsEpoch(folder) - epoch)
   }
-  expect(await opensFor(10, paste(10))).toBe(30)
-  expect(await opensFor(100, paste(100))).toBe(300)
+  expect(await opensFor(10, paste(10))).toBe(0)
+  expect(await opensFor(100, paste(100))).toBe(0)
   expect(Object.fromEntries(writes)).toEqual({ 10: 1, 100: 1 })
 })
 
@@ -130,23 +130,23 @@ const home = (folder: string) => ({
   agent: 'opencode' as const
 })
 
-it("opens each credential twice per bot's tools list", async () => {
+it("opens each credential once per bot's tools list", async () => {
   const list = (folder: string) => listBotTools(home(folder))
-  expect(await opensFor(10, list)).toBe(20)
-  expect(await opensFor(100, list)).toBe(200)
+  expect(await opensFor(10, list)).toBe(10)
+  expect(await opensFor(100, list)).toBe(100)
 })
 
-// The file's read, and one read that tells each server with a credential whether Orca signs in to it.
-it('opens each credential twice per tools check', async () => {
+// One read that tells each server with a credential whether Orca signs in to it.
+it('opens each credential once per tools check', async () => {
   const check = (folder: string) => botToolProblems(home(folder))
-  expect(await opensFor(10, check)).toBe(20)
-  expect(await opensFor(100, check)).toBe(200)
+  expect(await opensFor(10, check)).toBe(10)
+  expect(await opensFor(100, check)).toBe(100)
 })
 
-// The file's read, one read for every old value kept for a rollback, and the store's own write.
+// One read for every old value kept for a rollback, and the store's own write.
 it('opens each credential a fixed number of times per write that replaces every saved value', async () => {
   const replaceAll = (count: number) => (folder: string) =>
     writeBotToolServers(folder, withHeaders(count, 'rotated'))
-  expect(await opensFor(10, replaceAll(10))).toBe(30)
-  expect(await opensFor(100, replaceAll(100))).toBe(300)
+  expect(await opensFor(10, replaceAll(10))).toBe(20)
+  expect(await opensFor(100, replaceAll(100))).toBe(200)
 })
