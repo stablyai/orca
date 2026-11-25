@@ -19,5 +19,14 @@ export const MCP_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['id'],
     // Orca writes it into an agent terminal's MCP config for a server with saved env; nobody types it.
     hidden: true
+  },
+  {
+    path: ['mcp', 'env'],
+    summary: "Print a command MCP server's saved environment for a WSL terminal's wrapper",
+    usage: 'orca mcp env <id> --agent <agent> [--workspace <id>]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'id', 'agent', 'workspace'],
+    positionalArgs: ['id'],
+    // Orca's WSL wrapper reads its NUL-separated output from a pipe; nobody types it.
+    hidden: true
   }
 ]

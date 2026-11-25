@@ -1,22 +1,17 @@
 // The host list's servers for an agent's terminal, added at spawn on the host that runs it. With the
 // host's switch off, or for a launch that starts no agent of a known CLI afresh, nothing changes.
 import { createHash } from 'node:crypto'
-import { access } from 'node:fs/promises'
 import type { BotToolServer } from '../../../shared/bot-tools'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { MCP_TOKEN_ENV } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { mcpServerWorkspaceKeyOf } from '../../../shared/mcp-servers/mcp-servers'
 import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
-import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
-import { thisAppOrcaCliLauncher } from '../../cli/launchers/this-app-orca-cli-launcher'
 import { botToolRelay, type BotToolRelay } from '../../bots/tool-relay/bot-tool-relay'
-import { cmdShimArgument } from '../../bots/bot-tools-claude'
+import { terminalServers, type WslLaunch } from './terminal-mcp-servers'
 import { agentOwnMcpServerNames } from '../agent-own-mcp-server-names'
 import { codexArgsMcpServerNames } from '../../codex/structured/launch/codex-structured-launch-args'
 import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { mcpServerEntriesForLaunch, type McpLaunchEntry } from '../mcp-host-list-launch'
-import { mcpHostListFolder } from '../mcp-host-list-folder'
 import { isMcpServersFeatureEnabled } from '../mcp-servers-feature'
 import { SessionMcpTools, withSessionMcpToolsEnv } from '../session-mcp-tools'
 import { noteTerminalMcpDelivery } from '../mcp-agent-problems'
@@ -34,6 +29,8 @@ export type TerminalMcpPaneLaunch = {
   workspaceKey: string | null
   workspaceId: string | null
   wsl: boolean
+  /** The distro a WSL pane runs in (null: the default one). */
+  wslDistro?: string | null
   /** Of the servers it was offered; null when its CLI couldn't take them, so no restart helps. */
   fingerprint: string | null
 }
@@ -57,100 +54,6 @@ export type TerminalMcpLaunchInput = {
 
 type Deps = { relay?: Pick<BotToolRelay, 'grant'>; hostFolder?: string }
 
-/** The `orca` launcher this host's terminals run, and the user data it names its Orca by; null when
- *  this host has none to run (a dev serve never installs one). */
-async function orcaCliLauncher(): Promise<{ launcher: string; userDataPath: string } | null> {
-  if (!hasAppEnvironment()) {
-    return null
-  }
-  const userDataPath = getAppEnvironment().getPath('userData')
-  const launcher = thisAppOrcaCliLauncher(userDataPath)
-  const found = launcher
-    ? await access(launcher).then(
-        () => true,
-        () => false
-      )
-    : false
-  return launcher && found ? { launcher, userDataPath } : null
-}
-
-/**
- * A command server with saved env as `orca mcp exec <id>`: the CLI fetches the env from the running
- * Orca and execs the real command, so no saved value sits in the agent's config, argv or env.
- * `ORCA_USER_DATA_PATH` is named outright since agents start servers with a trimmed environment.
- */
-function throughOrcaExec(
-  entry: McpLaunchEntry,
-  launch: { agent: string; workspaceId: string | null },
-  cli: { launcher: string; userDataPath: string } | null
-): BotToolServer | null {
-  const { server } = entry
-  if ('url' in server || Object.keys(server.env ?? {}).length === 0) {
-    return server
-  }
-  if (!entry.id || !cli) {
-    return null
-  }
-  const args = [
-    'mcp',
-    'exec',
-    entry.id,
-    '--agent',
-    launch.agent,
-    ...(launch.workspaceId ? ['--workspace', launch.workspaceId] : [])
-  ]
-  // A dev build's Windows launcher is a .cmd, which Node-based agents can only start through cmd.
-  const viaCmd = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cli.launcher)
-  return {
-    name: server.name,
-    command: viaCmd ? 'cmd' : cli.launcher,
-    args: viaCmd ? ['/c', cli.launcher, ...args.map(cmdShimArgument)] : args,
-    env: { ORCA_USER_DATA_PATH: cli.userDataPath }
-  }
-}
-
-/**
- * The servers a pane of `agent` gets, shaped for a terminal. A command server Orca runs once for
- * every session stays as it is here: SessionMcpTools points the agent at it through the relay. In
- * WSL, only servers needing neither the relay nor saved env (the guest can't reach Windows
- * loopback, and `orca mcp exec` there would run the server on Windows).
- */
-async function terminalServers(
-  agent: string,
-  workspaceId: string | null,
-  wsl: boolean,
-  deps: Deps
-): Promise<{
-  folder: string
-  servers: BotToolServer[]
-  sharedProcesses: ReadonlyMap<string, string>
-  bridged: BotToolServer[]
-}> {
-  const folder = deps.hostFolder ?? mcpHostListFolder()
-  const key = workspaceId ? mcpServerWorkspaceKeyOf(workspaceId) : null
-  const { entries, sharedProcesses } = await mcpServerEntriesForLaunch(agent, { key }, folder)
-  const shared = (server: BotToolServer): boolean => sharedProcesses.has(server.name)
-  const savedEnv = (server: BotToolServer): boolean =>
-    !('url' in server) && !shared(server) && Object.keys(server.env ?? {}).length > 0
-  const relayed = (server: BotToolServer): boolean =>
-    'url' in server ? server.credential !== undefined : shared(server)
-  const cli =
-    wsl || !entries.some(({ server }) => savedEnv(server)) ? null : await orcaCliLauncher()
-  const bridged: BotToolServer[] = []
-  const servers = entries.flatMap((entry) => {
-    const { server } = entry
-    if (wsl && (relayed(server) || savedEnv(server))) {
-      return []
-    }
-    const shaped = shared(server) ? server : throughOrcaExec(entry, { agent, workspaceId }, cli)
-    if (shaped && shaped !== server) {
-      bridged.push(server)
-    }
-    return shaped ? [shaped] : []
-  })
-  return { folder, servers, sharedProcesses, bridged }
-}
-
 type OfferedTools = { tools: SessionMcpTools; bridged: readonly BotToolServer[] }
 
 /** Of what the pane runs: its servers as delivered, and the definitions behind its `orca mcp exec`
@@ -165,7 +68,7 @@ function fingerprintOf({ tools, bridged }: OfferedTools): string {
 async function offeredTools(
   agent: string,
   workspaceId: string | null,
-  wsl: boolean,
+  wsl: WslLaunch,
   deps: Deps
 ): Promise<OfferedTools> {
   const { bridged, ...host } = await terminalServers(agent, workspaceId, wsl, deps)
@@ -182,13 +85,14 @@ async function offeredTools(
 
 /** The fingerprint a pane launched with these settings would have now; null with the switch off. */
 export async function currentTerminalMcpFingerprint(
-  pane: Pick<TerminalMcpPaneLaunch, 'agent' | 'workspaceId' | 'wsl'>,
+  pane: Pick<TerminalMcpPaneLaunch, 'agent' | 'workspaceId' | 'wsl' | 'wslDistro'>,
   deps: Deps = {}
 ): Promise<string | null> {
   if (!isMcpServersFeatureEnabled()) {
     return null
   }
-  return fingerprintOf(await offeredTools(pane.agent, pane.workspaceId, pane.wsl, deps))
+  const wsl = pane.wsl ? { distro: pane.wslDistro ?? null } : null
+  return fingerprintOf(await offeredTools(pane.agent, pane.workspaceId, wsl, deps))
 }
 
 function adapterAndExecutable(
@@ -233,13 +137,14 @@ export async function withTerminalMcpServers(
     return unchanged
   }
   const { adapter, executable } = found
-  const wsl = input.wsl !== undefined
+  const wsl = input.wsl ?? null
   const workspaceId = input.worktreeId ?? null
   const pane = (fingerprint: string | null): TerminalMcpPaneLaunch => ({
     agent: adapter.agent,
     workspaceKey: workspaceId ? mcpServerWorkspaceKeyOf(workspaceId) : null,
     workspaceId,
-    wsl,
+    wsl: wsl !== null,
+    ...(wsl ? { wslDistro: wsl.distro } : {}),
     fingerprint
   })
   if (wsl && !adapter.wsl) {
