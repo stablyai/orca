@@ -35,6 +35,7 @@ export function isAgentPermissionChoice(value: unknown): value is AgentPermissio
 const ASK_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--permission-mode default',
   'claude-agent-teams': '--permission-mode default',
+  doubao: '--permission-mode ask_always',
   grok: '--permission-mode default',
   codex: '-a on-request -s read-only -c approvals_reviewer=user'
 }

@@ -28,6 +28,9 @@ function render() {
     `${keyboardProtocolMode ? `\x1b]0;\u280b ${keyboardProtocolAgent} is thinking\x07\x1b[>1u` : '\x1b]0;Golden Stub Agent\x07'}${[
       '\x1b[H\x1b[2JGolden Stub Agent',
       `[${READY_MARKER}]`,
+      ...(process.env.ORCA_GOLDEN_REPORT_ARGS === '1'
+        ? [JSON.stringify(process.argv.slice(2))]
+        : []),
       '',
       ...renderedComposer,
       '',

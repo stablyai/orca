@@ -67,6 +67,10 @@ If an agent's CLI is installed outside `PATH`, expand its row in **Settings → 
 | Trae               | Auto-setup via `traecli` (TRAE CN CLI)                                                                                     | [Trae](https://www.trae.ai/)                                                                      |
 | Doubao (豆包)      | Terminal workers via `doubao`. Install with `npm install -g @bytedance/doubao-cli` and sign in with `doubao login`.        | [Doubao CLI](https://www.npmjs.com/package/@bytedance/doubao-cli)                                 |
 
+To configure a Doubao worker, open **Settings → Agents → Doubao** for the host that will run it, or search Settings for **豆包**. Expand the row to set its command, arguments, environment, and permissions. If the executable path contains spaces, quote it for the terminal shell, for example `& "C:\My Tools\doubao.cmd"` in PowerShell.
+
+Environment entries apply to the Doubao CLI process. On Windows with Doubao CLI 2.37.1, the shell tools inside a conversation can have a different environment.
+
 ## ZCode: pick a CLI that ships the TUI
 
 Orca drives ZCode through the `zcode` terminal CLI, so `zcode` on your `PATH` has to be a build that
