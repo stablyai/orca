@@ -77,11 +77,23 @@ export function AppRail({
     toolbarRef.current = node
     setToolbar(node)
   }, [])
+  // Carry only an acknowledged toggle that swaps the slot at the same size.
+  const [checklistCarry, setChecklistCarry] = useState<{
+    id: AppRailDestinationId
+    byPointer: boolean
+    shownKey: string
+    capacity: number
+    more: boolean
+  } | null>(null)
+  const pendingChecklistWrite = useRef<typeof checklistCarry>(null)
+  const releaseChecklistCarry = useCallback(() => {
+    pendingChecklistWrite.current = null
+    setChecklistCarry(null)
+  }, [])
   // Focus ownership sampled at the moment a fold/unfold is about to commit; only that transition may recover it.
   const transitionOwnerRef = useRef<AppRailItemId | null>(null)
-  const pendingChecklistWrite = useRef<object | null>(null)
   const capacity = useAppRailSlotCapacity(toolbar, () => {
-    pendingChecklistWrite.current = null
+    releaseChecklistCarry()
     transitionOwnerRef.current = toolbarRef.current ? railItemOwningFocus(toolbarRef.current) : null
   })
   // Customize can change the shown set with its menu open; sample focus before that commits, as for a fold.
@@ -126,21 +138,6 @@ export function AppRail({
         ? 'account'
         : null
   const [lastFocusedItem, setLastFocusedItem] = useState<AppRailItemId | null>(null)
-  // A checklist toggle that will swap "…" and More (one more page folds the rail, one fewer unfolds it) leaves its row
-  // here; the form that mounts in that swap reopens the checklist on it so editing carries on. It is bound to the
-  // write and the size it was made at, and is taken once, so an in-place or failed toggle, or a later resize, never
-  // reopens anything.
-  const [checklistCarry, setChecklistCarry] = useState<{
-    id: AppRailDestinationId
-    byPointer: boolean
-    shownKey: string
-    capacity: number
-    more: boolean
-  } | null>(null)
-  const releaseChecklistCarry = useCallback(() => {
-    pendingChecklistWrite.current = null
-    setChecklistCarry(null)
-  }, [])
   const tabStopItem =
     lastFocusedItem && renderedItems.includes(lastFocusedItem)
       ? lastFocusedItem

@@ -325,6 +325,7 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
       ([node, surface, expected]) =>
         node.isConnected &&
         surface.contains(node) &&
+        surface.getAttribute('data-state') === 'open' &&
         node.getAttribute('aria-checked') === expected,
       [rowNode, menuNode, flipped],
       { polling: 50 }
@@ -448,6 +449,8 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
             const menu = await open(theme)
             const first = await hitAndToggle(menu, ROW_NAMES[0])
             const last = await hitAndToggle(menu, ROW_NAMES.at(-1))
+            await paint(page)
+            assert.equal(await menu.getAttribute('data-state'), 'open', 'the checklist stays open')
             const rail = await railItems()
             if (label.startsWith('More')) {
               assert.ok(rail.includes('more'), `More stays on the rail: ${rail}`)

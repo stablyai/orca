@@ -18,7 +18,7 @@ async function groupMembers(group) {
     const { stdout } = await exec(
       process.env.ORCA_RAIL_PROOF_PGREP || 'pgrep',
       ['-g', String(group)],
-      { timeout: 2_000 }
+      { timeout: 2_000, killSignal: 'SIGKILL' }
     )
     const members = stdout.trim().split(/\s+/).map(Number)
     if (members.some((pid) => !Number.isSafeInteger(pid) || pid < 1)) {
@@ -161,6 +161,10 @@ export async function runInProofProcessGroup() {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'orca-rail-proof-'))
   let code = 1
   try {
+    if (requestedSignal) {
+      code = SIGNAL_CODES[requestedSignal]
+      return
+    }
     supervisor = fork(import.meta.filename, process.argv.slice(1), {
       detached: true,
       env: { ...process.env, ORCA_RAIL_PROOF_TEMP: tempDir }
