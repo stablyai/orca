@@ -132,6 +132,11 @@ export class AcpKeptSession {
     )
   }
 
+  /** The last app couldn't say what work was open when it let go (the daemon tracked none). */
+  get workUnknown(): boolean {
+    return this.child.attachResult?.openWork === undefined
+  }
+
   /** Background work the daemon still counted open at this attach, or saw end while no app was
    *  attached (`ended`), by its first key part. */
   openWork(group: string, ended = false): string[] {

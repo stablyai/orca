@@ -102,7 +102,19 @@ function keptUpdate(name: string, line: string): AcpKeptUpdate | null {
     : null
 }
 
+/** Read once per attach: the launch and the session both use it. */
+const keptAgents = new WeakMap<RelayedProviderChild, AcpKeptAgent>()
+
 export function acpKeptAgent(child: RelayedProviderChild): AcpKeptAgent {
+  let kept = keptAgents.get(child)
+  if (!kept) {
+    kept = readKeptAgent(child)
+    keptAgents.set(child, kept)
+  }
+  return kept
+}
+
+function readKeptAgent(child: RelayedProviderChild): AcpKeptAgent {
   const attach = child.attachResult
   let sessionStart: (AcpKeptAgent['sessionStart'] & { seq: number }) | null = null
   const updates: { seq: number; update: AcpKeptUpdate }[] = []

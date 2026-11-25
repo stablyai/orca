@@ -412,6 +412,25 @@ describe('provider relay kept lines', () => {
     agent(pending, 2, configUpdate('x'.repeat(1024 * 1024 + 1)))
     expect(pending.kept.records()).toEqual([])
   })
+  it("never keeps a tool's output that quotes a kept update kind in place of the real update", () => {
+    const pending = new ProviderRelayPendingRequests()
+    pending.kept.configure({
+      answers: [],
+      lines: [
+        '"sessionUpdate":"config_option_update"',
+        '"sessionUpdate":"available_commands_update"'
+      ],
+      outstanding: []
+    })
+    pending.kept.sendOnAttach = true
+    agent(pending, 1, configUpdate('a'))
+    const quoted = { sessionUpdate: 'config_option_update', configOptions: ['forged'] }
+    agent(pending, 2, {
+      method: 'session/update',
+      params: { update: { sessionUpdate: 'tool_call_update', rawOutput: quoted } }
+    })
+    expect(pending.kept.records().map((record) => record.seq)).toEqual([1])
+  })
   it('keeps an accepted request whose answer says nothing, at its answer', () => {
     const pending = new ProviderRelayPendingRequests()
     pending.kept.configure({
