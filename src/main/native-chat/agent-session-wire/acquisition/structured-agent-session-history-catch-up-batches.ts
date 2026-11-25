@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import {
   createHistoryCatchUpBatch,
@@ -47,7 +48,12 @@ export function createHistoryCatchUpBatches(seed: (batch: Batch) => void) {
       stage((batch) => batch.push(mutation)),
     revise: (mutation: ItemMutation, expected: Omit<ExpectedHistoryItem, 'key'>) =>
       stage((batch) => batch.revise(mutation, expected)),
-    finish: (settlementPrefix: string, digestOf: unknown): HistoryCatchUpPlan[] =>
-      batches.map((batch, index) => batch.finish(`${settlementPrefix}:${index}`, [digestOf, index]))
+    finish: (settlementPrefix: string, digestOf: unknown): HistoryCatchUpPlan[] => {
+      // The whole import is hashed once; each commit's settlement adds only its own place.
+      const digest = createHash('sha256').update(JSON.stringify(digestOf)).digest('hex')
+      return batches.map((batch, index) =>
+        batch.finish(`${settlementPrefix}:${index}`, [digest, index])
+      )
+    }
   }
 }

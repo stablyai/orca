@@ -6,8 +6,9 @@ import type { ProviderRelayAckFloor } from './relayed-provider-output'
  * its kept start at the file cap): it can't be rewritten whole, so its lines go to a continuation row.
  */
 export type ProviderRelayItemContinuation = {
-  /** The streamed item a line belongs to, and whether the line starts it or ends it. */
-  item(line: string): { key: string; start: boolean; end: boolean } | null
+  /** The streamed item a line belongs to, and whether the line starts it or ends it. `follows`:
+   *  the line goes with a moved item but never moves one itself (it may be a whole message). */
+  item(line: string): { key: string; start: boolean; end: boolean; follows?: boolean } | null
   /** The line with its item moved to the continuation named by `tag` (stable across attaches). */
   rekey(line: string, tag: string): string
   /** A start of that continuation, as the ack floor reads one, so it is kept from its first line. */
@@ -78,7 +79,11 @@ export class RelayedProviderContinuation {
     }
     let tag = this.moved.get(item.key)
     if (tag === undefined) {
-      if (this.started.has(item.key) || (this.cutKeys && !this.cutKeys.has(item.key))) {
+      if (
+        item.follows ||
+        this.started.has(item.key) ||
+        (this.cutKeys && !this.cutKeys.has(item.key))
+      ) {
         return [line]
       }
       tag = `relay:${this.relayId}:${seq}`

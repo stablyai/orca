@@ -66,10 +66,13 @@ export const CLAUDE_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
     if (event === null) {
       return null
     }
+    // A final frame goes on its message's continuation, but a subagent's unstreamed message is
+    // nothing but final frames: one alone never starts a move.
     return {
       key: scopeKey(line),
       start: event === 'message_start',
-      end: event === 'message_stop'
+      end: event === 'message_stop',
+      follows: event === ''
     }
   },
   // Keys as CLAUDE_RELAY_WORK_MARKERS' groups: `turn` [session_id], ended by a result or idle

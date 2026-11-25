@@ -59,16 +59,16 @@ async function importRows(count: number) {
     readView: async (history) => ({ physicalCursor: await history.reads.physicalCursor() }),
     prepare: async () => {
       const batches = createHistoryCatchUpBatches(() => {})
-      for (let index = 0; index < count; index++) {
-        batches.push(
-          journalLifecycleItemMutation(
-            { turnScope: AGENT_JOURNAL_THREAD_SCOPE },
-            { provider: 'legacy', agent: 'claude', sessionId: SESSION, recordId: `row-${index}` },
-            continuedOutsideNotice(false)
-          )
+      const rows = Array.from({ length: count }, (_, index) =>
+        journalLifecycleItemMutation(
+          { turnScope: AGENT_JOURNAL_THREAD_SCOPE },
+          { provider: 'legacy', agent: 'claude', sessionId: SESSION, recordId: `row-${index}` },
+          continuedOutsideNotice(false)
         )
-      }
-      return batches.finish('batches-performance', count)
+      )
+      rows.forEach((row) => batches.push(row))
+      // The whole import names the settlements, as the transcript import does.
+      return batches.finish('batches-performance', [SESSION, rows])
     }
   })
   delay.disable()
