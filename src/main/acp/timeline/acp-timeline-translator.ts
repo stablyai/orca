@@ -104,7 +104,8 @@ export class AcpTimelineTranslator {
 
   isSyntheticBackgroundTask = (taskId: string): boolean => this.ownership.tools.backgrounds(taskId)
 
-  agentTurnCalls = (): 'none' | 'running' | null => this.agentTurns.calls(this.activeTurn)
+  /** The running calls of the turn the agent began itself; null when none is open. */
+  agentTurnCalls = (): string[] | null => this.agentTurns.calls(this.activeTurn)
 
   promptResult(
     clientMessageId: string,

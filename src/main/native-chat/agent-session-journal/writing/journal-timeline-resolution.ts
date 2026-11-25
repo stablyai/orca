@@ -253,7 +253,14 @@ function withSavedCall<T extends { body: AgentJournalItemBody; keepsSavedCall?: 
   const output = body.output ?? saved.output
   // Its name is a fallback, but a given input stands.
   const input = body.input ?? saved.input
-  const merged = { ...body, name: saved.name, input, ...(output ? { output } : {}) }
+  const images = body.outputImagePaths ?? saved.outputImagePaths
+  const merged = {
+    ...body,
+    name: saved.name,
+    input,
+    ...(output ? { output } : {}),
+    ...(images ? { outputImagePaths: images } : {})
+  }
   return { ...resolution, body: merged }
 }
 
