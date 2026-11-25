@@ -35,6 +35,27 @@ function link(order: string[]) {
 }
 
 describe('RelayE2eeLink', () => {
+  it('rejects a malformed saved desktop key before opening any socket', () => {
+    const createSocket = vi.fn()
+    expect(
+      () =>
+        new RelayE2eeLink({
+          platform: { ...NODE_RELAY_CLIENT_PLATFORM, createSocket },
+          endpoint: { cellUrl: 'https://cell.example', relayHostId: 'AbCdEf0123_-xyZ9' },
+          credential: 'resume-token',
+          expectedCredentialKind: 'resume',
+          authCredential: { kind: 'token', deviceToken: 'token' },
+          desktopPublicKeyB64: 'not a key',
+          onAuthenticated: () => {},
+          onText: () => {},
+          onBinary: () => {},
+          onError: () => {}
+        })
+    ).toThrow()
+    // A socket built before the throw would never be closed, and every retry would leak another.
+    expect(createSocket).not.toHaveBeenCalled()
+  })
+
   it('sends nothing and reports no open for a socket that opens after close()', () => {
     const order: string[] = []
     const { instance, events } = link(order)
