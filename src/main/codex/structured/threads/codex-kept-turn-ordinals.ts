@@ -104,7 +104,7 @@ export async function seedCarriedKeptCodexCommands(
  * daemon carried still running: restated even when history no longer reports them running.
  */
 export function restateKeptCodexBackgroundWork(
-  tracker: Pick<CodexBackgroundTaskTracker, 'observe' | 'publishChildWork'>,
+  tracker: Pick<CodexBackgroundTaskTracker, 'observe' | 'publishChildWork' | 'primaryThreadId'>,
   turns: readonly KeptCodexTurn[],
   ended: readonly (readonly string[])[] = [],
   open: readonly (readonly string[])[] = [],
@@ -125,8 +125,11 @@ export function restateKeptCodexBackgroundWork(
   const endedHere = new Set(ended.map(([threadId, itemId]) => `${threadId}\u0000${itemId}`))
   for (const { threadId, turnId, status, items } of turns) {
     const turn = { id: turnId, status: status ?? 'inProgress' }
-    if (status === 'inProgress') {
-      tracker.observe({ method: 'turn/started', threadId, params: { turn } })
+    // A child that finished while no app was attached is seen working first, so its end settles
+    // its row and card as a live end does.
+    if (status === 'inProgress' || threadId !== tracker.primaryThreadId) {
+      const started = { id: turnId, status: 'inProgress' }
+      tracker.observe({ method: 'turn/started', threadId, params: { turn: started } })
     }
     for (const item of items) {
       if (item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE) {

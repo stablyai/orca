@@ -2,6 +2,7 @@ import type { CodexAppServerConnection } from '../../app-server/codex-app-server
 import { readCodexTurnStatus } from '../../app-server/codex-structured-thread-facts'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import { codexSubagentParentThreadId } from '../../app-server/shared-servers/codex-shared-server-frames'
+import { codexSubagentPathLabel } from '../../../../shared/agent-hook-listener/providers/codex/codex-agent-path'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import { isCodexMessageItemType, readCodexThreadItem } from '../items/codex-thread-item-identity'
 import {
@@ -37,7 +38,20 @@ type Connection = Pick<CodexAppServerConnection, 'request'>
 /** What a kept agent says of itself at reattach: each thread's turns and its children. */
 export type KeptCodexSnapshot = { turns: KeptCodexTurn[]; spawns: KeptCodexSpawn[] }
 
-type ThreadRead = { turn: KeptCodexTurn | null; parentThreadId: string | null }
+type ChildSource = { parentThreadId: string | null; label: string | null }
+type ThreadRead = { turn: KeptCodexTurn | null; source: ChildSource | null }
+
+/** A child's parent and the name it was spawned under, as the live spawn labelled it. */
+function readChildSource(result: unknown): ChildSource {
+  const thread = readRecord(readRecord(result).thread)
+  const spawn = readRecord(readRecord(readRecord(thread.source).subAgent).thread_spawn)
+  const path = typeof spawn.agent_path === 'string' ? spawn.agent_path : null
+  const nickname = typeof thread.agentNickname === 'string' ? thread.agentNickname : null
+  return {
+    parentThreadId: codexSubagentParentThreadId(result),
+    label: codexSubagentPathLabel(path) ?? nickname
+  }
+}
 
 async function turnPage(
   connection: Connection,
@@ -86,7 +100,7 @@ async function readKeptThread(input: {
           return read(Math.min(timeoutMs, PRIMARY_RETRY_TIMEOUT_MS))
         })
       : soft(read(timeoutMs), fallback)
-  const [[turn], recent, parentThreadId] = await Promise.all([
+  const [[turn], recent, source] = await Promise.all([
     required((ms) => turnPage(connection, threadId, 1, 'full', ms), []),
     required((ms) => turnPage(connection, threadId, SNAPSHOT_TURNS, 'notLoaded', ms), []),
     input.primary
@@ -94,7 +108,7 @@ async function readKeptThread(input: {
       : soft(
           connection
             .request('thread/read', { threadId, includeTurns: false }, { timeoutMs })
-            .then(codexSubagentParentThreadId),
+            .then(readChildSource),
           null
         )
   ])
@@ -105,14 +119,14 @@ async function readKeptThread(input: {
   )
   input.translator.seedKeptTurns(threadId, states)
   if (!turn || typeof turn.id !== 'string') {
-    return { turn: null, parentThreadId }
+    return { turn: null, source }
   }
   const items = (Array.isArray(turn.items) ? turn.items : []).flatMap(
     (value) => readCodexThreadItem(value) ?? []
   )
   return {
     turn: { threadId, turnId: turn.id, status: readCodexTurnStatus(turn), items },
-    parentThreadId
+    source
   }
 }
 
@@ -135,7 +149,11 @@ async function loadedThreadIds(connection: Connection, timeoutMs: number): Promi
 }
 
 /** A child as the tracker learns of it from a spawn, so Stop reaches it and its end settles it. */
-function spawnOf(parentThreadId: string, childThreadId: string): KeptCodexSpawn {
+function spawnOf(
+  parentThreadId: string,
+  childThreadId: string,
+  label: string | null = null
+): KeptCodexSpawn {
   return {
     threadId: parentThreadId,
     turnId: '',
@@ -144,6 +162,8 @@ function spawnOf(parentThreadId: string, childThreadId: string): KeptCodexSpawn 
       id: `kept-subagent:${childThreadId}`,
       tool: 'spawnAgent',
       status: 'completed',
+      // A spawn's prompt is what names its child's row.
+      ...(label ? { prompt: label } : {}),
       receiverThreadIds: [childThreadId]
     }
   }
@@ -220,11 +240,11 @@ export async function readKeptCodexSnapshot(input: {
       )
     )
     wave = []
-    reads.forEach(({ turn, parentThreadId }, i) => {
+    reads.forEach(({ turn, source }, i) => {
       const threadId = reading[i]!
       if (threadId !== input.threadId) {
-        if (parentThreadId) {
-          spawns.push(spawnOf(parentThreadId, threadId))
+        if (source?.parentThreadId) {
+          spawns.push(spawnOf(source.parentThreadId, threadId, source.label))
         } else {
           unparented.push(threadId)
         }

@@ -416,19 +416,21 @@ describe('codex rows across a reattach', () => {
           { type: 'collabAgentToolCall', id: 'x', tool: 'spawnAgent', receiverThreadIds: ['grand'] }
         ]
       },
-      grand: { id: 'turn-g', status: 'inProgress', items: [] }
+      grand: { id: 'turn-g', status: 'inProgress', items: [] },
+      // Finished while no app was attached.
+      done: { id: 'turn-d', status: 'completed', items: [] }
     }
     const request = async (method: string, params?: unknown) => {
       const threadId = String(readRecord(params).threadId)
       // Only the app-server's loaded threads name the child: no carried work does.
       if (method === 'thread/loaded/list') {
-        return { data: ['main', 'child', 'grand'] }
+        return { data: ['main', 'child', 'grand', 'done'] }
       }
       if (method === 'thread/read' && threadId === 'grand') {
         throw new Error('timed out')
       }
       if (method === 'thread/read') {
-        const spawn = { parent_thread_id: 'main' }
+        const spawn = { parent_thread_id: 'main', agent_path: `/root/${threadId}_agent` }
         return { thread: { id: threadId, source: { subAgent: { thread_spawn: spawn } } } }
       }
       return { data: [latest[threadId]] }
@@ -453,8 +455,32 @@ describe('codex rows across a reattach', () => {
       timeoutMs: 1_000,
       onError: () => {}
     })
-    const tracker = new CodexBackgroundTaskTracker('main')
+    const evidence: unknown[] = []
+    const tracker = new CodexBackgroundTaskTracker('main', undefined, {
+      deliver: (batch) => evidence.push(...batch),
+      now: () => 0
+    })
     restateKeptCodexBackgroundWork(tracker, turns, [], [], spawns)
+    // A running child keeps the name it was spawned under.
+    expect(JSON.stringify(tracker.state)).toContain('child_agent')
+    // A child that finished while closed is settled, not left working.
+    expect(tracker.runsSubagentTurn('done', 'turn-d')).toBe(false)
+    // Seen live first, as a live end is, so the new session has a record of it to settle.
+    expect(evidence).toContainEqual(
+      expect.objectContaining({
+        type: 'live',
+        child: expect.objectContaining({
+          handle: expect.objectContaining({ id: 'done', runId: 'turn-d' })
+        })
+      })
+    )
+    expect(evidence).toContainEqual(
+      expect.objectContaining({
+        type: 'ended',
+        handle: expect.objectContaining({ id: 'done', runId: 'turn-d' }),
+        outcome: 'succeeded'
+      })
+    )
     // The replay re-sends the finished turn from its start: it must not reopen it.
     const send = (threadId: string, method: string, params: Record<string, unknown>) =>
       translator.handle({
