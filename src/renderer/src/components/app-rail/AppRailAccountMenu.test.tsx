@@ -11,6 +11,7 @@ import {
   type SetupMilestones
 } from '@/components/sidebar/chrome/help-menu-controller'
 import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
+import { registerTitlebarSidebarToggle } from '@/app-shell/chrome/titlebar-sidebar-toggle-ref'
 import { AppRailAccountMenu, appRailAccount } from './AppRailAccountMenu'
 
 const SIGNED_OUT: OrcaProfileAuthStatus = {
@@ -251,6 +252,61 @@ describe('AppRailAccountMenu sign-out dialog focus', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(document.activeElement).toBe(button)
     expect(button).toHaveAccessibleName('Settings')
+  })
+})
+
+describe('AppRailAccountMenu sign-out dialog focus owners', () => {
+  async function settle(): Promise<void> {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+  }
+
+  function RailOrNot({ rail }: { rail: boolean }): React.JSX.Element {
+    return (
+      <>
+        <button type="button" ref={registerTitlebarSidebarToggle}>
+          Toggle sidebar
+        </button>
+        <input aria-label="Composer" />
+        {rail ? <Harness /> : null}
+      </>
+    )
+  }
+
+  async function openSignOut(): Promise<void> {
+    openWithKey(screen.getByRole('button', { name: 'Account' }), 'Enter')
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+    })
+    await settle()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  }
+
+  it('a focus owner that takes over while the dialog closes keeps focus', async () => {
+    useAppStore.setState({ orcaProfileAuthStatus: SIGNED_IN })
+    render(<RailOrNot rail />)
+    await openSignOut()
+    act(() => {
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    })
+    const composer = screen.getByRole('textbox', { name: 'Composer' })
+    act(() => {
+      composer.focus()
+    })
+    await settle()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(composer)
+  })
+
+  it('if the rail goes away with the dialog open, focus falls back to the titlebar sidebar toggle', async () => {
+    useAppStore.setState({ orcaProfileAuthStatus: SIGNED_IN })
+    const { rerender } = render(<RailOrNot rail />)
+    await openSignOut()
+    rerender(<RailOrNot rail={false} />)
+    await settle()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Toggle sidebar' }))
   })
 })
 

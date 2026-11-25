@@ -15,14 +15,17 @@ export function OrcaProfileSignOutConfirmDialog({
   onOpenChange,
   onConfirm,
   signingOut,
-  returnFocusRef
+  returnFocusTo
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: () => void
   signingOut: boolean
-  /** Where focus goes when the dialog closes, for a dialog opened from a menu row rather than its own trigger. */
-  returnFocusRef?: React.RefObject<HTMLElement | null>
+  /**
+   * Where focus goes when the dialog closes, for a dialog opened from a menu row rather than its own trigger. Resolved
+   * at close time, so the caller can fall back when its own button has gone.
+   */
+  returnFocusTo?: () => HTMLElement | null
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -30,10 +33,20 @@ export function OrcaProfileSignOutConfirmDialog({
       <DialogContent
         className="sm:max-w-[420px]"
         onCloseAutoFocus={
-          returnFocusRef
+          returnFocusTo
             ? (event) => {
                 event.preventDefault()
-                returnFocusRef.current?.focus({ preventScroll: true })
+                // Radix runs this a tick after the dialog has gone. If focus was moved somewhere on purpose in
+                // between, that newer owner keeps it; only focus left on nothing is handed back.
+                const active = document.activeElement
+                if (
+                  active instanceof HTMLElement &&
+                  active !== document.body &&
+                  active.isConnected
+                ) {
+                  return
+                }
+                returnFocusTo()?.focus({ preventScroll: true })
               }
             : undefined
         }

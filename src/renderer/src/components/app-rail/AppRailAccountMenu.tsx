@@ -21,6 +21,7 @@ import {
   type SetupMilestones
 } from '@/components/sidebar/chrome/help-menu-controller'
 import { OrcaProfileSignOutConfirmDialog } from '@/components/orca-profiles/OrcaProfileSignOutConfirmDialog'
+import { getTitlebarSidebarToggle } from '@/app-shell/chrome/titlebar-sidebar-toggle-ref'
 import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from './AppRailButton'
 
 export type AppRailAccount = { name: string; email: string | undefined; initial: string }
@@ -94,6 +95,10 @@ export function AppRailAccountMenu({
   // The sign-out dialog opens from a menu row, so it has no trigger of its own to hand focus back to.
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const viewAtOpenRef = useRef<string | null>(null)
+  // The account button, or, if the rail went away while the dialog was open, the titlebar's sidebar toggle (the same
+  // fallback the rail uses when it unmounts with focus).
+  const signOutReturnTarget = (): HTMLElement | null =>
+    triggerRef.current?.isConnected ? triggerRef.current : getTitlebarSidebarToggle()
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
@@ -241,7 +246,7 @@ export function AppRailAccountMenu({
         onOpenChange={setSignOutOpen}
         onConfirm={() => void confirmSignOut()}
         signingOut={signingOut}
-        returnFocusRef={triggerRef}
+        returnFocusTo={signOutReturnTarget}
       />
     </>
   )
