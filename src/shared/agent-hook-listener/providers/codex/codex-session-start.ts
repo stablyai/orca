@@ -19,6 +19,7 @@ import {
   type CodexRemoteRosterAuthority
 } from './codex-state'
 import { retireCodexPaneTranscripts } from './codex-pane-transcript-retirement'
+import { settleRetiredRolloutReads } from './codex-rollout-async-reads'
 
 /** Only a definite root replacement excludes an execution host's previous turn facts. */
 export function previousCodexTurnContext<T extends AgentHookEventPayload>(
@@ -201,6 +202,7 @@ export function reconcileCodexStatusEvent(
             )
           }
       state.codexSubagentRosterByPaneKey.delete(event.paneKey)
+      settleRetiredRolloutReads(event.paneKey)
       return {
         ...event,
         restoredUnconfirmed: unconfirmedRoot ? true : undefined,

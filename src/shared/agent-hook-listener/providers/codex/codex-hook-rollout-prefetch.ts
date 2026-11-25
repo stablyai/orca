@@ -115,19 +115,16 @@ export async function prefetchCodexHookRolloutReadsWithin(
   body: unknown
 ): Promise<PrefetchedRolloutReads> {
   const reads = createPrefetchedRolloutReads()
-  const timedOut = await new Promise<boolean>((resolve) => {
-    const timer = setTimeout(() => resolve(true), HOOK_PREFETCH_MAX_MS)
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, HOOK_PREFETCH_MAX_MS)
     timer.unref?.()
     const done = (): void => {
       clearTimeout(timer)
-      resolve(false)
+      resolve()
     }
     prefetchCodexHookRolloutReads(state, body, reads).then(done, done)
   })
   reads.closed = true
-  if (timedOut) {
-    reads.batch.settleQueued()
-  }
   return reads
 }
 

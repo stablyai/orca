@@ -58,7 +58,9 @@ export function settleRetiredRolloutReads(owner?: string): void {
     return
   }
   for (const waiter of rolloutReadQueue) {
-    if (!waiter.batch.wanted()) {
+    // An ownerless waiter (a closed hook prefetch) stays until a slot frees: its pending read keeps later hooks
+    // from queueing the same stalled path.
+    if (waiter.batch.owner !== undefined && !waiter.batch.wanted()) {
       settleRolloutRead(waiter, false)
     }
   }

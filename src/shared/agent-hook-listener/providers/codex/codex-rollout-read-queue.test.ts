@@ -28,4 +28,20 @@ describe('rollout read slots', () => {
     await expect(retired).resolves.toBeNull()
     expect(stalled).toHaveLength(3)
   })
+
+  it('keeps a closed hook prefetch queued, so later hooks still skip that stalled path', async () => {
+    const live = new RolloutReadBatch()
+    for (let i = 0; i < 3; i += 1) {
+      void rolloutFileSizeAsync(`/stalled-${i}`, live)
+    }
+    let open = true
+    let settled = false
+    void rolloutFileSizeAsync('/prefetch', new RolloutReadBatch(() => open)).then(() => {
+      settled = true
+    })
+    open = false
+    settleRetiredRolloutReads()
+    await Promise.resolve()
+    expect(settled).toBe(false)
+  })
 })
