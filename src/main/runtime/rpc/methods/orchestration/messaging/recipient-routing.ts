@@ -212,6 +212,7 @@ export type SendRecipientWarning = {
     | 'recipient_delivery_unknown'
     | 'stale_task_id'
     | 'files_not_sent'
+    | 'local_paths_unreadable'
   recipient: string
   message: string
 }
