@@ -61,7 +61,7 @@ async function askKeptBypass(session: ClaudeSession, timeoutMs: number | undefin
 /** Writes a Build mode. The pick is recorded before its write, so a message sent before Claude
  *  answers writes the same mode behind it; each write goes out at the pick, so Claude answers
  *  picks in order and the last one wins. A pick a newer one replaced records nothing after its
- *  answer; a failed switch drops the applied mode, so the next message asks again. */
+ *  answer; a failed switch leaves Ask owed to the next message. */
 async function applyBuildMode(
   session: ClaudeSession,
   mode: PermissionMode,
@@ -86,8 +86,13 @@ async function applyBuildMode(
       session.appliedInputOptions.set('buildPermissionMode', applied)
     }
   } catch (error) {
-    if (current()) {
+    if (current() && mode === 'bypassPermissions') {
+      // Unknown or refused: the next message asks again (a refusal takes the fallback).
       session.appliedInputOptions.delete('buildPermissionMode')
+    } else if (current()) {
+      // Never back to an older, looser mode: Ask until the next message has it written.
+      session.appliedInputOptions.set('buildPermissionMode', 'default')
+      session.keptModeOwed = 'default'
     }
     throw error
   }

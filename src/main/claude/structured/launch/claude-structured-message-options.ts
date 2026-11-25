@@ -88,9 +88,15 @@ export async function applyClaudeMessageOptions(
     )
   }
   throwIfSignalAborted(signal)
-  if (session.keptModeOwed) {
+  const owed = session.keptModeOwed
+  if (owed) {
+    // A message never goes out in a looser mode than the one picked; only Full access may lag.
     await waitForPromiseWithSignal(
-      applyKeptClaudeModeOwed(session, timeoutMs).catch(() => {}),
+      applyKeptClaudeModeOwed(session, timeoutMs).catch((error: unknown) => {
+        if (owed !== 'bypassPermissions') {
+          throw error
+        }
+      }),
       signal
     )
   }
