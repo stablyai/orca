@@ -10,6 +10,7 @@ export function botActivityNeedOpener(
   bot: BotRef,
   needKey: string
 ): (() => void) | null {
+  const owner = botAutomationRowOwner(row, bot)
   switch (row.kind) {
     case 'worker':
       return botWorkerRowOpener(row, botTarget(bot))
@@ -17,7 +18,7 @@ export function botActivityNeedOpener(
       return () =>
         openBotAutomation({
           bot,
-          owner: botAutomationRowOwner(row, bot),
+          owner,
           automationId: row.automationId,
           runId: row.runId,
           originRowKey: needKey

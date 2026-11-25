@@ -1,6 +1,10 @@
 import { useAppStore } from '@/store'
 import type { BotRef } from '@/lib/bot-hosts'
-import type { BotActivity } from '../../../../../shared/bots/bot-activity-model'
+import type {
+  BotActivity,
+  BotSessionActivityRow
+} from '../../../../../shared/bots/bot-activity-model'
+import type { BotAutomationFacts } from '../../../../../shared/bots/bot-automation-rows'
 import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import { automationOwnerForHostId, evaluateAutomationOwner } from './automation-host-owner'
 
@@ -23,7 +27,10 @@ export function captureBotAutomationOwners(bot: BotRef): (activity: BotActivity)
   }
 }
 
-export function botAutomationRowOwner(automation: object, bot: BotRef): AutomationOwnerRef | null {
+export function botAutomationRowOwner(
+  automation: BotAutomationFacts | BotSessionActivityRow,
+  bot: BotRef
+): AutomationOwnerRef | null {
   const captured = owners.get(automation)
   if (captured !== undefined) {
     return captured
