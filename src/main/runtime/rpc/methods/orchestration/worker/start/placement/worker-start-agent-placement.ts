@@ -26,6 +26,7 @@ import {
   type OrchestrationWorkerLaunchReceipt
 } from '../launch/worker-launch-preferences'
 import { recordWorkerLaunchObservation } from '../../../../../../orchestration/workers/launch/worker-launch-observation'
+import { buildWorkerProxyEnv } from '../../../../../../../../shared/network/worker-proxy'
 
 /** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
 type PlacedWorktree = { id: string; repoId: string }
@@ -135,6 +136,9 @@ async function launchWorkerAgent(
   existing: PlacedWorktree | undefined
 ): Promise<WorkerAgentPlacement> {
   const agent = requireAgent(args.agent)
+  const launchEnv = args.params.proxy
+    ? buildWorkerProxyEnv(args.params.proxy, args.params.proxyBypass)
+    : undefined
   let created: Awaited<ReturnType<typeof createWorkerWorktree>> | undefined
   let structuredSession: WorkerStructuredSession | null = null
   let terminalCreation: RuntimeTerminalCreate | undefined
@@ -185,6 +189,7 @@ async function launchWorkerAgent(
             promisedAgentChat,
             onWorkspaceCreated,
             ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
+            ...(launchEnv ? { launchEnv } : {}),
             effects: args.effects
           })
           return {
@@ -197,6 +202,7 @@ async function launchWorkerAgent(
       surfaces: workerSurfaceFactory(
         args,
         agent,
+        launchEnv,
         (terminal) => {
           terminalCreation = terminal
         },
@@ -243,6 +249,7 @@ function launchedWorkerReceipt(
 function workerSurfaceFactory(
   args: WorkerAgentPlacementArgs,
   agent: TuiAgent,
+  launchEnv: Record<string, string> | undefined,
   onTerminalCreation: (terminal: RuntimeTerminalCreate) => void,
   onStructuredSession: (session: WorkerStructuredSession) => void
 ): AgentLaunchSurfaceFactory {
@@ -279,6 +286,7 @@ function workerSurfaceFactory(
         worktreeId,
         agent,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
+        ...(launchEnv ? { launchEnv } : {}),
         taskId: args.taskId,
         effects: args.effects
       })

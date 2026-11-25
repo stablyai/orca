@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 import { CrossStoreParentRefSchema } from '../workspaces/cross-store-parent-params'
+import { parseWorkerProxyUrl } from '../../network/worker-proxy'
 
 export const OptionalWorkerLaunchPreference = z
   .string()
@@ -30,6 +31,10 @@ export const WorkerStartParams = z
     agent: OptionalString,
     model: OptionalWorkerLaunchPreference,
     effort: OptionalWorkerLaunchPreference,
+    /** Outbound proxy for the new worker's process only; it may carry credentials, so it is never echoed. */
+    proxy: z.string().max(2048).optional(),
+    /** Hosts the worker reaches directly besides loopback, as NO_PROXY lists them. */
+    proxyBypass: z.string().max(4096).optional(),
     retryOf: OptionalString,
     timeoutMs: OptionalFiniteNumber,
     devMode: z.boolean().optional(),
@@ -48,6 +53,26 @@ export const WorkerStartParams = z
     chatLineage: z.literal(true).optional()
   })
   .superRefine((params, ctx) => {
+    const proxy = params.proxy === undefined ? undefined : parseWorkerProxyUrl(params.proxy)
+    if (proxy && !proxy.ok) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['proxy'], message: proxy.message })
+    }
+    if (params.proxyBypass !== undefined && params.proxy === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['proxyBypass'],
+        message: '--proxy-bypass requires --proxy'
+      })
+    }
+    // A remote start would hand the credentials to another server; a reused terminal spawns nothing.
+    if (params.proxy !== undefined && (params.on || params.terminal)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['proxy'],
+        message:
+          '--proxy applies only to a worker this Orca launches; it cannot combine with --on or --terminal'
+      })
+    }
     if (!params.task && !params.spec) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

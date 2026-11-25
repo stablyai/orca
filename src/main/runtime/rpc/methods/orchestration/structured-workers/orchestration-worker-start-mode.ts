@@ -33,6 +33,8 @@ type WorkerStartModePlacement = {
   worktree?: string
   model?: string
   effort?: string
+  /** A worker proxy is applied to a terminal process env; a chat session has none to carry it. */
+  proxy?: string
 }
 
 export function decideWorkerStartMode(args: {
@@ -45,6 +47,7 @@ export function decideWorkerStartMode(args: {
     placement: args.params,
     settings: args.settings,
     chatLineage: args.chatLineage,
+    ...(args.params.proxy ? { surface: 'terminal' as const } : {}),
     vocabulary: WORKER_START_VOCABULARY
   })
 }

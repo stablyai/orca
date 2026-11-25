@@ -20,6 +20,7 @@ import { mergePersistedWindowsPath } from '../../../pty/environment/windows-envi
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/shell-startup/codex-shell-launch-preflight'
 import { scheduleCodexHookReconcile } from '../../../codex/hooks/reconciliation/codex-hook-reconcile'
 import { buildConfiguredProxyEnv } from '../../../../shared/network/network-proxy'
+import { ORCA_LAUNCH_PROXY_ENV } from '../../../../shared/network/worker-proxy'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { BuildPtyHostEnvOptions } from './types'
 import { stripInheritedOrcaCodexHomeOverride } from './codex-home'
@@ -44,7 +45,11 @@ export function buildPtyHostEnv(
   opts: BuildPtyHostEnvOptions
 ): Record<string, string> {
   mergePersistedWindowsPath(baseEnv)
-  Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
+  if (baseEnv[ORCA_LAUNCH_PROXY_ENV]) {
+    delete baseEnv[ORCA_LAUNCH_PROXY_ENV]
+  } else {
+    Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
+  }
 
   const openCodeConfig = captureOpenCodeSourceConfig(baseEnv, opts.userDataPath)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
