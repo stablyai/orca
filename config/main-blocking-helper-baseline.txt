@@ -759,6 +759,8 @@
 8 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 1 src/main/mcp-servers/mcp-shared-process-servers.ts # a shared server's relay request reads the host list as a launch does; only its one-time inline-header migration is synchronous
 3 src/main/mcp-servers/session-mcp-launch.ts # per chat launch and turn: the bot launch read of its tools file, its revision check (moved from bot-structured-session-wiring.ts), and the host list read
+1 src/main/mcp-servers/terminal/terminal-mcp-servers.ts # wslGuestOrcaLauncher: the managed WSL CLI launcher, resolved once per data folder per run
+3 src/main/mcp-servers/terminal/terminal-mcp-wsl-servers.ts # resolves the managed WSL CLI launcher (getManagedWslCliDir) once per data folder per run; settleWslAutomountRoot reads a distro mount root once per distro start (cached after)
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts
 1 src/main/memory/hydrate-local-pty-registry.ts

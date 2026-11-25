@@ -5,13 +5,14 @@
 import { isAbsolute, resolve } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import type { McpServerConnection } from '../../shared/mcp-servers/mcp-servers'
+import { encodeMcpEnvPairs } from '../../shared/mcp-servers/mcp-env-pairs'
 import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   readInjectedAgentSessionId,
   readInjectedBotToken
 } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
-import type { CommandHandler } from '../dispatch/dispatch'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/connection/types'
 
 type CommandServer = { command: string; args: string[]; env: Record<string, string> }
@@ -80,39 +81,59 @@ function runAsWrapper(server: CommandServer, env: NodeJS.ProcessEnv, cwd: string
   })
 }
 
+/** The command server `flags` name, as this Orca starts it for that agent and workspace. */
+async function commandServer({ flags, client }: HandlerContext): Promise<CommandServer> {
+  const id = getRequiredStringFlag(flags, 'id')
+  const agent = getRequiredStringFlag(flags, 'agent')
+  const workspaceId = getOptionalStringFlag(flags, 'workspace') ?? null
+  const botToken = readInjectedBotToken()
+  const callerSessionId = readInjectedAgentSessionId()
+  const { result } = await client.call<McpServerConnection>('mcpServers.connect', {
+    id,
+    agent,
+    workspaceId,
+    ...(botToken ? { botToken } : {}),
+    ...(callerSessionId ? { callerSessionId } : {})
+  })
+  if (!result.on) {
+    throw new RuntimeClientError('mcp_server_off', `This server is off for ${agent} here.`)
+  }
+  if ('url' in result) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'This server is reached by its URL, not started with a command.'
+    )
+  }
+  return { command: result.command, args: result.args, env: result.env }
+}
+
 export const MCP_EXEC_HANDLERS: Record<string, CommandHandler> = {
-  'mcp exec': async ({ flags, client, cwd }) => {
-    const id = getRequiredStringFlag(flags, 'id')
-    const agent = getRequiredStringFlag(flags, 'agent')
-    const workspaceId = getOptionalStringFlag(flags, 'workspace') ?? null
-    const botToken = readInjectedBotToken()
-    const callerSessionId = readInjectedAgentSessionId()
-    const { result } = await client.call<McpServerConnection>('mcpServers.connect', {
-      id,
-      agent,
-      workspaceId,
-      ...(botToken ? { botToken } : {}),
-      ...(callerSessionId ? { callerSessionId } : {})
-    })
-    if (!result.on) {
-      throw new RuntimeClientError('mcp_server_off', `This server is off for ${agent} here.`)
-    }
-    if ('url' in result) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'This server is reached by its URL, not started with a command.'
-      )
-    }
-    const server = { command: result.command, args: result.args, env: result.env }
+  'mcp exec': async (ctx) => {
+    const server = await commandServer(ctx)
     const env = serverEnv(server)
     if (process.platform !== 'win32' && typeof process.execve === 'function') {
       // The agent talks to the server over this process's stdio, which the exec keeps.
       process.execve(
-        executablePath(server.command, env, cwd),
+        executablePath(server.command, env, ctx.cwd),
         [server.command, ...server.args],
         env
       )
     }
-    await runAsWrapper(server, env, cwd)
+    await runAsWrapper(server, env, ctx.cwd)
+  },
+  // For a WSL guest's wrapper (mcp-env-pairs.ts), which reads it from a pipe over interop. The TTY
+  // check only keeps a person at a Windows console from printing the values by mistake; it guards
+  // nothing (any caller this Orca accepts can read them through mcpServers.connect).
+  'mcp env': async (ctx) => {
+    if (process.stdout.isTTY) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'orca mcp env prints saved values; Orca runs it for a WSL terminal’s server, not a person.'
+      )
+    }
+    const { env } = await commandServer(ctx)
+    await new Promise<void>((done, fail) => {
+      process.stdout.write(encodeMcpEnvPairs(env), (error) => (error ? fail(error) : done()))
+    })
   }
 }
