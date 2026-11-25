@@ -138,7 +138,9 @@ function SectionWalk({
       )
     )
   const open = walk.uid
-    ? (shown.find((row) => row.uid === walk.uid) ?? seed.find((row) => row.uid === walk.uid))
+    ? (shown.find((row) => row.uid === walk.uid) ??
+      seed.find((row) => row.uid === walk.uid) ??
+      walkClosed.find((row) => row.uid === walk.uid))
     : null
   useBotItemBackFocus(open != null, scroll)
   const toggle = (label: string, on: boolean, flip: () => void) => (
