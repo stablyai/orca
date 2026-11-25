@@ -210,8 +210,10 @@ export function NativeChatAutomationCardDetails({
   const t = useTranslate()
   const visualOwner = useNativeChatVisualOwner()
   // Captured once per host: a re-pair to another machine retires what was read.
-  const [owner] = useState(() =>
-    automationOwnerForEnvironment(environmentId, useAppStore.getState())
+  const [owner] = useState(
+    () =>
+      visualOwner?.automationOwner ??
+      automationOwnerForEnvironment(environmentId, useAppStore.getState())
   )
   const { controller, snapshot } = useAutomationDetails({
     owner,

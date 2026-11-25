@@ -156,6 +156,7 @@ export function useBotAutomationNotices({
   if (runNow?.state === 'unconfirmed') {
     list.push({
       key: 'unconfirmed',
+      priority: true,
       id: ids.unconfirmed,
       tone: 'amber',
       content: (

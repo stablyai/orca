@@ -102,7 +102,7 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
   const runNow = runAttempt
   const runningAction =
     latestRun && (!snapshot.acknowledgedRun || latestRun.id === snapshot.acknowledgedRun.id)
-      ? botAutomationRunAction(bot, latestRun)
+      ? botAutomationRunAction(bot, latestRun, owner)
       : null
   const notices = useBotAutomationNotices({
     bot,

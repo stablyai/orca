@@ -426,6 +426,63 @@ describe('AutomationDetailsController selected run', () => {
 })
 
 describe('AutomationDetailsController paging', () => {
+  it('does not use an acknowledgement as proof that a refreshed page reaches retained history', async () => {
+    const h = harness()
+    h.controller.start()
+    h.pages[0].resolve({
+      runs: [100, 99, 98, 97, 96].map((id) => run(String(id), id)),
+      nextCursor: 'after-96'
+    })
+    await flush()
+    h.controller.loadMore()
+    h.pages[1].resolve({ runs: [run('95', 95)], nextCursor: 'after-95' })
+    await flush()
+    await h.controller.startRun(async () => ({ ...run('200', 200), status: 'dispatched' }))
+    h.pages[2].resolve({
+      runs: [200, 199, 198, 197, 196].map((id) => run(String(id), id)),
+      nextCursor: 'after-196'
+    })
+    await flush()
+    expect(h.controller.getSnapshot().runs.value.map((run) => run.id)).toEqual([
+      '200',
+      '199',
+      '198',
+      '197',
+      '196'
+    ])
+    expect(h.controller.getSnapshot().runs.nextCursor).toBe('after-196')
+  })
+
+  it('settles an oversized exact lookup instead of retaining its completed loading state', async () => {
+    const h = harness(
+      {
+        readRun: async () => ({
+          kind: 'run',
+          run: {
+            ...run('oversized', 1),
+            outputSnapshot: {
+              format: 'plain_text',
+              content: 'x'.repeat(20 * 1024 * 1024),
+              capturedAt: 1,
+              truncated: false
+            }
+          }
+        })
+      },
+      'oversized'
+    )
+    h.controller.start()
+    h.pages[0].resolve({ runs: [run('recent', 2)], nextCursor: null })
+    await flush()
+    expect(h.controller.getSnapshot().selected).toEqual({
+      runId: 'oversized',
+      status: 'error',
+      run: null,
+      error: { kind: 'failed', message: 'Open in Automations to read more details.' }
+    })
+    expect(h.controller.getSnapshot().runs.value.map((run) => run.id)).toEqual(['recent'])
+  })
+
   it('rebases an unexpanded window before accepting an older page from its old cursor', async () => {
     const h = harness()
     h.controller.start()

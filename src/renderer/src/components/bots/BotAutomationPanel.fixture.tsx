@@ -72,6 +72,7 @@ type Scenario =
   | 'running'
   | 'runningTerminal'
   | 'unconfirmed'
+  | 'unconfirmedSsh'
   | 'offline'
   | 'update'
   | 'homeFails'
@@ -90,7 +91,11 @@ function setup(
       setBotHostListing({ hosts: [{ hostId: 'local', state: 'offline' }], updateNeeded: [] })
     }
     const shownDigest =
-      scenario !== 'default' && scenario !== 'failed' ? { ...digest, on: [] } : digest
+      scenario === 'unconfirmedSsh'
+        ? { ...digest, on: [], executionTargetType: 'ssh' }
+        : scenario !== 'default' && scenario !== 'failed'
+          ? { ...digest, on: [] }
+          : digest
     const runtime = window.api.runtime
     const fallback = runtime.call
     Reflect.set(window.api, 'runtime', {
@@ -225,7 +230,7 @@ function scenarioFixture(scenario: Scenario, width: number) {
         [...frame.querySelectorAll<HTMLButtonElement>('button')].find(
           (node) => node.textContent?.trim() === text
         )
-      if (scenario === 'unconfirmed') {
+      if (scenario === 'unconfirmed' || scenario === 'unconfirmedSsh') {
         button('Run now')?.click()
       }
       if (scenario === 'homeFails') {
@@ -257,6 +262,7 @@ export const running280 = scenarioFixture('running', 280)
 export const runningTerminal280 = scenarioFixture('runningTerminal', 280)
 export const unconfirmed220 = scenarioFixture('unconfirmed', 220)
 export const unconfirmed280 = scenarioFixture('unconfirmed', 280)
+export const unconfirmedSsh280 = scenarioFixture('unconfirmedSsh', 280)
 export const offline220 = scenarioFixture('offline', 220)
 export const offline280 = scenarioFixture('offline', 280)
 export const update220 = scenarioFixture('update', 220)

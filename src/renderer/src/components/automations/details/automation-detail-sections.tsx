@@ -277,11 +277,12 @@ export type AutomationDetailNotice = {
   id?: string
   /** Ranks after every other notice, whatever its tone: it explains one control, not the automation. */
   minor?: true
+  /** Recovery actions precede informational notices of the same severity. */
+  priority?: true
   content: React.ReactNode
 }
 
 const TONE_ORDER: Record<AutomationDetailNoticeTone, number> = { red: 0, amber: 1, info: 2 }
-const MINOR_ORDER = 3
 
 /** Most urgent first, red before amber before info, minor last; a repeated cause keeps its first notice. */
 export function orderAutomationDetailNotices(
@@ -292,8 +293,9 @@ export function orderAutomationDetailNotices(
     .map((notice, index) => ({ notice, index }))
     .sort(
       (left, right) =>
-        (left.notice.minor ? MINOR_ORDER : TONE_ORDER[left.notice.tone]) -
-          (right.notice.minor ? MINOR_ORDER : TONE_ORDER[right.notice.tone]) ||
+        (left.notice.minor ? 3 : TONE_ORDER[left.notice.tone]) -
+          (right.notice.minor ? 3 : TONE_ORDER[right.notice.tone]) ||
+        Number(Boolean(right.notice.priority)) - Number(Boolean(left.notice.priority)) ||
         left.index - right.index
     )
     .map(({ notice }) => notice)

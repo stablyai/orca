@@ -43,6 +43,7 @@ export type AutomationSelectedRun = {
   runId: string
   status: 'loading' | 'in-window' | 'ready' | 'run-missing' | 'unsupported' | 'error'
   run: AutomationRun | null
+  error?: AutomationReadProblem
 }
 
 export type AutomationDetailsContinuity = 'same' | 'checking' | 'retired' | 'unpaired'
@@ -149,11 +150,14 @@ export function reconcileAutomationRuns(
   const acknowledged = previous.value.filter(
     (run) => acknowledgedRunIds.has(run.id) && !ids.has(run.id)
   )
+  const continuous =
+    paged &&
+    firstPage.some(
+      (run) => !acknowledgedRunIds.has(run.id) && previous.value.some((old) => old.id === run.id)
+    )
   for (const id of ids) {
     acknowledgedRunIds.delete(id)
   }
-  const continuous =
-    paged && firstPage.some((run) => previous.value.some((old) => old.id === run.id))
   const covered = continuous && page.nextCursor ? mergeRuns(firstPage, previous.value) : firstPage
   const value = newestFirst([
     ...new Map([...acknowledged, ...covered].map((run) => [run.id, run])).values()

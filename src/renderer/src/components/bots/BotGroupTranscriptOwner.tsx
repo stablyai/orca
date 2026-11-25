@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from 'react'
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { useNativeChatTranscriptVisualOwner } from '../native-chat/media/visuals/native-chat-visual-owner'
 import { NativeChatTranscriptScope } from '../native-chat/native-chat-transcript-scope'
 import { createNativeChatFileLinkExistence } from '../native-chat/links/actions/native-chat-file-link-existence'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
@@ -104,17 +105,11 @@ export function BotGroupTranscriptOwner({
   isVisible: boolean
   children: ReactNode
 }) {
-  const visualOwner = useMemo(
-    () =>
-      context && sessionId
-        ? {
-            target: context.runtimeContext.target,
-            sessionId,
-            tabId,
-            worktreeId: context.fileLinkContext.worktreeId
-          }
-        : null,
-    [context, sessionId, tabId]
+  const visualOwner = useNativeChatTranscriptVisualOwner(
+    context?.runtimeContext.target ?? null,
+    sessionId,
+    context?.fileLinkContext.worktreeId ?? null,
+    tabId
   )
   const image = useMemo(
     () => ({

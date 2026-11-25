@@ -1,6 +1,12 @@
 // Recent runs on the Automation screen: the shared compact run list, rows expanding in place, an
 // asked-for older run pinned at the top, and Show more until the page takes over.
 import React from 'react'
+import { toast } from 'sonner'
+import { useAppStore } from '@/store'
+import { botErrorMessage } from './bot-presentation'
+import { actOnBotAutomationRow } from '../automations/hosts/bot-automation-row-owner'
+import { automationOwnerForHostId } from '../automations/hosts/automation-host-owner'
+import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { revealWorkerPane } from '@/lib/open-orchestration-worker'
@@ -20,24 +26,37 @@ const LINK =
 
 export function botAutomationRunAction(
   bot: Bot,
-  run: AutomationRun
+  run: AutomationRun,
+  owner: AutomationOwnerRef
 ): { kind: 'chat' | 'terminal'; open: () => void } | null {
+  const guarded =
+    (open: () => void): (() => void) =>
+    () => {
+      void actOnBotAutomationRow(owner, async (current) => {
+        const target = automationOwnerForHostId(bot.hostId, useAppStore.getState())
+        if (!target || JSON.stringify(target) !== JSON.stringify(current)) {
+          throw new Error('This computer changed. Refresh this automation before opening it.')
+        }
+        open()
+      }).catch((error: unknown) => toast.error(botErrorMessage(error)))
+    }
   if (run.sessionKind === 'chat' && run.chatSessionId) {
     return {
       kind: 'chat',
-      open: () => openBotSession(bot, run.chatSessionId ?? '', run.workspaceId)
+      open: guarded(() => openBotSession(bot, run.chatSessionId ?? '', run.workspaceId))
     }
   }
   if (run.terminalPaneKey && run.workspaceId) {
     const host = parseExecutionHostId(bot.hostId)
     return {
       kind: 'terminal',
-      open: () =>
+      open: guarded(() =>
         revealWorkerPane(
           run.workspaceId ?? '',
           run.terminalPaneKey,
           host?.kind === 'runtime' ? host.id : undefined
         )
+      )
     }
   }
   return null
@@ -45,13 +64,15 @@ export function botAutomationRunAction(
 
 export function RunActions({
   bot,
-  run
+  run,
+  owner
 }: {
   bot: Bot
   run: AutomationRun
+  owner: AutomationOwnerRef
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const action = botAutomationRunAction(bot, run)
+  const action = botAutomationRunAction(bot, run, owner)
   return action ? (
     <button type="button" className={LINK} onClick={action.open}>
       {action.kind === 'chat'
@@ -98,7 +119,8 @@ export function BotAutomationRuns({
           ? t('bots.automationPanel.runGone', 'That run is no longer kept.')
           : selected.status === 'unsupported'
             ? t('bots.automationPanel.runUnsupported', "Can't open that run here.")
-            : t('bots.automationPanel.runFailed', "Couldn't read that run.")
+            : (selected.error?.message ??
+              t('bots.automationPanel.runFailed', "Couldn't read that run."))
       : null
   return (
     <DetailSection title={t('components.native-chat.automationSaved.recentRuns', 'Recent runs')}>
@@ -153,7 +175,7 @@ export function BotAutomationRuns({
             onPress={(run) => controller.selectRun(selected?.runId === run.id ? null : run.id)}
             renderActions={(run) => (
               <>
-                <RunActions bot={bot} run={run} />
+                <RunActions bot={bot} run={run} owner={snapshot.owner} />
                 {run.outputSnapshot?.truncated ? (
                   <button type="button" className={LINK} onClick={() => toPage(run.id)}>
                     {t('bots.automationPanel.openOnPage', 'Open in Automations')} ↗
