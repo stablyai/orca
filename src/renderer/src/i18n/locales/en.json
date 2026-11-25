@@ -22539,7 +22539,8 @@
           "addressLabel": "Sign-in page address",
           "unfinished": "Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.",
           "pastePlaceholder": "http://localhost:…"
-        }
+        },
+        "manage": "Manage MCP servers"
       },
       "cardKindHidden": {
         "description": "You can change this anytime in",
@@ -25863,19 +25864,6 @@
         "grokFailed": "Grok could not name this chat. Try generating the name again.",
         "antigravityFailed": "Antigravity could not name this chat. Try generating the name again."
       }
-    }
-  },
-  "tabStrip": {
-    "overflow": {
-      "chipOnlyName_one": "{{title}}, {{count}} tab",
-      "chipOnlyName_other": "{{title}}, {{count}} tabs",
-      "entryNeedsAttention": "{{title}}, needs attention",
-      "moreTabs_one": "{{count}} more tab",
-      "moreTabs_other": "{{count}} more tabs",
-      "needAttention_one": ", {{count}} needs attention",
-      "needAttention_other": ", {{count}} need attention",
-      "openTabs_one": "{{count}} open tab",
-      "openTabs_other": "{{count}} open tabs"
     }
   },
   "updates": {
@@ -29831,7 +29819,13 @@
         "context7": "Current docs and examples for code libraries",
         "atlassian": "Jira issues and Confluence pages",
         "notion": "Search, read and edit pages",
-        "stripe": "Look up payments, customers and subscriptions"
+        "stripe": "Look up payments, customers and subscriptions",
+        "clickup": "Manage tasks, lists and docs",
+        "airtable": "Query and edit bases, tables and records",
+        "todoist": "Add, sort and complete tasks",
+        "zapier": "Run actions in the apps you set up in Zapier",
+        "granola": "Search meeting notes and transcripts",
+        "intercom": "Search conversations, contacts and articles"
       },
       "mcp": {
         "adding": "Adding {{app}}…",
@@ -29845,7 +29839,11 @@
           "hostLabel": "GitLab address (optional)",
           "hostHint": "For self-managed or Dedicated. Leave empty for GitLab.com."
         },
+        "intercom": {
+          "siteLabel": "Intercom region"
+        },
         "place": {
+          "unitedStates": "United States",
           "usEast": "US East",
           "usWest": "US West",
           "usCentral": "US Central",
@@ -31008,7 +31006,33 @@
     "failedChipTooltip": "Update failed. Click to see details.",
     "failedTitle": "Couldn't update {{product}}",
     "failedDescription": "Orca ran <code>{{command}}</code> on <strong>{{host}}</strong> to update your {{product}} from <strong>{{installedVersion}}</strong> to <strong>{{latestVersion}}</strong>, and it failed.",
-    "failedDescriptionNoCommand": "Orca couldn't update your {{product}} on <strong>{{host}}</strong>."
+    "failedDescriptionNoCommand": "Orca couldn't update your {{product}} on <strong>{{host}}</strong>.",
+    "cardLabel": "Agent CLI updates",
+    "cardSingleTitle": "{{name}} {{version}} is out",
+    "cardSingleInstalled": "You have {{version}}",
+    "cardNamesTwo": "{{first}} and {{second}}",
+    "cardNamesThree": "{{first}}, {{second}} and {{third}}",
+    "cardDismiss": "Dismiss",
+    "cardDetails": "Details",
+    "cardLater": "Later",
+    "copyCommandFull": "Copy command",
+    "cardDoneOne": "{{name}} is up to date",
+    "cardFailedOne": "{{name}} didn’t update",
+    "cardProgress": "{{done}} of {{total}}",
+    "cardShowEach": "Show each CLI",
+    "cardNamesSome_one": "{{first}}, {{second}} and {{count}} more",
+    "cardNamesSome_other": "{{first}}, {{second}} and {{count}} more",
+    "cardNamesMany_one": "{{first}} and {{count}} more",
+    "cardNamesMany_other": "{{first}} and {{count}} more",
+    "cardHostsTitle_one": "{{count}} CLI update on {{hosts}} hosts",
+    "cardHostsTitle_other": "{{count}} CLI updates on {{hosts}} hosts",
+    "cardUpdateSome_one": "Update {{count}} CLI",
+    "cardUpdateSome_other": "Update {{count}} CLIs",
+    "cardDone_one": "{{count}} CLI is up to date",
+    "cardDone_other": "All {{count}} CLIs are up to date",
+    "cardFailed_one": "{{count}} CLI didn’t update",
+    "cardFailed_other": "{{count}} CLIs didn’t update",
+    "cardSingleInstalledOn": "{{host}} has {{version}}"
   },
   "backgroundWorkerPaused": {
     "title": "Some background work paused after crashing repeatedly",

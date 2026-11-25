@@ -82,7 +82,7 @@ export function stripSortableIdsWithoutPinnedHome(
   return pinnedHomeId === null ? sortableIds : sortableIds.filter((id) => id !== pinnedHomeId)
 }
 
-/** "Insert after the pinned Home" marks Home's right edge: the first strip tab can be hidden or unmounted. */
+/** "Insert after the pinned Home" marks Home's right edge: the first strip tab can be scrolled away or unmounted. */
 export function pinnedHomeDropIndicators(
   indicators: Map<string, DropIndicator>,
   pinnedHomeId: string | null,

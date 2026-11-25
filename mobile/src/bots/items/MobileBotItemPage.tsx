@@ -40,7 +40,12 @@ import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
 import { MobileBotItemDescription } from './MobileBotItemDescription'
 import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
-import { botItemCommentDraftKey, quoteIntoBotItemCommentDraft } from './bot-item-comment-drafts'
+import {
+  botItemCommentDraftKey,
+  quoteIntoBotItemCommentDraft,
+  useBotItemCommentDraftEmpty
+} from './bot-item-comment-drafts'
+import { useMobileNativeChatDraftInputs } from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-inputs'
 import { useBotItemQuestionSteps } from './use-phone-bot-item-question-steps'
 import { MobileNativeChatComposerMenuHost } from '../../session/native-chat/composer/menus/MobileNativeChatComposerMenuHost'
 
@@ -111,12 +116,17 @@ export function MobileBotItemPage({
     jump.jumpToTail()
   }
   // `waitingLine`: the question the comment box names, until a reply is on its way.
+  // Its words and photos, as the comment box keeps them: a draft's start takes the line named then.
+  const noWords = useBotItemCommentDraftEmpty(botItemCommentDraftKey(hostId, uid))
+  const photos = useMobileNativeChatDraftInputs(uid, 'images')
+  const boxEmpty = noWords && photos.length === 0
   const { sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
     itemKey,
     view.item,
     view.events,
     sendComment,
-    pending.shown
+    pending.shown,
+    boxEmpty
   )
   // A reply already on its way answers the question, before the host's read says so.
   const replying = pending.shown.some(({ failed }) => !failed)

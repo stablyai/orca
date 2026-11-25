@@ -213,6 +213,9 @@ export const BotSchema = z.object({
   googleAccounts: z.array(z.string().min(1).max(320)).max(100).optional().catch([]),
   /** Closes the chats its automation runs opened once each run ended and nothing waits there. Absent is off. */
   closeEndedRuns: z.boolean().optional().catch(undefined),
+  /** Its sessions also take the host's MCP server list (and so its sign-ins); absent is off. Only
+   *  bots.tools.setHostMcpServers sets it, never the bot itself. Older hosts drop it. */
+  hostMcpServers: z.boolean().optional().catch(undefined),
   /** Projects (repo ids) whose skills the bot loads when a chat starts; absent is none. */
   skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
   /** Its place in the sidebar's Bots list, set by a drag; a bot without one follows the placed bots. */
