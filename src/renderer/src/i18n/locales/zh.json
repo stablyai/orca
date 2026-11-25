@@ -23178,6 +23178,9 @@
       "fileRenameFailed": "重命名\"{{name}}\"失败",
       "worktreeCreateFailed": "创建工作树失败",
       "missingBaseBranchHelp": "请先创建初始提交（例如在 main 分支上），或在\"创建来源\"中选择现有分支，然后重试",
+      "baseBranchLookupFailedTitle": "无法查询基准分支",
+      "baseBranchLookupFailedMessage": "查询此仓库的默认基准分支时，Git 执行失败或超时",
+      "baseBranchLookupFailedHelp": "请重试，或在\"创建来源\"中选择基准分支",
       "dropTooManyPaths": "拖放内容包含的路径过多",
       "dropPathsTooLarge": "拖放路径列表过大",
       "fileOwnerResolveFailed": "解析文件所属主机失败"

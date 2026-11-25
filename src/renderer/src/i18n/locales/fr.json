@@ -22225,7 +22225,10 @@
     },
     "toastFallbacks": {
       "worktreeCreateFailed": "Impossible de créer l’arbre de travail.",
-      "missingBaseBranchHelp": "Créez un premier commit (par exemple sur main), ou sélectionnez une branche existante dans « Créer à partir de », puis réessayez."
+      "missingBaseBranchHelp": "Créez un premier commit (par exemple sur main), ou sélectionnez une branche existante dans « Créer à partir de », puis réessayez.",
+      "baseBranchLookupFailedTitle": "Impossible de déterminer la branche de base",
+      "baseBranchLookupFailedMessage": "Git a échoué ou a expiré lors de la recherche de la branche de base par défaut de ce dépôt.",
+      "baseBranchLookupFailedHelp": "Réessayez, ou sélectionnez une branche de base dans « Créer à partir de »."
     },
     "crash": {
       "report": {

@@ -22132,7 +22132,10 @@
     },
     "toastFallbacks": {
       "worktreeCreateFailed": "Worktree konnte nicht erstellt werden.",
-      "missingBaseBranchHelp": "Erstellen Sie einen ersten Commit (zum Beispiel auf main) oder wählen Sie unter „Erstellen von“ einen vorhandenen Branch aus und versuchen Sie es erneut."
+      "missingBaseBranchHelp": "Erstellen Sie einen ersten Commit (zum Beispiel auf main) oder wählen Sie unter „Erstellen von“ einen vorhandenen Branch aus und versuchen Sie es erneut.",
+      "baseBranchLookupFailedTitle": "Basis-Branch konnte nicht ermittelt werden",
+      "baseBranchLookupFailedMessage": "Git ist beim Ermitteln des Standard-Basis-Branches dieses Repositorys fehlgeschlagen oder hat das Zeitlimit überschritten.",
+      "baseBranchLookupFailedHelp": "Versuchen Sie es erneut oder wählen Sie unter „Erstellen von“ einen Basis-Branch aus."
     },
     "crash": {
       "report": {

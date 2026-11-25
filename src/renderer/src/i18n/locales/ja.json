@@ -22361,6 +22361,9 @@
       "fileRenameFailed": "「{{name}}」の名前を変更できませんでした。",
       "worktreeCreateFailed": "ワークツリーを作成できませんでした。",
       "missingBaseBranchHelp": "初回コミットを作成する（例: main 上で）か、「作成元」で既存のブランチを選択してから、もう一度お試しください。",
+      "baseBranchLookupFailedTitle": "ベースブランチを確認できませんでした",
+      "baseBranchLookupFailedMessage": "このリポジトリの既定のベースブランチを確認中に Git が失敗したか、タイムアウトしました。",
+      "baseBranchLookupFailedHelp": "もう一度お試しいただくか、「作成元」でベースブランチを選択してください。",
       "dropTooManyPaths": "ドロップされたパスが多すぎます。",
       "dropPathsTooLarge": "ドロップされたパスのリストが大きすぎます。",
       "fileOwnerResolveFailed": "ファイルの所有者を解決できませんでした。"

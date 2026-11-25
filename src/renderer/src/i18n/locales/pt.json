@@ -23760,7 +23760,10 @@
     },
     "toastFallbacks": {
       "worktreeCreateFailed": "Não foi possível criar a árvore de trabalho.",
-      "missingBaseBranchHelp": "Crie um commit inicial (por exemplo, em main) ou selecione uma ramificação existente em Criar a partir de e tente novamente."
+      "missingBaseBranchHelp": "Crie um commit inicial (por exemplo, em main) ou selecione uma ramificação existente em Criar a partir de e tente novamente.",
+      "baseBranchLookupFailedTitle": "Não foi possível consultar a ramificação base",
+      "baseBranchLookupFailedMessage": "O Git falhou ou expirou ao consultar a ramificação base padrão deste repositório.",
+      "baseBranchLookupFailedHelp": "Tente novamente ou selecione uma ramificação base em Criar a partir de."
     },
     "crash": {
       "report": {
