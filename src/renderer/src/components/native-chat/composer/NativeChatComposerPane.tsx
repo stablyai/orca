@@ -119,6 +119,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     const { picker, orcaCommands, sideChat } = useNativeChatComposerCommandPicker({
       mode: editSession ? 'edit' : launchPrompt || pending ? 'launch' : undefined,
       agent,
+      nextAgent,
       terminalTabId,
       draftScopeKey: paneKey,
       draft,

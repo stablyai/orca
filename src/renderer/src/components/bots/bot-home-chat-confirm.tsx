@@ -45,23 +45,30 @@ export function useConfirmNewHomeChat(): (bot: Pick<Bot, 'name'>) => Promise<boo
 export function useConfirmBotAgentSwitch(): (
   bot: Pick<Bot, 'name' | 'agent'>,
   next: BotAgent,
-  broaderAccess?: boolean
+  broaderAccess?: boolean,
+  inPlace?: boolean
 ) => Promise<boolean> {
   const confirm = useConfirmationDialog()
   return useCallback(
-    (bot, next, broaderAccess) => {
+    (bot, next, broaderAccess, inPlace = true) => {
       const agent = botAgentLabel(next)
       return confirm({
         title: translate('bots.agentSwitch.title', 'Switch {{name}} to {{agent}}?', {
           name: bot.name,
           agent
         }),
-        description: translate(
-          'bots.agentSwitch.description',
-          'Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.',
-          { agent }
-        ),
-        details: (
+        description: inPlace
+          ? translate(
+              'bots.agentSwitch.continueDescription',
+              'Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.',
+              { agent }
+            )
+          : translate(
+              'bots.agentSwitch.description',
+              "{{name}}'s Home Chat starts fresh on {{agent}}. The current conversation stays in history.",
+              { name: bot.name, agent }
+            ),
+        details: inPlace ? (
           <ul className="list-disc space-y-1 pl-5 text-sm">
             <li>
               {translate(
@@ -96,7 +103,7 @@ export function useConfirmBotAgentSwitch(): (
               </li>
             ) : null}
           </ul>
-        ),
+        ) : undefined,
         confirmLabel: broaderAccess
           ? translate('bots.agentSwitch.allowAction', 'Allow access and switch')
           : translate('bots.agentSwitch.action', 'Switch to {{agent}}', { agent })

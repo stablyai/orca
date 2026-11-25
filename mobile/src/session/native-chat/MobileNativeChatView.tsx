@@ -352,7 +352,16 @@ export function MobileNativeChatView({
           {...{ dictationMode, onMicPressIn, onMicPressOut }}
           {...offlineQueue.composerLock}
           sendDisabled={expandedPromptOwnsSend}
-          placeholder={composerPlaceholder}
+          placeholder={
+            composerPlaceholder ??
+            (sessionOptions?.providerPicker?.selection
+              ? t('chat.providerSwitch.nextMessage', 'Message {{agent}}…', {
+                  agent:
+                    tuiAgentDisplayName(sessionOptions.providerPicker.selection.agent) ??
+                    sessionOptions.providerPicker.selection.agent
+                })
+              : undefined)
+          }
           {...{ filePaths, onNeedFiles, fileReference, skillDiscovery, onNeedSkills }}
           stop={canStop ? { onStop, held: turnIndicator?.stopRequestInFlight === true } : null}
         />

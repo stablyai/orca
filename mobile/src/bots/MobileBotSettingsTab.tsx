@@ -4,6 +4,8 @@ import {
   BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY
 } from '../../../src/shared/bot-runtime-capabilities'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
+import { AGENT_SESSION_SELECT_PROVIDER_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
+import { ensureBotHomeChat } from './host-bots-read'
 import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../src/shared/worktree/removal/removal'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
@@ -74,6 +76,7 @@ export function MobileBotSettingsTab(props: {
   const status = props.client ? readConnectionStatusProbe(props.client) : undefined
   const takesColor = useRouteCapability(BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
   const takesOutfit = useRouteCapability(BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
+  const inPlaceSwitch = useRouteCapability(AGENT_SESSION_SELECT_PROVIDER_RUNTIME_CAPABILITY)
   const accessBot = { ...bot, accessHost: phoneAccessHost(status) }
   const [saving, setSaving] = useState(false)
   const locked = saving || !props.online
@@ -267,7 +270,11 @@ export function MobileBotSettingsTab(props: {
         banner={offlineBanner}
         onBack={backToSettings}
         onLaunch={(launch) => void save({ launch })}
+        inPlaceSwitch={inPlaceSwitch}
         previewSwitch={async (agent) => {
+          if (!inPlaceSwitch) {
+            return { consent: null }
+          }
           if (!props.client) {
             return null
           }
@@ -281,7 +288,17 @@ export function MobileBotSettingsTab(props: {
           }
         }}
         onSwitch={async (agent, consent) => {
-          await save({ agent, launch: null, ...(consent ? { agentSwitchConsent: consent } : {}) })
+          const saved = await save({
+            agent,
+            launch: null,
+            ...(consent ? { agentSwitchConsent: consent } : {})
+          })
+          if (saved && props.client && !inPlaceSwitch) {
+            const refusal = await ensureBotHomeChat(props.client, bot.id)
+            if (refusal) {
+              props.showToast(refusal, 3000)
+            }
+          }
         }}
       />
     )

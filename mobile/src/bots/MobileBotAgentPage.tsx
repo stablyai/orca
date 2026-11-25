@@ -33,6 +33,7 @@ export function MobileBotAgentPage(props: {
   client: RpcClient | null
   disabled: boolean
   online: boolean
+  inPlaceSwitch?: boolean
   banner: ReactNode
   onBack: { label: string; onPress: () => void }
   /** Saves the new agent; its old launch belongs to the old agent, so it goes too. */
@@ -120,18 +121,28 @@ export function MobileBotAgentPage(props: {
           agent
         })}
         message={[
-          t(
-            'bots.agentSwitch.description',
-            'Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.',
-            { agent }
-          ),
+          props.inPlaceSwitch
+            ? t(
+                'bots.agentSwitch.continueDescription',
+                'Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.',
+                { agent }
+              )
+            : t(
+                'bots.agentSwitch.description',
+                '{{name}}’s Home Chat starts fresh on {{agent}}. The current conversation stays in history.',
+                { name: bot.name, agent }
+              ),
           '',
           t('bots.agentSwitch.kept', 'Kept: soul, memory, automations, connectors'),
-          t(
-            'bots.agentSwitch.homeContinues',
-            'Home Chat continues on {{agent}} with its recent history',
-            { agent }
-          ),
+          ...(props.inPlaceSwitch
+            ? [
+                t(
+                  'bots.agentSwitch.homeContinues',
+                  'Home Chat continues on {{agent}} with its recent history',
+                  { agent }
+                )
+              ]
+            : [t('bots.agentSwitch.notKept', 'Not kept: the current conversation')]),
           t(
             'bots.agentSwitch.newChats',
             'New Slack threads, automation runs and chats you open later start on {{agent}}',

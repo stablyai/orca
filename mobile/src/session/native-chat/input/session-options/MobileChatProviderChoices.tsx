@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Alert } from 'react-native'
+import { ConfirmContent } from '../../../../components/sheets/ConfirmModal'
+import { ListGroup, ListRow, SectionHeader } from '../../../../components/list/ListGroup'
+import { useMobileChatModelChoices } from '../../../../bots/use-bot-model-choices'
 import { useOptionalHostProtocolGates } from '../../../../components/host-connection/host-protocol-gates-context'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileAgentTileGrid } from '../../../agent-launch/MobileAgentTileGrid'
@@ -8,6 +10,7 @@ import { callAgentSession } from '../../agent-session/mobile-structured-agent-se
 import { isNativeChatAgent } from '../../../../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
 import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { AgentSessionSelectProviderResultSchema } from '../../../../../../src/shared/agent-session/lifecycle/records/agent-session-provider-selection'
+import type { AgentSessionSelectProviderParams } from '../../../../../../src/shared/agent-session/lifecycle/records/agent-session-provider-selection'
 import type { MobileChatProviderPickerScope } from './use-mobile-chat-provider-picker'
 
 export function MobileChatProviderChoices({
@@ -22,7 +25,17 @@ export function MobileChatProviderChoices({
   const t = useMobileTranslation()
   const status = useOptionalHostProtocolGates()
   const [pending, setPending] = useState(false)
+  const [moreModels, setMoreModels] = useState(false)
+  const [confirming, setConfirming] = useState<AgentSessionSelectProviderParams | null>(null)
   const { client, sessionId, worktreeId, hostId, selection } = scope
+  const { model: selectedModel, ...selectedOptions } = selection?.options ?? {}
+  const catalog = useMobileChatModelChoices(
+    client,
+    client.getState() === 'connected',
+    selection?.agent,
+    worktreeId,
+    { model: selectedModel, options: selectedOptions }
+  )
   const { options } = useMobileNewTabAgentOptions({
     client,
     hostId,
@@ -32,60 +45,33 @@ export function MobileChatProviderChoices({
     open: true,
     prefetch: false
   })
-  const pick = async (agent: string) => {
-    if (pending || agent === (selection?.agent ?? active)) {
+  const select = async (params: AgentSessionSelectProviderParams) => {
+    if (pending) {
       return
     }
     setPending(true)
     try {
-      const params = { sessionId, agent }
       const result = AgentSessionSelectProviderResultSchema.parse(
         await callAgentSession(client, 'agentSession.selectProvider', params)
       )
       if (result.status === 'consent-required') {
-        const allowed = await new Promise<boolean>((resolve) => {
-          Alert.alert(
-            t('chat.providerSwitch.allowTitle', 'Let {{agent}} use tools without Orca approval?', {
-              agent: tuiAgentDisplayName(agent) ?? agent
-            }),
+        if (params.consent) {
+          onError(
             t(
-              'chat.providerSwitch.allowDescription',
-              'Orca can’t require this agent to ask before using tools. The current reply and messages already queued keep their permissions.'
-            ),
-            [
-              {
-                text: t('common.cancel', 'Cancel'),
-                style: 'cancel',
-                onPress: () => resolve(false)
-              },
-              {
-                text: t('chat.providerSwitch.allow', 'Allow and switch'),
-                onPress: () => resolve(true)
-              }
-            ],
-            { cancelable: true, onDismiss: () => resolve(false) }
-          )
-        })
-        if (allowed) {
-          const confirmed = AgentSessionSelectProviderResultSchema.parse(
-            await callAgentSession(client, 'agentSession.selectProvider', {
-              ...params,
-              consent: {
-                from: result.from,
-                fromPermission: result.fromPermission,
-                permission: 'full-access'
-              }
-            })
-          )
-          if (confirmed.status !== 'selected') {
-            onError(
-              t(
-                'chat.providerSwitch.changed',
-                'Chat permissions changed. Pick the agent again to continue.'
-              )
+              'chat.providerSwitch.changed',
+              'Chat permissions changed. Pick the agent again to continue.'
             )
-          }
+          )
+          return
         }
+        setConfirming({
+          ...params,
+          consent: {
+            from: result.from,
+            fromPermission: result.fromPermission,
+            permission: 'full-access'
+          }
+        })
       }
     } catch {
       onError(t('chat.providerSwitch.failed', 'Couldn’t select this agent.'))
@@ -93,12 +79,95 @@ export function MobileChatProviderChoices({
       setPending(false)
     }
   }
+  const pick = (agent: string, choices?: Record<string, string>) => {
+    if (choices || agent !== (selection?.agent ?? active)) {
+      void select({ sessionId, agent, ...(choices ? { options: choices } : {}) })
+    }
+  }
+  if (confirming) {
+    return (
+      <ConfirmContent
+        title={t(
+          'chat.providerSwitch.allowTitle',
+          'Let {{agent}} use tools without Orca approval?',
+          { agent: tuiAgentDisplayName(confirming.agent) ?? confirming.agent }
+        )}
+        message={t(
+          'chat.providerSwitch.allowDescription',
+          'Orca can’t require this agent to ask before using tools. The current reply and messages already queued keep their permissions.'
+        )}
+        confirmLabel={t('chat.providerSwitch.allow', 'Allow and switch')}
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => {
+          setConfirming(null)
+          void select(confirming)
+        }}
+      />
+    )
+  }
+  const extraModels =
+    catalog?.models.filter((model) => model.isLegacy && model.id !== catalog.modelId) ?? []
   return (
-    <MobileAgentTileGrid
-      options={options.filter(({ agent, cliOnly }) => !cliOnly && isNativeChatAgent(agent))}
-      showCliOnly={false}
-      selected={selection?.agent ?? active}
-      onPick={({ agent }) => void pick(agent)}
-    />
+    <>
+      <MobileAgentTileGrid
+        options={options.filter(({ agent, cliOnly }) => !cliOnly && isNativeChatAgent(agent))}
+        showCliOnly={false}
+        selected={selection?.agent ?? active}
+        onPick={({ agent }) => {
+          setMoreModels(false)
+          void pick(agent)
+        }}
+      />
+      {selection && catalog && catalog.models.length > 0 ? (
+        <>
+          <SectionHeader title={t('bots.settings.model', 'Model')} />
+          <ListGroup>
+            {catalog.models
+              .filter((model) => moreModels || !model.isLegacy || model.id === catalog.modelId)
+              .map((model) => (
+                <ListRow
+                  key={model.id}
+                  title={model.label}
+                  subtitle={model.description}
+                  selected={model.id === catalog.modelId}
+                  disabled={pending}
+                  onPress={() => void pick(selection.agent, { model: model.id })}
+                />
+              ))}
+            {extraModels.length > 0 && !moreModels ? (
+              <ListRow
+                title={t('chat.providerSwitch.moreModels', 'More models ({{count}})', {
+                  count: extraModels.length
+                })}
+                onPress={() => setMoreModels(true)}
+                navigates
+              />
+            ) : null}
+          </ListGroup>
+          {catalog.effort ? (
+            <>
+              <SectionHeader title={t('bots.settings.effort', 'Effort')} />
+              <ListGroup>
+                {catalog.effort.option.kind.choices.map(({ value, label }) => (
+                  <ListRow
+                    key={value}
+                    title={label}
+                    selected={value === catalog.effort?.value}
+                    disabled={pending}
+                    onPress={() =>
+                      void pick(selection.agent, {
+                        ...selection.options,
+                        ...(catalog.modelId ? { model: catalog.modelId } : {}),
+                        effort: value
+                      })
+                    }
+                  />
+                ))}
+              </ListGroup>
+            </>
+          ) : null}
+        </>
+      ) : null}
+    </>
   )
 }

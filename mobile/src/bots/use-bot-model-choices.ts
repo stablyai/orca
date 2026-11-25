@@ -41,9 +41,9 @@ type HostChoices = {
 async function readHostChoices(
   client: RpcClient,
   agent: string,
-  folderWorkspaceId: string
+  worktreeId: string
 ): Promise<HostChoices> {
-  const worktree = `id:${folderWorkspaceKey(folderWorkspaceId)}`
+  const worktree = `id:${worktreeId}`
   const read = (waitForListing: boolean) =>
     callAgentSession<AgentSessionModelCatalogResult>(
       client,
@@ -73,15 +73,30 @@ export function useBotModelChoices(
   online: boolean,
   bot: { agent: string; folderWorkspaceId: string; launch?: BotLaunch }
 ): BotModelChoices | null {
-  const { agent, folderWorkspaceId } = bot
+  return useMobileChatModelChoices(
+    client,
+    online,
+    bot.agent,
+    folderWorkspaceKey(bot.folderWorkspaceId),
+    bot.launch
+  )
+}
+
+export function useMobileChatModelChoices(
+  client: RpcClient | null,
+  online: boolean,
+  agent: string | undefined,
+  worktreeId: string,
+  launch?: BotLaunch
+): BotModelChoices | null {
   const [answer, setAnswer] = useState<{ key: string; host: HostChoices | null } | null>(null)
-  const key = `${agent}\n${folderWorkspaceId}`
+  const key = `${agent}\n${worktreeId}`
   useEffect(() => {
-    if (!client || !online) {
+    if (!client || !online || !agent) {
       return
     }
     let live = true
-    void readHostChoices(client, agent, folderWorkspaceId).then(
+    void readHostChoices(client, agent, worktreeId).then(
       (host) => live && setAnswer({ key, host }),
       () =>
         live && setAnswer((held) => (held?.key === key && held.host ? held : { key, host: null }))
@@ -89,7 +104,7 @@ export function useBotModelChoices(
     return () => {
       live = false
     }
-  }, [client, online, agent, folderWorkspaceId, key])
+  }, [client, online, agent, worktreeId, key])
   const host = answer?.key === key ? answer.host : null
   if (!host || !isTuiAgent(agent)) {
     return null
@@ -103,17 +118,16 @@ export function useBotModelChoices(
   }
   // The bot's own picks over the chat defaults, as a new chat of the bot seeds them.
   const listed = agentPickerModels(entry, 'chat')
-  const modelId =
-    bot.launch?.model ?? host.seed?.model ?? listed.find((model) => model.isDefault)?.id
+  const modelId = launch?.model ?? host.seed?.model ?? listed.find((model) => model.isDefault)?.id
   const models = listed.filter((model) => !model.hidden || model.id === modelId)
   const model = modelId ? listedModelDescribing(models, undefined, modelId) : undefined
   const option = agentPickerEntryOptions(entry, modelId, 'chat').find(
     (candidate): candidate is EffortOption =>
       candidate.id === 'effort' && candidate.kind.type === 'select'
   )
-  const effort = bot.launch?.model
-    ? bot.launch.options?.effort
-    : (bot.launch?.options?.effort ?? host.seed?.effort)
+  const effort = launch?.model
+    ? launch.options?.effort
+    : (launch?.options?.effort ?? host.seed?.effort)
   return {
     models,
     modelId,

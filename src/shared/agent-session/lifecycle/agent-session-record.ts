@@ -431,7 +431,12 @@ export function isPersistedAgentSessionRecord(
     return false
   }
   const floor = value.lease.minimumNextFence
+  if (value.providerSwitch) {
+    const switchFloor = value.providerSwitchFenceFloor
+    return floor === null && (switchFloor === undefined || isNonNegativeSafeInteger(switchFloor))
+  }
   return (
-    floor === undefined || (typeof floor === 'number' && Number.isSafeInteger(floor) && floor >= 0)
+    value.providerSwitchFenceFloor === undefined &&
+    (floor === undefined || isNonNegativeSafeInteger(floor))
   )
 }

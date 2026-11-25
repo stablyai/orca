@@ -182,6 +182,34 @@ it('keeps both native handles across a switch and puts the current chain where o
 })
 
 describe('what this build writes', () => {
+  it('keeps an uncommitted provider handoff read-only on older hosts', () => {
+    const source = agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        claimStatus: 'released',
+        ownerProcess: null,
+        provenHandleLinkId: null,
+        minimumNextFence: 10
+      })
+    )
+    const record: AgentSessionRecord = {
+      ...source,
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/test/codex' },
+      providerSwitch: {
+        clientMessageId: 'message-1',
+        hostRunId: 'host-1',
+        from: { provider: source.provider, accountHome: source.accountHome },
+        through: { epoch: 'journal-1', sequence: 20 }
+      }
+    }
+    const stored = encodeAgentSessionRecord(record)
+    expect(stored.lease.minimumNextFence).toBeNull()
+    expect(stored.providerSwitchFenceFloor).toBe(10)
+    expect(isPersistedAgentSessionRecord(stored)).toBe(true)
+    expect(isPersistedAgentSessionRecord({ ...stored, providerSwitch: undefined })).toBe(false)
+    expect(decodePersistedAgentSessionRecord(stored).record).toEqual(record)
+  })
+
   it('keeps the persisted key and root strings older builds derived', () => {
     // Fork seeds, superseded creations and resume offers store these; a new spelling strands them.
     const claude = claudeProviderHandle('sess-1', 'leaf-1')

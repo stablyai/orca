@@ -10,9 +10,10 @@ import { callStructuredAgentSession } from '@/runtime/native-chat/requests/struc
 import { isNativeChatAgent } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { tuiAgentDisplayName } from '../../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import type {
-  AgentPickerDraft,
-  AgentPickerEntry
+import {
+  agentPickerDraft,
+  type AgentPickerDraft,
+  type AgentPickerEntry
 } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentSessionSelectProviderResult } from '../../../../../../shared/agent-session/lifecycle/records/agent-session-provider-selection'
 import type {
@@ -78,12 +79,15 @@ export function NativeChatProviderPicker({
       }
     : undefined
   const pick = async (next: AgentPickerEntry['agent'], draft?: AgentPickerDraft) => {
-    if (confirming || !entries.find((entry) => entry.agent === next)?.surfaces.includes('chat')) {
+    const entry = entries.find((candidate) => candidate.agent === next)
+    if (confirming || !entry?.surfaces.includes('chat')) {
       return
     }
+    const choices =
+      draft?.choices ?? (next !== active ? agentPickerDraft(entry, 'chat').choices : undefined)
     const values = {
-      ...draft?.choices.options,
-      ...(draft?.choices.model ? { model: draft.choices.model } : {})
+      ...choices?.options,
+      ...(choices?.model ? { model: choices.model } : {})
     }
     try {
       if (next === active && next === agent) {

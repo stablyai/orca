@@ -257,7 +257,9 @@ export function MobileNativeChatSessionOptionPickers({
           onDrawerAfterClose?.()
         }}
       >
-        {providerPage && activeAgent ? (
+        {(providerPage || (homeView && providerPicker?.selection)) &&
+        providerPicker &&
+        activeAgent ? (
           <View style={styles.sheet}>
             <SheetHeader
               title={t('chat.providerSwitch.agent', 'Agent')}
@@ -269,13 +271,23 @@ export function MobileNativeChatSessionOptionPickers({
               onError={setProviderError}
             />
             {providerError ? <SessionOptionCaption>{providerError}</SessionOptionCaption> : null}
-            {home ? (
+            {home && !providerPicker.selection ? (
               <ListGroup>
                 <SessionOptionSummaryRow
                   label={t('bots.settings.model', 'Model')}
                   value={primary}
                   disabled={false}
                   onPress={() => onNavigate(home.id)}
+                />
+              </ListGroup>
+            ) : null}
+            {providerPicker.selection && permission ? (
+              <ListGroup>
+                <SessionOptionSummaryRow
+                  label={t('chat.providerSwitch.currentPermissions', 'Current agent permissions')}
+                  value={permissionChoice?.label ?? ''}
+                  disabled={false}
+                  onPress={() => onNavigate(permission.id)}
                 />
               </ListGroup>
             ) : null}

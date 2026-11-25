@@ -58,6 +58,7 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
     lastTurn,
     instructionsKey,
     inactiveProviderHandleLinks: _inactiveLinks,
+    providerSwitchFenceFloor,
     asyncQuestionsSkippedThrough: skipped,
     ...rest
   } = record
@@ -67,6 +68,12 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
     instructionsKey.length > 0 &&
     instructionsKey.length <= 128
   const lease = normalizeLegacyHandoffLease(record.lease)
+  // Older hosts can read the chat but must not start its uncommitted provider.
+  const pendingFence = lease.minimumNextFence === null && record.providerSwitch
+  const minimumNextFence: Exclude<L['minimumNextFence'], null> | number | undefined = pendingFence
+    ? providerSwitchFenceFloor
+    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: validated writable rows use null only with a pending provider; observation rows retain unknown values.
+      (lease.minimumNextFence as Exclude<L['minimumNextFence'], null>)
   return {
     record: {
       ...rest,
@@ -75,7 +82,11 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
       ...(isAgentSessionLastTurn(lastTurn) ? { lastTurn } : {}),
       ...(typeof skipped === 'string' && skipped ? { asyncQuestionsSkippedThrough: skipped } : {}),
       providerHandleChain,
-      lease: { ...lease, deathEvidence: decodeDeathEvidence(lease.deathEvidence) }
+      lease: {
+        ...lease,
+        minimumNextFence,
+        deathEvidence: decodeDeathEvidence(lease.deathEvidence)
+      }
     },
     normalized:
       leaseCarriesLegacyHandoffValues(record.lease) ||
@@ -94,7 +105,14 @@ export function encodeAgentSessionRecord(record: AgentSessionRecord): PersistedA
   )
   return {
     ...record,
-    lease: { ...record.lease, deathEvidence: encodeDeathEvidence(record.lease.deathEvidence) },
+    lease: {
+      ...record.lease,
+      ...(record.providerSwitch ? { minimumNextFence: null } : {}),
+      deathEvidence: encodeDeathEvidence(record.lease.deathEvidence)
+    },
+    ...(record.providerSwitch && record.lease.minimumNextFence !== undefined
+      ? { providerSwitchFenceFloor: record.lease.minimumNextFence }
+      : {}),
     providerHandleChain: encodePersistedAgentSessionProviderHandleChain(current),
     ...(inactive.length
       ? { inactiveProviderHandleLinks: encodePersistedAgentSessionProviderHandleChain(inactive) }

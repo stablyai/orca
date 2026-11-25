@@ -6,7 +6,7 @@ import {
 import { NativeChatUsageLimitActionsProvider } from './usage/NativeChatUsageLimitActions'
 import { useNativeChatHandOff } from './pane/actions/use-native-chat-hand-off'
 import { useNativeChatStructuredPaneNotices } from '@/components/native-chat/messages/notices/use-native-chat-structured-pane-notices'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from './session/structured/use-structured-chat-live-session'
 import { NativeChatStructuredPromptCard } from './prompts/NativeChatStructuredPromptCard'
@@ -96,7 +96,7 @@ export function NativeChatStructuredSession(input: Omit<NativeChatStructuredView
   const t = useTranslate()
   const supportsProviderPicker =
     useStructuredAgentSessionHostCapabilityState(
-      props.target,
+      props.isVisible ? props.target : null,
       AGENT_SESSION_SELECT_PROVIDER_RUNTIME_CAPABILITY
     ) === 'supported'
   const selectedProvider = useStructuredAgentSessionSelectedProvider(props.sessionId, props.target)
@@ -129,6 +129,27 @@ export function NativeChatStructuredSession(input: Omit<NativeChatStructuredView
   useRecheckNativeChatFileLinksWhenTurnEnds(controller.isWorking)
   const { composerError, reportComposerError } = useNativeChatComposerError(
     controller.commandRefusalCauses
+  )
+  const pickerScope = useMemo(
+    () =>
+      supportsProviderPicker && ownerWorktreeId && provisionalLaunch.transportEnabled
+        ? {
+            sessionId: props.sessionId,
+            target: props.target,
+            workspaceId: ownerWorktreeId,
+            selected: selectedProvider,
+            onError: reportComposerError
+          }
+        : null,
+    [
+      supportsProviderPicker,
+      ownerWorktreeId,
+      provisionalLaunch.transportEnabled,
+      props.sessionId,
+      props.target,
+      selectedProvider,
+      reportComposerError
+    ]
   )
   const [optionPickerRequest, setOptionPickerRequest] =
     useState<NativeChatOptionPickerRequest | null>(null)
@@ -419,19 +440,7 @@ export function NativeChatStructuredSession(input: Omit<NativeChatStructuredView
                 />
               ) : null}
               {composerShown ? (
-                <NativeChatProviderPickerContext.Provider
-                  value={
-                    supportsProviderPicker && ownerWorktreeId && provisionalLaunch.transportEnabled
-                      ? {
-                          sessionId: props.sessionId,
-                          target: props.target,
-                          workspaceId: ownerWorktreeId,
-                          selected: selectedProvider,
-                          onError: reportComposerError
-                        }
-                      : null
-                  }
-                >
+                <NativeChatProviderPickerContext.Provider value={pickerScope}>
                   <NativeChatComposer
                     ref={composerRef}
                     terminalTabId={props.tabId}
