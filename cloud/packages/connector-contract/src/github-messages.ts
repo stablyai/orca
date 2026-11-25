@@ -40,8 +40,8 @@ export const GITHUB_LINK_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
 
 // POST `${github}/links/preview` (whom the token names; it stays usable) and `…/links/confirm`
 // ("This is me": links them, spending it). Only the account that started the sign-in may redeem it;
-// others get 409 wrong_account. Other 409s: expired, and already_linked (the account is linked to
-// another GitHub user and unlinks first).
+// others get 409 wrong_account, and an expired token 409 expired. Links are many-to-many, so a
+// second GitHub user links beside the first.
 export const ConnectorGitHubLinkTokenRequestSchema = z.object({
   v: z.literal(1),
   token: z.string().regex(GITHUB_LINK_TOKEN_PATTERN)

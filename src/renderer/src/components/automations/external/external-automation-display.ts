@@ -11,7 +11,8 @@ export function formatExternalDate(
   value: string | null,
   now: number,
   t?: Translate,
-  intlLocale?: string
+  intlLocale?: string,
+  format = formatAutomationDateTimeWithRelative
 ): string {
   if (!value) {
     return formatAutomationDateTime(null, t, intlLocale)
@@ -20,7 +21,7 @@ export function formatExternalDate(
   if (!Number.isFinite(parsed)) {
     return value
   }
-  return formatAutomationDateTimeWithRelative(parsed, now, t, intlLocale)
+  return format(parsed, now, t, intlLocale)
 }
 
 export function getExternalProviderLabel(_manager: ExternalAutomationManager): string {

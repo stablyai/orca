@@ -19,6 +19,7 @@ import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'
 import { SshDetectedPortRow } from './ssh-detected-port-row'
 import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-forward-dialog'
 import type { PortForwardOwner } from './port-forward-owner'
+import { openForwardedUrlInSystemBrowser } from '@/lib/workspace-ports/forwarded-url-system-browser-open'
 import { portForwardKey, portForwardRemoteHost } from './port-forward-remote-host'
 
 const NO_UNRESTORED: readonly UnrestoredPortForward[] = []
@@ -98,7 +99,7 @@ export function SshPortsPanel({
           isMac: navigator.userAgent.includes('Mac')
         })
       ) {
-        void window.api.shell.openUrl(url)
+        void openForwardedUrlInSystemBrowser(url, entry, 'ssh')
         return
       }
       if (!activeWorktree?.id) {

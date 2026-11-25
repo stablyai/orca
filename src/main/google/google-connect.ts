@@ -3,6 +3,7 @@
 import { googleClientView, type GoogleClientView } from '../../shared/google/google-client-config'
 import { googleClientFile, parseGoogleClientFile } from './google-client-file'
 import {
+  GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY,
   GOOGLE_CONNECT_RUNTIME_CAPABILITY,
   GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
   GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
@@ -186,10 +187,12 @@ export class GoogleConnect {
   }
 
   /** Re-reads every connected account's services; a grant Google ended shows as Reconnect. */
-  async checkAccounts(): Promise<GoogleAccountView[]> {
+  async checkAccounts(only?: (email: string) => boolean): Promise<GoogleAccountView[]> {
     const deps = { http: this.deps.http, now: this.deps.now }
+    // `only`: the accounts worth checking (a bot's own); the rest keep their last check.
+    const listed = (await listGoogleAccounts()).filter(({ email }) => !only || only(email))
     await Promise.all(
-      (await listGoogleAccounts()).map(async ({ email }) => {
+      listed.map(async ({ email }) => {
         // An unreadable account is listed as Reconnect; googleAccessToken says it isn't connected.
         try {
           const accessToken = await googleAccessToken(email, deps)
@@ -324,7 +327,8 @@ export function googleRuntimeCapabilities(): string[] {
         GOOGLE_CONNECT_RUNTIME_CAPABILITY,
         GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
         GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY,
-        GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY
+        GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
+        GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY
       ]
     : []
 }

@@ -18,7 +18,6 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   'prime-agent': null,
   qoder: 'qoder',
   'qoder-cn': 'qoder-cn',
-  gemini: 'gemini-cli',
   antigravity: 'antigravity',
   aider: null,
   goose: 'goose',

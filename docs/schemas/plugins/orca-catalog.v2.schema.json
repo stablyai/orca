@@ -575,6 +575,7 @@
             "newFiles",
             "settings",
             "statusBarItems",
+            "mcpServers",
             "worktreeBadges"
           ],
           "description": "Contribution point.",

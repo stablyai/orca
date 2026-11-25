@@ -80,7 +80,7 @@ export async function startWorker(
   }
   const checked =
     startParams.origin !== undefined
-      ? await checkedWorkerOrigin(startParams.origin, ctx)
+      ? await checkedWorkerOrigin(startParams.origin, ctx, startFollowUp?.of)
       : undefined
   const prepared = await prepareWorkerStart(
     checked ? { ...startParams, origin: checked.origin } : startParams,
