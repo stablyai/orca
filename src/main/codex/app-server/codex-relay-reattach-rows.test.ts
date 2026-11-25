@@ -13,6 +13,7 @@ import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent
 import { createCodexJournalTranslator } from '../structured/journal/codex-structured-journal-translation'
 import {
   restateKeptCodexBackgroundWork,
+  seedCarriedKeptCodexCommands,
   seedKeptCodexCommandOutput,
   seedKeptCodexTurnOrdinals
 } from '../structured/threads/codex-kept-turn-ordinals'
@@ -494,5 +495,56 @@ describe('codex rows across a reattach', () => {
     const continuation = identity('relay:r-1-abc:6872:msg-a')
     expect(identity('msg-a')).toEqual({ ...continuation, ordinal: 1 })
     expect(continuation).toMatchObject({ ordinal: 2 })
+  })
+
+  it("restores a carried command's row from its saved body when Codex's history leaves it out", async () => {
+    const rows = new Map<string, string>()
+    const translatorFor = () =>
+      createCodexJournalTranslator({
+        sink: {
+          appendItem: (identity, body) =>
+            rows.set(agentJournalItemKey(identity), JSON.stringify(body)),
+          appendTombstone: (identity) => rows.delete(agentJournalItemKey(identity)),
+          publish: () => {}
+        }
+      })
+    const command = { type: 'commandExecution', id: 'cmd', command: 'seq 1 9', cwd: '/w' }
+    const send = (
+      translator: ReturnType<typeof translatorFor>,
+      method: string,
+      params: Record<string, unknown>
+    ) =>
+      translator.handle({
+        type: 'notification',
+        sessionId: 's',
+        threadId: 't',
+        method,
+        params: { threadId: 't', turnId: 'turn-a', ...params }
+      })
+    const first = translatorFor()
+    send(first, 'turn/started', { turn: { id: 'turn-a' } })
+    send(first, 'item/started', { item: { ...command, status: 'inProgress' } })
+    send(first, 'item/commandExecution/outputDelta', { itemId: 'cmd', delta: 'line-one\n' })
+    first.flush()
+    const saved = [...rows.entries()].find(([, body]) => body.includes('line-one'))
+    expect(saved).toBeDefined()
+    const next = translatorFor()
+    const journal = {
+      reads: {
+        itemBody: async (key: string) => {
+          const body = rows.get(key)
+          return body ? JSON.parse(body) : null
+        }
+      }
+    }
+    // History lists the turn without its running command; the daemon carried it open.
+    const turns = [
+      { threadId: 't', turnId: 'turn-a', status: 'inProgress', items: [], running: [] }
+    ]
+    await seedCarriedKeptCodexCommands(next, journal, turns, [['t', 'cmd']])
+    send(next, 'item/commandExecution/outputDelta', { itemId: 'cmd', delta: 'line-two\n' })
+    next.flush()
+    expect(rows.get(saved![0])).toContain('seq 1 9')
+    expect(rows.get(saved![0])).toContain('line-one\\nline-two')
   })
 })

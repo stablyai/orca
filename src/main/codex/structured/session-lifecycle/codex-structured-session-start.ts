@@ -1,6 +1,7 @@
 import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../../app-server/codex-app-server-connection'
 import {
   restateKeptCodexBackgroundWork,
+  seedCarriedKeptCodexCommands,
   seedKeptCodexCommandOutput,
   seedKeptCodexTurnOrdinals,
   type KeptCodexTurn
@@ -188,7 +189,14 @@ export async function openCodexStructuredSession(
     current()
     const journal = input.events?.journalHistory?.() ?? null
     await waitForPromiseWithSignal(
-      seedKeptCodexCommandOutput(translator, journal, keptTurns),
+      seedKeptCodexCommandOutput(translator, journal, keptTurns).then(() =>
+        seedCarriedKeptCodexCommands(
+          translator,
+          journal,
+          keptTurns,
+          connection.relay?.openWork()?.command
+        )
+      ),
       openInput.signal
     )
     current()

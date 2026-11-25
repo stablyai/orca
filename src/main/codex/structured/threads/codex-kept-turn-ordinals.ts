@@ -5,7 +5,9 @@ import type { CodexJournalTranslator } from '../journal/codex-structured-journal
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import { jsonObject } from '../../../../shared/json-stream/json-value-property'
 import {
+  codexNonMessageIdentity,
   isCodexMessageItemType,
   readCodexThreadItem,
   type CodexThreadItem
@@ -129,6 +131,50 @@ export async function seedKeptCodexCommandOutput(
       if (output) {
         translator.seedRunningOutput(threadId, itemId, output.truncated ? null : output.head)
       }
+    }
+  }
+}
+
+/**
+ * Commands the daemon carried open that Codex's history doesn't list as running (it can leave an
+ * in-progress item out): their saved rows give back the command and output the replay continues.
+ */
+export async function seedCarriedKeptCodexCommands(
+  translator: Pick<CodexJournalTranslator, 'seedRunningItems' | 'seedRunningOutput'>,
+  journal: { reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'itemBody'> } | null,
+  turns: readonly KeptCodexTurn[],
+  open: readonly (readonly string[])[] = []
+): Promise<void> {
+  const seeded = new Set(
+    turns.flatMap(({ threadId, running = [] }) =>
+      running.map(({ itemId }) => `${threadId}\u0000${itemId}`)
+    )
+  )
+  for (const [threadId, itemId] of journal ? open : []) {
+    const turnId = turns.find((turn) => turn.threadId === threadId)?.turnId
+    if (!threadId || !itemId || !turnId || seeded.has(`${threadId}\u0000${itemId}`)) {
+      continue
+    }
+    const key = agentJournalItemKey(codexNonMessageIdentity(threadId, turnId, itemId))
+    const body = await journal!.reads.itemBody(key).catch(() => null)
+    if (body?.kind !== 'tool-call') {
+      continue
+    }
+    const input = jsonObject(body.input) ?? {}
+    const item = {
+      type: 'commandExecution',
+      id: itemId,
+      status: 'inProgress',
+      command: input.command ?? null,
+      cwd: input.cwd ?? null
+    }
+    translator.seedRunningItems(threadId, turnId, [item])
+    if (body.output) {
+      translator.seedRunningOutput(
+        threadId,
+        itemId,
+        body.output.truncated ? null : body.output.head
+      )
     }
   }
 }
