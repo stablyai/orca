@@ -121,7 +121,7 @@
     "handoff": {
       "title": "Передать агенту",
       "context": "Контекст",
-      "fullTranscript": "Полная расшифровка",
+      "fullTranscript": "Вся история",
       "noContext": "Нет контекста для продолжения в новой сессии.",
       "latestStatus": "Последний статус",
       "launchFailed": "Не удалось начать новую сессию.",
@@ -1003,8 +1003,8 @@
         "forItems": "для"
       },
       "kind": {
-        "started": "Начато",
-        "reopened": "Открыто заново",
+        "started": "Запущен",
+        "reopened": "Открыт заново",
         "task": "Задача",
         "followedUp": "Уточнение",
         "handedOff": "Передано"
@@ -1030,7 +1030,7 @@
         "pairedComputer": "Сопряжённый компьютер",
         "notConnected": "Не был подключён",
         "declined": "Отклонено",
-        "waitingOn": "Ожидает одобрения на {{computer}}"
+        "waitingOn": "Ожидает одобрения ({{computer}})"
       },
       "offer": {
         "unknownAgent": "{{bot}} запускает агента, которого это приложение не знает. Измените, чтобы выбрать другого.",
@@ -1070,7 +1070,7 @@
       "toolAdded": {
         "removed": "Удалён",
         "remove": "Удалить",
-        "added": "Добавлено"
+        "added": "Добавлен"
       },
       "webhook": {
         "title": "Вебхук",
@@ -1355,12 +1355,12 @@
         "youDeniedFor": "Вы отклонили <tool>{{tool}}</tool> для <task>{{task}}</task>",
         "coordinatorAllowed": "Координатор разрешил <tool>{{tool}}</tool> для <task>{{task}}</task>",
         "coordinatorDenied": "Координатор отклонил <tool>{{tool}}</tool> для <task>{{task}}</task>",
-        "allowedInTerminal": "<tool>{{tool}}</tool> для <task>{{task}}</task> разрешено в его терминале",
-        "deniedInTerminal": "<tool>{{tool}}</tool> для <task>{{task}}</task> отклонено в его терминале",
-        "allowedInChat": "<tool>{{tool}}</tool> для <task>{{task}}</task> разрешено в его чате",
-        "deniedInChat": "<tool>{{tool}}</tool> для <task>{{task}}</task> отклонено в его чате",
+        "allowedInTerminal": "<tool>{{tool}}</tool> для <task>{{task}}</task> разрешено в терминале исполнителя",
+        "deniedInTerminal": "<tool>{{tool}}</tool> для <task>{{task}}</task> отклонено в терминале исполнителя",
+        "allowedInChat": "<tool>{{tool}}</tool> для <task>{{task}}</task> разрешено в чате исполнителя",
+        "deniedInChat": "<tool>{{tool}}</tool> для <task>{{task}}</task> отклонено в чате исполнителя",
         "timedOut": "Время ожидания для <tool>{{tool}}</tool> (<task>{{task}}</task>) истекло",
-        "waitsInTerminal": "<tool>{{tool}}</tool> для <task>{{task}}</task> ожидает в его терминале",
+        "waitsInTerminal": "<tool>{{tool}}</tool> для <task>{{task}}</task> ожидает в терминале исполнителя",
         "workerEnded": "<tool>{{tool}}</tool> для <task>{{task}}</task> закрыто: исполнитель завершил работу",
         "closedUnnamed": "<tool>{{tool}}</tool> для <task>{{task}}</task> закрыто без записанного ответа",
         "reasonSentAsMessage": "Причина, отправленная сообщением",
@@ -1369,7 +1369,7 @@
     },
     "pairedServerAsk": {
       "deny": "Отклонить",
-      "thisServer": "этот сервер",
+      "thisServer": "этому серверу",
       "title": "{{from}} хочет написать {{to}} на этом компьютере",
       "once": "Разрешить один раз",
       "always": "Всегда разрешать {{server}}"
@@ -5974,7 +5974,7 @@
       "repeats": "Повтор",
       "moreActions": "Другие действия",
       "noRunsYet": "Запусков пока нет",
-      "newOnePerRun": "Новый при каждом запуске",
+      "newOnePerRun": "Новое при каждом запуске",
       "nextRunToday": "Следующий запуск сегодня в {{time}}",
       "nextRunTomorrow": "Следующий запуск завтра в {{time}}",
       "nextRunWeekday": "Следующий запуск: {{day}}, {{time}}",
@@ -6497,15 +6497,15 @@
       "suggestMore": "{{a}}, {{b}} и ещё {{count}}",
       "pickOne": "Выберите бота",
       "needsTwoBots": "Нужно 2 бота на {{host}}",
-      "remoteReplied": "Ответил на {{computer}}",
-      "remoteNotice": "Не ответил на {{computer}}",
+      "remoteReplied": "Ответ получен ({{computer}})",
+      "remoteNotice": "Нет ответа ({{computer}})",
       "remoteNotSent": "Не отправлено на {{computer}}",
       "remoteUnknown": "Статус доставки неизвестен",
       "remoteStopped": "Остановлено здесь",
       "remoteSending": "Отправка вопроса на {{computer}}…",
       "remoteAsked": "Вопрос задан на {{computer}}",
-      "remoteMayAnswer": "Ещё может ответить на {{computer}}.",
-      "remoteShortened": "Сокращено. Полный ответ на {{computer}}.",
+      "remoteMayAnswer": "Ответ ещё может прийти с {{computer}}.",
+      "remoteShortened": "Сокращено. Полный ответ — на {{computer}}.",
       "needsLocalBot": "В этой группе должен быть хотя бы один бот на этом компьютере.",
       "workingCount": "Работает: {{count}}",
       "moreCount": "Ещё {{count}}",
@@ -6831,7 +6831,7 @@
         "does": "Готовит спецификацию на одну страницу: проблема, решение, объём, открытые вопросы.",
         "reports": "Здесь, когда вы попросите",
         "example1": "Черновик: «Общий доступ к ботам v2». 3 решения, 2 открытых вопроса.",
-        "example2": "Сохранено в ваш Диск как документ."
+        "example2": "Сохранено на ваш Диск как документ."
       },
       "backlog-cleanup": {
         "name": "Чистка бэклога",
@@ -7100,7 +7100,7 @@
         "needsYou": "Ждёт вас",
         "done": "Готово",
         "canceled": "Отменено",
-        "waiting": "Ожидание"
+        "waiting": "В ожидании"
       },
       "needYouCount_one": "{{count}} элемент ждёт вас",
       "needYouCount_other": "{{count}} элемента ждут вас",
@@ -8066,7 +8066,7 @@
       "unreadableNotShared": "Не удаётся прочитать · не передаётся",
       "overLimitNotShared": "Превышен лимит навыков · не передаётся",
       "original": {
-        "sharedBy": "Поделился {{who}}",
+        "sharedBy": "Автор ссылки: {{who}}",
         "viewOriginal": "Открыть оригинал",
         "originalGone": "Больше недоступен"
       },
@@ -8196,7 +8196,7 @@
     },
     "chat": {
       "nothingToReport": "Сообщать нечего",
-      "mentionPaused": "Приостановлено",
+      "mentionPaused": "Приостановлен",
       "mentionOwnChats": "Ваши другие чаты",
       "mentionPlaceholder": "Спросите что угодно; @ — упомянуть ботов или файлы, / — команды",
       "mentionChatsLoadFailed": "Не удалось загрузить чаты"
@@ -8278,7 +8278,7 @@
       "fixAskDetail": "{{name}} будет чаще спрашивать перед действиями. Одобрить по-прежнему может тот, кто обратился. Уже открытые разговоры сохраняют своё разрешение.",
       "fixAskDetailCodex": "Тогда Codex работает только на чтение, пока запрос не одобрен. Одобрить по-прежнему может тот, кто обратился. Уже открытые разговоры сохраняют своё разрешение.",
       "fixOnlyMeConfirm": "Оставить {{name}} только себе?",
-      "fixOnlyMeConfirmDetail": "{{people}} больше не смогут обращаться к {{name}}. Если снова дать им доступ, сначала спросят вас.",
+      "fixOnlyMeConfirmDetail": "Доступ к {{name}} будет закрыт для: {{people}}. Чтобы снова его выдать, понадобится ваше подтверждение.",
       "fixAskConfirm": "Начинать новые разговоры в режиме «Запрашивать разрешение»?",
       "fixOnlyMeFailed": "Не удалось убрать {{names}}. Повторите попытку.",
       "fixAskDone": "Новые разговоры начинаются в режиме «Запрашивать разрешение».",
@@ -8305,7 +8305,7 @@
         "waiting": "Ожидание Slack…",
         "newLink": "Получить новую ссылку",
         "uncertain": "Возможно, Slack создал приложение {{name}}, которое Orca не может использовать. Если оно есть, удалите его в настройках приложений Slack и настройте заново.",
-        "uncertainChecked": "Я проверил Slack: такого приложения нет, или я его удалил",
+        "uncertainChecked": "Slack проверен: такого приложения нет или оно удалено",
         "again": "Настроить заново",
         "tryIt": "Попробуйте в любом канале или личных сообщениях",
         "openInSlack": "Написать ему в Slack",
@@ -8317,7 +8317,7 @@
       },
       "connection": {
         "removeConfirm": "Удалить",
-        "installedBy": "установил {{installer}}",
+        "installedBy": "установлено пользователем {{installer}}",
         "waiting": "Ожидание установки в Slack.",
         "none": "Пока не в Slack.",
         "unfinished": "Настройка Slack не завершена.",
@@ -8489,11 +8489,11 @@
       "cancel": "Отмена",
       "selectedHeading": "Выбрано",
       "add": "Добавить",
-      "cap": "Здесь можно не больше {{count}} чел.",
+      "cap": "Здесь можно добавить не больше {{count}} чел.",
       "addPeople": "Добавить людей",
       "addFailed": "Не удалось добавить {{names}}.",
-      "fullBot": "Никто не добавлен: с {{names}} у бота будет больше {{count}} чел.",
-      "fullWorkspace": "Никто не добавлен: с {{names}} в этом рабочем пространстве будет больше {{count}} чел.",
+      "fullBot": "Никто не добавлен: у бота может быть не больше {{count}} чел. ({{names}})",
+      "fullWorkspace": "Никто не добавлен: в этом рабочем пространстве может быть не больше {{count}} чел. ({{names}})",
       "incomplete": "В списке не все. Ищите по имени, чтобы найти нужного человека.",
       "searchIn": "Поиск людей в {{workspace}}",
       "peopleIn": "Люди в {{workspace}}",
@@ -8694,7 +8694,7 @@
       "headline": {
         "connected": "Google подключён",
         "toFixOne": "Почти готово: осталось исправить 1 пункт",
-        "toFix": "Почти готово: осталось исправить пунктов: {{count}}",
+        "toFix": "Почти готово, осталось исправить: {{count}}",
         "noDefault": "Выберите учётную запись по умолчанию",
         "ended": "Доступ к Google прекращён.",
         "endedOnHost": "Доступ к Google прекращён. Войдите снова на {{host}}."
