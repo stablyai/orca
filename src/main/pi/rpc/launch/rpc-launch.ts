@@ -124,6 +124,7 @@ export function piToolLimit(
 
 /** Pi stores its own sessions; an explicit session file is shared with terminal resumes. */
 export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLaunch {
+  const family = options.family ?? PI_RPC_FAMILY_PI
   if (!options.fullAccess) {
     throw new Error('Pi structured chat supports full access only')
   }
@@ -208,7 +209,10 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
           ]
         : []),
       ...(options.backgroundWork ? ['--extension', options.backgroundWork.extension] : []),
-      ...(options.botTools ? ['--extension', options.botTools.extension] : []),
+      // OMP rejects `--no-tools` combined with `--extension`, and a limited session must not gain host tools.
+      ...(options.botTools && !(options.tools && !family.supportsNoMcpFlag)
+        ? ['--extension', options.botTools.extension]
+        : []),
       ...(options.sessionFile ? ['--session', options.sessionFile] : []),
       ...(options.forkFile ? ['--fork', options.forkFile] : [])
     ],
