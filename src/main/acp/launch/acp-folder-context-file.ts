@@ -110,9 +110,9 @@ export async function writeFolderContextFile(
   return true
 }
 
-/** Takes Orca's text back out, for a launch that brings none: Orca's own file goes whole, the
- *  user's keeps their text, and symlinks or unreadable files stay untouched. */
-export async function removeFolderContextBlock(
+/** Takes Orca's text back out of `cwd`'s `path`: deletes a file Orca wrote for `agentName`, or
+ *  removes only Orca's block from a file the user wrote. A symlink or unreadable file stays. */
+export async function removeFolderContextFile(
   cwd: string,
   path: string,
   agentName: string
@@ -133,12 +133,13 @@ export async function removeFolderContextBlock(
   if (!span) {
     return
   }
-  // Only the end is tidied: the user's own first line may open an indented code block, and its
-  // indentation is theirs to keep.
-  const remaining = existing.text.slice(0, span.at) + existing.text.slice(span.until)
-  if (!remaining.trim()) {
+  // Only the end of `before` and start of `after` are tidied: the user's own first line may
+  // open an indented code block, and its indentation is theirs to keep.
+  const before = existing.text.slice(0, span.at).trimEnd()
+  const after = existing.text.slice(span.until).trimStart()
+  if (!before && !after) {
     await rm(target, { force: true })
     return
   }
-  await writeFolderContextText(target, `${remaining.replace(/\s+$/, '')}\n`)
+  await writeFolderContextText(target, `${[before, after].filter(Boolean).join('\n\n')}\n`)
 }

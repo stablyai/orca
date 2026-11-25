@@ -63,6 +63,8 @@ export type McpServer = {
   workspaces: McpServerWorkspaces
   /** A command server Orca runs once for every agent instead of once per session. */
   sharedProcess: boolean
+  /** Present on a server a plugin adds: its settings are the plugin's, and it goes with the plugin. */
+  plugin?: { key: string; name: string }
 }
 
 /** A server set up in an agent's own config or a repo's files, merged across agents by URL or command. */
@@ -93,5 +95,7 @@ export type McpServerTypedFailureCode =
   | 'mcp_server_stale'
   /** A shared process is only for a server Orca starts with a command. */
   | 'mcp_server_not_command'
+  /** A plugin's server: only its switches change here; the plugin owns the rest. */
+  | 'mcp_server_from_plugin'
   /** Declared by the contract; a later host fills it in. */
   | 'mcp_servers_not_yet'
