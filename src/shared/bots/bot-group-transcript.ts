@@ -6,6 +6,35 @@ export type BotGroupTranscript = {
   hasEarlier: boolean
 }
 
+export function botGroupReplyBodies(page: BotGroupTranscript): ReadonlyMap<string, string> {
+  const replies = new Map<string, string>()
+  for (const message of page.messages) {
+    for (const turn of message.turns) {
+      if (turn.replyKey && typeof turn.reply === 'string') {
+        replies.set(turn.replyKey, turn.reply)
+      }
+    }
+  }
+  return replies
+}
+
+export function restoreBotGroupReplies(
+  page: BotGroupTranscript,
+  replies: ReadonlyMap<string, string>
+): BotGroupTranscript {
+  return {
+    ...page,
+    messages: page.messages.map((message) => ({
+      ...message,
+      turns: message.turns.map((turn) => {
+        const reply =
+          turn.replyKey && turn.reply === undefined ? replies.get(turn.replyKey) : undefined
+        return reply === undefined ? turn : { ...turn, reply }
+      })
+    }))
+  }
+}
+
 export type BotGroupTranscriptAction =
   /** The latest page from a read. */
   | { kind: 'recent'; page: BotGroupTranscript }

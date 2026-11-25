@@ -3775,6 +3775,10 @@
       "youDenied": "You denied <tool>{{tool}}</tool>",
       "youAnswered": "You answered <tool>{{tool}}</tool>: <answer>{{answer}}</answer>"
     },
+    "subagents": {
+      "noReply": "Ended without a reply",
+      "stoppedBeforeReply": "Stopped before replying"
+    },
     "subagentGroup": {
       "stateCompleted": "completed",
       "stateWorking": "working",

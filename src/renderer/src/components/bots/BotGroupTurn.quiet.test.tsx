@@ -60,6 +60,7 @@ function renderMemberTurn(state: 'running' | 'completed', words: string): HTMLEl
     <TooltipProvider>
       <BotGroupTurn
         hostId="local"
+        groupId="room"
         turn={turn}
         files={null}
         roomLinks={{ onLinkClick: undefined, request: () => {}, rootRef: createRef() }}

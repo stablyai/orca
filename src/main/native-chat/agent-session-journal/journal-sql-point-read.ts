@@ -88,6 +88,7 @@ function read(
     case 'bot-memory-sources':
     case 'automation-result-notes':
     case 'operation-window':
+    case 'room-turn-page':
     case 'turn-attribution':
     case 'prompt-item':
     case 'latest-task-list':

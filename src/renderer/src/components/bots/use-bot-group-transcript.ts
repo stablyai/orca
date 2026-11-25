@@ -4,19 +4,23 @@ import type { BotRef } from '@/lib/bot-hosts'
 import { callBotGroupRpc } from '@/lib/bot-group-rpc'
 import { botGroupRoomConcerned } from '../../../../shared/bots/bot-change-scope'
 import {
+  botGroupReplyBodies,
   reduceBotGroupTranscript,
+  restoreBotGroupReplies,
   type BotGroupTranscript
 } from '../../../../shared/bots/bot-group-transcript'
 
 function readPage(
   group: BotRef,
   threadId: string | undefined,
-  beforeSequence?: number
+  beforeSequence?: number,
+  knownReplyKeys: readonly string[] = []
 ): Promise<BotGroupTranscript> {
   return callBotGroupRpc(group, 'bots.groups.read', {
     groupId: group.id,
     threadId,
-    beforeSequence
+    beforeSequence,
+    knownReplyKeys
   })
 }
 
@@ -39,12 +43,16 @@ export function useBotGroupTranscript(
     const ref = { hostId, id: groupId }
     let closed = false
     let request = 0
+    let replies: ReadonlyMap<string, string> = new Map()
     const read = () => {
       const current = ++request
-      void readPage(ref, threadId)
+      const held = replies
+      void readPage(ref, threadId, undefined, [...held.keys()])
         .then((page) => {
           if (!closed && request === current) {
-            apply({ kind: 'recent', page })
+            const complete = restoreBotGroupReplies(page, held)
+            replies = botGroupReplyBodies(complete)
+            apply({ kind: 'recent', page: complete })
             setError(null)
           }
         })

@@ -1,5 +1,5 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { folderWorkspaceKey } from '../../../src/shared/workspace/identity/workspace-scope'
 import { useMobileNativeChatVisualRenderer } from '../session/native-chat/visual/MobileNativeChatVisual'
@@ -14,6 +14,7 @@ import {
   createBotGroupJournalIndexer,
   type indexBotGroupJournal,
   type BotGroupTurn,
+  botGroupTurnShowsNothing,
   withBotGroupTurnAnswer
 } from '../../../src/shared/bots/bot-group'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -36,10 +37,13 @@ import {
 import { createStructuredQuestionProjection } from '../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
+import { useBotGroupTurnDetails } from '../../../src/shared/bots/use-bot-group-turn-details'
+import { groupTurnRows } from './bot-group-operations'
 
 export type MobileBotGroupSession = StructuredMobileSession & {
   groupTurnItems: ReturnType<typeof indexBotGroupJournal>
 }
+const noItems: never[] = []
 const transcript = createStructuredQuestionProjection(projectStructuredAgentStartItem)
 
 export const MobileBotGroupReader = memo(function Reader({
@@ -109,15 +113,21 @@ export const MobileBotGroupReader = memo(function Reader({
 })
 
 export function MobileBotGroupTurn({
+  groupId,
+  threadId,
   turn,
   session,
   onStop,
   onReply,
   client,
-  folderId
+  folderId,
+  visible
 }: {
+  groupId: string
+  threadId?: string
   turn: BotGroupTurn
   client: RpcClient
+  visible: boolean
   folderId?: string
   session?: MobileBotGroupSession
   onStop: () => void
@@ -125,22 +135,49 @@ export function MobileBotGroupTurn({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const [expanded, setExpanded] = useState(false)
+  const ended = turn.end !== undefined || turn.reply !== undefined
+  const readTurn = session?.groupTurnItems
+  const loadDetails = useCallback(
+    async (beforeSequence: number | undefined, signal: AbortSignal) =>
+      groupTurnRows.interpret(
+        await groupTurnRows.request(
+          client,
+          { groupId, threadId, operationId: turn.operationId, beforeSequence },
+          { signal }
+        )
+      ),
+    [client, groupId, threadId, turn.operationId]
+  )
+  const details = useBotGroupTurnDetails(loadDetails, ended && !turn.frozenItems, visible)
+  const { expanded, toggle: toggleExpanded } = details
   const items = useMemo(
     () =>
       turn.frozenItems ??
-      (session ? session.groupTurnItems(turn.operationId, turn.workerDispatchIds) : []),
-    [turn.frozenItems, session?.groupTurnItems, turn.operationId, turn.workerDispatchIds]
+      details.items ??
+      (ended ? noItems : (readTurn?.(turn.operationId, turn.workerDispatchIds) ?? noItems)),
+    [turn.frozenItems, details.items, ended, readTurn, turn.operationId, turn.workerDispatchIds]
   )
   const lifecycle = items.find((item) => item.body.kind === 'turn')?.body
   const clock = lifecycle?.kind === 'turn' ? lifecycle : null
   const queued = session?.queued.holds(turn.operationId)
-  const working = clock?.state === 'running' && !turn.revoked
+  const working = !ended && clock?.state === 'running' && !turn.revoked
+  const waiting = !clock && !ended
   const source = useMemo(() => ({ client, sessionId: turn.sessionId }), [client, turn.sessionId])
   const rawMessages = useMemo(
-    () => transcript.messages(items).filter((message) => message.role !== 'user'),
-    [items]
+    () =>
+      withBotGroupTurnAnswer(
+        transcript.messages(items).filter((message) => message.role !== 'user'),
+        {
+          operationId: turn.operationId,
+          answer: turn.answer,
+          reply: turn.reply,
+          endedAt: turn.endedAt
+        }
+      ),
+    [items, turn.operationId, turn.answer, turn.reply, turn.endedAt]
   )
+  const noReply =
+    ended && !turn.reply && !turn.hadWork && !turn.revoked && botGroupTurnShowsNothing(rawMessages)
   const fullContent = useMobileNativeChatMessageDetail(rawMessages, source)
   const messages = useMemo(
     () => foldMobileNativeChatMessages(fullContent.messages, turn.agent),
@@ -173,7 +210,7 @@ export function MobileBotGroupTurn({
     }),
     [turn.botId, turn.botName, turn.avatar, turn.avatarColor, turn.avatarOutfit]
   )
-  const settled = clock !== null && !working
+  const settled = ended || (clock !== null && !working)
   const fold = useMemo(
     () =>
       nativeChatTurnFold({
@@ -210,25 +247,37 @@ export function MobileBotGroupTurn({
                 pendingLabel={
                   turn.revoked && clock?.state !== 'completed'
                     ? t('bots.groups.memberRemoved', 'Member removed')
-                    : !clock
+                    : waiting
                       ? queued
                         ? t('chat.queuedMessages.queuedState', 'Queued')
                         : turn.error
                           ? t('bots.groups.notStarted', 'Not started')
                           : t('bots.groups.starting', 'Starting…')
-                      : undefined
+                      : ended && turn.workedMs === undefined
+                        ? t('session.agentChildRow.ended', 'Ended')
+                        : undefined
                 }
                 startedAt={clock?.startedAt ?? null}
-                workedSeconds={clock && working ? null : (clock?.durationMs ?? 0) / 1000}
-                verdict={clock?.outcome}
+                workedSeconds={
+                  working ? null : ((ended ? turn.workedMs : clock?.durationMs) ?? 0) / 1000
+                }
+                verdict={
+                  ended
+                    ? turn.end === 'stopped'
+                      ? 'cancellation'
+                      : turn.end === 'failed'
+                        ? 'failure'
+                        : 'success'
+                    : clock?.outcome
+                }
                 expanded={expanded}
                 onToggleExpanded={
-                  fold.foldableTurnKeys.has(turn.operationId)
-                    ? () => setExpanded(!expanded)
+                  (ended && !turn.frozenItems) || fold.foldableTurnKeys.has(turn.operationId)
+                    ? toggleExpanded
                     : undefined
                 }
                 trailing={
-                  !turn.revoked && !turn.error && (working || !clock) ? (
+                  !turn.revoked && !turn.error && (working || waiting) ? (
                     // The chat's Stop glyph, in the time line's 24pt box.
                     <Pressable
                       accessibilityRole="button"
@@ -254,6 +303,17 @@ export function MobileBotGroupTurn({
                   {botCodedText(turn.error, turn.failure, t)}
                 </Text>
               ) : null}
+              {expanded && details.loadEarlier ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={details.loadEarlier}
+                  disabled={details.loading}
+                >
+                  <Text style={[styles.notice, styles.turnNotice]}>
+                    {t('bots.groups.loadEarlierMessages', 'Load earlier messages')}
+                  </Text>
+                </Pressable>
+              ) : null}
               {shown.map((message) => (
                 <MobileNativeChatMessage
                   key={message.id}
@@ -263,6 +323,13 @@ export function MobileBotGroupTurn({
                   withoutMeta
                 />
               ))}
+              {noReply && !turn.error ? (
+                <Text style={[styles.notice, styles.turnNotice]}>
+                  {turn.end === 'stopped'
+                    ? t('chat.subagents.stoppedBeforeReply', 'Stopped before replying')
+                    : t('chat.subagents.noReply', 'Ended without a reply')}
+                </Text>
+              ) : null}
               {!working && (settled || turn.error || shown.length > 0) ? (
                 <View
                   style={[
@@ -274,6 +341,7 @@ export function MobileBotGroupTurn({
                   <MobileNativeChatMessageTime
                     timestamp={
                       messages.findLast((message) => message.timestamp)?.timestamp ??
+                      turn.endedAt ??
                       (clock?.state === 'completed' ? clock.completedAt : null)
                     }
                     fontScale={1}

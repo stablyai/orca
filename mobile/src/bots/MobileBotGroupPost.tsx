@@ -16,6 +16,7 @@ import { MobileBotGroupTurn, type MobileBotGroupSession } from './MobileBotGroup
 export function MobileBotGroupPost({
   message,
   client,
+  visible,
   bots,
   sessions,
   onStop,
@@ -23,6 +24,7 @@ export function MobileBotGroupPost({
 }: {
   message: BotGroupMessage
   client: RpcClient
+  visible: boolean
   bots: readonly PhoneBot[]
   sessions: ReadonlyMap<string, MobileBotGroupSession>
   onStop: (botId: string) => void
@@ -51,8 +53,11 @@ export function MobileBotGroupPost({
       {message.turns.map((turn) => (
         <MobileBotGroupTurn
           key={turn.operationId}
+          groupId={message.groupId}
+          threadId={message.threadId}
           turn={turn}
           client={client}
+          visible={visible}
           folderId={bots.find((bot) => bot.id === turn.botId)?.folderWorkspaceId}
           session={sessions.get(turn.sessionId)}
           onStop={() => onStop(turn.botId)}

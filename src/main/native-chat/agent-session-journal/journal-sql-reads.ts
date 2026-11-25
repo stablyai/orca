@@ -14,6 +14,10 @@ import type { AgentSessionJournalReads } from './journal-reads'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type {
+  JournalRoomTurnPage,
+  JournalRoomTurnPageRequest
+} from './journal-domain-room-turn-page'
+import type {
   JournalAcpHistory,
   JournalAcpHistoryItems,
   JournalAcpHistoryRead,
@@ -60,6 +64,10 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   automationResultNotes(): Promise<AgentJournalSnapshot>
   /** The rows and sends that place these anchors' turns, never the whole conversation. */
   operationWindow(anchors: JournalOperationWindowAnchors): Promise<JournalOperationWindow>
+  roomTurnPage(
+    request: JournalRoomTurnPageRequest,
+    signal?: AbortSignal
+  ): Promise<JournalRoomTurnPage>
   /** Whom a turn acts for, by index over the turn's own rows (never the chat's send history). */
   turnAttribution(turnId: string, through: number): Promise<JournalTurnAttribution>
   promptItem(end: 'first' | 'last'): Promise<AgentJournalRenderItem | null>
@@ -122,9 +130,10 @@ export function journalSqlReads(
   sessionId: string
 ): JournalSqlReads {
   const read = async <K extends PointKind>(
-    operation: JournalSqlPointRead['operation'] & { kind: K }
+    operation: JournalSqlPointRead['operation'] & { kind: K },
+    signal?: AbortSignal
   ): Promise<Extract<JournalSqlPointReadResult, { kind: K }>> => {
-    const result = await readers.point({ sessionId, operation })
+    const result = await readers.point({ sessionId, operation }, signal)
     if (!answered(result, operation.kind)) {
       throw new Error(`journal reader answered ${result.kind} for ${operation.kind}`)
     }
@@ -165,6 +174,8 @@ export function journalSqlReads(
     botMemorySources: async (after) => (await read({ kind: 'bot-memory-sources', after })).sources,
     automationResultNotes: async () => (await read({ kind: 'automation-result-notes' })).snapshot,
     operationWindow: async (anchors) => (await read({ kind: 'operation-window', anchors })).window,
+    roomTurnPage: async (request, signal) =>
+      (await read({ kind: 'room-turn-page', request }, signal)).page,
     turnAttribution: async (turnId, through) =>
       (await read({ kind: 'turn-attribution', turnId, through })).attribution,
     promptItem: async (end) => (await read({ kind: 'prompt-item', end })).item,

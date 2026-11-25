@@ -7,7 +7,10 @@ import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
-import { readOperationWindowItems } from './journal-operation-window-rows'
+import {
+  readOperationWindowItems,
+  readOperationWindowTurnAnchors
+} from './journal-operation-window-rows'
 import { marginBefore } from './journal-operation-window-turn-ahead'
 import { marginAfter } from './journal-operation-window-end'
 import {
@@ -64,6 +67,8 @@ export type JournalOperationWindowAnchors = {
   /** Only the rows that say who opened and ran each turn: messages, turn and status rows, and any
    *  row of no known turn (it ends a turn's reach); never tool calls or diffs. */
   turnShape?: boolean
+  /** Only user and turn placements, for a legacy room post with no saved journal turn identity. */
+  turnAttributionOnly?: boolean
 }
 
 export type JournalOperationWindow = {
@@ -184,7 +189,12 @@ export function readJournalDomainOperationWindow(
     }
     start = next
   }
-  const items = start === null ? [] : readOperationWindowItems(scope, start, anchors, end)
+  const items =
+    start === null
+      ? []
+      : anchors.turnAttributionOnly
+        ? readOperationWindowTurnAnchors(scope, start, end)
+        : readOperationWindowItems(scope, start, anchors, end)
   const first = scope.db
     .prepare(`SELECT MIN(sequence) AS sequence FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0`)

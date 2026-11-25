@@ -56,6 +56,7 @@ export const MOBILE_BOT_RPC_METHODS = [
   'bots.groups.reorder',
   'bots.groups.send',
   'bots.groups.stop',
+  'bots.groups.turnRows',
   'bots.groups.update',
   'bots.import.sources',
   'bots.items.owner.comment',

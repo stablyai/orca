@@ -9,6 +9,7 @@ import {
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { botChatReads } from './bot-chat-reads'
 import type { BotGroupRuntime } from './bot-group-runtime'
+import { botGroupTurnEnd } from './bot-group-turn-end'
 
 /** Each finished turn's reply text, keyed by operation: saved when the turn ended, or a retired
  *  member's from its frozen rows. Only turns saved before replies were read their member's chat. */
@@ -52,12 +53,13 @@ export async function completedGroupReplies(
     }
   }
   // What a read settles is saved too, so the next post reads that chat no more: the reply, or null
-  // for a turn that ended without one (stopped, failed). Saved on the message as it stands now.
-  const settled = new Map<string, string | null>()
+  // for a turn that ended without one (stopped, failed), with how it ended. Saved on the message as
+  // it stands now.
+  const settled = new Map<string, Pick<BotGroupTurn, 'reply' | 'end' | 'workedMs'>>()
   for (const [operationId, items] of read) {
-    const ended = items.some((item) => item.body.kind === 'turn' && item.body.state !== 'running')
-    if (replies.has(operationId) || ended) {
-      settled.set(operationId, replies.get(operationId) ?? null)
+    const end = botGroupTurnEnd(items)
+    if (replies.has(operationId) || end) {
+      settled.set(operationId, { reply: replies.get(operationId) ?? null, ...end })
     }
   }
   const found = (turn: BotGroupTurn) => turn.reply === undefined && settled.has(turn.operationId)
@@ -66,7 +68,7 @@ export async function completedGroupReplies(
       groups.store.update({
         ...message,
         turns: message.turns.map((turn) =>
-          found(turn) ? { ...turn, reply: settled.get(turn.operationId) } : turn
+          found(turn) ? { ...turn, ...settled.get(turn.operationId) } : turn
         )
       })
     }

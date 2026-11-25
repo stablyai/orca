@@ -25,6 +25,7 @@ import { reserveGroupTurns } from './bot-group-turn-reservation'
 import { botGroupTurnBody } from './bot-group-turn-body'
 import { deliverRemoteAsks } from './bot-group-remote'
 import { collectRemoteAnswers, presentPageAnswers } from './bot-group-remote-answers'
+import { presentBotGroupPage } from './bot-group-page-replies'
 import { remoteAsksFor } from './bot-group-remote-question'
 
 export type SendBotGroupMessageOptions = {
@@ -294,23 +295,18 @@ export function readBotGroup(
   groups: BotGroupRuntime,
   groupId: string,
   beforeSequence?: number,
-  threadId?: string
+  threadId?: string,
+  knownReplyKeys?: readonly string[]
 ) {
   const group = groups.store.room(groupId, threadId)
-  const messages = collectRemoteAnswers(
-    groups,
-    groups.store.roomMessages(groupId, threadId, 40, beforeSequence)
-  )
+  const stored = groups.store.roomMessages(groupId, threadId, 41, beforeSequence)
+  const messages = collectRemoteAnswers(groups, stored.slice(-40))
   settleDeadGroupMailTurns(groups, messages)
+  const page = presentBotGroupPage(group, presentPageAnswers(messages), knownReplyKeys)
   return {
     group,
-    // Saved replies feed later posts' context only; the room renders each turn from its chat.
-    messages: presentPageAnswers(messages).map((message) => ({
-      ...message,
-      turns: message.turns.map(({ reply: _reply, ...turn }) => turn)
-    })),
-    hasEarlier:
-      messages.length > 0 &&
-      groups.store.roomMessages(groupId, threadId, 1, messages[0].sequence).length > 0
+    // An ended turn draws from its saved reply and end, so the room needs none of its chat's rows.
+    messages: page,
+    hasEarlier: stored.length > page.length
   }
 }

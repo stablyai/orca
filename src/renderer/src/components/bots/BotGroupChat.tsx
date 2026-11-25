@@ -119,12 +119,17 @@ export function BotGroupChat({
     }
     for (const message of messages) {
       for (const turn of message.turns) {
-        if (!turn.revoked) {
-          bySession.set(turn.sessionId, {
-            sessionId: turn.sessionId,
-            agent: turn.agent,
-            operationIds: [...(bySession.get(turn.sessionId)?.operationIds ?? []), turn.operationId]
-          })
+        if (!turn.revoked && turn.end === undefined && turn.reply === undefined) {
+          const reader = bySession.get(turn.sessionId)
+          if (reader) {
+            reader.operationIds.push(turn.operationId)
+          } else {
+            bySession.set(turn.sessionId, {
+              sessionId: turn.sessionId,
+              agent: turn.agent,
+              operationIds: [turn.operationId]
+            })
+          }
         }
       }
     }
@@ -326,6 +331,8 @@ export function BotGroupChat({
                         <BotGroupTurn
                           key={turn.operationId}
                           hostId={data.group.hostId}
+                          groupId={data.group.id}
+                          threadId={threadId}
                           turn={turn}
                           tabId={tabId}
                           isVisible={isVisible}

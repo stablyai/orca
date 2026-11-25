@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { isBotAgent } from '../../../src/shared/bot-types'
 import { AppState } from 'react-native'
 import {
+  botGroupReplyBodies,
   reduceBotGroupTranscript,
+  restoreBotGroupReplies,
   type BotGroupTranscript,
   type BotGroupTranscriptAction
 } from '../../../src/shared/bots/bot-group-transcript'
@@ -115,6 +117,7 @@ export function useMobileBotGroupTranscript(
     }
     let closed = false
     let request = 0
+    let replies: ReadonlyMap<string, string> = new Map()
     const refresh = (changed?: BotChangeScope) => {
       const rooms = botChangeConcerns(changed, { kinds: ['groups'] })
       // An items or workers change naming no bot can change every member's list; another bot's
@@ -150,15 +153,18 @@ export function useMobileBotGroupTranscript(
         return
       }
       const current = ++request
+      const held = replies
       void Promise.all([
-        groupRead.request(client, { groupId, threadId }),
+        groupRead.request(client, { groupId, threadId, knownReplyKeys: [...held.keys()] }),
         readHostBots(client, hostBotsKey(hostId))
       ])
         .then(([reply, bots]) => {
           if (closed || current !== request) {
             return
           }
-          apply({ kind: 'recent', page: groupRead.interpret(reply) })
+          const page = restoreBotGroupReplies(groupRead.interpret(reply), held)
+          replies = botGroupReplyBodies(page)
+          apply({ kind: 'recent', page })
           if (bots.kind === 'bots') {
             setBots(bots.bots)
             setNeedsYou((last) => (sameCounts(last, bots.needsYou) ? last : bots.needsYou))
@@ -212,7 +218,13 @@ export function useMobileBotGroupTranscript(
                 operationIds:
                   data?.messages.flatMap((message) =>
                     message.turns
-                      .filter((turn) => turn.sessionId === member.sessionId && !turn.revoked)
+                      .filter(
+                        (turn) =>
+                          turn.sessionId === member.sessionId &&
+                          !turn.revoked &&
+                          turn.end === undefined &&
+                          turn.reply === undefined
+                      )
                       .map((turn) => turn.operationId)
                   ) ?? []
               }

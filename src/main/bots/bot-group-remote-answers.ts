@@ -30,7 +30,7 @@ export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGro
       ? message.turns.map((turn) => (turn.answer ? { ...turn, answer: take(turn.answer) } : turn))
       : message.turns
     if (!message.remoteAsks?.length) {
-      shown.set(message.id, { ...message, turns })
+      shown.set(message.id, turns === message.turns ? message : { ...message, turns })
       continue
     }
     shown.set(message.id, {
