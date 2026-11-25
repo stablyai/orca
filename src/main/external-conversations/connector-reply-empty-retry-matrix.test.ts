@@ -62,7 +62,7 @@ describe('an empty turn is asked once more, from its live end only', () => {
   const liveEnd = (p: ReturnType<typeof start>, key: string, opener: string, toolsRan: boolean) =>
     p.fillTurn({ ...solo, ...end(opener, key, toolsRan) })
 
-  it('asks once after reads; still empty, the request closes with no answer', async () => {
+  it('asks once after reads; the retry still empty, its words before a tool included, closes with no answer', async () => {
     const p = asking('accepted')
     admit(p.db, 'm1', asked('d1'))
     p.show([p.message('m1'), tool('item:t1', 40), ...p.turn('item:t1', 'm1', 'completed')])
@@ -70,7 +70,7 @@ describe('an empty turn is asked once more, from its live end only', () => {
     expect(p.outcomes()).toEqual({ d1: { outcome: null } })
     admit(p.db, 'r1', asks[0]!)
     p.show([...p.items(), p.message('r1'), ...p.turn('item:t2', 'r1', 'completed')])
-    await liveEnd(p, 'item:t2', 'r1', false)
+    await p.fillTurn({ ...solo, earlierProse: 'Let me check.', ...end('r1', 'item:t2') })
     await p.publish()
     expect(asks).toHaveLength(1)
     expect(p.outcomes()).toEqual({ d1: { outcome: 'no_answer', head: 'd1' } })

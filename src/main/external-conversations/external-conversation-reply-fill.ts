@@ -150,9 +150,13 @@ export function conversationReplyFill(
     if (await retry?.hold(turn, own)) {
       return { covered, paused: false }
     }
-    // No retry asks again: words before the last tool answer, except where the chat posted its own.
+    // No retry asks again: words before the last tool answer, except where the chat posted its own,
+    // and never for a row already retried: an empty retry closes with the no-answer line.
     const answeredIn = (row: JournalConnectorReplyRow): EndedTurnReplies =>
-      turn.prose || !turn.earlierProse || retry?.posted(turn, row.conversation.externalId)
+      turn.prose ||
+      !turn.earlierProse ||
+      row.emptyRetried === true ||
+      retry?.posted(turn, row.conversation.externalId)
         ? turn
         : { ...turn, prose: turn.earlierProse }
     // One answer per conversation, under the rule its turn began with: its head's (its earliest row
