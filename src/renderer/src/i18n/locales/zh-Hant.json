@@ -1018,7 +1018,10 @@
       "permissionWithoutAuto": "未使用「代為核准」的代理程式",
       "permissionMixed": "混合",
       "permissionSurfaceDifference": "終端機使用代理程式自身的設定；新聊天使用 {{mode}}。",
+      "permissionModeSurfaceDifference": "終端機使用 {{terminal}}；新聊天使用 {{mode}}。",
       "permissionSameAsAll": "與所有代理程式相同",
+      "choiceChipRemove": "移除 {{flag}}",
+      "choiceChipTooltip": "由「{{choice}}」加入。移除後會使用預設值。",
       "permissionChipRemove": "移除 {{flag}} 並使用 {{agent}} 自身的設定",
       "permissionChipTooltip": "由「權限」設定加入。移除後會使用 {{agent}} 自身的設定。",
       "permissionOverridesKept_one": "{{count}} 個代理程式仍使用自身的權限設定：",
@@ -1059,8 +1062,11 @@
       "chatUnavailableOnWindows": "{{value0}} Chat 尚不支援 Windows，因此 {{value0}} 會在此主機的終端機中開啟。macOS 或 Linux 主機上的聊天仍可正常使用。",
       "undetectedCommandHint": "如果 {{agent}} CLI 安裝在 PATH 之外，請輸入其在此主機上的可執行檔完整路徑。",
       "agentActions": "{{agent}} 操作",
+      "showAgentDetails": "顯示 {{agent}} 詳細資訊",
+      "hideAgentDetails": "隱藏 {{agent}} 詳細資訊",
       "defaultAutoBadge": "預設 · 自動",
-      "newAgentsTitle": "新代理程式"
+      "newAgentsTitle": "新代理程式",
+      "defaultSurfaceServerDescription": "{{host}} 自行啟動代理程式時的預設開啟方式，例如透過它的 CLI 或編排工作行程啟動。你從這台電腦開啟的代理程式，則依照本機的設定。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符號連結",
@@ -1070,6 +1076,10 @@
     },
     "followSymlinkedDirectories": "跟隨符號連結目錄",
     "followSymlinkedDirectoriesDescription": "在快速開啟中搜尋連結資料夾，並在檔案總管中展開本機連結資料夾。",
+    "accounts": {
+      "codexRemoveHome": "Orca 會刪除此帳戶在 {{host}} 上的 Codex 資料夾，包括其中的登入資訊和 MCP 登入。此操作無法復原。如果目前選取的是此帳戶，下次啟動 Codex 時會改用「系統預設」。",
+      "claudeRemoveProfile": "Orca 會刪除 {{host}} 上此帳戶專屬的 Claude 資料夾，以及其中儲存的登入資訊。「系統預設」的登入資訊，以及與它共用的聊天記錄都會保留。如果目前選取的是此帳戶，下次啟動 Claude 時會改用「系統預設」。"
+    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作",
       "remoteOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作（例如推送、拉取或強制推送）。請等待其完成後再使用此動作，以免操作重疊。",
@@ -1077,6 +1087,7 @@
         "on": "開啟",
         "off": "關閉",
         "model": "模型",
+        "effort": "推理強度",
         "agentDefault": "代理程式預設值",
         "effortDefault": "預設",
         "savedModel": "「設定」中的模型：{{value0}}",
@@ -1221,6 +1232,7 @@
       "command": "指令",
       "saving": "儲存中…",
       "save": "儲存格式化工具",
+      "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\"",
       "commandHelp": "在檔案所在主機的工作區根目錄中執行。從 stdin 讀取緩衝區，且只能將格式化後的文字輸出到 stdout。使用 ${file} 或 ${relativeFile} 表示路徑。引數會直接傳遞，不經由 shell。請勿使用 --write。留空即可在此專案中停用。",
       "include": "包含的 glob（每行一個）",
       "includeHelp": "比對相對於工作區根目錄的路徑。沒有相符的 glob 時不會格式化。* 和 ** 會略過以點開頭的名稱；請明確列出，例如 .github/**/*.yml。若要使用此指令，請在一般 > 編輯器中啟用「儲存時格式化」。",
@@ -1263,7 +1275,11 @@
       "fc2ba9b528": "視窗材質"
     },
     "sharedLinks": {
-      "keywordBots": "機器人"
+      "title": "共用連結",
+      "description": "你已發布的連結。",
+      "keywordBots": "機器人",
+      "keywordSkills": "技能",
+      "keywordShare": "分享"
     },
     "breadcrumb": {
       "settings": "設定",
@@ -1280,6 +1296,90 @@
       "cleanup": {
         "recipeDescription": "在輸入前整理聽寫文字。"
       }
+    },
+    "groupHooks": {
+      "title": "專案設定 > {{name}}",
+      "example": "範例：在每個存放庫中建立工作樹（僅限這台電腦）",
+      "useExample": "使用此範例",
+      "description": "建立工作區時在此資料夾中執行的指令碼。所有工作區共用此資料夾。本機指令碼儲存在這台電腦上；`orca.yaml` 指令碼會與你的團隊共用。",
+      "invalidSetup": "檔案存在，但 Orca 找不到有效的設定指令碼。",
+      "supportedKeys": "只定義支援的鍵：`scripts` 和 `setup`。",
+      "supportedArchiveKeys": "只定義支援的鍵：`scripts`、`setup` 和 `archive`。",
+      "invalidArchive": "檔案存在，但 Orca 找不到有效的設定或封存指令碼。"
+    },
+    "uninstall": {
+      "groupTitle": "解除安裝",
+      "title": "解除安裝 Orca",
+      "searchDescription": "移除代理程式鉤子、orca 指令、orca serve 伺服器，以及 SSH 主機上的鉤子。",
+      "keywords": {
+        "uninstall": "解除安裝",
+        "remove": "移除",
+        "delete": "刪除",
+        "cleanup": "清理",
+        "hooks": "鉤子"
+      },
+      "copyCommand": "複製指令",
+      "quit": "結束 Orca",
+      "next": {
+        "unknown": "結束 Orca，然後刪除應用程式。",
+        "macApp": "結束 Orca，然後將它從「應用程式」資料夾拖到垃圾桶。",
+        "homebrew": "Orca 是透過 Homebrew 安裝的。執行以下指令來移除應用程式：",
+        "linuxPackage": "執行以下指令來移除套件：",
+        "windows": "請在 Windows 解除安裝程式中完成。解除安裝程式開啟時，Orca 會結束。",
+        "appImage": "結束 Orca，然後刪除 <path>{{path}}</path>。"
+      },
+      "openUninstaller": "開啟解除安裝程式",
+      "agentStatusOff": "「代理程式狀態鉤子」已關閉。除非你到「設定 → 代理程式」重新開啟，否則 Orca 不會再加入鉤子。",
+      "loadFailed": "Orca 無法檢查它安裝了哪些項目。",
+      "tryAgain": "再試一次",
+      "keeps": "專案、工作樹和 Orca 設定會保留。",
+      "keepsShared": "{{name}} 也已安裝，因此它共用的鉤子也會保留。",
+      "closesTerminals": "開啟中的終端機將會關閉。",
+      "removing": "正在移除…",
+      "button": "解除安裝",
+      "uninstalling": "正在解除安裝…",
+      "rows": {
+        "hooksIn": "{{targets}} 中的鉤子",
+        "cliCommand": "PATH 中的 <cmd>{{name}}</cmd> CLI",
+        "service": "<cmd>orca serve</cmd> 伺服器",
+        "hookScripts": "鉤子指令碼",
+        "terminalDaemon": "終端機背景行程"
+      },
+      "retry": "重試",
+      "hookTargets": {
+        "agents_other": "{{count}} 個代理程式",
+        "sshHosts_other": "{{count}} 個 SSH 主機"
+      },
+      "path": {
+        "codexAccount": "Orca 管理的 Codex 帳戶",
+        "appData": "Orca 應用程式資料"
+      },
+      "host": {
+        "ssh": "SSH",
+        "connected": "已連線",
+        "notConnected": "未連線。",
+        "notConnectedRetry": "未連線。請連線此主機，然後按「重試」。"
+      },
+      "summary": {
+        "hooksIn": "{{targets}} 中的鉤子",
+        "cliCommand": "<cmd>{{name}}</cmd> CLI",
+        "service": "<cmd>orca serve</cmd> 伺服器",
+        "terminalDaemon": "終端機背景行程",
+        "hookScripts": "鉤子指令碼",
+        "nothing": "應用程式以外沒有需要移除的項目。",
+        "loading": "正在檢查 Orca 安裝了哪些項目…",
+        "done": "已移除。刪除應用程式即可完成。",
+        "problems_other": "刪除應用程式前，還有 {{count}} 個項目需要你處理。",
+        "stillInUse": "部分 Orca 檔案仍在使用中，因此暫時保留。"
+      },
+      "status": {
+        "running": "移除中",
+        "done": "完成",
+        "problem": "需要處理",
+        "kept": "已保留"
+      },
+      "stepFailed": "Orca 無法完成此步驟。",
+      "finishFailed": "Orca 無法執行此操作。"
     },
     "notifications": {
       "perfNotices": {
@@ -1444,6 +1544,12 @@
       "inlineBlameKeywordGit": "git",
       "inlineBlameKeywordAuthor": "作者",
       "inlineBlameKeywordAnnotation": "註解"
+    },
+    "openInApp": {
+      "preset": {
+        "devinDesktop": "Devin Desktop",
+        "antigravityIde": "Antigravity IDE"
+      }
     },
     "updateDelay": {
       "1b4d825e0e": "更新延遲",
@@ -8322,7 +8428,17 @@
             "modePopout": "彈出視窗"
           },
           "worktreeCardStyle": {
-            "title": "卡片樣式"
+            "title": "卡片樣式",
+            "copy": "選擇側邊欄中工作區卡片的外觀。",
+            "ariaLabel": "卡片樣式",
+            "classic": "經典",
+            "experimental": "實驗性"
+          },
+          "appRail": {
+            "title": "應用程式導覽列",
+            "description": "位於左側邊緣的圖示列，用於在工作區和其他頁面之間切換。",
+            "copy": "在工作區清單左側加入圖示列。「工作區」、「設定」和「說明」會移到圖示列上，且清單收合時圖示列仍會顯示。",
+            "toggleLabel": "切換應用程式導覽列"
           },
           "sharedCodexServers": {
             "title": "共用 Codex 伺服器",
@@ -8550,7 +8666,19 @@
           "f2765fbbf6": "GitLab API 預算",
           "8cdbaf4b03": "Jira 鍵大小寫",
           "fdbcd676b0": "GitHub API 預算",
-          "074f7aa0d6": "預設對比基準"
+          "074f7aa0d6": "預設對比基準",
+          "prAutoRefreshUpdateFailed": "無法在此主機上更新 PR 自動重新整理設定。",
+          "prAutoRefreshDefault": "自動",
+          "prAutoRefreshReduced": "較不頻繁",
+          "prAutoRefreshOff": "手動",
+          "prAutoRefreshAbout": "關於 PR 更新",
+          "prAutoRefreshHintAutomatic": "讓 PR 和檢查保持最新狀態。",
+          "prAutoRefreshHintLessOften": "降低檢查 GitHub 的頻率。如果你遇到 GitHub 速率限制，這會很有用。",
+          "prAutoRefreshTitle": "PR 更新",
+          "prAutoRefreshDescription": "Orca 向 GitHub 檢查 PR 與 CI 變更的頻率。",
+          "prAutoRefreshHintOff": "在你推送或按一下「重新整理」時更新。",
+          "prAutoRefreshUnsupportedHost": "請更新 {{host}} 上的 Orca 才能變更此設定",
+          "prAutoRefreshUnknownHost": "所選伺服器"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "在本機上啟用粗體顯示異常的擷取手勢：{{samplingShortcut}} 啟動密集取樣；{{captureShortcut}} 將窗格診斷資料擷取至磁碟。",
@@ -8959,7 +9087,11 @@
           "da00f141c2": "自訂 GitHub 議題命令",
           "88c6d1e54a": "命令來源",
           "01bdba296f": "工作樹掛鉤",
-          "1ecf0b115a": "設定指令碼"
+          "1ecf0b115a": "設定指令碼",
+          "yamlDetected": "已偵測到 <yaml>orca.yaml</yaml>",
+          "yamlNotDetected": "未偵測到 <yaml>orca.yaml</yaml>",
+          "yamlNotDetectedDescription": "新增一個即可與你的團隊共用指令碼。",
+          "copyTemplate": "複製範本"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "使用 {{value0}} 存放庫顏色",
@@ -8984,8 +9116,16 @@
           "emojiTooLongForRepoIcon": "此表情符號無法用作存放庫圖示。",
           "currentEmojiSelection": "目前：{{value0}}",
           "searchEmojiPlaceholder": "搜尋表情符號",
+          "custom": "自訂",
+          "githubAvatar": "GitHub 頭像",
+          "customImage": "自訂圖片",
+          "emojiDescription": "{{emoji}} 表情符號",
+          "lucideDescription": "{{label}} 圖示（使用存放庫顏色）",
+          "defaultIcon": "預設",
           "cc76342291": "使用 GitHub 頭像",
-          "43bf3709dd": "存放庫圖示"
+          "43bf3709dd": "存放庫圖示",
+          "autoColor": "自動配色（與其他專案保持區別）",
+          "lettersDescription": "文字「{{text}}」"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相對路徑從該專案根解析。",
@@ -10505,6 +10645,18 @@
               "inWindow": "視窗內",
               "worktrees": "工作樹",
               "eaf17a7214": "代理程式儀表板"
+            },
+            "worktreeCardStyle": {
+              "title": "卡片樣式",
+              "description": "選擇側邊欄中工作區卡片的外觀。"
+            },
+            "appRail": {
+              "title": "應用程式導覽列",
+              "description": "位於左側邊緣的圖示列，用於在工作區和其他頁面之間切換。",
+              "rail": "導覽列",
+              "navigation": "導覽",
+              "sidebar": "側邊欄",
+              "icons": "圖示"
             },
             "sharedCodexServers": {
               "title": "共用 Codex 伺服器",
@@ -12276,6 +12428,7 @@
         "PluginConsentDialog": {
           "reconsent": "權限、工作行程信任層級或指令內容自您上次審查此外掛以來已變更。在執行之前請再次審查。",
           "instructionalWarning": "此外掛沒有工作行程。其指令內容在您或代理程式使用時仍可能引發操作。在啟用之前，請審查以下指令和命令。",
+          "mcpServersWarning": "讓你的代理程式使用它的 MCP 伺服器，這些伺服器可以啟動程式並代替代理程式執行動作",
           "declarativeWarning": "此外掛僅貢獻經過驗證的內容。它不執行背景工作行程，也不接收對 Orca API 的存取。",
           "enable": "啟用外掛",
           "capability": {
@@ -12285,7 +12438,10 @@
             "secrets": "在外掛自己的加密保險庫中儲存和讀取機密資料",
             "settingsOwn": "讀取和變更外掛自己的設定",
             "agentsRead": "代理程式狀態變更時收到通知",
-            "terminalRun": "在您的終端機中執行命令，包括 SSH"
+            "terminalRun": "在您的終端機中執行命令，包括 SSH",
+            "terminalRead": "讀取你的終端機輸出，包括 SSH 終端機",
+            "workspaceWrite": "開啟你的工作區和檔案，並執行內建指令",
+            "agentLaunch": "在你的工作區中啟動代理程式，包括 SSH 工作區"
           },
           "decisionFailed": "無法儲存權限決定。請重試。",
           "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用你已儲存的登入資訊和 SSH 金鑰、使用網路、執行其他程式，並控制 Orca（包括你的終端機和代理程式）。",
@@ -12458,7 +12614,8 @@
           "installedManifestUnloadable": "此版本無法在這個 Orca 中載入。請更新或重新安裝。",
           "invalidArtifact": "宣告的工作行程或面板檔案缺失或不安全。請修復外掛檔案，然後重新整理。",
           "consentChanged": "您在審查時外掛發生了變更。請關閉此對話方塊並審查更新後的權限。",
-          "installGitMoved": "Orca 檢查後存放庫已變更。請再試一次。"
+          "installGitMoved": "Orca 檢查後存放庫已變更。請再試一次。",
+          "installReservedIdentity": "此外掛使用了保留給 Orca 官方外掛的名稱，官方外掛只能從 Orca 外掛目錄安裝。若是你自己的副本或 fork，請將 orca-plugin.json 中的「id」改成不以「orca-」開頭，並將「publisher」設為你自己的名稱。"
         },
         "plugins": {
           "search": {
@@ -13435,9 +13592,11 @@
           "newPanels": "新增面板",
           "newEvents": "回應更多 Orca 事件",
           "newRecipes": "機器配方",
+          "newMcpServers": "MCP 伺服器",
           "newContributions": "代替你執行動作的功能",
           "allAccess": "查看所有存取權限",
           "update": "更新",
+          "replacesAction": "改由 {{value0}} 執行，取代 Orca 的 {{value1}}",
           "newFileTypes": "變更它開啟的檔案",
           "newHooks": "可以變更或阻止 Orca 和你的代理程式的動作",
           "newSettings": "一個設定頁面",
@@ -13543,6 +13702,7 @@
           "customEditor": "編輯器",
           "panel": "側邊欄面板",
           "recipe": "機器配方",
+          "mcpServer": "MCP 伺服器",
           "logs": "記錄",
           "copyLogs": "複製",
           "noAccessReach": "不會存取自身檔案以外的任何內容"
@@ -13576,6 +13736,7 @@
           "updatesKeepApproval": "僅在需要新權限時，更新才會再次詢問",
           "fullAccessUpdates": "更新可在不詢問的情況下變更其程式碼",
           "editsFileTypes": "在 Orca 中開啟並編輯 {{value0}} 檔案，並可讀取它所開啟的檔案",
+          "replacesAction": "改由 {{value0}} 執行，取代 Orca 的 {{value1}}。你可以在它的外掛頁面中切換回來。",
           "install": "安裝並啟用",
           "keepOff": "保持關閉"
         },
@@ -13658,6 +13819,7 @@
           "contentOnly": "僅內容",
           "fullAccess": "完整存取權限",
           "addsVmRecipes": "新增虛擬機配方",
+          "addsMcpServers": "新增 MCP 伺服器",
           "opensAndEditsFiles": "開啟並編輯檔案",
           "runsPluginCode": "執行外掛程式碼"
         },
@@ -13703,6 +13865,10 @@
           "cancel": "取消",
           "addFolder": "新增資料夾",
           "install": "安裝"
+        },
+        "PluginSettingsSection": {
+          "reset": "重設",
+          "title": "設定"
         },
         "editorTypography": {
           "fontSizeUnit": "px",
@@ -13776,7 +13942,9 @@
           "languageCoverage": "介面語言 · 已翻譯 {{value0}}%",
           "newFileMenu": "加入 + 選單",
           "editorReplacesViewer": "以此開啟 {{value0}}，取代 Orca 的檢視器",
-          "editorMayReplaceViewer": "可能以此開啟 {{value0}}，取代 Orca 的檢視器"
+          "editorMayReplaceViewer": "可能以此開啟 {{value0}}，取代 Orca 的檢視器",
+          "statusBar": "狀態列",
+          "font": "終端機、編輯器或介面的字型"
         },
         "PluginPageAction": {
           "failedTitle": "無法安裝 {{value0}}",
@@ -13807,7 +13975,9 @@
           "worktreeCreated": "建立工作區時",
           "worktreeRemoved": "移除工作區時",
           "agentStatusChanged": "代理狀態變更時",
-          "detail": "會在背景執行程式碼"
+          "detail": "會在背景執行程式碼",
+          "workspaceChanged": "切換工作區或其終端機變更時",
+          "editorTypographyChanged": "編輯器字型或縮放比例變更時"
         },
         "PluginChips": {
           "updateNeedsReview": "更新需要審查",
@@ -13847,6 +14017,11 @@
           "noMatches": "沒有符合的項目。",
           "searchHosts": "搜尋主機…",
           "searchLanguages": "搜尋語言…"
+        },
+        "accountsPaneActionErrors": {
+          "codexSignInTimedOut": "Codex 登入花費太久，未能完成。請再試一次。",
+          "codexSignInUnavailable": "Codex 登入暫時無法使用。請過一分鐘再試一次。",
+          "claudeSignInFailed": "Claude 登入失敗。請再試一次。"
         },
         "StatusBarUsageFormatSetting": {
           "reset": "重設",
@@ -22236,6 +22411,15 @@
           "keywordMerged": "已合併"
         }
       },
+      "RepositoryHooksSection": {
+        "folderRunPolicyDescription": "建立新工作區時的預設行為。",
+        "folderTitle": "工作區掛鉤",
+        "folderDescription": "建立或移除工作區時在此資料夾中執行的指令碼。所有工作區共用此資料夾。本機指令碼儲存在這台電腦上；`orca.yaml` 指令碼會與你的團隊共用。",
+        "folderSetupDescription": "建立新工作區後執行的本機和共用指令碼。",
+        "folderArchiveDescription": "移除工作區前執行的本機和共用指令碼。",
+        "folderSetupFieldDescription": "在建立新工作區後執行；可建立子工作樹、安裝相依套件、複製環境變數檔案。",
+        "folderArchiveFieldDescription": "在移除工作區前執行。"
+      },
       "bitbucket": {
         "credentials": {
           "dialog": {
@@ -22280,6 +22464,16 @@
           "cleanup": "清理",
           "chatHistory": "刪除聊天記錄"
         }
+      },
+      "orcaAccount": {
+        "server": {
+          "sectionDescription": "{{host}} 執行時使用的 Orca 帳戶，供其機器人的 Slack、GitHub、Linear 和 webhook 使用。",
+          "unread": "無法讀取 {{host}} 的 Orca 帳戶。請更新或重新連線 {{host}}。",
+          "signInThere": "在 {{host}} 上執行 `orca auth login` 來登入。"
+        }
+      },
+      "git": {
+        "branchPrefixHostGitUsername": "{{host}} 上的 Git 使用者名稱"
       },
       "notifications": {
         "server": {
