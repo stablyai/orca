@@ -3,6 +3,7 @@ import SyncDatabase from '../sqlite/sync-database'
 import { createEventLoopStallSummary, type EventLoopStallWindow } from './event-loop-delay-probe'
 import {
   longestSyncCall,
+  recordSyncCall,
   recordSyncCallsOnThisThread,
   resetSyncCalls,
   resetSyncCallsForTests
@@ -43,4 +44,33 @@ it('names the slowest SQLite statement main ran during a gap of a second or more
   expect(windows[0]!.longGapSyncCall?.label).toMatch(/^WITH RECURSIVE/)
   // The gap starts when the late tick was due, not when the named call began.
   expect(windows[0]!.longGapStartedAtMs).toBe(startedAt + 500)
+})
+
+it('names only a call that ran into the gap, not a longer one that finished before it', () => {
+  const windows: EventLoopStallWindow[] = []
+  const summary = createEventLoopStallSummary(
+    0,
+    {
+      tickMs: 500,
+      windowMs: 2_000,
+      reportableMaxGapMs: 100,
+      syncCalls: { longest: longestSyncCall, reset: resetSyncCalls }
+    },
+    (window) => windows.push(window)
+  )
+  // As the tick at 0 would: the next tick is due at 500, so the gap starts there.
+  resetSyncCalls(500)
+  recordSyncCall('a.db', 'SELECT a', 100, 400)
+  recordSyncCall('b.db', 'SELECT b', 600, 700)
+  recordSyncCall('c.db', 'SELECT c', 450, 560)
+  summary.tick(2_000)
+
+  // A ran longest but ended before 500; C ran 60 ms into the gap, B 100 ms.
+  expect(windows[0]!.longGapStartedAtMs).toBe(500)
+  expect(windows[0]!.longGapSyncCall).toEqual({
+    source: 'b.db',
+    label: 'SELECT b',
+    startedAtMs: 600,
+    durationMs: 100
+  })
 })

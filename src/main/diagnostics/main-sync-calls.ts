@@ -1,10 +1,13 @@
-// The longest synchronous disk call since the stall probe's last tick, so a long event-loop gap can name it.
+// The synchronous disk call that ran longest into the stall probe's next gap, so a long gap can name it.
 // Scalars hold references to existing strings: recording allocates nothing.
 let recording = false
 let longestSource = ''
 let longestLabel = ''
 let longestStartedAt = 0
 let longestMs = -1
+let longestOverlapMs = 0
+/** The next tick's due time: a call that ended before it cannot have delayed that tick. */
+let countFrom = 0
 
 export type SyncCallRecord = {
   source: string
@@ -25,21 +28,31 @@ export function enterSyncCall(): number {
 }
 
 export function exitSyncCall(startedAt: number, source: string, label: string): void {
-  if (startedAt < 0) {
-    return
-  }
-  const ms = performance.now() - startedAt
-  if (ms > longestMs) {
-    longestSource = source
-    longestLabel = label
-    longestStartedAt = startedAt
-    longestMs = ms
+  if (startedAt >= 0) {
+    recordSyncCall(source, label, startedAt, performance.now())
   }
 }
 
-/** The longest call that finished since the last reset. */
+/** Ranks calls by how long they ran past the next tick's due time: only that part can delay the tick. */
+export function recordSyncCall(
+  source: string,
+  label: string,
+  startedAt: number,
+  endedAt: number
+): void {
+  const overlapMs = endedAt - Math.max(startedAt, countFrom)
+  if (overlapMs > 0 && overlapMs > longestOverlapMs) {
+    longestSource = source
+    longestLabel = label
+    longestStartedAt = startedAt
+    longestMs = endedAt - startedAt
+    longestOverlapMs = overlapMs
+  }
+}
+
+/** The call that ran longest past the due time given to the last reset. */
 export function longestSyncCall(): SyncCallRecord | null {
-  return longestMs < 0
+  return longestOverlapMs <= 0
     ? null
     : {
         source: longestSource,
@@ -49,9 +62,11 @@ export function longestSyncCall(): SyncCallRecord | null {
       }
 }
 
-/** Each probe tick starts a new interval; whatever blocks main next finishes after it. */
-export function resetSyncCalls(): void {
+/** Each probe tick passes when the next tick is due; only calls that run past it can delay that tick. */
+export function resetSyncCalls(nextTickDueAtMs = 0): void {
   longestMs = -1
+  longestOverlapMs = 0
+  countFrom = nextTickDueAtMs
 }
 
 export function resetSyncCallsForTests(): void {

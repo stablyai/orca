@@ -87,8 +87,8 @@ export type EventLoopStallSummaryOptions = {
   maxCountedGapMs?: number
   /** False keeps a reportable window open, e.g. while startup has no trace sink yet. */
   canReport?: () => boolean
-  /** The longest synchronous call since the last reset; reset runs on every tick. */
-  syncCalls?: { longest: () => SyncCallRecord | null; reset: () => void }
+  /** The sync call that ran longest past the due time each tick passes to reset. */
+  syncCalls?: { longest: () => SyncCallRecord | null; reset: (nextTickDueAtMs: number) => void }
 }
 
 export function isEventLoopDelayProbeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -147,12 +147,12 @@ export function createEventLoopStallSummary(
         maxGapMs = gap
         maxGapCpuMs = tickCpuMs
         if (gap >= LONG_GAP_MS) {
-          // Whatever blocked main ran after the previous tick, which reset the record.
+          // The previous tick reset the record to calls running past this tick's due time.
           longGapSyncCall = options.syncCalls?.longest() ?? undefined
           longGapStartedAtMs = now - gap
         }
       }
-      options.syncCalls?.reset()
+      options.syncCalls?.reset(now + intervalMs)
       if (counted && gap >= STALL_MS) {
         stallsSeen += 1
         stalledMsSeen += gap
@@ -203,7 +203,7 @@ export function createEventLoopStallSummary(
     resume: (now, cpuMs) => {
       paused = false
       // Calls before the suspend belong to no interval this tick will measure.
-      options.syncCalls?.reset()
+      options.syncCalls?.reset(now + intervalMs)
       lastTick = now
       lastCpuMs = cpuMs ?? lastCpuMs
     }
