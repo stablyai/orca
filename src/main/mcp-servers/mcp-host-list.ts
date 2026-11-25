@@ -239,7 +239,10 @@ export async function updateMcpServer(
       if (entries.some((entry) => entry !== previous && entry.server.name === input.name)) {
         throw nameTaken(input.name)
       }
-      return entries.map((entry) => (entry === previous ? { ...previous, server } : entry))
+      // Sharing one process is only for a command server; an HTTP replacement drops it.
+      const { sharedProcess: _shared, ...extras } = previous.extras
+      const next = 'url' in server ? { ...previous, server, extras } : { ...previous, server }
+      return entries.map((entry) => (entry === previous ? next : entry))
     },
     { rename: { from: before.server.name, to: input.name }, credentials: signIn }
   )

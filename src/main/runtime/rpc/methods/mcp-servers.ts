@@ -151,27 +151,27 @@ export const MCP_SERVER_METHODS = [
         const agent = params.agent ?? 'claude'
         const remote = params.scope === 'remote'
         const folder = mcpHostListFolder()
-        const ids = await mcpServerIdsByName(folder)
-        // The bots' check, run by that agent's CLI over the host's list: one per agent and scope at a time.
-        const byName = await sharedBotToolHealthCheck(
+        // The bots' check, run by that agent's CLI over the host's list: one per agent and scope at a
+        // time. Ids come from the checked run's own read, so a request that joins it gets that run's.
+        const problems = await sharedBotToolHealthCheck(
           MCP_HOST_LIST_RELAY_OWNER,
           `${agent}\0${remote ? 'remote' : 'all'}`,
-          async (signal) =>
-            botToolProblems(
-              await toolsHomeFor(context.runtime, agent, {
-                botId: MCP_HOST_LIST_RELAY_OWNER,
-                folder,
-                signInFolder: join(folder, '.orca', 'sign-in'),
-                otherBotFolders: []
-              }),
-              { remote, signal }
+          async (signal) => {
+            const ids = await mcpServerIdsByName(folder)
+            const home = await toolsHomeFor(context.runtime, agent, {
+              botId: MCP_HOST_LIST_RELAY_OWNER,
+              folder,
+              signInFolder: join(folder, '.orca', 'sign-in'),
+              otherBotFolders: []
+            })
+            const byName = await botToolProblems(home, { remote, signal })
+            return Object.fromEntries(
+              Object.entries(byName).flatMap(([name, problem]) => {
+                const id = ids.get(name)
+                return id ? [[id, problem] as const] : []
+              })
             )
-        )
-        const problems = Object.fromEntries(
-          Object.entries(byName).flatMap(([name, problem]) => {
-            const id = ids.get(name)
-            return id ? [[id, problem] as const] : []
-          })
+          }
         )
         return { problems }
       })
