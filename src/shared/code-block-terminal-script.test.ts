@@ -11,6 +11,8 @@ describe('codeBlockTerminalScript', () => {
     expect(codeBlockTerminalScript('ls -la\t.', 'sh')).toBe('ls -la .')
     expect(codeBlockTerminalScript('ls\x03 -la', 'sh')).toBeNull()
     expect(codeBlockTerminalScript('rm\u202e -rf x', 'sh')).toBeNull()
+    expect(codeBlockTerminalScript('ls\u3164 -la', 'sh')).toBeNull()
+    expect(codeBlockTerminalScript(`ls${' '.repeat(40)}; rm -rf x`, 'sh')).toBeNull()
     expect(codeBlockTerminalScript('print(1)', 'python')).toBeNull()
     expect(codeBlockTerminalScript('ls', undefined)).toBeNull()
     expect(codeBlockTerminalScript(' \n', 'bash')).toBeNull()

@@ -14,6 +14,7 @@ import { NativeChatToolRun } from '../../tools/runs/NativeChatToolRun'
 import { useBotForWorkspace } from '../../../bots/bot-workspace'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
 import {
+  NativeChatCodeBlock,
   NativeChatPlainCodeBlock,
   NativeChatRunnableCodeBlock
 } from '../../markdown/code/NativeChatCodeBlock'
@@ -111,7 +112,13 @@ export function NativeChatAssistantMessageRow({
           content={shownWords}
           variant="document"
           className="text-sm"
-          renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatRunnableCodeBlock}
+          renderCodeBlock={
+            isSystem
+              ? NativeChatPlainCodeBlock
+              : streaming
+                ? NativeChatCodeBlock
+                : NativeChatRunnableCodeBlock
+          }
           linkifyFilePaths
           {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
           visualMessageId={message.role === 'assistant' ? message.id : undefined}
