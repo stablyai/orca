@@ -46,8 +46,7 @@ function buildInventoryScope(params: WorkerTerminalInventoryParams): {
 /** With no terminal of its own left, a Dispatch whose follow-up runs in its exact process handed that terminal on; this names that follow-up. */
 export const WORKER_TERMINAL_HANDED_ON_TO_SQL = `(SELECT f.id FROM dispatch_contexts f
    WHERE r.id IS NULL AND f.follow_up_of_dispatch_id = d.id
-     AND f.process_incarnation = d.process_incarnation AND f.host_scope IS d.host_scope
-   ORDER BY f.rowid LIMIT 1)`
+     AND f.process_incarnation = d.process_incarnation AND f.host_scope IS d.host_scope)`
 
 export const WORKER_TERMINAL_HANDED_ON_SQL = `${WORKER_TERMINAL_HANDED_ON_TO_SQL} IS NOT NULL`
 
