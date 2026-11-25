@@ -154,7 +154,10 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
   timeoutMs: number
   logger?: StructuredAgentSessionLogger
   readView: (history: StructuredAgentSessionHistoryJournal, signal: AbortSignal) => Promise<View>
-  prepare: (context: HistoryCatchUpContext<View>) => Promise<HistoryCatchUpPlan | null>
+  /** Several plans commit in order, each on its own (an import past one commit's bound). */
+  prepare: (
+    context: HistoryCatchUpContext<View>
+  ) => Promise<HistoryCatchUpPlan | readonly HistoryCatchUpPlan[] | null>
 }): Promise<HistoryCatchUpOutcome> {
   const controller = new AbortController()
   const permit = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT))
@@ -182,39 +185,15 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
       ...(error === undefined ? {} : { error })
     })
   const { sink } = input
-  try {
-    check()
-    const written = await waitForPromiseWithSignal(
-      sink.written?.() ?? Promise.resolve({ ok: true }),
-      controller.signal
-    )
-    check()
-    const history = sink.journalHistory?.()
-    if (!history || !written.ok || !sink.tryAppendTransition) {
+  // One commit: re-checked against the journal right before it writes.
+  async function commitHistoryCatchUpPlan(
+    history: StructuredAgentSessionHistoryJournal,
+    plan: HistoryCatchUpPlan,
+    expectedCursor: AgentJournalCursor
+  ): Promise<'committed' | 'skipped'> {
+    if (!sink.tryAppendTransition) {
       return 'skipped'
     }
-    let planned: Promise<View> | undefined
-    const view = (): Promise<View> => (planned ??= input.readView(history, controller.signal))
-    const plan = await waitForPromiseWithSignal(
-      input.prepare({
-        view,
-        history,
-        signal: controller.signal,
-        deadline,
-        check,
-        yieldTurn: () => setImmediate(),
-        warn
-      }),
-      controller.signal
-    )
-    check()
-    if (!plan) {
-      return 'nothing'
-    }
-    const expectedCursor =
-      plan.expectedCursor ??
-      (await waitForPromiseWithSignal(view(), controller.signal)).physicalCursor
-    check()
     let resolved = false
     const admission = sink.tryAppendTransition({
       lifecycle: true,
@@ -265,7 +244,58 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
       warn('stale-history')
       return 'skipped'
     }
-    return plan.mutations.length ? 'committed' : 'checked'
+    return 'committed'
+  }
+  try {
+    check()
+    const written = await waitForPromiseWithSignal(
+      sink.written?.() ?? Promise.resolve({ ok: true }),
+      controller.signal
+    )
+    check()
+    const history = sink.journalHistory?.()
+    if (!history || !written.ok || !sink.tryAppendTransition) {
+      return 'skipped'
+    }
+    let planned: Promise<View> | undefined
+    const view = (): Promise<View> => (planned ??= input.readView(history, controller.signal))
+    const prepared = await waitForPromiseWithSignal(
+      input.prepare({
+        view,
+        history,
+        signal: controller.signal,
+        deadline,
+        check,
+        yieldTurn: () => setImmediate(),
+        warn
+      }),
+      controller.signal
+    )
+    check()
+    if (!prepared) {
+      return 'nothing'
+    }
+    const plans = 'settlementId' in prepared ? [prepared] : prepared
+    let wrote = false
+    for (const [index, plan] of plans.entries()) {
+      // A later commit follows the one before it, with a turn between so main never waits long.
+      if (index > 0) {
+        await setImmediate()
+        check()
+      }
+      const expectedCursor =
+        plan.expectedCursor ??
+        (index === 0
+          ? (await waitForPromiseWithSignal(view(), controller.signal)).physicalCursor
+          : await waitForPromiseWithSignal(history.reads.physicalCursor(), controller.signal))
+      check()
+      const outcome = await commitHistoryCatchUpPlan(history, plan, expectedCursor)
+      if (outcome !== 'committed') {
+        return outcome
+      }
+      wrote ||= plan.mutations.length > 0
+    }
+    return wrote ? 'committed' : 'checked'
   } catch (error) {
     warn('import-skipped', error)
     return 'skipped'
