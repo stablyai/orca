@@ -1,6 +1,6 @@
-// Share an agent with people: one Add field whose suggestions name what each adds, then everyone who
-// can ask it. The caller owns the people and the search; this draws them and reports picks.
-import { useId, useState } from 'react'
+// Share an agent with people: picks wait in the Add field as chips until Share saves them, then
+// everyone who can ask it. The caller owns the people, the picks and the search; this draws them.
+import { useId, useRef, useState } from 'react'
 import { Laptop } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -17,6 +17,7 @@ import {
   TeamSharePersonRow,
   TeamShareSuggestionOption
 } from './BotTeamShareRows'
+import { TeamShareStagedChip } from './BotTeamShareStagedChip'
 
 export function BotTeamShareDialog({
   bot,
@@ -26,7 +27,11 @@ export function BotTeamShareDialog({
   query,
   onQueryChange,
   suggestions,
-  onAdd,
+  staged,
+  onStage,
+  onUnstage,
+  onShare,
+  onCancelStaged,
   onRemove,
   onResend,
   onShareAgain,
@@ -43,7 +48,12 @@ export function BotTeamShareDialog({
   onQueryChange: (query: string) => void
   /** What the field found for `query`; null while it is empty or still searching. */
   suggestions: readonly TeamShareSuggestion[] | null
-  onAdd: (suggestion: TeamShareSuggestion) => void
+  /** Picked in the field, not saved until Share. */
+  staged: readonly TeamShareSuggestion[]
+  onStage: (suggestion: TeamShareSuggestion) => void
+  onUnstage: (suggestion: TeamShareSuggestion) => void
+  onShare: () => void
+  onCancelStaged: () => void
   onRemove: (person: TeamSharePerson) => void
   onResend: (person: Extract<TeamSharePerson, { kind: 'invite' }>) => void
   /** A declined person, asked again under a new share id. */
@@ -54,8 +64,9 @@ export function BotTeamShareDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const listId = useId()
+  const inputRef = useRef<HTMLInputElement>(null)
   const [activeIndex, setActiveIndex] = useState(0)
-  // Radix focuses the field on open; leaving the Add row hides the suggestions until it is back.
+  // The field is focused on open; leaving the Add row hides the suggestions until it is back.
   const [addRowFocused, setAddRowFocused] = useState(true)
   const open = addRowFocused && query.trim() !== '' && suggestions !== null
   const shown = open ? suggestions : []
@@ -64,11 +75,17 @@ export function BotTeamShareDialog({
   const optionId = (index: number) => `${listId}-${index}`
   const pick = (suggestion: TeamShareSuggestion | undefined) => {
     if (suggestion) {
-      onAdd(suggestion)
+      onStage(suggestion)
       setActiveIndex(0)
     }
   }
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const last = staged.at(-1)
+    if (event.key === 'Backspace' && query === '' && last) {
+      event.preventDefault()
+      onUnstage(last)
+      return
+    }
     if (shown.length === 0) {
       return
     }
@@ -90,12 +107,10 @@ export function BotTeamShareDialog({
         size="flush"
         className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)_auto] sm:max-w-[520px]"
         aria-describedby={undefined}
-        onEscapeKeyDown={(event) => {
-          // Esc clears a search before it closes the dialog.
-          if (query !== '') {
-            event.preventDefault()
-            onQueryChange('')
-          }
+        // The field, not a chip's ✕, takes focus on open.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          inputRef.current?.focus()
         }}
       >
         <div className="flex items-center gap-3 px-6 pt-6 pr-12">
@@ -116,23 +131,48 @@ export function BotTeamShareDialog({
           }}
         >
           <div className="relative min-w-0 flex-1">
-            <Input
-              role="combobox"
-              aria-expanded={listed}
-              aria-controls={listed ? listId : undefined}
-              aria-autocomplete="list"
-              aria-activedescendant={active >= 0 ? optionId(active) : undefined}
-              aria-label={t('bots.teamShare.addLabel', 'Add people')}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder={t('bots.teamShare.addPlaceholder', 'Email, Slack @name or GitHub login')}
-              value={query}
-              onChange={(event) => {
-                onQueryChange(event.target.value)
-                setActiveIndex(0)
+            {/* A drawn field: the chips sit inside it, so the input is the embedded text run. */}
+            <div
+              className="scrollbar-sleek flex max-h-24 min-h-9 flex-wrap items-center gap-1 overflow-y-auto rounded-md border border-input px-3 py-1 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  event.preventDefault()
+                  inputRef.current?.focus()
+                }
               }}
-              onKeyDown={onKeyDown}
-            />
+            >
+              {staged.map((suggestion) => (
+                <TeamShareStagedChip
+                  key={suggestion.key}
+                  suggestion={suggestion}
+                  onRemove={() => onUnstage(suggestion)}
+                />
+              ))}
+              <Input
+                ref={inputRef}
+                surface="embedded"
+                className="h-7 w-auto min-w-24 flex-1"
+                role="combobox"
+                aria-expanded={listed}
+                aria-controls={listed ? listId : undefined}
+                aria-autocomplete="list"
+                aria-activedescendant={active >= 0 ? optionId(active) : undefined}
+                aria-label={t('bots.teamShare.addLabel', 'Add people')}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={
+                  staged.length === 0
+                    ? t('bots.teamShare.addPlaceholder', 'Email, Slack @name or GitHub login')
+                    : undefined
+                }
+                value={query}
+                onChange={(event) => {
+                  onQueryChange(event.target.value)
+                  setActiveIndex(0)
+                }}
+                onKeyDown={onKeyDown}
+              />
+            </div>
             {open ? (
               <div
                 id={listed ? listId : undefined}
@@ -162,9 +202,6 @@ export function BotTeamShareDialog({
               </div>
             ) : null}
           </div>
-          <Button variant="outline" disabled={active < 0} onClick={() => pick(shown[active])}>
-            {t('bots.teamShare.add', 'Add')}
-          </Button>
         </div>
         <div className="scrollbar-sleek min-h-0 max-h-[340px] overflow-y-auto pt-1 pb-2">
           <h3 className="px-6 pt-4 pb-1 text-xs font-medium text-muted-foreground">
@@ -195,7 +232,16 @@ export function BotTeamShareDialog({
               )}
             </span>
           </p>
-          <Button onClick={onClose}>{t('bots.teamShare.done', 'Done')}</Button>
+          {staged.length > 0 ? (
+            <>
+              <Button variant="ghost" onClick={onCancelStaged}>
+                {t('bots.teamShare.cancel', 'Cancel')}
+              </Button>
+              <Button onClick={onShare}>{t('bots.teamShare.shareStaged', 'Share')}</Button>
+            </>
+          ) : (
+            <Button onClick={onClose}>{t('bots.teamShare.done', 'Done')}</Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

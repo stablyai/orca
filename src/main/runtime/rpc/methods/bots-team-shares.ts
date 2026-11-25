@@ -18,7 +18,7 @@ import { sendBotInviteEmail } from '../../../bots/team-share/bot-invite-email'
 
 const OWNER_ONLY = 'Only your owner shares you with people, in Orca.'
 
-/** Emails each invite and marks the ones that went out; one that didn't shows "Email not sent yet". */
+/** Emails each invite and marks the ones that went out; the share reaches them in Orca either way. */
 async function emailInvites(
   context: RpcContext,
   bot: Bot,

@@ -20,10 +20,10 @@ const hasAccess: BotShare = {
 }
 
 describe('share dialog rows', () => {
-  it('reads Invited, Email not sent yet and Has access from the share list', () => {
+  it('reads invites, emailed or not, and Has access from the share list', () => {
     expect(teamSharePeople([invited, waiting, hasAccess])).toEqual([
-      { kind: 'invite', key: 'a', email: 'alice@example.com', emailSent: true },
-      { kind: 'invite', key: 'b', email: 'bo@example.com', emailSent: false },
+      { kind: 'invite', key: 'a', email: 'alice@example.com' },
+      { kind: 'invite', key: 'b', email: 'bo@example.com' },
       {
         kind: 'account',
         key: 'c',

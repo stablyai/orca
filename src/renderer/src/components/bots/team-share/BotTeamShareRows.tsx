@@ -34,7 +34,7 @@ import {
   type TeamShareSuggestion
 } from './bot-team-share-people'
 
-const LINK_ICONS = { slack: SlackIcon, github: GitHubIcon, linear: LinearIcon } as const
+export const LINK_ICONS = { slack: SlackIcon, github: GitHubIcon, linear: LinearIcon } as const
 const LINK_NAMES = { slack: 'Slack', github: 'GitHub', linear: 'Linear' } as const
 
 function LinkIcons({ links }: { links: readonly TeamShareLinkSource[] }): React.JSX.Element {
@@ -122,14 +122,11 @@ function useSubline(person: TeamSharePerson): React.ReactNode {
       return <StateLine {...ANSWER_ICONS[answer]} text={`${words} · ${person.email}`} />
     }
     case 'invite':
+      // True whether or not the email went out: the share reaches them in Orca either way.
       return (
         <StateLine
-          icon={Mail}
-          text={
-            person.emailSent
-              ? t('bots.teamShare.invited', 'Invited')
-              : t('bots.teamShare.emailNotSent', 'Email not sent yet')
-          }
+          {...ANSWER_ICONS.pending}
+          text={t('bots.teamShare.invitedInOrca', 'Invited · they’ll see it in Orca')}
         />
       )
     case 'slack':

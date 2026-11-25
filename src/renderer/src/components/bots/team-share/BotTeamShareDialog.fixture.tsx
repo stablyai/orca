@@ -42,8 +42,7 @@ const PEOPLE = {
   sam: { kind: 'slack', key: 'sam', name: 'Sam Ruiz', handle: '@sam', workspace: 'Stably' },
   octo: { kind: 'github', key: 'octo', login: 'octo-dev', place: 'stablyai', linkedAccounts: 2 },
   tom: { kind: 'github', key: 'tom', login: 'tom-okafor', place: 'stablyai' },
-  dana: { kind: 'invite', key: 'dana', email: 'dana@acme.co', emailSent: true },
-  danaHeld: { kind: 'invite', key: 'dana', email: 'dana@acme.co', emailSent: false },
+  dana: { kind: 'invite', key: 'dana', email: 'dana@acme.co' },
   danaJoined: { kind: 'account', key: 'dana', name: 'Dana Wu', email: 'dana@acme.co', links: [] },
   mei: {
     kind: 'account',
@@ -114,15 +113,27 @@ const FOUND: Record<string, readonly TeamShareSuggestion[]> = {
   }))
 }
 
+const STAGED: Record<string, TeamShareSuggestion> = {
+  dana: { kind: 'invite', key: 'dana@acme.co', email: 'dana@acme.co' },
+  alicia: { kind: 'slack', key: 'alicia', name: 'Alicia Gómez', detail: 'Stably' }
+}
+
+const NONE_STAGED: readonly (keyof typeof STAGED)[] = []
+
 function Scene({
   people: initial,
-  query: initialQuery = ''
+  query: initialQuery = '',
+  staged: initialStaged = NONE_STAGED
 }: {
   people: readonly PersonKey[]
   query?: string
+  staged?: readonly (keyof typeof STAGED)[]
 }): React.JSX.Element {
   const [people, setPeople] = useState<TeamSharePerson[]>(initial.map((key) => PEOPLE[key]))
   const [query, setQuery] = useState(initialQuery)
+  const [staged, setStaged] = useState<TeamShareSuggestion[]>(
+    initialStaged.map((key) => STAGED[key])
+  )
   return (
     <div className="min-h-[640px]">
       <BotTeamShareDialog
@@ -133,7 +144,26 @@ function Scene({
         query={query}
         onQueryChange={setQuery}
         suggestions={query.trim() === '' ? null : (FOUND[query.trim()] ?? [])}
-        onAdd={() => setQuery('')}
+        staged={staged}
+        onStage={(suggestion) => {
+          setQuery('')
+          setStaged([...staged, suggestion])
+        }}
+        onUnstage={(suggestion) =>
+          setStaged(staged.filter((entry) => entry.key !== suggestion.key))
+        }
+        onShare={() => {
+          setPeople([
+            ...people,
+            ...staged.map((entry): TeamSharePerson =>
+              entry.kind === 'invite'
+                ? { kind: 'invite', key: entry.key, email: entry.email }
+                : { kind: 'slack', key: entry.key, name: entry.name, workspace: 'Stably' }
+            )
+          ])
+          setStaged([])
+        }}
+        onCancelStaged={() => setStaged([])}
         onRemove={(person) => setPeople(people.filter((entry) => entry.key !== person.key))}
         onResend={() => {}}
         onShareAgain={() => {}}
@@ -143,10 +173,13 @@ function Scene({
   )
 }
 
-function scene(people: readonly PersonKey[], opts: { query?: string; interact?: () => void } = {}) {
+function scene(
+  people: readonly PersonKey[],
+  opts: { query?: string; staged?: readonly (keyof typeof STAGED)[]; interact?: () => void } = {}
+) {
   return defineFixture({
     width: 760,
-    render: () => <Scene people={people} query={opts.query} />,
+    render: () => <Scene people={people} query={opts.query} staged={opts.staged} />,
     interact: opts.interact
   })
 }
@@ -166,11 +199,11 @@ export const inviteEmail = scene(['alice', 'bo'], { query: 'dana@acme.co' })
 /** Nothing matches the name, so nothing can be added. */
 export const noMatch = scene(['alice', 'bo', 'sam'], { query: '@alcie' })
 
-/** An added email shows Invited until their Orca picks it up. */
-export const invited = scene(['alice', 'bo', 'sam', 'dana'])
+/** Picked people wait in the field as chips; nothing is saved until Share. */
+export const staged = scene(['alice', 'bo'], { staged: ['dana', 'alicia'] })
 
-/** Past the hourly email limit the share stands; only the email waits. */
-export const emailNotSent = scene(['alice', 'bo', 'danaHeld'])
+/** After Share: an invite says it reaches them in Orca, emailed or not. */
+export const invited = scene(['alice', 'bo', 'sam', 'dana'])
 
 /** The invite resolved: Dana has access as her Orca account. */
 export const hasAccess = scene(['alice', 'bo', 'danaJoined'])

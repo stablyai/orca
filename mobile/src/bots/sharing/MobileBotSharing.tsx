@@ -261,7 +261,7 @@ function SharingPage(props: {
             subtitle={t('bots.share.description', 'Anyone with the link can make a copy.')}
             accessory={
               <MobileBotTextButton
-                label={t('bots.share.shareBot', 'Share bot…')}
+                label={t('bots.share.shareBot', 'Send a copy…')}
                 disabled={!props.online || read.kind === 'loading'}
                 onPress={props.onShare}
               />

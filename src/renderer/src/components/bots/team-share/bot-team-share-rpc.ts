@@ -25,8 +25,8 @@ async function changeShares<TResult extends { bot: Bot }>(
   }
 }
 
-export function addBotTeamShare(bot: BotRef, email: string): Promise<{ bot: Bot }> {
-  return changeShares(bot, 'bots.teamShares.add', { botId: bot.id, emails: [email] })
+export function addBotTeamShare(bot: BotRef, emails: readonly string[]): Promise<{ bot: Bot }> {
+  return changeShares(bot, 'bots.teamShares.add', { botId: bot.id, emails })
 }
 
 export function removeBotTeamShare(bot: BotRef, shareId: string): Promise<{ bot: Bot }> {
