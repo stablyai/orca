@@ -146,6 +146,7 @@ export class ProviderRelay {
     this.idleStop.disarm()
     // Read before the replay: lines released later through this client's own acks reached it.
     const { truncatedThrough } = this.spool
+    this.options.log?.('relay-attached', { relayId: this.relayId, cursor, truncatedThrough })
     this.release()
     // Live records wait for this attach's own replay, or they would reach the new client twice.
     this.spool.suspend()

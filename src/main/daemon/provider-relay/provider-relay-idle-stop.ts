@@ -92,6 +92,7 @@ export class ProviderRelayIdleStop {
     }
     this.work = policy?.open ? this.openWorkAtDetach(policy.open) : null
     this.armed = this.work !== null
+    this.host.log?.('relay-detached', { armed: this.armed, busy: this.work?.busy ?? null })
     this.waitingForLine = false
     this.lastActivityAt = Date.now()
     this.schedule(this.armed ? (this.policy?.idleStopMs ?? null) : null)
