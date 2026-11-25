@@ -1,7 +1,8 @@
 // The agents other people shared with this Orca account, as main publishes them to the window: each is
 // a host the app reaches over Orca Relay by its own environment id.
+import type { SharedHostLink } from '../remote-runtime/relay/client/shared-host-relay-link'
 
-export type SharedBotHostLink = 'live' | 'connecting' | 'offline' | 'unpaired'
+export type SharedBotHostLink = SharedHostLink
 
 /** Off for now: a shared host that is away reads as a paired server that is away (no send, nothing
  *  held). Every held path reads this; the held code stays for when it comes back. */
@@ -35,6 +36,26 @@ export type SharedBotHostView = {
   holds: boolean
   /** This device's held messages the cloud still reports, oldest first. */
   held: SharedBotHeldView[]
+}
+
+/** A share as a device lists it, with how that device reaches it; nothing holds while held sends
+ *  are off. */
+export function sharedBotHostView(
+  share: Pick<SharedBotHostView, 'environmentId' | 'shareId' | 'botId' | 'botName' | 'ownerName'>,
+  reach: Pick<SharedBotHostView, 'homeWorkspaceId' | 'link' | 'holds' | 'held'>
+): SharedBotHostView {
+  const { environmentId, shareId, botId, botName, ownerName } = share
+  const holds = SHARED_HOSTS_HOLD_WHILE_AWAY && reach.holds
+  return {
+    environmentId,
+    shareId,
+    botId,
+    botName,
+    ownerName,
+    ...reach,
+    holds,
+    held: holds ? reach.held : []
+  }
 }
 
 /** What main publishes: the shared agents, and whether this account's Orca Cloud takes shares

@@ -1,5 +1,6 @@
 // Window-only: this desktop's view of the agents shared with its Orca account. Calls and streams to
-// their hosts go through runtimeEnvironments, which routes them here.
+// their hosts go through runtimeEnvironments, which routes them here; this computer's own phones only
+// ask for keys of their own (bots-share-phone.ts).
 import { BrowserWindow, ipcMain } from 'electron'
 import { z } from 'zod'
 import type { SharedBotHostsState } from '../../shared/bots/shared-bot-hosts'
@@ -7,6 +8,10 @@ import { NODE_RELAY_CLIENT_PLATFORM } from '../../shared/remote-runtime/relay/cl
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import { SharedBotHosts } from '../bots/shared-with-me/shared-bot-hosts'
 import { sharedBotsCloud } from '../bots/shared-with-me/shared-bots-cloud'
+import {
+  reportingSharedBotsCloud,
+  SharedBotHostFailures
+} from '../bots/shared-with-me/shared-bot-host-failures'
 import {
   routeSharedHostsThrough,
   sharedHostsChanged
@@ -24,15 +29,18 @@ export function registerSharedBotHostsHandlers(args: {
   cloud: () => ConnectorCloud | null
   homes: Omit<SharedBotHomeDeps, 'userDataPath'>
 }): SharedBotHosts {
+  const failures = new SharedBotHostFailures()
   const hosts = new SharedBotHosts({
     userDataPath: args.userDataPath,
     homes: new SharedBotHomes({ ...args.homes, userDataPath: args.userDataPath }),
     platform: NODE_RELAY_CLIENT_PLATFORM,
     cloud: () => {
       const cloud = args.cloud()
-      return cloud ? sharedBotsCloud(cloud) : null
+      return cloud ? reportingSharedBotsCloud(sharedBotsCloud(cloud), failures) : null
     },
+    failures,
     account: () => args.cloud()?.signedInAccount() ?? null,
+    connectorOrigin: () => args.cloud()?.origin() ?? null,
     publish: (state: SharedBotHostsState) => {
       sharedHostsChanged()
       for (const window of BrowserWindow.getAllWindows()) {

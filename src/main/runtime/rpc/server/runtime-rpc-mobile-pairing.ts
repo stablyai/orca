@@ -8,7 +8,7 @@ import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './pairing/network/network-exposure-guidance'
 import { createOwnerPairingOffer } from './pairing/pairing-offer-requests'
 import type { PairingOffersRpcContext } from '../core'
-import { RuntimeRpcPairing } from './runtime-rpc-pairing'
+import { RuntimeRpcBotShareOffers } from './runtime-rpc-bot-share-offers'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
@@ -21,7 +21,7 @@ import {
 // How long an automatic mint waits for an on-demand Relay install before reporting it missing.
 const RELAY_PROVIDER_INSTALL_WAIT_MS = 15_000
 
-export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
+export class RuntimeRpcMobilePairing extends RuntimeRpcBotShareOffers {
   protected override ownerPairingOffers(): PairingOffersRpcContext {
     return {
       create: async (params, createdByDeviceId, createdByClientInstanceId) => {

@@ -28,7 +28,7 @@ import type { BridgeHost, BridgeHostOptions } from './bridge-host-contract'
 
 // Bind the host structurally to one RPC client; the protocol lets pages name no other host. Native origin checks reject expired sessions, and init caps are enforced here.
 export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
-  const { client, buildId, sessionId, pageRoutes, host } = options
+  const { client, buildId, sessionId, pageRoutes, host, readHostStatus, bypassesVerdict } = options
   const granted: readonly string[] = [...BRIDGE_SHELL_GRANTS, ...options.routeGrants]
   // Validate manifest pairs like the route: a pair refused by the page would invalidate the entire init.
   const parsedRouteGrants =
@@ -74,7 +74,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   })
   const { postJson, sendJson, send, sendError } = frames
 
-  const verdict = createBridgeVerdictHold(options.readHostStatus, sendError)
+  const verdict = createBridgeVerdictHold(readHostStatus, sendError, bypassesVerdict)
+  void options.bypassesVerdictSettled?.then(() => !closed && verdict.releaseBypassing(dispatch))
   const subscriptions = new BridgeHostSubscriptions({
     client,
     holdReplay: verdict.holdReplay,

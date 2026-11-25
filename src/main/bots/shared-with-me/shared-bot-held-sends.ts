@@ -1,6 +1,7 @@
 // A teammate's messages held in Orca Cloud for a shared agent's host: where a send goes, the held
 // states the cloud reports, and Send again for one the host refused.
 import { UNKNOWN_SHARE_REFUSAL } from '../../../shared/connector-share-contract'
+import { agentShareCloudReason, reportAgentShareFailure } from '../../telemetry/agent-share-failure'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
@@ -14,6 +15,10 @@ import {
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
 import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import {
+  sharedBotHeldChat,
+  sharedBotHeldRefusal
+} from '../../../shared/bots/shared-bot-held-routing'
 import { handOffSharedBotMessage, type HandOffResult } from './shared-bot-hand-off'
 import {
   sharedBotHostKey,
@@ -56,10 +61,7 @@ export function namesSharedBotNewChat(params: unknown): boolean {
   return isSharedBotNewChatId(sessionIdOf(params))
 }
 
-/** The chat a session id names: a placeholder id is a new chat the host hasn't started yet. */
-export function sharedBotHeldChat(sessionId: string): SharedBotHeldMessage['chat'] {
-  return isSharedBotNewChatId(sessionId) ? { newChatId: sessionId } : { sessionId }
-}
+export { sharedBotHeldChat } from '../../../shared/bots/shared-bot-held-routing'
 
 export class SharedBotHeldSends {
   private states = new Map<string, SharedBotHeldState>()
@@ -80,9 +82,16 @@ export class SharedBotHeldSends {
 
   /** The cloud's latest word on every held message of the account's shares. */
   applyMine(shares: readonly MineShare[]): void {
+    const before = this.states
     this.states = new Map(
       shares.flatMap((share) => share.held.map((held) => [held.clientMessageId, held.state]))
     )
+    for (const [clientMessageId, state] of this.states) {
+      // Seen waiting, now refused: once per message, never for one already refused at launch.
+      if (state === 'not_sent' && before.get(clientMessageId) === 'waiting') {
+        reportAgentShareFailure({ stage: 'held_not_sent', reason: 'refused' })
+      }
+    }
   }
 
   /** A cloud read begins; its answer settles the holds taken before it began. */
@@ -143,31 +152,15 @@ export class SharedBotHeldSends {
     if (result?.kind === 'held' && content) {
       this.uploads.release(content.paths)
     }
-    if (result?.kind === 'held') {
-      return sharedBotFailure(
-        'agentSession.send',
-        SHARED_BOT_HOST_ERRORS.held,
-        `Waiting for ${entry.ownerName}’s computer`
-      )
-    }
-    if (result?.kind === 'too-large') {
-      return sharedBotFailure(
-        'agentSession.send',
-        SHARED_BOT_HOST_ERRORS.tooLarge,
-        `Too large to hold; send it when ${entry.ownerName}’s computer is online`
-      )
-    }
-    if (result?.kind === 'failed' && result.error === UNKNOWN_SHARE_REFUSAL) {
+    const unshared = result?.kind === 'failed' && result.failure.error === UNKNOWN_SHARE_REFUSAL
+    if (unshared) {
       // Revoked: the cloud's list drops it now, not at the next idle read.
       this.deps.changed()
-      return sharedBotFailure(
-        'agentSession.send',
-        SHARED_BOT_HOST_ERRORS.unshared,
-        `${entry.ownerName} no longer shares this agent with you`
-      )
     }
+    const refusal =
+      result && sharedBotHeldRefusal(unshared ? 'unshared' : result.kind, entry.ownerName)
     // Not held (refused, unsupported, no cloud): still never sent live ahead of the queue.
-    return sharedBotOffline(entry)
+    return refusal ? sharedBotFailure('agentSession.send', ...refusal) : sharedBotOffline(entry)
   }
 
   /**
@@ -285,6 +278,12 @@ export class SharedBotHeldSends {
       ...message,
       sentAt: this.deps.now()
     })
+    if (result.kind !== 'held') {
+      reportAgentShareFailure({
+        stage: 'held_send',
+        reason: result.kind === 'too-large' ? 'too_large' : agentShareCloudReason(result.failure)
+      })
+    }
     if (result.kind === 'held') {
       const current = this.deps.store.get(entry.shareId) ?? entry
       this.deps.store.put({
@@ -329,6 +328,16 @@ export class SharedBotHeldSends {
   private state(held: SharedBotHeldMessage): SharedBotHeldState {
     return this.states.get(held.clientMessageId) ?? 'waiting'
   }
+}
+
+/** The host's own answer, named for the host the window asked. */
+export function sharedBotAnswer(
+  entry: Pick<SharedBotHostEntry, 'environmentId'>,
+  response: RpcResponse
+): RuntimeRpcResponse<unknown> {
+  return response.ok
+    ? { ...response, _meta: { runtimeId: response._meta?.runtimeId ?? entry.environmentId } }
+    : response
 }
 
 /** A call the host wasn't reached for, and nothing was held for. */

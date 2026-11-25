@@ -21,6 +21,7 @@ import type { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-deskt
 import type { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import { RelayRevokeOutbox } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import { PushUnregisterOutbox } from '../../push/push-unregister-outbox'
+import { BotSharePhoneCredentialOutbox } from '../../../bots/team-share/bot-share-phone-credentials'
 import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 import { eraseRpcMethods, isStreamingMethod, type RpcResponse } from '../core'
 import { errorResponse } from '../responses/rpc-response'
@@ -85,6 +86,7 @@ export class RuntimeRpcState {
   protected readonly specializedLongPollCap: number
   protected readonly relayRevokeOutbox: RelayRevokeOutbox
   protected readonly pushUnregisterOutbox: PushUnregisterOutbox
+  protected readonly phoneCredentialOutbox: BotSharePhoneCredentialOutbox
   protected deviceRegistry: DeviceRegistry | null = null
   protected botShareDevices: BotShareDeviceStore | null = null
   protected e2eeKeypair: E2EEKeypair | null = null
@@ -185,6 +187,9 @@ export class RuntimeRpcState {
     this.specializedLongPollCap = Math.max(1, Math.floor(longPollCap * SPECIALIZED_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
     this.pushUnregisterOutbox = new PushUnregisterOutbox(userDataPath)
+    this.phoneCredentialOutbox = new BotSharePhoneCredentialOutbox(userDataPath, () =>
+      this.runtime.getConnectorCloud()
+    )
     this.authenticatedSourceRecorder = new AuthenticatedSourceRecorder(userDataPath)
     this.runtime.configureNotificationDismissalStore(userDataPath)
   }

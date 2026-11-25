@@ -1,8 +1,6 @@
 import type { RuntimeDeviceGrant } from '../callers/rpc-method-permission'
 import type { DeviceRegistry } from './pairing/device-registry'
 import type { BotShareDeviceStore } from './pairing/bot-share-device-store'
-import { mintBotShareOffer, type BotShareOfferAsk } from './pairing/bot-share-offer'
-import type { BotTeamShareOffer } from '../../../../shared/bots/bot-team-share-seal'
 import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TokenDeviceEntry } from './pairing/device-entry'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
@@ -73,28 +71,6 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
 
   getPushUnregisterOutbox(): PushUnregisterOutbox {
     return this.pushUnregisterOutbox
-  }
-
-  /** A teammate's device asked to reach a shared bot: see `mintBotShareOffer`. */
-  async mintBotShareOffer(ask: BotShareOfferAsk): Promise<BotTeamShareOffer> {
-    const store = this.botShareDevices
-    const relay = this.mobileRelayPairingProvider
-    const hostPublicKeyB64 = this.e2eeKeypair?.publicKeyB64
-    if (!store || !relay || !hostPublicKeyB64) {
-      throw new Error('share_offer_unavailable')
-    }
-    return await mintBotShareOffer(
-      {
-        store,
-        relay,
-        hostPublicKeyB64,
-        bindRelay: (deviceId, binding) => this.setRelayDeviceBinding(deviceId, binding),
-        revokeRelay: (binding) => {
-          this.queueRelayDeviceRevoke(binding)
-        }
-      },
-      ask
-    )
   }
 
   /** Binds a phone or share device to its Relay credential, in whichever store holds it. */

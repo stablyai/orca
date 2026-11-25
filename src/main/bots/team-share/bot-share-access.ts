@@ -2,6 +2,10 @@
 // teammate reads the shared bot without the list of whom else it is shared with.
 import type { Bot } from '../../../shared/bot-types'
 import type { BotShare } from '../../../shared/bots/bot-team-shares'
+import type {
+  BotShareProvisionedPhone,
+  BotShareProvisionPhoneParams
+} from '../../../shared/bots/bot-share-phone'
 import type { BotHostUpdates } from '../../../shared/rpc-contract/bots-params'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { BotShareOfferMint } from '../bot-team-share-deliveries'
@@ -15,6 +19,13 @@ export type BotShareDevices = {
   mintBotShareOffer: BotShareOfferMint
   /** One teammate's devices with `accountId`, else every device on the bot; false if not all ended. */
   revokeBotShareDevices: (botId: string, accountId?: string) => Promise<boolean>
+  /** A key for a teammate's phone, asked for by their computer's share device `parentDeviceId`. */
+  provisionBotSharePhone: (
+    parentDeviceId: string,
+    params: BotShareProvisionPhoneParams
+  ) => Promise<BotShareProvisionedPhone>
+  /** Ends a phone `parentDeviceId` asked for; false when it isn't one of that computer's. */
+  revokeBotSharePhone: (parentDeviceId: string, deviceId: string) => Promise<boolean>
   /** The key teammates seal held messages to: this host's pairing E2EE key, null without one. */
   getE2EEPublicKey: () => string | null
   deliverBotShareHeldMessage: (

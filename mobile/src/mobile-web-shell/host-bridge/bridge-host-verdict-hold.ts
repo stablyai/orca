@@ -26,6 +26,8 @@ export type BridgeVerdictHold = {
   holdReplay: (id: string, resend: () => void) => boolean
   // On the verdict opening: re-send init if what the page last heard changed, then send what waited.
   publish: (resendInit: () => void, dispatch: (message: DesktopBound) => void) => void
+  // Sends the waiting frames `bypassesVerdict` now names (it names more once it has loaded).
+  releaseBypassing: (dispatch: (message: DesktopBound) => void) => void
   // The document ended; parked frames never left the phone, so a disposal fails them definitely.
   settle: (notify: boolean) => void
   noteInit: () => void
@@ -35,7 +37,9 @@ export type BridgeVerdictHold = {
 // Frames wait rather than fail, as they would in the native client during a reconnect.
 export function createBridgeVerdictHold(
   readHostStatus: (() => HostStatusReply | null) | undefined,
-  sendError: (id: string, error: unknown) => void
+  sendError: (id: string, error: unknown) => void,
+  // A frame bound for another host than this connection's, which its verdict says nothing about.
+  bypassesVerdict: (message: DesktopBound) => boolean = () => false
 ): BridgeVerdictHold {
   // Absent only in harnesses that model no connection verdict.
   const open = (): boolean => readHostStatus === undefined || readHostStatus() !== null
@@ -65,7 +69,8 @@ export function createBridgeVerdictHold(
         !isDesktopBound(message) ||
         passes() ||
         message.method === 'status.get' ||
-        isPhoneOnlyNativeVerb(message.method)
+        isPhoneOnlyNativeVerb(message.method) ||
+        bypassesVerdict(message)
       ) {
         return true
       }
@@ -94,6 +99,11 @@ export function createBridgeVerdictHold(
         resends.forEach((resend) => resend())
         take().forEach(dispatch)
       }
+    },
+    releaseBypassing: (dispatch) => {
+      const leaving = parked.filter(bypassesVerdict)
+      parked = parked.filter((message) => !leaving.includes(message))
+      leaving.forEach(dispatch)
     },
     settle: (notify) => {
       replays.clear()

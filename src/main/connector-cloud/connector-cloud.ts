@@ -226,6 +226,9 @@ export class ConnectorCloud {
     this.options.onStatusChanged?.()
   }
 
+  /** Where Orca Cloud's connector routes are, for a device that calls them with its own credential. */
+  readonly origin = (): string => this.options.origin
+
   /** An authorized call as the signed-in account, polling or not; refused while signing out or quitting. */
   async call<TSchema extends z.ZodType>(
     path: string,
@@ -330,9 +333,7 @@ export class ConnectorCloud {
   }
 
   /** The signed-in Orca account's name, as a mirrored Slack post names its author. */
-  orcaAccountName(): string {
-    return connectorAccountName(this.options.userDataPath)
-  }
+  readonly orcaAccountName = (): string => connectorAccountName(this.options.userDataPath)
 
   /** Whether a rule's run can answer in its event's thread; an older cloud would bind none and drop the post. */
   takesThreadReplies(): boolean {

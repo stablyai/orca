@@ -1,3 +1,7 @@
+import {
+  SHARED_BOTS_PHONE_LIST_METHOD,
+  SHARED_BOTS_PHONE_PROVISION_METHOD
+} from '../../../../shared/bots/bot-share-phone'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 
 /** Phone methods the relaying Mac always answers itself, even when the call names a server. */
@@ -18,6 +22,9 @@ export const PAIRED_DESKTOP_METHODS = [
   'pairing.provisionRelay',
   'pairing.registerDeviceKey',
   'pairing.exchangeTicket',
+  // The agents shared with this computer's account, and the phone's own key to each.
+  SHARED_BOTS_PHONE_LIST_METHOD,
+  SHARED_BOTS_PHONE_PROVISION_METHOD,
   // The configured servers the desktop shows, and their workspace lists as it last fetched them.
   'mobileRelay.hosts.list',
   'mobileRelay.hosts.worktrees',

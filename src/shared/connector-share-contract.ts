@@ -71,6 +71,14 @@ export const ShareSendDelivery = z
 /** PUT `${bots}/<bot id>/shares/<share id>/offer`: the accept's answer, sealed to its sealKey. */
 export type ConnectorShareOfferRequest = { v: 1; devicePublicKey: string; sealedOffer: string }
 
+/** PUT `${bots}/<bot id>/shares/<share id>/devices/<device id>`: a teammate's phone's share
+ *  credential, by hash, before the host gives the phone its grant. DELETE the same path removes it. */
+export type ConnectorShareDeviceRequest = { v: 1; credentialHash: string }
+
+export function shareDevicePath(botId: string, shareId: string, deviceId: string): string {
+  return `${CONNECTOR_PATHS.bots}/${encodeURIComponent(botId)}/shares/${encodeURIComponent(shareId)}/devices/${encodeURIComponent(deviceId)}`
+}
+
 /** The share isn't the caller's, or is gone. */
 export const UNKNOWN_SHARE_REFUSAL = 'unknown_share'
 
@@ -118,6 +126,15 @@ export const ConnectorShareAcceptSchema = z.object({ status: z.literal('queued')
 
 export type ConnectorShareHoldRequest = { v: 1; clientMessageId: string; sealed: string }
 export const ConnectorShareHoldSchema = z.object({ status: z.enum(['held', 'duplicate']) })
+
+// GET `…/<share id>/messages` (a phone, `Bearer <share credential>`): that share's held states.
+export const ConnectorShareHeldSchema = z.object({
+  v: z.literal(1),
+  held: z
+    .array(z.object({ clientMessageId: Id, state: z.enum(SHARE_HELD_STATES) }))
+    .max(MAX_SHARE_HELD_STATES)
+})
+export type ConnectorShareHeld = z.infer<typeof ConnectorShareHeldSchema>
 
 export function sharePath(shareId: string, tail: 'accept' | 'messages'): string {
   return `${CONNECTOR_PATHS.shares}/${encodeURIComponent(shareId)}/${tail}`
