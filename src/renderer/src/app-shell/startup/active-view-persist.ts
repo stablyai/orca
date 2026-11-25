@@ -10,7 +10,9 @@ type ActiveViewUnloadState = {
 export function buildActiveViewUnloadPatch(
   state: ActiveViewUnloadState
 ): Partial<PersistedUIState> {
-  // Startup unload must not replace the saved view with defaults before hydration.
-  const activeView = isSavedTopLevelView(state.activeView) ? state.activeView : 'terminal'
-  return state.persistedUIReady ? { activeView } : {}
+  // Startup unload must not replace the saved view with defaults before hydration, and an unsaved
+  // view leaves the one saved before it.
+  return state.persistedUIReady && isSavedTopLevelView(state.activeView)
+    ? { activeView: state.activeView }
+    : {}
 }
