@@ -11,8 +11,10 @@ export function readRruleInterval(
     // Stored rules keep running every period, as they did before INTERVAL was read.
     return { interval: 1, ignoredPart: `INTERVAL=${raw}` }
   }
-  // Interval weeks start on Monday, so another week start would shift which weeks run.
+  // Interval weeks start on Monday, so another week start would shift which weeks run; stored rules then run every week.
   const wkst = entries.get('WKST')
   const shiftsWeeks = freq === 'WEEKLY' && interval > 1 && wkst !== undefined && wkst !== 'MO'
-  return { interval, ignoredPart: shiftsWeeks ? `WKST=${wkst}` : null }
+  return shiftsWeeks
+    ? { interval: 1, ignoredPart: `WKST=${wkst}` }
+    : { interval, ignoredPart: null }
 }
