@@ -4,6 +4,7 @@ import claude from './claude.json'
 import cline from './cline.json'
 import codex from './codex.json'
 import cursor from './cursor.json'
+import doubao from './doubao.json'
 import dsh from './dsh.json'
 import hermes from './hermes.json'
 import omp from './omp.json'
@@ -38,6 +39,7 @@ export const RAW_BUNDLED_AGENT_STATE_RULE_FILES: readonly unknown[] = [
   cline,
   codex,
   cursor,
+  doubao,
   dsh,
   hermes,
   omp,

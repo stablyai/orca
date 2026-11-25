@@ -32,6 +32,11 @@ export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
     agent: 'prime-agent',
     processName: 'prime-agent'
   },
+  {
+    pattern: /(?:^|\/)node_modules\/@bytedance\/doubao-cli\/scripts\/run\.cjs$/,
+    agent: 'doubao',
+    processName: 'doubao'
+  },
   // DSH re-execs generic lib/bin.js on Windows; package identity still requires later profile filtering for dsh web.
   {
     pattern: /(?:^|\/)node_modules\/@deepseek-ai\/dsh\/lib\/bin\.js$/,

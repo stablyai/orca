@@ -43,6 +43,7 @@ const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   devin: true,
   ante: true,
   trae: true,
+  doubao: true,
   muse: true,
   zcode: true,
   dsh: true,

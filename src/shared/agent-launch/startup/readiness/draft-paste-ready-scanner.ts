@@ -103,6 +103,15 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     marker: CLAUDE_COMPOSER_PROMPT,
     quietAnchor: DECSET_BRACKETED_PASTE
   },
+  'doubao-composer-ready': {
+    // The composer is already visible while sending is paused. Its model/effort/workspace footer arrives when ready.
+    markerAnchors: [{ enter: 'Ask Doubao to do anything', exit: DECRST_BRACKETED_PASTE }],
+    marker: new RegExp(
+      ` · ${SGR_RUN}[^·\x1b\r\n]{1,48}${SGR_RUN} · ${SGR_RUN}(?:[a-z]:|[~/])`,
+      'i'
+    ),
+    quietAnchor: null
+  },
   'zcode-composer-prompt': {
     markerAnchors: [
       { enter: DECSET_ALT_SCREEN, exit: DECRST_ALT_SCREEN },

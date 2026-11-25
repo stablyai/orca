@@ -10,6 +10,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   devin: 'Devin',
   ante: 'Ante',
   trae: 'Trae',
+  doubao: 'Doubao',
   muse: 'Muse',
   dsh: 'DeepSeek Harness',
   zcode: 'ZCode',

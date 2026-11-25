@@ -45,6 +45,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   ante: null,
   // Only TRAE CN ships the traecli alias Orca detects.
   trae: 'trae-cn',
+  doubao: null,
   muse: null,
   zcode: 'zcode',
   // DSH uses Cordis plugins rather than a skills --agent target.

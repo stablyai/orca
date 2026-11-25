@@ -15,6 +15,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'mimo-code',
   'ante',
   'trae',
+  'doubao',
   'muse',
   'dsh',
   'qoder',

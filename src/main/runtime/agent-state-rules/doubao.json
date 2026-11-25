@@ -1,0 +1,31 @@
+{
+  "id": "doubao",
+  "engineVersion": 1,
+  "profile": { "screenSource": "trusted" },
+  "anchors": [],
+  "rules": [
+    {
+      "id": "composer_ready",
+      "why": "The empty composer also appears during startup and generation. Wait for its workspace footer and the interrupt hint to clear.",
+      "priority": 500,
+      "when": {
+        "region": "screen",
+        "rows": [
+          { "regex": "^❯ +Ask Doubao to do anything$", "ignoreCase": true },
+          { "regex": "^─{8,}$" },
+          { "regex": " · [^·]{1,48} · " }
+        ],
+        "endsWithinBottom": 4,
+        "noneAbove": { "contains": "esc to interrupt" }
+      },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": true }
+    },
+    {
+      "id": "composer_unavailable",
+      "why": "A login, update or permission prompt cannot accept another assignment.",
+      "priority": 100,
+      "when": { "region": "screen" },
+      "answer": { "state": "hold" }
+    }
+  ]
+}

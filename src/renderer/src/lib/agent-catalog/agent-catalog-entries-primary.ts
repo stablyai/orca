@@ -81,6 +81,13 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://docs.trae.cn/cli_get-started-with-trae-cli'
     },
     {
+      id: 'doubao',
+      label: translate('auto.lib.agent.catalog.doubao_label', 'Doubao'),
+      cmd: 'doubao',
+      searchAliases: ['豆包', 'ByteDance'],
+      homepageUrl: 'https://www.npmjs.com/package/@bytedance/doubao-cli'
+    },
+    {
       id: 'muse',
       label: translate('auto.lib.agent.catalog.muse_label', 'Muse'),
       cmd: 'muse',

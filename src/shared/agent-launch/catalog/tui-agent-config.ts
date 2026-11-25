@@ -71,10 +71,13 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     submitRetryDelayMs: 1200
   },
   autohand: { detectCmd: 'autohand', promptInjectionMode: 'stdin-after-start' },
-  ante: {
-    detectCmd: 'ante',
-    // Why: `ante --prompt` is headless (runs once and exits), so launch the bare TUI and inject after startup.
-    promptInjectionMode: 'stdin-after-start'
+  // Ante and Doubao both exit after a command-line prompt, so dispatch into the running TUI.
+  ante: { detectCmd: 'ante', promptInjectionMode: 'stdin-after-start' },
+  doubao: {
+    detectCmd: 'doubao',
+    promptInjectionMode: 'stdin-after-start',
+    draftPasteReadySignal: 'doubao-composer-ready',
+    composerReadyCaptures: ['doubao-composer-ready']
   },
   trae: {
     // Use TRAE CN’s unique traecli alias; unrelated bytedance/trae-agent also installs trae-cli.

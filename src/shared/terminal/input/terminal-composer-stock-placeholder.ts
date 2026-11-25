@@ -1,6 +1,7 @@
 // Codex before 0.152 rotated these composer and side-chat placeholders.
 const STOCK_PLACEHOLDERS: ReadonlySet<string> = new Set([
   'Ask Codex to do anything',
+  'Ask Doubao to do anything',
   'Ask a follow-up question',
   'Explain this codebase',
   'Summarize recent commits',
