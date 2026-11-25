@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/orca-profiles/constants'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { ClaudeManagedAccount } from '../../shared/agent-accounts/managed-account-types'
+import { createEmptyRateLimitState } from '../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import { ClaudeAccountService } from './service'
 
 // Listing accounts must never reach the real Keychain.
@@ -60,7 +61,10 @@ it('tells chat checks only when a selection settles, and none while it is uncert
         settings = { ...settings, ...patch }
       }
     },
-    { evictInactiveClaudeCache: vi.fn(), refreshForClaudeAccountChange: vi.fn(async () => {}) },
+    {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => createEmptyRateLimitState())
+    },
     runtimeAuth
   )
   const told: (() => boolean)[] = []
