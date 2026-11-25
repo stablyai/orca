@@ -56,6 +56,8 @@ export function AutomationEditor(props: {
   draftKey: string
   onDraftChange: (draft: AutomationDraft) => void
   busy: boolean
+  /** Why the last save failed, from the page's catalog. */
+  saveError: string | null
   connected: boolean
   capabilities: readonly string[]
   present: PresentAutomationSheet
@@ -89,6 +91,7 @@ export function AutomationEditor(props: {
   const [error, setError] = useState<string | null>(null)
   const [inventoryLimit, setInventoryLimit] = useState(200)
   const [reload, setReload] = useState(0)
+  const [agentReload, setAgentReload] = useState(0)
   const disabled = props.busy || !props.connected || !targets
   const setup = targets?.setups.find((entry) => automationSetupKey(entry) === draft.setupId)
   const workspaces =
@@ -179,7 +182,7 @@ export function AutomationEditor(props: {
     return () => {
       active = false
     }
-  }, [props.client, props.connected, setup, draft.workspaceMode, draft.workspaceId])
+  }, [props.client, props.connected, setup, draft.workspaceMode, draft.workspaceId, agentReload])
 
   useEffect(() => {
     props.onDraftChange(draft)
@@ -231,7 +234,8 @@ export function AutomationEditor(props: {
     />
   )
   const noAgents = !agentsLoading && !agentError && setup && agents.length === 0 && !props.current
-  const note = error ?? agentError
+  // A failed save lands in the page's notes, which the sheet covers.
+  const note = error ?? agentError ?? props.saveError
   const main = (
     <View>
       <SheetHeader
@@ -261,13 +265,17 @@ export function AutomationEditor(props: {
       />
       <View style={[styles.content, section && styles.sectionOnly]}>
         {note ? <SettingsNote error>{note}</SettingsNote> : null}
-        {error && !targets ? (
+        {(error && !targets) || agentError ? (
           <ListGroup>
             <ListRow
               title={t('automations.mobile.refresh', 'Refresh')}
               accent
               disabled={props.busy || !props.connected}
-              onPress={() => setReload((value) => value + 1)}
+              onPress={() =>
+                error && !targets
+                  ? setReload((value) => value + 1)
+                  : setAgentReload((value) => value + 1)
+              }
             />
           </ListGroup>
         ) : null}
@@ -373,9 +381,9 @@ export function AutomationEditor(props: {
   return (
     <BottomDrawer
       visible={props.visible}
-      // Unsaved edits stay until Cancel asks about them; a swipe would drop them unasked.
-      // A swipe keeps unsaved edits in the draft row; Cancel is the way to drop them.
-      dismissible={!props.busy}
+      // With unsaved edits only Cancel closes it, so a create the host may have made can't be
+      // reopened as a fresh attempt.
+      dismissible={!props.busy && !leave.changed}
       onClose={props.onClose}
       onAfterClose={() => {
         pager.forget()
