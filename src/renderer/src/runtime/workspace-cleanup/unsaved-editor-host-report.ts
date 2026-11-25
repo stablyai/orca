@@ -1,4 +1,4 @@
-// Tell each paired host which of its workspaces hold this window's unsaved edits, so its cleanup keeps them.
+// Tell each host, this app's own included, which of its workspaces hold this window's unsaved edits, so its cleanup keeps them.
 import { useEffect } from 'react'
 import { errorMessage } from '../../../../shared/errors/error-message'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
@@ -12,6 +12,8 @@ import {
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import { onServerControlConnected } from '../workspace-layout/server/server-layout-view-report'
 import { subscribeRuntimeHostContactRegained } from '../hosts/connections/runtime-host-contact-regained'
@@ -23,21 +25,38 @@ import {
 
 type UnsavedReportState = WorktreeOperationRouteState & Pick<AppState, 'openFiles' | 'editorDrafts'>
 
-function unsavedWorktreeIdsByEnvironment(state: UnsavedReportState): Map<string, string[]> {
-  const byEnvironment = new Map<string, Set<string>>()
+// This app's runtime; environment ids are UUIDs, so it can't collide with one.
+const LOCAL_HOST = '\0local'
+
+function hostTarget(host: string): RuntimeClientTarget {
+  return host === LOCAL_HOST ? { kind: 'local' } : { kind: 'environment', environmentId: host }
+}
+
+function unsavedWorktreeIdsByHost(
+  state: UnsavedReportState,
+  hasLocalRuntime: boolean
+): Map<string, string[]> {
+  const byHost = new Map<string, Set<string>>()
   for (const file of state.openFiles) {
     if (!file.isDirty && state.editorDrafts[file.id] === undefined) {
       continue
     }
     // Restored tabs may lack the owner stamp; resolve it from the workspace like file operations do.
     const target = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
-    if (target?.kind === 'environment') {
-      const ids = byEnvironment.get(target.environmentId) ?? new Set<string>()
+    // The session keeps only edit-mode drafts, after a save delay; this app's cleanup sees diff buffers and fresh edits only here.
+    const host =
+      target?.kind === 'environment'
+        ? target.environmentId
+        : target?.kind === 'local' && hasLocalRuntime
+          ? LOCAL_HOST
+          : null
+    if (host !== null) {
+      const ids = byHost.get(host) ?? new Set<string>()
       ids.add(file.worktreeId)
-      byEnvironment.set(target.environmentId, ids)
+      byHost.set(host, ids)
     }
   }
-  return new Map([...byEnvironment].map(([environmentId, ids]) => [environmentId, [...ids].sort()]))
+  return new Map([...byHost].map(([host, ids]) => [host, [...ids].sort()]))
 }
 
 /** Every field the report and file-owner routing read; the mapped type fails to compile until a new one is listed. */
@@ -81,8 +100,10 @@ function windowReporterId(): string {
 }
 
 /** Reports changes per host, and again whenever contact with it is regained: a host drops a closed socket's report. */
-export function installRemoteUnsavedEditorReport(): () => void {
+export function installUnsavedEditorHostReport(): () => void {
   const reporterId = windowReporterId()
+  // A web client's local target is its paired host, which already gets this window's report.
+  const hasLocalRuntime = !isWebClientLocation()
   const sent = new Map<string, string>()
   const unsupported = new Set<string>()
   const stopWatches = new Map<string, () => void>()
@@ -95,24 +116,23 @@ export function installRemoteUnsavedEditorReport(): () => void {
     const state = useAppStore.getState()
     const inputs = readReportInputs.map((read) => read(state))
     if (reportInputs?.every((value, index) => value === inputs[index]) !== true) {
-      reports = unsavedWorktreeIdsByEnvironment(state)
+      reports = unsavedWorktreeIdsByHost(state, hasLocalRuntime)
       reportInputs = inputs
     }
     return reports
   }
 
-  const send = (environmentId: string, worktreeIds: string[]): void => {
-    sent.set(environmentId, worktreeIds.join('\n'))
-    inFlight.add(environmentId)
-    callRuntimeRpc(
-      { kind: 'environment', environmentId },
-      'workspaceCleanup.reportUnsavedEditors',
-      { worktreeIds, reporterId }
-    )
+  const send = (host: string, worktreeIds: string[]): void => {
+    sent.set(host, worktreeIds.join('\n'))
+    inFlight.add(host)
+    callRuntimeRpc(hostTarget(host), 'workspaceCleanup.reportUnsavedEditors', {
+      worktreeIds,
+      reporterId
+    })
       .catch((error: unknown) => {
         if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
           // A host from before automatic cleanup removes nothing on its own.
-          unsupported.add(environmentId)
+          unsupported.add(host)
           return
         }
         // Kept as sent so typing does not retry a host that is down; regaining contact sends it again.
@@ -122,31 +142,32 @@ export function installRemoteUnsavedEditorReport(): () => void {
         )
       })
       .finally(() => {
-        inFlight.delete(environmentId)
+        inFlight.delete(host)
         // Edits made while it was in flight go out now, as the latest list only.
-        syncHosts([environmentId])
+        syncHosts([host])
       })
   }
 
-  const syncHosts = (environmentIds: Iterable<string>): void => {
+  const syncHosts = (hosts: Iterable<string>): void => {
     const current = currentReports()
-    for (const environmentId of environmentIds) {
-      const worktreeIds = current.get(environmentId) ?? []
+    for (const host of hosts) {
+      const worktreeIds = current.get(host) ?? []
       if (
-        inFlight.has(environmentId) ||
-        unsupported.has(environmentId) ||
-        sent.get(environmentId) === worktreeIds.join('\n')
+        inFlight.has(host) ||
+        unsupported.has(host) ||
+        sent.get(host) === worktreeIds.join('\n')
       ) {
         continue
       }
-      watch(environmentId)
-      send(environmentId, worktreeIds)
+      watch(host)
+      send(host, worktreeIds)
     }
   }
   const sync = (): void => syncHosts(new Set([...sent.keys(), ...currentReports().keys()]))
 
   const watch = (environmentId: string): void => {
-    if (stopWatches.has(environmentId)) {
+    // The local IPC route only drops a report with the document, whose replacement reports afresh.
+    if (environmentId === LOCAL_HOST || stopWatches.has(environmentId)) {
       return
     }
     const resend = (): void => {
@@ -213,6 +234,6 @@ export function installRemoteUnsavedEditorReport(): () => void {
   }
 }
 
-export function useRemoteUnsavedEditorReport(): void {
-  useEffect(() => installRemoteUnsavedEditorReport(), [])
+export function useUnsavedEditorHostReport(): void {
+  useEffect(() => installUnsavedEditorHostReport(), [])
 }
