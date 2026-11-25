@@ -4,15 +4,15 @@ import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
   Check,
-  ChevronDown,
-  Copy,
   Folder,
   FolderPlus,
-  MessageSquareText,
-  X
-} from 'lucide-react-native'
+  X,
+  ChevronDown,
+  Copy,
+  MessageSquareText
+} from '../components/icons/app-icons'
+import { LIST_LEADING_INSET, ListRow, LIST_ROW_PADDING } from '../components/list/ListGroup'
 import { DisclosureChevron } from '../components/list/DisclosureChevron'
-import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListRow } from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
 import { colors, radii, spacing } from '../theme/mobile-theme'

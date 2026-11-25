@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronRight, FolderTree, Pin } from 'lucide-react-native'
+import { ChevronRight, FolderTree, Pin } from '../../components/icons/app-icons'
 import { DisclosureChevron } from '../../components/list/DisclosureChevron'
 import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
 import { WORKTREE_ROW_LAYOUT } from '../../worktree/row-presentation/worktree-list-row-layout'

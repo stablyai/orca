@@ -1,6 +1,6 @@
 // The `@` list's bot rows, as the desktop's: a bot with "Chats ›", and one level down "‹ Bot" over its chats.
 import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, RotateCcw } from '../../../../components/icons/app-icons'
 import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
 import { ChatBadgedIcon } from '../../../../bots/MobileBotChatLeading'
 import { useNow } from '../../../../hooks/use-now'

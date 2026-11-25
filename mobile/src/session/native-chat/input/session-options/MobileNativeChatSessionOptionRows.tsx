@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ShieldAlert, type LucideIcon } from 'lucide-react-native'
+import { ShieldAlert, type AppIcon } from '../../../../components/icons/app-icons'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
@@ -43,9 +43,9 @@ export function ModelPill({
   primary: string
   secondary: string | null
   warning: boolean
-  icon?: LucideIcon
+  icon?: AppIcon
   /** Shown before the label, unlike `icon`, which replaces it. */
-  leading?: LucideIcon
+  leading?: AppIcon
   accessibleName: string
   disabled: boolean
   onPress: () => void

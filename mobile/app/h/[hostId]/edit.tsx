@@ -12,11 +12,10 @@ import {
   type TextInputProps
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, ChevronLeft } from 'lucide-react-native'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { Check } from '../../../src/components/icons/app-icons'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
-import { NavBar } from '../../../src/components/nav-bar/NavBar'
-import { NavBarButton } from '../../../src/components/nav-bar/NavBarButton'
+import { NATIVE_SCREEN_HEADER, ScreenHeader } from '../../../src/components/nav-bar/ScreenHeader'
 import { themedStyleSheet } from '../../../src/theme/themed-styles'
 import { useMobileColorScheme } from '../../../src/theme/use-mobile-color-scheme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/host-catalog/host-store'
@@ -31,7 +30,11 @@ import { removeHostAndCloseClient } from '../../../src/host-catalog/host-removal
 import { useHostDisplay } from '../../../src/host-descriptors/use-host-display'
 import { leaveHostRoute } from '../../../src/host-route-exit'
 import { ConfirmModal } from '../../../src/components/sheets/ConfirmModal'
-import { LIST_ROW_PADDING, ListRow } from '../../../src/components/list/ListGroup'
+import {
+  GroupedListScreen,
+  LIST_ROW_PADDING,
+  ListRow
+} from '../../../src/components/list/ListGroup'
 import type { HostProfile } from '../../../src/host-catalog/host-profile'
 import { hostOs } from '../../../src/platform/host-os'
 import { translate } from '../../../src/i18n/mobile-i18n'
@@ -69,6 +72,9 @@ export default function EditHostScreen() {
     routeRevision.current += 1
     router.back()
   }
+  // Native Back pops without leave(), so a save that finishes after a blur must not pop again.
+  const blurs = useRef(0)
+  useFocusEffect(useCallback(() => () => void (blurs.current += 1), []))
 
   const load = useCallback(
     async (revision: number) => {
@@ -166,6 +172,7 @@ export default function EditHostScreen() {
     }
 
     const revision = routeRevision.current
+    const blursAtStart = blurs.current
     savingRef.current = true
     setSaving(true)
     setSaveError(null)
@@ -176,12 +183,13 @@ export default function EditHostScreen() {
         ...(nextEndpoint !== undefined ? { endpoint: nextEndpoint } : {})
       })
     } catch (err) {
+      // Always unblock Save: a screen pushed over this one mid-save comes back to it.
+      savingRef.current = false
+      setSaving(false)
       if (revision === routeRevision.current) {
         setSaveError(
           err instanceof Error ? err.message : t('host.edit.saveFailed', 'Failed to save host.')
         )
-        savingRef.current = false
-        setSaving(false)
       }
       return
     }
@@ -194,9 +202,9 @@ export default function EditHostScreen() {
       // best-effort re-prime; persisted data is unaffected
     }
 
-    if (revision === routeRevision.current) {
-      savingRef.current = false
-      setSaving(false)
+    savingRef.current = false
+    setSaving(false)
+    if (revision === routeRevision.current && blursAtStart === blurs.current) {
       leave()
     }
 
@@ -225,24 +233,24 @@ export default function EditHostScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            onPress={leave}
-            accessibilityLabel={t('common.back', 'Back')}
-          />
-        }
+    <View
+      style={[
+        settingsScreenStyles.groupedContainer,
+        { paddingTop: NATIVE_SCREEN_HEADER ? 0 : insets.top }
+      ]}
+    >
+      <ScreenHeader
         title={t('host.edit.title', 'Edit host')}
-        trailing={
-          <NavBarButton
-            icon={Check}
-            onPress={() => void handleSave()}
-            disabled={!canSave}
-            accessibilityLabel={t('host.edit.saveHost', 'Save host')}
-          />
-        }
+        onBack={leave}
+        actions={[
+          {
+            id: 'save',
+            icon: Check,
+            label: t('host.edit.saveHost', 'Save host'),
+            onPress: () => void handleSave(),
+            disabled: !canSave
+          }
+        ]}
       />
 
       {loadError ? (
@@ -265,62 +273,65 @@ export default function EditHostScreen() {
           behavior={hostOs() === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
+            contentInsetAdjustmentBehavior="automatic"
             contentContainerStyle={[
               settingsScreenStyles.scrollContent,
               { paddingBottom: insets.bottom + spacing.xl }
             ]}
             keyboardShouldPersistTaps="handled"
           >
-            <SettingsSection first footer={fieldsNote}>
-              <HostFieldRow
-                key="name"
-                label={t('host.edit.name', 'Name')}
-                value={name}
-                onChangeText={(value) => {
-                  setName(value)
-                  setSaveError(null)
-                }}
-                // An empty name falls back to the one the host reports, which the placeholder shows.
-                placeholder={
-                  host.lastKnownMachineName ?? t('host.edit.hostNamePlaceholder', 'Host name')
-                }
-                autoCapitalize="words"
-                autoCorrect={false}
-                returnKeyType="next"
-              />
-              <HostFieldRow
-                key="address"
-                label={t('host.edit.address', 'Address')}
-                value={address}
-                onChangeText={(value) => {
-                  setAddress(value)
-                  setSaveError(null)
-                }}
-                placeholder="192.168.1.10:6768"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="off"
-                keyboardType="url"
-                returnKeyType="done"
-                onSubmitEditing={() => {
-                  if (canSave) {
-                    void handleSave()
+            <GroupedListScreen>
+              <SettingsSection first footer={fieldsNote}>
+                <HostFieldRow
+                  key="name"
+                  label={t('host.edit.name', 'Name')}
+                  value={name}
+                  onChangeText={(value) => {
+                    setName(value)
+                    setSaveError(null)
+                  }}
+                  // An empty name falls back to the one the host reports, which the placeholder shows.
+                  placeholder={
+                    host.lastKnownMachineName ?? t('host.edit.hostNamePlaceholder', 'Host name')
                   }
-                }}
-              />
-            </SettingsSection>
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                />
+                <HostFieldRow
+                  key="address"
+                  label={t('host.edit.address', 'Address')}
+                  value={address}
+                  onChangeText={(value) => {
+                    setAddress(value)
+                    setSaveError(null)
+                  }}
+                  placeholder="192.168.1.10:6768"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  keyboardType="url"
+                  returnKeyType="done"
+                  onSubmitEditing={() => {
+                    if (canSave) {
+                      void handleSave()
+                    }
+                  }}
+                />
+              </SettingsSection>
 
-            <HostOrcaVersionSection />
+              <HostOrcaVersionSection />
 
-            <SettingsSection>
-              <ListRow
-                key="remove"
-                title={t('host.edit.removeHost', 'Remove host')}
-                destructive
-                disabled={saving}
-                onPress={() => setConfirmRemove(true)}
-              />
-            </SettingsSection>
+              <SettingsSection>
+                <ListRow
+                  key="remove"
+                  title={t('host.edit.removeHost', 'Remove host')}
+                  destructive
+                  disabled={saving}
+                  onPress={() => setConfirmRemove(true)}
+                />
+              </SettingsSection>
+            </GroupedListScreen>
           </ScrollView>
         </KeyboardAvoidingView>
       )}
@@ -364,10 +375,6 @@ function HostFieldRow({ label, ...inputProps }: HostFieldRowProps) {
 }
 
 const styles = themedStyleSheet(() => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
   flex: {
     flex: 1
   },

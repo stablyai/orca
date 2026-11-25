@@ -1,11 +1,4 @@
-import {
-  Bot,
-  CalendarClock,
-  Gauge,
-  LayoutList,
-  SquareTerminal,
-  type LucideIcon
-} from 'lucide-react-native'
+import type { AppIcon } from '../../components/icons/app-icons'
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, {
@@ -19,17 +12,7 @@ import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduce
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
-
-const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
-  feed: LayoutList,
-  bots: Bot,
-  agents: SquareTerminal,
-  usage: Gauge,
-  automations: CalendarClock
-}
-
-export const HOME_TAB_BAR_HEIGHT = 52
+import { HOME_EASE_OUT, HOME_TAB_ICONS, homeTabLabels, type HomeTabId } from './home-tabs'
 
 export function MobileHomeTabBar(props: {
   tabs: readonly HomeTabId[]
@@ -43,13 +26,7 @@ export function MobileHomeTabBar(props: {
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const labels: Record<HomeTabId, string> = {
-    feed: t('home.tabs.feed', 'Feed'),
-    bots: t('home.tabs.bots', 'Bots'),
-    agents: t('home.tabs.agents', 'Agents'),
-    usage: t('home.tabs.usage', 'Usage'),
-    automations: t('home.tabs.automations', 'Automations')
-  }
+  const labels = homeTabLabels(t)
   const badges: Partial<Record<HomeTabId, number>> = {
     agents: props.agentsBadge,
     bots: props.botsBadge
@@ -64,7 +41,7 @@ export function MobileHomeTabBar(props: {
       {props.tabs.map((tab) => (
         <TabButton
           key={tab}
-          icon={TAB_ICONS[tab]}
+          icon={HOME_TAB_ICONS[tab]}
           label={labels[tab]}
           selected={tab === props.active}
           badge={badges[tab] ?? 0}
@@ -76,7 +53,7 @@ export function MobileHomeTabBar(props: {
 }
 
 function TabButton(props: {
-  icon: LucideIcon
+  icon: AppIcon
   label: string
   selected: boolean
   badge: number

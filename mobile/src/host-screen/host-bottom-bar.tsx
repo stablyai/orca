@@ -1,4 +1,4 @@
-import { Plus, SlidersHorizontal } from 'lucide-react-native'
+import { Plus, SlidersHorizontal } from '../components/icons/app-icons'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

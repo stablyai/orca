@@ -2,6 +2,7 @@
 // swipe, so no row carries loose text buttons.
 import { useRef, useState, type ReactNode } from 'react'
 import { Image, View, type HostInstance } from 'react-native'
+import type { LucideIcon } from 'lucide-react-native'
 import {
   Bot,
   Eye,
@@ -10,9 +11,8 @@ import {
   UserMinus,
   UserPlus,
   UserRound,
-  X,
-  type LucideIcon
-} from 'lucide-react-native'
+  X
+} from '../components/icons/app-icons'
 import type { BotMember } from '../../../src/shared/bot-types'
 import { botMemberAvatarUrl } from '../../../src/shared/bots/bot-member-avatar-url'
 import { connectorAskerInitials } from '../../../src/shared/connectors/connector-message-asker-view'

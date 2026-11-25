@@ -2,7 +2,7 @@
 // numbered notes, the line that points to the computer, and the answer call.
 import { useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Laptop } from 'lucide-react-native'
+import { Laptop } from '../../../../components/icons/app-icons'
 import type { GoogleSetupBlocker } from '../../../../../../src/shared/google/google-setup-blocker'
 import type {
   GoogleSetupCard,

@@ -1,4 +1,4 @@
-import { ArrowUpFromLine, X } from 'lucide-react-native'
+import { ArrowUpFromLine, X } from '../components/icons/app-icons'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../theme/mobile-theme'

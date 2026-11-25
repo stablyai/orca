@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
-import { View, Text, Pressable } from 'react-native'
+import { View, Text } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Copy, Check, Send } from 'lucide-react-native'
-import { colors, pressedStyle, spacing } from '../theme/mobile-theme'
+import { Activity, Copy, Check, Send } from '../components/icons/app-icons'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { ConnectionLog } from '../components/host-connection/ConnectionLog'
 import { connectionDiagnosticsScreenStyles as styles } from './connection-diagnostics-screen-styles'
@@ -11,7 +11,19 @@ import type { ConnectionState } from '../transport/connection/connection-state'
 import type { ConnectionDiagnosis } from './connection-diagnostics-analysis'
 import type { DiagnosticsSubmissionState } from './connection-diagnostics-screen-data'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { SettingsNavBar, settingsScreenStyles } from '../settings/settings-screen-frame'
+import { NATIVE_SCREEN_HEADER } from '../components/nav-bar/ScreenHeader'
+import {
+  SettingsNavBar,
+  SettingsNote,
+  settingsScreenStyles
+} from '../settings/settings-screen-frame'
+import {
+  GroupedListScreen,
+  LIST_LEADING_INSET,
+  ListGroup,
+  ListRow,
+  SectionHeader
+} from '../components/list/ListGroup'
 
 export function ConnectionDiagnosticsView({
   hostPicker,
@@ -52,7 +64,12 @@ export function ConnectionDiagnosticsView({
     'auth-failed': t('diagnostics.connectionDiagnosticsView.authFailed', 'auth-failed')
   }
   return (
-    <View style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
+    <View
+      style={[
+        settingsScreenStyles.groupedContainer,
+        { paddingTop: NATIVE_SCREEN_HEADER ? 0 : insets.top }
+      ]}
+    >
       <SettingsNavBar
         title={t('diagnostics.connectionDiagnosticsView.title', 'Network diagnostics')}
         onBack={onBack}
@@ -65,101 +82,122 @@ export function ConnectionDiagnosticsView({
           { paddingBottom: insets.bottom + spacing.xl }
         ]}
       >
-        {hostPicker}
-        {hasHost || entries.length > 0 ? (
-          <>
-            <View style={styles.statusRow}>
-              <Text style={styles.statusText}>
-                {!hasHost
-                  ? t('diagnostics.connectionDiagnosticsView.noHosts', 'No paired hosts.')
-                  : reconnectAttempts > 0
-                    ? t(
-                        'diagnostics.connectionDiagnosticsView.stateWithAttempt',
-                        '{{state}} · attempt {{attempts}}',
-                        { state: stateLabels[state], attempts: reconnectAttempts }
-                      )
-                    : stateLabels[state]}
-              </Text>
-              <Pressable
-                style={({ pressed }) => [styles.copyButton, pressed && pressedStyle]}
-                onPress={() => void copyDiagnostics()}
-              >
-                {copied ? (
-                  <Check size={14} color={colors.statusGreen} />
-                ) : (
-                  <Copy size={14} color={colors.textSecondary} />
-                )}
-                <Text style={styles.copyButtonText}>
-                  {copied
-                    ? t('common.copied', 'Copied')
-                    : t('diagnostics.connectionDiagnosticsView.copyReport', 'Copy report')}
-                </Text>
-              </Pressable>
-            </View>
-            {diagnosis && (
-              <View style={styles.diagnosisCard}>
-                <Text style={styles.diagnosisHeading}>
-                  {t(
-                    'diagnostics.connectionDiagnosticsView.diagnosisHeading',
-                    'What this suggests'
-                  )}
-                </Text>
-                <Text style={styles.diagnosisText}>{diagnosis.likelyCause}</Text>
-                <Text style={styles.diagnosisNext}>{diagnosis.nextStep}</Text>
-                {diagnosis.reportability === 'orca-relay' && (
-                  <>
-                    <Text style={styles.privacyHint}>
+        <GroupedListScreen>
+          {hostPicker}
+          {hasHost || entries.length > 0 ? (
+            <>
+              <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
+                <ListRow
+                  key="state"
+                  title={
+                    !hasHost
+                      ? t('diagnostics.connectionDiagnosticsView.noHosts', 'No paired hosts.')
+                      : reconnectAttempts > 0
+                        ? t(
+                            'diagnostics.connectionDiagnosticsView.stateWithAttempt',
+                            '{{state}} · attempt {{attempts}}',
+                            { state: stateLabels[state], attempts: reconnectAttempts }
+                          )
+                        : stateLabels[state]
+                  }
+                  leading={<Activity size={18} color={colors.textSecondary} />}
+                />
+                <ListRow
+                  key="copy"
+                  title={
+                    copied
+                      ? t('common.copied', 'Copied')
+                      : t('diagnostics.connectionDiagnosticsView.copyReport', 'Copy report')
+                  }
+                  leading={
+                    copied ? (
+                      <Check size={18} color={colors.statusGreen} />
+                    ) : (
+                      <Copy size={18} color={colors.textSecondary} />
+                    )
+                  }
+                  onPress={() => void copyDiagnostics()}
+                />
+              </ListGroup>
+              {diagnosis && (
+                <View style={styles.group}>
+                  <SectionHeader
+                    title={t(
+                      'diagnostics.connectionDiagnosticsView.diagnosisHeading',
+                      'What this suggests'
+                    )}
+                    first
+                  />
+                  <ListGroup separatorInset={LIST_LEADING_INSET}>
+                    <ListRow
+                      key="diagnosis"
+                      title={diagnosis.likelyCause}
+                      wrapTitle
+                      subtitle={diagnosis.nextStep}
+                      subtitleLines={0}
+                    />
+                    {diagnosis.reportability === 'orca-relay' ? (
+                      <ListRow
+                        key="send"
+                        title={
+                          submissionState === 'sending'
+                            ? t('diagnostics.connectionDiagnosticsView.sending', 'Sending…')
+                            : submissionState === 'sent'
+                              ? t('diagnostics.connectionDiagnosticsView.sent', 'Diagnostics sent')
+                              : submissionState === 'failed'
+                                ? t(
+                                    'diagnostics.connectionDiagnosticsView.retrySending',
+                                    'Retry sending'
+                                  )
+                                : t(
+                                    'diagnostics.connectionDiagnosticsView.sendDiagnostics',
+                                    'Send diagnostics'
+                                  )
+                        }
+                        leading={
+                          submissionState === 'sent' ? (
+                            <Check size={18} color={colors.statusGreen} />
+                          ) : (
+                            <Send size={18} color={colors.textSecondary} />
+                          )
+                        }
+                        busy={submissionState === 'sending'}
+                        onPress={() => void sendDiagnostics()}
+                      />
+                    ) : null}
+                  </ListGroup>
+                  {diagnosis.reportability === 'orca-relay' ? (
+                    <SettingsNote>
                       {t(
                         'diagnostics.connectionDiagnosticsView.privacyHint',
                         'Sends a size-limited redacted report including host name, endpoint, versions, connection state, and events—never terminal contents or credentials.'
                       )}
-                    </Text>
-                    <Pressable
-                      style={({ pressed }) => [styles.sendButton, pressed && pressedStyle]}
-                      onPress={() => void sendDiagnostics()}
-                      disabled={submissionState === 'sending'}
-                    >
-                      {submissionState === 'sent' ? (
-                        <Check size={14} color={colors.statusGreen} />
-                      ) : (
-                        <Send size={14} color={colors.textPrimary} />
-                      )}
-                      <Text style={styles.sendButtonText}>
-                        {submissionState === 'sending'
-                          ? t('diagnostics.connectionDiagnosticsView.sending', 'Sending…')
-                          : submissionState === 'sent'
-                            ? t('diagnostics.connectionDiagnosticsView.sent', 'Diagnostics sent')
-                            : submissionState === 'failed'
-                              ? t(
-                                  'diagnostics.connectionDiagnosticsView.retrySending',
-                                  'Retry sending'
-                                )
-                              : t(
-                                  'diagnostics.connectionDiagnosticsView.sendDiagnostics',
-                                  'Send diagnostics'
-                                )}
-                      </Text>
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            )}
-            {entries.length > 0 ? (
-              <ConnectionLog entries={[...entries]} title={hostName} fillAvailableHeight />
-            ) : (
-              <Text style={styles.emptyText}>
-                {t(
-                  'diagnostics.connectionDiagnosticsView.noEvents',
-                  'No connection events yet. Events appear as the app dials this host.'
-                )}
-              </Text>
-            )}
-          </>
-        ) : (
-          <Text style={styles.emptyText}>
-            {t('diagnostics.connectionDiagnosticsView.noHosts', 'No paired hosts.')}
-          </Text>
-        )}
+                    </SettingsNote>
+                  ) : null}
+                </View>
+              )}
+              {entries.length > 0 ? (
+                <ConnectionLog
+                  entries={[...entries]}
+                  title={hostName}
+                  fillAvailableHeight
+                  style={styles.log}
+                />
+              ) : (
+                <Text style={styles.emptyText}>
+                  {t(
+                    'diagnostics.connectionDiagnosticsView.noEvents',
+                    'No connection events yet. Events appear as the app dials this host.'
+                  )}
+                </Text>
+              )}
+            </>
+          ) : (
+            <Text style={styles.emptyText}>
+              {t('diagnostics.connectionDiagnosticsView.noHosts', 'No paired hosts.')}
+            </Text>
+          )}
+        </GroupedListScreen>
       </View>
     </View>
   )

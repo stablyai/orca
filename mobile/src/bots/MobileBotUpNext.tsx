@@ -1,7 +1,7 @@
 import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight } from '../components/icons/app-icons'
 import {
   SUGGESTION_LIMITS,
   suggestionLinkLabel,

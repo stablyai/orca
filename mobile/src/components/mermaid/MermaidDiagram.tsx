@@ -1,6 +1,6 @@
 import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View, type HostInstance } from 'react-native'
-import { Maximize2 } from 'lucide-react-native'
+import { Maximize2 } from '../icons/app-icons'
 import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { themedStyleSheet } from '../../theme/themed-styles'

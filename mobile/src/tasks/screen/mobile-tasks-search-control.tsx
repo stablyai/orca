@@ -1,5 +1,5 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { Plus } from 'lucide-react-native'
+import { Plus } from '../../components/icons/app-icons'
 import { getTaskPresetQuery } from '../../../../src/shared/work-items/task-preset-query'
 import { scopeGitHubTaskSearch } from '../../../../src/shared/work-items/task-github-search'
 import { translate } from '../../i18n/mobile-i18n'

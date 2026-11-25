@@ -1,10 +1,10 @@
-import { Circle, CircleCheck, CircleDot, type LucideIcon } from 'lucide-react-native'
+import { Circle, CircleCheck, CircleDot, type AppIcon } from '../../components/icons/app-icons'
 import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
 import { prStateIcon } from '../../source-control/review/status/pr-state-token'
 import { colors } from '../../theme/mobile-theme'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 
-export type TaskItemStateGlyph = { icon: LucideIcon; color: string }
+export type TaskItemStateGlyph = { icon: AppIcon; color: string }
 
 // The shape says issue or review and its state, coloured as desktop's task page and review icons.
 function reviewGlyph(state: string): TaskItemStateGlyph {

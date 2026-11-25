@@ -1,5 +1,10 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { GitMerge, GitPullRequest, Sparkles, type LucideIcon } from 'lucide-react-native'
+import {
+  GitMerge,
+  GitPullRequest,
+  Sparkles,
+  type AppIcon
+} from '../../../../components/icons/app-icons'
 import { colors, feedback, pressedStyle } from '../../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -202,7 +207,7 @@ function ActionButton({
   grow = false
 }: {
   tone: Tone
-  icon?: LucideIcon
+  icon?: AppIcon
   label: string
   onPress?: () => void
   disabled?: boolean

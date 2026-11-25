@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Text, View } from 'react-native'
-import { GitMerge } from 'lucide-react-native'
+import { GitMerge } from '../../../components/icons/app-icons'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../i18n/mobile-i18n'

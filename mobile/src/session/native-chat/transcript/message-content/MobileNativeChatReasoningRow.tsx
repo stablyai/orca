@@ -3,7 +3,7 @@ import { mobileNativeChatMemberId } from '../viewport/mobile-native-chat-reading
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'
-import { Brain, ChevronRight } from 'lucide-react-native'
+import { Brain, ChevronRight } from '../../../../components/icons/app-icons'
 import {
   nativeChatReasoningDisclosureKey,
   nativeChatReasoningHeadline,

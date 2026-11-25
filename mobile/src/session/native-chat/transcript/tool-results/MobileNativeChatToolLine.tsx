@@ -1,7 +1,7 @@
 import { useContext, useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../../../../components/icons/app-icons'
 import {
   diffFromText,
   diffFromToolCall

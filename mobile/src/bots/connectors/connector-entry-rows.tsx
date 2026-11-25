@@ -2,7 +2,7 @@
 // status the owner acts on, as the phone's reads give it.
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { Fragment, type ReactNode } from 'react'
-import { Blocks } from 'lucide-react-native'
+import { Blocks } from '../../components/icons/app-icons'
 import { botLinearWorkspaces, botMembersFrom, botSlackApps } from '../../../../src/shared/bot-types'
 import {
   botConnectorEntries,

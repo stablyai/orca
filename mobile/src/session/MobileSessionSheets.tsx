@@ -2,7 +2,7 @@ import { Platform } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { useClipboardWriter } from '../platform/clipboard/clipboard'
-import { Copy, FileText, RefreshCw } from 'lucide-react-native'
+import { Copy, FileText, RefreshCw } from '../components/icons/app-icons'
 import { MobileSessionTerminalLayoutSheet } from '../terminal/session/pane-layout/MobileSessionTerminalLayoutSheet'
 import { QuickCommandsSheet } from '../terminal/quick-commands/QuickCommandsSheet'
 import { triggerSuccess, triggerError } from '../platform/haptics/haptics'
@@ -325,11 +325,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         // The session page reports 'web', where RN Web maps 'url' to the URL keyboard.
         keyboardType={Platform.OS === 'android' ? 'default' : 'url'}
         onSubmit={(value) => {
-          void handleCreateBrowser(value, browserProfile.profileId ?? undefined).then((created) => {
-            if (created) {
-              setShowCreateBrowserModal(false)
-            }
-          })
+          setShowCreateBrowserModal(Platform.OS !== 'ios') // iOS alert is gone; else keep URL to retry
+          void handleCreateBrowser(value, browserProfile.profileId ?? undefined).then(
+            (created) => created && setShowCreateBrowserModal(false)
+          )
         }}
         onCancel={() => setShowCreateBrowserModal(false)}
       />

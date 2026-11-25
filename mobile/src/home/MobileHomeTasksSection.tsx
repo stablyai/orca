@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { ChevronRight, ListTodo, type LucideIcon } from 'lucide-react-native'
+import { ChevronRight, ListTodo, type AppIcon } from '../components/icons/app-icons'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { PickerModal } from '../components/sheets/PickerModal'
@@ -38,7 +38,7 @@ export const MobileHomeTasksSection = memo(function MobileHomeTasksSection(
 
 function HomeSection(
   props: HomeHostSectionProps & {
-    icon: LucideIcon
+    icon: AppIcon
     title: string
     subtitle: string
     pickerTitle: string

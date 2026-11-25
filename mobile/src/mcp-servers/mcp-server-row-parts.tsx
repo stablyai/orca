@@ -1,7 +1,7 @@
 // Small pieces every MCP server screen draws: a server's mark, the tray's status dot, and a
 // label-over-value row for a command, its arguments and its secrets.
 import { Image, Text, View } from 'react-native'
-import { Globe, Lock, SquareTerminal } from 'lucide-react-native'
+import { Globe, Lock, SquareTerminal } from '../components/icons/app-icons'
 import { composioLogoUrl } from '../../../src/shared/composio/composio-apps'
 import { MobileConnectorLogo } from '../bots/MobileConnectorSourceIcon'
 import { LIST_ROW_PADDING } from '../components/list/ListGroup'

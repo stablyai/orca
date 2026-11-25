@@ -2,7 +2,7 @@ import { MobileNativeChatGoalCheckNotice } from './MobileNativeChatGoalCheckNoti
 import * as Fallback from '../../../../../../src/shared/native-chat/transcript/notices/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
+import { AlertCircle, AlertTriangle, Info } from '../../../../components/icons/app-icons'
 import { MobileNativeChatInterruptedContinueButton } from './MobileNativeChatInterruptedContinueButton'
 import {
   nativeChatNoticeBlock,

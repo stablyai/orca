@@ -14,7 +14,7 @@ import {
   Hourglass,
   Link2,
   X
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import { Text, View } from 'react-native'
 import {
   BOT_ITEM_LINK_ROWS,

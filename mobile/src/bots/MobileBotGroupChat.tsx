@@ -1,13 +1,11 @@
 import { useCallback, useState, useSyncExternalStore } from 'react'
 import { View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useForceReconnect, useHostClient } from '../transport/connection/host-client-hooks'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { NavBar } from '../components/nav-bar/NavBar'
-import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { NATIVE_SCREEN_HEADER, ScreenHeader } from '../components/nav-bar/ScreenHeader'
 import { MobileOfflineState, MobileStateView } from '../components/feedback/MobileStateView'
 import { groupStyles as styles } from './mobile-bot-group-styles'
 import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
@@ -83,16 +81,15 @@ export function MobileBotGroupChat() {
     )
   }
   return (
-    <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            accessibilityLabel={t('bots.groups.back', 'Back')}
-            onPress={() => router.back()}
-          />
-        }
+    <View
+      style={[
+        styles.screen,
+        { paddingTop: NATIVE_SCREEN_HEADER ? 0 : insets.top, paddingBottom: insets.bottom }
+      ]}
+    >
+      <ScreenHeader
         title={keptName ?? t('bots.groups.group', 'Group')}
+        onBack={() => router.back()}
       />
       {state === 'connecting' || state === 'handshaking' ? (
         <MobileStateView loading title={t('common.connectingToHost', 'Connecting to host…')} />

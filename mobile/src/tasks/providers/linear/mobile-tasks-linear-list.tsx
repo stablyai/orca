@@ -2,7 +2,7 @@ import type { ConnectionPresentationModel } from '../../screen-state/use-mobile-
 import { translate } from '../../../i18n/mobile-i18n'
 import { View, Text, ScrollView, Pressable, FlatList } from 'react-native'
 import { colors, spacing, type MobileColorScheme, pressedStyle } from '../../../theme/mobile-theme'
-import { ChevronDown } from 'lucide-react-native'
+import { ChevronDown } from '../../../components/icons/app-icons'
 import { TaskProviderLogo } from '../../../components/icons/TaskProviderLogo'
 import {
   ignoreKeptRowPress,

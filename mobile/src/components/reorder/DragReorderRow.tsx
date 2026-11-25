@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import { GripVertical } from 'lucide-react-native'
+import { GripVertical } from '../icons/app-icons'
 import Animated, {
   Easing,
   interpolateColor,

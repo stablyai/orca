@@ -4,15 +4,14 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileBotGroupReader } from './MobileBotGroupTurns'
 import { useCallback, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft, Ellipsis, ListChecks } from 'lucide-react-native'
+import { Ellipsis, ListChecks } from '../components/icons/app-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileSessionKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
-import { NavBar } from '../components/nav-bar/NavBar'
-import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { NATIVE_SCREEN_HEADER, ScreenHeader } from '../components/nav-bar/ScreenHeader'
 import {
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
   BOTS_ITEMS_RUNTIME_CAPABILITY
@@ -48,9 +47,6 @@ import {
   MobileBotGroupDictationScope,
   useMobileBotGroupDictation
 } from './use-mobile-bot-group-dictation'
-
-/** The group's picture before its name, a chat avatar's 24pt slot. */
-const NAV_FACES = 24
 
 export function MobileBotGroupRoom({
   client,
@@ -175,7 +171,10 @@ export function MobileBotGroupRoom({
     <View
       style={[
         styles.screen,
-        { paddingTop: insets.top, paddingBottom: insets.bottom + keyboardLift }
+        {
+          paddingTop: NATIVE_SCREEN_HEADER ? 0 : insets.top,
+          paddingBottom: insets.bottom + keyboardLift
+        }
       ]}
     >
       {readers.map((turn) => (
@@ -190,42 +189,27 @@ export function MobileBotGroupRoom({
           connected={connected}
         />
       ))}
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            accessibilityLabel={t('bots.groups.back', 'Back')}
-            onPress={dictation.back}
-          />
-        }
+      <ScreenHeader
         title={anyRoomGroup?.name ?? t('bots.groups.group', 'Group')}
-        titleLeading={
-          faces.length > 0 ? <MobileBotFaceStack faces={faces} slot={NAV_FACES} /> : undefined
-        }
-        subtitle={
-          workingCount > 0
-            ? t('bots.groups.workingCount', '{{count}} working', { count: workingCount })
-            : faces.length > 0
-              ? t('bots.groups.memberCount', '{{count}} bots', { count: faces.length })
-              : undefined
-        }
-        trailing={
-          <>
-            {itemsOnPhone ? (
-              <NavBarButton
-                icon={ListChecks}
-                active={itemsOpen}
-                accessibilityLabel={t('session.header.items', 'Items')}
-                onPress={() => setItemsOpen(true)}
-              />
-            ) : null}
-            <NavBarButton
-              icon={Ellipsis}
-              accessibilityLabel={t('bots.groups.groupActions', 'Group actions')}
-              onPress={() => setMenu('actions')}
-            />
-          </>
-        }
+        onBack={dictation.back}
+        actions={[
+          ...(itemsOnPhone
+            ? [
+                {
+                  id: 'items',
+                  icon: ListChecks,
+                  label: t('session.header.items', 'Items'),
+                  onPress: () => setItemsOpen(true)
+                }
+              ]
+            : []),
+          {
+            id: 'actions',
+            icon: Ellipsis,
+            label: t('bots.groups.groupActions', 'Group actions'),
+            onPress: () => setMenu('actions')
+          }
+        ]}
       />
       {anyRoomGroup?.threads?.length || threadId ? (
         <MobileBotGroupRoomBar

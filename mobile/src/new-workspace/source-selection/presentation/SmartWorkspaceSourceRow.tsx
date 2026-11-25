@@ -1,6 +1,6 @@
 import { branchRefLabel } from '../../../../../src/shared/git/refs/branch-ref-label'
 import { Text, View } from 'react-native'
-import { GitBranch, Sparkles } from 'lucide-react-native'
+import { GitBranch, Sparkles } from '../../../components/icons/app-icons'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../../../src/shared/new-workspace/smart-workspace-source-results'
 import { colors, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'

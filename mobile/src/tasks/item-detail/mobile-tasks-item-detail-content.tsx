@@ -4,7 +4,7 @@ import { isBrokenCheck } from '../../../../src/shared/source-control/checks/pr-c
 import { View, Text, Pressable } from 'react-native'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { openExternalLink } from '../../platform/external-links/external-link'
-import { ExternalLink } from 'lucide-react-native'
+import { ExternalLink } from '../../components/icons/app-icons'
 import { TextField } from '../../components/composer-input/TextField'
 import { styles, getGitLabPipelineStatusStyle } from '../mobile-tasks-legacy-styles'
 import {

@@ -3,7 +3,7 @@
 // person typed on their paired computer, "Sam Lee · Sam's MacBook Pro"; "Sent as goal".
 import { useState } from 'react'
 import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
-import { ChevronRight, Goal } from 'lucide-react-native'
+import { ChevronRight, Goal } from '../../../../components/icons/app-icons'
 import type { ConnectorMessageAsker } from '../../../../../../src/shared/connector-message-asker'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import {

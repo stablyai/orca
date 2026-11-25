@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { ScrollView, View } from 'react-native'
-import { Inbox, ListFilter } from 'lucide-react-native'
+import { Inbox, ListFilter } from '../components/icons/app-icons'
 import { BOT_ITEM_GROUP_IDS, type BotItemGroupId } from '../../../src/shared/bots/bot-item-groups'
 import type { BotItem } from '../../../src/shared/bots/bot-items'
 import { botItemWalkOf } from '../../../src/shared/bots/bot-item-walk'

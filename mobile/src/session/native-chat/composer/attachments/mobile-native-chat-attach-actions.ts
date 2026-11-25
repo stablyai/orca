@@ -1,4 +1,4 @@
-import { AtSign, Image, Package, Paperclip, Terminal } from 'lucide-react-native'
+import { AtSign, Image, Package, Paperclip, Terminal } from '../../../../components/icons/app-icons'
 import type { ActionSheetAction } from '../../../../components/sheets/ActionSheetModal'
 import { translate } from '../../../../i18n/mobile-i18n'
 

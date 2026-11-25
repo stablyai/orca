@@ -1,4 +1,4 @@
-import { ArrowUpRight, Copy, Eye, EyeOff, Folder, X } from 'lucide-react-native'
+import { ArrowUpRight, Copy, Eye, EyeOff, Folder, X } from '../components/icons/app-icons'
 import { useCallback, useMemo, useState } from 'react'
 import { Alert } from 'react-native'
 import { ActionSheetModal, type ActionSheetAction } from '../components/sheets/ActionSheetModal'

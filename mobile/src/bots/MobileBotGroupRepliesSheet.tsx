@@ -1,4 +1,4 @@
-import { AtSign, Users } from 'lucide-react-native'
+import { AtSign, Users } from '../components/icons/app-icons'
 import { botFailureMessage } from './bot-failure-message'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { mobileBotAvatarSource } from './host-bot-row-facts'

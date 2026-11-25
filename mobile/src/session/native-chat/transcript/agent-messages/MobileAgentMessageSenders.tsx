@@ -1,6 +1,6 @@
 import { Fragment, useContext } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight } from '../../../../components/icons/app-icons'
 import {
   agentMessageSendersShown,
   type AgentMessageSource

@@ -16,6 +16,8 @@ import { BRIDGE_SWAP_SAFE_NOTIFY } from '../bridge/page-lifecycle/bridge-app-res
 import { BRIDGE_PAGE_PAINTED } from '../bridge/page-lifecycle/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from '../bridge/page-lifecycle/bridge-route-update'
 import { BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY } from '../bridge/native-capabilities/bridge-terminal-key'
+import { BRIDGE_PAGE_HEADER_NOTIFY } from '../bridge/native-capabilities/bridge-page-header'
+import type { BridgeHostBack } from '../host-bridge/bridge-host-back'
 import type { BridgeHostOptions } from '../host-bridge/bridge-host-contract'
 import { pageMayWriteStorageKey } from '../page-storage/page-storage-keys'
 
@@ -27,7 +29,7 @@ export function createBridgeNotifyForwarder(args: {
   granted: readonly string[]
   initSent: () => boolean
   route: () => BridgeInitRoute | null
-  onBackClaim: (claimed: boolean) => void
+  back: Pick<BridgeHostBack, 'readClaim' | 'readHeader'>
   onTerminalKeyRailClaim: (
     claimed: boolean,
     inputOwner?: string,
@@ -57,11 +59,15 @@ export function createBridgeNotifyForwarder(args: {
     }
     if (message.name === BRIDGE_BACK_CLAIM_NOTIFY) {
       // Forward Back claims to the screen that owns the native key; this host serves only its document.
-      args.onBackClaim(message.claimed)
+      args.back.readClaim(message.claimed)
       return
     }
     if (message.name === BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY) {
       args.onTerminalKeyRailClaim(message.claimed, message.inputOwner, message.toolbar)
+      return
+    }
+    if (message.name === BRIDGE_PAGE_HEADER_NOTIFY) {
+      args.back.readHeader(message.header)
       return
     }
     if (message.name === 'foreground') {

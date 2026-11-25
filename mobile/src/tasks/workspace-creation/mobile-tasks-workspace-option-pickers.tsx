@@ -3,7 +3,7 @@ import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tas
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { TextField } from '../../components/composer-input/TextField'
-import { Search, Pencil } from 'lucide-react-native'
+import { Search, Pencil } from '../../components/icons/app-icons'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from '../task-list/mobile-tasks-options'
 import { ListGroup, ListRow } from '../../components/list/ListGroup'

@@ -2,7 +2,12 @@ import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tas
 import { translate } from '../../i18n/mobile-i18n'
 import { View, ActivityIndicator, Text, FlatList, Pressable } from 'react-native'
 import { colors, spacing, type MobileColorScheme, pressedStyle } from '../../theme/mobile-theme'
-import { ChevronLeft, ChevronRight, ExternalLink, GitBranch } from 'lucide-react-native'
+import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  GitBranch
+} from '../../components/icons/app-icons'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import {
   getHostedReviewSignalTone,

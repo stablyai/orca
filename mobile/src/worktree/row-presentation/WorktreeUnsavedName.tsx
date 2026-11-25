@@ -1,4 +1,4 @@
-import { PencilLine } from 'lucide-react-native'
+import { PencilLine } from '../../components/icons/app-icons'
 import { Text, View } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, typography } from '../../theme/mobile-theme'

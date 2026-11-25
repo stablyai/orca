@@ -14,13 +14,9 @@ import { triggerSelection } from '../../platform/haptics/haptics'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { BOTTOM_DRAWER_EASING } from '../bottom-drawer/bottom-drawer-constants'
 
-export type MobileSwitchProps = {
-  value: boolean
-  onValueChange: (value: boolean) => void
-  accessibilityLabel: string
-  disabled?: boolean
-  testID?: string
-}
+import type { MobileSwitchProps } from './mobile-control-props'
+
+export type { MobileSwitchProps }
 
 const TRACK_WIDTH = 51
 const TRACK_HEIGHT = 31
@@ -31,7 +27,7 @@ const TOGGLE_MS = 260
 // Reaches a 44 pt target without making the row taller than its siblings.
 const HIT_SLOP = { top: (44 - TRACK_HEIGHT) / 2, bottom: (44 - TRACK_HEIGHT) / 2 } as const
 
-/** The shared switch pairs the theme's foreground track with its canvas thumb. */
+/** The web switch pairs the theme's foreground track with its canvas thumb. */
 export function MobileSwitch({
   value,
   onValueChange,

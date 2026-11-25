@@ -1,4 +1,4 @@
-import { SquareTerminal } from 'lucide-react-native'
+import { SquareTerminal } from '../../../components/icons/app-icons'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
 import { translate } from '../../../i18n/mobile-i18n'
 import type { MobileSessionController } from '../../use-mobile-session-controller'

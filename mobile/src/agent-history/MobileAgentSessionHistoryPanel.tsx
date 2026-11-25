@@ -1,7 +1,13 @@
 import { useMemo, useState } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft, History, MessageSquarePlus, Play, RefreshCw } from 'lucide-react-native'
+import {
+  ChevronLeft,
+  History,
+  MessageSquarePlus,
+  Play,
+  RefreshCw
+} from '../components/icons/app-icons'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   MobileSegmentedControl,

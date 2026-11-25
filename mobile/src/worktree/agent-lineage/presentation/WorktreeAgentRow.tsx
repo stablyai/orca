@@ -2,7 +2,7 @@ import { agentNoUpdateLabel } from '../../../../../src/shared/agent-status/prese
 import { MobileForkMarkedName } from '../../../session/fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../../../session/fork/mobile-fork-marked-name'
 import { memo, type ReactNode } from 'react'
-import { Bell } from 'lucide-react-native'
+import { Bell } from '../../../components/icons/app-icons'
 import { listedAgentVerdict } from '../../../agents/agent-list-rows'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { Pressable, Text, View } from 'react-native'

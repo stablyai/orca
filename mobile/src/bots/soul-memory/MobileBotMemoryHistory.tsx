@@ -9,8 +9,8 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
-  type LucideIcon
-} from 'lucide-react-native'
+  type AppIcon
+} from '../../components/icons/app-icons'
 import type { BotMemoryHistoryView } from '../../../../src/shared/bots/bot-memory-history'
 import {
   botMemoryHistoryAuthor,
@@ -39,7 +39,7 @@ import type { MemoryActions } from './MobileBotMemory'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-const ICONS: Record<BotMemoryHistoryKind, LucideIcon> = {
+const ICONS: Record<BotMemoryHistoryKind, AppIcon> = {
   'tidy-up': Sparkles,
   undo: RotateCcw,
   edit: Pencil,

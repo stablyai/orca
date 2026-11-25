@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { ActivityIndicator, ScrollView, View } from 'react-native'
-import { FolderGit2, GitBranch, Plus } from 'lucide-react-native'
+import { FolderGit2, GitBranch, Plus } from '../../components/icons/app-icons'
 import type { Repo } from '../../../../src/shared/repository/repo-types'
 import { projectGroupIdFromRepoId } from '../../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { getRepoExecutionHostId } from '../../../../src/shared/execution-host/execution-host'

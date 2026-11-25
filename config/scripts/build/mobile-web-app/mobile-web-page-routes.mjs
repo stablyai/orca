@@ -3,6 +3,10 @@
 // Builder owns declarations and manifest checks MobileWebBundleRouteSchema. Haptics census derives required token from every reachable seam.
 // Every route offers the device store; without it (an older shell) the page keeps its data in memory only.
 const DEVICE_STORE_GRANT = 'native.store.rows'
+// Every route's alerts, prompts and pickers; without it (an older shell) the page draws its own.
+const DIALOG_GRANT = 'native.dialog.act'
+// Full-screen routes' top bar as the native stack header; without it (an older shell) the page draws its own.
+const HEADER_GRANT = 'nativeHeader'
 
 export const MOBILE_WEB_PAGE_ROUTES = [
   // Home needs navigate/storage for session hops and app pins; shared protocol-wall Update action needs externalLink. Wide ownsHostArea permits sidebar.
@@ -10,7 +14,13 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
-    optionalGrants: [DEVICE_STORE_GRANT, 'native.clipboard.write', 'native.clipboard.read'],
+    optionalGrants: [
+      DEVICE_STORE_GRANT,
+      DIALOG_GRANT,
+      HEADER_GRANT,
+      'native.clipboard.write',
+      'native.clipboard.read'
+    ],
     canOwnHostArea: true,
     canOwnHostAreaAcrossLayouts: true
   },
@@ -19,24 +29,24 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/agent-history/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
-    optionalGrants: [DEVICE_STORE_GRANT]
+    optionalGrants: [DEVICE_STORE_GRANT, DIALOG_GRANT, HEADER_GRANT]
   },
   // Tasks needs navigate/storage plus provider externalLink and comment-review clipboard writes; grants persist from opening route.
   {
     pathname: '/h/[hostId]/tasks',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
-    optionalGrants: [DEVICE_STORE_GRANT]
+    optionalGrants: [DEVICE_STORE_GRANT, DIALOG_GRANT, HEADER_GRANT]
   },
   {
     pathname: '/h/[hostId]/automations',
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
-    optionalGrants: [DEVICE_STORE_GRANT]
+    optionalGrants: [DEVICE_STORE_GRANT, DIALOG_GRANT, HEADER_GRANT]
   },
   // Accounts needs navigate/storage/externalLink for Back/shared layout wall; haptics census requires seam grant.
   {
     pathname: '/h/[hostId]/accounts',
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
-    optionalGrants: [DEVICE_STORE_GRANT]
+    optionalGrants: [DEVICE_STORE_GRANT, DIALOG_GRANT, HEADER_GRANT]
   },
   // MCP servers needs navigate/storage for Back and the shared layout wall, externalLink for a server's sign-in page.
   {
@@ -48,7 +58,8 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/new-workspace',
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
-    optionalGrants: [DEVICE_STORE_GRANT]
+    // No header grant: an overlay's shell draws no stack header, so its page keeps its own.
+    optionalGrants: [DEVICE_STORE_GRANT, DIALOG_GRANT]
   },
   // Explorer grants cover preview too so push stays in document under opening session’s grants; uncovered target hands off and reopens under its own.
   // externalLink serves layout wall/in-document Markdown preview; clipboard.write serves preview Source Copy. Census checks relation.
@@ -61,7 +72,9 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'externalNavigation',
       'native.pdf.view',
       'native.image.act',
-      DEVICE_STORE_GRANT
+      DEVICE_STORE_GRANT,
+      DIALOG_GRANT,
+      HEADER_GRANT
     ]
   },
   // Preview itself uses Markdown externalLink and Source Copy clipboard; explorer inherits same grants for in-document hop.
@@ -72,7 +85,9 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'externalNavigation',
       'native.pdf.view',
       'native.image.act',
-      DEVICE_STORE_GRANT
+      DEVICE_STORE_GRANT,
+      DIALOG_GRANT,
+      HEADER_GRANT
     ]
   },
   // Hub grants cover Back/review navigation, shared storage, PR link openers and conflict-command Copy.
@@ -80,14 +95,14 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/source-control/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
-    optionalGrants: [DEVICE_STORE_GRANT]
+    optionalGrants: [DEVICE_STORE_GRANT, DIALOG_GRANT, HEADER_GRANT]
   },
   // Review grants cover Back/native-session navigation, shared layout, PR links and copy-notes.
   // Match hub grants so both directions stay in-document under opening session’s capabilities; census detects future mismatch.
   {
     pathname: '/h/[hostId]/review/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
-    optionalGrants: [DEVICE_STORE_GRANT]
+    optionalGrants: [DEVICE_STORE_GRANT, DIALOG_GRANT, HEADER_GRANT]
   },
   // A group room: Back and its item hops navigate, Copy writes the clipboard, + picks photos and the mic dictates (all three media and audio verbs, as a chat's).
   // The mic's optional grants match the session's: without native.speech.act the computer transcribes, without native.a11y.announce the page's live region speaks.
@@ -145,7 +160,9 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.a11y.announce',
       'native.link.open',
       'terminalKeyRail',
-      DEVICE_STORE_GRANT
+      DEVICE_STORE_GRANT,
+      DIALOG_GRANT,
+      HEADER_GRANT
     ]
   }
 ]

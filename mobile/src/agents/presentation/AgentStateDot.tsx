@@ -1,4 +1,4 @@
-import { Activity, MessageCircleQuestion } from 'lucide-react-native'
+import { Activity, MessageCircleQuestion } from '../../components/icons/app-icons'
 import { Animated, View, type ViewStyle } from 'react-native'
 import { agentStateLabel, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

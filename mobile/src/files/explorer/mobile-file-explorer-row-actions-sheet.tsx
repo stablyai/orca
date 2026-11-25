@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Copy } from 'lucide-react-native'
+import { Copy } from '../../components/icons/app-icons'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'

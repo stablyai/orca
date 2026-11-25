@@ -2,7 +2,7 @@
 // as the desktop's Memory panel.
 import { useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { MessageSquareText } from 'lucide-react-native'
+import { MessageSquareText } from '../../components/icons/app-icons'
 import type { BotMemoryFact } from '../../../../src/shared/bot-memory-lines'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'

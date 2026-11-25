@@ -3,7 +3,7 @@
 import { useRef, type ReactNode } from 'react'
 import { Animated, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft } from 'lucide-react-native'
+import { ChevronLeft } from '../components/icons/app-icons'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

@@ -1,11 +1,11 @@
-import type { LucideIcon } from 'lucide-react-native'
+import type { AppIcon } from '../../components/icons/app-icons'
 import { Text, View } from 'react-native'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
 /** A Home tab with nothing to list: its glyph, a title and a line. */
-export function MobileHomeTabEmpty(props: { icon: LucideIcon; title: string; message?: string }) {
+export function MobileHomeTabEmpty(props: { icon: AppIcon; title: string; message?: string }) {
   useMobileColorScheme()
   const Icon = props.icon
   return (

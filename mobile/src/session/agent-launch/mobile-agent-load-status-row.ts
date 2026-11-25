@@ -1,4 +1,4 @@
-import { Bot } from 'lucide-react-native'
+import { Bot } from '../../components/icons/app-icons'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import type { Translate } from '../../i18n/mobile-i18n'
 import type { MobileNewTabAgentLoadState } from './mobile-agent-load-state'

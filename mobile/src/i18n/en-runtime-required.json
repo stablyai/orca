@@ -404,9 +404,7 @@
       "membersHere_one": "{{names}} is here.",
       "membersHere_other": "{{names}} are here.",
       "moreCount_one": "{{count}} more",
-      "moreCount_other": "{{count}} more",
-      "workingCount_one": "{{count}} working",
-      "workingCount_other": "{{count}} working"
+      "moreCount_other": "{{count}} more"
     },
     "import": {
       "folderItems_one": "{{count}} item",

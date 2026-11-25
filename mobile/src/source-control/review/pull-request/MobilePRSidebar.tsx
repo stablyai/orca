@@ -1,12 +1,5 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  type HostInstance
-} from 'react-native'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import {
   ArrowRight,
   CircleCheck,
@@ -17,8 +10,8 @@ import {
   MessageCircle,
   MoreHorizontal,
   RotateCw,
-  type LucideIcon
-} from 'lucide-react-native'
+  type AppIcon
+} from '../../../components/icons/app-icons'
 import { MobileLoadErrorState, MobileStateView } from '../../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -47,7 +40,7 @@ import {
 import { usePrTabMenuGroups } from './actions/use-pr-tab-menu'
 import { openExternalLink as openMobilePrUrl } from '../../../platform/external-links/external-link'
 import { NavBarButton } from '../../../components/nav-bar/NavBarButton'
-import { PullDownMenu } from '../../../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../../../components/menu/NativeMenu'
 import { useBackClaim } from '../../../navigation/use-back-claim'
 import { prTabStyles as styles } from './pr-tab-styles'
 import { mobilePrSidebarStyles as sidebarStyles } from './mobile-pr-sidebar-styles'
@@ -267,7 +260,7 @@ function PrTabHeader({ data }: { data: PrSidebarData }) {
   )
 }
 
-const GATE_ICON: Record<Exclude<PrGateTone, 'loading'>, LucideIcon> = {
+const GATE_ICON: Record<Exclude<PrGateTone, 'loading'>, AppIcon> = {
   passed: CircleCheck,
   blocking: CircleX,
   waiting: CircleDashed,
@@ -340,8 +333,6 @@ export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarP
       }
     ]
   ]
-  const moreRef = useRef<HostInstance>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const close = () => setScreen(null)
   // The dock's drawer would otherwise take Back and close the whole PR panel from a pushed screen.
   useBackClaim(
@@ -359,19 +350,15 @@ export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarP
       ) : (
         <>
           <View style={styles.dockBar}>
-            <NavBarButton
-              ref={moreRef}
-              icon={MoreHorizontal}
-              onPress={() => setMenuOpen(true)}
-              active={menuOpen}
-              accessibilityLabel={t('pullRequest.tab.moreActions', 'More pull request actions')}
-            />
-            <PullDownMenu
-              visible={menuOpen}
-              anchorRef={moreRef}
-              groups={menuGroups}
-              onClose={() => setMenuOpen(false)}
-            />
+            <NativeMenu groups={menuGroups}>
+              {(openMenu) => (
+                <NavBarButton
+                  icon={MoreHorizontal}
+                  onPress={openMenu}
+                  accessibilityLabel={t('pullRequest.tab.moreActions', 'More pull request actions')}
+                />
+              )}
+            </NativeMenu>
           </View>
           <MobilePrTabBody
             tab={tab}

@@ -2,7 +2,7 @@
 // its events (changed by chatting with the agent), where it runs and where its results go.
 import { useEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
-import { Zap } from 'lucide-react-native'
+import { Zap } from '../components/icons/app-icons'
 import type { AutomationOwnerPrecondition } from '../../../src/shared/automations/ownership/automation-owner-precondition'
 import type { AutomationEventSource } from '../../../src/shared/automation-event-triggers'
 import {

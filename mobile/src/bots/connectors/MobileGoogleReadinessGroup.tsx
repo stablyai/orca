@@ -1,12 +1,6 @@
 // Google's "What it can use" for one account: a row per thing the person picked, with its fix.
-import {
-  ArrowUpRight,
-  CalendarDays,
-  Folder,
-  Mail,
-  Users,
-  type LucideIcon
-} from 'lucide-react-native'
+import type { LucideIcon } from 'lucide-react-native'
+import { ArrowUpRight, CalendarDays, Folder, Mail, Users } from '../../components/icons/app-icons'
 import {
   GOOGLE_CHOICE_SERVICES,
   GOOGLE_SERVICES,

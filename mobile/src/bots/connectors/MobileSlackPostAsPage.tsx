@@ -3,7 +3,7 @@
 // in Slack; picking the posted choice again cancels it.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator } from 'react-native'
-import { ArrowUpRight, Laptop } from 'lucide-react-native'
+import { ArrowUpRight, Laptop } from '../../components/icons/app-icons'
 import type {
   ConnectorBotSlackState,
   SlackPostAs

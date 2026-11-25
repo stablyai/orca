@@ -1,4 +1,4 @@
-import { CaseSensitive, GitBranch, Sparkles } from 'lucide-react-native'
+import { CaseSensitive, GitBranch, Sparkles } from '../../../components/icons/app-icons'
 import type { SmartModeIcon } from '../mobile-smart-source-modes'
 import { TaskProviderLogo } from '../../../components/icons/TaskProviderLogo'
 

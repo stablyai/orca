@@ -1,7 +1,7 @@
 // A received link's review on the phone: who shared it, the safety check, and one row per part, each
 // drilling in to the exact text Create writes. The desktop's BotShareReviewDialog and its pages.
 import { Text, View } from 'react-native'
-import { ShieldAlert, TriangleAlert } from 'lucide-react-native'
+import { ShieldAlert, TriangleAlert } from '../../components/icons/app-icons'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import type { BotShareFlagSpot } from '../../../../src/shared/bots/bot-share-flag-spots'
 import { toolHost } from '../../../../src/shared/bots/bot-share-review-files'

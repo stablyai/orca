@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../../components/icons/app-icons'
 import {
   nativeChatAnswerOperationEvidence,
   type NativeChatAnswerOperation,

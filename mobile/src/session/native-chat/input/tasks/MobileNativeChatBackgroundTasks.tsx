@@ -15,7 +15,7 @@ import {
   CircleHelp,
   SquareTerminal,
   Workflow
-} from 'lucide-react-native'
+} from '../../../../components/icons/app-icons'
 import type { AgentChildRowModel } from '../../../../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { AgentSessionBackgroundTask } from '../../../../../../src/shared/agent-session/background-tasks/agent-session-background-task-wire'
 import { sayMobileBackgroundTask as say } from './mobile-background-task-copy'

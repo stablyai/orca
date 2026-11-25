@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../components/icons/app-icons'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import { colors, pressedStyle, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'

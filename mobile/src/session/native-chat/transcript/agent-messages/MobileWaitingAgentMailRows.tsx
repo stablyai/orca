@@ -1,7 +1,7 @@
 import { memo, useState } from 'react'
 import { Text, View, type LayoutChangeEvent } from 'react-native'
 import { useMobileScreenReaderOn } from '../../../../platform/accessibility/use-mobile-screen-reader-on'
-import { Image as ImageIcon } from 'lucide-react-native'
+import { Image as ImageIcon } from '../../../../components/icons/app-icons'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors } from '../../../../theme/mobile-theme'

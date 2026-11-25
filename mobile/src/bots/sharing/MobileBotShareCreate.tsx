@@ -1,6 +1,6 @@
 // New bot from a reviewed link: New bot's picture, name, computer and agent, plus the permission (Ask, picked
 // for bots made from a link) and the review's tool ticks. Create writes the reviewed version whole.
-import { useState, type ReactElement, type ReactNode } from 'react'
+import { useState, type ReactNode, type ReactElement } from 'react'
 import { View } from 'react-native'
 import { isBotMascotId, mascotAvatar, randomMascotAvatar } from '../../../../src/shared/bot-avatar'
 import { BOT_NAME_MAX_LENGTH, type BotAgent } from '../../../../src/shared/bot-types'

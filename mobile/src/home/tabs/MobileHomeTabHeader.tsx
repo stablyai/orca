@@ -1,28 +1,55 @@
-import type { LucideIcon } from 'lucide-react-native'
-import { useState, type ReactNode, type Ref } from 'react'
-import { Pressable, Text, View, type HostInstance } from 'react-native'
+import type { AppIcon } from '../../components/icons/app-icons'
+import { useState } from 'react'
+import { Pressable, Text, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { NativeMenu } from '../../components/menu/NativeMenu'
+import { isMenuAction } from '../../components/nav-bar/screen-header-props'
+import type { HomeTabHeaderProps } from './home-tab-header-props'
 
-/** A Home tab's title row: the tab's name and at most two icon buttons. */
-export function MobileHomeTabHeader(props: { title: string; trailing?: ReactNode }) {
+/** A Home tab's drawn title row: the tab's name and at most two icon buttons. */
+export function MobileHomeTabHeader(props: HomeTabHeaderProps) {
   useMobileColorScheme()
   return (
     <View style={styles.bar}>
       <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
         {props.title}
       </Text>
-      {props.trailing ? <View style={styles.actions}>{props.trailing}</View> : null}
+      {props.actions.length > 0 ? (
+        <View style={styles.actions}>
+          {props.actions.map((action) =>
+            isMenuAction(action) ? (
+              <NativeMenu key={action.id} groups={action.menu}>
+                {(openMenu) => (
+                  <MobileHomeTabHeaderButton
+                    icon={action.icon}
+                    accessibilityLabel={action.label}
+                    onPress={openMenu}
+                  />
+                )}
+              </NativeMenu>
+            ) : (
+              <MobileHomeTabHeaderButton
+                key={action.id}
+                icon={action.icon}
+                accessibilityLabel={action.label}
+                disabled={action.disabled}
+                spinning={action.spinning}
+                active={action.active}
+                onPress={action.onPress}
+              />
+            )
+          )}
+        </View>
+      ) : null}
     </View>
   )
 }
 
-export function MobileHomeTabHeaderButton(props: {
-  /** The anchor a pull-down menu drops from. */
-  ref?: Ref<HostInstance>
-  icon: LucideIcon
+function MobileHomeTabHeaderButton(props: {
+  icon: AppIcon
   accessibilityLabel: string
   disabled?: boolean
   /** Spins the glyph while a refresh it started is in flight. */
@@ -36,7 +63,6 @@ export function MobileHomeTabHeaderButton(props: {
   const Icon = props.icon
   return (
     <Pressable
-      ref={props.ref}
       accessibilityRole="button"
       accessibilityLabel={props.accessibilityLabel}
       accessibilityState={{

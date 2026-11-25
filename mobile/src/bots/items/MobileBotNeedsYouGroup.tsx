@@ -4,7 +4,7 @@
 // opens where the ask was made, or an access request's decision; a row the phone can't reach is dimmed.
 import { useMemo, useState, type ReactNode } from 'react'
 import { View } from 'react-native'
-import { CircleHelp, KeyRound, Shield, UserPlus } from 'lucide-react-native'
+import { CircleHelp, KeyRound, Shield, UserPlus } from '../../components/icons/app-icons'
 import { CONNECTOR_SOURCE_NAMES } from '../../../../src/shared/connectors/external-conversation-link'
 import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
 import { needsYouFold } from '../../../../src/shared/bots/needs-you-fold'

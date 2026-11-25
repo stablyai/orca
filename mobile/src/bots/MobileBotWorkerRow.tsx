@@ -1,6 +1,6 @@
 // A bot worker's row: the Chats tab lists it under its chat, an item's Links and a chat's worker strip list it flat.
 import { View } from 'react-native'
-import { CircleX } from 'lucide-react-native'
+import { CircleX } from '../components/icons/app-icons'
 import { AGENT_FAILURE_COLOR, AgentStateDot } from '../agents/presentation/AgentStateDot'
 import { ListRow } from '../components/list/ListGroup'
 import { useNow } from '../hooks/use-now'

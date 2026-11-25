@@ -7,7 +7,7 @@ import {
   Send,
   Trash2,
   Undo2
-} from 'lucide-react-native'
+} from '../../../components/icons/app-icons'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useWorkspaceOnPairedHost } from '../../../navigation/workspace-execution-host'
 import type { useMobileDiffReviewController } from '../use-mobile-diff-review-controller'

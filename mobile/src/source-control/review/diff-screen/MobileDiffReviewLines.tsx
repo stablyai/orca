@@ -9,7 +9,7 @@ import {
   type ViewStyle
 } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import { UnfoldVertical } from 'lucide-react-native'
+import { UnfoldVertical } from '../../../components/icons/app-icons'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'

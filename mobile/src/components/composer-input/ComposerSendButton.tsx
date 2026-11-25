@@ -1,4 +1,4 @@
-import { ArrowUp } from 'lucide-react-native'
+import { ArrowUp } from '../icons/app-icons'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobilePendingButton } from '../controls/MobilePendingButton'

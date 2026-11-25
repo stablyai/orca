@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native'
-import { FolderGit2 } from 'lucide-react-native'
+import { FolderGit2 } from '../../../components/icons/app-icons'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../../src/shared/worktree/create-types'
 import type { WorkspaceSshGate } from '../workspace-ssh-gate'

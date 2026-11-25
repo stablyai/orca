@@ -2,7 +2,7 @@
 // returns to 127.0.0.1 on the host, so it opens in Orca's browser there (shown here as that tab) and the
 // phone waits; the steps after it (pick, admin install, turn on) are all here.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight } from '../../components/icons/app-icons'
 import { botLinearWorkspaces, type BotLinearLink } from '../../../../src/shared/bot-types'
 import type { ConnectorLinearWorkspace } from '../../../../src/shared/connector-bot-linear-contract'
 import { BOT_LINEAR_OFF } from '../../../../src/shared/connector-bot-linear-contract'

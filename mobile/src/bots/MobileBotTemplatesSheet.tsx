@@ -2,7 +2,7 @@
 // desktop page's rows; a tap opens the template's detail, whose Use template… prefills New bot.
 import { useState } from 'react'
 import { Keyboard, ScrollView, View } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { Plus } from '../components/icons/app-icons'
 import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { useBottomDrawerModalHostBackClaim } from '../components/bottom-drawer/bottom-drawer-modal-host-scope'
 import { MobileSearchField } from '../components/controls/MobileSearchField'

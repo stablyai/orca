@@ -2,7 +2,7 @@
 // what stays behind, a tick on each thing that can come. Import tells the bot the desktop's same sentence.
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Check, Download } from 'lucide-react-native'
+import { Check, Download } from '../../../../components/icons/app-icons'
 import {
   BOT_IMPORT_PLAN_GROUPS,
   botImportAnswer,

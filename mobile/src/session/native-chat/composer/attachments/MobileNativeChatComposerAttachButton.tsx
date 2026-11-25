@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { Plus } from '../../../../components/icons/app-icons'
 import { colors } from '../../../../theme/mobile-theme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal'

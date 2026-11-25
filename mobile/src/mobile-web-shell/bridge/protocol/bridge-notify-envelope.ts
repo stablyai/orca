@@ -11,6 +11,10 @@ import {
   BridgeTerminalToolbarSchema
 } from '../native-capabilities/bridge-terminal-key'
 import {
+  BRIDGE_PAGE_HEADER_NOTIFY,
+  BridgePageHeaderSchema
+} from '../native-capabilities/bridge-page-header'
+import {
   BRIDGE_CLEARABLE_ROUTE_PARAMS,
   BRIDGE_ROUTE_PARAM_CLEAR
 } from '../page-lifecycle/bridge-route-update'
@@ -134,6 +138,13 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     claimed: z.boolean(),
     inputOwner: z.string().min(1).max(128).optional(),
     toolbar: BridgeTerminalToolbarSchema.optional()
+  }),
+  // Behind the `nativeHeader` grant; null hands the bar back to the page.
+  z.object({
+    v: versionSchema,
+    type: z.literal('notify'),
+    name: z.literal(BRIDGE_PAGE_HEADER_NOTIFY),
+    header: BridgePageHeaderSchema.nullable()
   })
 ])
 

@@ -1,7 +1,7 @@
 // Agent and model: the agents this bot's computer can run; switching asks first, as the desktop does,
 // because the Home Chat starts over on the new agent.
 import { useState, type ReactNode } from 'react'
-import { RotateCcw } from 'lucide-react-native'
+import { RotateCcw } from '../components/icons/app-icons'
 import { isBotAgent, type BotAgent } from '../../../src/shared/bot-types'
 import {
   botLaunchFromChoices,

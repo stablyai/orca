@@ -9,8 +9,8 @@ import {
   GitPullRequestArrow,
   History,
   RefreshCw,
-  type LucideIcon
-} from 'lucide-react-native'
+  type AppIcon
+} from '../../components/icons/app-icons'
 import type { MobileSourceControlActionIcon } from '../workflows/mobile-source-control-actions'
 import type {
   MobileGitBranchChangeEntry,
@@ -86,7 +86,7 @@ export type MobileBranchEntryView = MobileGitBranchChangeEntry & {
 
 export const KEYBOARD_COMMIT_BAR_CLEARANCE = 10
 
-export const SOURCE_CONTROL_ACTION_ICONS: Record<MobileSourceControlActionIcon, LucideIcon> = {
+export const SOURCE_CONTROL_ACTION_ICONS: Record<MobileSourceControlActionIcon, AppIcon> = {
   commit: Check,
   push: ArrowUp,
   pull: ArrowDown,

@@ -1,7 +1,7 @@
 // Settings › Tools' first row: whether the bot's sessions also take its host's MCP servers, named
 // under it. Shown only while the host's MCP servers switch is on (its tools read says so).
 import { useEffect, useState } from 'react'
-import { Server } from 'lucide-react-native'
+import { Server } from '../../components/icons/app-icons'
 import { MobileSwitch } from '../../components/controls/MobileSwitch'
 import { ListRow } from '../../components/list/ListGroup'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'

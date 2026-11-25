@@ -1,7 +1,7 @@
 import { useEffect, useState, type ComponentType } from 'react'
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
-import { X } from 'lucide-react-native'
+import { X } from '../icons/app-icons'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'

@@ -11,11 +11,11 @@ import {
   Search,
   SquareTerminal,
   Wrench,
-  type LucideIcon
-} from 'lucide-react-native'
+  type AppIcon
+} from '../../../../components/icons/app-icons'
 import type { NativeChatToolIconName } from '../../../../../../src/shared/native-chat/tools/native-chat-tool-icon'
 
-const GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
+const GLYPHS: Record<NativeChatToolIconName, AppIcon> = {
   eye: Eye,
   search: Search,
   folder: Folder,

@@ -9,6 +9,7 @@ import type { BridgeNativeVerb } from '../native-capabilities/bridge-native-verb
 import type { PageBackConsumer } from '../page-lifecycle/page-back-consumers'
 import type { BridgeClearableRouteParam } from '../page-lifecycle/bridge-route-update'
 import type { createBridgeClientTerminalKeys } from './bridge-client-terminal-keys'
+import type { createBridgeClientPageHeader } from './bridge-client-page-header'
 
 export type BridgeRpcClientOptions = {
   send: (json: string) => void
@@ -25,6 +26,8 @@ export type BridgeRpcClient = RpcClient &
      * dispose is called; `listener` takes each press. Nothing is sent to a shell without the grant.
      */
     claimTerminalKeyRail: ReturnType<typeof createBridgeClientTerminalKeys>['claim']
+    /** Asks the shell to draw this header until the release; the newest claim shows. Nothing is sent without the grant. */
+    claimPageHeader: ReturnType<typeof createBridgeClientPageHeader>['claim']
     getShellSession: () => BridgeShellSession | null
     // False without navigate lets tap handlers fall back safely instead of throwing into uncaught UI callbacks.
     notifyNavigate: (href: string, replace?: boolean) => boolean

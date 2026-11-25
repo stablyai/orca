@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { Minus, Plus } from 'lucide-react-native'
+import { Minus, Plus } from '../../../components/icons/app-icons'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { hostOs } from '../../../platform/host-os'

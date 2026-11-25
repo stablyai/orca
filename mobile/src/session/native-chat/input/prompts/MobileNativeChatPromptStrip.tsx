@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronUp } from 'lucide-react-native'
+import { ChevronUp } from '../../../../components/icons/app-icons'
 import { colors, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'

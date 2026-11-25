@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, Platform, Pressable, View } from 'react-native'
-import { ArrowDown } from 'lucide-react-native'
+import { ArrowDown } from '../../../components/icons/app-icons'
 import { SHEET_CURVE } from '../../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
 import { colors, feedback } from '../../../theme/mobile-theme'

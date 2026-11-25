@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronRight, Plus } from 'lucide-react-native'
+import { ChevronRight, Plus } from '../components/icons/app-icons'
 import { summarizeBotPreview } from '../../../src/shared/bots/bot-collapsed-preview'
 import type { BotsListEndLine, Section } from '../worktree/workspace-list/workspace-list-types'
 import { colors, pressedStyle, spacing } from '../theme/mobile-theme'

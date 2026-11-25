@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppState, View, Text, Pressable, type AppStateStatus } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { X } from 'lucide-react-native'
+import { X } from '../../../components/icons/app-icons'
 import type Animated from 'react-native-reanimated'
 import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
 import { useDirectionPadAvailable } from '../../../layout/use-shell-side-rail'

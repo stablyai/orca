@@ -1,4 +1,4 @@
-import { Bot, Plus } from 'lucide-react-native'
+import { Bot, Plus } from '../../components/icons/app-icons'
 import { useMemo } from 'react'
 import { ActivityIndicator, ScrollView, View } from 'react-native'
 import { MobileBotsListEnd } from '../../bots/MobileBotsSectionHeader'
@@ -12,7 +12,7 @@ import { homeBotRowsByComputer, MobileHomeBotRows } from '../bots/MobileHomeBotR
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
-import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
+import { MobileHomeTabHeader } from './MobileHomeTabHeader'
 
 /** Every bot on every paired computer and the servers they relay, needs-you first. */
 export function MobileHomeBotsTab(props: {
@@ -28,14 +28,17 @@ export function MobileHomeBotsTab(props: {
   const header = (
     <MobileHomeTabHeader
       title={t('home.tabs.bots', 'Bots')}
-      trailing={
-        props.onNewBot ? (
-          <MobileHomeTabHeaderButton
-            icon={Plus}
-            accessibilityLabel={t('bots.new.title', 'New bot')}
-            onPress={props.onNewBot}
-          />
-        ) : undefined
+      actions={
+        props.onNewBot
+          ? [
+              {
+                id: 'new-bot',
+                icon: Plus,
+                label: t('bots.new.title', 'New bot'),
+                onPress: props.onNewBot
+              }
+            ]
+          : []
       }
     />
   )
@@ -44,56 +47,54 @@ export function MobileHomeBotsTab(props: {
   if (!data.hostCatalogLoaded) {
     return header
   }
-  if (data.hostCatalog.length === 0) {
-    return (
-      <>
-        {header}
-        <MobileHomeTabEmpty
-          icon={Bot}
-          title={t('home.bots.noBotsTitle', 'No bots yet')}
-          message={t('home.bots.pairDesktop', 'Pair a desktop to see its bots here.')}
-        />
-      </>
-    )
-  }
   const { rows } = data.bots
+  // Empty states scroll too, so a native large title sits above them rather than over them.
   return (
     <>
       {header}
-      {notice.kind === 'empty' ? (
-        <MobileHomeTabEmpty icon={Bot} title={notice.title} message={notice.message} />
-      ) : (
-        <ScrollView
-          contentContainerStyle={[
-            { paddingBottom: props.bottomInset },
-            isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
-          ]}
-        >
-          {computers.length > 1 ? (
-            computers.map((computer, index) => (
-              <View key={computer.placeKey}>
-                <View style={styles.computer}>
-                  <MobileHomeSectionHeading
-                    title={computer.label}
-                    count={computer.rows.length}
-                    first={index === 0}
-                  />
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={[
+          { paddingBottom: props.bottomInset },
+          isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
+        ]}
+      >
+        {data.hostCatalog.length === 0 ? (
+          <MobileHomeTabEmpty
+            icon={Bot}
+            title={t('home.bots.noBotsTitle', 'No bots yet')}
+            message={t('home.bots.pairDesktop', 'Pair a desktop to see its bots here.')}
+          />
+        ) : notice.kind === 'empty' ? (
+          <MobileHomeTabEmpty icon={Bot} title={notice.title} message={notice.message} />
+        ) : (
+          <>
+            {computers.length > 1 ? (
+              computers.map((computer, index) => (
+                <View key={computer.placeKey}>
+                  <View style={styles.computer}>
+                    <MobileHomeSectionHeading
+                      title={computer.label}
+                      count={computer.rows.length}
+                      first={index === 0}
+                    />
+                  </View>
+                  <MobileHomeBotRows rows={computer.rows} onOpen={props.onOpenBot} />
                 </View>
-                <MobileHomeBotRows rows={computer.rows} onOpen={props.onOpenBot} />
+              ))
+            ) : (
+              <MobileHomeBotRows rows={rows} onOpen={props.onOpenBot} />
+            )}
+            {notice.kind === 'waiting' ? (
+              <View style={styles.connecting}>
+                <ActivityIndicator size="small" color={colors.textSecondary} />
               </View>
-            ))
-          ) : (
-            <MobileHomeBotRows rows={rows} onOpen={props.onOpenBot} />
-          )}
-          {notice.kind === 'waiting' ? (
-            <View style={styles.connecting}>
-              <ActivityIndicator size="small" color={colors.textSecondary} />
-            </View>
-          ) : notice.lines.length > 0 ? (
-            <MobileBotsListEnd lines={notice.lines} underRows={rows.length > 0} />
-          ) : null}
-        </ScrollView>
-      )}
+            ) : notice.lines.length > 0 ? (
+              <MobileBotsListEnd lines={notice.lines} underRows={rows.length > 0} />
+            ) : null}
+          </>
+        )}
+      </ScrollView>
     </>
   )
 }

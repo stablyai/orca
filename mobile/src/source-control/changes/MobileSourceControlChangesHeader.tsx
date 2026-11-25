@@ -5,7 +5,7 @@ import {
   GitBranch,
   GitCommitHorizontal,
   TriangleAlert
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'

@@ -4,7 +4,7 @@ import {
   automationRunEventSourceKey,
   sayAutomationRunEnglish
 } from '../../../src/shared/automations/automation-run-row-words'
-import { History } from 'lucide-react-native'
+import { History } from '../components/icons/app-icons'
 import { MobileLoadErrorState, MobileStateView } from '../components/feedback/MobileStateView'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { SettingsEmptyRow, SettingsNote, SettingsSection } from '../settings/settings-screen-frame'

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Text, View } from 'react-native'
-import { Bot } from 'lucide-react-native'
+import { Bot } from '../../../../components/icons/app-icons'
 import {
   formatSubagentTokens,
   nativeChatSubagentGroupHeader

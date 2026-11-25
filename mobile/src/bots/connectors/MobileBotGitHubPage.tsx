@@ -3,7 +3,7 @@
 // install page in the phone's browser, and the host notices the change itself.
 import { saveRemovingMembers } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
-import { useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   ArrowUpRight,
   BookMarked,
@@ -12,7 +12,7 @@ import {
   Plus,
   RefreshCw,
   Unlink
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import {
   botMemberSource,
   botMembersFrom,
@@ -27,7 +27,7 @@ import {
 import type { BotUpdateParams } from '../../../../src/shared/rpc-contract/bots-params'
 import { ListRow, LIST_LEADING_INSET } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
-import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../../components/menu/NativeMenu'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -69,8 +69,6 @@ export function MobileBotGitHubPage(props: {
 }) {
   const t = useMobileTranslation()
   const { bot, installation, github, hostName } = props
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuAnchor = useRef(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [pickingDefault, setPickingDefault] = useState(false)
   // The installs as they were when GitHub's page opened; followed until they change.
@@ -281,14 +279,17 @@ export function MobileBotGitHubPage(props: {
         onBack={{ label: t('bots.connectors.back', 'Back to Connectors'), onPress: props.onBack }}
         trailingButtons={
           menu.length + accountMenu.length > 0 ? (
-            <NavBarButton
-              ref={menuAnchor}
-              icon={Ellipsis}
-              accessibilityLabel={t('bots.connector.actions', '{{name}} actions', {
-                name: BOT_CONNECTOR_NAMES.github
-              })}
-              onPress={() => setMenuOpen(true)}
-            />
+            <NativeMenu groups={[menu, accountMenu].filter((group) => group.length > 0)}>
+              {(openMenu) => (
+                <NavBarButton
+                  icon={Ellipsis}
+                  accessibilityLabel={t('bots.connector.actions', '{{name}} actions', {
+                    name: BOT_CONNECTOR_NAMES.github
+                  })}
+                  onPress={openMenu}
+                />
+              )}
+            </NativeMenu>
           ) : undefined
         }
       />
@@ -371,12 +372,6 @@ export function MobileBotGitHubPage(props: {
           />
         </SettingsSection>
       ) : null}
-      <PullDownMenu
-        visible={menuOpen}
-        anchorRef={menuAnchor}
-        onClose={() => setMenuOpen(false)}
-        groups={[[...menu, ...accountMenu]]}
-      />
     </>
   )
 }

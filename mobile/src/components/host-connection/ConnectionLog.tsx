@@ -1,5 +1,13 @@
 import { useRef } from 'react'
-import { ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native'
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type ScrollViewInstance,
+  type StyleProp,
+  type ViewStyle
+} from 'react-native'
 import type { ConnectionLogEntry } from '../../diagnostics/connection/connection-log-types'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -10,6 +18,7 @@ type Props = {
   // Label log scope before first entry (Pairing vs Reconnect).
   title?: string
   fillAvailableHeight?: boolean
+  style?: StyleProp<ViewStyle>
 }
 
 const levelColor = (): Record<ConnectionLogEntry['level'], string> => ({
@@ -38,7 +47,7 @@ function formatTime(ts: number, baseTs: number): string {
   return `+${Math.round(elapsed)}s`
 }
 
-export function ConnectionLog({ entries, title, fillAvailableHeight = false }: Props) {
+export function ConnectionLog({ entries, title, fillAvailableHeight = false, style }: Props) {
   useMobileColorScheme()
   const scrollRef = useRef<ScrollViewInstance | null>(null)
 
@@ -53,7 +62,8 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
     <View
       style={[
         styles.container,
-        fillAvailableHeight ? styles.fillContainer : styles.boundedContainer
+        fillAvailableHeight ? styles.fillContainer : styles.boundedContainer,
+        style
       ]}
     >
       {title && <Text style={styles.title}>{title}</Text>}

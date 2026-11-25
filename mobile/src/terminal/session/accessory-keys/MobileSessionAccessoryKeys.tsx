@@ -6,7 +6,7 @@ import {
   Monitor,
   Plus,
   Smartphone
-} from 'lucide-react-native'
+} from '../../../components/icons/app-icons'
 import { triggerMediumImpact } from '../../../platform/haptics/haptics'
 import { createTerminalLiveAccessoryInput } from '../../live-input/terminal-live-accessory-input'
 import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../../key-input/terminal-accessory-repeat'

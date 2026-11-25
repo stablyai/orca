@@ -1,4 +1,4 @@
-import { GitBranch, MessageSquarePlus } from 'lucide-react-native'
+import { GitBranch, MessageSquarePlus } from '../components/icons/app-icons'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { colors } from '../theme/mobile-theme'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'

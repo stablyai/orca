@@ -4,7 +4,7 @@ import {
   type MembershipStore
 } from '../../../../../../src/shared/collections/membership-store'
 import { Pressable, Text, View } from 'react-native'
-import { CornerDownRight, Pencil, Send, Trash2 } from 'lucide-react-native'
+import { CornerDownRight, Pencil, Send, Trash2 } from '../../../../components/icons/app-icons'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'

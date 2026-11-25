@@ -1,11 +1,17 @@
-import { useRef, useState, type ReactNode } from 'react'
-import type { HostInstance } from 'react-native'
-import { ChevronLeft, ExternalLink, MoreHorizontal, RefreshCw, X } from 'lucide-react-native'
+import type { ReactNode } from 'react'
+import {
+  ChevronLeft,
+  ExternalLink,
+  MoreHorizontal,
+  RefreshCw,
+  X
+} from '../../components/icons/app-icons'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
-import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
+import { DrawnMenu } from '../../components/menu/DrawnMenu'
+import { NativeMenu } from '../../components/menu/NativeMenu'
 import { useRefreshHint } from '../../query/refresh-hint'
 
 type Props = {
@@ -27,6 +33,8 @@ type Props = {
   accessory?: ReactNode
   /** The active tab's own menu, e.g. the PR tab's; replaces the default refresh/open items. */
   menuGroups?: ActionSheetAction[][] | null
+  /** The git menu's rows say why they're disabled and how far ahead they are, which a native menu can't show. */
+  drawnMenu?: boolean
 }
 
 export function MobileSourceControlHeader({
@@ -41,13 +49,12 @@ export function MobileSourceControlHeader({
   onOpenPrWeb,
   prNumber = null,
   accessory,
-  menuGroups = null
+  menuGroups = null,
+  drawnMenu = false
 }: Props) {
   const t = useMobileTranslation()
   // Here, not in the panel, so the hint's timers re-render only the bar.
   const showRefreshLine = useRefreshHint(refreshing)
-  const moreRef = useRef<HostInstance>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const actions: ActionSheetAction[] = [
     {
       id: 'refresh',
@@ -82,53 +89,48 @@ export function MobileSourceControlHeader({
       accessibilityLabel={t('sourceControl.header.close', 'Close source control')}
     />
   )
+  const Menu = drawnMenu ? DrawnMenu : NativeMenu
   return (
-    <>
-      <NavBar
-        // Dock dismissal and route Back have distinct semantics.
-        leading={
-          backInPlace ? (
-            <NavBarButton
-              icon={ChevronLeft}
-              onPress={backInPlace.onPress}
-              accessibilityLabel={backInPlace.label}
-            />
-          ) : embedded ? (
-            closeButton
-          ) : (
-            <NavBarButton
-              icon={ChevronLeft}
-              onPress={onBack}
-              accessibilityLabel={t('sourceControl.header.backToSession', 'Back to session')}
-            />
-          )
-        }
-        title={t('sourceControl.header.title', 'Source Control')}
-        subtitle={worktreeLabel}
-        accessory={accessory}
-        refreshing={showRefreshLine}
-        trailing={
-          <>
-            {backInPlace && embedded ? closeButton : null}
-            <NavBarButton
-              ref={moreRef}
-              icon={MoreHorizontal}
-              onPress={() => setMenuOpen(true)}
-              active={menuOpen}
-              accessibilityLabel={t(
-                'sourceControl.header.moreActions',
-                'More source control actions'
-              )}
-            />
-          </>
-        }
-      />
-      <PullDownMenu
-        visible={menuOpen}
-        anchorRef={moreRef}
-        groups={menuGroups ?? [actions]}
-        onClose={() => setMenuOpen(false)}
-      />
-    </>
+    <NavBar
+      // Dock dismissal and route Back have distinct semantics.
+      leading={
+        backInPlace ? (
+          <NavBarButton
+            icon={ChevronLeft}
+            onPress={backInPlace.onPress}
+            accessibilityLabel={backInPlace.label}
+          />
+        ) : embedded ? (
+          closeButton
+        ) : (
+          <NavBarButton
+            icon={ChevronLeft}
+            onPress={onBack}
+            accessibilityLabel={t('sourceControl.header.backToSession', 'Back to session')}
+          />
+        )
+      }
+      title={t('sourceControl.header.title', 'Source Control')}
+      subtitle={worktreeLabel}
+      accessory={accessory}
+      refreshing={showRefreshLine}
+      trailing={
+        <>
+          {backInPlace && embedded ? closeButton : null}
+          <Menu groups={menuGroups ?? [actions]}>
+            {(openMenu) => (
+              <NavBarButton
+                icon={MoreHorizontal}
+                onPress={openMenu}
+                accessibilityLabel={t(
+                  'sourceControl.header.moreActions',
+                  'More source control actions'
+                )}
+              />
+            )}
+          </Menu>
+        </>
+      }
+    />
   )
 }

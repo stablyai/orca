@@ -2,7 +2,7 @@
 // at a row's height so it reads as a state rather than a section header. The page header already shows
 // the bot, so the line carries no picture.
 import { Text, View } from 'react-native'
-import { CircleCheck } from 'lucide-react-native'
+import { CircleCheck } from '../../components/icons/app-icons'
 import { LIST_ROW_PADDING } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { PhoneBot } from '../host-bots-operations'

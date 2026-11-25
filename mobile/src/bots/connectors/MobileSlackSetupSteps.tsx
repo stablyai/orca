@@ -1,7 +1,7 @@
 // Connect Slack's pick and problem steps on the phone, as the desktop's BotSlackSetupDialog draws its
 // ConnectorWorkspacePicker and SlackSetupProblemStep.
 import { useEffect, useState } from 'react'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight } from '../../components/icons/app-icons'
 import { botSlackApps } from '../../../../src/shared/bot-types'
 import { slackSetupProblemCode } from '../../../../src/shared/bots/slack-setup-problem-details'
 import { slackTeamState } from '../../../../src/shared/connector-bot-slack-contract'

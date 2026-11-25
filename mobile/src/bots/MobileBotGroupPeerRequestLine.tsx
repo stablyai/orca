@@ -1,5 +1,5 @@
 import { View } from 'react-native'
-import { CornerDownRight, Pause } from 'lucide-react-native'
+import { CornerDownRight, Pause } from '../components/icons/app-icons'
 import type { BotGroupMessage } from '../../../src/shared/bots/bot-group'
 import {
   botGroupPeerLine,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { View } from 'react-native'
-import { GitBranch, RefreshCw } from 'lucide-react-native'
+import { GitBranch, RefreshCw } from '../components/icons/app-icons'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   MobileLoadErrorState,
@@ -264,6 +264,7 @@ export function MobileSourceControlPanel({
             ? changesMenuGroups
             : null
       }
+      drawnMenu={activeTab === 'changes' && ready}
       onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
       prNumber={prWebNumber}
       accessory={

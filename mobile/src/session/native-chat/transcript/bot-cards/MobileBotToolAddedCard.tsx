@@ -2,7 +2,7 @@
 // Signing in opens the app's page in the phone's browser and finishes from the address it lands on, pasted here.
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ExternalLink, Wrench } from 'lucide-react-native'
+import { ExternalLink, Wrench } from '../../../../components/icons/app-icons'
 import type { NativeChatBotCardValues } from '../../../../../../src/shared/native-chat/bot-cards/native-chat-bot-card-kind'
 import { botToolAddedCardView } from '../../../../../../src/shared/bots/bot-tool-added-card-view'
 import { botToolSubtitle, botToolTitle } from '../../../../../../src/shared/bots/bot-tool-labels'

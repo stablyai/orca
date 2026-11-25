@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Copy, ExternalLink, Globe } from 'lucide-react-native'
+import { Copy, ExternalLink, Globe } from '../../components/icons/app-icons'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'

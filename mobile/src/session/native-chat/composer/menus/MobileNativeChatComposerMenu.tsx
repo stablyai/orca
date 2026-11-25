@@ -2,7 +2,7 @@ import { MobileNativeChatComposerMenuReservation } from '../field/MobileNativeCh
 import type { RefObject } from 'react'
 import { MobileNativeChatComposerMenuLayer } from './MobileNativeChatComposerMenuLayer'
 import { Pressable, ScrollView, StyleSheet, Text, View, type HostInstance } from 'react-native'
-import { AtSign, FileText, Folder, Package, Terminal } from 'lucide-react-native'
+import { AtSign, FileText, Folder, Package, Terminal } from '../../../../components/icons/app-icons'
 import type { NativeChatPickerItem } from '../../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import { isFolderPath } from '../../../../../../src/shared/quick-open/quick-open-folder-paths'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'

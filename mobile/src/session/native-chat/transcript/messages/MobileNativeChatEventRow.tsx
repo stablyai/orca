@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight, X } from 'lucide-react-native'
+import { ChevronRight, X } from '../../../../components/icons/app-icons'
 import { AGENT_WORKING_COLOR, WorkingRing } from '../../../../agents/presentation/AgentStateDot'
 import {
   colors,

@@ -1,4 +1,4 @@
-import { Laptop } from 'lucide-react-native'
+import { Laptop } from '../../components/icons/app-icons'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../platform/external-links/external-link'

@@ -1,6 +1,6 @@
 // Snoozing from the phone: Snooze… in a row's, the status and the Move to sheets opens the presets
 // (Later today, Tomorrow, Monday) with Pick a time… (a day, then an hour) and Unsnooze while snoozed.
-import { AlarmClock, AlarmClockOff, CalendarDays } from 'lucide-react-native'
+import { AlarmClock, AlarmClockOff, CalendarDays } from '../../components/icons/app-icons'
 import {
   isBotItemSnoozed,
   isOpenBotItemStatus,

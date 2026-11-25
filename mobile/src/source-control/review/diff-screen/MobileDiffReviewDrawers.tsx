@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { KeyboardAvoidingView, Pressable, Text, View } from 'react-native'
-import { Copy, Plus, Send, Trash2, X } from 'lucide-react-native'
+import { Copy, Plus, Send, Trash2, X } from '../../../components/icons/app-icons'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'

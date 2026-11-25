@@ -3,7 +3,7 @@
 // from the box that didn't reach the host, Not sent · Retry · Discard.
 import { useEffect, useRef, type Ref } from 'react'
 import { Animated, Pressable, Text, View, type HostInstance } from 'react-native'
-import { CircleAlert, MessageSquare, Quote } from 'lucide-react-native'
+import { CircleAlert, MessageSquare, Quote } from '../../components/icons/app-icons'
 import type { BotItemActivityEntry } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'

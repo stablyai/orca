@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react'
 import { View, type HostInstance } from 'react-native'
-import { Keyboard as KeyboardIcon } from 'lucide-react-native'
+import { Keyboard as KeyboardIcon } from '../components/icons/app-icons'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
 import { MobileTerminalLiveInputStatus } from '../terminal/session/input-controls/MobileTerminalLiveInputStatus'

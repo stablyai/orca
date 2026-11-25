@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
   type HostInstance
 } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../icons/app-icons'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -144,10 +144,10 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
   const shown = groups.map((group) => group.filter(Boolean)).filter((group) => group.length > 0)
   return (
     <Modal visible={presented} transparent animationType="none" onRequestClose={onClose}>
+      {/* Stays enabled while fading out, so no tap reaches a row the menu's trigger sits in. */}
       <Pressable
         style={StyleSheet.absoluteFill}
-        onPress={onClose}
-        disabled={!visible}
+        onPress={visible ? onClose : undefined}
         accessibilityLabel={t('components.pullDownMenu.close', 'Close menu')}
       />
       {anchor ? (
@@ -178,6 +178,7 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
             }
           ]}
           accessibilityRole="menu"
+          onStartShouldSetResponder={() => true}
         >
           <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
             {shown.map((group, groupIndex) => (

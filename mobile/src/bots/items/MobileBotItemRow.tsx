@@ -2,7 +2,7 @@
 // bot's question under a Needs you row, the unseen dot and its age (a snoozed row's wake time); and the
 // floating bar while rows are checked.
 import { Pressable, Text, View } from 'react-native'
-import { Circle, CircleCheck, CircleHelp, X } from 'lucide-react-native'
+import { Circle, CircleCheck, X, CircleHelp } from '../../components/icons/app-icons'
 import {
   botItemActivityAt,
   formatBotItemNumber,

@@ -1,5 +1,5 @@
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native'
-import { Check, Plus, Search } from 'lucide-react-native'
+import { Check, Plus, Search } from '../../components/icons/app-icons'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

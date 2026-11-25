@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Bell, ChevronDown, ChevronRight, GitBranch } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight, GitBranch } from '../../components/icons/app-icons'
 import { Pressable, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../../platform/haptics/haptics'

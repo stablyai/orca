@@ -11,17 +11,16 @@ import {
   Gauge,
   Globe,
   Layers,
-  type LucideIcon,
   Package,
   Palette,
   Rocket,
-  Server,
-  // `Shapes` is lucide's own export name; exempted in config/oxlint-anti-slop.json.
+  Server, // `Shapes` is lucide's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
   Sparkles,
   SquareTerminal,
-  Wrench
-} from 'lucide-react-native'
+  Wrench,
+  type AppIcon
+} from './app-icons'
 import { useState } from 'react'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../../host-screen/host-screen-reply-schema'
@@ -31,7 +30,7 @@ import { colors, radii } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
 // Match desktop repo-icon picker’s lucide glyphs so mobile project headers retain chosen icons.
-const REPO_LUCIDE_ICONS: Record<string, LucideIcon> = {
+const REPO_LUCIDE_ICONS: Record<string, AppIcon> = {
   Folder,
   Code2,
   SquareTerminal,

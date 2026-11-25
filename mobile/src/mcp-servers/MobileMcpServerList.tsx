@@ -2,7 +2,7 @@
 // group a grouped list like Settings › Tools, with the agents a server is on for on the right.
 import { useRef, useState } from 'react'
 import { Pressable, type HostInstance } from 'react-native'
-import { ArrowDownToLine, Copy, MoreHorizontal, Plus } from 'lucide-react-native'
+import { ArrowDownToLine, Copy, MoreHorizontal, Plus } from '../components/icons/app-icons'
 import type { BotToolProblem } from '../../../src/shared/bot-tools'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
 import { MobileStateButton } from '../components/feedback/MobileStateView'

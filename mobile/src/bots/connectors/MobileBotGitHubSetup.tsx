@@ -4,7 +4,7 @@
 // notices the install.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator } from 'react-native'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight } from '../../components/icons/app-icons'
 import {
   BOT_GITHUB_OFF,
   GITHUB_BOT_MENTION,

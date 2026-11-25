@@ -3,7 +3,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useEffect, useRef, useState } from 'react'
 import { Text, View, type HostInstance } from 'react-native'
-import { Ellipsis, History, Pencil, Play, Trash2 } from 'lucide-react-native'
+import { Ellipsis, History, Pencil, Play, Trash2 } from '../components/icons/app-icons'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   loadAutomationTargets,

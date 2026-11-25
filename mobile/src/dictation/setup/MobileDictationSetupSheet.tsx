@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Check, Download } from 'lucide-react-native'
+import { Check, Download } from '../../components/icons/app-icons'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { MobileSwitch } from '../../components/controls/MobileSwitch'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'

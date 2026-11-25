@@ -8,7 +8,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ChevronDown } from 'lucide-react-native'
+import { ChevronDown } from '../icons/app-icons'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'

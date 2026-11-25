@@ -1,6 +1,6 @@
 import { useContext, useSyncExternalStore } from 'react'
 import { Pressable, View } from 'react-native'
-import { ArrowUp, GitFork } from 'lucide-react-native'
+import { ArrowUp, GitFork } from '../../../../components/icons/app-icons'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
 import { colors, radii } from '../../../../theme/mobile-theme'

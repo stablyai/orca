@@ -1,6 +1,6 @@
 // A connector setup's last page, the desktop's ConnectorTryIt: how to ask the bot, ready to copy, then Done.
 import type { ReactNode } from 'react'
-import { Copy } from 'lucide-react-native'
+import { Copy } from '../../components/icons/app-icons'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'

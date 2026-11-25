@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable } from 'react-native'
-import { CornerDownRight, ListEnd } from 'lucide-react-native'
+import { CornerDownRight, ListEnd } from '../../../../components/icons/app-icons'
 import type {
   NativeChatFollowUpBehavior,
   NativeChatSendFollowUp

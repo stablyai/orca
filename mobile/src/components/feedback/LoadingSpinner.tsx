@@ -1,5 +1,5 @@
 import { Animated } from 'react-native'
-import { Hourglass, LoaderCircle } from 'lucide-react-native'
+import { Hourglass, LoaderCircle } from '../icons/app-icons'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useWorkingRingRotation } from '../motion/use-working-motion'
 

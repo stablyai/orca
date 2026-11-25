@@ -2,7 +2,7 @@
 // itself happens in Google Cloud on the computer; from the phone the owner answers what they can.
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../../components/icons/app-icons'
 import type {
   GoogleSetupAction,
   GoogleSetupBlocker

@@ -2,7 +2,7 @@
 // load at the end isn't a surprise; the address it lands on is pasted back here.
 import { useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { ArrowUpRight, Check } from 'lucide-react-native'
+import { ArrowUpRight, Check } from '../../components/icons/app-icons'
 import { ListRow } from '../../components/list/ListGroup'
 import { TextField } from '../../components/composer-input/TextField'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'

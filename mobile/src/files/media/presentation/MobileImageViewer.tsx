@@ -8,7 +8,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, X } from '../../../components/icons/app-icons'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
 import { colors, feedback, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'

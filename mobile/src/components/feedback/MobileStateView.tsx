@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import { CircleAlert, SearchX, WifiOff, type LucideIcon } from 'lucide-react-native'
+import { CircleAlert, SearchX, WifiOff, type AppIcon } from '../icons/app-icons'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import {
   colors,
@@ -18,7 +18,7 @@ export type MobileStateAction = { label: string; onPress: () => void }
 
 type MobileStateViewProps = {
   /** Omitted while loading, which shows a spinner instead. */
-  icon?: LucideIcon
+  icon?: AppIcon
   /** A non-Lucide mark, such as a provider logo, drawn where the icon goes. */
   iconElement?: ReactNode
   title: string

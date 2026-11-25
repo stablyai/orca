@@ -1,16 +1,31 @@
-import { Children, Fragment, isValidElement, type ReactNode } from 'react'
+import {
+  Children,
+  createContext,
+  Fragment,
+  isValidElement,
+  useContext,
+  type ReactNode
+} from 'react'
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
-import { Check, ChevronDown, ChevronRight } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronRight } from '../icons/app-icons'
 import { DisclosureChevron } from './DisclosureChevron'
+import { listStyleMetrics as metrics } from './list-style-metrics'
 import { triggerSelection } from '../../platform/haptics/haptics'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, feedback, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
-export const LIST_ROW_PADDING = spacing.lg
-export const LIST_LEADING_SLOT = 24
+export const LIST_ROW_PADDING = metrics.rowPadding
+export const LIST_LEADING_SLOT = metrics.leadingSlot
 /** Where hairlines start in a group whose rows carry a leading icon, so they line up with the text. */
-export const LIST_LEADING_INSET = LIST_ROW_PADDING + LIST_LEADING_SLOT + spacing.md
+export const LIST_LEADING_INSET = LIST_ROW_PADDING + LIST_LEADING_SLOT + metrics.rowGap
+
+const GroupedScreenContext = createContext(false)
+
+/** Marks a screen of grouped lists (on colors.groupedBackground), whose groups take the screen's fill, not a sheet's. */
+export function GroupedListScreen({ children }: { children: ReactNode }) {
+  return <GroupedScreenContext.Provider value>{children}</GroupedScreenContext.Provider>
+}
 
 type ListGroupProps = {
   children: ReactNode
@@ -18,15 +33,18 @@ type ListGroupProps = {
   style?: StyleProp<ViewStyle>
 }
 
-/** Rows on one rounded surface with hairlines between them; the group draws the separators, never the rows. */
+/** Rows on one rounded surface, with hairlines between them where the platform draws them; never the rows. */
 export function ListGroup({ children, separatorInset = LIST_ROW_PADDING, style }: ListGroupProps) {
   useMobileColorScheme()
+  const onGroupedScreen = useContext(GroupedScreenContext)
   const rows = Children.toArray(children).filter(isValidElement)
   return (
-    <View style={[styles.group, style]}>
+    <View style={[styles.group, onGroupedScreen && styles.groupOnScreen, style]}>
       {rows.map((row, index) => (
         <Fragment key={String(row.key)}>
-          {index > 0 ? <View style={[styles.separator, { marginLeft: separatorInset }]} /> : null}
+          {index > 0 && metrics.separators ? (
+            <View style={[styles.separator, { marginLeft: separatorInset }]} />
+          ) : null}
           {row}
         </Fragment>
       ))}
@@ -36,10 +54,11 @@ export function ListGroup({ children, separatorInset = LIST_ROW_PADDING, style }
 
 const styles = themedStyleSheet(() => ({
   group: {
-    borderRadius: radii.surface,
+    borderRadius: metrics.groupRadius,
     backgroundColor: colors.sheetGroup,
     overflow: 'hidden'
   },
+  groupOnScreen: { backgroundColor: colors.groupedSurface },
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle
@@ -60,7 +79,7 @@ type SectionHeaderProps = {
   first?: boolean
 }
 
-/** A section's label above a ListGroup: 13 pt in sentence case, lined up with the row text. */
+/** A section's label above a ListGroup, in sentence case and lined up with the row text. */
 export function SectionHeader({
   title,
   icon,
@@ -95,11 +114,12 @@ export function SectionHeader({
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityState={{ expanded: expanded === true }}
+      android_ripple={metrics.ripple ? { color: colors.translucentFill } : undefined}
       style={({ pressed }) => [
         sectionHeaderStyles.header,
         sectionHeaderStyles.toggle,
         first && sectionHeaderStyles.first,
-        pressed && sectionHeaderStyles.pressed
+        pressed && !metrics.ripple && sectionHeaderStyles.pressed
       ]}
     >
       {label}
@@ -116,13 +136,13 @@ const sectionHeaderStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: LIST_ROW_PADDING,
-    paddingTop: spacing.lg,
-    paddingBottom: 6
+    paddingTop: metrics.headerPaddingTop,
+    paddingBottom: metrics.headerPaddingBottom
   },
   toggle: { minHeight: 44, paddingBottom: spacing.xs },
   first: { paddingTop: spacing.xs },
   pressed: { opacity: 0.6 },
-  title: { fontSize: 13, fontWeight: '500', color: colors.textSecondary, flexShrink: 1 },
+  title: { ...metrics.header, color: colors[metrics.headerColor], flexShrink: 1 },
   spacer: { flex: 1 }
 }))
 
@@ -177,7 +197,7 @@ type ListRowProps = {
   testID?: string
 }
 
-/** One row of a grouped list: 48 pt, or 60 with a subtitle, with a trailing value, chevron or check. */
+/** One row of a grouped list, taller with a subtitle, with a trailing value, chevron or check. */
 export function ListRow({
   title,
   wrapTitle = false,
@@ -275,7 +295,9 @@ export function ListRow({
       {accessory}
       {selected ? <Check size={17} color={colors.textPrimary} strokeWidth={2.4} /> : null}
       {selected === false ? <View style={listRowStyles.checkSpace} /> : null}
-      {navigates ? <ChevronRight size={15} color={colors.textMuted} strokeWidth={2.2} /> : null}
+      {navigates ? (
+        <ChevronRight size={15} color={colors.disclosureTint} strokeWidth={2.2} />
+      ) : null}
     </>
   )
   if (onPress === undefined) {
@@ -305,7 +327,8 @@ export function ListRow({
           : { ...inertState, checked: selected, selected }
       }
       testID={testID}
-      style={({ pressed }) => [...rowStyle, pressed && listRowStyles.pressed]}
+      android_ripple={metrics.ripple ? { color: colors.translucentFill } : undefined}
+      style={({ pressed }) => [...rowStyle, pressed && !metrics.ripple && listRowStyles.pressed]}
     >
       {content}
     </Pressable>
@@ -334,14 +357,14 @@ function WithIcon({
 
 const listRowStyles = themedStyleSheet(() => ({
   row: {
-    minHeight: 48,
+    minHeight: metrics.rowMinHeight,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: metrics.rowGap,
     paddingHorizontal: LIST_ROW_PADDING,
-    paddingVertical: spacing.sm
+    paddingVertical: metrics.rowPaddingVertical
   },
-  rowTwoLine: { minHeight: 60 },
+  rowTwoLine: { minHeight: metrics.rowTwoLineMinHeight },
   // A translucent wash: bgRaised matches sheetGroup in dark, so it would not show.
   pressed: { backgroundColor: colors.translucentFill },
   disabled: { opacity: feedback.disabledOpacity },
@@ -354,15 +377,15 @@ const listRowStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontVariant: ['tabular-nums']
   },
-  title: { fontSize: 15, color: colors.textPrimary },
-  titleEmphasis: { fontWeight: '500' },
+  title: { ...metrics.title, color: colors.textPrimary },
+  titleEmphasis: { fontWeight: metrics.titleWithSubtitleWeight },
   titlePrefix: { color: colors.textMuted, fontVariant: ['tabular-nums'] },
   titleStrong: { fontWeight: '700' },
   titleDestructive: { color: colors.statusRed },
   titleAccent: { color: colors.accentBlue },
-  subtitle: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
+  subtitle: { ...metrics.subtitle, color: colors.textSecondary, flexShrink: 1 },
   subtitleMono: { fontFamily: typography.monoFamily },
-  value: { fontSize: 15, color: colors.textSecondary, flexShrink: 1, maxWidth: 180 },
+  value: { ...metrics.value, color: colors.textSecondary, flexShrink: 1, maxWidth: 180 },
   checkSpace: { width: 17 },
   withIcon: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minWidth: 0 },
   shrink: { flexShrink: 1 }

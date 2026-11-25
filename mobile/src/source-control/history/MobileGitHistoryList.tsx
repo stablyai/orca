@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native'
-import { ChevronLeft, GitCommitHorizontal } from 'lucide-react-native'
+import { ChevronLeft, GitCommitHorizontal } from '../../components/icons/app-icons'
 import {
   MobileLoadErrorState,
   MobileOfflineState,

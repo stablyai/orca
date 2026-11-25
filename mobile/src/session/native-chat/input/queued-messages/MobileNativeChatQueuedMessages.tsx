@@ -3,7 +3,13 @@ import { DragReorderList } from '../../../../components/reorder/DragReorderList'
 import type { DragReorderMove } from '../../../../components/reorder/drag-reorder-positions'
 import { useContext, useLayoutEffect, useState, type ReactNode } from 'react'
 import { Pressable, Text, View, type LayoutRectangle } from 'react-native'
-import { ChevronDown, ChevronUp, Pencil, Play, Trash2 } from 'lucide-react-native'
+import {
+  ChevronDown,
+  ChevronUp,
+  Pencil,
+  Play,
+  Trash2
+} from '../../../../components/icons/app-icons'
 import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal'
 import { colors } from '../../../../theme/mobile-theme'
 import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'

@@ -2,8 +2,8 @@
 // LinearAccountSettings. How to ask, who the host is linked as and its default bot, Who can ask, Remove.
 import { saveRemovingMembers } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
-import { useRef, useState, type ReactNode } from 'react'
-import { Ellipsis, LogIn, Plus, Unlink } from 'lucide-react-native'
+import { useState, type ReactNode } from 'react'
+import { Ellipsis, LogIn, Plus, Unlink } from '../../components/icons/app-icons'
 import {
   botLinearWorkspaces,
   botMemberSource,
@@ -14,7 +14,7 @@ import {
 import type { BotUpdateParams } from '../../../../src/shared/rpc-contract/bots-params'
 import { ListRow } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
-import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../../components/menu/NativeMenu'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -49,8 +49,6 @@ export function MobileBotLinearPage(props: {
 }) {
   const t = useMobileTranslation()
   const { bot, workspace, linear, hostName } = props
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuAnchor = useRef(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [pickingDefault, setPickingDefault] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -203,14 +201,45 @@ export function MobileBotLinearPage(props: {
         subtitle={place}
         onBack={{ label: t('bots.connectors.back', 'Back to Connectors'), onPress: props.onBack }}
         trailingButtons={
-          <NavBarButton
-            ref={menuAnchor}
-            icon={Ellipsis}
-            accessibilityLabel={t('bots.connector.actions', '{{name}} actions', {
-              name: BOT_CONNECTOR_NAMES.linear
-            })}
-            onPress={() => setMenuOpen(true)}
-          />
+          <NativeMenu
+            groups={[
+              [
+                {
+                  label: t('bots.connectors.addAnotherWorkspace', 'Add another workspace'),
+                  icon: Plus,
+                  disabled: !props.online,
+                  onPress: () => props.onSetUp(undefined)
+                },
+                // As GitHub's page: the host's link to this workspace, for every bot on it.
+                ...(linked
+                  ? [
+                      {
+                        label: t('bots.linear.account.reconnect', 'Reconnect'),
+                        icon: LogIn,
+                        disabled: !props.online,
+                        onPress: () => unlink(true)
+                      },
+                      {
+                        label: t('bots.linear.account.unlink', 'Unlink Linear account'),
+                        icon: Unlink,
+                        disabled: !props.online,
+                        onPress: () => unlink(false)
+                      }
+                    ]
+                  : [])
+              ]
+            ]}
+          >
+            {(openMenu) => (
+              <NavBarButton
+                icon={Ellipsis}
+                accessibilityLabel={t('bots.connector.actions', '{{name}} actions', {
+                  name: BOT_CONNECTOR_NAMES.linear
+                })}
+                onPress={openMenu}
+              />
+            )}
+          </NativeMenu>
         }
       />
       {props.banner}
@@ -262,38 +291,6 @@ export function MobileBotLinearPage(props: {
           onPress={() => setConfirmRemove(true)}
         />
       </SettingsSection>
-      <PullDownMenu
-        visible={menuOpen}
-        anchorRef={menuAnchor}
-        onClose={() => setMenuOpen(false)}
-        groups={[
-          [
-            {
-              label: t('bots.connectors.addAnotherWorkspace', 'Add another workspace'),
-              icon: Plus,
-              disabled: !props.online,
-              onPress: () => props.onSetUp(undefined)
-            },
-            // As GitHub's page: the host's link to this workspace, for every bot on it.
-            ...(linked
-              ? [
-                  {
-                    label: t('bots.linear.account.reconnect', 'Reconnect'),
-                    icon: LogIn,
-                    disabled: !props.online,
-                    onPress: () => unlink(true)
-                  },
-                  {
-                    label: t('bots.linear.account.unlink', 'Unlink Linear account'),
-                    icon: Unlink,
-                    disabled: !props.online,
-                    onPress: () => unlink(false)
-                  }
-                ]
-              : [])
-          ]
-        ]}
-      />
     </>
   )
 }

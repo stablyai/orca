@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
-import { Minus, Plus, Undo2 } from 'lucide-react-native'
+import { Minus, Plus, Undo2 } from '../../components/icons/app-icons'
 import { colors } from '../../theme/mobile-theme'
 import { STATUS_LABELS } from '../../../../src/shared/git/status/git-status-labels'
 import type {

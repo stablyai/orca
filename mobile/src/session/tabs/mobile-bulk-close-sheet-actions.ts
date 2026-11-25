@@ -1,4 +1,4 @@
-import { CopyX, X } from 'lucide-react-native'
+import { CopyX, X } from '../../components/icons/app-icons'
 import type { MarkdownDocState } from '../../files/session-documents/session-document-state'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'

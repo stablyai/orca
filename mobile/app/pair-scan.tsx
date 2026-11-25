@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
+import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from '../src/components/icons/app-icons'
 import { decodePairingUrl, parsePairingCode } from '../src/pairing/pairing'
 import { getPairingScanErrorMessage } from '../src/pairing/pairing-scan-error-message'
 import {

@@ -11,7 +11,7 @@ import {
 } from '../../../../src/shared/bots/bot-mcp-apps'
 import { useState, type ReactNode } from 'react'
 import { View } from 'react-native'
-import { Plus, SlidersHorizontal, Webhook } from 'lucide-react-native'
+import { Plus, Webhook, SlidersHorizontal } from '../../components/icons/app-icons'
 import { MobileNoMatchState } from '../../components/feedback/MobileStateView'
 import { LIST_LEADING_INSET, ListRow } from '../../components/list/ListGroup'
 import { BottomSearchBar } from '../../components/nav-bar/BottomSearchBar'

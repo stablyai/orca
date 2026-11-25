@@ -20,6 +20,11 @@ import { BRIDGE_PAGE_LOCATION } from '../page-lifecycle/bridge-page-location'
 import { BRIDGE_SWAP_SAFE_NOTIFY } from '../page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PAGE_PAINTED } from '../page-lifecycle/bridge-page-painted'
 import {
+  BRIDGE_PAGE_HEADER_GRANT,
+  BRIDGE_PAGE_HEADER_NOTIFY,
+  type BridgePageHeader
+} from '../native-capabilities/bridge-page-header'
+import {
   BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
   BRIDGE_TERMINAL_KEY_RAIL_GRANT
 } from '../native-capabilities/bridge-terminal-key'
@@ -55,6 +60,7 @@ export type BridgeClientNotifications = {
     inputOwner?: string,
     toolbar?: BridgeTerminalToolbar
   ) => void
+  notifyPageHeader: (header: BridgePageHeader | null) => void
 }
 
 export function createBridgeClientNotifications(
@@ -165,6 +171,17 @@ export function createBridgeClientNotifications(
           ...(inputOwner === undefined ? {} : { inputOwner }),
           ...(toolbar === undefined ? {} : { toolbar }),
           claimed
+        })
+      }
+    },
+    // Only to a shell that granted the header: any other refuses the name, and draws no bar for it.
+    notifyPageHeader: (header) => {
+      if (deps.hasGrant(BRIDGE_PAGE_HEADER_GRANT)) {
+        post({
+          v: BRIDGE_PROTOCOL_VERSION,
+          type: 'notify',
+          name: BRIDGE_PAGE_HEADER_NOTIFY,
+          header
         })
       }
     }

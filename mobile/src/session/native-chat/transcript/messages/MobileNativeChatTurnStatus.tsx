@@ -2,7 +2,7 @@ import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
 import { MobileNativeChatBotIdentityContext } from '../../mobile-native-chat-bot-identity'
 import { useContext, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../../../../components/icons/app-icons'
 import { nativeChatElapsedSeconds } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import {
   formatMobileNativeChatTurnStatusLabel,

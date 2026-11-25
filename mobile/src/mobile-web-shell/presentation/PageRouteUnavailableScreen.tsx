@@ -1,5 +1,5 @@
 import { Platform, View } from 'react-native'
-import { CircleAlert, WifiOff } from 'lucide-react-native'
+import { CircleAlert, WifiOff } from '../../components/icons/app-icons'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { useMobileUpdateLink } from '../../components/host-connection/ProtocolBlockScreen'
 import { useHostProfile } from '../../host-catalog/use-host-profile'

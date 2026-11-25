@@ -2,7 +2,7 @@
 // sample call one tap away. Drawn in place of the saved row, so the URL is never folded away.
 import { useContext, useEffect, useRef, useState } from 'react'
 import { AppState, Text, View } from 'react-native'
-import { Check, ChevronDown, ChevronRight, Webhook } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronRight, Webhook } from '../../../../components/icons/app-icons'
 import {
   webhookAdapterName,
   webhookStatusFact

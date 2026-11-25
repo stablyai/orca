@@ -2,7 +2,7 @@
 // host reads it (the phone ships no parser): a preview names what it found, and Add sends the text.
 // A plain URL can carry headers, kept as names once saved.
 import { useEffect, useState } from 'react'
-import { Plus } from 'lucide-react-native'
+import { Plus } from '../components/icons/app-icons'
 import { botToolNameFrom, freeBotToolName } from '../../../src/shared/bot-tools'
 import { createNonSecureContextUuid as createUuid } from '../../../src/shared/identifiers/non-secure-context-uuid'
 import { ListRow, SectionHeader } from '../components/list/ListGroup'

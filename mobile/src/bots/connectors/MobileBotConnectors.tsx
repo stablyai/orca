@@ -2,7 +2,7 @@
 // list in its order: each Slack workspace, Linear workspace and GitHub org, Google, Webhooks, each app signed in
 // through Composio, then the apps the bot has as tools.
 import { useState, type ReactNode } from 'react'
-import { Plus } from 'lucide-react-native'
+import { Plus } from '../../components/icons/app-icons'
 import { botLinearWorkspaces, botSlackApps } from '../../../../src/shared/bot-types'
 import type { BotUpdateParams } from '../../../../src/shared/rpc-contract/bots-params'
 import { ListRow, LIST_LEADING_INSET } from '../../components/list/ListGroup'

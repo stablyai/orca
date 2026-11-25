@@ -1,7 +1,7 @@
 import { automationOrphanIssueText } from './automation-orphan-issue-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { CalendarClock } from 'lucide-react-native'
+import { CalendarClock } from '../components/icons/app-icons'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { MobileStateView } from '../components/feedback/MobileStateView'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'

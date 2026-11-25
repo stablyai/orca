@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { MountedBottomDrawer, type MountedBottomDrawerProps } from './mounted-bottom-drawer'
+import type { MountedBottomDrawerProps } from './mounted-bottom-drawer'
+import { SheetBottomDrawer } from './sheet-bottom-drawer'
 import { useBottomDrawerModalHost } from './bottom-drawer-modal-host-scope'
 import { SheetPageScrollContext } from '../nav-bar/sheet-page-scroll'
 
@@ -82,7 +83,7 @@ export function KeyedBottomDrawer<T>({
     return null
   }
   return (
-    <MountedBottomDrawer
+    <SheetBottomDrawer
       {...drawerProps}
       visible={!next.closing}
       onClose={() => onClose(presented)}
@@ -91,7 +92,7 @@ export function KeyedBottomDrawer<T>({
       <SheetPageScrollContext.Provider value={null}>
         {children(presented)}
       </SheetPageScrollContext.Provider>
-    </MountedBottomDrawer>
+    </SheetBottomDrawer>
   )
 }
 

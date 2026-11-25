@@ -1,7 +1,7 @@
 import { useContext, useEffect } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { CircleAlert, Laptop, Smartphone } from 'lucide-react-native'
+import { CircleAlert, Laptop, Smartphone } from '../components/icons/app-icons'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'

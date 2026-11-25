@@ -1,5 +1,3 @@
-import type { RefObject } from 'react'
-import type { HostInstance } from 'react-native'
 import {
   ALargeSmall,
   Columns2,
@@ -8,31 +6,23 @@ import {
   ListChecks,
   Plus,
   SquareChevronRight
-} from 'lucide-react-native'
-import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
+} from '../components/icons/app-icons'
+import { AgentSessionHistoryMenuIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
-import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 
-type Props = {
-  controller: MobileSessionController
-  anchorRef: RefObject<HostInstance | null>
-  /** A narrow sideways header also moves source control and New tab in here. */
+/** The ⋯ menu's sections, for the drawn menu and for the shell's native header alike. */
+export function useSessionMoreMenuGroups(
+  controller: MobileSessionController,
   actionsCollapsed: boolean
-}
-
-export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsCollapsed }: Props) {
-  useMobileColorScheme()
+): (readonly ActionSheetAction[])[] {
   const t = useMobileTranslation()
   const {
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
-    showHeaderMoreActions,
     setShowHeaderMoreActions,
     showAgentSessionHistoryAction,
     showChecksAction,
@@ -96,9 +86,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
               'session.headerMoreActionsSheet.agentHistoryHint',
               'Browse and resume agent sessions'
             ),
-            renderIcon: () => (
-              <MobileAgentSessionHistoryIcon size={17} color={colors.textPrimary} strokeWidth={2} />
-            ),
+            icon: AgentSessionHistoryMenuIcon,
             onPress: openAgentSessionHistory
           }
         ]
@@ -166,12 +154,5 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
         ]
       : [])
   ]
-  return (
-    <PullDownMenu
-      visible={showHeaderMoreActions}
-      anchorRef={anchorRef}
-      groups={[panels, view, tabs]}
-      onClose={() => setShowHeaderMoreActions(false)}
-    />
-  )
+  return [panels, view, tabs]
 }

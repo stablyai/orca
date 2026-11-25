@@ -7,7 +7,7 @@ import {
   SunMoon,
   Terminal,
   Wrench
-} from 'lucide-react-native'
+} from '../components/icons/app-icons'
 import type { MobileSettingsMenuItem } from './mobile-settings-menu'
 import { translate } from '../i18n/mobile-i18n'
 

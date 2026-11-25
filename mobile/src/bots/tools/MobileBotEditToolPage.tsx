@@ -2,7 +2,7 @@
 // rows open a page per value, saved with bots.tools.update. Saved header and variable values never
 // reach the phone, only their names.
 import { useEffect, useState, type ReactNode } from 'react'
-import { Plus } from 'lucide-react-native'
+import { Plus } from '../../components/icons/app-icons'
 import { freeBotToolName, type BotToolDetails } from '../../../../src/shared/bot-tools'
 import {
   botToolDraftError,

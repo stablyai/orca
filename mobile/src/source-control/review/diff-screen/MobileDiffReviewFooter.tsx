@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native'
+import { Check, ChevronLeft, ChevronRight, Plus } from '../../../components/icons/app-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { MobileDiffReviewQueueItem } from '../diff-state/mobile-diff-review-queue'

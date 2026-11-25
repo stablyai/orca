@@ -8,8 +8,8 @@ import {
   GitMerge,
   GitPullRequest,
   Sparkles,
-  type LucideIcon
-} from 'lucide-react-native'
+  type AppIcon
+} from '../../components/icons/app-icons'
 import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -32,7 +32,7 @@ import type {
 import { styles as sourceControlStyles } from '../mobile-source-control-styles'
 import { useMobileDictationClearance } from '../../dictation/mobile-dictation-host-context'
 
-const ICONS: Record<MobileNextStepIcon, LucideIcon> = {
+const ICONS: Record<MobileNextStepIcon, AppIcon> = {
   push: ArrowUp,
   pull: ArrowDown,
   sync: ArrowDownUp,
@@ -191,7 +191,7 @@ function BarButton({
   onPress
 }: {
   label: string
-  Icon?: LucideIcon
+  Icon?: AppIcon
   tone: MobileNextStepTone
   disabled: boolean
   loading: boolean

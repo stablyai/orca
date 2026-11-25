@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { CloudOff } from 'lucide-react-native'
+import { CloudOff } from '../icons/app-icons'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { LoadingSpinner } from '../feedback/LoadingSpinner'
 import { LIST_ROW_PADDING } from '../list/ListGroup'

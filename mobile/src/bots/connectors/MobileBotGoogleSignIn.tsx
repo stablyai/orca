@@ -1,7 +1,7 @@
 // Google's sign-in as a page inside the bot's settings, the trip Linear and GitHub use: Google's page opens
 // in Orca's browser on the host, whose own loopback takes the return, and shows here in the sign-in sheet.
 import { useEffect, useRef, type ReactNode } from 'react'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight } from '../../components/icons/app-icons'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'

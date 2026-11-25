@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
-import { Copy, Download, Share, type LucideIcon } from 'lucide-react-native'
+import { Copy, Download, Share, type AppIcon } from '../../../components/icons/app-icons'
 import { ActionSheetModal } from '../../../components/sheets/ActionSheetModal'
 import { TransientToast, useTransientToast } from '../../../components/feedback/TransientToast'
 import type { Translate } from '../../../i18n/mobile-i18n'
@@ -15,7 +15,7 @@ import { colors, feedback } from '../../../theme/mobile-theme'
 import type { ImageViewerActionsProps } from '../../../files/media/presentation/MobileImageViewer'
 
 type OperationCopy = {
-  icon: LucideIcon
+  icon: AppIcon
   label: string
   done: string | null
   failed: string

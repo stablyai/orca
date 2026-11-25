@@ -1,4 +1,4 @@
-import { Activity, Edit3, PowerOff, RefreshCw } from 'lucide-react-native'
+import { Activity, Edit3, PowerOff, RefreshCw } from './components/icons/app-icons'
 import type { ActionSheetAction } from './components/sheets/ActionSheetModal'
 import type { ConnectionState } from './transport/connection/connection-state'
 import type { HostProfile } from './host-catalog/host-profile'

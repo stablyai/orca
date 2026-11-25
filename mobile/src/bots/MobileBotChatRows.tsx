@@ -2,7 +2,7 @@
 // title, time or live counts, fold chevron), its workers as one line each, and their paging.
 import { memo } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronDown, ChevronRight } from '../components/icons/app-icons'
 import { pressFoldableRow } from '../../../src/shared/bots/bot-row-press'
 import {
   BOT_WORKSPACE_LINE_LOGO,

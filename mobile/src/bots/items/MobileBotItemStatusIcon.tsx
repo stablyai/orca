@@ -3,7 +3,7 @@
 // (grey once stale), Done a check, Canceled a slashed circle.
 import { View } from 'react-native'
 import Svg, { Circle, Path } from 'react-native-svg'
-import { CircleCheck, CircleSlash } from 'lucide-react-native'
+import { CircleCheck, CircleSlash } from '../../components/icons/app-icons'
 import type { BotItemStatus } from '../../../../src/shared/bots/bot-items'
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { colors, radii } from '../../theme/mobile-theme'

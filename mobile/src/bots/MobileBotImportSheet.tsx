@@ -1,8 +1,8 @@
 // Import from another app, from New bot: pick a bot OpenClaw, Hermes or OpenBot keeps on the bot's computer, or
 // the folder an old bot exported there; the new bot's first turn brings it over. The desktop's ImportBotDialog.
-import { useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { useState, type ReactNode, useRef, type ReactElement } from 'react'
 import { ScrollView, Text, View, type HostInstance } from 'react-native'
-import { Ellipsis, Plus } from 'lucide-react-native'
+import { Plus, Ellipsis } from '../components/icons/app-icons'
 import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { useBottomDrawerModalHostBackClaim } from '../components/bottom-drawer/bottom-drawer-modal-host-scope'
 import { TextField } from '../components/composer-input/TextField'

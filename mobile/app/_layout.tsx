@@ -15,6 +15,7 @@ import { colors } from '../src/theme/mobile-theme'
 import { startMobileAppearance } from '../src/theme/mobile-appearance'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { nativeHeaderOptions } from '../src/components/nav-bar/native-header-options'
 import { OrcaLogo } from '../src/components/icons/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/connection/client-context'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider'
@@ -201,16 +202,13 @@ export default function RootLayout() {
             <SideSafeArea>
               <Stack
                 screenOptions={{
-                  headerStyle: { backgroundColor: colors.bgPanel },
-                  headerTintColor: colors.textPrimary,
-                  headerTitleStyle: { fontSize: 16, fontWeight: '600' },
-                  contentStyle: { backgroundColor: colors.bgBase },
-                  headerShadowVisible: false
+                  ...nativeHeaderOptions(),
+                  contentStyle: { backgroundColor: colors.bgBase }
                   // Leave orientation unset: react-native-screens overrides rotation lock even for default; Android manifest fullUser honors the user’s setting.
                 }}
               >
                 <Stack.Screen
-                  name="index"
+                  name="(home)"
                   options={{
                     headerShown: false,
                     headerTitle: () => <OrcaLogo size={22} />

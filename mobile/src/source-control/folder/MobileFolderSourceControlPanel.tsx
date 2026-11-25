@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { ScrollView, View } from 'react-native'
-import { GitBranch } from 'lucide-react-native'
+import { GitBranch } from '../../components/icons/app-icons'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   MobileLoadErrorState,

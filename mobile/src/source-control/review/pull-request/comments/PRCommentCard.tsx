@@ -1,7 +1,14 @@
 import { memo, useState } from 'react'
 import { Image, Platform, Pressable, Text, View } from 'react-native'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
-import { Check, CornerDownRight, ExternalLink, Pencil, Trash2, Undo2 } from 'lucide-react-native'
+import {
+  Check,
+  CornerDownRight,
+  ExternalLink,
+  Pencil,
+  Trash2,
+  Undo2
+} from '../../../../components/icons/app-icons'
 import type {
   GitHubReaction,
   GitHubReactionContent,

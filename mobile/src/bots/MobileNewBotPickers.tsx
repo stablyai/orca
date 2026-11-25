@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, View } from 'react-native'
-import { Shuffle } from 'lucide-react-native'
+import { Shuffle } from '../components/icons/app-icons'
 import type { BotAgent } from '../../../src/shared/bot-types'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { HostKindIcon } from '../components/icons/HostKindIcon'

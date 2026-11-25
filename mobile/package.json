@@ -23,6 +23,7 @@
     "start:emulator": "node scripts/start-emulator.mjs"
   },
   "dependencies": {
+    "@expo/ui": "~58.0.29",
     "@formatjs/intl-pluralrules": "6.3.16",
     "@noble/hashes": "1.8.0",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
@@ -55,6 +56,7 @@
     "expo-secure-store": "^58.0.2",
     "expo-splash-screen": "^58.0.12",
     "expo-status-bar": "^58.0.4",
+    "expo-symbols": "~58.0.5",
     "expo-task-manager": "~58.0.13",
     "fflate": "0.8.3",
     "i18next": "26.7.2",

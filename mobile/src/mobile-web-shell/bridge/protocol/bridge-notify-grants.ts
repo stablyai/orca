@@ -15,6 +15,10 @@ import { BRIDGE_SWAP_SAFE_NOTIFY } from '../page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PAGE_PAINTED } from '../page-lifecycle/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from '../page-lifecycle/bridge-route-update'
 import {
+  BRIDGE_PAGE_HEADER_GRANT,
+  BRIDGE_PAGE_HEADER_NOTIFY
+} from '../native-capabilities/bridge-page-header'
+import {
   BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
   BRIDGE_TERMINAL_KEY_RAIL_GRANT
 } from '../native-capabilities/bridge-terminal-key'
@@ -38,6 +42,7 @@ const BRIDGE_NOTIFY_GRANTS: Readonly<Record<BridgeNotifyName, string | null>> = 
   [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT,
   [BRIDGE_HAPTICS_NOTIFY]: BRIDGE_HAPTICS_GRANT,
   [BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY]: BRIDGE_TERMINAL_KEY_RAIL_GRANT,
+  [BRIDGE_PAGE_HEADER_NOTIFY]: BRIDGE_PAGE_HEADER_GRANT,
   [BRIDGE_LIVENESS_PROBE_NOTIFY]: null
 }
 

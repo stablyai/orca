@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { Package } from 'lucide-react-native'
+import { View, Text, ActivityIndicator } from 'react-native'
+import { Package } from '../components/icons/app-icons'
 import { loadHosts } from '../host-catalog/host-store'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -12,7 +12,7 @@ import {
 import type { HostProfile } from '../host-catalog/host-profile'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { ListGroup, ListRow } from '../components/list/ListGroup'
+import { LIST_LEADING_INSET, ListGroup, ListRow } from '../components/list/ListGroup'
 
 function buttonLabel(
   state: MobileWebBundleProbeState,
@@ -112,23 +112,22 @@ export function MobileWebBundleProbeRow() {
 
   return (
     <View>
-      <Pressable
-        style={({ pressed }) => [
-          styles.diagnosticButton,
-          pressed && styles.diagnosticButtonPressed,
-          state.status === 'running' && styles.diagnosticButtonDisabled
-        ]}
-        testID="mobile-web-bundle-probe"
-        onPress={run}
-        disabled={state.status === 'running'}
-      >
-        {state.status === 'running' ? (
-          <ActivityIndicator size="small" color={colors.textPrimary} />
-        ) : (
-          <Package size={16} color={colors.textPrimary} />
-        )}
-        <Text style={styles.diagnosticButtonLabel}>{buttonLabel(state, awaitingHost, t)}</Text>
-      </Pressable>
+      <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
+        <ListRow
+          key="probe"
+          title={buttonLabel(state, awaitingHost, t)}
+          leading={
+            state.status === 'running' ? (
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+            ) : (
+              <Package size={18} color={colors.textSecondary} />
+            )
+          }
+          busy={state.status === 'running'}
+          testID="mobile-web-bundle-probe"
+          onPress={run}
+        />
+      </ListGroup>
       <ProbeResult
         state={state}
         hostName={

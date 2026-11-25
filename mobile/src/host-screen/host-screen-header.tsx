@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { Pressable, Text, type HostInstance } from 'react-native'
+import { useState } from 'react'
+import { Pressable, Text } from 'react-native'
 import {
   CalendarClock,
   ChevronLeft,
@@ -10,13 +10,13 @@ import {
   Server,
   SquareTerminal,
   UserCircle
-} from 'lucide-react-native'
+} from '../components/icons/app-icons'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { hostDiagnosticsAction, hostEditAction } from '../host-list-action-sheet-actions'
-import { NavBar, NavBarSubtitleText } from '../components/nav-bar/NavBar'
+import { NavBar, NavBarRefreshLine, NavBarSubtitleText } from '../components/nav-bar/NavBar'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
+import { NativeMenu } from '../components/menu/NativeMenu'
 import { StatusDot } from '../components/feedback/StatusDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useRefreshHint } from '../query/refresh-hint'
@@ -32,6 +32,7 @@ import {
 import type { HostScreenController } from './use-host-screen-controller'
 import { HostSharedLinksSheet } from './host-shared-links-sheet'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
+import { usePageHeaderClaim } from '../platform/page-header/page-header-claim'
 import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../../src/shared/mcp-servers/mcp-servers'
 import { useRouteCapability } from '../worktree/execution-hosts/use-route-capability'
 
@@ -101,8 +102,6 @@ export function HostScreenHeader({
     onHideSidebar,
     router
   } = controller
-  const moreRef = useRef<HostInstance>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [sharedLinksOpen, setSharedLinksOpen] = useState(false)
   // The computer's own bot links, once it lists bots; a server's live under that server's account.
   const listsBots = controller.bots.some(
@@ -181,46 +180,64 @@ export function HostScreenHeader({
     hostEditAction(() => actions.navigateFromHostList(`${hostPath}/edit`)),
     hostDiagnosticsAction(() => router.push({ pathname: '/connection-log', params: { hostId } }))
   ]
+  const moreActionsLabel = t('hostScreen.hostScreenHeader.moreActions', 'More actions')
+  // The status line stays under the in-content title; the sidebar beside a session keeps its own bar.
+  const native = usePageHeaderClaim(
+    embedded
+      ? null
+      : {
+          title: hostDisplay.title,
+          titleVisible: collapsingTitle?.barTitleShown ?? true,
+          onBack: actions.leaveHost,
+          actions: [
+            {
+              id: 'more',
+              icon: MoreHorizontal,
+              label: moreActionsLabel,
+              menu: [navigationGroup, hostGroup]
+            }
+          ]
+        }
+  )
   return (
     <>
-      <NavBar
-        leading={
-          <>
-            <NavBarButton
-              icon={ChevronLeft}
-              accessibilityLabel={t('hostScreen.hostScreenHeader.backToHosts', 'Back to hosts')}
-              onPress={actions.leaveHost}
-            />
-            {embedded && onHideSidebar ? (
+      {native && showRefreshLine ? <NavBarRefreshLine /> : null}
+      {native ? null : (
+        <NavBar
+          leading={
+            <>
               <NavBarButton
-                icon={PanelLeftClose}
-                accessibilityLabel={t('hostScreen.hostScreenHeader.hideSidebar', 'Hide sidebar')}
-                onPress={onHideSidebar}
+                icon={ChevronLeft}
+                accessibilityLabel={t('hostScreen.hostScreenHeader.backToHosts', 'Back to hosts')}
+                onPress={actions.leaveHost}
               />
-            ) : null}
-          </>
-        }
-        title={hostDisplay.title}
-        subtitle={<HostConnectionStatus controller={controller} />}
-        refreshing={showRefreshLine}
-        titleOpacity={collapsingTitle?.barTitleOpacity}
-        dividerOpacity={collapsingTitle?.barDividerOpacity}
-        trailing={
-          <NavBarButton
-            ref={moreRef}
-            icon={MoreHorizontal}
-            accessibilityLabel={t('hostScreen.hostScreenHeader.moreActions', 'More actions')}
-            onPress={() => setMenuOpen(true)}
-            active={menuOpen}
-          />
-        }
-      />
-      <PullDownMenu
-        visible={menuOpen}
-        anchorRef={moreRef}
-        groups={[navigationGroup, hostGroup]}
-        onClose={() => setMenuOpen(false)}
-      />
+              {embedded && onHideSidebar ? (
+                <NavBarButton
+                  icon={PanelLeftClose}
+                  accessibilityLabel={t('hostScreen.hostScreenHeader.hideSidebar', 'Hide sidebar')}
+                  onPress={onHideSidebar}
+                />
+              ) : null}
+            </>
+          }
+          title={hostDisplay.title}
+          subtitle={<HostConnectionStatus controller={controller} />}
+          refreshing={showRefreshLine}
+          titleOpacity={collapsingTitle?.barTitleOpacity}
+          dividerOpacity={collapsingTitle?.barDividerOpacity}
+          trailing={
+            <NativeMenu groups={[navigationGroup, hostGroup]}>
+              {(openMenu) => (
+                <NavBarButton
+                  icon={MoreHorizontal}
+                  accessibilityLabel={moreActionsLabel}
+                  onPress={openMenu}
+                />
+              )}
+            </NativeMenu>
+          }
+        />
+      )}
       {listsBots ? (
         <HostSharedLinksSheet
           controller={controller}

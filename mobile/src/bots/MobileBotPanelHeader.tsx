@@ -1,7 +1,7 @@
 // The bot panel's head: the Needs you only toggle (on Items), the bot's name and "agent · computer",
 // the gear for settings, then the tabs with Items' Needs you count.
 import { Text, View } from 'react-native'
-import { ListFilter, Settings } from 'lucide-react-native'
+import { ListFilter, Settings } from '../components/icons/app-icons'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'

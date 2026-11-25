@@ -1,6 +1,6 @@
 // The phone's composer under-row Slack item ("#eng thread"); a press opens the chat's Slack sheet.
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown } from 'lucide-react-native'
+import { ChevronDown } from '../../../components/icons/app-icons'
 import { MobileConnectorSourceIcon } from '../../../bots/MobileConnectorSourceIcon'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'

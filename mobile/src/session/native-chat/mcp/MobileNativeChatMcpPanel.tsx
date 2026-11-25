@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { ChevronRight, X } from 'lucide-react-native'
+import { X, ChevronRight } from '../../../components/icons/app-icons'
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpServer,

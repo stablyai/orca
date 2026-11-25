@@ -3,7 +3,7 @@
 // Composio's own pages are ordinary web pages, so the phone opens them in the browser.
 import { useState } from 'react'
 import { Text } from 'react-native'
-import { Check, ExternalLink, KeyRound } from 'lucide-react-native'
+import { Check, ExternalLink, KeyRound } from '../../../../components/icons/app-icons'
 import { COMPOSIO_PAGES } from '../../../../../../src/shared/composio/composio-apps'
 import type { ComposioSetupCardRef } from '../../../../../../src/shared/composio/composio-setup-card'
 import { useHostBotById } from '../../../../bots/host-bot-store'

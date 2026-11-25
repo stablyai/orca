@@ -7,7 +7,7 @@ import {
   RotateCw,
   UserRound,
   X
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'

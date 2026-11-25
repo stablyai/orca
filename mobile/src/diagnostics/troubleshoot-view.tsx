@@ -1,12 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react'
-import {
-  View,
-  Text,
-  Pressable,
-  ScrollView,
-  ActivityIndicator,
-  type HostInstance
-} from 'react-native'
+import { View, Text, ScrollView, ActivityIndicator, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   ChevronDown,
@@ -16,14 +9,21 @@ import {
   ScrollText,
   XCircle,
   AlertTriangle
-} from 'lucide-react-native'
+} from '../components/icons/app-icons'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { NATIVE_SCREEN_HEADER } from '../components/nav-bar/ScreenHeader'
 import { SettingsNavBar, settingsScreenStyles } from '../settings/settings-screen-frame'
-import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
+import {
+  GroupedListScreen,
+  LIST_LEADING_INSET,
+  ListGroup,
+  ListRow,
+  SectionHeader
+} from '../components/list/ListGroup'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
 
 export type CheckResult = {
@@ -73,7 +73,13 @@ export function TroubleshootView({
     []
   )
   return (
-    <View ref={rootRef} style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
+    <View
+      ref={rootRef}
+      style={[
+        settingsScreenStyles.groupedContainer,
+        { paddingTop: NATIVE_SCREEN_HEADER ? 0 : insets.top }
+      ]}
+    >
       <SettingsNavBar
         title={t('diagnostics.troubleshootView.title', 'Troubleshooting')}
         onBack={onBack}
@@ -81,103 +87,105 @@ export function TroubleshootView({
 
       <ScrollView
         style={styles.scroll}
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
           settingsScreenStyles.scrollContent,
           { paddingBottom: insets.bottom + spacing.xl }
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
-          style={({ pressed }) => [
-            styles.diagnosticButton,
-            pressed && styles.diagnosticButtonPressed,
-            diagnosticStatus === 'running' && styles.diagnosticButtonDisabled
-          ]}
-          testID="diagnostics-run"
-          onPress={runDiagnostics}
-          disabled={diagnosticStatus === 'running'}
-        >
-          {diagnosticStatus === 'running' ? (
-            <ActivityIndicator size="small" color={colors.textPrimary} />
-          ) : (
-            <Activity size={16} color={colors.textPrimary} />
-          )}
-          <Text style={styles.diagnosticButtonLabel}>
-            {diagnosticStatus === 'running'
-              ? t('diagnostics.troubleshootView.running', 'Running…')
-              : diagnosticStatus === 'done'
-                ? t('diagnostics.troubleshootView.runAgain', 'Run again')
-                : t('diagnostics.troubleshootView.runDiagnostics', 'Run diagnostics')}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.diagnosticButton,
-            pressed && styles.diagnosticButtonPressed
-          ]}
-          onPress={onConnectionLog}
-        >
-          <ScrollText size={16} color={colors.textPrimary} />
-          <Text style={styles.diagnosticButtonLabel}>
-            {t('diagnostics.troubleshootView.viewNetworkDiagnostics', 'View network diagnostics')}
-          </Text>
-        </Pressable>
-
-        {developerRow}
-
-        {checks.length > 0 && (
+        <GroupedListScreen>
           <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
-            {checks.map((check) => (
-              <ListRow
-                key={check.label}
-                title={check.label}
-                leading={<StatusIcon status={check.status} />}
-                detail={
-                  <Text
-                    style={[styles.checkDetail, check.status === 'fail' && styles.checkDetailFail]}
-                  >
-                    {check.detail}
-                  </Text>
-                }
-              />
+            <ListRow
+              key="run"
+              title={
+                diagnosticStatus === 'running'
+                  ? t('diagnostics.troubleshootView.running', 'Running…')
+                  : diagnosticStatus === 'done'
+                    ? t('diagnostics.troubleshootView.runAgain', 'Run again')
+                    : t('diagnostics.troubleshootView.runDiagnostics', 'Run diagnostics')
+              }
+              leading={
+                diagnosticStatus === 'running' ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : (
+                  <Activity size={18} color={colors.textSecondary} />
+                )
+              }
+              busy={diagnosticStatus === 'running'}
+              testID="diagnostics-run"
+              onPress={runDiagnostics}
+            />
+            <ListRow
+              key="network"
+              title={t(
+                'diagnostics.troubleshootView.viewNetworkDiagnostics',
+                'View network diagnostics'
+              )}
+              leading={<ScrollText size={18} color={colors.textSecondary} />}
+              navigates
+              onPress={onConnectionLog}
+            />
+          </ListGroup>
+
+          {developerRow}
+
+          {checks.length > 0 && (
+            <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
+              {checks.map((check) => (
+                <ListRow
+                  key={check.label}
+                  title={check.label}
+                  leading={<StatusIcon status={check.status} />}
+                  detail={
+                    <Text
+                      style={[
+                        styles.checkDetail,
+                        check.status === 'fail' && styles.checkDetailFail
+                      ]}
+                    >
+                      {check.detail}
+                    </Text>
+                  }
+                />
+              ))}
+            </ListGroup>
+          )}
+
+          <SectionHeader
+            title={t('diagnostics.troubleshootView.commonIssues', 'Common issues')}
+            first
+          />
+
+          <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
+            {troubleshootCommonIssues(t, hostEndpoints).map((section) => (
+              <View key={section.id}>
+                <ListRow
+                  title={section.title}
+                  leading={<section.icon size={18} color={colors.textSecondary} />}
+                  accessory={
+                    expandedId === section.id ? (
+                      <ChevronUp size={16} color={colors.disclosureTint} />
+                    ) : (
+                      <ChevronDown size={16} color={colors.disclosureTint} />
+                    )
+                  }
+                  onPress={() => toggleSection(section.id)}
+                />
+                {expandedId === section.id && (
+                  <View style={styles.accordionBody}>
+                    {section.steps.map((step, j) => (
+                      <View key={j} style={styles.stepRow}>
+                        <Text style={styles.bullet}>•</Text>
+                        <Text style={styles.stepText}>{step}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
             ))}
           </ListGroup>
-        )}
-
-        <SectionHeader
-          title={t('diagnostics.troubleshootView.commonIssues', 'Common issues')}
-          first
-        />
-
-        <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
-          {troubleshootCommonIssues(t, hostEndpoints).map((section) => (
-            <View key={section.id}>
-              <ListRow
-                title={section.title}
-                leading={<section.icon size={16} color={colors.textSecondary} />}
-                accessory={
-                  expandedId === section.id ? (
-                    <ChevronUp size={16} color={colors.textMuted} />
-                  ) : (
-                    <ChevronDown size={16} color={colors.textMuted} />
-                  )
-                }
-                onPress={() => toggleSection(section.id)}
-              />
-              {expandedId === section.id && (
-                <View style={styles.accordionBody}>
-                  {section.steps.map((step, j) => (
-                    <View key={j} style={styles.stepRow}>
-                      <Text style={styles.bullet}>•</Text>
-                      <Text style={styles.stepText}>{step}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          ))}
-        </ListGroup>
+        </GroupedListScreen>
       </ScrollView>
     </View>
   )

@@ -6,7 +6,7 @@ import {
   MessageSquareWarning,
   OctagonAlert,
   TriangleAlert
-} from 'lucide-react-native'
+} from '../../icons/app-icons'
 import type { GitHubCalloutKind } from '../../../../../src/shared/github/markdown/github-callouts'
 import { translate } from '../../../i18n/mobile-i18n'
 import { styles } from '../mobile-markdown-styles'

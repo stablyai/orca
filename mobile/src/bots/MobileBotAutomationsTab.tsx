@@ -1,5 +1,4 @@
-import { useRef, useState } from 'react'
-import { Text, View, type HostInstance } from 'react-native'
+import { Text } from 'react-native'
 import {
   Clock,
   History,
@@ -10,14 +9,14 @@ import {
   Plus,
   Trash2,
   Zap
-} from 'lucide-react-native'
+} from '../components/icons/app-icons'
 import { hasAutomationSchedule } from '../../../src/shared/automation-event-triggers'
 import { useNow } from '../hooks/use-now'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { botWaitTimeFormat } from '../../../src/shared/bots/bot-row-line'
 import { MobileStateButton, MobileStateView } from '../components/feedback/MobileStateView'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
-import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
+import { DrawnMenu } from '../components/menu/DrawnMenu'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -52,8 +51,6 @@ function AutomationRow(props: {
   onDelete: (() => void) | null
 }) {
   const t = useMobileTranslation()
-  const anchor = useRef<HostInstance>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const { automation, failing } = props.row
   const { onEdit, onAskInChat, onViewRuns } = props.actions
   const wontFire = automationWontFireNote(automation, props.bot)
@@ -115,44 +112,46 @@ function AutomationRow(props: {
         ]
       : []
   ]
+  // Drawn: the whole row opens it, and a native menu would also swallow taps on the row's switch.
   return (
-    <View ref={anchor} collapsable={false}>
-      <ListRow
-        title={automation.name}
-        subtitle={automationWhenText(automation, automation.enabled)}
-        subtitleNote={
-          props.row.needsSignIn
-            ? { text: t('bots.upcoming.needsSignIn', 'Needs sign-in'), color: colors.agentQuestion }
-            : failing
+    <DrawnMenu groups={menu}>
+      {(openMenu) => (
+        <ListRow
+          title={automation.name}
+          subtitle={automationWhenText(automation, automation.enabled)}
+          subtitleNote={
+            props.row.needsSignIn
               ? {
-                  text: t('bots.automations.couldNotFinish', 'Couldn’t finish'),
-                  color: colors.statusRed
+                  text: t('bots.upcoming.needsSignIn', 'Needs sign-in'),
+                  color: colors.agentQuestion
                 }
-              : undefined
-        }
-        leading={<Kind {...KIND_GLYPH} color={colors.textSecondary} />}
-        onPress={() => setMenuOpen(true)}
-        detail={wontFire ? <Text style={optionStyles.optionRowDetail}>{wontFire}</Text> : undefined}
-        accessory={
-          <MobileSwitch
-            value={automation.enabled}
-            onValueChange={props.onSetEnabled}
-            disabled={props.disabled}
-            accessibilityLabel={
-              automation.enabled
-                ? t('bots.automations.pause', 'Pause {{name}}', { name: automation.name })
-                : t('bots.automations.resume', 'Resume {{name}}', { name: automation.name })
-            }
-          />
-        }
-      />
-      <PullDownMenu
-        visible={menuOpen}
-        anchorRef={anchor}
-        groups={menu}
-        onClose={() => setMenuOpen(false)}
-      />
-    </View>
+              : failing
+                ? {
+                    text: t('bots.automations.couldNotFinish', 'Couldn’t finish'),
+                    color: colors.statusRed
+                  }
+                : undefined
+          }
+          leading={<Kind {...KIND_GLYPH} color={colors.textSecondary} />}
+          onPress={openMenu}
+          detail={
+            wontFire ? <Text style={optionStyles.optionRowDetail}>{wontFire}</Text> : undefined
+          }
+          accessory={
+            <MobileSwitch
+              value={automation.enabled}
+              onValueChange={props.onSetEnabled}
+              disabled={props.disabled}
+              accessibilityLabel={
+                automation.enabled
+                  ? t('bots.automations.pause', 'Pause {{name}}', { name: automation.name })
+                  : t('bots.automations.resume', 'Resume {{name}}', { name: automation.name })
+              }
+            />
+          }
+        />
+      )}
+    </DrawnMenu>
   )
 }
 

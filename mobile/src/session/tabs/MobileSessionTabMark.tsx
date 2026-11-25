@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Image } from 'react-native'
-import { File, FileText, Globe, SquareTerminal } from 'lucide-react-native'
+import { File, FileText, Globe, SquareTerminal } from '../../components/icons/app-icons'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { FlatList, View, type ListRenderItem } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft, FolderOpen, X } from 'lucide-react-native'
+import { ChevronLeft, FolderOpen, X } from '../../components/icons/app-icons'
 import {
   partialMatchKey,
   useQueryClient,

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ArrowUpDown, Bot as BotIcon, Users } from 'lucide-react-native'
+import { ArrowUpDown, Bot as BotIcon, Users } from '../components/icons/app-icons'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import type { useMobileTranslation } from '../i18n/use-mobile-translation'
 

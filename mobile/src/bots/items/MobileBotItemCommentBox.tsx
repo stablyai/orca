@@ -6,7 +6,7 @@
 // attach with the chat's + and thumbnails, each named [Image #N] in the words.
 import { useCallback, useContext, useEffect, useRef, useState, type RefObject } from 'react'
 import { Pressable, Text, View, type HostInstance, type TextInputInstance } from 'react-native'
-import { WifiOff, X } from 'lucide-react-native'
+import { WifiOff, X } from '../../components/icons/app-icons'
 import type { BotItem, BotItemCommentSkill } from '../../../../src/shared/bots/bot-items'
 import type { BotItemWaitingLine } from '../../../../src/shared/bots/bot-item-question-answers'
 import { folderWorkspaceKey } from '../../../../src/shared/workspace/identity/workspace-scope'

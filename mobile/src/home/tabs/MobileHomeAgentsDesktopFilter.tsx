@@ -1,4 +1,4 @@
-import { Monitor, WifiOff } from 'lucide-react-native'
+import { Monitor, WifiOff } from '../../components/icons/app-icons'
 import { useState } from 'react'
 import type { AgentListHostSummary } from '../../agents/agent-list-rows'
 import { PickerModal, type PickerOption } from '../../components/sheets/PickerModal'

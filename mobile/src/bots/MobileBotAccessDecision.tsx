@@ -3,7 +3,7 @@
 // waiting.
 import { useEffect, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Laptop, Mail, ShieldAlert, ShieldOff, type LucideIcon } from 'lucide-react-native'
+import { Laptop, Mail, ShieldAlert, ShieldOff, type AppIcon } from '../components/icons/app-icons'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -29,7 +29,7 @@ import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
 import { mobileBotAccessCopy } from './mobile-bot-access-copy'
 import { SettingsNote } from '../settings/settings-screen-frame'
 
-const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], LucideIcon>> = {
+const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], AppIcon>> = {
   computer: Laptop,
   'no-approvals': ShieldOff,
   'may-skip-approvals': ShieldAlert,

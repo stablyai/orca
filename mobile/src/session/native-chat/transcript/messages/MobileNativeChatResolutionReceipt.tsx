@@ -1,5 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { ShieldCheck, ShieldMinus, ShieldQuestion, ShieldX } from 'lucide-react-native'
+import {
+  ShieldCheck,
+  ShieldMinus,
+  ShieldQuestion,
+  ShieldX
+} from '../../../../components/icons/app-icons'
 import {
   nativeChatReceiptAnswerHeading,
   nativeChatReceiptAnswers,

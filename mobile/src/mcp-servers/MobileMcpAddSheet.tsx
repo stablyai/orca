@@ -3,7 +3,7 @@
 // the host says Added and opens its page; one that takes a token opens Custom server filled in.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
-import { Plus, SlidersHorizontal, X } from 'lucide-react-native'
+import { Plus, SlidersHorizontal, X } from '../components/icons/app-icons'
 import { botMcpAppLine } from '../../../src/shared/bots/bot-app-lines'
 import { botMcpAppUrl } from '../../../src/shared/bots/bot-mcp-apps'
 import {

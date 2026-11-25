@@ -9,7 +9,7 @@ import {
   Moon,
   Pin,
   PinOff
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import { buildWorktreeNavigationActions } from '../../agent-history/worktree-navigation-actions'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

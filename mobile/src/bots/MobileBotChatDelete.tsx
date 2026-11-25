@@ -2,7 +2,7 @@
 // Delete chat, a confirm beside the drawer asks, then the chat's host deletes it and closes its tabs.
 import { useRef, useState, type ReactNode } from 'react'
 import { View, type HostInstance } from 'react-native'
-import { ArrowUpRight, Trash2 } from 'lucide-react-native'
+import { ArrowUpRight, Trash2 } from '../components/icons/app-icons'
 import {
   AGENT_SESSION_PHONE_DELETE_RUNTIME_CAPABILITY,
   orcaChatDeleteRefusalText,

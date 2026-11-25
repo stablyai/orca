@@ -2,7 +2,7 @@
 import { useId } from 'react'
 import { View, type ViewStyle } from 'react-native'
 import { Circle, Defs, Mask, Rect } from 'react-native-svg'
-import { CalendarClock, House, MessageSquare } from 'lucide-react-native'
+import { CalendarClock, House, MessageSquare } from '../components/icons/app-icons'
 import {
   AGENT_STATE_DOT_SIZE,
   AGENT_WORKING_COLOR,

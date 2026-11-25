@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { RefreshCw } from 'lucide-react-native'
+import { RefreshCw } from '../../components/icons/app-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

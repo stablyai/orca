@@ -4,7 +4,7 @@
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
-import { ArrowUpRight, Ellipsis, Plus, Share } from 'lucide-react-native'
+import { Ellipsis, ArrowUpRight, Plus, Share } from '../../components/icons/app-icons'
 import {
   GOOGLE_CHOICE_SERVICES,
   GOOGLE_SERVICE_CHOICES

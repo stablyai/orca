@@ -7,7 +7,7 @@ import {
   Image as ImageIcon,
   MoreHorizontal,
   Send
-} from 'lucide-react-native'
+} from '../../../../components/icons/app-icons'
 import { colors } from '../../../../theme/mobile-theme'
 import { queuedMessageCardSteers } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'

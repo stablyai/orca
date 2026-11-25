@@ -1,7 +1,7 @@
 // Where a server is on: every workspace (with ones added later), or only the ones ticked. The same
 // choice Repository settings' switches edit on the desktop.
 import { useRef, useState } from 'react'
-import { Folder } from 'lucide-react-native'
+import { Folder } from '../components/icons/app-icons'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsSection } from '../settings/settings-screen-frame'

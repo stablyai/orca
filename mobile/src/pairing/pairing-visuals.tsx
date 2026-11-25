@@ -7,7 +7,7 @@ import Animated, {
   withSpring,
   withTiming
 } from 'react-native-reanimated'
-import { Check } from 'lucide-react-native'
+import { Check } from '../components/icons/app-icons'
 import { SHEET_CURVE } from '../components/motion/sheet-motion-values'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
