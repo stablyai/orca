@@ -7,17 +7,20 @@ import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-prot
  */
 export class ProviderRelayAnsweredRequests {
   private readonly seqs = new Set<number>()
+  private prunedAt = 0
 
   constructor(private readonly ackedSeq: () => number) {}
 
   readonly add = (seq: number): void => {
     // Acked lines are never replayed again, so they are dropped as new answers come in.
     const acked = this.ackedSeq()
-    for (const answered of this.seqs) {
+    // Only an ack since the last prune can retire any: answers while detached cost nothing more.
+    for (const answered of acked > this.prunedAt ? this.seqs : []) {
       if (answered <= acked) {
         this.seqs.delete(answered)
       }
     }
+    this.prunedAt = acked
     if (seq > acked) {
       this.seqs.add(seq)
     }
