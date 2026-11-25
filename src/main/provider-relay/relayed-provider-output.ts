@@ -64,6 +64,11 @@ export class RelayedProviderOutput {
   private keptFrom: number | null = null
   /** A forced ack released lines through here; a floor at or below it was already given up. */
   private releasedThrough = 0
+  /**
+   * The daemon's ask covers through here. A first answer can fall short (lines still on their way),
+   * and the daemon won't ask again, so every ack until here saves what it must, as the first did.
+   */
+  private askedThrough = 0
   /** The floor gave up an open item; held until an ack carrying the cut succeeds. */
   private pendingCut = false
   /** Requests already handed on, so a replay or reattach never asks the user twice. */
@@ -219,7 +224,8 @@ export class RelayedProviderOutput {
   }
 
   /** Acks everything handed on now, after its durability barrier; `force` saves live text first. */
-  settle(force = false): Promise<void> {
+  settle(force = false, askedThrough = 0): Promise<void> {
+    this.askedThrough = Math.max(this.askedThrough, force ? askedThrough : 0)
     this.clearAckTimer()
     return this.ack(force)
   }
@@ -336,7 +342,8 @@ export class RelayedProviderOutput {
       await new Promise((resolve) => setImmediate(resolve))
       try {
         // Unsaved streamed text is only in a kept item, which a reattach replays whole.
-        if ((await this.options.durable?.(force)) === false && keepFrom === null) {
+        const owed = force || this.ackedSeq < this.askedThrough
+        if ((await this.options.durable?.(owed)) === false && keepFrom === null) {
           return
         }
         // Giving up an open kept span: the next attach must know its replay starts inside an item.

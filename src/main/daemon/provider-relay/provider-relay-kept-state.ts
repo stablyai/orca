@@ -70,7 +70,13 @@ export class ProviderRelayKeptState {
     return this.sendOnAttach ? [...this.kept.values()].sort((a, b) => a.seq - b.seq) : []
   }
 
-  /** Which kept seq answers to which name; taken with `records()`, they describe the same lines. */
+  /** The kept lines an attach sends and their names, taken together: a line kept while the attach
+   *  awaits would otherwise be named in its reply but never sent as kept. */
+  snapshot(): { records: ProviderRelayRecord[]; lines: ProviderRelayKeptLine[] } {
+    return { records: this.records(), lines: this.lines() }
+  }
+
+  /** Which kept seq answers to which name. */
   lines(): ProviderRelayKeptLine[] {
     return this.sendOnAttach
       ? [...this.kept].map(([name, record]) => ({ seq: record.seq, name }))

@@ -144,7 +144,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.output.restartAt((this.attachedFrom = fromSeq))
     this.unbind = this.options.channel.bind(this.relayId, {
       line: (event, seq, line) => this.output.line(event, seq, line),
-      ackWanted: () => void this.output.settle(true),
+      ackWanted: (seq) => void this.output.settle(true, seq),
       exit: (exit) => this.onExit(exit),
       disconnected: () => void this.reattach()
     })
