@@ -21,8 +21,8 @@ vi.mock('@/lib/files/os-open/local-file-manager-label', () => ({
 import { offerRemoteBrowserDownloadCopy } from './remote-browser-download-copy'
 
 type Clickable = { action: { onClick: (event: { preventDefault: () => void }) => void } }
-const click = (options: unknown): void =>
-  (options as Clickable).action.onClick({ preventDefault: () => {} })
+// The toast options the code passed (a mock's recorded argument).
+const click = (options: Clickable): void => options.action.onClick({ preventDefault: () => {} })
 
 type AckOrder = 'ack-before-result' | 'result-before-ack'
 

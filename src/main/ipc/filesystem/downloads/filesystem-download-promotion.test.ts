@@ -63,13 +63,13 @@ async function copyWithTrouble(
   }
 
   vi.mocked(link).mockRejectedValue(ioError('no links', 'EPERM'))
-  vi.mocked(lstat).mockImplementation((async (...args: Parameters<typeof fs.lstat>) => {
+  vi.mocked(lstat).mockImplementation(async (...args: Parameters<typeof fs.lstat>) => {
     const result = await fs.lstat(...args)
     if (seen.troubled && args[0] === destinationPath) {
       await hooks.onInspect?.(destinationPath)
     }
     return result
-  }) as typeof fs.lstat)
+  })
   vi.mocked(open).mockImplementation(async (...args: Parameters<typeof fs.open>) => {
     const handle = await fs.open(...args)
     const close = handle.close.bind(handle)
@@ -84,10 +84,12 @@ async function copyWithTrouble(
         }
       })
     }
-    const write = handle.write.bind(handle) as (...a: unknown[]) => Promise<unknown>
+    // Bound before the wrapper below replaces it on the handle.
+    const realWrite = handle.write.bind(handle)
+    const write = (bytes: Buffer) => realWrite(bytes, 0, bytes.byteLength)
     return Object.assign(handle, {
       // The staged copy is 'copied': the first half lands, then the trouble, then the rest.
-      write: async (...a: unknown[]) => {
+      write: async (buffer: Uint8Array, _offset?: number, length = buffer.byteLength) => {
         await write(Buffer.from('cop'))
         if (trouble.write) {
           await troubleNow()
@@ -98,7 +100,7 @@ async function copyWithTrouble(
           await troubleNow()
         }
         await write(Buffer.from('ied'))
-        return { bytesWritten: a[2] as number, buffer: a[0] }
+        return { bytesWritten: length, buffer }
       },
       close: async () => {
         await close()
@@ -118,7 +120,10 @@ async function copyWithTrouble(
     controller.signal
   ).then(
     (savedAt) => ({ savedAt, error: null }),
-    (error: unknown) => ({ savedAt: null, error: error as Error })
+    (error: unknown) => ({
+      savedAt: null,
+      error: error instanceof Error ? error : new Error(String(error))
+    })
   )
   return { dir, destinationPath, outcome, targetClosed: seen.targetClosed }
 }

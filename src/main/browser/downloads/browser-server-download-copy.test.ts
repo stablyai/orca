@@ -47,8 +47,10 @@ const RETIRED = 'The connection to the server changed. Download it again.'
 
 type Callbacks = Parameters<typeof subscribeRuntimeEnvironment>[5]
 type StreamEvent = Parameters<Callbacks['onEvent']>[0]
-const response = (result: unknown): StreamEvent =>
-  ({ type: 'response', response: { ok: true, result } }) as StreamEvent
+const response = (result: unknown): StreamEvent => ({
+  type: 'response',
+  response: { id: 'stream', ok: true, result, _meta: { runtimeId: 'server' } }
+})
 const frame = (bytes: Buffer): StreamEvent => ({
   type: 'binary',
   bytes: Uint8Array.from([BROWSER_DOWNLOAD_COPY_FRAME_KIND, ...bytes])
@@ -90,7 +92,8 @@ const isStaging = (filePath: unknown): boolean => path.basename(String(filePath)
 /** Wraps the staging file ('staging') or, on a volume without links, the new file in Downloads. */
 function wrapWritable(
   which: 'staging' | 'new',
-  wrap: (handle: FsPromises.FileHandle) => Partial<FsPromises.FileHandle>
+  // Replaces some of the handle's methods; the rest stay the real ones.
+  wrap: (handle: FsPromises.FileHandle) => object
 ): void {
   vi.mocked(open).mockImplementation(async (...args: Parameters<typeof fs.open>) => {
     const handle = await fs.open(...args)
@@ -274,10 +277,12 @@ describe('Save to this computer for a download on a paired server', () => {
       // The order the held write finishing and the file closing happened in.
       const order: string[] = []
       wrapWritable('staging', (handle) => {
-        const realWrite = handle.write.bind(handle) as (...a: unknown[]) => Promise<unknown>
+        // Bound before the wrapper below replaces it on the handle.
+        const realWrite = handle.write.bind(handle)
         const close = handle.close.bind(handle)
         return {
-          write: (async (...a: unknown[]) => {
+          // The copy writes (bytes, offset, length).
+          write: async (bytes: Uint8Array, offset?: number, length?: number) => {
             writesStarted.count += 1
             if (writesStarted.count === 1) {
               try {
@@ -286,12 +291,12 @@ describe('Save to this computer for a download on a paired server', () => {
                 order.push('write done')
               }
             }
-            const result = (await realWrite(...a)) as { bytesWritten: number }
+            const result = await realWrite(bytes, offset, length)
             // A short write: only part of the frame landed, so the rest would be written next.
             return options.shortWrite && writesStarted.count === 1
               ? { ...result, bytesWritten: 1 }
               : result
-          }) as FsPromises.FileHandle['write'],
+          },
           close: async () => {
             order.push('close')
             await close()
