@@ -7,7 +7,7 @@ import {
   type ClaudeStreamJsonLaunch
 } from '../claude-stream-json-connection'
 import { launchRelayedProviderProcess } from '../../provider-relay/app-provider-relays'
-import { CLAUDE_RELAY_WORK_MARKERS } from './claude-relay-markers'
+import { CLAUDE_RELAY_WORK_MARKERS, claudeRelayAttachTaskIds } from './claude-relay-markers'
 import { ClaudeKeptAgentResponder } from './claude-kept-agent-responder'
 import { ClaudeKeptAgentQuery } from './claude-kept-agent-query'
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
@@ -30,6 +30,8 @@ export type ClaudeKeptAgentRelay = {
   /** Background tasks open when the last app let go, and those that ended since: this app never
    *  saw them start, so each is restated and the replayed end settles one that ended. */
   taskIds: readonly string[]
+  /** Claude's last reported mode as the daemon kept it, when it kept one. */
+  confirmedMode: string | null | undefined
 }
 
 export type ClaudeKeptAgentConnection = ClaudeStreamJsonConnection & {
@@ -146,7 +148,7 @@ export async function openKeptClaudeAgentConnection(
   const { managed, child } = relayed
   const reattachedStdout = handlers.onReattach?.()
   // Ahead of every replayed or pending line, so a waiting request reads the mode Claude confirmed.
-  feedClaudeKeptModeLines(child, handlers.onStdout)
+  const confirmedMode = feedClaudeKeptModeLines(child, handlers.onStdout)
   const records = child.stdout.relayRecords
   records.claim()
   const exited = Promise.withResolvers<Error>()
@@ -301,14 +303,8 @@ export async function openKeptClaudeAgentConnection(
     ...createClaudeControlSurface(keptQuery),
     kept: {
       releaseOutput: () => child.releaseOutput(),
-      taskIds: [
-        ...new Set(
-          [
-            ...(child.attachResult?.openWork?.task ?? []),
-            ...(child.attachResult?.endedWork?.task ?? [])
-          ].flatMap(([id]) => id ?? [])
-        )
-      ]
+      taskIds: claudeRelayAttachTaskIds(child.attachResult),
+      confirmedMode
     },
     exited: exited.promise,
     spawned: Promise.resolve(),

@@ -53,6 +53,7 @@ export function createClaudeStreamedThinking(deps: {
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: deps.producer,
+    retire: (identity) => deps.sink.appendTombstone(identity, { lifecycle: true }),
     persist: (identity, text, options, ended) => {
       const body = journalReasoningBody(
         text,

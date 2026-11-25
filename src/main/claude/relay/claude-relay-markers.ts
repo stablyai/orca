@@ -2,6 +2,7 @@ import {
   registerReattachableProviderRelayAgent,
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
+import type { ProviderRelayAttachResult } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import { claudeRelayAckFloor } from './claude-relay-ack-floor'
 import {
   CLAUDE_RELAY_ITEM_CONTINUATION,
@@ -74,6 +75,14 @@ export const CLAUDE_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
       key: [TASK]
     }
   ]
+}
+
+/** Background tasks open when the last app let go, and those that ended since, from an attach. */
+export function claudeRelayAttachTaskIds(
+  attach: Pick<ProviderRelayAttachResult, 'openWork' | 'endedWork'> | null
+): string[] {
+  const work = [...(attach?.openWork?.task ?? []), ...(attach?.endedWork?.task ?? [])]
+  return [...new Set(work.flatMap(([id]) => id ?? []))]
 }
 
 /** The chat's open work for a detached idle stop, keyed as `CLAUDE_RELAY_WORK_MARKERS` key it. */

@@ -120,6 +120,10 @@ async function openStartingClaudeSession(
       events?.appendItem(keptTurn.identity, keptTurn.body, { turnScope: { kind: 'thread' } })
     }
     restateKeptClaudeBackgroundTasks(session, kept.taskIds, keptTurn !== null)
+    // Claude's own last word on its mode (Plan included) outranks what its launch reported.
+    if (kept.confirmedMode !== undefined) {
+      session.reportedOptions.reportedPermissionMode = kept.confirmedMode
+    }
     noteKeptClaudeReattach(session)
     input.publishChildWork?.(request.sessionId, session)
   }

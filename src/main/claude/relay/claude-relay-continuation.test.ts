@@ -9,6 +9,7 @@ import {
   createClaudeStreamedBlockRegistry
 } from '../structured/journal/claude-streamed-block-identity'
 import { CLAUDE_RELAY_ITEM_CONTINUATION } from './claude-relay-continuation'
+import { createClaudeStreamedTextCheckpoints } from '../structured/journal/claude-streamed-text-checkpoints'
 
 const scope = { session_id: 's', parent_tool_use_id: null }
 const delta = (uuid: string, text: string) =>
@@ -108,5 +109,29 @@ describe("a continuation's final whose block streamed nothing after the cut", ()
     expect(blocks.placeAt(stop(1))).toBe(true)
     expect(blocks.placeAt(stop(2))).toBe(false)
     expect(placed).toEqual([{ provider: 'claude', sessionId: 's', uuid: 'block:msg_1:1' }])
+  })
+})
+
+describe('a continuation row whose reply ends without its final', () => {
+  it('moves its text to a row of its own and frees the shared row', () => {
+    const writes: unknown[] = []
+    const retired: unknown[] = []
+    const never = (): never => {
+      throw new Error('root rows read no linkage')
+    }
+    const text = createClaudeStreamedTextCheckpoints({
+      persist: (identity, body) => writes.push([identity, body]),
+      retire: (identity) => retired.push(identity),
+      producer: { linkageFor: never, settledLinkageFor: never },
+      schedule: () => () => {}
+    })
+    const shared = { provider: 'claude' as const, sessionId: 's', uuid: 'block:relay:r1:s|:0' }
+    text.append(shared, 'interrupted suffix')
+    text.finish({ completedAt: 7 })
+    expect(writes.at(-1)).toEqual([
+      { ...shared, uuid: 'block:relay:r1:s|:0:ended:7' },
+      'interrupted suffix'
+    ])
+    expect(retired).toEqual([shared])
   })
 })
