@@ -57,23 +57,27 @@ export function MobileNativeChatModelSearchList({
   // Decided on arrival, so a listing that grows mid-visit never raises the keyboard.
   const [autoFocus] = useState(() => browsableCount(model) >= FOCUS_FROM)
   const choices = model.kind.type === 'select' ? model.kind.choices : []
-  // Each model's text is built once per listing, not on every keystroke.
+  const matches = useMemo(() => nativeChatModelSearchMatcher(query), [query])
+  const searching = matches !== null
+  // Built only while searching, then once per listing, not on every keystroke.
   const texts = useMemo(
     () =>
-      choices.map((choice) =>
-        nativeChatModelSearchText([
-          choice.value,
-          nativeChatSessionChoiceLabel(choice, say, model.id),
-          choice.description ?? ''
-        ])
-      ),
-    [choices, model.id]
+      searching
+        ? choices.map((choice) =>
+            nativeChatModelSearchText([
+              choice.value,
+              nativeChatSessionChoiceLabel(choice, say, model.id),
+              choice.description ?? ''
+            ])
+          )
+        : null,
+    [choices, model.id, searching]
   )
-  const matches = nativeChatModelSearchMatcher(query)
   // A search lists every match, search-only and folded models included, as desktop does.
-  const items: SelectListItem[] = matches
-    ? choices.filter((_, index) => matches(texts[index]!))
-    : browsedSelectItems(model, moreChoices)
+  const items: SelectListItem[] =
+    matches && texts
+      ? choices.filter((_, index) => matches(texts[index]!))
+      : browsedSelectItems(model, moreChoices)
   const pick = (value: SessionOptionValue): void => {
     Keyboard.dismiss()
     onSetOption(value)
