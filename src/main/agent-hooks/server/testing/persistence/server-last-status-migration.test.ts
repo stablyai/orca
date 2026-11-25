@@ -132,4 +132,40 @@ describe('saved agent status from an older build', () => {
     writeLegacyFile('written by an older build later')
     expect(await restoredPrompt()).toBe('written by an older build later')
   })
+
+  it('returns the persisted report timestamp from readRestoredAgentStatus', async () => {
+    const receivedAt = recentTs() - 30_000
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            receivedAt,
+            stateStartedAt: receivedAt - 5_000,
+            payload: {
+              state: 'working',
+              prompt: 'monitoring',
+              agentType: 'antigravity',
+              mainAgent: { state: 'done', stateStartedAt: receivedAt - 2_000 }
+            }
+          }
+        }
+      })
+    )
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      await expect(server.readRestoredAgentStatus(PANE)).resolves.toMatchObject({
+        state: 'working',
+        mainAgent: { state: 'done', stateStartedAt: receivedAt - 2_000 },
+        receivedAt
+      })
+    } finally {
+      server.stop()
+    }
+  })
 })

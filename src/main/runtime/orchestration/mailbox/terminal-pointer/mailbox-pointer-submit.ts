@@ -18,7 +18,10 @@ type PointerSubmitDependencies = {
   mailboxOwner: OrchestrationMailboxOwner
   state: OrchestrationMailboxPointerState
   getDb: () => OrchestrationDb | null
-  resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
+  resolveSubmitTarget: (
+    ptyId: string,
+    options?: { ignoreStagedPointerWrite?: boolean }
+  ) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
@@ -66,7 +69,7 @@ export function submitOrchestrationMailboxPointer(
         finalizeReservation = false
         return
       }
-      const target = deps.resolveSubmitTarget(input.ptyId)
+      const target = deps.resolveSubmitTarget(input.ptyId, { ignoreStagedPointerWrite: true })
       const terminal =
         target?.terminal.handle === input.expectedTarget.terminal.handle &&
         target.processIncarnation === input.expectedTarget.processIncarnation

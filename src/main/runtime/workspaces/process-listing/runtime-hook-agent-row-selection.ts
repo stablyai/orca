@@ -50,6 +50,8 @@ type HookRowJoin = {
   hookRows: readonly AgentStatusIpcPayload[]
   /** Lets a restored permission wait stand while the pane's screen could still show its dialog. */
   screenMayHoldDialog?: () => boolean
+  /** A finished main-agent turn stays done past the working staleness window until new work or input. */
+  allowStaleDoneLead?: boolean
 }
 
 function isPermissionState(state: AgentStatusEntry['state']): boolean {
@@ -76,11 +78,13 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
     if (!(row.terminalHandle && handles.has(row.terminalHandle)) && !paneKeys.has(row.paneKey)) {
       continue
     }
+    const stale =
+      !row.paneSleep &&
+      now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS
     if (
       !row.state ||
       typeof row.receivedAt !== 'number' ||
-      (!row.paneSleep &&
-        now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS) ||
+      (!args.allowStaleDoneLead && stale) ||
       !(isLiveObservation(row) || isHeldRestoredPermission(row, args))
     ) {
       continue
@@ -93,7 +97,20 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
       best = row
     }
   }
-  return best
+  if (!best || !args.allowStaleDoneLead) {
+    return best
+  }
+  const stale =
+    !best.paneSleep &&
+    now - (best.evidenceObservedAt ?? best.receivedAt) > AGENT_STATUS_STALE_AFTER_MS
+  if (!stale) {
+    return best
+  }
+  return isLiveObservation(best) &&
+    !isPermissionState(best.state) &&
+    mainAgentState(best) === 'done'
+    ? best
+    : null
 }
 
 /** The terminal's latest hook row of any age: a turn end stays true until the agent's next report. A row bound to another terminal handle is not this one's. */

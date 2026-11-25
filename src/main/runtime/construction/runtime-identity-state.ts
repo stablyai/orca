@@ -33,7 +33,6 @@ import { WorktreeTerminalMutationLock } from '../workspaces/lifecycle/worktree-t
 import { RemoteRuntimeTerminalCreateIdempotency } from '../terminal/identity/remote-runtime-terminal-create-idempotency'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 
-import type { KeyedTrailingEdgeCoalescer } from '../client/events/keyed-trailing-edge-coalescer'
 import { createMobileSessionTabsNotifyCoalescer } from '../session-lifecycle/publication/mobile-session-tabs-notify-coalescer'
 
 import { MobileSessionSnapshotsByWorktree } from '../session-tabs/publication/mobile-session-snapshots-by-worktree'
@@ -263,10 +262,9 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     this.intentionalPtyStops.noteSpawnCommit(commit.id)
   }
 
-  protected readonly mobileSessionTabsNotifyCoalescer: KeyedTrailingEdgeCoalescer =
-    createMobileSessionTabsNotifyCoalescer((worktreeId) =>
-      this.flushScheduledMobileSessionTabsChanged(worktreeId)
-    )
+  protected readonly mobileSessionTabsNotifyCoalescer = createMobileSessionTabsNotifyCoalescer(
+    (worktreeId) => this.flushScheduledMobileSessionTabsChanged(worktreeId)
+  )
 
   protected readonly mobileSessionTabsAgentStatusHeartbeat =
     createMobileSessionTabsAgentStatusHeartbeat(
@@ -353,6 +351,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
     getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
+    getLastInputAt: (ptyId) => (ptyId ? this.terminalRunFacts.readLastInputAt(ptyId) : null),
     isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId),
     readScreenClearingBlockedTail: (ptyId) => this.readScreenClearingBlockedTailForPty(ptyId)
   }
@@ -365,9 +364,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     // Runtime emulator reads avoid a provider round trip on every poll.
     readVisibleScreen: (ptyId) =>
       this.headlessTerminals.has(ptyId)
-        ? this.readHeadlessVisibleTerminalState(ptyId).then(
-            (screen) => screen?.lines.join('\n') ?? null
-          )
+        ? this.readHeadlessVisibleTerminalState(ptyId).then((s) => s?.lines.join('\n') ?? null)
         : null,
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result),
     requestReattachedRepaint: (ptyId) => this.requestReattachedRepaint(ptyId),
