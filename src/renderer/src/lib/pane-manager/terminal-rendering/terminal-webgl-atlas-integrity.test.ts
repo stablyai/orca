@@ -66,6 +66,42 @@ describe('checkAtlasIntegrity', () => {
     })
   })
 
+  it('acts on a valid blank after an invalid read, but never calls invalid then ink healthy', () => {
+    const pages = (results: string[]) => {
+      const multi = atlas()
+      for (let i = 1; i < results.length; i++) {
+        multi.pages.push({ canvas: { width: 512 + i, height: 512 }, glyphs: [glyph(0)] })
+      }
+      const reader: GlyphInkReader = (canvas) => results[canvas.width - 512] as never
+      return [multi, reader] as const
+    }
+    const [blankAfter, blankReader] = pages(['unreadable', 'blank'])
+    expect(checkAtlasIntegrity(blankAfter, blankReader, traversal(), 2)).toMatchObject({
+      outcome: 'poisoned',
+      reads: 2
+    })
+    const [inkAfter, inkReader] = pages(['unreadable', 'ink'])
+    expect(checkAtlasIntegrity(inkAfter, inkReader, traversal(), 2)).toEqual({
+      outcome: 'inconclusive',
+      reads: 2
+    })
+    const [twoInvalid, twoInvalidReader] = pages(['unreadable', 'unreadable', 'blank'])
+    expect(checkAtlasIntegrity(twoInvalid, twoInvalidReader, traversal(), 16)).toEqual({
+      outcome: 'inconclusive',
+      reads: 2
+    })
+  })
+
+  it('does not credit health from positive alpha read through failed controls', () => {
+    const inkedPage = atlas()
+    Object.assign(inkedPage.pages[0].canvas, { alphaAt: () => 255 })
+    const read = createGlyphInkReader(() => fakeKit({ dropControls: true }))
+    expect(checkAtlasIntegrity(inkedPage, read, traversal(), 16)).toEqual({
+      outcome: 'inconclusive',
+      reads: 1
+    })
+  })
+
   it('reads every admitted glyph of a page in turn, one per attempt', () => {
     const merged = atlas([glyph(0), glyph(9), glyph(512), glyph(0, 512), glyph(512, 512)], 1024)
     const blankLast: GlyphInkReader = (_c, rect) =>
@@ -203,12 +239,21 @@ describe('createGlyphInkReader', () => {
     expect(read(pageWithInk(true), { x: 0, y: 0, width: 9, height: 18 })).toBe('unreadable')
   })
 
-  it('recreates a failed scratch once and then succeeds', () => {
+  it('replaces a failed scratch before the next read instead of re-reading the same rect', () => {
     const kits = [fakeKit({ dropControls: true }), fakeKit()]
     const make = vi.fn(() => kits.shift() ?? null)
     const read = createGlyphInkReader(make)
-    expect(read(pageWithInk(false), { x: 0, y: 0, width: 9, height: 18 })).toBe('blank')
+    const rect = { x: 0, y: 0, width: 9, height: 18 }
+    expect(read(pageWithInk(false), rect)).toBe('unreadable')
+    expect(make).toHaveBeenCalledTimes(1)
+    expect(read(pageWithInk(false), rect)).toBe('blank')
     expect(make).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports unavailable when no scratch can be created, without issuing a read', () => {
+    expect(
+      createGlyphInkReader(() => null)(pageWithInk(false), { x: 0, y: 0, width: 9, height: 18 })
+    ).toBe('unavailable')
   })
 })
 
@@ -546,6 +591,41 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
       [...state.pending.keys()].some((ref) => ref.deref() === atlasOfPaneFor(waiting[0]))
     ).toBe(false)
     expect(timers).toHaveLength(1)
+  })
+
+  it('does not charge the read budget when no scratch could be created', () => {
+    const pane = fakePane(atlas())
+    register(true, [pane])
+
+    verifyPaneWebglAtlasIntegrity(
+      pane,
+      'reveal',
+      deps(() => 'unavailable')
+    )
+
+    expect(state.readTimes).toEqual([])
+    expect(state.lastAttemptAt).toBe(clock)
+  })
+
+  it.each([
+    ['has no eligible owner', { covered: true }],
+    ['fails scratch setup', {}]
+  ])('serves the second pending atlas after the first %s', (_name, firstOptions) => {
+    const busy = fakePane(atlas())
+    const first = fakePane(atlas([glyph(0)], 513), firstOptions)
+    const second = fakePane(atlas())
+    register(true, [busy, first, second])
+    // One shared reader, as in production: the first atlas's scratch setup fails, the second reads blank.
+    const reader: GlyphInkReader = (canvas) => (canvas.width === 513 ? 'unavailable' : 'blank')
+    verifyPaneWebglAtlasIntegrity(busy, 'reveal', deps(ink))
+    verifyPaneWebglAtlasIntegrity(first, 'reveal', deps(reader))
+    verifyPaneWebglAtlasIntegrity(second, 'reveal', deps(reader))
+
+    runTimers()
+
+    expect(first.addon.clearTextureAtlas).not.toHaveBeenCalled()
+    expect(second.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(timers).toHaveLength(0)
   })
 
   it('never throws into its caller when atlas internals throw', () => {

@@ -87,17 +87,16 @@ function readOnce(
 export function createGlyphInkReader(makeKit: () => ReadKit | null = createKit): GlyphInkReader {
   let kit: ReadKit | null = null
   return (canvas, rect) => {
-    for (let tries = 0; tries < 2; tries++) {
-      kit ??= makeKit()
-      if (!kit) {
-        return 'unreadable'
-      }
-      const result = readOnce(kit, canvas, rect)
-      if (result !== 'control-failed') {
-        return result
-      }
-      kit = null
+    // A failed kit is replaced before the next permitted candidate, never by re-reading this rect.
+    kit ??= makeKit()
+    if (!kit) {
+      return 'unavailable'
     }
-    return 'unreadable'
+    const result = readOnce(kit, canvas, rect)
+    if (result === 'control-failed') {
+      kit = null
+      return 'unreadable'
+    }
+    return result
   }
 }

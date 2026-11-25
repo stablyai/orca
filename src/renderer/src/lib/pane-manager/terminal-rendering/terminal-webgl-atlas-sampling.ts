@@ -25,7 +25,8 @@ export type GlyphAtlasLike = {
   readonly pageLayoutVersion?: number
 }
 
-export type InkRead = 'ink' | 'blank' | 'unreadable'
+/** `unavailable`: no read was issued (scratch setup failed); `unreadable`: an issued read was invalid. */
+export type InkRead = 'ink' | 'blank' | 'unreadable' | 'unavailable'
 export type GlyphInkReader = (canvas: AtlasCanvas, rect: GlyphRect) => InkRead
 
 export type AtlasPoisonFinding = { reason: 'blank-page-glyph'; page: number; pageSize: number }
@@ -83,7 +84,10 @@ function nextReadCandidate(
   return { rect: null, next: start + scans }
 }
 
-/** One read per page per attempt; healthy only when every read was a valid ink observation. */
+/**
+ * One read per page per attempt. A valid blank is acted on even after an earlier invalid read; a second invalid
+ * read or an unavailable scratch ends sampling. Healthy only when every selected read was a valid ink.
+ */
 export function checkAtlasIntegrity(
   atlas: GlyphAtlasLike,
   read: GlyphInkReader,
@@ -96,6 +100,8 @@ export function checkAtlasIntegrity(
   }
   let reads = 0
   let inked = 0
+  let invalid = 0
+  let unavailable = false
   let scansLeft = MAX_VISITS_PER_ATTEMPT
   const pageCount = atlas.pages.length
   const firstPage = pageCount ? traversal.startPage % pageCount : 0
@@ -114,13 +120,17 @@ export function checkAtlasIntegrity(
     if (!candidate.rect) {
       continue
     }
-    reads++
     let result: InkRead
     try {
       result = read(canvas, candidate.rect)
     } catch {
       result = 'unreadable'
     }
+    if (result === 'unavailable') {
+      unavailable = true
+      break
+    }
+    reads++
     if (result === 'blank') {
       return {
         outcome: 'poisoned',
@@ -130,7 +140,10 @@ export function checkAtlasIntegrity(
     }
     if (result === 'ink') {
       inked++
+    } else if (++invalid >= 2) {
+      break
     }
   }
-  return { outcome: inked > 0 && inked === reads ? 'healthy' : 'inconclusive', reads }
+  const healthy = inked > 0 && inked === reads && invalid === 0 && !unavailable
+  return { outcome: healthy ? 'healthy' : 'inconclusive', reads }
 }
