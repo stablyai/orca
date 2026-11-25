@@ -23,7 +23,8 @@ const RELEASE_SLICE_CHARS = 64 * 1024
  */
 export type ProviderRelayAckFloor = {
   observe: (seq: number, line: string) => void
-  floor: () => number | null
+  /** The first line still needed after a crash, for an ack covering lines through `through`. */
+  floor: (through?: number) => number | null
   /** True once after the floor rose past an open item's start on purpose (its replay will be cut). */
   tookCut?: () => boolean
   /** A forced ack (the daemon's file cap) released everything through `seq`: items it held that
@@ -344,7 +345,7 @@ export class RelayedProviderOutput {
       // Lines from the floor on (a streamed item still open) stay kept, so a reattach rewrites the
       // item whole. The daemon's ask while keeping (its file cap) releases them, and the forced
       // save keeps the text; an ask before any keep (its memory cap) starts keeping instead.
-      const floor = this.options.ackFloor?.floor() ?? null
+      const floor = this.options.ackFloor?.floor(target) ?? null
       const usable = floor !== null && floor > this.releasedThrough && floor <= target
       const keepAt = usable ? Math.min(floor, heldFrom ?? floor) : heldFrom
       // Held lines the journal hasn't saved are never let go; the daemon spools them instead.

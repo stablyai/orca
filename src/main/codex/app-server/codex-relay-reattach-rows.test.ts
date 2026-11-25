@@ -17,6 +17,7 @@ import {
 } from '../structured/threads/codex-kept-turn-ordinals'
 import { CodexBackgroundTaskTracker } from '../structured/background-work/codex-background-task-tracker'
 import { CodexTurnOrdinals } from '../structured/journal/codex-turn-ordinals'
+import { readCodexThreadItem } from '../structured/items/codex-thread-item-identity'
 
 const item = (method: string, id: string, status = 'inProgress') =>
   JSON.stringify({ method, params: { threadId: 't', item: { type: 'agentMessage', id, status } } })
@@ -49,6 +50,17 @@ describe('codex rows across a reattach', () => {
     await settle()
     // The daemon's first ask (its memory cap) starts keeping c rather than release it.
     expect(acks).toEqual(['4 keep 3', '5', '6 keep 6'])
+  })
+
+  it("keeps an item's start until the reader took its end, not just until its end was handed on", () => {
+    const floor = createCodexRelayAckFloor()
+    floor.observe(1, item('item/started', 'a'))
+    floor.observe(2, '{"method":"item/agentMessage/delta","params":{"itemId":"a"}}')
+    floor.observe(3, item('item/completed', 'a', 'completed'))
+    // The reader took only through 2: a crash now replays from 3, so a's start must stay.
+    expect(floor.floor(2)).toBe(1)
+    expect(floor.floor(3)).toBe(null)
+    expect(floor.floor(2)).toBe(null)
   })
 
   it('never keeps from a floor a forced ack gave up, and an ask before any keep starts keeping', async () => {
@@ -258,7 +270,7 @@ describe('codex rows across a reattach', () => {
     expect(rows.get(saved[0]![0])).toContain('Hello world')
   })
 
-  it('a replay that starts mid-command keeps its saved row whole until the command ends', () => {
+  it('a replay that starts mid-command streams onto its row and keeps the command', () => {
     const rows = new Map<string, string>()
     const translatorFor = () =>
       createCodexJournalTranslator({
@@ -289,12 +301,14 @@ describe('codex rows across a reattach', () => {
     first.flush()
     const saved = [...rows.entries()].find(([, body]) => body.includes('seq 1 9'))
     expect(saved).toBeDefined()
-    // The next launch replays from its cursor, past the command's start.
+    // The next launch replays from its cursor, past the command's start; Codex's history has it.
     const next = translatorFor()
-    next.seedTurnOrdinals('t', 'turn-a', ['cmd'])
-    send(next, 'item/commandExecution/outputDelta', { itemId: 'cmd', delta: '1\n2\n' })
+    const running = readCodexThreadItem({ ...command, status: 'inProgress' })
+    next.seedRunningItems('t', 'turn-a', running ? [running] : [])
+    send(next, 'item/commandExecution/outputDelta', { itemId: 'cmd', delta: 'line-two\n' })
     next.flush()
-    expect(rows.get(saved![0])).toBe(saved![1])
+    expect(rows.get(saved![0])).toContain('seq 1 9')
+    expect(rows.get(saved![0])).toContain('line-two')
     send(next, 'item/completed', {
       item: { ...command, status: 'completed', aggregatedOutput: '1\n2\n3\n', exitCode: 0 }
     })
@@ -324,7 +338,8 @@ describe('codex rows across a reattach', () => {
       },
       translator: {
         seedTurnOrdinals: (threadId, turnId, ids) =>
-          ids.forEach((id) => ordinals.ordinalFor(threadId, turnId, id))
+          ids.forEach((id) => ordinals.ordinalFor(threadId, turnId, id)),
+        seedRunningItems: () => {}
       },
       threadId: 'main',
       timeoutMs: 1_000

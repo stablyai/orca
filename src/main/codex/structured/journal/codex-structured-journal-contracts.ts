@@ -69,6 +69,8 @@ export type CodexJournalTranslator = {
   flush: () => void
   /** A kept agent's running turn: its messages, in order, keep the ordinals the live run gave them. */
   seedTurnOrdinals: (threadId: string, turnId: string, messageItemIds: readonly string[]) => void
+  /** A kept agent's running items, from Codex's history: a replay from mid-item keeps their fields. */
+  seedRunningItems: (threadId: string, turnId: string, items: readonly CodexThreadItem[]) => void
   dispose: () => void
 }
 
