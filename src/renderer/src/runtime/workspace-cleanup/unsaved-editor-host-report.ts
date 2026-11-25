@@ -32,8 +32,14 @@ function hostTarget(host: string): RuntimeClientTarget {
   return host === LOCAL_HOST ? { kind: 'local' } : { kind: 'environment', environmentId: host }
 }
 
-type HostReport = { worktreeIds: string[]; signature: string }
+type HostReport = { worktreeIds: string[]; signature?: string }
 const NO_REPORT: HostReport = { worktreeIds: [], signature: '' }
+
+// Built at the first compare that gets past the skip gates, then reused by send and the completion recheck.
+function signatureOf(report: HostReport): string {
+  report.signature ??= report.worktreeIds.join('\n')
+  return report.signature
+}
 
 function unsavedWorktreeIdsByHost(
   state: UnsavedReportState,
@@ -62,8 +68,7 @@ function unsavedWorktreeIdsByHost(
   }
   const reports = new Map<string, HostReport>()
   for (const [host, ids] of byHost) {
-    const worktreeIds = [...ids].sort()
-    reports.set(host, { worktreeIds, signature: worktreeIds.join('\n') })
+    reports.set(host, { worktreeIds: [...ids].sort() })
   }
   return reports
 }
@@ -156,7 +161,7 @@ export function installUnsavedEditorHostReport(): () => void {
   }
 
   const send = (host: string, report: HostReport): void => {
-    sent.set(host, report.signature)
+    sent.set(host, signatureOf(report))
     inFlight.add(host)
     callRuntimeRpc(hostTarget(host), 'workspaceCleanup.reportUnsavedEditors', {
       worktreeIds: report.worktreeIds,
@@ -187,7 +192,7 @@ export function installUnsavedEditorHostReport(): () => void {
     const current = currentReports()
     for (const host of hosts) {
       const report = current.get(host) ?? NO_REPORT
-      if (inFlight.has(host) || unsupported.has(host) || sent.get(host) === report.signature) {
+      if (inFlight.has(host) || unsupported.has(host) || sent.get(host) === signatureOf(report)) {
         continue
       }
       watch(host)
