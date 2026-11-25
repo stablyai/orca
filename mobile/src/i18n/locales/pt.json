@@ -1626,25 +1626,16 @@
       "loadFailed": "Não foi possível carregar os arquivos",
       "title": "Arquivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando os primeiros 5000",
-      "filterPlaceholder": "Filtrar arquivos",
-      "noMatchesHint": "Somente as pastas que você abriu serão pesquisadas.",
-      "clearFilter": "Limpar filtro",
       "loading": "Carregando arquivos…"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} indisponível no celular",
       "loadFolderFailed": "Não foi possível carregar a pasta",
       "loadedOfTotal": "{{loaded}} de {{total}}",
-      "loading": "Carregando…",
       "openFolder": "Abrir pasta {{name}}",
       "previewFile": "Pré-visualizar arquivo {{name}}",
       "retryLoading": "Tentar carregar {{path}} novamente",
-      "searchAll": "Pesquisar tudo",
-      "searchAllIn": "Pesquisar todo o {{folder}}",
-      "searched": "{{loaded}} de {{total}} pesquisados em {{folder}}.",
-      "searching": "Pesquisando {{folder}}… {{loaded}} de {{total}}",
-      "showMore": "Mostrar mais {{rows}}",
-      "unavailable": "Indisponível no celular"
+      "showMore": "Mostrar mais {{rows}}"
     },
     "fileExplorerRowActions": {
       "copyName": "Copiar Nome",
@@ -5140,7 +5131,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",

@@ -19,13 +19,13 @@ const FILE_SEARCH_RESULT_LIMIT = 16
 const FILE_SEARCH_QUERY_CACHE_LIMIT = 20
 
 /** Ranks the paths with the folders holding them, as desktop's `@` does. */
-function rankWithFolders(paths: readonly string[], query: string): string[] {
-  return rankQuickOpenFiles(
-    query,
-    getPreparedQuickOpenFiles(withFolderPaths(paths)),
-    FILE_SEARCH_RESULT_LIMIT
-  ).map((result) => result.path)
+function rankWithFolders(paths: readonly string[], query: string, limit: number): string[] {
+  return rankQuickOpenFiles(query, getPreparedQuickOpenFiles(withFolderPaths(paths)), limit).map(
+    (result) => result.path
+  )
 }
+
+const NO_ANSWER: { query: string | null; paths: string[] } = { query: null, paths: [] }
 
 /** The legacy inventory is the whole workspace, so its request carries no further parameters. */
 type WorkspaceInventoryParameters = Readonly<Record<string, never>>
@@ -34,9 +34,20 @@ const WHOLE_WORKSPACE: WorkspaceInventoryParameters = {}
 export function useMobileNativeChatFileSearch(args: {
   client: RpcClient | null
   worktreeId: string
-}): { nativeChatFilePaths: string[]; loadNativeChatFiles: (query: string) => void } {
-  const { client, worktreeId } = args
-  const [nativeChatFilePaths, setNativeChatFilePaths] = useState<string[]>([])
+  /** How many paths to rank; the `@` menu shows a few, the Files search a screenful. */
+  limit?: number
+}): {
+  nativeChatFilePaths: string[]
+  /** The normalized query the paths answer; null while a newer one is pending. */
+  nativeChatFilesQuery: string | null
+  loadNativeChatFiles: (query: string) => void
+} {
+  const { client, worktreeId, limit = FILE_SEARCH_RESULT_LIMIT } = args
+  const [answer, setAnswer] = useState<{ query: string | null; paths: string[] }>(NO_ANSWER)
+  const setNativeChatFilePaths = useCallback(
+    (paths: string[], query: string | null = null) => setAnswer({ query, paths }),
+    []
+  )
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sequenceRef = useRef(0)
   const queryCacheRef = useRef(new Map<string, string[]>())
@@ -91,7 +102,7 @@ export function useMobileNativeChatFileSearch(args: {
           timerRef.current = null
         }
         sequenceRef.current++
-        setNativeChatFilePaths(cached)
+        setNativeChatFilePaths(cached, normalizedQuery)
         return
       }
       if (timerRef.current) {
@@ -117,7 +128,13 @@ export function useMobileNativeChatFileSearch(args: {
             }
             queryCacheRef.current.delete(oldest)
           }
-          setNativeChatFilePaths(paths)
+          setNativeChatFilePaths(paths, normalizedQuery)
+        }
+        // A failed read answers the query with nothing, uncached, so a caller waiting on it stops waiting.
+        const answerNothing = (): void => {
+          if (isCurrentRequest()) {
+            setNativeChatFilePaths([], normalizedQuery)
+          }
         }
         const loadLegacyPaths = async (): Promise<void> => {
           if (!mountedRef.current) {
@@ -127,7 +144,7 @@ export function useMobileNativeChatFileSearch(args: {
           const inventoryScope: RequestScope = [client, worktreeId, generation]
           const held = inventory.read(inventoryScope, WHOLE_WORKSPACE)
           if (held) {
-            applyPaths(rankWithFolders(held, normalizedQuery))
+            applyPaths(rankWithFolders(held, normalizedQuery, limit))
             return
           }
           // Share overlapping legacy full-inventory reads, especially across slow SSH.
@@ -145,7 +162,7 @@ export function useMobileNativeChatFileSearch(args: {
           ) {
             return
           }
-          applyPaths(rankWithFolders(loaded.value, normalizedQuery))
+          applyPaths(rankWithFolders(loaded.value, normalizedQuery, limit))
         }
         void (async () => {
           if (!isCurrentRequest()) {
@@ -158,7 +175,7 @@ export function useMobileNativeChatFileSearch(args: {
           const response = await nativeChatFileSearchRead.request(client, {
             worktree: `id:${worktreeId}`,
             query: normalizedQuery,
-            limit: FILE_SEARCH_RESULT_LIMIT
+            limit
           })
           const accepted = nativeChatFileSearchRead.interpret(response)
           if (!isCurrentRequest()) {
@@ -166,19 +183,25 @@ export function useMobileNativeChatFileSearch(args: {
           }
           if (accepted.accepted) {
             searchSupportedRef.current = true
-            applyPaths(rankWithFolders(accepted.value, normalizedQuery))
+            applyPaths(rankWithFolders(accepted.value, normalizedQuery, limit))
             return
           }
           // Inspect method_not_found before policy interpretation to choose legacy inventory fallback.
           if (!response.ok && response.error.code === 'method_not_found') {
             searchSupportedRef.current = false
             await loadLegacyPaths()
+            return
           }
-        })().catch(() => {})
+          answerNothing()
+        })().catch(answerNothing)
       }, FILE_SEARCH_DEBOUNCE_MS)
     },
-    [client, inventory, worktreeId]
+    [client, inventory, limit, setNativeChatFilePaths, worktreeId]
   )
 
-  return { nativeChatFilePaths, loadNativeChatFiles }
+  return {
+    nativeChatFilePaths: answer.paths,
+    nativeChatFilesQuery: answer.query,
+    loadNativeChatFiles
+  }
 }

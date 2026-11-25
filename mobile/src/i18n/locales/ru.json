@@ -2336,25 +2336,16 @@
       "loadFailed": "Не удалось загрузить файлы",
       "title": "Файлы",
       "truncatedList": "{{worktreeLabel}} — показаны первые 5000",
-      "filterPlaceholder": "Фильтр файлов",
-      "noMatchesHint": "Поиск идёт только по открытым папкам.",
-      "clearFilter": "Очистить фильтр",
       "loading": "Загрузка файлов…"
     },
     "fileExplorerRow": {
       "fileUnavailable": "Файл {{name}} недоступен на мобильном устройстве",
       "loadFolderFailed": "Не удалось загрузить папку",
       "loadedOfTotal": "{{loaded}} из {{total}}",
-      "loading": "Загрузка…",
       "openFolder": "Открыть папку {{name}}",
       "previewFile": "Открыть предпросмотр файла {{name}}",
       "retryLoading": "Повторить загрузку {{path}}",
-      "searchAll": "Искать везде",
-      "searchAllIn": "Искать во всей папке {{folder}}",
-      "searched": "Просмотрено {{loaded}} из {{total}} в {{folder}}.",
-      "searching": "Поиск в {{folder}}… {{loaded}} из {{total}}",
       "showMore": "Показать ещё {{rows}}",
-      "unavailable": "Недоступно на мобильном устройстве",
       "ignored": "Игнорируется в .gitignore"
     },
     "fileExplorerRowActions": {

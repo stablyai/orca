@@ -1516,16 +1516,10 @@
       "fileUnavailable": "{{name}} indisponible sur mobile",
       "loadFolderFailed": "Impossible de charger le dossier",
       "loadedOfTotal": "{{loaded}} sur {{total}}",
-      "loading": "Chargement…",
       "openFolder": "Ouvrir le dossier {{name}}",
       "previewFile": "Afficher l'aperçu du fichier {{name}}",
       "retryLoading": "Réessayer de charger {{path}}",
-      "searchAll": "Tout rechercher",
-      "searchAllIn": "Rechercher dans tout {{folder}}",
-      "searched": "{{loaded}} sur {{total}} parcourus dans {{folder}}.",
-      "searching": "Recherche dans {{folder}}… {{loaded}} sur {{total}}",
-      "showMore": "Afficher {{rows}} de plus",
-      "unavailable": "Indisponible sur mobile"
+      "showMore": "Afficher {{rows}} de plus"
     },
     "fileExplorerRowActions": {
       "copyName": "Copier le nom",
@@ -4566,7 +4560,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",

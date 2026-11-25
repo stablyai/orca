@@ -2263,10 +2263,9 @@
       "title": "Files",
       "truncatedList": "{{worktreeLabel}} - Showing first 5000",
       "emptyState": "No files found",
-      "filterPlaceholder": "Filter files",
-      "noMatchesHint": "Only folders you have opened are searched.",
-      "clearFilter": "Clear filter",
-      "loading": "Loading files…"
+      "loading": "Loading files…",
+      "searching": "Searching…",
+      "searchPlaceholder": "Search files"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -2321,20 +2320,15 @@
       "open": "Open PDF"
     },
     "fileExplorerRow": {
-      "loading": "Loading...",
       "loadFolderFailed": "Unable to load folder",
       "retryLoading": "Retry loading {{path}}",
       "openFolder": "Open folder {{name}}",
       "fileUnavailable": "{{name}} unavailable on mobile",
       "previewFile": "Preview file {{name}}",
-      "unavailable": "Unavailable on mobile",
       "showMore": "Show {{rows}} more",
       "loadedOfTotal": "{{loaded}} of {{total}}",
-      "searched": "Searched {{loaded}} of {{total}} in {{folder}}.",
-      "searching": "Searching {{folder}}… {{loaded}} of {{total}}",
-      "searchAll": "Search all",
-      "searchAllIn": "Search all of {{folder}}",
-      "ignored": "Ignored by .gitignore"
+      "ignored": "Ignored by .gitignore",
+      "loadingFolder": "Loading…"
     },
     "fileExplorerRowActions": {
       "copyName": "Copy Name",
