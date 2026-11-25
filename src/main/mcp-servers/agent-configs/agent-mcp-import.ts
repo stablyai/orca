@@ -10,7 +10,10 @@ import type {
   McpServerWorkspaces
 } from '../../../shared/mcp-servers/mcp-servers'
 import { agentMcpServerMergeKey } from '../../../shared/mcp/agent-mcp-config-entry'
-import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../../../shared/file-access/cross-platform-path'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { listClaudeProfileHomesAsync } from '../../claude-accounts/profiles/claude-profile-homes'
 import { getOrcaUserDataPath } from '../../codex/configuration/homes/codex-home-paths'
@@ -234,6 +237,19 @@ export type HostWorkspaceFolders = {
   folderWorkspaces: readonly { id: string; name: string; folderPath: string }[]
 }
 
+/** `path` (a comparison key) and each folder above it, deepest first, as comparison keys too. */
+function* comparisonKeyAndParents(path: string): Generator<string> {
+  yield path
+  for (let cut = path.lastIndexOf('/'); cut >= 0; cut = path.lastIndexOf('/', cut - 1)) {
+    const parent = path.slice(0, cut)
+    // A filesystem root keeps its slash, as the comparison key of `/` or `C:/` does.
+    yield parent === '' ? '/' : /^[a-z]:$/i.test(parent) ? `${parent}/` : parent
+    if (cut === 0) {
+      return
+    }
+  }
+}
+
 /** The deepest repo, worktree or folder workspace holding `projectPath`, as a workspace key. */
 export function workspaceForPathIn(folders: HostWorkspaceFolders): WorkspaceForPath {
   const repoName = new Map(folders.repos.map((repo) => [repo.id, repo.displayName]))
@@ -248,9 +264,22 @@ export function workspaceForPathIn(folders: HostWorkspaceFolders): WorkspaceForP
       key: folderWorkspaceKey(folder.id),
       name: folder.name
     }))
-  ].sort((left, right) => right.path.length - left.path.length)
+  ]
+  // Why an index: a server can be limited to many projects, and the host can hold 1000s of folders.
+  const byFolder = new Map<string, { key: string; name: string }>()
+  for (const { path, key, name } of candidates) {
+    const folder = normalizeRuntimePathForComparison(path)
+    if (!byFolder.has(folder)) {
+      byFolder.set(folder, { key, name })
+    }
+  }
   return (projectPath) => {
-    const deepest = candidates.find((candidate) => isPathInsideOrEqual(candidate.path, projectPath))
-    return deepest ? { key: deepest.key, name: deepest.name } : null
+    for (const folder of comparisonKeyAndParents(normalizeRuntimePathForComparison(projectPath))) {
+      const workspace = byFolder.get(folder)
+      if (workspace) {
+        return workspace
+      }
+    }
+    return null
   }
 }

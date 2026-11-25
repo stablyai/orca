@@ -95,7 +95,7 @@ export function installPluginMcpServerSync(
         // Why after settling: mid-refresh nothing reads as approved, which would drop every server.
         await service.whenReady()
         const plugins = pluginMcpServers(service)
-        const version = pluginMcpServersVersion(plugins)
+        const version = await pluginMcpServersVersion(plugins)
         if (version === settled) {
           continue
         }

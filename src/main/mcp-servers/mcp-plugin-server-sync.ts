@@ -2,8 +2,10 @@
 // Orca's sign-in, the relay and every launch treat them as any other server. The user's switches on
 // one stay across plugin updates, and a sync that changes nothing writes nothing.
 import { randomUUID } from 'node:crypto'
+import { stat } from 'node:fs/promises'
 import { freeBotToolName, type BotToolServer } from '../../shared/bot-tools'
 import type { BotToolNewCredential } from '../bots/bot-tools-file'
+import { botToolsPath } from '../bots/bot-tools-path'
 import { sortAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
 import { changeHostEntries, readHostEntries, type HostEntry } from './mcp-host-list'
 import { mcpHostListFolder } from './mcp-host-list-folder'
@@ -149,11 +151,25 @@ const sameEntries = (a: readonly HostEntry[], b: readonly HostEntry[]): boolean 
 /** Stands for "nothing to write", so the file and its revision stay as they are. */
 class Unchanged extends Error {}
 
-/** What a sync of `plugins` into `folder` depends on: equal versions sync to the same entries. */
-export const pluginMcpServersVersion = (
+/** The list file's identity, so an edit by anything else (another process, a restore) shows. */
+async function hostListFileStamp(folder: string): Promise<string> {
+  const file = await stat(botToolsPath(folder), { bigint: true }).catch(() => null)
+  return file ? `${file.ino}:${file.size}:${file.mtimeNs}:${file.ctimeNs}` : 'absent'
+}
+
+/** What a sync of `plugins` into `folder` depends on, read before the sync: equal versions sync to
+ *  the same entries. A sync's own write changes the stamp, so the next one checks once more. */
+export async function pluginMcpServersVersion(
   plugins: PluginMcpServers,
   folder = mcpHostListFolder()
-): string => JSON.stringify([folder, plugins.declared, [...plugins.held].sort()])
+): Promise<string> {
+  return JSON.stringify([
+    folder,
+    await hostListFileStamp(folder),
+    plugins.declared,
+    [...plugins.held].sort()
+  ])
+}
 
 /** `settled`: the list matches `plugins` and every address is sorted, so the same plugins need no
  *  sync again. False when aborted or when an address couldn't be reached and waits for a retry. */
