@@ -62,20 +62,47 @@ export async function continueStructuredAgentSessionsAtLaunch(
   onReserved: (rows: StructuredAgentSessionResumeCandidate[]) => void = () => {}
 ): Promise<StructuredAgentSessionLaunchContinuation> {
   const listedKept = (await deps.keptRunning?.().catch(() => null)) ?? new Set<string>()
-  // Kept chats reattach before any restart offer runs; one whose agent ended meanwhile was cut
-  // after all and goes through the ordinary cold path below.
-  const kept = new Set<string>()
-  await mapWithConcurrency([...listedKept], KEPT_REBIND_CONCURRENCY, async (sessionId) => {
-    const rebound = await (
-      deps.rebindKeptAgent?.(sessionId) ?? Promise.resolve('unresolved')
-    ).catch((error: unknown) => {
-      console.warn('[agent-session] reattaching a kept chat agent failed', error)
-      return 'unresolved' as const
-    })
-    if (rebound !== 'gone') {
-      kept.add(sessionId)
+  // Kept chats reattach beside the offers below, which never wait on them; one whose agent ended
+  // meanwhile was cut after all and takes the ordinary crash cut once its reattach settles.
+  const gone = new Set<string>()
+  const rebinds = mapWithConcurrency(
+    [...listedKept],
+    KEPT_REBIND_CONCURRENCY,
+    async (sessionId) => {
+      const rebound = await (
+        deps.rebindKeptAgent?.(sessionId) ?? Promise.resolve('unresolved')
+      ).catch((error: unknown) => {
+        console.warn('[agent-session] reattaching a kept chat agent failed', error)
+        return 'unresolved' as const
+      })
+      if (rebound === 'gone') {
+        gone.add(sessionId)
+      }
     }
-  })
+  )
+  try {
+    const continuation = await continueColdChats(deps, listedKept, onReserved)
+    await rebinds
+    const cuts = [...gone].flatMap((sessionId) => {
+      const replaced = deps.store.replacedRuntime(sessionId)
+      return deps.store.listHeldSessionIds().includes(sessionId) && replaced?.runtime
+        ? [{ sessionId, crashedRuntime: replaced.runtime }]
+        : []
+    })
+    if (cuts.length > 0) {
+      await deps.restartResume.adoptCrashCuts(cuts, deps.startedAt)
+    }
+    return { ...continuation, cutByLastRun: new Set([...continuation.cutByLastRun, ...gone]) }
+  } finally {
+    await rebinds
+  }
+}
+
+async function continueColdChats(
+  deps: StructuredAgentSessionLaunchContinuationDeps,
+  kept: ReadonlySet<string>,
+  onReserved: (rows: StructuredAgentSessionResumeCandidate[]) => void
+): Promise<StructuredAgentSessionLaunchContinuation> {
   const finished = deps.finishedWhileDetached?.() ?? new Set<string>()
   const heldByLastRun = deps.store
     .listHeldSessionIds()

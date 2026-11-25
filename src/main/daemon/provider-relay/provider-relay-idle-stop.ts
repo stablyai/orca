@@ -25,6 +25,8 @@ type IdleStopHost = {
   stop: () => void
   /** Output no app has taken yet: the next launch shows it, so the agent isn't idle-stopped. */
   unread?: () => boolean
+  /** Idle, held only by output no app took: the detached cap starts counting for it. */
+  idleUnread?: () => void
   log?: (event: string, details?: Record<string, unknown>) => void
 }
 
@@ -62,7 +64,11 @@ export class ProviderRelayIdleStop {
       stoppedBy: ProviderRelayStop
       close: () => Promise<unknown>
     },
-    options: { relayId: string; log?: (event: string, details?: Record<string, unknown>) => void },
+    options: {
+      relayId: string
+      log?: (event: string, details?: Record<string, unknown>) => void
+      onIdleUnread?: () => void
+    },
     unacked: () => readonly ProviderRelayRecord[] | null
   ): ProviderRelayIdleStop {
     return new ProviderRelayIdleStop({
@@ -78,6 +84,7 @@ export class ProviderRelayIdleStop {
         const lines = unacked()
         return lines === null || lines.length > 0
       },
+      idleUnread: () => options.onIdleUnread?.(),
       stop: () => {
         relay.stoppedBy = 'idle'
         void relay.close().catch(() => {})
@@ -237,6 +244,7 @@ export class ProviderRelayIdleStop {
     // Only an attach takes it; the detached cap bounds how long it waits.
     if (this.host.unread?.()) {
       this.host.log?.('relay-idle-unread', { quietMs: quietFor })
+      this.host.idleUnread?.()
       return
     }
     this.armed = false

@@ -15,8 +15,6 @@ export function providerRelayStopFlags(
 
 /** A detached agent held only by output no app took, or by work the idle stop can't see, ends after this. */
 export const RELAY_DETACHED_CAP_MS = 24 * 60 * 60 * 1000
-/** A relay past the cap but still busy and fully read is looked at again this often. */
-const RECHECK_MS = 60 * 60 * 1000
 
 export type CappableRelay = {
   readonly relayId: string
@@ -34,12 +32,15 @@ export type CappableRelay = {
 /**
  * The detached cap for the whole daemon, on one timer at the earliest deadline: a relay detached
  * this long with unread output, or with work the idle stop can't see, is stopped (its spool stays).
+ * Busy work is never stopped, so only a relay that went idle with unread output, or whose work is
+ * unknown, counts; nothing rechecks a busy one, which counts again at its next idle-with-unread.
  */
 export class ProviderRelayDetachedCap {
   private readonly detachedAt = new Map<CappableRelay, number>()
+  /** Detached relays the cap counts: work unknown, or idle with unread output. */
+  private readonly counted = new Set<CappableRelay>()
   private timer: ReturnType<typeof setTimeout> | null = null
   private dueAt: number | null = null
-  private recheckAt = 0
 
   constructor(
     private readonly log: (event: string, details: Record<string, unknown>) => void,
@@ -50,12 +51,24 @@ export class ProviderRelayDetachedCap {
   detached(relay: CappableRelay): void {
     if (relay.live && relay.attachedClientId === null) {
       this.detachedAt.set(relay, this.now())
+      if (!relay.idleStopPolicy.tracking) {
+        this.counted.add(relay)
+      }
+      this.update()
+    }
+  }
+
+  /** The idle stop found it idle but for unread output. */
+  idleUnread(relay: CappableRelay): void {
+    if (this.detachedAt.has(relay) && !this.counted.has(relay)) {
+      this.counted.add(relay)
       this.update()
     }
   }
 
   /** Attached again, or ended: no deadline. */
   forget(relay: CappableRelay): void {
+    this.counted.delete(relay)
     if (this.detachedAt.delete(relay)) {
       this.update()
     }
@@ -63,13 +76,14 @@ export class ProviderRelayDetachedCap {
 
   stop(): void {
     this.detachedAt.clear()
+    this.counted.clear()
     this.clearTimer()
   }
 
   private update(): void {
     let earliest: number | null = null
-    for (const at of this.detachedAt.values()) {
-      const due = Math.max(at + RELAY_DETACHED_CAP_MS, this.recheckAt)
+    for (const relay of this.counted) {
+      const due = this.detachedAt.get(relay)! + RELAY_DETACHED_CAP_MS
       earliest = earliest === null ? due : Math.min(earliest, due)
     }
     if (earliest === this.dueAt) {
@@ -81,6 +95,11 @@ export class ProviderRelayDetachedCap {
       this.timer = setTimeout(() => this.fire(), Math.max(0, earliest - this.now()))
       this.timer.unref?.()
     }
+  }
+
+  private forgetQuietly(relay: CappableRelay): void {
+    this.counted.delete(relay)
+    this.detachedAt.delete(relay)
   }
 
   private clearTimer(): void {
@@ -95,19 +114,25 @@ export class ProviderRelayDetachedCap {
     this.timer = null
     this.dueAt = null
     const now = this.now()
-    this.recheckAt = now + RECHECK_MS
-    for (const [relay, at] of this.detachedAt) {
+    for (const relay of this.counted) {
+      const at = this.detachedAt.get(relay)!
       if (!relay.live || relay.attachedClientId !== null) {
-        this.detachedAt.delete(relay)
+        this.forgetQuietly(relay)
+        continue
+      }
+      if (now - at < RELAY_DETACHED_CAP_MS) {
         continue
       }
       const policy = relay.idleStopPolicy
-      if (now - at >= RELAY_DETACHED_CAP_MS && (!policy.tracking || policy.unread)) {
-        this.detachedAt.delete(relay)
-        relay.stoppedBy = policy.finished ? 'cap-finished' : 'cap'
-        this.log('relay-cap-stop', { relayId: relay.relayId, unread: policy.unread })
-        void relay.close().catch(() => {})
+      // Busy again since it counted: not stopped, and not counted until it is idle with unread again.
+      if (policy.tracking && !(policy.unread && policy.finished)) {
+        this.counted.delete(relay)
+        continue
       }
+      this.forgetQuietly(relay)
+      relay.stoppedBy = policy.finished ? 'cap-finished' : 'cap'
+      this.log('relay-cap-stop', { relayId: relay.relayId, unread: policy.unread })
+      void relay.close().catch(() => {})
     }
     this.update()
   }

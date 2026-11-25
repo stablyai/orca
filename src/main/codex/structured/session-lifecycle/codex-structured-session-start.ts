@@ -175,6 +175,10 @@ export async function openCodexStructuredSession(
         connection,
         translator,
         threadId: opened.threadId,
+        carriedThreadIds: [
+          ...(connection.relay?.openWork()?.turn ?? []),
+          ...(connection.relay?.endedWork()?.turn ?? [])
+        ].flatMap(([threadId]) => threadId ?? []),
         timeoutMs: deps.requestTimeoutMs ?? DEFAULT_CODEX_REQUEST_TIMEOUT_MS,
         onError: (threadId, error) =>
           deps.logger?.warn('numbering a kept turn from history failed', {

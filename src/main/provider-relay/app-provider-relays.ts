@@ -1,8 +1,5 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
-import type {
-  ProviderRelayDetachPolicy,
-  ProviderRelaySpawnSpec
-} from '../daemon/protocol/daemon-provider-relay-protocol'
+import type { ProviderRelayDetachPolicy } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
 export {
   dropListedProviderRelay,
@@ -11,6 +8,7 @@ export {
   providerRelayKeptFromLastRun,
   providerRelayChatsIdleStoppedThisRun,
   liveKeptProviderRelayChats as liveProviderRelayChats,
+  noteProviderRelayKeptUnverified,
   registerReattachableProviderRelayAgent
 } from './provider-relay-launch-inventory'
 import {
@@ -22,6 +20,8 @@ import {
   keptProviderRelay,
   listKeptProviderRelays,
   recheckKeptProviderRelay,
+  providerRelayKeptUnverified,
+  providerRelayMayKeep,
   providerRelayInventoryComplete as inventoryComplete
 } from './provider-relay-launch-inventory'
 import {
@@ -32,15 +32,11 @@ import {
 export { KeptProviderRelayEndedError, KeptProviderRelayUnreachableError }
 export { withProviderRelayRebind } from './provider-relay-kept-rebind'
 import type { ManagedProviderProcess } from '../provider-process/managed-provider-process'
-import {
-  resolveProviderChildEnv,
-  type ProviderProcessLaunch
-} from '../provider-process/provider-process-launch'
-import { processEnvWithoutAgentSession } from '../../shared/agent-launch/startup/parent-agent-session-env'
-import { resolveProviderExecPath } from '../provider-process/provider-exec-path'
+import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { RelayedProviderChild } from './relayed-provider-child'
+import { daemonReadsFolder, providerRelaySpawnSpec } from './provider-relay-spawn-request'
 import { ProviderRelayCarriedWork } from './provider-relay-carried-work'
 import { relayedManagedProcess } from './relayed-managed-process'
 
@@ -121,6 +117,20 @@ export function listProviderRelaysAtLaunch(): Promise<void> {
   return installed ? listKeptProviderRelays(() => installed.all()) : Promise.resolve()
 }
 
+/** Whether this chat could have an agent kept here; no other chat waits on the listing. */
+export function providerRelayMayKeepChat(provider: string, ownerOnLocalHost: boolean): boolean {
+  return route !== null && providerRelayMayKeep(provider, ownerOnLocalHost)
+}
+
+/** True once every daemon answered within `ms`; false while the listing is late or incomplete. */
+export function listProviderRelaysAtLaunchWithin(ms: number): Promise<boolean> {
+  return withTimeout(
+    listProviderRelaysAtLaunch().then(() => inventoryComplete()),
+    ms,
+    false
+  )
+}
+
 async function connected(client: DaemonClient | null): Promise<DaemonClient | null> {
   if (!client) {
     return null
@@ -130,53 +140,6 @@ async function connected(client: DaemonClient | null): Promise<DaemonClient | nu
     return client
   } catch {
     return null
-  }
-}
-
-function spawnSpec(
-  launch: ProviderProcessLaunch,
-  client: DaemonClient
-): ProviderRelaySpawnSpec | null {
-  const identity = client.getDaemonIdentity()
-  // A daemon kept from another bundle relays too, when it speaks the relay protocol.
-  if (!route || !identity?.providerRelay) {
-    return null
-  }
-  if (!launch.cwd) {
-    return null
-  }
-  const env: Record<string, string> = {}
-  const resolved = resolveProviderChildEnv(launch, processEnvWithoutAgentSession(process.platform))
-  for (const [key, value] of Object.entries(resolved)) {
-    if (value !== undefined) {
-      env[key] = value
-    }
-  }
-  return {
-    command: launch.command,
-    args: launch.args,
-    cwd: launch.cwd,
-    env,
-    ownerExecutable: resolveProviderExecPath(),
-    appVersion: route.appVersion,
-    ...(identity.entryPath ? { entryPath: identity.entryPath } : {})
-  }
-}
-
-/** On macOS the daemon may lack permission for the chat's folder; only a readable one relays. */
-async function daemonReadsFolder(client: DaemonClient, cwd: string): Promise<boolean> {
-  if (process.platform !== 'darwin') {
-    return true
-  }
-  try {
-    const reply = await client.request<{ outcome?: unknown } | null>(
-      'probeProviderCwd',
-      { cwd },
-      1_500
-    )
-    return reply?.outcome === 'ok'
-  } catch {
-    return false
   }
 }
 
@@ -262,16 +225,24 @@ export async function launchRelayedProviderProcess(
   launch: ProviderProcessLaunch,
   relay: ProviderRelayLaunch
 ): Promise<RelayedProviderProcess | null> {
-  if (!route) {
+  const installed = route
+  if (!installed) {
     return null
   }
   await listProviderRelaysAtLaunch()
+  // Opened as kept while the listing was late: ask once more, and never start a second agent.
+  if (!inventoryComplete() && providerRelayKeptUnverified(relay.chatKey)) {
+    await listKeptProviderRelays(() => installed.all(), true)
+    if (!inventoryComplete() && !keptProviderRelay(relay.chatKey)) {
+      throw new KeptProviderRelayUnreachableError(relay.chatKey)
+    }
+  }
   const kept = await reattachListed(relay)
   if (kept) {
     return kept
   }
-  const client = await connected(await route.current().catch(() => null))
-  const spec = client ? spawnSpec(launch, client) : null
+  const client = await connected(await installed.current().catch(() => null))
+  const spec = client ? providerRelaySpawnSpec(launch, client, installed.appVersion) : null
   if (!client || !spec || !(await daemonReadsFolder(client, spec.cwd))) {
     return null
   }

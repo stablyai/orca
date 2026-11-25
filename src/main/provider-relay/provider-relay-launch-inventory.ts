@@ -33,11 +33,20 @@ const reattachableAgents = new Set<string>()
 /** Integrations whose open works on an ended agent: handed one once, to show its unread output. */
 const opensEndedAgents = new Set<string>()
 
+/** Chat providers (record `provider`) whose agent can be kept: only their chats wait on a listing. */
+const keepableProviders = new Set<string>()
+
+/** Chats opened as kept on process evidence alone, while the listing was late: a send waits for it. */
+const keptUnverified = new Set<string>()
+
 export function registerReattachableProviderRelayAgent(
   agent: string,
-  options: { opensEnded?: boolean } = {}
+  options: { opensEnded?: boolean; provider?: string } = {}
 ): void {
   reattachableAgents.add(agent)
+  if (options.provider) {
+    keepableProviders.add(options.provider)
+  }
   if (options.opensEnded) {
     opensEndedAgents.add(agent)
   }
@@ -129,8 +138,11 @@ async function listOne(client: DaemonClient): Promise<boolean> {
  * is asked again in the background by a later caller, so a slow start never reads as "no kept
  * agents" for good and an unreachable daemon never stalls a chat open again.
  */
-export function listKeptProviderRelays(clients: () => Promise<DaemonClient[]>): Promise<void> {
-  if (!listing && !complete && Date.now() >= retryAt) {
+export function listKeptProviderRelays(
+  clients: () => Promise<DaemonClient[]>,
+  retryNow = false
+): Promise<void> {
+  if (!listing && !complete && (retryNow || Date.now() >= retryAt)) {
     listing = (async () => {
       const all = await withTimeout(
         clients().catch(() => null),
@@ -147,7 +159,20 @@ export function listKeptProviderRelays(clients: () => Promise<DaemonClient[]>): 
     })()
     firstListing ??= listing
   }
-  return firstListing ?? Promise.resolve()
+  return (retryNow ? listing : null) ?? firstListing ?? Promise.resolve()
+}
+
+/** Only a local chat of a keepable provider that had an agent at its last run can have one kept. */
+export function providerRelayMayKeep(provider: string, ownerOnLocalHost: boolean): boolean {
+  return ownerOnLocalHost && process.platform !== 'win32' && keepableProviders.has(provider)
+}
+
+export function noteProviderRelayKeptUnverified(chatKey: string): void {
+  keptUnverified.add(chatKey)
+}
+
+export function providerRelayKeptUnverified(chatKey: string): boolean {
+  return keptUnverified.has(chatKey)
 }
 
 /** Every daemon answered a listing, so a kept agent not in it isn't kept. */

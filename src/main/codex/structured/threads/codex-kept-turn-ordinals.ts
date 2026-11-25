@@ -45,10 +45,12 @@ export async function seedKeptCodexTurnOrdinals(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
   translator: Pick<CodexJournalTranslator, 'seedTurnOrdinals' | 'seedRunningItems'>
   threadId: string
+  /** Threads the daemon saw a turn of open or end (a subagent spawned in an earlier turn too). */
+  carriedThreadIds?: readonly string[]
   timeoutMs: number
   onError?: (threadId: string, error: unknown) => void
 }): Promise<KeptCodexTurn[]> {
-  const queue = [input.threadId]
+  const queue = [input.threadId, ...(input.carriedThreadIds ?? [])]
   const seen = new Set<string>()
   const fetched: KeptCodexTurn[] = []
   for (

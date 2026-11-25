@@ -13,7 +13,7 @@ const ENVELOPE_MAX_FIELDS = 32
 
 /** Recorded with each Codex relay; this build reattaches it. */
 export const CODEX_RELAY_AGENT = 'codex-app-server'
-registerReattachableProviderRelayAgent(CODEX_RELAY_AGENT)
+registerReattachableProviderRelayAgent(CODEX_RELAY_AGENT, { provider: 'codex' })
 
 const THREAD = [
   ['params', 'threadId'],

@@ -247,7 +247,7 @@ export class ProviderRelay {
 
   close(grace?: 'brief'): Promise<unknown> {
     this.input.flush()
-    return this.options.managed.close(undefined, grace === 'brief' ? { grace } : undefined)
+    return this.options.managed.close(this.options.tree, grace === 'brief' ? { grace } : undefined)
   }
 
   info(): ProviderRelayInfo {

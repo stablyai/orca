@@ -403,7 +403,9 @@ describe('codex rows across a reattach', () => {
           { type: 'collabAgentToolCall', id: 'x', tool: 'spawnAgent', receiverThreadIds: ['sub'] }
         ]
       },
-      sub: { id: 'turn-s', status: 'inProgress', items: [{ type: 'agentMessage', id: 's1' }] }
+      sub: { id: 'turn-s', status: 'inProgress', items: [{ type: 'agentMessage', id: 's1' }] },
+      // Spawned in an earlier parent turn: only the daemon's carried turns name it.
+      older: { id: 'turn-o', status: 'completed', items: [{ type: 'agentMessage', id: 'o1' }] }
     }
     const ordinals = new CodexTurnOrdinals()
     await seedKeptCodexTurnOrdinals({
@@ -416,12 +418,14 @@ describe('codex rows across a reattach', () => {
         seedRunningItems: () => []
       },
       threadId: 'main',
+      carriedThreadIds: ['older'],
       timeoutMs: 1_000
     })
     // A replayed message keeps its number; the next new one follows, never taking an earlier row.
     expect(ordinals.ordinalFor('main', 'turn-1', 'm1')).toBe(1)
     expect(ordinals.ordinalFor('main', 'turn-1', 'm2')).toBe(2)
     expect(ordinals.ordinalFor('sub', 'turn-s', 's2')).toBe(1)
+    expect(ordinals.ordinalFor('older', 'turn-o', 'o2')).toBe(1)
   })
 
   it('restates a command that ended while no app was attached, so its replayed end settles it', () => {

@@ -56,41 +56,51 @@ describe('a detached agent with output no app took', () => {
     expect(stop).toHaveBeenCalledTimes(1)
   })
 
-  it('is stopped once it has been detached 24 h, on one timer for every relay; fully read busy work is not', async () => {
+  it('is stopped 24 h after its detach once idle with unread output or with work unknown, on one timer; busy work never', async () => {
     let now = 0
     const cap = new ProviderRelayDetachedCap(
       () => {},
       () => now
     )
-    const unread = relay('unread', { tracking: true, unread: true })
+    const unread = relay('unread', { tracking: true, unread: true, finished: true })
     const unknown = relay('unknown', { tracking: false, unread: false })
     const busyRead = relay('busy-read', { tracking: true, unread: false })
+    const busyAgain = relay('busy-again', { tracking: true, unread: true, finished: true })
     cap.detached(unread)
+    cap.detached(busyRead)
+    cap.detached(busyAgain)
+    // Busy relays count for nothing: no timer at all.
+    expect(vi.getTimerCount()).toBe(0)
+    cap.idleUnread(unread)
+    cap.idleUnread(busyAgain)
     now = 2 * HOUR
     cap.detached(unknown)
-    cap.detached(busyRead)
     // Every deadline shares one timer, at the earliest.
     expect(vi.getTimerCount()).toBe(1)
+    Object.assign(busyAgain.idleStopPolicy, { finished: false })
     now = RELAY_DETACHED_CAP_MS - 1
     await vi.advanceTimersByTimeAsync(RELAY_DETACHED_CAP_MS - 1)
     expect(unread.close).not.toHaveBeenCalled()
     now = RELAY_DETACHED_CAP_MS
     await vi.advanceTimersByTimeAsync(1)
-    expect([unread.stoppedBy, unread.close]).toEqual(['cap', unread.close])
+    expect(unread.stoppedBy).toBe('cap-finished')
     expect(unread.close).toHaveBeenCalledTimes(1)
+    expect(busyAgain.close).not.toHaveBeenCalled()
     expect(unknown.close).not.toHaveBeenCalled()
     now = RELAY_DETACHED_CAP_MS + 2 * HOUR
     await vi.advanceTimersByTimeAsync(2 * HOUR)
     expect(unknown.stoppedBy).toBe('cap')
+    // Nothing counted is left: no recheck wakes the daemon for busy work.
+    expect(vi.getTimerCount()).toBe(0)
     expect(busyRead.close).not.toHaveBeenCalled()
+    expect(busyAgain.close).not.toHaveBeenCalled()
     // Attached again before its deadline: never stopped.
-    const back = relay('back', { tracking: true, unread: true })
+    const back = relay('back', { tracking: false, unread: true })
     cap.detached(back)
     cap.forget(back)
     now += RELAY_DETACHED_CAP_MS * 2
     await vi.advanceTimersByTimeAsync(RELAY_DETACHED_CAP_MS * 2)
     expect(back.close).not.toHaveBeenCalled()
-    expect(busyRead.close).not.toHaveBeenCalled()
     cap.stop()
   })
 
@@ -101,8 +111,9 @@ describe('a detached agent with output no app took', () => {
       () => now
     )
     const done = relay('done', { tracking: true, unread: true, finished: true })
-    const working = relay('working', { tracking: true, unread: true })
+    const working = relay('working', { tracking: false, unread: true })
     cap.detached(done)
+    cap.idleUnread(done)
     cap.detached(working)
     now = RELAY_DETACHED_CAP_MS
     await vi.advanceTimersByTimeAsync(RELAY_DETACHED_CAP_MS)
