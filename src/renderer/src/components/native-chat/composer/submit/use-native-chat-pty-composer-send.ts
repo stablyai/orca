@@ -10,6 +10,7 @@ import type { NativeChatLaunchDraft } from '@/components/native-chat/drafts/nati
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../../../store/index'
 import { emitNativeChatMessageSent } from '@/components/native-chat/telemetry/native-chat-telemetry'
+import { reopenDoneWorkspaceOnChatSend } from './native-chat-send-reopens-done-workspace'
 import {
   sendNativeChatMessage,
   sendNativeChatTypedCommand,
@@ -165,6 +166,7 @@ export function useNativeChatPtyComposerSend(args: {
         agent: args.agent,
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
       })
+      reopenDoneWorkspaceOnChatSend({ terminalTabId: args.terminalTabId })
       args.onSubmitted?.()
       if (!retry) {
         args.setDraft('')
