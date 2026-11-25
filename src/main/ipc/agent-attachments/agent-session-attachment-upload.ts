@@ -22,6 +22,7 @@ import {
 import { stageOneSourceForRuntimeUpload } from '../filesystem/imports/filesystem-runtime-upload-staging'
 import { streamExternalFileSlices } from '../runtime-transfers/runtime-upload-file-stream'
 import { formatByteCeiling } from '../runtime-transfers/runtime-import-limits'
+import { sharedBotHostCall } from '../../bots/shared-with-me/shared-bot-host-routing'
 
 const ATTACHMENT_CALL_TIMEOUT_MS = 30_000
 
@@ -44,10 +45,22 @@ async function callAttachmentMethod<TResult>(
   method: string,
   params: unknown
 ): Promise<TResult> {
-  if (isRuntimeEnvironmentManuallyDisconnected(context.environmentId)) {
+  const sharedHost = await sharedBotHostCall(context.environmentId)
+  if (!sharedHost && isRuntimeEnvironmentManuallyDisconnected(context.environmentId)) {
     throw new Error(RUNTIME_MANUALLY_DISCONNECTED_MESSAGE)
   }
-  const response = await callRuntimeEnvironment(
+  const response = sharedHost
+    ? await sharedHost(method, params)
+    : await callPairedServer(context, method, params)
+  if (response.ok !== true) {
+    throw new Error(response.error.message || response.error.code)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each caller names the result type of the agentSessionAttachment.* method it calls, whose server handler returns exactly that shape.
+  return response.result as TResult
+}
+
+function callPairedServer(context: UploadContext, method: string, params: unknown) {
+  return callRuntimeEnvironment(
     context.userDataPath,
     context.environmentId,
     method,
@@ -60,11 +73,6 @@ async function callAttachmentMethod<TResult>(
       signal: context.signal
     }
   )
-  if (response.ok !== true) {
-    throw new Error(response.error.message || response.error.code)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each caller names the result type of the agentSessionAttachment.* method it calls, whose server handler returns exactly that shape.
-  return response.result as TResult
 }
 
 /** One `agentSessionAttachment.*` call on the store's host; `abort` is the cleanup call, sent even
@@ -157,13 +165,24 @@ export async function uploadPasteToAgentSessionAttachments(
   const stored = await uploadBufferToAgentSessionAttachments(
     {
       ...target,
-      environmentId: (await resolveEnvironment(userDataPath, runtimeEnvironmentId)).id,
+      environmentId: await resolveAttachmentEnvironmentId(userDataPath, runtimeEnvironmentId),
       userDataPath
     },
     name,
     buffer
   )
   return stored.path
+}
+
+/** The id uploads go to: a shared agent's host is named by its own id; a paired server's selector
+ *  resolves to its id, which the manual-disconnect check keys on. */
+export async function resolveAttachmentEnvironmentId(
+  userDataPath: string,
+  selector: string
+): Promise<string> {
+  return (await sharedBotHostCall(selector))
+    ? selector
+    : (await resolveEnvironment(userDataPath, selector)).id
 }
 
 /** Upload files in input order; folders are unsupported. */

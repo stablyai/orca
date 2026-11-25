@@ -13,6 +13,7 @@ import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { botOwnsChatSession } from '../../../../shared/bots/bot-chat-identity'
 import { selectFolderWorkspaceOnHost } from '../../store/folder-workspaces/folder-workspace-record-index'
+import { botHomeHostId } from '../../../../shared/bots/bot-home-host'
 
 export type BotChatIdentity = {
   showName?: boolean
@@ -42,7 +43,9 @@ export function useBotChatIdentity(
   const hostId = getRuntimeTargetHostId(target)
   const listed = isListedBotHost(hostId)
   const workspace = useAppStore((state) =>
-    listed && folderId ? selectFolderWorkspaceOnHost(state, folderId, hostId) : undefined
+    listed && folderId
+      ? selectFolderWorkspaceOnHost(state, folderId, botHomeHostId({ hostId }))
+      : undefined
   )
   const bots = useBots(enabled && workspace !== undefined)
   return (

@@ -65,6 +65,7 @@ import type { ShellApi } from './api/terminal/shell-api'
 import type { BotChangesApi } from './api/bot-changes-api'
 import type { GoogleSetupApi } from './api/google-setup-api'
 import type { SlackHandOffApi } from './api/slack-hand-off-api'
+import type { SharedBotHostsApi } from './api/shared-bot-hosts-api'
 import type { AvatarGenerationApi } from '../shared/avatar-generation/avatar-generation-contract'
 import type { SpeechApi } from './api/speech/speech-api'
 import type { SshApi } from './api/ssh/ssh-api'
@@ -149,6 +150,7 @@ export type PreloadApi = {
   botChanges: BotChangesApi
   googleSetup: GoogleSetupApi
   slackHandOff: SlackHandOffApi
+  sharedBotHosts: SharedBotHostsApi
   avatarGeneration: AvatarGenerationApi
   skills: SkillsApi
   pet: PetApi

@@ -6,6 +6,7 @@ import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { getFolderWorkspaceHostIdentity } from '../folder-workspaces/folder-workspace-worktree'
 import { folderWorkspaceKey } from '../workspace/identity/workspace-scope'
+import { botHomeHostId } from './bot-home-host'
 
 type BotHomeWorkspace = Pick<FolderWorkspace, 'id' | 'connectionId' | 'executionHostId'>
 /** A paired server's bots name that server, not `local`, once the phone has read them. */
@@ -30,7 +31,8 @@ export function botOfHomeWorkspace<B extends Pick<Bot, 'folderWorkspaceId'>>(
 export function isHome(workspace: BotHomeWorkspace, candidates: readonly BotHomeOwner[]): boolean {
   return candidates.some(
     (bot) =>
-      bot.folderWorkspaceId === workspace.id && getRepoExecutionHostId(workspace) === bot.hostId
+      bot.folderWorkspaceId === workspace.id &&
+      getRepoExecutionHostId(workspace) === botHomeHostId(bot)
   )
 }
 

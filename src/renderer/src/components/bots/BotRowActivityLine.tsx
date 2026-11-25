@@ -246,10 +246,13 @@ export function BotRowLineText({
 /** The hover card's copy of the row's line, whole and with markdown stripped. */
 export function BotHoverLatestLine({
   line,
-  now
+  now,
+  belowShareLine = false
 }: {
   line: BotRowLine | null
   now: number
+  /** The share line above already draws the divider. */
+  belowShareLine?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -265,7 +268,12 @@ export function BotHoverLatestLine({
     lineText(t, line, now).replace(/^\s*(?:[-*+]|\d+\.|#{1,6}|>)\s+/gm, '')
   )
   return (
-    <div className="mt-2.5 line-clamp-3 border-t border-border pt-2 text-xs leading-snug text-foreground">
+    <div
+      className={cn(
+        'line-clamp-3 text-xs leading-snug text-foreground',
+        belowShareLine ? 'mt-2' : 'mt-2.5 border-t border-border pt-2'
+      )}
+    >
       {age ? <span className="text-muted-foreground">{age} · </span> : null}
       {text}
     </div>

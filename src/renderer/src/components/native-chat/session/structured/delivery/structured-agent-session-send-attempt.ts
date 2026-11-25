@@ -31,6 +31,8 @@ import {
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
+import { sharedBotHostFor } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import { SHARED_BOT_HOST_ERRORS } from '../../../../../../../shared/bots/shared-bot-hosts'
 // Only agentSession.send mutates; stops during earlier local/read-only work prove the request never went out.
 
 const fences = new Map<string, number>()
@@ -79,6 +81,8 @@ export type StructuredAgentSessionSendAttempt =
     }
   /** It failed before its request went out, so nothing was sent: why, in the composer's words. */
   | { kind: 'not-sent'; parts: AgentSessionWriteNoticePart[] }
+  /** Held in Orca Cloud for a shared agent's host that is away, until that host records it. */
+  | { kind: 'held' }
 
 const NOT_SENT = agentSessionWriteNotDoneParts('composer-send')
 
@@ -96,6 +100,23 @@ function notSentParts(error: unknown): AgentSessionWriteNoticePart[] {
     : ['unreachable', ...NOT_SENT]
 }
 
+/** A shared agent's host that wasn't reached: held for it, or why nothing was. */
+function sharedBotHostAnswer(error: unknown): StructuredAgentSessionSendAttempt | null {
+  if (!(error instanceof RuntimeRpcCallError)) {
+    return null
+  }
+  switch (error.code) {
+    case SHARED_BOT_HOST_ERRORS.held:
+      return { kind: 'held' }
+    case SHARED_BOT_HOST_ERRORS.tooLarge:
+      return { kind: 'not-sent', parts: [{ text: error.message }] }
+    case SHARED_BOT_HOST_ERRORS.offline:
+      return { kind: 'not-sent', parts: [{ text: error.message }, 'notDoneSend'] }
+    default:
+      return null
+  }
+}
+
 /** Null when the send was abandoned (a Stop, its deadline, the journal settling it) meanwhile. */
 export async function attemptStructuredAgentSessionSend(args: {
   entry: StructuredAgentSessionPendingSend
@@ -109,13 +130,15 @@ export async function attemptStructuredAgentSessionSend(args: {
   if (structuredAgentSessionBlocksTooLarge(entry.body.blocks)) {
     return { kind: 'not-sent', parts: [...AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS] }
   }
+  // A shared agent's host takes no fence, and needs no read first while it is away.
+  const shared = target.kind === 'environment' && sharedBotHostFor(target) !== null
   let fence: number | null
   let body = entry.body
   try {
     if (target.kind === 'environment') {
       await ensureRuntimeEnvironmentCompatible(target.environmentId)
     }
-    fence = await knownFence(target, entry.sessionId)
+    fence = shared ? null : await knownFence(target, entry.sessionId)
     if (
       body.skills?.length &&
       !(await structuredAgentSessionHostSupports(
@@ -132,7 +155,7 @@ export async function attemptStructuredAgentSessionSend(args: {
   if (args.abandoned()) {
     return null
   }
-  if (fence === null) {
+  if (fence === null && !shared) {
     return { kind: 'not-sent', parts: NOT_SENT }
   }
   args.beforeIssue()
@@ -163,6 +186,11 @@ export async function attemptStructuredAgentSessionSend(args: {
     if (error instanceof RuntimeRpcCallError && error.code === RUNTIME_ENVIRONMENT_CHANGED) {
       args.reconcile(false)
       return { kind: 'not-sent', parts: notSentParts(error) }
+    }
+    const sharedAnswer = shared ? sharedBotHostAnswer(error) : null
+    if (sharedAnswer) {
+      args.reconcile(false)
+      return sharedAnswer
     }
     answer = {
       kind: 'thrown',

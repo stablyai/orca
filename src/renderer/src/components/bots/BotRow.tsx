@@ -29,6 +29,8 @@ import { revealBotUpNext } from './bot-up-next-reveal'
 import { useDeleteBot } from './use-delete-bot'
 import { setBotPurpose } from './bot-purpose-cache'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
+import { BotShareMark, useBotShareLine } from './sharing/BotShareMark'
+import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 type BotRowFold = {
   folded: boolean
@@ -62,7 +64,10 @@ export function BotRow({
   const isUnread = home.isUnread && !offline
   const upNextNew = useBotUpNextUnseen(bot)
   const age = offline ? null : botRowLineAge(line, now)
-  const hostPill = hostLabel ? <BotRowHostIcon label={hostLabel} /> : null
+  const shareLine = useBotShareLine(bot)
+  // A teammate's agent: its owner's computer runs it, named by the share mark, and only the owner manages it.
+  const shared = useSharedBotHostOf(bot.hostId) !== null
+  const hostPill = hostLabel && !shared ? <BotRowHostIcon label={hostLabel} /> : null
   // The Bots search matches purposes from what each listed row shows; it never reads SOUL.md.
   const purposeKey = botSidebarEntryKey(bot)
   useEffect(() => {
@@ -84,6 +89,7 @@ export function BotRow({
     <BotSidebarRow
       avatar={<BotAvatar bot={bot} className="size-8 rounded-md text-sm" />}
       name={bot.name}
+      nameMark={shareLine ? <BotShareMark line={shareLine} /> : null}
       workspaceId={workspaceId}
       hostId={bot.hostId}
       status={offline ? null : status}
@@ -92,7 +98,7 @@ export function BotRow({
       isActive={isActive}
       expanded={fold ? !fold.folded : undefined}
       dimmed={bot.paused || offline}
-      actionsDisabled={offline}
+      actionsDisabled={offline || shared}
       dragHandle={dragHandle}
       onOpen={open}
       onRename={async (name) => {
@@ -147,37 +153,41 @@ export function BotRow({
         />
       )}
       menuItems={
-        <>
-          <ContextMenuItem onSelect={() => openBotSettings(bot.id)}>
-            <Settings className="size-3.5" />
-            {t('bots.row.settings', 'Bot settings…')}
-          </ContextMenuItem>
-          <ContextMenuItem
-            disabled={offline}
-            onSelect={() => run(updateBot(bot, { paused: !bot.paused }))}
-          >
-            {bot.paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
-            {bot.paused ? t('bots.row.resume', 'Resume bot') : t('bots.row.pause', 'Pause bot')}
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem onSelect={() => window.api.ui.writeClipboardText(home.folderPath)}>
-            <Copy className="size-3.5" />
-            {t('bots.row.copyPath', 'Copy Path')}
-          </ContextMenuItem>
-        </>
+        shared ? null : (
+          <>
+            <ContextMenuItem onSelect={() => openBotSettings(bot.id)}>
+              <Settings className="size-3.5" />
+              {t('bots.row.settings', 'Bot settings…')}
+            </ContextMenuItem>
+            <ContextMenuItem
+              disabled={offline}
+              onSelect={() => run(updateBot(bot, { paused: !bot.paused }))}
+            >
+              {bot.paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+              {bot.paused ? t('bots.row.resume', 'Resume bot') : t('bots.row.pause', 'Pause bot')}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => window.api.ui.writeClipboardText(home.folderPath)}>
+              <Copy className="size-3.5" />
+              {t('bots.row.copyPath', 'Copy Path')}
+            </ContextMenuItem>
+          </>
+        )
       }
       menuFooter={
-        <>
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            variant="destructive"
-            disabled={offline}
-            onSelect={() => void handleDelete()}
-          >
-            <Trash2 className="size-3.5" />
-            {t('bots.row.delete', 'Delete bot')}
-          </ContextMenuItem>
-        </>
+        shared ? null : (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              variant="destructive"
+              disabled={offline}
+              onSelect={() => void handleDelete()}
+            >
+              <Trash2 className="size-3.5" />
+              {t('bots.row.delete', 'Delete bot')}
+            </ContextMenuItem>
+          </>
+        )
       }
     />
   )

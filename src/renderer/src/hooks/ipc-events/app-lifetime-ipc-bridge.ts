@@ -7,6 +7,7 @@ import { emitBotsChangedWindowEvent } from '@/lib/bots-changed-window-event'
 import { emitPeerMailReturnedWindowEvent } from '@/lib/peer-mail-returned-window-event'
 import { emitMcpServersChangedWindowEvent } from '@/lib/mcp-servers-changed-window-event'
 import { installBotHostListing } from '@/lib/bot-host-listing'
+import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/components/terminal-pane/mounting/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
@@ -83,6 +84,9 @@ export function installAppLifetimeIpcEvents(): () => void {
       emitBotsChangedWindowEvent(LOCAL_EXECUTION_HOST_ID, scope)
     )
   )
+  if (!isPairedWebClientWindow()) {
+    unsubs.push(installSharedBotHostCatalog())
+  }
   unsubs.push(installBotHostListing(useAppStore, isPairedWebClientWindow()))
   const stopSessionWorkerNotices = window.api.runtime.onOrchestrationSessionWorkersChanged?.(
     ({ sessionId }) => noteOrchestrationSessionWorkersChanged(null, sessionId)

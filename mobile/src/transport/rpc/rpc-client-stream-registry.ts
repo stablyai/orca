@@ -12,7 +12,7 @@ import {
   buildRequestStreamUnsubscribe,
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
-import { buildReadyStreamUnsubscribe, isReadyIdStream } from './rpc-client-server-subscription'
+import * as ready from '../../../../src/shared/remote-runtime/relay/client/relay-stream-unsubscribe'
 import { isStreamingOpenerReply } from './rpc-acceptance-policies'
 import {
   isStreamEndResult,
@@ -228,7 +228,7 @@ export class RpcClientStreamRegistry {
       stream.listener = undefined
       stream.onBinaryFrame = undefined
     }
-    if (stream && isReadyIdStream(stream.method)) {
+    if (stream && ready.isReadyIdStream(stream.method)) {
       if (stream.method === 'browser.screencast') {
         this.clearBrowserRequest(id)
       }
@@ -273,7 +273,7 @@ export class RpcClientStreamRegistry {
     if (!stream.subscriptionId) {
       return
     }
-    const unsubscribe = buildReadyStreamUnsubscribe(stream.method, stream.subscriptionId)
+    const unsubscribe = ready.buildReadyStreamUnsubscribe(stream.method, stream.subscriptionId)
     if (unsubscribe) {
       this.sendRpc(unsubscribe.method, unsubscribe.params, stream.envelope)
     }

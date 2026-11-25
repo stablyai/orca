@@ -26,6 +26,8 @@ import { BotHoverNeedsYou } from './BotHoverNeedsYou'
 import { BotHoverLatestLine, useBotRowLine } from './BotRowActivityLine'
 import { useBotSoulDescription } from './bot-soul-description'
 import { useBotHostLabel } from './use-bot-host-label'
+import { BotHoverShareLine, useBotShareLine } from './sharing/BotShareMark'
+import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 /** Shared row facts. The collapsed preview reads them only while the card is open. */
 export function useBotRowDetails(bot: Bot, home: FolderWorkspace) {
@@ -51,6 +53,7 @@ export function BotHoverDetails({
 }): React.JSX.Element {
   const { workspaceId, status, hostLabel, offline, description, line, now } = details
   const t = useTranslate()
+  const shareLine = useBotShareLine(bot)
   const current = useWorktreeAgentRows(workspaceId).find((row) => row.state === 'working')
   const action = current
     ? formatAgentToolPreview(current.entry, current.state) || getAgentRowPrimaryText(current.entry)
@@ -124,8 +127,11 @@ export function BotHoverDetails({
           <TooltipContent side="top">{homeLabel}</TooltipContent>
         </Tooltip>
       </div>
+      {shareLine ? <BotHoverShareLine line={shareLine} /> : null}
       {/* Needs you names its asks below, so the bare count line would repeat it. */}
-      {line?.kind === 'needYouElsewhere' ? null : <BotHoverLatestLine line={line} now={now} />}
+      {line?.kind === 'needYouElsewhere' ? null : (
+        <BotHoverLatestLine line={line} now={now} belowShareLine={shareLine !== null} />
+      )}
       {offline || bot.paused ? null : <BotHoverNeedsYou bot={bot} onReview={onOpenHome} />}
     </div>
   )
@@ -141,9 +147,11 @@ function BotHoverHostIcon({
   showOnFocus: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  // A teammate's agent runs on its owner's computer.
+  const shared = useSharedBotHostOf(hostId) !== null
   // A paired browser's local runtime is the server running Orca.
   const paired = hostId === LOCAL_EXECUTION_HOST_ID && isPairedWebClientWindow()
-  const Icon = hostId === LOCAL_EXECUTION_HOST_ID && !paired ? Laptop : Server
+  const Icon = shared || (hostId === LOCAL_EXECUTION_HOST_ID && !paired) ? Laptop : Server
   const label = useAppStore((state) => {
     if (hostLabel) {
       return hostLabel

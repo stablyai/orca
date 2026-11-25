@@ -38,6 +38,9 @@ async function attempt(entry: StructuredAgentSessionPendingSend): Promise<void> 
   }
   if (outcome.kind === 'not-sent') {
     handBack(current, outcome.parts)
+  } else if (outcome.kind === 'held') {
+    // Drawn as sent until the host records it from the held queue.
+    settleRecorded(current, null, 'reply')
   } else if (outcome.evidence.kind === 'recorded') {
     settleRecorded(current, outcome.submission, 'reply', outcome.cursor)
   } else if (outcome.evidence.kind === 'not-recorded') {

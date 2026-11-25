@@ -7,6 +7,7 @@ import { useAppStore } from '@/store'
 import { selectFolderWorkspaceOnHost } from '@/store/folder-workspaces/folder-workspace-record-index'
 import type { Bot } from '../../../../../shared/bot-types'
 import { type BotHome, readBotHomeFile, writeBotHomeFile } from './bot-home-files'
+import { botHomeHostId } from '../../../../../shared/bots/bot-home-host'
 
 export type BotHomeFileWrite = 'saved' | 'changed-on-disk' | 'failed'
 
@@ -51,7 +52,8 @@ export function useStableBotHome(home: BotHome | null): BotHome | null {
 /** The bot's home as its catalog lists it; null while its folder workspace isn't loaded. */
 export function useBotHome(bot: Pick<Bot, 'hostId' | 'folderWorkspaceId'> | null): BotHome | null {
   const folderPath = useAppStore((state) =>
-    bot
+    // A home kept on this computer for another account's agent holds none of that agent's files.
+    bot && botHomeHostId(bot) === bot.hostId
       ? (selectFolderWorkspaceOnHost(state, bot.folderWorkspaceId, bot.hostId)?.folderPath ?? null)
       : null
   )

@@ -2,7 +2,7 @@ import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rp
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 import { callRuntimeEnvironmentWithRevision } from '../calls/runtime-rpc-environment-call'
-import { unwrapRuntimeRpcResult } from '../calls/runtime-rpc-result'
+import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../calls/runtime-rpc-result'
 import {
   compatibilityEntry,
   getCachedRuntimeCompatibilityCheck,
@@ -10,6 +10,7 @@ import {
   runtimeCompatibilityChecks
 } from './runtime-compatibility-cache'
 import { RUNTIME_IDLE_STOPPED_ERROR_CODE } from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-stop-signal'
+import { sharedBotHostFor } from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 function isIdleStopRefusal(error: unknown): boolean {
   return (
@@ -30,6 +31,10 @@ export async function ensureRuntimeEnvironmentCompatible(
     wake?: boolean
   } = {}
 ): Promise<RuntimeStatus | null> {
+  // A shared agent's host answers only its share's methods, never a status: nothing to probe.
+  if (sharedBotHostFor({ kind: 'environment', environmentId })) {
+    return null
+  }
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
   if (cached) {
     try {
@@ -87,6 +92,16 @@ export async function getRuntimeEnvironmentStatus(
   timeoutMs?: number
 ): Promise<RuntimeStatus> {
   const trimmed = environmentId.trim()
+  // The share answers no status: refused as the host would, never sent to the paired-server registry.
+  if (sharedBotHostFor({ kind: 'environment', environmentId: trimmed })) {
+    const method = 'status.get'
+    // Read by its code, as from a host that lacks the method; never shown.
+    throw new RuntimeRpcCallError({
+      id: method,
+      ok: false,
+      error: { code: 'method_not_found', message: method }
+    })
+  }
   const entry = compatibilityEntry()
   // Publish before awaiting so concurrent cold capability reads share this status probe.
   const check = (async () => {
