@@ -78,7 +78,8 @@ export function useSmartWorkspaceGithubSearch({
         repos,
         repoSlugCache: repoSlugCacheRef.current,
         handledCrossRepoUrlRef,
-        query: debouncedQuery.trim()
+        query: debouncedQuery.trim(),
+        isCurrent: () => !stale
       })
         .then((result) => {
           if (stale) {
@@ -122,7 +123,7 @@ export function useSmartWorkspaceGithubSearch({
             workItem: lookupGitHubWorkItemForSource,
             workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
           }
-          if (intent.kind === 'hash-number' && crossRepoSwitchTarget === 'project') {
+          if (intent.kind === 'hash-number') {
             return lookupSmartGitHubNumberItems(target.repo, intent.number, lookup)
           }
           const item = await lookupSmartGitHubSubmitItem({

@@ -28,7 +28,8 @@ export async function resolveSmartWorkspaceGithubDirectLink({
   repos,
   repoSlugCache,
   handledCrossRepoUrlRef,
-  query
+  query,
+  isCurrent
 }: {
   directLink: GitHubIssueOrPRLink
   isIssueShorthand?: boolean
@@ -40,6 +41,7 @@ export async function resolveSmartWorkspaceGithubDirectLink({
   repoSlugCache: Map<string, GitHubIssueOrPRLink['slug']>
   handledCrossRepoUrlRef: React.RefObject<string | null>
   query: string
+  isCurrent: () => boolean
 }): Promise<{ items: GitHubWorkItem[]; prompt: CrossRepoPrompt | null }> {
   if (isIssueShorthand) {
     if (!selectedRepo?.path) {
@@ -47,17 +49,22 @@ export async function resolveSmartWorkspaceGithubDirectLink({
     }
     const selectedSlug = await getRepoSlugCached(selectedRepo, githubSourceContext, repoSlugCache)
     const link = normalizeGitHubLinkQuery(query, selectedSlug?.host).directLink
-    if (!link) {
+    if (!link || !isCurrent()) {
       return { items: [], prompt: null }
     }
-    const item = await lookupGitHubWorkItemByOwnerRepoForSource({
+    const item = await lookupSmartGitHubSubmitItem({
       repoPath: selectedRepo.path,
       repoId: selectedRepo.id,
       sourceContext: githubSourceContext,
-      ...link.slug,
-      number: link.number,
-      type: link.type,
-      allowSameHost: true
+      intent: {
+        kind: 'link',
+        ...link.slug,
+        number: link.number,
+        type: link.type,
+        allowSameHost: true
+      },
+      workItem: lookupGitHubWorkItemForSource,
+      workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
     })
     return { items: item ? [item] : [], prompt: null }
   }
