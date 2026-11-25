@@ -213,4 +213,15 @@ describe('a teammate’s chats on their own sidebar', () => {
       )
     ).toEqual(['alice-home'])
   })
+
+  it('list Home always, owned or shared, made yet or not; other chats only with a tab', () => {
+    // Alice's Home not made yet (her placeholder row), and no tab of anything on her computer.
+    const { alice, owner } = trees(false)
+    expect(
+      botSidebarListedChats(withViewerChatTabs(alice.chats, new Set())).map((e) => e.chatId)
+    ).toEqual([NO_HOME_CHAT_ID])
+    // The owner's own agent: its Home lists with its tab closed, a side chat with no tab does not.
+    const ownerChats = owner.chats.map((entry) => ({ ...entry, tab: false }))
+    expect(botSidebarListedChats(ownerChats).map((e) => e.chatId)).toEqual(['owner-home'])
+  })
 })

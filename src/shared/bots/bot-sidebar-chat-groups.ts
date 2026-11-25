@@ -16,12 +16,13 @@ export function withViewerChatTabs(
   }))
 }
 
-/** The chats the sidebar lists: only those with an open tab; an older host doesn't say, so its open chats all list. */
+/** The chats the sidebar lists: Home always, on any agent, owned or shared, made yet or not; the rest
+ *  only with an open tab (an older host doesn't say, so its open chats all list). */
 export function botSidebarListedChats(chats: readonly BotChatTreeChat[]): BotChatTreeChat[] {
-  return chats.filter((chat) => !chat.closed && chat.tab !== false)
+  return chats.filter((chat) => !chat.closed && (chat.origin === 'home' || chat.tab !== false))
 }
 
-/** The sidebar's chats (those with an open tab) in the panel's order, each with the bot workspaces its
+/** The sidebar's chats (`botSidebarListedChats`) in the panel's order, each with the bot workspaces its
  *  workers have, live ones first. One no chat has goes under Home Chat; one whose chat has no tab is left out. */
 export function groupBotWorkspacesByChat<T extends { id: string }>(
   chats: readonly BotChatTreeChat[],
