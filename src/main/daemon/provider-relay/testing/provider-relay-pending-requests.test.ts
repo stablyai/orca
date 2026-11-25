@@ -432,6 +432,22 @@ describe('provider relay kept lines', () => {
     expect(pending.records().map((record) => record.seq)).toEqual([2])
   })
 
+  it('never answers a request that asks the person, whatever the spec names', () => {
+    for (const method of [
+      'session/request_permission',
+      '_x.ai/exit_plan_mode',
+      'cursor/ask_question'
+    ]) {
+      const pending = new ProviderRelayPendingRequests()
+      pending.kept.configure({ answers: [], lines: [], outstanding: [], replies: { [method]: {} } })
+      const written: string[] = []
+      pending.toAgent = (line) => written.push(line) > 0
+      agent(pending, 1, { id: 3, method, params: {} })
+      expect(written).toEqual([])
+      expect(pending.records().map((record) => record.seq)).toEqual([1])
+    }
+  })
+
   it("never keeps a tool's output that quotes a kept update kind in place of the real update", () => {
     const pending = new ProviderRelayPendingRequests()
     pending.kept.configure({

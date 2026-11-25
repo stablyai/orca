@@ -11,14 +11,19 @@ const keepNames = (value: unknown): value is string[] =>
   )
 
 const MAX_REPLY_CHARS = 4096
+/** A request that asks the person (a permission, an approval, a question, a plan to accept) is
+ *  never answered for them: the daemon holds it for the app, whatever a spec says. */
+const ASKS_THE_PERSON =
+  /permission|approv|elicit|question|confirm|plan_mode|(?:^|[/_.])ask(?:[/_.]|$)|ask_?user/i
 
-/** Fixed answers by method; a malformed or oversized set answers nothing itself. */
+/** Fixed answers by method; a malformed, oversized or person-asking set answers nothing itself. */
 function readReplies(value: unknown): Record<string, unknown> | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return undefined
   }
   const entries = Object.entries(value)
   return keepNames(entries.map(([method]) => method)) &&
+    !entries.some(([method]) => ASKS_THE_PERSON.test(method)) &&
     entries.every(([, reply]) => (JSON.stringify(reply)?.length ?? Infinity) <= MAX_REPLY_CHARS)
     ? Object.fromEntries(entries)
     : undefined

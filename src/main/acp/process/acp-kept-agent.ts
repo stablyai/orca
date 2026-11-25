@@ -1,4 +1,5 @@
 import { takeAcpKeptVersionSkip } from '../launch/acp-launch-version'
+import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import type { ProviderRelayKeepSpec } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import {
   launchRelayedProviderProcess,
@@ -41,6 +42,16 @@ const ACP_RELAY_KEEP: ProviderRelayKeepSpec = {
   outstanding: [PROMPT],
   // Its answer is empty, so the model the user picked is read from the request.
   requests: [SET_MODEL]
+}
+
+/** With the dialect's fixed housekeeping replies; never one for a request Orca shows the person. */
+function acpRelayKeep(dialect: AcpLaunchSpec['dialect']): ProviderRelayKeepSpec {
+  const replies = Object.entries(dialect.detachedReplies ?? {}).filter(
+    ([method]) => dialect.request?.(method, {}) === undefined
+  )
+  return replies.length > 0
+    ? { ...ACP_RELAY_KEEP, replies: Object.fromEntries(replies) }
+    : ACP_RELAY_KEEP
 }
 
 /** A pid's start time; a kept agent that ended while Orca was closed still hands on its output,
@@ -238,9 +249,7 @@ export async function launchRelayedAcpAgent(
       },
       continuation
     },
-    keep: spec.dialect.detachedReplies
-      ? { ...ACP_RELAY_KEEP, replies: { ...spec.dialect.detachedReplies } }
-      : ACP_RELAY_KEEP,
+    keep: acpRelayKeep(spec.dialect),
     passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor)
   }
   const relayed = await launchRelayedProviderProcess(processLaunch, relay).catch(refuse)
