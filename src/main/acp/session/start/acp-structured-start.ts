@@ -68,6 +68,13 @@ export async function startAcpStructuredSession(
       throw new Error('closed while starting')
     }
     children.sessions.set(sessionId, session)
+    // Snapshot: a kept agent that exits later did take what this app sent it.
+    if (session.connection.kept?.agentExited) {
+      session.endedBeforeAcquire = true
+      children.endedBeforeAcquire.set(sessionId, generation)
+    } else {
+      children.endedBeforeAcquire.delete(sessionId)
+    }
     return acquisition
   } catch (error) {
     children.endings.retire(sessionId, generation)

@@ -287,6 +287,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return droidUnknown ? { ...work, [ACP_UNKNOWN_WORK]: [['subagent']] } : work
   }
 
+  endedBeforeAcquire = (sessionId: string, generation: string): boolean =>
+    this.children.endedBeforeAcquire.get(sessionId) === generation
+
   holdsLiveProviderProcess = (sessionId: string, generation: string): boolean => {
     const session = this.children.sessions.get(sessionId)
     return session?.acquisitionGeneration === generation && !session.connection.exited
