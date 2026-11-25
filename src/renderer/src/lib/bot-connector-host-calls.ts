@@ -1,4 +1,4 @@
-// A host's Slack, Linear and GitHub setup (`bots.slack/linear/github/connect.*`), run on that host as
+// A host's Slack, Linear and GitHub setup (`bots.slack/linear/github/links/connect.*`), run on that host as
 // its own Orca account: this app's runtime for its own bots, a paired server's for the server's.
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
@@ -21,6 +21,10 @@ import type {
   ConnectorGitHubUsersResponse
 } from '../../../shared/connector-bot-github-contract'
 import type { ConnectorConnectSource } from '../../../shared/connectors/connector-cloud-contract'
+import type {
+  ConnectorLinkKey,
+  ConnectorLinksResponse
+} from '../../../shared/connectors/connector-links-contract'
 import type { ConnectorConnectRedeem } from '../../../../cloud/packages/connector-contract/src/connect-messages'
 import { botHostTarget } from './bot-hosts'
 
@@ -96,6 +100,13 @@ export function botGitHubCalls(hostId: ExecutionHostId) {
     unlink: (args: { userId?: string } = {}) => call<undefined>(hostId, 'bots.github.unlink', args),
     setDefaultBot: (args: { botId: string | null; userId?: string }) =>
       call<undefined>(hostId, 'bots.github.setDefaultBot', args)
+  }
+}
+
+export function connectorLinksCalls(hostId: ExecutionHostId) {
+  return {
+    list: () => call<ConnectorLinksResponse>(hostId, 'bots.links.list'),
+    unlink: (link: ConnectorLinkKey) => call<undefined>(hostId, 'bots.links.unlink', link)
   }
 }
 

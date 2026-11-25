@@ -1,4 +1,4 @@
-// One "Connect Linear" / "Connect GitHub" trip per host and source, as every setup surface sees it.
+// One "Connect Linear" / "Connect GitHub" / Sign in with Slack trip per host and source, as every setup surface sees it.
 // The host runs the trip as its own Orca account; this window opens its page where the host's
 // return reaches (a server's own page in Orca's browser) and waits on the host for its end.
 import { useEffect, useSyncExternalStore } from 'react'
@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { signedInOrcaAccount } from './signed-in-orca-account'
 import { refreshBotGitHub } from './bot-github-state'
 import { refreshBotLinear } from './bot-linear-state'
+import { refreshConnectorLinks } from './connector-links-state'
 import { connectorTripCalls } from './bot-connector-host-calls'
 import { openBotHostPage } from './bot-host-page'
 import { CONNECT_NOT_ROUTED } from '@/components/bots/bot-host-copy'
@@ -78,11 +79,11 @@ function set(trip: Trip, next: ConnectorConnectView): void {
   listeners.forEach((listener) => listener())
 }
 
-// What a trip's link changes on the host. A Slack sign-in only adds a link, which no host state shows.
+// What a trip's link changes on the host: its linked accounts, and Linear's or GitHub's own state.
 const REFRESH: Record<ConnectorConnectSource, (hostId: ExecutionHostId) => Promise<unknown>> = {
-  linear: refreshBotLinear,
-  github: refreshBotGitHub,
-  slack: () => Promise.resolve()
+  linear: (hostId) => Promise.all([refreshBotLinear(hostId), refreshConnectorLinks(hostId)]),
+  github: (hostId) => Promise.all([refreshBotGitHub(hostId), refreshConnectorLinks(hostId)]),
+  slack: refreshConnectorLinks
 }
 
 async function settle(

@@ -15,6 +15,8 @@ import {
   getDesktopReportingOrgIds,
   getOrcaCloudTeamCapabilities
 } from '../../../../../../shared/orca-profiles/orca-cloud-team-policy'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
+import { LinkedAccountsSettings } from './LinkedAccountsSettings'
 import { OrcaConsoleRow } from './OrcaConsoleRow'
 
 export function accountStatusCopy(
@@ -220,6 +222,9 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           </div>
         )}
         {isOrcaCloudConsoleAvailable(authStatus) ? <OrcaConsoleRow /> : null}
+        {connected ? (
+          <LinkedAccountsSettings hostId={LOCAL_EXECUTION_HOST_ID} hostName={null} />
+        ) : null}
 
         <div className="space-y-4 border-t border-border/60 pt-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

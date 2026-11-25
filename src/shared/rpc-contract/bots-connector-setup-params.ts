@@ -1,4 +1,4 @@
-// `bots.slack.*`, `bots.linear.*`, `bots.github.*` and `bots.connect.*`: a host's Slack, Linear and
+// `bots.slack.*`, `bots.linear.*`, `bots.github.*`, `bots.links.*` and `bots.connect.*`: a host's Slack, Linear and
 // GitHub setup, run as that host's own Orca account for whichever client asks.
 import * as z from 'zod'
 import {
@@ -7,6 +7,7 @@ import {
 } from '../connector-bot-slack-contract'
 import { GITHUB_ID_PATTERN, GITHUB_LOGIN_PATTERN } from '../connector-bot-github-contract'
 import { CONNECTOR_CONNECT_SOURCES } from '../connectors/connector-cloud-contract'
+import { CONNECTOR_LINK_SOURCES } from '../connectors/connector-links-contract'
 
 const Id = z.string().min(1).max(256)
 const Query = z.string().max(200)
@@ -58,4 +59,11 @@ export const ConnectorConnectCancel = z.object({ source: Source })
 export const ConnectorConnectRedeemParams = z.object({
   source: Source,
   result: z.string().max(512)
+})
+
+/** One of the host account's linked Slack, GitHub or Linear people. */
+export const BotLinkedAccount = z.object({
+  source: z.enum(CONNECTOR_LINK_SOURCES),
+  workspaceId: Id,
+  userId: Id
 })

@@ -7,8 +7,11 @@ import type { BotDeepLinkOutcome } from '../../../../shared/bot-deep-link'
 import { watchAccessRequests } from '@/lib/bot-access-requests'
 import { openAccessRequestLink, openBotLinkHome } from '@/lib/bot-link-open'
 import { openBotShareLink } from '@/components/bots/sharing/bot-share-receive-open'
-import { botGitHubErrorMessage } from '@/components/bots/github/bot-github-copy'
-import { botLinearErrorMessage } from '@/components/bots/linear/bot-linear-copy'
+import {
+  CONNECTOR_SETTINGS_PANE,
+  connectorConnectedMessage,
+  connectorTripErrorMessage
+} from '@/components/bots/connector-trip-copy'
 import { redeemConnectorLink } from '@/lib/connector-connect-state'
 import { isConnectorSetupOpen } from '@/lib/connector-setup-open'
 import { botHostTarget } from '@/lib/bot-hosts'
@@ -42,20 +45,12 @@ function openBotLink(outcome: BotDeepLinkOutcome): void {
         return
       }
       if (!result.ok) {
-        toast.error(
-          source === 'linear'
-            ? botLinearErrorMessage(result.error, null)
-            : botGitHubErrorMessage(result.error, null)
-        )
+        toast.error(connectorTripErrorMessage(source, result.error, null))
         return
       }
-      toast.success(
-        source === 'linear'
-          ? translate('bots.linear.connect.connected', 'Linear connected.')
-          : translate('bots.github.connect.connected', 'GitHub connected.')
-      )
+      toast.success(connectorConnectedMessage(source))
       const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
-      openSettingsTarget({ pane: 'bots', repoId: null })
+      openSettingsTarget({ pane: CONNECTOR_SETTINGS_PANE[source], repoId: null })
       openSettingsPage()
     })
   }
