@@ -25,7 +25,10 @@ import {
   startNativeChatTextReveal,
   type NativeChatTextReveal
 } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
-import { createNativeChatRevealScheduler } from '../../../../../shared/native-chat/transcript/row-content/native-chat-reveal-scheduler'
+import {
+  createNativeChatRevealScheduler,
+  documentInputPending
+} from '../../../../../shared/native-chat/transcript/row-content/native-chat-reveal-scheduler'
 
 const WORD_FADE_MS = 300
 /** A step that shows a long stretch at once (a slow-to-draw reply steps seconds apart) fades only
@@ -40,20 +43,6 @@ const ARRIVAL_STEP_MS = 60
 /** A reply that renders slowly leaves most of the thread to typing and scrolling. Until a reply
  *  switches to its saves (a 100 ms step), steps stay under 0.4 s apart, so none is a visible pause. */
 const REVEAL_BUSY_SHARE = 1 / 4
-/** A key or click already waiting for the main thread, where the browser can tell (Chromium). */
-function documentInputPending(): boolean {
-  if (typeof navigator === 'undefined' || !('scheduling' in navigator)) {
-    return false
-  }
-  const { scheduling } = navigator
-  return (
-    typeof scheduling === 'object' &&
-    scheduling !== null &&
-    'isInputPending' in scheduling &&
-    typeof scheduling.isInputPending === 'function' &&
-    scheduling.isInputPending() === true
-  )
-}
 
 /** Every streaming reply in the window steps on one clock and shares that one busy share. */
 const revealFrames = createNativeChatRevealScheduler(
@@ -252,7 +241,13 @@ export function useNativeChatPacedText(
         reveals?.drawn.set(rowKey, next)
         setShown(next.shown, true)
       }
-      return playNativeChatSaveReveal(pace.current, onScreen.current, draw, pacesSaves)
+      return playNativeChatSaveReveal(
+        pace.current,
+        onScreen.current,
+        draw,
+        pacesSaves,
+        documentInputPending
+      )
     }
     return playNativeChatTextRevealOnClock(
       () => pace.current,

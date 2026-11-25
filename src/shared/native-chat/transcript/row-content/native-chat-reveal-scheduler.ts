@@ -2,6 +2,21 @@
 
 import type { NativeChatTextRevealFrames } from './native-chat-text-reveal'
 
+/** A key or click already waiting for the main thread, where the browser can tell (Chromium). */
+export function documentInputPending(): boolean {
+  if (typeof navigator === 'undefined' || !('scheduling' in navigator)) {
+    return false
+  }
+  const { scheduling } = navigator
+  return (
+    typeof scheduling === 'object' &&
+    scheduling !== null &&
+    'isInputPending' in scheduling &&
+    typeof scheduling.isInputPending === 'function' &&
+    scheduling.isInputPending() === true
+  )
+}
+
 /** Until the display's own frames are measured, assume 60 Hz. */
 const FRAME_MS = 1000 / 60
 const MIN_FRAME_MS = 1000 / 240

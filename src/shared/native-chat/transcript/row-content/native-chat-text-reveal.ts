@@ -214,6 +214,11 @@ export function nativeChatSaveReceived(
   return { ...next, arrivals: paced ? next.arrivals.slice(-1) : next.arrivals, savedAt, saveGapMs }
 }
 
+/** A save's redraw waits this long, a few times at most, while a key or click is waiting, so
+ *  typing is handled before a whole-reply redraw rather than after it. */
+const INPUT_WAIT_MS = 50
+const INPUT_WAITS = 4
+
 /** A reply shown at its saves shows each this long after the one before, at most, so a slow
  *  stream doesn't hold its text back for longer. */
 const MAX_SAVE_GAP_MS = 8000
@@ -228,15 +233,34 @@ export function playNativeChatSaveReveal(
   step: (next: NativeChatTextReveal) => void,
   /** Paced by the gap between saves while streaming; otherwise the usual reveal delay. */
   paced: boolean,
+  inputPending: () => boolean = () => false,
   now = performance.now()
 ): () => void {
   const gapMs = paced ? reveal.saveGapMs : undefined
   const end = reveal.source.length
   let current = reveal
-  const draw = (shown: number, halfDrawnAt = current.halfDrawnAt): void => {
+  const draw = (to: number, halfDrawnAt = current.halfDrawnAt): void => {
+    const shown = Math.max(to, current.shown)
     const arrivals = shown < end ? current.arrivals : []
     current = { ...current, shown, arrivals, halfDrawnAt }
     step(current)
+  }
+  const timers = new Set<ReturnType<typeof setTimeout>>()
+  const later = (run: () => void, ms: number): void => {
+    const timer = setTimeout(() => {
+      timers.delete(timer)
+      run()
+    }, ms)
+    timers.add(timer)
+  }
+  const stop = (): void => timers.forEach(clearTimeout)
+  // A whole-reply redraw lets a waiting key or click go first.
+  const drawAfterInput = (to: number, halfDrawnAt?: number, waits = 0): void => {
+    if (waits < INPUT_WAITS && inputPending()) {
+      later(() => drawAfterInput(to, halfDrawnAt, waits + 1), INPUT_WAIT_MS)
+    } else {
+      draw(to, halfDrawnAt)
+    }
   }
   // Never back: the reveal may already show more than the screen does, or all of it.
   const from = Math.max(onScreen, reveal.shown)
@@ -248,15 +272,16 @@ export function playNativeChatSaveReveal(
     gapMs === undefined ? NATIVE_CHAT_TEXT_REVEAL_DELAY_MS : Math.min(MAX_SAVE_GAP_MS, gapMs) / 2
   const wait = savedAt + Math.max(NATIVE_CHAT_TEXT_REVEAL_DELAY_MS, halfGap) - now
   if (wait <= 0) {
-    draw(end)
-    return () => {}
+    drawAfterInput(end)
+    return stop
   }
   if (reveal.halfDrawnAt !== savedAt) {
     // Recorded even when the midpoint adds nothing (one unfinished word), so it isn't sought again.
-    draw(Math.max(from, pacedTextEnd(reveal.source, from + (end - from) / 2, true)), savedAt)
+    const middle = Math.max(from, pacedTextEnd(reveal.source, from + (end - from) / 2, true))
+    drawAfterInput(middle, savedAt)
   }
-  const timer = setTimeout(() => draw(end), wait)
-  return () => clearTimeout(timer)
+  later(() => drawAfterInput(end), wait)
+  return stop
 }
 
 /** Steps only when a clock that spaces its own steps fires (see `nativeChatRevealStepFrames`). */
