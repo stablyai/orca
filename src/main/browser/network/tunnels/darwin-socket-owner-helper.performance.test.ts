@@ -49,4 +49,20 @@ describe.skipIf(process.platform === 'win32')('macOS socket owner helper spawns'
     release()
     expect(spawns).toBe(2)
   })
+  it('refuses lookups past the queue cap without failing the helper for live listeners', async () => {
+    const release = retainDarwinSocketOwnerHelper()
+    const lookup = (port: number) =>
+      isOwnDarwinConnection({ host: '127.0.0.1', port }, { host: '127.0.0.1', port: 5173 }).then(
+        () => 'answered',
+        () => 'refused'
+      )
+    const outcomes = await Promise.all(
+      Array.from({ length: 2_000 }, (_, index) => lookup(index + 1))
+    )
+    expect(outcomes.filter((outcome) => outcome === 'answered')).toHaveLength(1_024)
+    // The flood is shed, not counted as a stuck helper: the next connection is still checked.
+    await expect(lookup(1)).resolves.toBe('answered')
+    release()
+    expect(spawns).toBe(1)
+  })
 })

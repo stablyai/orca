@@ -6,8 +6,12 @@ import { spawnProcess } from '@orca/process-host'
 
 // Bundled next to the app executable; it names the account holding a loopback connection's client end.
 const HELPER_EXECUTABLE = 'orca-socket-owner'
-// A lookup takes well under a millisecond; one that doesn't answer means the helper is stuck.
-const LOOKUP_TIMEOUT_MS = 5_000
+// Lookups take about a millisecond; no answer at all for this long means the helper is stuck.
+const STALL_TIMEOUT_MS = 5_000
+// Each listener admits at most 256 connections; a deeper queue is a flood, refused without a lookup.
+const MAX_PENDING_LOOKUPS = 1_024
+// A failed helper is respawned at most this often, so a crash loop can't spawn per connection.
+const RESPAWN_BACKOFF_MS = 30_000
 
 type Endpoint = { host: string; port: number }
 type Pending = { resolve: (own: boolean) => void; reject: (error: Error) => void }
@@ -15,14 +19,16 @@ type RunningHelper = {
   child: ChildProcessWithoutNullStreams
   pending: Pending[]
   buffered: string
+  /** Armed while lookups wait; each answer pushes it back, so a deep queue isn't a stall. */
+  stall: ReturnType<typeof setTimeout> | null
 }
 
 let helperPath = (): string => join(dirname(process.execPath), HELPER_EXECUTABLE)
 let available: Promise<boolean> | null = null
 let holders = 0
 let running: RunningHelper | null = null
-// Set when the helper fails; connections stay refused until every listener closes and a new one opens.
-let broken: string | null = null
+// Set when the helper fails; connections are refused until the backoff passes or every listener closes.
+let broken: { reason: string; until: number } | null = null
 
 export function darwinSocketOwnerHelperAvailable(): Promise<boolean> {
   available ??= access(helperPath(), constants.X_OK).then(
@@ -51,8 +57,8 @@ export function retainDarwinSocketOwnerHelper(): () => void {
 
 /** Whether one of this account's processes holds the connection's client end. Rejects when it can't tell. */
 export function isOwnDarwinConnection(client: Endpoint, listener: Endpoint): Promise<boolean> {
-  if (broken) {
-    return Promise.reject(new Error(broken))
+  if (broken && Date.now() < broken.until) {
+    return Promise.reject(new Error(broken.reason))
   }
   if (holders === 0) {
     return Promise.reject(new Error('no listener holds the socket owner helper'))
@@ -61,29 +67,28 @@ export function isOwnDarwinConnection(client: Endpoint, listener: Endpoint): Pro
     return Promise.reject(new Error('connection has no IP address'))
   }
   const helper = running ?? start()
+  if (helper.pending.length >= MAX_PENDING_LOOKUPS) {
+    return Promise.reject(new Error('too many connections are waiting for an owner check'))
+  }
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => fail(helper, 'the macOS socket owner helper stopped answering'),
-      LOOKUP_TIMEOUT_MS
-    )
-    helper.pending.push({
-      resolve: (own) => {
-        clearTimeout(timer)
-        resolve(own)
-      },
-      reject: (error) => {
-        clearTimeout(timer)
-        reject(error)
-      }
-    })
+    helper.pending.push({ resolve, reject })
+    helper.stall ??= armStall(helper)
     helper.child.stdin.write(`${client.host} ${client.port} ${listener.host} ${listener.port}\n`)
   })
 }
 
+function armStall(helper: RunningHelper): ReturnType<typeof setTimeout> {
+  return setTimeout(
+    () => fail(helper, 'the macOS socket owner helper stopped answering'),
+    STALL_TIMEOUT_MS
+  )
+}
+
 function start(): RunningHelper {
   const child = spawnProcess({ program: helperPath(), args: [] })
-  const helper: RunningHelper = { child, pending: [], buffered: '' }
+  const helper: RunningHelper = { child, pending: [], buffered: '', stall: null }
   running = helper
+  broken = null
   child.stdout.setEncoding('utf8')
   child.stdout.on('data', (chunk: string) => {
     helper.buffered += chunk
@@ -98,6 +103,10 @@ function start(): RunningHelper {
         request?.reject(new Error(`the macOS socket owner helper answered "${answer}"`))
       }
       newline = helper.buffered.indexOf('\n')
+    }
+    if (helper.stall) {
+      clearTimeout(helper.stall)
+      helper.stall = helper.pending.length > 0 ? armStall(helper) : null
     }
   })
   child.stdin.on('error', (error) =>
@@ -114,7 +123,7 @@ function fail(helper: RunningHelper, reason: string): void {
   if (running !== helper) {
     return
   }
-  broken = reason
+  broken = { reason, until: Date.now() + RESPAWN_BACKOFF_MS }
   stop(helper, reason)
 }
 
@@ -124,6 +133,9 @@ function stop(helper: RunningHelper | null, reason: string): void {
   }
   if (running === helper) {
     running = null
+  }
+  if (helper.stall) {
+    clearTimeout(helper.stall)
   }
   for (const request of helper.pending.splice(0)) {
     request.reject(new Error(reason))
