@@ -5,7 +5,7 @@ import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-c
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   getRepoExecutionHostId,
-  getRepoSshConnectionId
+  parseExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../../../../../shared/mcp-servers/mcp-servers'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
@@ -13,10 +13,11 @@ import { McpConfigSection } from './McpConfigSection'
 import { McpRepoServersSection } from './McpRepoServersSection'
 
 export function RepositoryMcpSection({ repo }: { repo: Repo }): React.JSX.Element | null {
-  // A direct SSH repo has no Orca runtime to keep a server list.
-  const target = getRepoSshConnectionId(repo)
-    ? null
-    : ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo))
+  // A repo on a legacy SSH relay has no Orca runtime to keep a server list. One a server owns
+  // (runtime:<env>, even over its own SSH target) uses that server's list.
+  const owner = getRepoExecutionHostId(repo)
+  const target =
+    parseExecutionHostId(owner)?.kind === 'ssh' ? null : ipcOrRuntimeTargetForHostId(owner)
   const support = useStructuredAgentSessionHostCapabilityState(
     target,
     MCP_SERVERS_RUNTIME_CAPABILITY
