@@ -32,6 +32,10 @@ const CLI_E2E_BUILD_TIMEOUT_MS = 120_000
 const WEB_E2E_BUILD_TIMEOUT_MS = 300_000
 
 export default function globalSetup(): void {
+  prepareE2E()
+}
+
+export function prepareE2E({ electronSourceMaps = false } = {}): void {
   // Why: workers and teardown need this run's path, never another concurrent run's.
   process.env[E2E_TEST_REPO_PATH_FILE_ENV] = TEST_REPO_PATH_FILE
   const root = process.cwd()
@@ -43,8 +47,11 @@ export default function globalSetup(): void {
     console.error('[e2e] SKIP_BUILD set and out/main/index.js exists — skipping build')
   } else {
     // Use E2E mode to expose window.__store; retain the env flag for older local overrides.
-    console.error('[e2e] Building Electron app with electron-vite build --mode e2e...')
-    execSync('npx electron-vite build --mode e2e', {
+    const build = electronSourceMaps
+      ? 'npx electron-vite build --mode e2e --sourcemap'
+      : 'npx electron-vite build --mode e2e'
+    console.error(`[e2e] Building Electron app with ${build}...`)
+    execSync(build, {
       env: { ...process.env, VITE_EXPOSE_STORE: 'true' },
       cwd: root,
       stdio: 'inherit',

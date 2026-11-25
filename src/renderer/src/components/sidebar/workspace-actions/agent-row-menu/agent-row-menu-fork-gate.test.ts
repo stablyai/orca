@@ -6,6 +6,8 @@ import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { resolveTabSessionHistorySubject } from '@/components/tab-bar/session-actions/tab-session-history-switch'
 import { getAgentRowMenuActions, resolveAgentRowMenuTarget } from './agent-row-menu-target'
 
 const worktree = makeWorktree({ id: `${TEST_REPO.id}::/sample`, repoId: TEST_REPO.id })
@@ -46,7 +48,7 @@ function seed(twin: boolean, active: boolean): AppState {
   return useAppStore.getState()
 }
 
-function forkOffered(state: AppState, tabId: string, cardHostId: ExecutionHostId): boolean {
+function forkOffered(state: AppState, tabId: string, cardHostId?: ExecutionHostId): boolean {
   const tab = state.unifiedTabsByWorktree[worktree.id]!.find((item) => item.id === tabId)!
   const target = resolveAgentRowMenuTarget(state, {
     worktreeId: worktree.id,
@@ -59,6 +61,65 @@ function forkOffered(state: AppState, tabId: string, cardHostId: ExecutionHostId
 
 afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
+})
+
+it('separates exact row Fork authority from the local-first history subject', () => {
+  const sshHost = 'ssh:fixture' as const
+  const localChat = chatTab('local-chat', 'local')
+  const local = { ...worktree, hostId: 'local' as const }
+  const detected = {
+    [worktree.repoId]: {
+      repoId: worktree.repoId,
+      authoritative: true,
+      source: 'git' as const,
+      worktrees: [
+        {
+          ...worktree,
+          hostId: sshHost,
+          ownership: 'external' as const,
+          selectedCheckout: false,
+          visible: false
+        }
+      ]
+    }
+  }
+  const subject = () =>
+    resolveTabSessionHistorySubject(useAppStore.getState(), {
+      tab: localChat,
+      nativeChat: { sessionId: localChat.entityId, agent: 'codex' }
+    })
+  const offered = (hostId?: ExecutionHostId) =>
+    forkOffered(useAppStore.getState(), localChat.id, hostId)
+
+  // Construct the retained mixed catalog instead of claiming ordinary scans publish it.
+  useAppStore.setState({
+    repos: [
+      { ...TEST_REPO, executionHostId: 'local' },
+      { ...TEST_REPO, executionHostId: sshHost, connectionId: 'fixture' }
+    ],
+    unifiedTabsByWorktree: { [worktree.id]: [localChat] },
+    worktreesByRepo: { [worktree.repoId]: [worktree] },
+    detectedWorktreesByRepo: detected
+  })
+  expect(resolveOwner(useAppStore.getState(), { workspaceId: worktree.id })).toEqual({
+    kind: 'resolved',
+    owner: { endpoint: { kind: 'self' }, at: sshHost }
+  })
+  expect(subject()).toMatchObject({ kind: 'chat', request: { executionHostScope: 'local' } })
+  expect(offered()).toBe(false)
+
+  useAppStore.setState({ worktreesByRepo: { [worktree.repoId]: [local] } })
+  expect(resolveOwner(useAppStore.getState(), { workspaceId: worktree.id })).toEqual({
+    kind: 'ambiguous'
+  })
+  expect(offered('local')).toBe(false)
+
+  useAppStore.setState({ detectedWorktreesByRepo: {} })
+  expect(subject()).toMatchObject({ kind: 'chat', request: { executionHostScope: 'local' } })
+  expect(offered('local')).toBe(true)
+
+  useAppStore.setState({ worktreesByRepo: { [worktree.repoId]: [worktree] } })
+  expect(offered()).toBe(false)
 })
 
 it('offers row Fork for a local chat only when no other host has the workspace', () => {

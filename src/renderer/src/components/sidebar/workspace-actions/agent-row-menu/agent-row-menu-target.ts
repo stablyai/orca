@@ -18,8 +18,11 @@ import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-
 import { hasTerminalTabRenameListener } from '@/components/tab-bar/terminal-tabs/terminal-tab-rename-request'
 import { resolveUnmirroredAgentTerminalOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
 import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
+import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
 import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { findIndexedDetectedWorktrees } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 
 type AgentRowMenuRowRef = {
   worktreeId: string
@@ -212,16 +215,34 @@ function canForkOnThisComputer(state: AppState, target: AgentRowMenuTarget): boo
     target.kind !== 'chat' ||
     target.chatAgent === null ||
     target.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-    (target.cardHostId && target.cardHostId !== LOCAL_EXECUTION_HOST_ID)
+    target.cardHostId !== LOCAL_EXECUTION_HOST_ID
   ) {
     return false
   }
-  // Ask without the active selection: the active card's host would otherwise settle a twin as local.
-  const owner = runtimeEnvironmentIdForWorkspaceOwner(
+  const card = selectWorkspaceByHostTarget(
+    state,
+    hostWorktreeTarget({ id: target.worktreeId, hostId: LOCAL_EXECUTION_HOST_ID })
+  )
+  if (card?.hostId !== LOCAL_EXECUTION_HOST_ID || isWorktreeRetiredByRemoval(card)) {
+    return false
+  }
+  if (
+    findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, target.worktreeId).some(
+      (row) => row.hostId !== LOCAL_EXECUTION_HOST_ID || row.runtimeOwnerEnvironmentId?.trim()
+    )
+  ) {
+    return false
+  }
+  // The active card's host would settle a twin as local.
+  const owner = resolveOwner(
     { ...state, activeWorktreeId: null },
     { workspaceId: target.worktreeId }
   )
-  return owner.kind === 'resolved' && owner.environmentId === null
+  return (
+    owner.kind === 'resolved' &&
+    owner.owner.endpoint.kind === 'self' &&
+    owner.owner.at === LOCAL_EXECUTION_HOST_ID
+  )
 }
 
 export function getAgentRowMenuActions(
