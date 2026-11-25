@@ -155,14 +155,15 @@ export class StructuredAgentSessionUsageLimitContinue {
     }
   }
 
-  /** See usageLimitCutDisposition; the cut read as the journal stands now. */
-  disposition = async (id: string, turnItemId: string): Promise<UsageLimitCutDisposition> => {
+  /** See usageLimitCutDisposition; the cut read as the journal stands now, even unloaded. Without a
+   *  turn, the chat's latest cut. */
+  disposition = async (id: string, turnItemId?: string): Promise<UsageLimitCutDisposition> => {
     const cut = await this.cold.read(id, true)
     const record = this.deps.host.store.getRecord(id)
     const attempt = this.attempts.get(id)
     return usageLimitCutDisposition({
       cut,
-      turnItemId,
+      turnItemId: turnItemId ?? cut?.turnItemId ?? '',
       continuable:
         cut !== null &&
         this.enabled() &&
