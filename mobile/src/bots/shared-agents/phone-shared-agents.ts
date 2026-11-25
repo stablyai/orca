@@ -134,11 +134,9 @@ export class PhoneSharedAgents {
     const { pairedHostId } = computer
     const shares = await readComputerShares(computer)
     if (shares) {
+      const listed = new Set(shares.map((share) => share.shareId))
       for (const entry of this.store.list()) {
-        if (
-          entry.pairedHostId === pairedHostId &&
-          !shares.some((s) => s.shareId === entry.shareId)
-        ) {
+        if (entry.pairedHostId === pairedHostId && !listed.has(entry.shareId)) {
           this.links.get(entry.shareId)?.close()
           this.links.delete(entry.shareId)
           this.kept.forget(entry.shareId)
