@@ -83,6 +83,8 @@ export type AgentCliUpdatesSlice = {
   recheckAgentCliUpdates: (target: RuntimeClientTarget) => void
   /** Checks as `checkAgentCliUpdates` does, but past a much shorter interval, when the user opens the list. */
   checkAgentCliUpdatesOnOpen: (target: RuntimeClientTarget) => Promise<void>
+  /** Drops the answers of paired hosts that were removed or re-paired; a disconnected host keeps its own. */
+  forgetAgentCliUpdateHosts: (environmentIds: readonly string[]) => void
   /** Resolves true once the host reports the CLI current. */
   runAgentCliUpdate: (target: RuntimeClientTarget, agent: AgentCliUpdateAgent) => Promise<boolean>
 }
@@ -94,6 +96,10 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
 ) => {
   const writeHost = (key: string, write: (host: AgentCliUpdateHost) => AgentCliUpdateHost) =>
     set((state) => {
+      // A run result from a removed host must not list it again.
+      if (state.removedRuntimeEnvironmentIds.has(key)) {
+        return state
+      }
       const next = new Map(state.agentCliUpdates)
       next.set(key, write(state.agentCliUpdates.get(key) ?? EMPTY_HOST))
       return { agentCliUpdates: next }
@@ -139,6 +145,8 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
     let check = checks.get(key)
     if (!check) {
       checkedAt.set(key, Date.now())
+      // A host forgotten meanwhile (removed or re-paired) must not get this answer or its failure.
+      const current = (): boolean => checks.get(key) === check
       check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(
         target,
         'agentCliUpdate.check',
@@ -147,16 +155,22 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
       )
         .then(({ updates }) => {
           // An unchanged answer leaves the store alone, so the status bar doesn't re-render.
-          if (!sameUpdates(get().agentCliUpdates.get(key)?.updates ?? [], updates)) {
+          if (current() && !sameUpdates(get().agentCliUpdates.get(key)?.updates ?? [], updates)) {
             writeHost(key, (host) => ({ ...host, updates }))
           }
         })
         .catch((error: unknown) => {
           // Still asked (so rechecks apply), but a failure must not hold off the next ask for the interval.
-          checkedAt.set(key, 0)
+          if (current()) {
+            checkedAt.set(key, 0)
+          }
           console.warn('[agent-cli-update] check failed:', error)
         })
-        .finally(() => checks.delete(key))
+        .finally(() => {
+          if (current()) {
+            checks.delete(key)
+          }
+        })
       checks.set(key, check)
     }
     return check
@@ -168,6 +182,18 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
     checkAgentCliUpdates: (target) => checkPastInterval(target, CHECK_INTERVAL_MS),
 
     checkAgentCliUpdatesOnOpen: (target) => checkPastInterval(target, OPEN_CHECK_INTERVAL_MS),
+
+    forgetAgentCliUpdateHosts: (environmentIds) => {
+      environmentIds.forEach((id) => {
+        checkedAt.delete(id)
+        checks.delete(id)
+      })
+      set((state) => {
+        const next = new Map(state.agentCliUpdates)
+        environmentIds.forEach((id) => next.delete(id))
+        return next.size === state.agentCliUpdates.size ? state : { agentCliUpdates: next }
+      })
+    },
 
     recheckAgentCliUpdates: (target) => {
       const key = agentCliUpdateHostKey(target)

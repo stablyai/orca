@@ -46,6 +46,10 @@ export const ConnectorReact = z.object({
   emoji: z.string().min(1).max(100)
 })
 
+export const ConnectorLeaveThread = z.object({
+  sessionId: z.string().min(1, 'Missing session id')
+})
+
 const MirrorChat = { sessionId: z.string().min(1, 'Missing session id') }
 
 /** A bot's Slack thread chat: post the owner's next messages there too, or keep them in Orca. */

@@ -40,6 +40,12 @@ export function claudeTurnDoneOnScreen(lines: readonly string[]): boolean {
   return status !== undefined && TURN_DONE_RE.test(status)
 }
 
+/** Claude compacting: its request writes no `api-request` row, so the transcript cannot tell. */
+export function claudeCompactingOnScreen(lines: readonly string[]): boolean {
+  // Whitespace dropped: a narrow pane wraps the words onto separate rows.
+  return /compactingconversation/i.test(lines.join('').replace(/\s+/g, ''))
+}
+
 export function claudeToolRunsOnScreen(lines: readonly string[]): boolean {
   return lines.some((line) => TOOL_RUNNING_RE.test(line))
 }
