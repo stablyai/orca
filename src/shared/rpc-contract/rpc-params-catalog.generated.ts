@@ -35,6 +35,11 @@ import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/
 import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
 import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
 import {
+  DesktopBrowserBridgeDownloadAbortParams,
+  DesktopBrowserBridgeDownloadWriteParams,
+  DesktopBrowserBridgeFileReadParams
+} from '../browser/client-hosting/desktop-browser-bridge-file-transfer-protocol'
+import {
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultChunkParams,
   DesktopBrowserBridgeResultParams
@@ -47,7 +52,6 @@ import {
   WorkerDockAcknowledge,
   WorkerDockRead,
   WorkerDockResultRead,
-  WorkerDockResultsRead,
   WorkerDockStop,
   WorkerDockSubscribe
 } from '../orchestration/dock/worker-dock'
@@ -135,6 +139,12 @@ import {
   AutomationUpdate
 } from './automations/automation-params'
 import {
+  BotAvatarRead,
+  BotAvatarUpload,
+  BotSlackIconUpload,
+  BotSlackIconWanted
+} from './bot-avatar-params'
+import {
   ComposioApp,
   ComposioApps,
   ComposioBot,
@@ -201,8 +211,6 @@ import {
   BotAccessDecide,
   BotAccessRedeem,
   BotActivityRead,
-  BotAvatarRead,
-  BotAvatarUpload,
   BotChat,
   BotChatReset,
   BotChatSearch,
@@ -292,10 +300,9 @@ import {
   MouseButton,
   MouseWheel,
   MouseXY,
-  ProfileClearGoogleCookies,
+  ProfileClearCookies,
   ProfileDelete,
   ProfileImportFromBrowser,
-  Screencast,
   Scroll,
   Select,
   SelectorPath,
@@ -319,8 +326,13 @@ import {
   Wait
 } from './browser/browser-params'
 import {
+  DownloadCopyStream,
   FileChooserAnswer,
   PagePromptAnswer,
+  ReadPrintPdf,
+  ReleaseDownloadCopy,
+  ReleasePrintPdf,
+  Screencast,
   ScreencastAck,
   ScreencastReclaimForDesktop,
   ScreencastUnsubscribe
@@ -367,6 +379,7 @@ import {
 } from './computer/computer-schemas-params'
 import {
   ConnectorAct,
+  ConnectorLeaveThread,
   ConnectorReact,
   ConnectorReply,
   ConnectorSlackMirrorPost,
@@ -516,6 +529,7 @@ import {
 } from './google-files-params'
 import {
   GoogleBotAccessSetParams,
+  GoogleBotConnectedParams,
   GoogleClientExportParams,
   GoogleClientImportParams,
   GoogleDefaultSetParams,
@@ -638,6 +652,24 @@ import {
 } from './linear/linear-params'
 import { CreateProject } from './linear/linear-project-create-params'
 import { LinkPreviewGetParams } from './link-preview/link-preview-params'
+import {
+  McpServerAdd,
+  McpServerAgentFilesAllow,
+  McpServerDiscover,
+  McpServerImport,
+  McpServerProblems,
+  McpServerSessions,
+  McpServerSetAgentEnabled,
+  McpServerSetSharedProcess,
+  McpServerSetWorkspaces,
+  McpServerSignInFinish,
+  McpServerSignInFlow,
+  McpServerSignInStart,
+  McpServerSignInWait,
+  McpServerTarget,
+  McpServerUpdate,
+  McpServersList
+} from './mcp-servers-params'
 import { NativeChatSession, NativeChatUnsubscribe } from './native-chat/native-chat-params'
 import {
   NotificationGetMissedSinceParams,
@@ -827,6 +859,7 @@ import {
   GitCommitAction,
   GitCommitCompare,
   GitCommitDiff,
+  GitContinueRebase,
   GitCreateBranch,
   GitDiff,
   GitDiscoverCommitMessageModels,
@@ -1077,6 +1110,7 @@ import {
   SkillUploadChunkRequestSchema,
   SkillUploadCommitRequestSchema
 } from '../skills/sharing/skill-upload-session-contract'
+import { NetworkPortForwardAttachParams } from '../workspace/ports/port-forward-loopback-host'
 
 // Why: the host parses params with these schemas, so a client that matches this map
 // matches the dispatcher. Clients must import it for types only — parsing a params
@@ -1232,6 +1266,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.activity': BotActivityRead,
   'bots.agentChoices': null,
   'bots.avatar.read': BotAvatarRead,
+  'bots.avatar.slackIcon.upload': BotSlackIconUpload,
+  'bots.avatar.slackIcon.wanted': BotSlackIconWanted,
   'bots.avatar.upload': BotAvatarUpload,
   'bots.chat.open': BotChat,
   'bots.chat.reset': BotChatReset,
@@ -1393,6 +1429,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.dialogAccept': DialogAccept,
   'browser.dialogDismiss': ExpectUrlBrowserTarget,
   'browser.download': SelectorPath,
+  'browser.downloadCopyStream': DownloadCopyStream,
   'browser.drag': Drag,
   'browser.dropFiles': DropFiles,
   'browser.eval': Eval,
@@ -1435,14 +1472,18 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.openUrl': BrowserOpenUrlParams,
   'browser.pagePromptAnswer': PagePromptAnswer,
   'browser.pdf': BrowserTarget,
+  'browser.profileClearCookies': ProfileClearCookies,
   'browser.profileClearDefaultCookies': null,
-  'browser.profileClearGoogleCookies': ProfileClearGoogleCookies,
+  'browser.profileClearGoogleCookies': ProfileClearCookies,
   'browser.profileCreate': ProfileCreate,
   'browser.profileDelete': ProfileDelete,
   'browser.profileDetectBrowsers': null,
   'browser.profileImportFromBrowser': ProfileImportFromBrowser,
   'browser.profileList': null,
   'browser.readImage': ReadImage,
+  'browser.readPrintPdf': ReadPrintPdf,
+  'browser.releaseDownloadCopy': ReleaseDownloadCopy,
+  'browser.releasePrintPdf': ReleasePrintPdf,
   'browser.reload': Reload,
   'browser.replaceMisspelling': PageMenuWord,
   'browser.saveImage': PageMenuImage,
@@ -1509,6 +1550,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
   'connector.act': ConnectorAct,
+  'connector.leaveThread': ConnectorLeaveThread,
   'connector.react': ConnectorReact,
   'connector.reply': ConnectorReply,
   'connector.slackMirror.post': ConnectorSlackMirrorPost,
@@ -1516,6 +1558,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'connector.slackMirror.status': ConnectorSlackMirrorStatus,
   'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
+  'desktopBrowserBridge.downloadAbort': DesktopBrowserBridgeDownloadAbortParams,
+  'desktopBrowserBridge.downloadWrite': DesktopBrowserBridgeDownloadWriteParams,
+  'desktopBrowserBridge.fileRead': DesktopBrowserBridgeFileReadParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'desktopBrowserBridge.resultChunk': DesktopBrowserBridgeResultChunkParams,
   'diagnostics.memory': null,
@@ -1606,6 +1651,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.commitDiff': GitCommitDiff,
   'git.completeMerge': WorktreeSelectorOfGitParams,
   'git.conflictOperation': WorktreeSelectorOfGitParams,
+  'git.continueRebase': GitContinueRebase,
   'git.createBranch': GitCreateBranch,
   'git.diff': GitDiff,
   'git.discard': GitFilePath,
@@ -1620,6 +1666,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.mutationInFlight': WorktreeSelectorOfGitParams,
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
+  'git.rebaseAutoStash': WorktreeSelectorOfGitParams,
   'git.rebaseFromBase': GitRebaseFromBase,
   'git.refs': GitRefs,
   'git.remoteCommitUrl': GitRemoteCommitUrl,
@@ -1710,6 +1757,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.updateMRState': UpdateMrState,
   'gitlab.workItemByPath': WorkItemByPath,
   'gitlab.workItemDetails': WorkItemDetailsOfGitlabParams,
+  'google.bot.connected': GoogleBotConnectedParams,
   'google.bot.set': GoogleBotAccessSetParams,
   'google.calendar.calendars': CalendarCalendarsParams,
   'google.calendar.create': CalendarCreateParams,
@@ -1857,6 +1905,27 @@ export const RPC_PARAMS_BY_METHOD = {
   'managedServer.update': ManagedServerUpdate,
   'markdown.readTab': ActivateTab,
   'markdown.saveTab': SaveMarkdownTab,
+  'mcpServers.add': McpServerAdd,
+  'mcpServers.agentFiles.allow': McpServerAgentFilesAllow,
+  'mcpServers.cancelProblems': McpServersList,
+  'mcpServers.copy': McpServerImport,
+  'mcpServers.details': McpServerTarget,
+  'mcpServers.discover': McpServerDiscover,
+  'mcpServers.list': McpServersList,
+  'mcpServers.move': McpServerImport,
+  'mcpServers.problems': McpServerProblems,
+  'mcpServers.remove': McpServerTarget,
+  'mcpServers.sessions.restart': McpServerSessions,
+  'mcpServers.sessions.stale': McpServerSessions,
+  'mcpServers.setAgentEnabled': McpServerSetAgentEnabled,
+  'mcpServers.setSharedProcess': McpServerSetSharedProcess,
+  'mcpServers.setWorkspaces': McpServerSetWorkspaces,
+  'mcpServers.signIn.cancel': McpServerSignInFlow,
+  'mcpServers.signIn.finish': McpServerSignInFinish,
+  'mcpServers.signIn.start': McpServerSignInStart,
+  'mcpServers.signIn.wait': McpServerSignInWait,
+  'mcpServers.signOut': McpServerTarget,
+  'mcpServers.update': McpServerUpdate,
   'mobileRelay.hosts.list': null,
   'mobileRelay.hosts.worktrees': MobileRelayHostWorktreesParamsSchema,
   'mobileRelay.projectSections': null,
@@ -1869,6 +1938,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'nativeChat.subscribe': NativeChatSession,
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
+  'network.portForward': NetworkPortForwardAttachParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.pushCoverage': NotificationPushCoverageParams,
   'notifications.registerPush': NotificationRegisterPushParams,
@@ -1945,7 +2015,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerDockAcknowledge': WorkerDockAcknowledge,
   'orchestration.workerDockRead': WorkerDockRead,
   'orchestration.workerDockResult': WorkerDockResultRead,
-  'orchestration.workerDockResultsRead': WorkerDockResultsRead,
   'orchestration.workerDockStop': WorkerDockStop,
   'orchestration.workerDockSubscribe': WorkerDockSubscribe,
   'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,

@@ -1,3 +1,5 @@
+import { resolvePluginPanelPathIcon } from '../../../shared/plugins/contributions/plugin-panel-path-icon'
+import type { PluginPanelContribution } from '../../../shared/plugins/contributions/plugin-panel-contribution'
 import { PLUGIN_CAPABILITY_DESCRIPTIONS } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import { needsReconsent } from '../../../shared/plugins/approval/plugin-consent-state'
 import { pluginPanelTabKey } from '../../../shared/plugins/frames/plugin-tab-key'
@@ -12,6 +14,7 @@ import { pluginInstalledHostImages } from '../media/plugin-manifest-images'
 import { markCommandReplacementOwners } from '../commands/plugin-command-replacement-owners'
 import type { PluginService } from '../plugin-service'
 import { listPluginVmRecipeCommands } from '../../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
+import { pluginMcpServerListing } from '../../../shared/plugins/contributions/plugin-mcp-server-contribution'
 import {
   isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
@@ -22,6 +25,7 @@ import { pluginCatalogTypes } from '../../../shared/plugins/catalog/plugin-catal
 import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import type {
   PluginHostListEntry,
+  PluginHostPanel,
   PluginHostStatus
 } from '../../../shared/plugins/plugin-list-entry'
 import {
@@ -29,6 +33,8 @@ import {
   customEditorFrame
 } from '../../../shared/plugins/contributions/plugin-custom-editor-contribution'
 import { pluginExecutionProfile } from '../../../shared/plugins/contributions/plugin-execution-profile'
+import { isRequiredTeamPluginInstall } from '../installation/plugin-team-install-policy'
+import { installedPluginReleasePolicyError } from '../activation/plugin-activation-policy'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
 
@@ -82,6 +88,17 @@ const devChangeCountOf = (plugin: DiscoveredPlugin) =>
 
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
 
+/** A name stays in `icon`; a path icon goes to `iconPath` so older clients never see an object. */
+export function projectPluginPanelIcon(
+  icon: PluginPanelContribution['icon']
+): Pick<PluginHostPanel, 'icon' | 'iconPath'> {
+  if (typeof icon === 'string') {
+    return { icon }
+  }
+  const iconPath = icon ? resolvePluginPanelPathIcon(icon) : null
+  return iconPath ? { iconPath } : {}
+}
+
 export async function buildPluginList(
   service: PluginService,
   lock: PluginLockfile,
@@ -109,6 +126,7 @@ export async function buildPluginList(
           publisher: '',
           status: 'invalid' as const,
           needsReconsent: false,
+          ...(isRequiredTeamPluginInstall(lockEntry) ? { requiredByTeam: true as const } : {}),
           error: plugin.error,
           isDev: plugin.isDev,
           ...devChangeCountOf(plugin),
@@ -129,6 +147,10 @@ export async function buildPluginList(
       const worker = service.workerState(plugin.pluginKey)
       const activationError = service.activationError(plugin.pluginKey)
       const killListEntry = service.options.getPluginKillListEntry?.(plugin.pluginKey) ?? null
+      const releasePolicyError =
+        activation === 'disabled' && !killListEntry
+          ? installedPluginReleasePolicyError(plugin)
+          : null
       let status: PluginHostStatus
       if (activation === 'disabled') {
         status = 'disabled'
@@ -156,6 +178,10 @@ export async function buildPluginList(
           ? { icon: pluginInstalledImageUrl(plugin.pluginKey, plugin.contentHash ?? 'dev', slot) }
           : {}
       const bundled = lockEntry?.source.kind === 'bundled'
+      const managedByTeams =
+        lockEntry?.source.kind === 'marketplace'
+          ? service.options.getCatalogManagingTeams?.(lockEntry.source.marketplace)
+          : undefined
       const official =
         bundled ||
         (lockEntry?.source.kind === 'marketplace' &&
@@ -167,6 +193,7 @@ export async function buildPluginList(
         name: plugin.manifest.name,
         version: plugin.manifest.version,
         publisher: splitQualifiedPluginKey(plugin.pluginKey)?.publisher ?? '',
+        ...(managedByTeams ? { managedByTeams } : {}),
         ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
         execution: pluginExecutionProfile(plugin.manifest),
         types: pluginCatalogTypes(plugin.manifest),
@@ -178,6 +205,7 @@ export async function buildPluginList(
         ...(plugin.manifest.repository ? { repository: plugin.manifest.repository } : {}),
         status,
         needsReconsent: needsReconsent(plugin.pluginKey, plugin.consentFingerprint, consents),
+        ...(isRequiredTeamPluginInstall(lockEntry) ? { requiredByTeam: true as const } : {}),
         ...(status === 'errored'
           ? { error: activationError ?? 'plugin worker crashed repeatedly' }
           : {}),
@@ -192,7 +220,7 @@ export async function buildPluginList(
         panels: plugin.manifest.contributes.panels.map((panel) => ({
           id: panel.id,
           title: panel.title,
-          ...(panel.icon ? { icon: panel.icon } : {}),
+          ...projectPluginPanelIcon(panel.icon),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
         })),
         customEditors: plugin.manifest.contributes.customEditors.map((editor, index) => ({
@@ -236,6 +264,7 @@ export async function buildPluginList(
         statusBarItems: plugin.manifest.contributes.statusBarItems,
         hooks: plugin.manifest.contributes.hooks.map((hook) => hook.event),
         hasWorker: Boolean(plugin.manifest.main),
+        mcpServers: plugin.manifest.contributes.mcpServers.map(pluginMcpServerListing),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,
           name: recipe.name,
@@ -247,10 +276,13 @@ export async function buildPluginList(
           ? {
               blockedByKillList: {
                 reason: killListEntry.reason,
+                ...(killListEntry.team ? { team: true as const } : {}),
                 ...(killListEntry.advisoryUrl ? { advisoryUrl: killListEntry.advisoryUrl } : {})
               }
             }
-          : {}),
+          : releasePolicyError
+            ? { blockedByKillList: { reason: releasePolicyError, team: true as const } }
+            : {}),
         ...lockEntrySource(lockEntry)
       }
     }

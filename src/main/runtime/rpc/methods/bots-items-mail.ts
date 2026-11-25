@@ -7,13 +7,12 @@ import {
   BOT_ITEM_MAIL_ID_PREFIX,
   BOT_ITEM_MAIL_SENDER
 } from '../../../../shared/bots/bot-item-note-runs'
-import { runtimeBotChats } from '../../../bots/bot-chat-session'
+import { botMailSession } from '../../../bots/bot-mail-chat'
 import type { BotItemNoteBy } from '../../../../shared/bots/bot-item-note'
 import { appendBotItemNote, botItemNote } from '../../../bots/bot-item-chat-notes'
 import { botItemChangeMail, botItemMailImages } from '../../../bots/bot-items-mail-text'
 import type { BotItemMail } from '../../../bots/bot-items-schema'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { botChatTakingMail } from './bots-chats'
 
 /** A message id from the first item event it carries. */
 export function botItemMailId(eventId: number): string {
@@ -73,8 +72,7 @@ export async function sendBotItemMail(
   if (!mail || !bot) {
     return true
   }
-  const chat = await botChatTakingMail(runtime, bot, owed.chatId)
-  const sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
+  const sessionId = await botMailSession(runtime, bot, owed.chatId)
   const to = `orca_session_id:${sessionId}`
   const images = botItemMailImages(owed.changes)
   const asker = answerAskedIn(owed)

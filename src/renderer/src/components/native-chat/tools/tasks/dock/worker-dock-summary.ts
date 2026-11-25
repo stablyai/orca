@@ -1,5 +1,5 @@
 import type { Translate } from '@/i18n/use-translate'
-import { workerDockKindCount } from './worker-dock-labels'
+import { workerDockWorkerCount } from './worker-dock-labels'
 import type { WorkerDockRowView } from './WorkerDockRow'
 
 export function workerDockSummary(
@@ -7,54 +7,69 @@ export function workerDockSummary(
   rows: ReadonlyMap<string, WorkerDockRowView>,
   t: Translate
 ) {
-  const failures = identities.filter(
-    (row) => row.state === 'failed' || row.state === 'unexpected'
-  ).length
-  const needsYou = identities.filter((row) => row.state === 'needs-you').length
-  const unavailable = identities.filter((row) => row.state === 'unavailable').length
+  let failures = 0
+  let needsYou = 0
+  let running = 0
   const kinds = new Map<string, number>()
   for (const row of identities) {
     const kind = row.kind ?? rows.get(row.id)?.kind ?? 'worker'
     kinds.set(kind, (kinds.get(kind) ?? 0) + 1)
+    if (row.state === 'failed' || row.state === 'unexpected') {
+      failures++
+    } else if (row.state === 'needs-you') {
+      needsYou++
+    } else if (row.state === 'running' || row.state === 'starting' || row.state === 'stopping') {
+      running++
+    }
   }
-  const mixed = kinds.size > 1
   const total = identities.length
-  const count =
-    failures === total && failures > 0
-      ? t('components.native-chat.workerDock.failedCount', '{{count}} failed', { count: failures })
-      : [
-          ...(mixed
-            ? [
-                t('components.native-chat.workerDock.totalCount', '{{count}} total', {
-                  count: total
-                })
-              ]
-            : []),
-          ...[...kinds].map(([kind, count]) => workerDockKindCount(t, kind, count)),
-          ...(needsYou
-            ? [
-                t('components.native-chat.workerDock.needsYouCount', '{{count}} needs you', {
-                  count: needsYou
-                })
-              ]
-            : []),
-          ...(failures
-            ? [
-                t('components.native-chat.workerDock.failedCount', '{{count}} failed', {
-                  count: failures
-                })
-              ]
-            : []),
-          ...(unavailable
-            ? [
-                t('components.native-chat.workerDock.unavailableCount', '{{count}} unavailable', {
-                  count: unavailable
-                })
-              ]
-            : [])
-        ]
-          // Each part stays whole, so a narrow header wraps only between parts.
-          .map((part) => part.replaceAll(' ', '\u00a0'))
-          .join(' · ')
-  return { failures, needsYou, mixed, total, count }
+  // One count for everything listed: workers, subagents and background tasks alike.
+  const countLabel = total ? workerDockWorkerCount(t, total) : ''
+  const status = failures
+    ? t('components.native-chat.workerDock.failedCount', '{{count}} failed', { count: failures })
+    : needsYou
+      ? t('components.native-chat.workerDock.needsYouCount', '{{count}} needs you', {
+          count: needsYou
+        })
+      : running
+        ? t('components.native-chat.workerDock.runningCount', '{{count}} running', {
+            count: running
+          })
+        : ''
+  return {
+    failures,
+    needsYou,
+    mixed: kinds.size > 1,
+    total,
+    label: countLabel,
+    count: [countLabel, status].filter(Boolean).join(' · ')
+  }
+}
+
+/** The folded chip's text, never empty: "3 workers", "2 failed" once only failures remain, or the
+ *  empty copy with no rows. A held roster can outlive its live count by a gesture, so it then
+ *  counts its own rows. */
+export function workerDockChipLabel(
+  t: Translate,
+  {
+    summary,
+    rows,
+    empty
+  }: {
+    summary: { total: number; failures: number; label: string }
+    rows: number
+    empty: string | null
+  }
+): string {
+  if (empty !== null) {
+    return empty
+  }
+  if (!summary.total) {
+    return workerDockWorkerCount(t, rows)
+  }
+  return summary.failures === summary.total
+    ? t('components.native-chat.workerDock.failedCount', '{{count}} failed', {
+        count: summary.failures
+      })
+    : summary.label
 }

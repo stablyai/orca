@@ -25,6 +25,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {
   buildMobileSessionTabSummary,
+  countMobileSessionDesktopTabs,
   isForkedChatTab,
   type MobileSessionTabSummary
 } from './mobile-session-tab-rows'
@@ -48,7 +49,7 @@ function TabBarDot({ tabId, state }: { tabId: string; state: AgentDotState | und
   if (startedEmpty.tabId === tabId && startedEmpty.empty) {
     return <ArrivingTabBarDot state={state} />
   }
-  return state && state !== 'idle' ? <AgentStateDot state={state} /> : null
+  return state && state !== 'idle' ? <AgentStateDot state={state} decorative /> : null
 }
 
 // Mounted with the bare tab, so the motion preference is read before the dot arrives.
@@ -59,7 +60,7 @@ function ArrivingTabBarDot({ state }: { state: AgentDotState | undefined }) {
   }
   return (
     <ArrivalFade animate={reducedMotion === false}>
-      <AgentStateDot state={state} />
+      <AgentStateDot state={state} decorative />
     </ArrivalFade>
   )
 }
@@ -180,10 +181,11 @@ export function MobileSessionTabBar({
   )
 
   const status = active?.dotState && active.dotState !== 'idle' ? active.dotState : undefined
+  const tabCount = countMobileSessionDesktopTabs(rows)
   const countLabel =
-    rows.length === 1
+    tabCount === 1
       ? t('session.tabBar.oneTab', '1 tab')
-      : t('session.tabBar.tabCount', '{{count}} tabs', { count: rows.length })
+      : t('session.tabBar.tabCount', '{{count}} tabs', { count: tabCount })
   const tabLabel = [
     active && isForkedChatTab(active.tab) ? mobileForkAccessibleName(active.title) : active?.title,
     status ? agentStateLabel(status) : null
@@ -277,10 +279,10 @@ export function MobileSessionTabBar({
         accessibilityHint={t('session.tabBar.hint', 'Shows all tabs')}
       >
         <View style={styles.countBox}>
-          <Text style={styles.countText}>{rows.length}</Text>
+          <Text style={styles.countText}>{tabCount}</Text>
+          {othersNeedYou ? <View style={styles.alert} /> : null}
         </View>
         {anyUnread ? <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} /> : null}
-        {othersNeedYou ? <View style={styles.alert} /> : null}
       </Pressable>
       {/* A collapsed bar's + lives in the header's ⋯ menu. */}
       {!actionsCollapsed ? (
@@ -359,6 +361,8 @@ const styles = themedStyleSheet(() => ({
   },
   sideCell: {
     width: 46,
+    flexDirection: 'row',
+    gap: 2,
     alignItems: 'center',
     justifyContent: 'center',
     borderRightWidth: 1,
@@ -387,8 +391,8 @@ const styles = themedStyleSheet(() => ({
   // Another tab needs you: a red dot on the count's corner, ringed in the bar's colour.
   alert: {
     position: 'absolute',
-    top: 8,
-    right: 9,
+    top: -6,
+    right: -7,
     width: 9,
     height: 9,
     borderRadius: radii.pill,

@@ -143,3 +143,5 @@ export async function removeFolderContextBlock(
   }
   await writeFolderContextText(target, `${remaining.replace(/\s+$/, '')}\n`)
 }
+
+export const removeFolderContextFile = removeFolderContextBlock

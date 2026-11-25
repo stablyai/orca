@@ -8,7 +8,14 @@ import { persistPortForwards } from './ssh-port-forward-persistence'
 import { serializePortForwardChange } from './ssh-managed-port-forward-restore'
 import { clearForwardFailure, listUnrestoredPortForwards } from './ssh-port-forward-unrestored'
 import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
+import { assertIpv6LoopbackPortFree } from '../../ssh/port-forwarding/local-forward-ipv6-loopback-probe'
+import { addForwardOnFreeLocalPort } from '../../ssh/port-forwarding/forward-local-port-choice'
+import { savedForwardLocalPorts } from '../../ports/paired-forwards/paired-port-forward-saved'
+import { loopbackPortForwardDialHost } from '../../../shared/workspace/ports/port-forward-loopback-host'
 import { broadcastPortForwards, enrichDetected } from './ssh-renderer-broadcast'
+
+// Covers a fresh OpenSSH login through a jump host; past it the click reports a failure.
+const FORWARD_LISTENER_TIMEOUT_MS = 20_000
 
 export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void {
   handle(
@@ -25,6 +32,7 @@ export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void
         if (!conn) {
           throw new Error(`SSH connection "${args.targetId}" not found`)
         }
+        await assertIpv6LoopbackPortFree(args.localPort)
         const entry = await portForwardManager!.addForward(
           args.targetId,
           conn,
@@ -40,6 +48,53 @@ export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void
         return entry
       })
   )
+
+  // The renderer calls this only from a person's click on the host's localhost link or port.
+  handle('ssh:ensurePortForward', (args: { targetId: string; remotePort: number }) => {
+    const targetId = typeof args?.targetId === 'string' ? args.targetId : ''
+    const remotePort = args?.remotePort
+    if (!targetId || !Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65_535) {
+      throw new Error('Invalid port forward request')
+    }
+    return serializePortForwardChange(targetId, async () => {
+      const existing = portForwardManager!
+        .listForwards(targetId)
+        .find(
+          (forward) =>
+            forward.remotePort === remotePort &&
+            loopbackPortForwardDialHost(forward.remoteHost) !== null
+        )
+      if (existing) {
+        return { entry: existing, created: false }
+      }
+      const conn = connectionManager!.getConnection(targetId)
+      if (!conn) {
+        throw new Error(`SSH connection "${targetId}" not found`)
+      }
+      // Saved forwards of every host, SSH or paired, keep their ports: one restoring as this starts would answer its probe.
+      const savedLocalPorts = savedForwardLocalPorts()
+      const entry = await addForwardOnFreeLocalPort({
+        remotePort,
+        add: (localPort) =>
+          portForwardManager!.addForward(targetId, conn, localPort, 'localhost', remotePort),
+        remove: (id) => portForwardManager!.removeForwardAndWait(id),
+        // SSH forwards listen on 127.0.0.1 only.
+        holdsIpv6Loopback: false,
+        // Persisting a new forward on a saved one's port would also drop that saved mapping.
+        reservedLocalPorts: savedLocalPorts,
+        // The caller opens the address next; a slow SSH login must not hand it a port nothing answers yet.
+        listening: {
+          timeoutMs: FORWARD_LISTENER_TIMEOUT_MS,
+          isOpen: (entry) =>
+            portForwardManager!.listForwards(targetId).some((forward) => forward.id === entry.id)
+        }
+      })
+      clearForwardFailure(targetId, entry)
+      persistPortForwards(targetId)
+      broadcastPortForwards(targetId)
+      return { entry, created: true }
+    })
+  })
 
   handle(
     'ssh:updatePortForward',
@@ -59,6 +114,8 @@ export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void
         const previous = portForwardManager!
           .listForwards(args.targetId)
           .find((forward) => forward.id === args.id)
+        // The forward being edited listens on 127.0.0.1 only, so it never answers this probe.
+        await assertIpv6LoopbackPortFree(args.localPort)
         try {
           const entry = await portForwardManager!.updateForward(
             args.id,

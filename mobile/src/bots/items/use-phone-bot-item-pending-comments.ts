@@ -3,6 +3,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import {
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY
@@ -18,6 +19,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { commentOnBotItem } from './bot-item-operations'
 import { botItemWriteFailure } from './use-bot-item-moves'
+import { phoneBotItemReturnText } from './phone-bot-item-refused-reply'
 
 const usePendingComments = createBotItemPendingCommentsHook({ useEffect, useSyncExternalStore })
 
@@ -27,7 +29,9 @@ export function usePhoneBotItemPendingComments({
   uid,
   events,
   hostName,
-  showToast
+  showToast,
+  draftKey,
+  refresh
 }: {
   client: RpcClient | null
   /** One item on one host. */
@@ -36,12 +40,17 @@ export function usePhoneBotItemPendingComments({
   events: readonly BotItemEvent[]
   hostName: string
   showToast: (message: string) => void
+  /** The item's comment box draft, which a refused reply's words go back to. */
+  draftKey: string
+  /** Re-reads the item once the host refuses a reply to a replaced question. */
+  refresh: () => void
 }) {
   const t = useMobileTranslation()
   const requestIds = useRouteCapability(BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY)
   const skills = useRouteCapability(BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY)
   const questionIds = useRouteCapability(BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY)
   const plain = useRouteCapability(BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY)
+  const skipped = useRouteCapability(BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY)
   return usePendingComments(key, events, {
     post: async (entry) => {
       const outcome = client
@@ -50,7 +59,8 @@ export function usePhoneBotItemPendingComments({
             requestId: entry.requestId ?? undefined,
             skills: entry.skills,
             questionId: entry.questionId ?? undefined,
-            plain: entry.plain
+            plain: entry.plain,
+            skipped: entry.skipped
           })
         : ({ kind: 'not-sent' } as const)
       if (outcome.kind !== 'done') {
@@ -73,9 +83,12 @@ export function usePhoneBotItemPendingComments({
             ? error.message
             : String(error)
       ),
+    returnText: phoneBotItemReturnText(key, draftKey),
+    refresh,
     requestIds,
     questionIds,
     plain,
-    skills
+    skills,
+    skipped
   })
 }

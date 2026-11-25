@@ -1,3 +1,5 @@
+import type { FleetWorkerOutcome } from './orchestration-fleet-outcome-resolution'
+
 export const ORCHESTRATION_FLEET_ATTENTION_CATEGORIES = [
   'guidance',
   'input',
@@ -19,7 +21,7 @@ export type OrchestrationFleetAttention = {
 
 export type OrchestrationFleetAttentionFacts = {
   isRoot: boolean
-  outcome?: 'in_progress' | 'succeeded' | 'failed' | 'outcome_unknown' | 'finished_unverified'
+  outcome?: FleetWorkerOutcome
   pendingInput?: boolean
   pendingGuidance?: boolean
   pendingApproval?: boolean

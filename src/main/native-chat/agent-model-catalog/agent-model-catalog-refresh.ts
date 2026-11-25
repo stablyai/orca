@@ -46,6 +46,8 @@ export type AgentModelCatalogRefresh = {
   hold: (reader: AgentModelCatalogReadOperation) => void
   /** Also lists efforts for a reader's selected model. */
   want: (model: string | undefined) => void
+  /** Lists its catalog again once its scope is resolved (a user's Refresh). */
+  relist: () => void
 }
 
 type Held = AgentModelCatalogRefresh & { workspaceId?: string; end: () => void }
@@ -90,6 +92,8 @@ export function createAgentModelCatalogRefreshes(context: {
     let register: ((holder?: AbortSignal) => void) | undefined
     let demand: ((model: string) => void) | undefined
     let projecting: Promise<void> | undefined
+    let relisting = false
+    let resolvedFingerprint: string | undefined
     const run = async (): Promise<void> => {
       const facts = await bounded(resolveAgentModelCatalogAccount(deps, launch, current))
       if (!facts) {
@@ -132,10 +136,11 @@ export function createAgentModelCatalogRefreshes(context: {
       })
       projecting = bound.projecting
       void projecting.finally(defaults.resolve)
+      const scopeParams = { agent, workspacePath, savedOnly: launch.passive, legacy: launch.legacy }
       const scope = await bounded(
         resolveAgentModelCatalogScope(
           deps,
-          { agent, workspacePath, savedOnly: launch.passive, legacy: launch.legacy },
+          { ...scopeParams, relistRequested: () => relisting },
           scoped,
           base,
           probeHome,
@@ -146,9 +151,16 @@ export function createAgentModelCatalogRefreshes(context: {
       if (!scope) {
         return
       }
-      const { fingerprint, exact, resolved, cwd } = scope
+      const { fingerprint, exact, resolved, cwd, unavailable } = scope
+      resolvedFingerprint = fingerprint
       Object.assign(bound, { fingerprint, exact, cwd })
       bindAgentModelCatalogScope(bindings, launch.bindingKey, bound, requestKey)
+      if (unavailable) {
+        return
+      }
+      if (relisting) {
+        deps.store.relistScope(fingerprint)
+      }
       const probe = deps.probes?.[agent]
       let completion: Promise<AgentModelCatalogEntry | null> | undefined
       if (
@@ -258,6 +270,13 @@ export function createAgentModelCatalogRefreshes(context: {
         if (model && !targets.has(model)) {
           targets.add(model)
           demand?.(model)
+        }
+      },
+      relist: () => {
+        relisting = true
+        if (resolvedFingerprint !== undefined && current()) {
+          deps.store.relistScope(resolvedFingerprint)
+          register?.()
         }
       },
       workspaceId: launch.records.record?.location.workspaceId,

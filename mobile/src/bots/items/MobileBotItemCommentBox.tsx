@@ -4,15 +4,7 @@
 // question waits, "Replying to" names it, as on the desktop; its × sends the comment as one of its own.
 // The chat's field and mic: the session's dictation lands here while the box is its target. Photos
 // attach with the chat's + and thumbnails, each named [Image #N] in the words.
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-  type Ref
-} from 'react'
+import { useCallback, useContext, useEffect, useRef, useState, type RefObject } from 'react'
 import { Pressable, Text, View, type HostInstance, type TextInputInstance } from 'react-native'
 import { WifiOff, X } from 'lucide-react-native'
 import type { BotItem, BotItemCommentSkill } from '../../../../src/shared/bots/bot-items'
@@ -46,24 +38,18 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { BotItemCommentMicContext } from './bot-item-comment-mic'
 import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
-import { useBotItemCommentImages } from './use-bot-item-comment-images'
+import { useBotDraftImages } from '../use-bot-draft-images'
+import {
+  botItemCommentDraftKey,
+  botItemCommentDrafts as drafts,
+  writeBotItemCommentDraft,
+  shownBotItemCommentDrafts as shownDrafts
+} from './bot-item-comment-drafts'
 
-// Each item's unsent text, for this app session.
-const drafts = new Map<string, string>()
 // Skills picked into each item's draft, by the file the comment's mail names.
 const pickedSkills = new Map<string, readonly BotItemCommentSkill[]>()
 const NO_SKILLS: readonly BotItemCommentSkill[] = []
-// The open box of each item, so a late photo's [Image #N] change reaches the field it shows in.
-const shownDrafts = new Map<string, (next: string) => void>()
 const NO_FILES: readonly never[] = []
-
-export type BotItemCommentBoxHandle = {
-  /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
-   *  of its own, with "Replying to" hidden. */
-  fill: (text: string, plain?: boolean) => void
-  /** Focus the box to answer the waiting question in your own words, naming it. */
-  answer: () => void
-}
 
 /** The agent's question the item waits on, and who asked it. */
 export type BotItemWaitingQuestion = BotItemWaitingLine & { asker: string }
@@ -79,7 +65,7 @@ export function MobileBotItemCommentBox({
   attachTo,
   onSend,
   showToast,
-  ref
+  fieldRef: input
 }: {
   client: RpcClient | null
   hostId: string
@@ -101,35 +87,32 @@ export function MobileBotItemCommentBox({
   showToast: (message: string) => void
   /** The agent's question waiting on the owner (what is sent is the reply). */
   question?: BotItemWaitingQuestion | null
-  ref?: Ref<BotItemCommentBoxHandle>
+  /** The field, which the page focuses for a quote. */
+  fieldRef: RefObject<TextInputInstance | null>
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const mic = useContext(BotItemCommentMicContext)
-  // Keyed by host too: two hosts can hold the same item ids.
-  const key = `${hostId}\0${item.uid}`
+  const key = botItemCommentDraftKey(hostId, item.uid)
   const [text, setTextState] = useState(() => drafts.get(key) ?? '')
   // The question whose "Replying to" the owner closed.
   const [unmarked, setUnmarked] = useState<string | null>(null)
   const quote = question && unmarked !== question.id ? question : null
   const [error, setError] = useState<string | null>(null)
-  const input = useRef<TextInputInstance>(null)
   const cancelRef = useRef<HostInstance>(null)
   const { uid } = item
   const setText = useCallback(
     (next: string) => {
       setTextState(next)
       setError(null)
-      if (next) {
-        drafts.set(key, next)
-      } else {
-        drafts.delete(key)
-      }
+      writeBotItemCommentDraft(key, next)
     },
     [key]
   )
   useEffect(() => {
     shownDrafts.set(key, setText)
+    // Text returned to the draft between the first render and this registration shows too.
+    setTextState(drafts.get(key) ?? '')
     return () => {
       shownDrafts.delete(key)
     }
@@ -189,9 +172,9 @@ export function MobileBotItemCommentBox({
       focusMobileNativeChatTextDestination(scope)
       run()
     })
-  const photos = useBotItemCommentImages({
+  const photos = useBotDraftImages({
     client,
-    uid,
+    draftKey: uid,
     sessionId: attachTo,
     editText: (change) => (shownDrafts.get(key) ?? setText)(change(drafts.get(key) ?? '')),
     showToast
@@ -230,22 +213,9 @@ export function MobileBotItemCommentBox({
       )
       pickedSkills.delete(key)
       setText('')
-      photos.clear()
+      photos.clearSent(photos.images.map((image) => image.id))
     }
   }
-  useImperativeHandle(ref, () => ({
-    fill: (words, plain) => {
-      if (plain) {
-        setUnmarked(question?.id ?? null)
-      }
-      setText(`${words} `)
-      input.current?.focus()
-    },
-    answer: () => {
-      setUnmarked(null)
-      input.current?.focus()
-    }
-  }))
   const notice = !online
     ? t(
         'bots.items.comment.offline',

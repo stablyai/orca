@@ -19,6 +19,12 @@ export function isUpdateCardVisible({
   collapsed?: boolean
 }): boolean {
   const isUserInitiated = 'userInitiated' in status && Boolean(status.userInitiated)
+  if (status.state === 'downloaded' && status.requiredByTeam) {
+    return status.teamRestart?.phase !== 'snoozed'
+  }
+  if (status.state === 'error' && status.requiredByTeam) {
+    return true
+  }
 
   if (status.state === 'checking' && !isUserInitiated) {
     return false
@@ -56,7 +62,7 @@ export function getUpdateCardAriaLabel(status: UpdateStatus, t: Translate = tran
       return t('auto.components.UpdateCard.aria.statusDownloaded', 'Update ready to install')
     case 'error':
       if (status.installOnQuit) {
-        return t('updates.installOnQuit.title', 'Restart Orca manually')
+        return t('updates.installOnQuit.title', 'Update ready to install')
       }
       return status.installBlock
         ? t('updates.installBlock.waitingLabel', 'Update waiting')

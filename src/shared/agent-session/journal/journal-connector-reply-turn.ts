@@ -8,31 +8,30 @@ import type { JournalConnectorReplyOutcome } from './journal-connector-reply'
 // the boot scan so both say the same for the same turn.
 
 /** A delivery a turn answered, as its journal proves it. `ownerAsked`: the bot's owner sent the
- *  message that carried it (its asker), the one person the marker can't silence in a DM. */
+ *  message that carried it (its asker): an older build's row in their own DM keeps its words. */
 export type ConnectorReplyStamp = AgentJournalConnectorDelivery & { ownerAsked?: true }
 
-/** A bot's final words for a request: none when its quiet marker silences them. The marker is a
- *  deliberate silence, except toward its owner in their own DM (`addressed`): there it silences only
- *  a reply that is nothing but the marker, and otherwise just the trailing marker goes
- *  (addressedBotWords). */
+/** A bot's final words for a request: none when its quiet marker silences them. A reply that is
+ *  nothing but the marker is a deliberate silence; otherwise only the trailing marker goes
+ *  (addressedBotWords), unless `silencedWhole`: a row admitted under the older rule, where the
+ *  marker silenced the whole reply. */
 export function connectorReplyWords(
   prose: string,
-  { bot, addressed }: { bot: boolean; addressed: boolean }
+  { bot, silencedWhole }: { bot: boolean; silencedWhole?: boolean }
 ): string | null {
   if (!bot || !isQuietBotResult(prose)) {
     return prose
   }
-  return addressed ? addressedBotWords(prose) : null
+  return silencedWhole ? null : addressedBotWords(prose)
 }
 
 /** The outcome a turn's end gives one request it answered. prose: its own root prose (empty when
- *  it wrote none). `addressed`: the request is its owner's in their own DM
- *  (connectorReplyWords). A success that wrote nothing is done without an answer, never a failure. */
+ *  it wrote none). A success that wrote nothing is done without an answer, never a failure. */
 export function connectorReplyTurnOutcome(turn: {
   outcome: 'success' | 'failure' | 'cancellation' | 'superseded' | 'interruption'
   prose: string
   bot: boolean
-  addressed?: boolean
+  silencedWhole?: boolean
 }): { outcome: JournalConnectorReplyOutcome; prose?: string } {
   switch (turn.outcome) {
     case 'success': {
@@ -41,7 +40,7 @@ export function connectorReplyTurnOutcome(turn: {
       }
       const words = connectorReplyWords(turn.prose, {
         bot: turn.bot,
-        addressed: turn.addressed === true
+        silencedWhole: turn.silencedWhole
       })
       return words === null ? { outcome: 'quiet' } : { outcome: 'answered', prose: words }
     }

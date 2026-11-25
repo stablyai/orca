@@ -1,8 +1,22 @@
-import { chmod, lstat, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { removeFolderContextBlock, writeFolderContextFile } from './acp-folder-context-file'
+import {
+  removeFolderContextBlock,
+  removeFolderContextFile,
+  writeFolderContextFile
+} from './acp-folder-context-file'
 
 const HERMES_CONTEXT_FILE = '.hermes.md'
 const writeHermesContextFile = (cwd: string, text: string) =>
@@ -118,4 +132,17 @@ describe('Hermes context file', () => {
     await removeFolderContextBlock(dir, HERMES_CONTEXT_FILE, 'Hermes')
     expect(await lstat(join(dir, HERMES_CONTEXT_FILE)).catch(() => null)).toBeNull()
   })
+})
+
+it("takes Orca's text back out of a context file and keeps the user's", async () => {
+  const orcaOwn = join(dir, 'own')
+  await mkdir(orcaOwn)
+  await writeFolderContextFile(orcaOwn, 'GEMINI.md', 'Gemini', 'bot preamble')
+  await removeFolderContextFile(orcaOwn, 'GEMINI.md', 'Gemini')
+  await expect(lstat(join(orcaOwn, 'GEMINI.md'))).rejects.toThrow()
+
+  await writeFile(join(dir, 'GEMINI.md'), 'My own rules.\n')
+  await writeFolderContextFile(dir, 'GEMINI.md', 'Gemini', 'bot preamble')
+  await removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')
+  expect(await readFile(join(dir, 'GEMINI.md'), 'utf8')).toBe('My own rules.\n')
 })

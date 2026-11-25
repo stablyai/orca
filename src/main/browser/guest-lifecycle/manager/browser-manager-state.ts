@@ -122,6 +122,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     browserTabId: string | null,
     payload: BrowserDownloadFinishedEvent
   ): void
+  protected abstract stopOversizedRemoteDownload(download: ActiveDownload): boolean
   protected abstract settleClientHostedDownload(
     download: ActiveDownload,
     status: BrowserDownloadFinishedEvent['status'],

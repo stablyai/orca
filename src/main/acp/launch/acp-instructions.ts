@@ -10,7 +10,11 @@ import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
-import { writeFolderContextFile, removeFolderContextBlock } from './acp-folder-context-file'
+import {
+  removeFolderContextBlock,
+  removeFolderContextFile,
+  writeFolderContextFile
+} from './acp-folder-context-file'
 import {
   openCodeSourceConfigDirectory,
   openCodeTakesConfigDirInstructions,
@@ -68,11 +72,16 @@ export function antigravityTakesSystemPrompt(initialized: InitializeResponse): b
 }
 
 // Orca's managed server forgets it when it restarts, and a re-sent text replaces the old one.
-export const deliverAntigravityInstructions: AcpInstructionsDelivery = async ({ text }) => ({
-  sessionMeta: { antigravity: { systemPrompt: { append: text } } },
-  sessionMetaOnReopen: true,
-  takesSessionMeta: antigravityTakesSystemPrompt
-})
+export const deliverAntigravityInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  // agy also reads the folder's GEMINI.md, where Gemini CLI chats (bots now on Antigravity) left
+  // Orca's old copy of these instructions.
+  await removeFolderContextFile(cwd, 'GEMINI.md', 'Gemini').catch(() => undefined)
+  return {
+    sessionMeta: { antigravity: { systemPrompt: { append: text } } },
+    sessionMetaOnReopen: true,
+    takesSessionMeta: antigravityTakesSystemPrompt
+  }
+}
 
 /** OpenCode 1.x and its forks: appended to the user's own inline instructions in `variable`, never
  *  replacing them. */
@@ -151,13 +160,6 @@ export const deliverKimiInstructions: AcpInstructionsDelivery = async ({ text, c
 export const deliverGooseInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, '.goosehints', 'Goose', text)
   return {}
-}
-
-// Gemini ignores `_meta` and builds its context from the folder's GEMINI.md at every start, a
-// reopen and each compression included, but reads it only in a trusted folder, so the launch trusts it.
-export const deliverGeminiInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, 'GEMINI.md', 'Gemini', text)
-  return { env: { GEMINI_CLI_TRUST_WORKSPACE: 'true' } }
 }
 
 // Qwen rebuilds its system prompt from the folder's QWEN.md at every start, reopens included

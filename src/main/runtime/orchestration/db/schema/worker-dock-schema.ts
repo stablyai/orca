@@ -43,8 +43,12 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
       dispatch_id TEXT PRIMARY KEY, source TEXT, home TEXT NOT NULL, state TEXT NOT NULL,
       changed_at INTEGER, report_id TEXT, settlement TEXT, result_lost_at INTEGER, model TEXT, reason TEXT
     );
-    CREATE INDEX IF NOT EXISTS worker_dock_result_time ON worker_dock_facts(source, changed_at DESC, dispatch_id) WHERE report_id IS NOT NULL;
+    DROP TRIGGER IF EXISTS worker_dock_failure_result_INSERT;
+    DROP TRIGGER IF EXISTS worker_dock_failure_result_UPDATE;
+    DROP TRIGGER IF EXISTS worker_dock_confirmed_stop;
+    DROP TRIGGER IF EXISTS worker_dock_dispatch_delete;
     CREATE INDEX IF NOT EXISTS worker_dock_source_state ON worker_dock_facts(source, state);
+    CREATE INDEX IF NOT EXISTS worker_dock_source_state_time ON worker_dock_facts(source, state, changed_at);
     CREATE INDEX IF NOT EXISTS worker_dock_eligible ON worker_dock_facts(source)
       WHERE state <> 'succeeded' OR report_id IS NULL;
     CREATE TABLE IF NOT EXISTS worker_dock_acknowledgments (
@@ -56,16 +60,6 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
       receipt TEXT, confirmed INTEGER NOT NULL DEFAULT 0, settlement TEXT
     );
     CREATE INDEX IF NOT EXISTS worker_dock_owner_stop_attempt ON worker_dock_owner_stops(dispatch_id, confirmed);
-    CREATE TABLE IF NOT EXISTS worker_dock_failure_results (
-      dispatch_id TEXT PRIMARY KEY, source TEXT NOT NULL, id TEXT NOT NULL,
-      changed_at INTEGER, settlement TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS worker_dock_failure_result_time ON worker_dock_failure_results(source, changed_at DESC, dispatch_id);
-    CREATE TABLE IF NOT EXISTS worker_dock_stop_results (
-      dispatch_id TEXT PRIMARY KEY, source TEXT NOT NULL, id TEXT NOT NULL,
-      changed_at INTEGER, settlement TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS worker_dock_stop_result_time ON worker_dock_stop_results(source, changed_at DESC, dispatch_id);
     CREATE TABLE IF NOT EXISTS worker_dock_revision (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL);
     INSERT OR IGNORE INTO worker_dock_revision VALUES(1, 0);
     CREATE TABLE IF NOT EXISTS worker_dock_provider_failures (
@@ -106,25 +100,6 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     WHEN NEW.type = 'worker_done' BEGIN
     ${projection("(SELECT dispatch_id FROM attempt_observation_facts WHERE id = 'worker_report:' || NEW.id)")}
   END;`)
-  for (const event of ['INSERT', 'UPDATE']) {
-    this.db
-      .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_failure_result_${event} AFTER ${event} ON worker_dock_facts BEGIN
-      DELETE FROM worker_dock_failure_results WHERE dispatch_id = NEW.dispatch_id;
-      INSERT INTO worker_dock_failure_results(dispatch_id, source, id, changed_at, settlement)
-        SELECT NEW.dispatch_id, NEW.source, 'settlement:' || NEW.settlement, NEW.changed_at, NEW.settlement
-        WHERE NEW.source IS NOT NULL AND NEW.report_id IS NULL AND NEW.settlement IS NOT NULL
-          AND NEW.state IN ('failed', 'stopped', 'abandoned')
-          AND NOT EXISTS(SELECT 1 FROM worker_dock_owner_stops s WHERE s.dispatch_id = NEW.dispatch_id AND s.confirmed = 1 AND s.settlement = NEW.settlement);
-    END;`)
-  }
-  this.db
-    .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_confirmed_stop AFTER UPDATE ON worker_dock_owner_stops
-    WHEN NEW.confirmed = 1 AND NEW.settlement IS NOT NULL BEGIN
-    DELETE FROM worker_dock_failure_results WHERE dispatch_id = NEW.dispatch_id;
-    INSERT OR IGNORE INTO worker_dock_stop_results(dispatch_id, source, id, changed_at, settlement)
-      SELECT NEW.dispatch_id, NEW.source, 'owner_stop:' || NEW.request_id, changed_at, NEW.settlement
-      FROM worker_dock_facts WHERE dispatch_id = NEW.dispatch_id;
-  END;`)
   for (const table of [
     'worker_dock_facts',
     'worker_dock_acknowledgments',
@@ -137,9 +112,7 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     }
   }
   this.db
-    .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_dispatch_delete AFTER DELETE ON dispatch_contexts BEGIN
-    DELETE FROM worker_dock_failure_results WHERE dispatch_id = OLD.id;
-    DELETE FROM worker_dock_stop_results WHERE dispatch_id = OLD.id;
+    .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_dispatch_cleanup AFTER DELETE ON dispatch_contexts BEGIN
     DELETE FROM worker_dock_facts WHERE dispatch_id = OLD.id;
     DELETE FROM worker_dock_acknowledgments WHERE dispatch_id = OLD.id;
     DELETE FROM worker_dock_owner_stops WHERE dispatch_id = OLD.id;

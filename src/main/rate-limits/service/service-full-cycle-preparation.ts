@@ -1,6 +1,5 @@
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
-import { fetchGeminiRateLimits } from '../providers/gemini/gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
 import { readGrokAuthSession } from '../providers/grok/grok-auth'
 import { fetchCursorRateLimits } from '../providers/cursor/cursor-fetcher'
@@ -94,7 +93,6 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const previousState = this.state
     const codexStateBeforeFetch =
       previousState.codex?.status === 'fetching' ? null : previousState.codex
-    const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
     // Probe auth during fetch, not hot renderer/mobile getState calls.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
@@ -140,7 +138,6 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       codex: codexFetchGated
         ? codexStateBeforeFetch
         : this.withFetchingStatus(previousState.codex, 'codex'),
-      gemini: this.withFetchingStatus(previousState.gemini, 'gemini'),
       opencodeGo: opencodeConfigChanged
         ? this.withFetchingStatus(null, 'opencode-go')
         : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
@@ -178,7 +175,11 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
     const antigravityResultPromise = (
       antigravityFetchAllowed
-        ? fetchAntigravityRateLimits({ signal, target: antigravityTarget }).then((limits) =>
+        ? fetchAntigravityRateLimits({
+            signal,
+            target: antigravityTarget,
+            networkProxySettings: this.networkProxySettingsResolver?.()
+          }).then((limits) =>
             this.attributeAntigravityReading(antigravityRead, antigravityGeneration, limits)
           )
         : Promise.resolve(previousState.antigravity ?? antigravityUsageDisabledSnapshot())
@@ -200,7 +201,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       !this.isClaudeOAuthUsageEnabled() ||
       claudeGeneration !== this.claudeFetchGeneration ||
       (!options?.force && this.shouldSkipAutomatedFetch('claude', previousState.claude))
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
+    const [claudeResult, codexResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([
         claudeFetchGated
           ? Promise.resolve(previousState.claude as ProviderRateLimits)
@@ -220,7 +221,6 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
               networkProxySettings: this.networkProxySettingsResolver?.(),
               signal
             })),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
         fetchOpenCodeGoUsage({
           settingsApiKey: openCodeGoApiKey,
           // Store/env keys become known only when the fetch resolves them.
@@ -286,14 +286,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       zcodeGeneration,
       antigravityGeneration,
       claudeFetchGated,
-      results: [
-        claudeResult,
-        codexResult,
-        geminiResult,
-        opencodeGoResult,
-        kimiResult,
-        miniMaxResult
-      ],
+      results: [claudeResult, codexResult, opencodeGoResult, kimiResult, miniMaxResult],
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,

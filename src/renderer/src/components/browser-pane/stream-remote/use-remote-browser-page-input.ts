@@ -10,7 +10,10 @@ import { RemoteBrowserInputQueue } from './remote-browser-input-queue'
 import type { RemoteBrowserHostMenuPress } from './remote-browser-host-context-menus'
 import { useRemoteBrowserPageHover } from './use-remote-browser-page-hover'
 import { useRemoteBrowserSelectPopup } from './remote-browser-select-popup'
-import type { RemoteBrowserPageInputParams } from './remote-browser-page-input-params'
+import type {
+  RemoteBrowserKeyboardProxyHandlers,
+  RemoteBrowserPageInputParams
+} from './remote-browser-page-input-params'
 import {
   getRemoteBrowserMouseButton,
   mapRemoteBrowserClientPoint,
@@ -45,8 +48,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerMove: (event: React.PointerEvent<HTMLImageElement>) => void
-  handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
-  handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
+  keyboardProxyHandlers: RemoteBrowserKeyboardProxyHandlers
   runRemoteEditCommand: (command: BrowserPageEditCommand) => void
   selectPopupElement: React.JSX.Element | null
 } {
@@ -57,6 +59,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     hostContextMenus,
     inputQueue,
     imageRef,
+    keyboardProxyRef,
     remoteViewportRef,
     remoteCssViewportSizeRef,
     remoteViewportSizeRef,
@@ -74,6 +77,7 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
   const {
     checkSelectListAfterPress,
     readSelectPopupAfterPress,
+    readSelectPopupAfterKey,
     closeSelectPopupForPageInput,
     selectPopupElement
   } = useRemoteBrowserSelectPopup(input)
@@ -131,7 +135,14 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     }
     const modifiers = readRemoteBrowserMouseModifiers(event, target)
     event.preventDefault()
-    image.focus()
+    const keyboardProxy = keyboardProxyRef.current
+    // A press commits the composition into the field it was typed for, as on a local page.
+    if (keyboardProxy && 'composing' in keyboardProxy.dataset) {
+      keyboardProxy.blur()
+    }
+    if (document.activeElement !== keyboardProxy) {
+      ;(keyboardProxy ?? image).focus({ preventScroll: true })
+    }
     // Why: a release over the letterbox gutter or outside the pane must still send mouseUp, or
     // the host page keeps the button held.
     if (typeof image.setPointerCapture === 'function') {
@@ -249,20 +260,25 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     })
   }
 
-  const { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste, runRemoteEditCommand } =
-    useRemoteBrowserPageKeyboard({
-      pickerAvailable,
-      runtimeTarget,
-      lifecycle,
-      runtimeWorktree,
-      enqueueRemoteInput,
-      createRemoteOperationToken,
-      isCurrentRemoteOperationToken,
-      closeMissingRemotePage,
-      scheduleRemoteTabInfoRefresh,
-      setPaneNotice,
-      closeSelectPopupForPageInput
-    })
+  const {
+    handleRemoteScreenshotKeyDown,
+    handleRemoteScreenshotPaste,
+    handleRemoteKeyboardProxyText,
+    runRemoteEditCommand
+  } = useRemoteBrowserPageKeyboard({
+    pickerAvailable,
+    runtimeTarget,
+    lifecycle,
+    runtimeWorktree,
+    enqueueRemoteInput,
+    createRemoteOperationToken,
+    isCurrentRemoteOperationToken,
+    closeMissingRemotePage,
+    scheduleRemoteTabInfoRefresh,
+    setPaneNotice,
+    closeSelectPopupForPageInput,
+    readSelectPopupAfterKey
+  })
 
   const handleRemotePointerMove = useRemoteBrowserPageHover({
     busy,
@@ -280,8 +296,11 @@ export function useRemoteBrowserPageInput(input: RemoteBrowserPageInputParams): 
     handleRemotePointerDown,
     handleRemotePointerUp,
     handleRemotePointerMove,
-    handleRemoteScreenshotKeyDown,
-    handleRemoteScreenshotPaste,
+    keyboardProxyHandlers: {
+      onKeyDown: handleRemoteScreenshotKeyDown,
+      onPaste: handleRemoteScreenshotPaste,
+      onText: handleRemoteKeyboardProxyText
+    },
     runRemoteEditCommand,
     selectPopupElement
   }
