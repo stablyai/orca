@@ -1,11 +1,15 @@
 import { defineMethod } from '../../../core'
 import { clientReadsOptionsWithoutModel } from '../structured-agent-session-policy'
+import { isAgentRpcCaller } from '../../../callers/rpc-caller-identity'
 import {
+  requireInstalledStructuredHost,
+  requireStructuredAgentAudience,
   requireStructuredSessionHost as requireSessionHost,
   structuredCallerFor as callerFor
 } from '../creation/structured-agent-session-gate'
 import {
   RespondParams,
+  SelectProviderParams,
   SetOptionParams
 } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
@@ -43,5 +47,18 @@ export const STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS = [
         { ...callerFor(ctx), readsOptionsWithoutModel: clientReadsOptionsWithoutModel(ctx) },
         params
       )
+  }),
+  defineMethod({
+    name: 'agentSession.selectProvider',
+    permission: 'workspace',
+    params: SelectProviderParams,
+    handler: async (params, ctx) => {
+      if (ctx.plugin || !ctx.caller || isAgentRpcCaller(ctx.caller)) {
+        throw new Error('forbidden')
+      }
+      requireStructuredAgentAudience(ctx, params.agent)
+      const host = await requireInstalledStructuredHost(ctx, params.sessionId)
+      return host.selectProvider(params)
+    }
   })
 ]

@@ -75,7 +75,9 @@ export async function structuredAgentSessionStartParams(
           )
   }
   const startupOptions = startedFor
-    ? (await context.sessions.get(sessionId)?.journal.reads.submission(startedFor))?.options
+    ? record.providerSwitch?.clientMessageId === startedFor
+      ? record.options
+      : (await context.sessions.get(sessionId)?.journal.reads.submission(startedFor))?.options
     : undefined
   return { ok: true, params, ...(startupOptions ? { startupOptions } : {}) }
 }

@@ -54,7 +54,12 @@ export type ConversationEvent =
       answeredWith?: string
     })
   // deliveryId: the delivery the turn answers, when exactly one started it.
-  | (ConversationPane & { kind: 'turn-started'; at: number; deliveryId?: string })
+  | (ConversationPane & {
+      kind: 'turn-started'
+      at: number
+      deliveryId?: string
+      switchedAgent?: string
+    })
   | (ConversationPane & {
       kind: 'turn-ended'
       /** The ended turn's turn-started `at`; null when its start predates this watch. The cloud ends
@@ -142,6 +147,7 @@ export type ConversationEventsDeps = {
   turnOpener: (sessionId: string) => AgentJournalRenderItem | null
   turnPlan?: ConstructorParameters<typeof ConversationTurnActivity>[0]['turnPlan']
   turnStartedAt?: (sessionId: string) => number | null
+  switchedAgentForTurn?: (sessionId: string) => string | undefined
   resolvedPrompt?: (
     sessionId: string,
     itemId: string

@@ -29,9 +29,12 @@ export function isAgentSessionProviderContextBoundary(
 
 /** Clear resets the chain; the boundary identifies a fresh launch before its first proof. */
 export function activeProviderContext(
-  record: Pick<AgentSessionRecord, 'providerHandleChain' | 'providerContextBoundary'>
+  record: Pick<AgentSessionRecord, 'providerHandleChain' | 'providerContextBoundary'> &
+    Partial<Pick<AgentSessionRecord, 'provider'>>
 ) {
-  const handleChain = record.providerHandleChain
+  const handleChain = record.provider
+    ? record.providerHandleChain.filter(({ handle }) => handle.agent === record.provider)
+    : record.providerHandleChain
   const head = handleChain.at(-1) ?? null
   return {
     handleChain,

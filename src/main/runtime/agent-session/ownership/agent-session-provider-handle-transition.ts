@@ -34,7 +34,7 @@ export function recordAgentSessionProviderHandle(args: {
   }
   const providerHandleChain = appendAgentSessionProviderHandleLink(
     record.providerHandleChain,
-    args.link
+    providerSwitchHandleLink(record, args.link)
   )
   const head = providerHandleChain.at(-1)
   if (!head) {
@@ -50,6 +50,16 @@ export function recordAgentSessionProviderHandle(args: {
     },
     updatedAt: args.now
   }
+}
+
+export function providerSwitchHandleLink(
+  record: AgentSessionRecord,
+  link: AgentSessionProviderHandleLink
+): AgentSessionProviderHandleLink {
+  const previous = record.providerHandleChain.at(-1)
+  return record.providerSwitch && previous && previous.handle.agent !== link.handle.agent
+    ? { ...link, switchedFrom: previous.linkId }
+    : link
 }
 
 /** Revise the live head in place, preserving link id/provenance and bounding chain growth.

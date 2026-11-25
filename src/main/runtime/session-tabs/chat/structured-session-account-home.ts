@@ -6,8 +6,34 @@ import { agentWorkspaceTrustDecisionForWorkspace } from '../../../agent-launch/t
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRuntimeWithStructuredSessionCliWriterHost {
+  async prepareProviderSwitchAccount(
+    record: AgentSessionRecord,
+    agent: StructuredAgentId,
+    permission: AgentChatPermissionChoice
+  ): Promise<AgentSessionAccountHome> {
+    const worktree = `id:${record.location.workspaceId}`
+    const resolve = this.structuredAgentAccountHomeResolver(
+      agent,
+      worktree,
+      'launch',
+      record.launchDirectory
+    )
+    if (!resolve) {
+      throw new Error('agent_session_provider_switch_unavailable')
+    }
+    await this.accounts.prepareHostAgentLaunch(agent)
+    return resolve(
+      {
+        launchEnv: this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings()),
+        location: record.location
+      },
+      permission
+    )
+  }
+
   /** Resolve account home through this host's agent registration; null means unregistered and create refuses. */
   protected structuredAgentAccountHomeResolver(
     agent: StructuredAgentId,

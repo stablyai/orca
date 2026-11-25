@@ -121,6 +121,9 @@ export function NativeChatNoticeRow({
     )
   }
   const look = nativeChatNoticeLook(block)
+  if (look.kind === 'context-handoff') {
+    return <NativeChatDividerRow label={block.text} tone={look.failed ? 'error' : undefined} />
+  }
   if (look.kind === 'forked-from') {
     return <NativeChatForkedFromRow look={look} />
   }

@@ -117,7 +117,7 @@ export type AgentSessionJournalReads = {
   newestTurn(): Promise<AgentJournalTurnLifecycle | null>
   namedTurn(turnId: string): Promise<JournalNamedTurn>
   messageOptions(clientMessageId: string): Promise<JournalMessageOptions>
-  continuationContext(): Promise<JournalContinuationContext>
+  continuationContext(after?: AgentJournalCursor): Promise<JournalContinuationContext>
   /** Bytes written, or null once the item is gone or revised (nothing written). */
   continuationSpill(spill: JournalContinuationSpill): Promise<number | null>
   /** The newest turn and its rows a restart settled, for the offer a crash leaves. */

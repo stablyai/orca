@@ -38,10 +38,15 @@ import {
   setAgentSessionRecordUserName,
   type AgentSessionUserNameWrite
 } from './agent-session-record-conversation-name'
+import {
+  applyAgentSessionProviderCommand,
+  type AgentSessionProviderCommand
+} from './agent-session-provider-transition'
 
 type WithoutRecord<F extends (...args: never[]) => unknown> = Omit<Parameters<F>[0], 'record'>
 
 export type AgentSessionRecordCommand =
+  | AgentSessionProviderCommand
   | { kind: 'name'; name: string | null; now: number }
   | { kind: 'user-name'; name: string; write: AgentSessionUserNameWrite; now: number }
   | {
@@ -106,6 +111,11 @@ export function applyAgentSessionRecordCommand(
 } {
   let next: AgentSessionRecord
   switch (command.kind) {
+    case 'select-provider':
+    case 'begin-provider-switch':
+    case 'settle-provider-switch':
+      next = applyAgentSessionProviderCommand(record, command)
+      break
     case 'name':
       next = setAgentSessionRecordConversationName(record, command.name, command.now)
       break

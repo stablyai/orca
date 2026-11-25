@@ -39,6 +39,7 @@ export type ChatTurnsDeps = ConversationWorkersDeps &
     turnOpener: (sessionId: string) => AgentJournalRenderItem | null
     /** Keeps (or, with undefined, clears) the adopted turn's opener on the link. */
     turnStartedAt?: (sessionId: string) => number | null
+    switchedAgentForTurn?: (sessionId: string) => string | undefined
     keepAdoptedTurn: (
       linked: LinkedConversation,
       opener: ExternalConversationLink['adoptedTurn']

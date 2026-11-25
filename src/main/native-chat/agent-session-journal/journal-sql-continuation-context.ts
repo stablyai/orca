@@ -64,7 +64,7 @@ type JournalContinuationPage = Omit<JournalContinuationContext, 'cursor'> & {
 }
 
 export type JournalContinuationRead =
-  | { kind: 'continuation-context' }
+  | { kind: 'continuation-context'; after?: AgentJournalCursor }
   | { kind: 'continuation-spill'; spill: JournalContinuationSpill }
 
 export type JournalContinuationReadResult =
@@ -77,7 +77,10 @@ export function readJournalDomainContinuation(
   operation: JournalContinuationRead
 ): JournalContinuationReadResult {
   return operation.kind === 'continuation-context'
-    ? { kind: 'continuation-context', context: readJournalDomainContinuationContext(db, target) }
+    ? {
+        kind: 'continuation-context',
+        context: readJournalDomainContinuationContext(db, target, operation.after)
+      }
     : spillJournalDomainContinuation(db, target, operation.spill)
 }
 
@@ -87,7 +90,8 @@ export function readJournalDomainContinuation(
  */
 function readJournalDomainContinuationContext(
   db: Database.Database,
-  target: { sessionId: string; epoch: string }
+  target: { sessionId: string; epoch: string },
+  after?: AgentJournalCursor
 ): JournalContinuationContext {
   const items: AgentJournalRenderItem[] = []
   const submissions: JournalContinuationContext['submissions'][number][] = []
@@ -100,8 +104,12 @@ function readJournalDomainContinuationContext(
       WHERE session_id=? AND epoch=? AND hidden=0 AND context_clear=1`)
       .get(target.sessionId, target.epoch)?.sequence ?? 0
   )
+  const floor =
+    after?.epoch === cursor.epoch && after.sequence <= cursor.sequence
+      ? Math.max(clear, after.sequence)
+      : clear
   const read = (from?: JournalContinuationFrom) =>
-    readJournalDomainContinuationPage(db, target, clear, from)
+    readJournalDomainContinuationPage(db, target, floor, from)
   let page = read()
   for (;;) {
     for (const part of page.continued) {

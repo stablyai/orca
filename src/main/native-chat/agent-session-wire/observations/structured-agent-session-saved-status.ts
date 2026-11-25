@@ -18,7 +18,8 @@ import type {
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import {
   structuredSummaryConversationNaming,
-  structuredSummaryHostProgram
+  structuredSummaryHostProgram,
+  structuredSummaryProviderSelection
 } from './structured-agent-session-status-summary'
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
 import {
@@ -43,6 +44,7 @@ export function savedStructuredAgentSessionStatus(
     sessionId: record.sessionId,
     workspaceId: record.location.workspaceId,
     agent: record.provider,
+    ...structuredSummaryProviderSelection(record),
     status: turn || markerAt !== undefined ? 'idle' : null,
     latestPrompt: turn?.prompt ?? '',
     runtimePermission: null,

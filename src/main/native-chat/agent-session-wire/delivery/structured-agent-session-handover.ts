@@ -70,8 +70,12 @@ export async function beginSubmissionHandover(
   const turnScope = await readContextStructuredAgentSessionTurnScope(ctx)
   let carried: StoppedHistoryDelivery | null = null
   const rideAlong = structuredAgentSessionRideAlong(ctx, submission, body)
-  const outgoing = (): AgentJournalMessageItem =>
-    rideAlong.outgoing(carried ? withStoppedHistory(body, carried.messages) : body)
+  const outgoing = (): AgentJournalMessageItem => {
+    const message = rideAlong.outgoing(carried ? withStoppedHistory(body, carried.messages) : body)
+    return ctx.contextHandoff
+      ? { ...message, blocks: [{ type: 'text', text: ctx.contextHandoff }, ...message.blocks] }
+      : message
+  }
   let ownsChild = stillCurrent
   let closing: UnsentSendHold['cause'] | undefined
   let unwritten = false
@@ -226,6 +230,9 @@ export async function beginSubmissionHandover(
             })
             await rideAlong.taken(ctx.fence)
           }
+          await ctx.settleProviderSwitch?.(
+            outcome === null || outcome.state === 'rejected' ? 'failed' : 'delivered'
+          )
         })
       } finally {
         release?.()

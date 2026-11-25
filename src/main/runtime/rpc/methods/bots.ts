@@ -1,5 +1,6 @@
 import {
   BotActivityRead,
+  BotAgentSwitchPreview,
   BotAvatarRead,
   BotAvatarUpload,
   BotChatReset,
@@ -17,7 +18,13 @@ import {
 } from '../../../../shared/rpc-contract/bot-avatar-params'
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
-import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
+import {
+  requireStructuredHost,
+  runtimeBotChats,
+  startBotSession,
+  botOnAgent
+} from '../../../bots/bot-chat-session'
+import { changeBotAgentInPlace, previewBotAgentSwitch } from '../../../bots/bot-agent-switch'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
@@ -52,7 +59,29 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (members !== undefined || added !== undefined || permissionMode !== undefined) {
     ownerOnly(context, 'Only your owner changes your Who can ask or permissions, in Orca.')
   }
-  const bot = await context.runtime.bots.update(params.botId, params.updates)
+  const { runtime } = context
+  if (params.updates.agentSwitchConsent) {
+    ownerOnly(context, 'Only the owner can approve broader access for a bot.')
+    if (context.plugin) {
+      throw new InvalidArgumentError('Approve broader bot access in Orca.')
+    }
+  }
+  const bot =
+    params.updates.agent === undefined
+      ? await runtime.bots.update(params.botId, params.updates)
+      : await runtimeBotChats(runtime).withDefaultChange(params.botId, async () => {
+          const host = await requireStructuredHost(runtime)
+          return runtime.bots.update(params.botId, params.updates, (current, next, save) =>
+            changeBotAgentInPlace(
+              runtime,
+              host,
+              current,
+              next,
+              params.updates.agentSwitchConsent,
+              save
+            )
+          )
+        })
   if (params.updates.skillProjects !== undefined) {
     relinkBotSkills(bot, context.runtime.listRepos())
   }
@@ -180,6 +209,18 @@ export const BOT_METHODS = [
   ...BOT_CHATS_METHODS,
   ...BOT_CHAT_TREE_METHODS,
   ...BOT_MEMORY_METHODS,
+  defineMethod({
+    name: 'bots.agentSwitchPreview',
+    permission: 'workspace',
+    params: BotAgentSwitchPreview,
+    handler: async ({ botId, agent }, { runtime }) => {
+      const bot = runtime.bots.list().find((entry) => entry.id === botId)
+      if (!bot) {
+        throw new InvalidArgumentError('Bot not found.')
+      }
+      return previewBotAgentSwitch(runtime, await requireStructuredHost(runtime), bot, agent)
+    }
+  }),
   defineMethod({
     name: 'bots.update',
     permission: 'workspace',

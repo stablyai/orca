@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
+  appendAgentSessionProviderHandleLink,
   decodePersistedAgentSessionProviderHandleChain,
   encodePersistedAgentSessionProviderHandleChain,
   type AgentSessionProviderHandle,
@@ -128,6 +129,54 @@ describe('a record row older builds wrote', () => {
     expectTypeOf(observed.record).not.toMatchTypeOf<AgentSessionRecord>()
     expect(observed.record.lease.minimumNextFence).toBe('bad')
   })
+})
+
+it('keeps both native handles across a switch and puts the current chain where older builds read it', () => {
+  const claude: AgentSessionProviderHandleLink = {
+    linkId: 'claude-1',
+    handle: claudeProviderHandle('original', 'leaf'),
+    origin: 'created',
+    mintedAtFence: 6,
+    observedAt: 1_000,
+    seenThrough: { epoch: 'journal-1', sequence: 21 },
+    accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/user/.claude' }
+  }
+  const codex: AgentSessionProviderHandleLink = {
+    linkId: 'codex-1',
+    handle: codexProviderHandle('new-thread'),
+    origin: 'created',
+    mintedAtFence: 7,
+    observedAt: 2_000,
+    switchedFrom: 'claude-1'
+  }
+  const resumed: AgentSessionProviderHandleLink = {
+    linkId: 'claude-2',
+    handle: claude.handle,
+    origin: 'resumed',
+    mintedAtFence: 8,
+    observedAt: 3_000,
+    switchedFrom: 'codex-1'
+  }
+  const providerHandleChain = appendAgentSessionProviderHandleLink(
+    appendAgentSessionProviderHandleLink([claude], codex),
+    resumed
+  )
+  const record = agentSessionRecordFixture({
+    providerHandleChain,
+    lease: agentSessionLeaseFixture({ runtimeFence: 8, provenHandleLinkId: 'claude-2' })
+  })
+  const stored = encodeAgentSessionRecord(record)
+  expect(stored.providerHandleChain.map(({ linkId }) => linkId)).toEqual(['claude-1', 'claude-2'])
+  expect(stored.inactiveProviderHandleLinks?.map(({ linkId }) => linkId)).toEqual(['codex-1'])
+  expect(isPersistedAgentSessionRecord(stored)).toBe(true)
+  expect(decodePersistedAgentSessionRecord(stored).record.providerHandleChain).toEqual([
+    claude,
+    codex,
+    resumed
+  ])
+  expect(() =>
+    appendAgentSessionProviderHandleLink([claude], { ...codex, switchedFrom: 'other-claude' })
+  ).toThrow('agent_session_provider_handle_provider_mismatch')
 })
 
 describe('what this build writes', () => {

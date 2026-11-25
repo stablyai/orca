@@ -25,6 +25,7 @@ import {
 import { structuredAgentSessionEndedChildFailure } from '../termination/structured-agent-session-ended-child-failure'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { previousExitUnverifiableRefusal } from '../termination/structured-agent-session-child-close'
+import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 
 type StartFailure = NonNullable<Awaited<ReturnType<typeof startThatFailedWhileQueued>>>
 
@@ -68,6 +69,14 @@ export async function beginStructuredAgentSessionInputHandover(
     return null
   }
   const failureTextContext = await deps.failureTextContext(sessionId)
+  const record = deps.record(sessionId)
+  const switching = record?.providerSwitch?.clientMessageId === next.clientMessageId
+  const contextHandoff = switching
+    ? await deps.providerSwitchPrompt?.(session, next.clientMessageId)
+    : null
+  const submission = switching
+    ? { ...next, options: readAgentSessionExecutionOptions(record?.options ?? {}) ?? undefined }
+    : next
   return beginSubmissionHandover(
     {
       sessionId,
@@ -78,6 +87,13 @@ export async function beginStructuredAgentSessionInputHandover(
       failureTextContext: failureTextContext,
       record: () => deps.record(sessionId),
       turnContext: deps.turnContext,
+      ...(contextHandoff ? { contextHandoff } : {}),
+      ...(switching
+        ? {
+            settleProviderSwitch: (outcome) =>
+              deps.settleProviderSwitch?.(session, next.clientMessageId, outcome)
+          }
+        : {}),
 
       admitFreshInput: async (enqueue, signal, prepare, kind = 'fresh') => {
         let admission: StructuredAgentSessionInputAdmission | undefined
@@ -296,7 +312,7 @@ export async function beginStructuredAgentSessionInputHandover(
         return recorder
       }
     },
-    next,
+    submission,
     // Re-read right before the provider call, which runs outside the serialize.
     isCurrent,
     isBound

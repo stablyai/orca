@@ -46,7 +46,9 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
   record: Omit<PersistedAgentSessionRecord, 'lease'> & { lease: L }
 ) {
   const providerHandleChain = decodePersistedAgentSessionProviderHandleChain(
-    record.providerHandleChain
+    record.providerHandleChain,
+    record.inactiveProviderHandleLinks,
+    record.inactiveProviderHandleLinks ? record.providerContextBoundary?.afterFence : undefined
   )
   if (!providerHandleChain) {
     throw new Error('agent_session_provider_handle_invalid')
@@ -55,6 +57,7 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
     sleptAt,
     lastTurn,
     instructionsKey,
+    inactiveProviderHandleLinks: _inactiveLinks,
     asyncQuestionsSkippedThrough: skipped,
     ...rest
   } = record
@@ -83,9 +86,18 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
 
 /** The record as a row stores it; Claude and Codex handles and death evidence keep the forms older builds read. */
 export function encodeAgentSessionRecord(record: AgentSessionRecord): PersistedAgentSessionRecord {
+  const current = record.providerHandleChain.filter(
+    ({ handle }) => handle.agent === record.provider
+  )
+  const inactive = record.providerHandleChain.filter(
+    ({ handle }) => handle.agent !== record.provider
+  )
   return {
     ...record,
     lease: { ...record.lease, deathEvidence: encodeDeathEvidence(record.lease.deathEvidence) },
-    providerHandleChain: encodePersistedAgentSessionProviderHandleChain(record.providerHandleChain)
+    providerHandleChain: encodePersistedAgentSessionProviderHandleChain(current),
+    ...(inactive.length
+      ? { inactiveProviderHandleLinks: encodePersistedAgentSessionProviderHandleChain(inactive) }
+      : {})
   }
 }

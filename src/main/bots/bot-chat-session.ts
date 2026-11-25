@@ -123,10 +123,10 @@ export function botChatSessions(deps: BotChatDependencies) {
     return sessionId
   }
 
-  /** The current Chat, or a new one when it is gone or runs another agent than the bot's. */
+  /** The current Chat keeps its identity and provider choice until explicitly changed. */
   const open = (host: BotChatHost, bot: Bot): Promise<string> | string => {
     const record = bot.chatSessionId ? host.deps.store.getConversation(bot.chatSessionId) : null
-    return record?.provider === bot.agent ? record.sessionId : replace(host, bot)
+    return record?.sessionId ?? replace(host, bot)
   }
 
   const underLock = <T>(botId: string, work: (host: BotChatHost, bot: Bot) => Promise<T> | T) =>
@@ -234,7 +234,7 @@ export function botChatSessions(deps: BotChatDependencies) {
       deliver(host, admitting, botId, sessionId, text, from, run)
     )
 
-  return { ensure, reset, withChat, sendToChat: send, sendToSession }
+  return { ensure, reset, withChat, withDefaultChange: underLock, sendToChat: send, sendToSession }
 }
 
 /** The selector native chat resolves a bot's home folder workspace by. */

@@ -189,6 +189,16 @@ export class StructuredAgentSessionDeliveryLoop {
     // Commands block while their child lives; ended command commits wake delivery again.
     const work = await this.deps.currentWork(sessionId)
     const oldest = await selectableStructuredSubmission(session.journal, work)
+    const switching = this.deps.record(sessionId)?.providerSwitch
+    if (switching && switching.clientMessageId !== oldest?.clientMessageId) {
+      const original = await session.journal.reads.submission(switching.clientMessageId)
+      await this.deps.settleProviderSwitch?.(
+        session,
+        switching.clientMessageId,
+        original?.dispatchState === 'accepted' ? 'delivered' : 'failed'
+      )
+      return 'continue'
+    }
     if (!oldest || (session.child && work && structuredAgentSessionCommandRunning(work))) {
       return this.stop(sessionId)
     }
@@ -198,6 +208,9 @@ export class StructuredAgentSessionDeliveryLoop {
     const failedStart = await startThatFailedWhileQueued(session, oldest)
     if (failedStart) {
       return this.fail(sessionId, failedStart, oldest.clientMessageId)
+    }
+    if ((await this.deps.prepareProviderSwitch?.(session, oldest)) === 'blocked') {
+      return this.stop(sessionId)
     }
     await this.deps.retireOutgrownChild(sessionId, undefined, oldest)
     const child = this.deps.sessions.get(sessionId)?.child
@@ -259,6 +272,17 @@ export class StructuredAgentSessionDeliveryLoop {
     if (!next) {
       return this.stop(sessionId)
     }
+    const switchingId = this.deps.record(sessionId)?.providerSwitch?.clientMessageId
+    if (switchingId && switchingId !== next.clientMessageId) {
+      return 'continue'
+    }
+    const switching = await this.deps.prepareProviderSwitch?.(session, next)
+    if (switching === 'blocked') {
+      return this.stop(sessionId)
+    }
+    if (switching === 'changed') {
+      return 'continue'
+    }
     if (waited) {
       // Verify awaited-child identity before rechecking launch permissions.
       await this.deps.retireOutgrownChild(sessionId, undefined, next)
@@ -304,6 +328,9 @@ export class StructuredAgentSessionDeliveryLoop {
         await this.deps.failureTextContext(sessionId),
         clientMessageId
       )
+      if (clientMessageId) {
+        await this.deps.settleProviderSwitch?.(session, clientMessageId, 'failed')
+      }
     }
     return 'continue'
   }

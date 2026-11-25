@@ -42,14 +42,14 @@ export function useConfirmNewHomeChat(): (bot: Pick<Bot, 'name'>) => Promise<boo
   )
 }
 
-/** Another agent can't carry the conversation, so a switch starts the Home Chat fresh. */
 export function useConfirmBotAgentSwitch(): (
   bot: Pick<Bot, 'name' | 'agent'>,
-  next: BotAgent
+  next: BotAgent,
+  broaderAccess?: boolean
 ) => Promise<boolean> {
   const confirm = useConfirmationDialog()
   return useCallback(
-    (bot, next) => {
+    (bot, next, broaderAccess) => {
       const agent = botAgentLabel(next)
       return confirm({
         title: translate('bots.agentSwitch.title', 'Switch {{name}} to {{agent}}?', {
@@ -58,24 +58,48 @@ export function useConfirmBotAgentSwitch(): (
         }),
         description: translate(
           'bots.agentSwitch.description',
-          "{{name}}'s Home Chat starts fresh on {{agent}}. The current conversation stays in history.",
-          { name: bot.name, agent }
+          'Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.',
+          { agent }
         ),
         details: (
           <ul className="list-disc space-y-1 pl-5 text-sm">
             <li>
-              {translate('bots.agentSwitch.kept', 'Kept: soul, memory, automations, connectors')}
+              {translate(
+                'bots.agentSwitch.homeContinues',
+                'Home Chat continues on {{agent}} with its recent history',
+                { agent }
+              )}
             </li>
-            <li>{translate('bots.agentSwitch.notKept', 'Not kept: the current conversation')}</li>
+            <li>
+              {translate(
+                'bots.agentSwitch.newChats',
+                'New Slack threads, automation runs and chats you open later start on {{agent}}',
+                { agent }
+              )}
+            </li>
             <li>
               {translate(
                 'bots.agentSwitch.threads',
                 "Slack threads with an existing Orca chat keep that chat's agent"
               )}
             </li>
+            <li>
+              {translate('bots.agentSwitch.kept', 'Kept: soul, memory, automations, connectors')}
+            </li>
+            {broaderAccess ? (
+              <li>
+                {translate(
+                  'bots.agentSwitch.broaderAccess',
+                  'Orca can’t require {{agent}} to ask before using tools. Allowing this applies to Home Chat and new work on this default.',
+                  { agent }
+                )}
+              </li>
+            ) : null}
           </ul>
         ),
-        confirmLabel: translate('bots.agentSwitch.action', 'Switch to {{agent}}', { agent })
+        confirmLabel: broaderAccess
+          ? translate('bots.agentSwitch.allowAction', 'Allow access and switch')
+          : translate('bots.agentSwitch.action', 'Switch to {{agent}}', { agent })
       })
     },
     [confirm]

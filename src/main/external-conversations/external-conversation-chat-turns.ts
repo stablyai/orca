@@ -127,11 +127,16 @@ export class ChatTurns {
     }
     this.told.add(paneKey)
     const deliveryId = this.deps.chatTurnDelivery(linked.link.sessionId, at)
+    const switchedAgent =
+      linked.link.source === 'slack'
+        ? this.deps.switchedAgentForTurn?.(linked.link.sessionId)
+        : undefined
     this.deps.emit({
       kind: 'turn-started',
       ...conversationPane(linked.link, linked.workspace.worktreeId),
       at,
-      ...(deliveryId ? { deliveryId } : {})
+      ...(deliveryId ? { deliveryId } : {}),
+      ...(switchedAgent ? { switchedAgent } : {})
     })
     return true
   }

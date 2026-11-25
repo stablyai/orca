@@ -27,6 +27,7 @@ import type {
 } from './journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
+import type { AgentSessionProviderSelection } from './lifecycle/records/agent-session-provider-selection'
 import type { AgentProviderSessionMetadata } from './lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
 import type { AgentSessionStatusPermissionFields } from './options/permissions/agent-session-status-permission-fields'
@@ -209,6 +210,7 @@ export type AgentSessionStatusSummary = {
   sessionId: string
   workspaceId: string
   agent: AgentSessionRecord['provider']
+  selectedProvider?: Pick<AgentSessionProviderSelection, 'agent' | 'options'>
   /** Null until the journal holds a persisted user or assistant message. */
   status: StructuredAgentSessionProjectedStatus | null
   /** Present only while this host has the provider child executing the session. */

@@ -10,8 +10,19 @@ import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { phoneBotReply, type PhoneBot } from './host-bots-operations'
 import { botMemberSource, type BotMember } from '../../../src/shared/bot-types'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { BotAgentSwitchPreviewResultSchema } from '../../../src/shared/rpc-contract/bots-params'
 
 export type SheetBot = PhoneBot
+
+export const previewBotAgentSwitch = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.agentSwitchPreview',
+    method: 'bots.agentSwitchPreview',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-agent-switch-preview', BotAgentSwitchPreviewResultSchema)
+  })
+)
 
 export const botUpdate = bindDeferredRpcOperation(
   defineRpcOperation({

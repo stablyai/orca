@@ -15,7 +15,7 @@ import {
   SettingsInsetRow
 } from '@/components/bots/settings-view/BotSettingsRows'
 import { useTranslate } from '@/i18n/use-translate'
-import { openBotChat } from '@/lib/bot-catalog'
+import { callBotRpc } from '@/lib/bot-hosts'
 import {
   AGENT_CHAT_PERMISSION_MODES,
   type AgentChatPermissionMode
@@ -26,7 +26,10 @@ import {
   savedChatPermissionMode
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
+import type {
+  BotAgentSwitchPreviewResult,
+  BotUpdateParams
+} from '../../../../../shared/rpc-contract/bots-params'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { useBotSettingsModel } from './use-bot-settings-model'
 
@@ -47,14 +50,22 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
       }
       return
     }
-    if (
-      !(await confirmAgentSwitch(bot, agent)) ||
-      !(await update({ agent, launch: launch ?? null }))
-    ) {
-      return
+    try {
+      const { consent } = await callBotRpc<BotAgentSwitchPreviewResult>(
+        bot,
+        'bots.agentSwitchPreview',
+        { botId: bot.id, agent }
+      )
+      if (await confirmAgentSwitch(bot, agent, consent !== null)) {
+        await update({
+          agent,
+          launch: launch ?? null,
+          ...(consent ? { agentSwitchConsent: consent } : {})
+        })
+      }
+    } catch (error) {
+      toast.error(botErrorMessage(error))
     }
-    // The Home Chat starts fresh now, not on its next message, so its tab already runs the new agent.
-    await openBotChat(bot).catch((error: unknown) => toast.error(botErrorMessage(error)))
   }
   return (
     <SettingsInsetGroup>

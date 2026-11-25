@@ -25,6 +25,8 @@ import * as conversation from '../delivery/structured-agent-session-host-deliver
 import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from '../delivery/structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
 import { createStructuredAgentSessionWorkspaceSleeper } from '../termination/structured-agent-session-workspace-sleep'
+import { selectStructuredChatProvider } from '../delivery/structured-agent-session-provider-switch'
+import type { AgentSessionSelectProviderParams } from '../../../../shared/agent-session/lifecycle/records/agent-session-provider-selection'
 
 export class StructuredAgentSessionHost {
   private readonly conversationCommands = new CommandController(() => this.mutationContext(), this)
@@ -280,6 +282,43 @@ export class StructuredAgentSessionHost {
   respondToPrompt = this.mutations.respondToPrompt
   approveAutoReviewDenial = this.mutations.approveAutoReviewDenial
   setOption = this.mutations.setOption
+  selectProvider = async (
+    params: AgentSessionSelectProviderParams,
+    saveDefault?: () => Promise<void>
+  ) => {
+    await this.conversation(params.sessionId)
+    return this.serialize(params.sessionId, async () => {
+      const session = this.sessions.get(params.sessionId)
+      if (!session) {
+        throw new Error('agent_session_provider_switch_unavailable')
+      }
+      const previous = this.deps.store.getRecord(params.sessionId)?.selectedProvider
+      const result = await selectStructuredChatProvider(
+        {
+          deps: this.deps,
+          now: this.now,
+          publish: this.clientDelivery.publishStatusAndSettlement
+        },
+        session,
+        params
+      )
+      if (result.status === 'selected') {
+        try {
+          await saveDefault?.()
+        } catch (error) {
+          await this.deps.store.updateRecord(params.sessionId, {
+            kind: 'select-provider',
+            selection: previous ?? null,
+            now: this.now()
+          })
+          throw error
+        }
+        this.clientDelivery.publishStatusAndSettlement(params.sessionId)
+        this.conversationDelivery.afterCommit(params.sessionId, session.journal)
+      }
+      return result
+    })
+  }
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
 

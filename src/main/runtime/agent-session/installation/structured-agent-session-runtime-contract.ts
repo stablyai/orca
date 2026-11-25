@@ -20,6 +20,7 @@ import type { AgentSessionTurnCompletionEvent } from '../../../../shared/agent-s
 import type { LinkedSkills } from '../../../native-chat/native-chat-skill-roots'
 
 export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportOverrides & {
+  resolveProviderSwitchAccount?: StructuredAgentSessionHostDeps['resolveProviderSwitchAccount']
   /** Host state root. The record store and the journal database both hang off it. */
   stateDirectory: string
   legacySessionTabIds?: readonly string[]

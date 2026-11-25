@@ -124,12 +124,36 @@ const BotMemberKeySchema = z.object({
   workspaceId: z.string().min(1).optional()
 })
 
+export const BotAgentSwitchPreview = z.strictObject({
+  botId: requiredString('Missing bot id'),
+  agent: z.enum(BOT_AGENTS)
+})
+
+const BotAgentSwitchConsent = z.strictObject({
+  agent: z.enum(BOT_AGENTS),
+  from: z.enum(BOT_AGENTS),
+  defaultPermission: z.enum(AGENT_CHAT_PERMISSION_MODES),
+  home: z
+    .strictObject({
+      sessionId: z.string().min(1).max(512),
+      from: z.string().min(1).max(128),
+      permission: z.enum(AGENT_CHAT_PERMISSION_MODES)
+    })
+    .nullable()
+})
+
+export const BotAgentSwitchPreviewResultSchema = z.strictObject({
+  consent: BotAgentSwitchConsent.nullable()
+})
+export type BotAgentSwitchPreviewResult = z.infer<typeof BotAgentSwitchPreviewResultSchema>
+
 export const BotUpdate = z.object({
   botId: requiredString('Missing bot id'),
   updates: z
     .object({
       name: BotNameSchema.optional(),
       agent: z.enum(BOT_AGENTS).optional(),
+      agentSwitchConsent: BotAgentSwitchConsent.optional(),
       avatar: SettableBotAvatar.optional(),
       /** The mascot revision visible when its color or outfit was picked. */
       lookAtEpoch: z.uuid().optional(),
@@ -325,6 +349,7 @@ export function applyBotMemberUpdates(
 /** A null permission mode clears the override, so the bot's chats follow the native chat default. */
 export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   const {
+    agentSwitchConsent: _agentSwitchConsent,
     permissionMode,
     launch,
     removeMember,

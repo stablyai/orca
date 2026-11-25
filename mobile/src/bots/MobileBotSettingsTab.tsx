@@ -9,7 +9,12 @@ import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { botAvatarUpload, botDelete, botUpdate } from './bot-sheet-operations'
+import {
+  botAvatarUpload,
+  botDelete,
+  botUpdate,
+  previewBotAgentSwitch
+} from './bot-sheet-operations'
 import { MobileBotSettingsOffline } from './MobileBotSettingsOffline'
 import { phoneAccessHost } from './bot-access-request-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
@@ -30,7 +35,6 @@ import { MobileBotIdentityPage } from './MobileBotIdentityPage'
 import { MobileBotAgentPage } from './MobileBotAgentPage'
 import { MobileBotComputerPage } from './MobileBotComputerPage'
 import { MobileBotWhoCanAskPage } from './MobileBotWhoCanAskPage'
-import { ensureBotHomeChat } from './host-bots-read'
 import { useMobileBotConnectorSettings } from './connectors/MobileBotConnectors'
 import { useBotSoulMemorySkills } from './use-bot-soul-memory-skills'
 import { useMobileBotSharingSettings } from './sharing/MobileBotSharing'
@@ -263,13 +267,21 @@ export function MobileBotSettingsTab(props: {
         banner={offlineBanner}
         onBack={backToSettings}
         onLaunch={(launch) => void save({ launch })}
-        onSwitch={async (agent) => {
-          // The Home Chat starts fresh now, not on its next message, as the desktop's switch does.
-          if ((await save({ agent, launch: null })) && props.client) {
-            await ensureBotHomeChat(props.client, bot.id).then(
-              (refusal) => refusal && props.showToast(refusal, 3000)
-            )
+        previewSwitch={async (agent) => {
+          if (!props.client) {
+            return null
           }
+          try {
+            return previewBotAgentSwitch.interpret(
+              await previewBotAgentSwitch.request(props.client, { botId: bot.id, agent })
+            )
+          } catch (error) {
+            props.showToast(errorMessage(error), 3000)
+            return null
+          }
+        }}
+        onSwitch={async (agent, consent) => {
+          await save({ agent, launch: null, ...(consent ? { agentSwitchConsent: consent } : {}) })
         }}
       />
     )

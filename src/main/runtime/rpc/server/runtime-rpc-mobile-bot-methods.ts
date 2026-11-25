@@ -7,6 +7,7 @@ export const MOBILE_BOT_RPC_METHODS = [
   'bots.access.redeem',
   'bots.activity',
   'bots.agentChoices',
+  'bots.agentSwitchPreview',
   'bots.avatar.read',
   'bots.avatar.upload',
   'bots.chat.open',

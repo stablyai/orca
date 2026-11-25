@@ -233,7 +233,8 @@ export function journalSqlReads(
     namedTurn: async (turnId) => (await read({ kind: 'named-turn', turnId })).turn,
     messageOptions: async (clientMessageId) =>
       (await read({ kind: 'message-options', clientMessageId })).options,
-    continuationContext: async () => (await read({ kind: 'continuation-context' })).context,
+    continuationContext: async (after) =>
+      (await read({ kind: 'continuation-context', after })).context,
     continuationSpill: async (spill) => (await read({ kind: 'continuation-spill', spill })).bytes,
     restartCut: async () => (await read({ kind: 'restart-cut' })).cut,
     latestPrompt: async () => (await read({ kind: 'latest-prompt' })).prompt,

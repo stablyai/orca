@@ -218,7 +218,11 @@ export class BotController {
   }
 
   /** A function reads the bot as saved, inside the queue, so a concurrent edit is not lost. */
-  update(botId: string, edit: BotHostUpdates | ((bot: Bot) => BotHostUpdates)): Promise<Bot> {
+  update(
+    botId: string,
+    edit: BotHostUpdates | ((bot: Bot) => BotHostUpdates),
+    changeAgent?: (previous: Bot, next: Bot, save: () => Promise<void>) => Promise<void>
+  ): Promise<Bot> {
     return this.serialize(async () => {
       const store = requireBotStore(this.deps.getStore())
       const home = await readBotHomePicture(this.deps, requireStoredBot(store, botId))
@@ -244,13 +248,20 @@ export class BotController {
         updated.avatarRevision = revision + 1
       }
       const next = stampBotLinkOwners(bot, updated, () => this.deps.accountUserId?.() ?? null)
-      if (home.known || pictureChoice) {
-        await writeBotHome(this.deps.filesystem, botHomeFolder(next, this.deps.botsRoot()), next)
+      const save = async () => {
+        if (home.known || pictureChoice) {
+          await writeBotHome(this.deps.filesystem, botHomeFolder(next, this.deps.botsRoot()), next)
+        }
+        if (next.name !== bot.name) {
+          store.updateFolderWorkspace(bot.folderWorkspaceId, { name: next.name })
+        }
+        store.saveBot(next)
       }
-      if (next.name !== bot.name) {
-        store.updateFolderWorkspace(bot.folderWorkspaceId, { name: next.name })
+      if (changeAgent && next.agent !== bot.agent) {
+        await changeAgent(bot, next, save)
+      } else {
+        await save()
       }
-      store.saveBot(next)
       this.deps.notifyBotsWritten(next.name !== bot.name)
       if (next.agent !== bot.agent) {
         this.deps.botAgentChanged?.(next)

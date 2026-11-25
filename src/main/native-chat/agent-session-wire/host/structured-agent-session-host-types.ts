@@ -251,6 +251,11 @@ export type StructuredAgentSessionHostDeps = {
     record: AgentSessionRecord,
     purpose?: 'read' | 'identity'
   ) => Promise<AgentSessionAccountHome | null>
+  resolveProviderSwitchAccount?: (
+    record: AgentSessionRecord,
+    agent: string,
+    permission: AgentChatPermissionChoice
+  ) => Promise<AgentSessionAccountHome>
   /** The tools a chat's agent launched with, against what its next launch would get; absent or a
    *  chat that launched none (not a bot's, or look-around) never refreshes for tools. */
   launchTools?: {
@@ -303,6 +308,8 @@ export type StructuredAgentSessionConversationNaming = {
 }
 
 export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext & {
+  contextHandoff?: string
+  settleProviderSwitch?: (outcome: 'delivered' | 'failed') => Promise<void> | undefined
   admitFreshInput?: StructuredAgentSessionAdmitHostInput
   continueInput?: StructuredAgentSessionContinueInput
   acquireAborts?: Pick<StructuredAgentSessionAcquireAborts, 'begin'>

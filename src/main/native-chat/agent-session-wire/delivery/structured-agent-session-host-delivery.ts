@@ -41,6 +41,12 @@ import { closeWhatTheUserClosed } from '../structured-agent-session-user-closed-
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import { settleStructuredAgentSessionLeftovers } from '../termination/structured-agent-session-leftover-settlement'
 import { createStructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
+import {
+  prepareStructuredChatProviderSwitch,
+  readStructuredChatProviderSwitchPrompt,
+  setProviderSwitchSessionParams
+} from './structured-agent-session-provider-switch'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
@@ -109,6 +115,9 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   const owesWork = async (sessionId: string, id: string): Promise<boolean> =>
     sessions.has(sessionId) &&
     (await structuredAgentSessionChildOwesWork(retainedWork(sessionId, id)))
+  const publishSwitch = (sessionId: string) =>
+    input.clientDelivery.publishStatusAndSettlement(sessionId)
+  const providerSwitchHost = { deps, publish: publishSwitch, now: () => deps.now?.() ?? Date.now() }
   const loop = new StructuredAgentSessionDeliveryLoop({
     activityChanged: (id) => sessions.get(id)?.workChanged?.(),
     sessions,
@@ -118,6 +127,55 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
     stopPermissionTransitionChild: input.stopPermissionTransitionChild,
+    prepareProviderSwitch: (session, submission) => {
+      const id = session.params.envelope.sessionId
+      return prepareStructuredChatProviderSwitch(
+        providerSwitchHost,
+        session,
+        submission,
+        async () =>
+          (await input.clientDelivery.readStopping(id)) ||
+          (await structuredAgentSessionChildOwesWork({
+            ...retainedWork(id, submission.clientMessageId),
+            hasOpenDispatch: () => false
+          })),
+        () => input.stopOutgrownAgent(id)
+      )
+    },
+    settleProviderSwitch: async (session, clientMessageId, outcome) => {
+      const id = session.params.envelope.sessionId
+      const current = deps.store.getRecord(id)
+      if (current?.providerSwitch?.clientMessageId !== clientMessageId) {
+        return
+      }
+      if (outcome === 'failed' && session.child) {
+        await input.stopOutgrownAgent(id)
+      }
+      const record = await deps.store.updateRecord(id, {
+        kind: 'settle-provider-switch',
+        clientMessageId,
+        outcome,
+        now: providerSwitchHost.now()
+      })
+      setProviderSwitchSessionParams(session, record)
+      const from =
+        tuiAgentDisplayName(current.providerSwitch.from.provider) ??
+        current.providerSwitch.from.provider
+      const to = tuiAgentDisplayName(current.provider) ?? current.provider
+      await session.journal.appendItem(
+        { provider: 'orca', clientMessageId: `context-handoff:${clientMessageId}` },
+        {
+          kind: 'status',
+          presentation: 'context-handoff',
+          text: `Context handoff · ${from} → ${to}`,
+          ...(outcome === 'failed' ? { tone: 'error' } : {})
+        },
+        { fence: record.lease.runtimeFence, turnScope: { kind: 'thread' } }
+      )
+      publishSwitch(id)
+    },
+    providerSwitchPrompt: (session, clientMessageId) =>
+      readStructuredChatProviderSwitchPrompt(deps, session, clientMessageId),
     retireOutgrownChild: async (sessionId, continuingId, next) => {
       // Defer retirement while personal Stop holds handover; its next step decides.
       const session = (await input.clientDelivery.readStopping(sessionId))

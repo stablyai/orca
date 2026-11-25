@@ -90,11 +90,15 @@ function prioritizeConversation(messages: readonly NativeChatMessage[]): Convers
   const delivered = candidates.filter(({ message }) => !message.queued && !message.unsent)
   const latestUser = delivered.findLast(({ message }) => message.role === 'user')
   const latestAssistant = delivered.findLast(({ message }) => message.role === 'assistant')
+  const firstUser = delivered.find(({ message }) => message.role === 'user')
   const priority = (candidate: ConversationMessage): number => {
     if (candidate === latestUser || candidate === latestAssistant) {
       return 0
     }
-    return candidate.message.queued || candidate.message.unsent ? 2 : 1
+    if (candidate === firstUser) {
+      return 1
+    }
+    return candidate.message.queued || candidate.message.unsent ? 3 : 2
   }
   return candidates.sort(
     (left, right) => priority(left) - priority(right) || right.messageIndex - left.messageIndex

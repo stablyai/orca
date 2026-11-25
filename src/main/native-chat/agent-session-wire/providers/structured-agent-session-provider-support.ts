@@ -41,7 +41,7 @@ export function agentDrivesSession(
     agentPinsAccountHome(definition, session.accountHome) &&
     session.providerHandleChain.every(
       ({ handle }) =>
-        handle.transport === definition.handleTransport && handle.agent === definition.agent
+        handle.agent !== session.provider || handle.transport === definition.handleTransport
     )
   )
 }

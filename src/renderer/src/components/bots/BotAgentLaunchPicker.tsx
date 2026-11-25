@@ -21,7 +21,7 @@ import {
   type AgentChatPermissionMode
 } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isBotAgent, type BotAgent } from '../../../../shared/bot-types'
-import { keptSetupCatalog } from '../../../../shared/agent-launch/picker/agent-launch-kept-setup-catalog'
+import { chatAgentPickerEntry } from '@/components/agent/chat-agent-picker-entry'
 import { botLaunchFromChoices, type BotLaunch } from '../../../../shared/bots/bot-launch'
 import type { BotPermissionIntent } from './use-bot-agent-setup'
 
@@ -75,21 +75,16 @@ function useBotAgentPickerEntries(
       if (previous && previous.signature === signature) {
         return previous.entry
       }
-      const projected: AgentPickerEntry = {
-        ...entry,
-        catalog: keptSetupCatalog(entry.agent, entry.catalog),
-        surfaces: ['chat'],
-        defaultSurface: 'chat',
-        // A bot's chats take no terminal Arguments, so none may set or hide a choice here.
-        arguments: '',
-        keptSetup: withPermission
+      const projected = chatAgentPickerEntry(
+        entry,
+        withPermission
           ? {
               permissions: agentChatPermissionModes(entry.agent)?.modes ?? [],
               // As the bot's Settings names it.
               inheritLabel: t('settings.bots.permissionSameAsChats', 'Same as chats')
             }
           : {}
-      }
+      )
       const projection: Projection = {
         signature,
         entry: projected,

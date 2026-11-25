@@ -14,6 +14,10 @@ import {
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
 import type { AgentSessionLastTurn } from './records/agent-session-last-turn'
+import type {
+  AgentSessionProviderSelection,
+  AgentSessionProviderSwitch
+} from './records/agent-session-provider-selection'
 import type { AgentSessionForkedFrom } from './records/agent-session-forked-from'
 export type { AgentSessionForkedFrom }
 import type { ExecutionHostId } from '../../execution-host/execution-host'
@@ -29,6 +33,7 @@ import {
 } from '../conversation-context/agent-session-provider-context'
 import { isStructuredAgentId } from './provider-handles/agent-session-provider-handle-encoding'
 import { isNonNegativeSafeInteger } from '../../remote-runtime/ssh/ssh-retained-payload-limits'
+import { isAgentChatPermissionMode } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import {
   isAgentSessionAccountHome,
   isOptionalAgentSessionLaunchedAccount,
@@ -112,6 +117,8 @@ export type AgentSessionRecord = {
   /** The agent this session names, whether this build can run it or not. */
   provider: string
   providerHandleChain: AgentSessionProviderHandleLink[]
+  selectedProvider?: AgentSessionProviderSelection
+  providerSwitch?: AgentSessionProviderSwitch
   providerContextBoundary?: AgentSessionProviderContextBoundary
   accountHome: AgentSessionAccountHome
   /** Where the latest proven runtime actually launched; absent before any or from older hosts. */
@@ -339,12 +346,20 @@ export function isPersistedAgentSessionObservationRecord(
     return false
   }
   // The row holds stored handles; validate the chain they decode to.
-  const chain = decodePersistedAgentSessionProviderHandleChain(record.providerHandleChain)
+  const chain = decodePersistedAgentSessionProviderHandleChain(
+    record.providerHandleChain,
+    record.inactiveProviderHandleLinks,
+    record.inactiveProviderHandleLinks ? record.providerContextBoundary?.afterFence : undefined
+  )
   const head = chain?.at(-1)
   return (
     chain !== null &&
-    // Chain validation already enforces one namespace.
-    (!head || head.handle.agent === record.provider) &&
+    (record.selectedProvider === undefined ||
+      isAgentSessionProviderSelection(record.selectedProvider)) &&
+    (record.providerSwitch === undefined || isAgentSessionProviderSwitch(record.providerSwitch)) &&
+    (!head ||
+      head.handle.agent === record.provider ||
+      head.handle.agent === record.providerSwitch?.from.provider) &&
     (record.providerContextBoundary === undefined ||
       record.providerContextBoundary.afterFence <= record.lease.runtimeFence) &&
     (record.lease.claimStatus !== 'live' ||
@@ -353,6 +368,57 @@ export function isPersistedAgentSessionObservationRecord(
         (record.lease.provenHandleLinkId === null ||
           (head?.linkId === record.lease.provenHandleLinkId &&
             head.mintedAtFence === record.lease.runtimeFence))))
+  )
+}
+
+function isAgentSessionProviderSelection(value: unknown): value is AgentSessionProviderSelection {
+  if (typeof value !== 'object' || value === null || !('agent' in value)) {
+    return false
+  }
+  const selection = value as Partial<AgentSessionProviderSelection>
+  const { consent } = selection
+  return (
+    isStructuredAgentId(selection.agent) &&
+    (selection.options === undefined || isAgentSessionOptions(selection.options)) &&
+    (consent === undefined ||
+      (consent !== null &&
+        isStructuredAgentId(consent.from) &&
+        isAgentChatPermissionMode(consent.fromPermission) &&
+        typeof consent.hostRunId === 'string' &&
+        isProviderSwitchCursor(consent.through)))
+  )
+}
+
+function isProviderSwitchCursor(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'epoch' in value &&
+    typeof value.epoch === 'string' &&
+    'sequence' in value &&
+    isNonNegativeSafeInteger(value.sequence)
+  )
+}
+
+function isAgentSessionProviderSwitch(value: unknown): value is AgentSessionProviderSwitch {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const transition = value as Partial<AgentSessionProviderSwitch>
+  const { from } = transition
+  return (
+    typeof transition.clientMessageId === 'string' &&
+    (transition.fromLinkId === undefined || typeof transition.fromLinkId === 'string') &&
+    isProviderSwitchCursor(transition.through) &&
+    typeof from === 'object' &&
+    from !== null &&
+    isStructuredAgentId(from.provider) &&
+    isAgentSessionAccountHome(from.accountHome) &&
+    (from.options === undefined || isAgentSessionOptions(from.options)) &&
+    (from.permissionMode === undefined || typeof from.permissionMode === 'string') &&
+    (from.launchArgs === undefined || isAgentSessionLaunchArgs(from.launchArgs)) &&
+    (from.instructionsKey === undefined || typeof from.instructionsKey === 'string') &&
+    (from.rewind === undefined || isAgentSessionRewindRecord(from.rewind))
   )
 }
 

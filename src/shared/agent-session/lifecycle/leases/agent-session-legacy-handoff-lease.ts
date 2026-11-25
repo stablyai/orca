@@ -31,6 +31,8 @@ export type PersistedAgentSessionRecord = Omit<
   sleptAt?: unknown
   lastTurn?: unknown
   providerHandleChain: PersistedAgentSessionProviderHandleLink[]
+  /** Other agents' links. Older readers can still open the current provider's conversation. */
+  inactiveProviderHandleLinks?: PersistedAgentSessionProviderHandleLink[]
 }
 
 /** Checked stored facts before the independent next-grant floor has been validated. */

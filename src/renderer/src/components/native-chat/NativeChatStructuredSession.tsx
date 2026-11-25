@@ -54,7 +54,16 @@ import { NativeChatRowActionsProvider } from './messages/actions/NativeChatRowAc
 import { NativeChatQueuedMessageList } from './queue/NativeChatQueuedMessageList'
 import { cancelStructuredPrompt } from './session/structured/writes/native-chat-structured-stop-controls'
 import { useNativeChatBotHome } from './NativeChatBotHomeScope'
-import { useStructuredAgentSessionHostExecution } from '@/components/native-chat/session/status/structured-agent-session-status-hooks'
+import {
+  useStructuredAgentSessionActiveProvider,
+  useStructuredAgentSessionHostExecution,
+  useStructuredAgentSessionSelectedProvider
+} from '@/components/native-chat/session/status/structured-agent-session-status-hooks'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { AGENT_SESSION_SELECT_PROVIDER_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
+import { NativeChatProviderPickerContext } from './composer/controls/native-chat-provider-picker-context'
+import { NativeChatDividerRow } from './NativeChatDividerRow'
+import { useTranslate } from '@/i18n/use-translate'
 import { useNativeChatPaneFork } from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import { NativeChatDock, NativeChatDockTranscript } from './pane/dock/NativeChatDock'
 import { useAppStore } from '@/store/index'
@@ -80,8 +89,17 @@ import {
   nativeChatWorkerApprovalParty
 } from './worker-approvals/NativeChatWorkerApprovals'
 
-export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
+export function NativeChatStructuredSession(input: Omit<NativeChatStructuredViewProps, 'mode'>) {
+  const agent = useStructuredAgentSessionActiveProvider(input.sessionId, input.target, input.agent)
+  const props = agent === input.agent ? input : { ...input, agent }
   const { ownerWorktreeId, turnBot, bot: chatBot } = useBotChatOwner(props)
+  const t = useTranslate()
+  const supportsProviderPicker =
+    useStructuredAgentSessionHostCapabilityState(
+      props.target,
+      AGENT_SESSION_SELECT_PROVIDER_RUNTIME_CAPABILITY
+    ) === 'supported'
+  const selectedProvider = useStructuredAgentSessionSelectedProvider(props.sessionId, props.target)
   const slackMirror = useNativeChatSlackMirror(chatBot, props.sessionId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
@@ -388,23 +406,49 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 />
               )}
               {subagents.statusBar}
-              {composerShown ? (
-                <NativeChatComposer
-                  ref={composerRef}
-                  terminalTabId={props.tabId}
-                  paneKey={paneKey}
-                  draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
-                  targetPtyId={null}
-                  agent={props.agent}
-                  {...bot.stopControls.composer}
-                  unavailableHint={install.unavailableHint}
-                  steerHead={
-                    bot.stopControls.stopping ? undefined : submits.queuedMessages.steerHead
-                  }
-                  structuredTransport={transport}
-                  notices={notices}
-                  recallSource={{ messages: session.messages, withoutImageMarkers: true }}
+              {selectedProvider && composerShown ? (
+                <NativeChatDividerRow
+                  label={t(
+                    'chat.providerSwitch.pending',
+                    'Context handoff pending · {{from}} → {{to}}',
+                    {
+                      from: agentLabel,
+                      to: structuredAgentLabel(selectedProvider.agent)
+                    }
+                  )}
                 />
+              ) : null}
+              {composerShown ? (
+                <NativeChatProviderPickerContext.Provider
+                  value={
+                    supportsProviderPicker && ownerWorktreeId && provisionalLaunch.transportEnabled
+                      ? {
+                          sessionId: props.sessionId,
+                          target: props.target,
+                          workspaceId: ownerWorktreeId,
+                          selected: selectedProvider,
+                          onError: reportComposerError
+                        }
+                      : null
+                  }
+                >
+                  <NativeChatComposer
+                    ref={composerRef}
+                    terminalTabId={props.tabId}
+                    paneKey={paneKey}
+                    draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
+                    targetPtyId={null}
+                    agent={props.agent}
+                    {...bot.stopControls.composer}
+                    unavailableHint={install.unavailableHint}
+                    steerHead={
+                      bot.stopControls.stopping ? undefined : submits.queuedMessages.steerHead
+                    }
+                    structuredTransport={transport}
+                    notices={notices}
+                    recallSource={{ messages: session.messages, withoutImageMarkers: true }}
+                  />
+                </NativeChatProviderPickerContext.Provider>
               ) : null}
             </NativeChatDock>
             {handOff.dialog}
