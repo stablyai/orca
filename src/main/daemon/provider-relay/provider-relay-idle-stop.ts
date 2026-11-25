@@ -34,6 +34,8 @@ export class ProviderRelayIdleStop {
   private reader: ProviderRelayWorkReader | null = null
   private work: ProviderRelayOpenWork | null = null
   private carried: Record<string, string[][]> | null = null
+  /** What the attached app was handed, followed until it ends: the app may ack an end, then drop. */
+  private handed: ProviderRelayOpenWork | null = null
   private ended: Record<string, string[][]> | null = null
   private armed = false
   /** Busy when last checked: the next agent line starts a fresh window. */
@@ -53,7 +55,7 @@ export class ProviderRelayIdleStop {
         readonly working: { readonly size: number }
         workMethods: ReadonlySet<string>
       }
-      close: () => Promise<unknown>
+      stopIdle: () => Promise<unknown>
     },
     options: { relayId: string; log?: (event: string, details?: Record<string, unknown>) => void },
     unacked: () => readonly ProviderRelayRecord[] | null
@@ -67,7 +69,7 @@ export class ProviderRelayIdleStop {
         relay.pending.workMethods = new Set(methods)
       },
       unacked,
-      stop: () => void relay.close().catch(() => {}),
+      stop: () => void relay.stopIdle().catch(() => {}),
       log: (event, details) => options.log?.(event, { relayId: options.relayId, ...details })
     })
   }
@@ -90,6 +92,7 @@ export class ProviderRelayIdleStop {
     }
     this.work = policy?.open ? this.openWorkAtDetach(policy.open) : null
     this.armed = this.work !== null
+    this.host.log?.('relay-detached', { armed: this.armed, busy: this.work?.busy ?? null })
     this.waitingForLine = false
     this.lastActivityAt = Date.now()
     this.schedule(this.armed ? (this.policy?.idleStopMs ?? null) : null)
@@ -104,8 +107,10 @@ export class ProviderRelayIdleStop {
   }
 
   disarm(): void {
-    // A takeover or a dropped stream tracked nothing new, so what the last app was handed still stands.
-    this.carried = this.work?.keys() ?? this.carried
+    // A takeover or a dropped stream hands on what the last app was handed and hasn't ended since.
+    this.carried = this.work?.keys(true) ?? (this.carried && (this.handed?.keys() ?? {}))
+    const handed = this.carried && Object.values(this.carried).some((keys) => keys.length > 0)
+    this.handed = handed && this.carried ? new ProviderRelayOpenWork(this.carried) : null
     // Ends are handed to one app: a window that tracked nothing (a dropped stream, a takeover)
     // passes none on, since that app may have acked them already.
     this.ended = this.work?.endedKeys() ?? null
@@ -120,11 +125,21 @@ export class ProviderRelayIdleStop {
     return isProviderRelayQuietLine(line, this.quietNames)
   }
 
-  /** Called for every stdout line; attached it costs nothing, since the app counts the work. */
+  /** Called for every stdout line; attached it reads lines only while handed work is open. */
   observeAgentLine(line: string): void {
     this.lastActivityAt = Date.now()
     if (this.armed && this.work && this.reader) {
       this.reader.read(line).forEach((change) => this.work?.apply(change))
+    } else if (this.handed && this.reader) {
+      // Only ends matter: the app's own view (replayed from its cursor) holds what started since.
+      for (const change of this.reader.read(line)) {
+        if (change.effect !== 'start') {
+          this.handed.apply(change)
+        }
+      }
+      if (!this.handed.busy) {
+        this.handed = null
+      }
     }
     // Only an agent line can end a detached chat's work, so a busy one waits for it, not a timer.
     if (this.armed && this.waitingForLine) {

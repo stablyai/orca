@@ -29,8 +29,9 @@ export function registerReattachableProviderRelayAgent(agent: string): void {
 }
 
 /** Still running, or ended with output the chat hasn't taken in yet: either way the chat reattaches. */
+/** Its agent runs, or ended with output the chat hasn't taken; an idle-stopped one's chat just ended. */
 export function keptProviderRelayOutstanding(info: ProviderRelayInfo): boolean {
-  return info.exit === null || info.nextSeq - 1 > info.ackedSeq
+  return info.exit === null || (info.nextSeq - 1 > info.ackedSeq && !info.exit.idleStopped)
 }
 
 /**

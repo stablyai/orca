@@ -99,8 +99,10 @@ export function attachContinuation(
   fromSeq: number,
   result: ProviderRelayAttachResult
 ): RelayedProviderContinuation | null {
-  const carried = hook.openGroup && result.openWork ? (result.openWork[hook.openGroup] ?? []) : null
-  if (fromSeq <= 0 || (carried ? carried.length === 0 : result.truncatedThrough === undefined)) {
+  const carried = hook.openGroup ? result.openWork?.[hook.openGroup] : undefined
+  const open = carried?.length ? carried : null
+  // A dropped kept span engages it even between turns; then the replay alone bounds it.
+  if (fromSeq <= 0 || (open === null && result.truncatedThrough === undefined)) {
     return null
   }
   return new RelayedProviderContinuation(
@@ -108,6 +110,6 @@ export function attachContinuation(
     relayId,
     result.truncatedThrough ?? fromSeq,
     result.replayThroughSeq,
-    carried && new Set(carried.map((key) => JSON.stringify(key)))
+    open && new Set(open.map((key) => JSON.stringify(key)))
   )
 }

@@ -18,6 +18,10 @@ import {
   updateQueuedStructuredAgentMessage
 } from './structured-agent-session-queued-edit'
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
+import {
+  keptRunningProviderRelayPid,
+  listProviderRelaysAtLaunch
+} from '../../../provider-relay/app-provider-relays'
 
 /** Read host context lazily during field initialization; session touch renews idle activity. */
 export function wireStructuredAgentSessionQueuedMessages(
@@ -35,6 +39,10 @@ export function wireStructuredAgentSessionQueuedMessages(
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(context().deps.store, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
+    keptAgentPending: async (sessionId) => {
+      await listProviderRelaysAtLaunch()
+      return keptRunningProviderRelayPid(sessionId) !== null
+    },
     captureSelection: async (sessionId, journal) => {
       const ctx = context()
       const stopping = await ctx.readStopping(sessionId)

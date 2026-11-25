@@ -116,6 +116,8 @@ export type ProviderRelayExit = {
   code: number | null
   signal: string | null
   error?: ProviderRelayFailure
+  /** The daemon stopped the agent by the user's idle stop: its chat ended, nothing to replay into. */
+  idleStopped?: true
   /** The agent's last stderr, so the chat can say why it ended (absent from older daemons). */
   stderrTail?: string
 }

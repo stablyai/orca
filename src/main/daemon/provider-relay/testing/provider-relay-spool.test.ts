@@ -165,6 +165,33 @@ describe('provider relay spool', () => {
     await spool.dispose()
   })
 
+  it('a detach while lines are kept can still read the ones the client never acked', async () => {
+    const spool = new ProviderRelaySpool({
+      path: join(dir, 'r.ndjson'),
+      deliver: () => {},
+      onPressureChanged: () => {},
+      memoryCapBytes: 4096
+    })
+    await spool.attach(0)
+    spool.append('a')
+    spool.append('b')
+    spool.ack(2, 1)
+    // Kept: these go to the file as well as to the client, which hasn't acked them yet.
+    spool.append('c')
+    spool.append('d')
+    expect(spool.unacked()?.map((record) => record.line)).toEqual(['c', 'd'])
+    spool.ack(3, 1)
+    expect(spool.unacked()?.map((record) => record.line)).toEqual(['d'])
+    // The replay of a detached span is only in the file: until it is acked, it can't be read.
+    await spool.detach()
+    spool.append('e')
+    await spool.attach(spool.ackedSeq)
+    expect(spool.unacked()).toBeNull()
+    spool.ack(5, 1)
+    expect(spool.unacked()).toEqual([])
+    await spool.dispose()
+  })
+
   it('round-trips raw spool rows of any content through the file and its compaction, and never replays a torn last row', async () => {
     const lines = [
       '',

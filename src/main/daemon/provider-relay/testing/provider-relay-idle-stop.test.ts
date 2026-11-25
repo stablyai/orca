@@ -169,4 +169,40 @@ describe('provider relay idle stop', () => {
     r.idle.disarm()
     expect(r.idle.carriedWork().endedWork).toBeUndefined()
   })
+
+  it('an app killed after it saw handed work end never leaves the next app that work open', () => {
+    const r = rig()
+    r.detach({ turn: [], command: [[T, 'cmd-1']] })
+    r.state.attached = true
+    r.idle.disarm()
+    expect(r.idle.carriedWork().openWork).toEqual({ turn: [], command: [[T, 'cmd-1']] })
+    // The attached app sees the command end and acks it, then is killed: its stream just drops.
+    r.line(command('item/completed', 'completed'))
+    r.state.attached = false
+    r.idle.arm(null)
+    r.state.attached = true
+    r.idle.disarm()
+    expect(r.idle.carriedWork().openWork).toEqual({})
+    // The next app's own detach then names nothing open, so the idle stop runs.
+    r.detach({ turn: [], command: [] })
+    vi.advanceTimersByTime(IDLE_MS)
+    expect(r.stop).toHaveBeenCalledOnce()
+  })
+
+  it('work a detach could not account for holds that window only, never the next app', () => {
+    const r = rig()
+    // Lines the app hadn't acked are only in the file: the daemon can't say what they opened.
+    r.state.unacked = null
+    r.detach({ turn: [], command: [] })
+    vi.advanceTimersByTime(IDLE_MS)
+    expect(r.stop).not.toHaveBeenCalled()
+    // The next app replays those lines from its cursor, so it is handed nothing it can't end.
+    r.state.attached = true
+    r.state.unacked = []
+    r.idle.disarm()
+    expect(r.idle.carriedWork().openWork).toEqual({ turn: [], command: [] })
+    r.detach({ turn: [], command: [] })
+    vi.advanceTimersByTime(IDLE_MS)
+    expect(r.stop).toHaveBeenCalledOnce()
+  })
 })

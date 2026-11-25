@@ -27,6 +27,7 @@ export class ProviderRelay {
   private readonly lines: ProviderRelayLineReader
   private readerBusy = false
   private exitStatus: ProviderRelayExit | null = null
+  private idleStopped = false
   private stdoutEnded = false
   private exitAnnounced = false
   private spoolPaused = false
@@ -91,7 +92,8 @@ export class ProviderRelay {
       this.exitStatus = {
         code: exit.code,
         signal: exit.signal,
-        ...(this.failure ? { error: this.failure } : {})
+        ...(this.failure ? { error: this.failure } : {}),
+        ...(this.idleStopped ? { idleStopped: true as const } : {})
       }
       this.pending.clear()
       this.idleStop.disarm()
@@ -144,6 +146,7 @@ export class ProviderRelay {
     this.idleStop.disarm()
     // Read before the replay: lines released later through this client's own acks reached it.
     const { truncatedThrough } = this.spool
+    this.options.log?.('relay-attached', { relayId: this.relayId, cursor, truncatedThrough })
     this.release()
     // Live records wait for this attach's own replay, or they would reach the new client twice.
     this.spool.suspend()
@@ -225,6 +228,11 @@ export class ProviderRelay {
 
   ack(seq: number, keepFrom?: number): void {
     this.spool.ack(seq, keepFrom)
+  }
+
+  stopIdle(): Promise<unknown> {
+    this.idleStopped = true
+    return this.close()
   }
 
   close(grace?: 'brief'): Promise<unknown> {

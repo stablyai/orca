@@ -171,13 +171,16 @@ export class ProviderRelayOpenWork {
     return this.overflowed || [...this.groups.values()].some((tasks) => tasks.size > 0)
   }
 
-  /** The open tasks as key parts per group; work it couldn't account for is one task of its own. */
-  keys(): Record<string, string[][]> {
+  /**
+   * The open tasks as key parts per group; work it couldn't account for is one task of its own,
+   * except `handed` to an attaching app, which replays those lines from its cursor and sees it.
+   */
+  keys(handed = false): Record<string, string[][]> {
     const open: Record<string, string[][]> = {}
     for (const [group, tasks] of this.groups) {
       open[group] = [...tasks].map((key) => key.split(KEY_SEPARATOR))
     }
-    if (this.overflowed) {
+    if (this.overflowed && !handed) {
       open[UNACCOUNTED_GROUP] = [['unaccounted']]
     }
     return open

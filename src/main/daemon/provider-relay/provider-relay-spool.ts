@@ -2,6 +2,7 @@ import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-prot
 import { SpoolFile } from './provider-relay-spool-file'
 import { RECORD_OVERHEAD_BYTES, SpoolMemory, type HeldRecord } from './provider-relay-spool-memory'
 import { SpoolReaderSlot } from './provider-relay-spool-reader-slot'
+import { SpoolKeptTail } from './provider-relay-spool-kept-tail'
 import { replayMemoryTail, replaySpoolFileRecords } from './provider-relay-spool-replay'
 
 export const RELAY_SPOOL_MEMORY_CAP_BYTES = 1024 * 1024
@@ -53,6 +54,7 @@ export class ProviderRelaySpool {
   /** Ends the current attach's waits once it is superseded, so its call returns even on a stalled disk. */
   private cancelWait: (() => void) | null = null
   private readonly reader = new SpoolReaderSlot()
+  private readonly keptTail = new SpoolKeptTail()
   private readonly memoryCap: number
   private readonly fileCap: number
 
@@ -128,6 +130,7 @@ export class ProviderRelaySpool {
       return
     }
     this.clientAcked = through
+    this.keptTail.ackThrough(through)
     const floor = keepFrom !== undefined && Number.isSafeInteger(keepFrom) ? keepFrom : null
     this.keeping = floor !== null
     // A floor past `seq` keeps nothing the client has; with a broken file, kept lines stay in memory.
@@ -141,9 +144,11 @@ export class ProviderRelaySpool {
     this.updatePressure()
   }
 
-  /** Records after the client's ack, oldest first; null when some of them are only in the file. */
+  /** Records after the client's ack, in seq order; null when some of them are only in the file. */
   readonly unacked = (): readonly ProviderRelayRecord[] | null =>
-    this.memory.after(this.clientAcked, Math.max(this.file.index.lastSeq, this.lostThrough))
+    this.lostThrough > this.clientAcked
+      ? null
+      : this.keptTail.after(this.clientAcked, this.memory.after(this.clientAcked, 0) ?? [])
 
   /** Attached and keeping: new and still-held lines go to the file as well as to the client. */
   private get keepingLive(): boolean {
@@ -369,6 +374,7 @@ export class ProviderRelaySpool {
   }
 
   private writeToFile(record: HeldRecord): void {
+    this.keptTail.wrote(record, this.keepingLive && record.seq > this.clientAcked)
     // Past the engine's string limit: it and every later record stay in memory, so seq order holds.
     if (!this.file.write(record)) {
       this.memory.push(record)
