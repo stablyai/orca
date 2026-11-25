@@ -194,19 +194,20 @@ export async function feishuInput(
         'The owner sent an image, but this bot’s agent does not accept image attachments. Tell the owner to choose an image-capable agent or describe the image.'
     }
   }
-  try {
-    const path = row.path ?? (await storeFeishuResource(binding, row.mid, row.kind, signal))
-    if (!row.path) {
-      await inbox.stored(binding.account, row.mid, path)
+  let path = row.path
+  if (!path) {
+    try {
+      path = await storeFeishuResource(binding, row.mid, row.kind, signal)
+    } catch {
+      signal.throwIfAborted()
+      return {
+        prompt: `The owner's ${row.kind} could not be attached. Tell the owner the attachment could not be read; do not infer its contents.`
+      }
     }
-    signal.throwIfAborted()
-    return row.kind === 'image'
-      ? { prompt: 'The owner sent this image in the DM.', storedImages: [path] }
-      : { prompt: `The owner sent a file in the DM: ${formatNativeChatFileReference(path)}` }
-  } catch {
-    signal.throwIfAborted()
-    return {
-      prompt: `The owner's ${row.kind} could not be attached. Tell the owner the attachment could not be read; do not infer its contents.`
-    }
+    await inbox.stored(binding.account, row.mid, path)
   }
+  signal.throwIfAborted()
+  return row.kind === 'image'
+    ? { prompt: 'The owner sent this image in the DM.', storedImages: [path] }
+    : { prompt: `The owner sent a file in the DM: ${formatNativeChatFileReference(path)}` }
 }

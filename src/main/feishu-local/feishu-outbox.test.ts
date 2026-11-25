@@ -41,7 +41,7 @@ afterEach(() => {
   closeBotsDbStores()
   vi.restoreAllMocks()
 })
-async function admit(mid: string, outcome: 'answered' | 'no_answer' = 'answered') {
+async function admit(mid: string, outcome: 'answered' | 'no_answer' | 'failed' = 'answered') {
   await inbox.accept(binding, {
     type: 'im.message.receive_v1',
     chat_type: 'p2p',
@@ -64,12 +64,16 @@ async function admit(mid: string, outcome: 'answered' | 'no_answer' = 'answered'
     fill: { outcome, answerDeliveryId: mid, filledAt: 1 }
   })
 }
-const drain = () =>
+const drain = (
+  checkProfile: () => Promise<void> = async () => {},
+  beforeSettle: (mid: string) => void = () => {}
+) =>
   drainFeishuOutbox(
     {
       readOwed: async (_, after, limit) =>
         owed.filter((r) => after === null || r.deliveryId > after).slice(0, limit),
       sent: async (keys) => {
+        beforeSettle(keys[0].deliveryId)
         owed = owed.filter(
           (r) => !keys.some((k) => k.account === r.account && k.deliveryId === r.deliveryId)
         )
@@ -79,7 +83,7 @@ const drain = () =>
     binding,
     new AbortController().signal,
     () => true,
-    async () => {},
+    checkProfile,
     changed
   )
 
@@ -90,6 +94,7 @@ it.each(['upload', 'file reply'])(
     await inbox.stageFile(binding.account, 'om_target', 'receipt.txt', Buffer.from('one'))
     let time = 1000
     vi.spyOn(Date, 'now').mockImplementation(() => time)
+    await inbox.postWindowStart(binding.account, 'om_target', time)
     const calls: string[] = []
     vi.spyOn(cli, 'feishuCommand').mockImplementation(async (args) => {
       const part = args.includes('/open-apis/im/v1/files') ? 'upload' : 'file reply'
@@ -147,5 +152,93 @@ it('retires a recalled original and retries only the transient failure after del
         .at(-2)
     )
   ).toEqual(['om_a', 'om_b', 'om_c', 'om_b'])
+  expect(changed).toHaveBeenCalledTimes(1)
+})
+
+it('opens the first POST window only after a profile outage and upload complete', async () => {
+  await admit('om_a', 'no_answer')
+  await inbox.stageFile(binding.account, 'om_a', 'demo.txt', Buffer.from('one'))
+  let time = 1000
+  vi.spyOn(Date, 'now').mockImplementation(() => time)
+  await expect(
+    drain(async () => {
+      throw new Error('offline')
+    })
+  ).rejects.toThrow('another attempt')
+  expect((await inbox.replyState(binding.account, 'om_a'))?.firstPost).toBeNull()
+  time += 60 * 60_000
+  const send = vi
+    .spyOn(cli, 'feishuCommand')
+    .mockImplementationOnce(async () => {
+      time += 60 * 60_000
+      return upload
+    })
+    .mockResolvedValue(receipt)
+  await drain()
+  expect(send).toHaveBeenCalledTimes(2)
+  expect(await inbox.replyState(binding.account, 'om_a')).toMatchObject({
+    firstPost: time,
+    done: true,
+    review: false
+  })
+})
+it('settles an already-confirmed file-only reply after restart even if its window has closed', async () => {
+  await admit('om_a', 'no_answer')
+  await inbox.stageFile(binding.account, 'om_a', 'one.txt', Buffer.from('a'))
+  await inbox.uploaded(binding.account, 'om_a', 'file_one')
+  await inbox.postWindowStart(binding.account, 'om_a', 1)
+  await inbox.filePosted(binding.account, 'om_a')
+  const send = vi.spyOn(cli, 'feishuCommand')
+  await drain()
+  expect(send).not.toHaveBeenCalled()
+  expect(owed).toEqual([])
+  expect(await inbox.needsReview(binding.account)).toBe(false)
+})
+it('retains a failed turn’s file across a transient reply error and clears the bytes on settlement', async () => {
+  await admit('om_a', 'failed')
+  await inbox.stageFile(binding.account, 'om_a', 'one.txt', Buffer.from('a'))
+  const send = vi
+    .spyOn(cli, 'feishuCommand')
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValueOnce(receipt)
+  await expect(drain()).rejects.toThrow('another attempt')
+  expect((await inbox.artifact(binding.account, 'om_a'))?.bytes).toBeInstanceOf(Uint8Array)
+  await drain()
+  expect(send).toHaveBeenCalledTimes(2)
+  expect(await inbox.artifact(binding.account, 'om_a')).toBeUndefined()
+  await expect(
+    inbox.stageFile(binding.account, 'om_a', 'two.txt', Buffer.from('b'))
+  ).rejects.toThrow()
+  expect(owed).toEqual([])
+})
+it('keeps a failed checkpoint owed without blocking other rows or resending a settled reply', async () => {
+  for (const mid of ['om_a', 'om_b', 'om_c']) {
+    await admit(mid)
+  }
+  const send = vi
+    .spyOn(cli, 'feishuCommand')
+    .mockRejectedValueOnce(new cli.FeishuReplyTargetGone())
+    .mockResolvedValue(receipt)
+  vi.spyOn(inbox, 'finishReply').mockRejectedValueOnce(new Error('review checkpoint unavailable'))
+  await expect(
+    drain(undefined, (mid) => {
+      if (mid === 'om_b') {
+        throw new Error('journal unavailable')
+      }
+    })
+  ).rejects.toThrow('another attempt')
+  expect(owed.map((r) => r.deliveryId)).toEqual(['om_a', 'om_b'])
+  expect((await inbox.replyState(binding.account, 'om_b'))?.done).toBe(true)
+  send.mockRejectedValueOnce(new cli.FeishuReplyTargetGone())
+  await drain()
+  expect(owed).toEqual([])
+  expect(
+    send.mock.calls.map((c) =>
+      c[0]
+        .find((s) => s.endsWith('/reply'))
+        ?.split('/')
+        .at(-2)
+    )
+  ).toEqual(['om_a', 'om_b', 'om_c', 'om_a'])
   expect(changed).toHaveBeenCalledTimes(1)
 })

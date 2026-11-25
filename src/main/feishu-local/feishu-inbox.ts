@@ -23,6 +23,9 @@ export class FeishuInbox {
       this.db.exec('ALTER TABLE reply_files ADD COLUMN sha256 TEXT')
     }
     const columns = this.db.prepare('PRAGMA table_info(inbox)').all()
+    if (!columns.some((c) => c.name === 'reply_done')) {
+      this.db.exec('ALTER TABLE inbox ADD COLUMN reply_done INTEGER NOT NULL DEFAULT 0')
+    }
     if (!columns.some((c) => c.name === 'progress')) {
       this.db.exec('ALTER TABLE inbox ADD COLUMN progress INTEGER NOT NULL DEFAULT 0')
     }
@@ -132,9 +135,13 @@ export class FeishuInbox {
       }
       throw new Error('A different or unverifiable file is already staged for this delivery')
     }
-    this.db
-      .prepare('INSERT INTO reply_files(account,mid,name,bytes) VALUES(?,?,?,?)')
-      .run(account, mid, name, bytes)
+    const inserted = this.db
+      .prepare(`INSERT INTO reply_files(account,mid,name,bytes)
+      SELECT account,mid,?,? FROM inbox WHERE account=? AND mid=? AND reply_done=0 AND review=0`)
+      .run(name, bytes, account, mid)
+    if (!inserted.changes) {
+      throw new Error('This Feishu delivery cannot receive another file')
+    }
   }
   artifact(account: string, mid: string) {
     const row = this.db
@@ -192,14 +199,42 @@ export class FeishuInbox {
       this.db.prepare('SELECT 1 FROM inbox WHERE account=? AND review=1 LIMIT 1').get(account)
     )
   }
+  replyState(account: string, mid: string) {
+    const row = this.db
+      .prepare('SELECT first_post,review,reply_done FROM inbox WHERE account=? AND mid=?')
+      .get(account, mid)
+    return (
+      row && {
+        firstPost: typeof row.first_post === 'number' ? row.first_post : null,
+        review: !!row.review,
+        done: !!row.reply_done
+      }
+    )
+  }
+  /** Keep the local outcome even if the independent native journal cannot settle yet. */
+  finishReply(account: string, mid: string, review: boolean): boolean {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const changed = review && this.review(account, mid)
+      this.db.prepare('UPDATE inbox SET reply_done=1 WHERE account=? AND mid=?').run(account, mid)
+      this.db
+        .prepare('DELETE FROM reply_files WHERE account=? AND mid=? AND bytes IS NOT NULL')
+        .run(account, mid)
+      this.db.exec('COMMIT')
+      return changed
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
   /** A reply whose outcome was lost must only be retried within Feishu's one-hour UUID window. */
   postWindowStart(account: string, mid: string, now: number): number | null {
     this.db
-      .prepare('UPDATE inbox SET first_post=? WHERE account=? AND mid=? AND first_post IS NULL')
+      .prepare(
+        'UPDATE inbox SET first_post=? WHERE account=? AND mid=? AND first_post IS NULL AND review=0 AND reply_done=0'
+      )
       .run(now, account, mid)
-    const row = this.db
-      .prepare('SELECT first_post,review FROM inbox WHERE account=? AND mid=?')
-      .get(account, mid)
-    return row && !row.review && typeof row.first_post === 'number' ? row.first_post : null
+    const row = this.replyState(account, mid)
+    return row && !row.review && !row.done ? row.firstPost : null
   }
 }

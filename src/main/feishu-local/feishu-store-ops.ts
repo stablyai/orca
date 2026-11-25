@@ -16,6 +16,8 @@ const OPS = [
   'admitted',
   'review',
   'needsReview',
+  'replyState',
+  'finishReply',
   'postWindowStart'
 ] as const satisfies readonly (keyof FeishuInbox)[]
 type Op = (typeof OPS)[number]

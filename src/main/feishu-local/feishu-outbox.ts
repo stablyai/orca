@@ -8,6 +8,7 @@ import type { FeishuStore } from './feishu-store-ops'
 
 class PostWindowClosed extends Error {}
 class DeliveryPaused extends Error {}
+type Reply = NonNullable<JournalConnectorReplyRow['fill']>
 
 /** Only the delivery named by the native turn's stamps owns the answer. */
 export async function drainFeishuOutbox(
@@ -24,54 +25,76 @@ export async function drainFeishuOutbox(
     return
   }
   const conversation = dmKey(b)
-  const post = async (mid: string, fill: NonNullable<JournalConnectorReplyRow['fill']>) => {
-    const start = await inbox.postWindowStart(b.account, mid, Date.now())
+  const post = async (mid: string, fill: Reply, firstPost: number | null) => {
+    let start = firstPost
     const requireSendWindow = () => {
       if (!active()) {
         throw new DeliveryPaused()
       }
       const now = Date.now()
-      if (start === null || now < start || now - start >= 55 * 60_000) {
+      if (start !== null && (now < start || now - start >= 55 * 60_000)) {
         throw new PostWindowClosed()
       }
     }
+    const reply = async (message: Parameters<typeof replyFeishu>[4], part: 'file' | 'final') => {
+      requireSendWindow()
+      if (start === null) {
+        start = await inbox.postWindowStart(b.account, mid, Date.now())
+        if (start === null) {
+          throw new PostWindowClosed()
+        }
+      }
+      requireSendWindow()
+      await replyFeishu(b.app, b.account, mid, chat, message, part, signal)
+    }
+    const artifact =
+      fill.outcome === 'answered' || fill.outcome === 'no_answer'
+        ? await inbox.artifact(b.account, mid)
+        : undefined
+    if (artifact?.posted && fill.outcome === 'no_answer') {
+      return
+    }
     requireSendWindow()
     await checkProfile()
-    if (fill.outcome === 'answered' || fill.outcome === 'no_answer') {
-      const artifact = await inbox.artifact(b.account, mid)
-      if (artifact && !artifact.posted) {
+    if (artifact) {
+      if (!artifact.posted) {
         let key = artifact.key
         if (!key) {
           requireSendWindow()
           key = await uploadFeishuFile(b.app, artifact.name, artifact.bytes, signal)
           await inbox.uploaded(b.account, mid, key)
         }
-        requireSendWindow()
-        await replyFeishu(
-          b.app,
-          b.account,
-          mid,
-          chat,
-          { type: 'file', content: { file_key: key } },
-          'file',
-          signal
-        )
+        await reply({ type: 'file', content: { file_key: key } }, 'file')
         await inbox.filePosted(b.account, mid)
       }
-      if (artifact && fill.outcome === 'no_answer') {
+      if (fill.outcome === 'no_answer') {
         return
       }
     }
-    requireSendWindow()
-    await replyFeishu(
-      b.app,
-      b.account,
-      mid,
-      chat,
+    await reply(
       finalFeishuMessage(fill.prose || outcomeSentence(fill.outcome, 'Orca', fill.toolsRan)),
-      'final',
-      signal
+      'final'
     )
+  }
+  const settle = async (mid: string, fill: Reply) => {
+    const state = await inbox.replyState(b.account, mid)
+    if (state && !state.done) {
+      let review = state.review
+      if (!review && fill.answerDeliveryId === mid && fill.outcome !== 'quiet') {
+        try {
+          await post(mid, fill, state.firstPost)
+        } catch (error) {
+          if (!(error instanceof PostWindowClosed || error instanceof FeishuReplyTargetGone)) {
+            throw error
+          }
+          review = true
+        }
+      }
+      if (await inbox.finishReply(b.account, mid, review)) {
+        changed()
+      }
+    }
+    await journal.sent([{ account: b.account, deliveryId: mid }])
   }
   let after: string | null = null
   let retry = false
@@ -82,36 +105,22 @@ export async function drainFeishuOutbox(
       if (!active()) {
         return
       }
-      const fill = row.fill
       if (
-        !fill ||
+        !row.fill ||
         row.account !== b.account ||
         row.conversation.source !== conversation.source ||
         row.conversation.externalId !== conversation.externalId
       ) {
         continue
       }
-      if (fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet') {
-        try {
-          await post(row.deliveryId, fill)
-        } catch (error) {
-          if (error instanceof DeliveryPaused || !active()) {
-            return
-          }
-          if (!(error instanceof PostWindowClosed || error instanceof FeishuReplyTargetGone)) {
-            retry = true
-            continue
-          }
-          // Leave the durable owner-review record before retiring the automatic delivery.
-          if (await inbox.review(b.account, row.deliveryId)) {
-            changed()
-          }
+      try {
+        await settle(row.deliveryId, row.fill)
+      } catch (error) {
+        if (error instanceof DeliveryPaused || !active()) {
+          return
         }
+        retry = true
       }
-      if (!active()) {
-        return
-      }
-      await journal.sent([{ account: b.account, deliveryId: row.deliveryId }])
     }
     if (rows.length < 32) {
       break
