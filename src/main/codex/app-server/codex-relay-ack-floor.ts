@@ -1,6 +1,7 @@
 import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
 import { jsonProperty } from '../../../shared/json-stream/json-value-property'
 import type { ProviderRelayAckFloor } from '../../provider-relay/relayed-provider-output'
+import { CODEX_TEXT_ITEM_TYPES } from './codex-relay-item-continuation'
 
 const ENVELOPE_SCAN_CHARS = 4096
 /** More open items than this can't be real; the oldest stay held, so nothing is acked past them. */
@@ -18,7 +19,12 @@ function itemKey(line: string): { key: string; running: boolean } | null {
   const threadId = jsonProperty(params, 'threadId')
   const id = jsonProperty(item, 'id')
   const status = jsonProperty(item, 'status')
-  if (typeof threadId !== 'string' || typeof id !== 'string') {
+  const type = jsonProperty(item, 'type')
+  if (
+    typeof threadId !== 'string' ||
+    typeof id !== 'string' ||
+    !CODEX_TEXT_ITEM_TYPES.has(String(type))
+  ) {
     return null
   }
   return {
@@ -29,8 +35,9 @@ function itemKey(line: string): { key: string; running: boolean } | null {
 
 /**
  * Codex items stream from `item/started` to `item/completed` and are keyed by their own ids, so a
- * reattach that replays an open item from its start rewrites the same row whole. Only those two
- * notifications are parsed; every other line is passed by its envelope.
+ * reattach that replays an open item from its start rewrites the same row whole. Only streamed text
+ * items are held: a command's end carries its whole output, so a replay from mid-command loses
+ * nothing. Only those two notifications are parsed; every other line is passed by its envelope.
  */
 export function createCodexRelayAckFloor(): ProviderRelayAckFloor {
   /** Insertion order is seq order, so the first entry is the floor. */

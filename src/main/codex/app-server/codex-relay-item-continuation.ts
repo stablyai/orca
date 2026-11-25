@@ -3,7 +3,11 @@ import type { ProviderRelayItemContinuation } from '../../provider-relay/relayed
 
 const ENVELOPE_SCAN_CHARS = 4096
 /** Items whose row is streamed text: replaying part of one onto its saved row would cut it. */
-const TEXT_ITEM_TYPES = new Set(['agentMessage', 'reasoning', 'plan'])
+export const CODEX_TEXT_ITEM_TYPES: ReadonlySet<string> = new Set([
+  'agentMessage',
+  'reasoning',
+  'plan'
+])
 const TEXT_DELTA_METHODS = new Set([
   'item/agentMessage/delta',
   'item/reasoning/textDelta',
@@ -37,7 +41,9 @@ function textItemLine(line: string): Message | null {
       return typeof params.itemId === 'string' ? message : null
     }
     const item = params.item
-    return typeof item?.id === 'string' && TEXT_ITEM_TYPES.has(String(item.type)) ? message : null
+    return typeof item?.id === 'string' && CODEX_TEXT_ITEM_TYPES.has(String(item.type))
+      ? message
+      : null
   } catch {
     return null
   }
