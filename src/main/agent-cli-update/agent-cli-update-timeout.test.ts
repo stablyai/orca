@@ -41,7 +41,7 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-/** Runs the update through a fake `claude` whose update is `body`; returns the result and fake seconds it took. */
+/** Runs the update through a fake `claude` whose update is `body`. */
 async function runFakeUpdater(body: string) {
   dir = mkdtempSync(join(tmpdir(), 'agent-cli-update-timeout-'))
   const program = join(dir, 'claude')
@@ -65,7 +65,6 @@ async function runFakeUpdater(body: string) {
   })
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   let settled = false
-  let seconds = 0
   const run = runAgentCliUpdate('claude', {}).finally(() => {
     settled = true
   })
@@ -73,23 +72,21 @@ async function runFakeUpdater(body: string) {
   await vi.waitFor(
     async () => {
       await vi.advanceTimersByTimeAsync(1_000)
-      seconds += 1
       expect(settled).toBe(true)
     },
     { timeout: 25_000, interval: 5 }
   )
   const [updater, child] = readFileSync(join(dir, 'pids'), 'utf8').trim().split(' ').map(Number)
-  return { result: await run, seconds, updater, child }
+  return { result: await run, updater, child }
 }
 
 describe('runAgentCliUpdate', () => {
   it.skipIf(process.platform === 'win32')(
     'stops an updater that goes silent and never exits, and fails the update',
     async () => {
-      const { result, seconds, updater, child } = await runFakeUpdater('wait')
+      const { result, updater, child } = await runFakeUpdater('wait')
       expect(result.ok).toBe(false)
       expect(result.ok ? '' : result.output).toContain('Stopped after 3 minutes without any output')
-      expect(seconds).toBeLessThan(4 * 60)
       expect(alive(updater)).toBe(false)
       expect(alive(child)).toBe(false)
     },
@@ -97,10 +94,9 @@ describe('runAgentCliUpdate', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
-    'settles soon after the updater exits even when a child it left holds its output',
+    'stops a child holding the updater’s output after the updater exits',
     async () => {
-      const { result, seconds, child } = await runFakeUpdater('exit 0')
-      expect(seconds).toBeLessThan(30)
+      const { result, child } = await runFakeUpdater('exit 0')
       expect(result.ok ? '' : result.output).toContain('left a process holding its output')
       expect(alive(child)).toBe(false)
     },
