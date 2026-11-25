@@ -1,4 +1,5 @@
 import type { SpeechModelProvider } from '../../shared/speech/speech-types'
+import { openAiCompatibleTranscriptionUrl } from '../../shared/speech/openai-compatible-transcription-url'
 import { getCatalogModel, replaceRetiredSpeechModelId } from './model-catalog'
 import {
   canReadOpenAiSpeechApiKey,
@@ -8,7 +9,6 @@ import {
 import {
   canReadOpenAiCompatibleSpeechProvider,
   hasOpenAiCompatibleSpeechProvider,
-  openAiCompatibleTranscriptionUrl,
   readOpenAiCompatibleSpeechProvider
 } from './openai-compatible-speech-provider-store'
 

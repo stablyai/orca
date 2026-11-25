@@ -15,6 +15,7 @@ import { Label } from '../../ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import type { OpenAiCompatibleSpeechProviderSummary } from '../../../../../shared/speech/speech-types'
+import { openAiCompatibleTranscriptionUrl } from '../../../../../shared/speech/openai-compatible-transcription-url'
 
 type OpenAiCompatibleProviderDialogProps = {
   open: boolean
@@ -57,7 +58,16 @@ export function OpenAiCompatibleProviderDialog({
   }, [open])
 
   const canSave = !pending && baseUrl.trim() !== '' && model.trim() !== ''
-  const keepsSavedKey = saved?.hasApiKey === true && saved.baseUrl === baseUrl.trim()
+  let keepsSavedKey = false
+  if (saved?.hasApiKey) {
+    try {
+      keepsSavedKey =
+        openAiCompatibleTranscriptionUrl(saved.baseUrl) ===
+        openAiCompatibleTranscriptionUrl(baseUrl)
+    } catch {
+      keepsSavedKey = false
+    }
+  }
 
   const save = async (event: React.FormEvent): Promise<void> => {
     event.preventDefault()
