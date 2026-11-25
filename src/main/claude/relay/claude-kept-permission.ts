@@ -58,32 +58,29 @@ async function askKeptBypass(session: ClaudeSession, timeoutMs: number | undefin
   }
 }
 
-/** Writes a Build mode and records the one Claude accepted; a failed switch records none. Each
- *  write goes out at the pick, so Claude answers picks in order and the last one wins; a pick a
- *  newer one replaced records nothing and writes nothing more after its answer. */
+/** Writes a Build mode. The pick is recorded before its write, so a message sent before Claude
+ *  answers writes the same mode behind it; each write goes out at the pick, so Claude answers
+ *  picks in order and the last one wins. A pick a newer one replaced records nothing after its
+ *  answer; a failed switch drops the applied mode, so the next message asks again. */
 async function applyBuildMode(
   session: ClaudeSession,
   mode: PermissionMode,
   timeoutMs: number | undefined,
   current: () => boolean = () => true
 ): Promise<void> {
-  if (mode === 'bypassPermissions' && !claudeInPlan(session)) {
-    await askKeptBypass(session, timeoutMs)
-    if (current()) {
-      session.launchIntent = { ...session.launchIntent, permissionMode: mode }
-      session.appliedInputOptions.set('buildPermissionMode', mode)
-    }
-    return
-  }
-  // The chat now wants this mode from this process: leaving Plan, a refused Full access and the
-  // next reattach all read it, not the mode the agent was launched in.
+  // The chat now wants this mode from this process: messages, leaving Plan, a refused Full access
+  // and the next reattach all read it, not the mode the agent was launched in.
   session.launchIntent = { ...session.launchIntent, permissionMode: mode }
+  session.appliedInputOptions.set('buildPermissionMode', mode)
   if (claudeInPlan(session)) {
     // Plan stays until the user leaves it; leaving it (or a plan exit in flight) writes this mode.
-    session.appliedInputOptions.set('buildPermissionMode', mode)
     return
   }
   try {
+    if (mode === 'bypassPermissions') {
+      await askKeptBypass(session, timeoutMs)
+      return
+    }
     const applied = await setClaudeAllowedPermissionMode(session, mode, { timeoutMs })
     if (current()) {
       session.appliedInputOptions.set('buildPermissionMode', applied)
