@@ -14,7 +14,7 @@ import {
   type BotItemDecision,
   type BotItemQuestionShape
 } from './bot-item-ask'
-import type { BotItem, BotItemEvent } from './bot-items'
+import { parseBotItemEventId, type BotItem, type BotItemEvent } from './bot-items'
 import { IMAGE_PROMPT_MARKER } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 
 export type BotItemQuestionAnswers = {
@@ -241,17 +241,38 @@ function quotedLine(
   return lines.find((line) => IMAGE_PROMPT_MARKER.test(named[line] ?? '')) ?? lines.at(-1)
 }
 
-/** The ask the agent waits on, by its event id, with its lines' answers so far. */
+/** The ask the host's item read says waits: its `waitingAsk`, else its Needs you question. */
+function hostWaitingAsk(item: BotItemWaitingView): string | null {
+  return item.waitingAsk ?? (item.status === 'needs_you' ? (item.question?.eventId ?? null) : null)
+}
+
+/** An item as a client reads it: the host's own waiting ask and question, where it sent them. */
+type BotItemWaitingView = Pick<BotItem, 'status'> &
+  Partial<Pick<BotItem, 'question' | 'waitingAsk'>>
+
+/** The ask the agent waits on, by its event id, with its lines' answers so far. When the host's read
+ *  names a newer ask than the loaded events pair (a replaced question still on screen), the host's
+ *  wins: its own entry when loaded, else none, so the box falls back to the host's question. Replies
+ *  then name the ask the host waits on, and one meant for another is refused, never moved to it. */
 export function botItemWaitingAsk(
-  item: Pick<BotItem, 'status'>,
+  item: BotItemWaitingView,
   events: readonly BotItemEvent[]
 ): ({ askId: string } & BotItemQuestionAnswers) | null {
-  for (const [askId, entry] of botItemQuestionPairing(item, events).questions) {
-    if (entry.waiting) {
-      return { askId, ...entry }
-    }
+  const { questions } = botItemQuestionPairing(item, events)
+  const paired = [...questions].find(([, entry]) => entry.waiting)
+  if (!paired) {
+    return null
   }
-  return null
+  const host = hostWaitingAsk(item)
+  if (
+    host === null ||
+    host === paired[0] ||
+    (parseBotItemEventId(host) ?? 0) <= (parseBotItemEventId(paired[0]) ?? 0)
+  ) {
+    return { askId: paired[0], ...paired[1] }
+  }
+  const own = questions.get(host)
+  return own ? { askId: host, ...own, waiting: true } : null
 }
 
 /** A line the comment box replies to; `eventId` is the comment that asks it. */
@@ -264,16 +285,15 @@ export function botItemWaitingLine(
   item: Pick<BotItem, 'question' | 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemWaitingLine | null {
-  for (const [questionId, entry] of botItemQuestionPairing(item, events).questions) {
-    const index = entry.answers.indexOf(null)
-    const decision = entry.shape.decisions[index]
-    if (entry.waiting && decision) {
-      return {
-        id: `${questionId}:${index}`,
-        eventId: questionId,
-        line: botItemQuestionLine(decision.question),
-        replies: decision.replies.length > 0
-      }
+  const waiting = botItemWaitingAsk(item, events)
+  const open = waiting?.answers.indexOf(null) ?? -1
+  const line = waiting?.shape.decisions[open]
+  if (waiting && line) {
+    return {
+      id: `${waiting.askId}:${open}`,
+      eventId: waiting.askId,
+      line: botItemQuestionLine(line.question),
+      replies: line.replies.length > 0
     }
   }
   const { question } = item

@@ -1,4 +1,4 @@
-// The Activity entry that put the item in Needs you, edged in amber, and where the header's Reply leads;
+// The Activity entry that put the item in Needs you, and where the header's Reply leads;
 // and the item's making, dated, since its first entry is the only place the page says when it was made.
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { BotItemClampedOpenContext } from './BotItemClampedText'
@@ -24,7 +24,7 @@ export type BotItemNeedsYouMark = {
   opened: number
 }
 
-/** The entry that asked, edged in amber so it stands out among the rest, and where Reply leads. */
+/** The entry that asked, where Reply leads; its card's Needs you tag marks it. */
 export function BotItemNeedsYouMarkBox({
   mark,
   children
@@ -38,11 +38,7 @@ export function BotItemNeedsYouMarkBox({
       ref={mark?.setNode}
       id={mark?.id}
       data-bot-item-needs-you={mark ? '' : undefined}
-      className={
-        mark
-          ? 'relative -mx-2 scroll-mt-3 rounded-[10px] px-2 before:pointer-events-none before:absolute before:inset-y-1 before:-left-0.5 before:w-0.5 before:rounded-full before:bg-agent-question'
-          : undefined
-      }
+      className={mark ? 'relative -mx-2 scroll-mt-3 rounded-[10px] px-2' : undefined}
     >
       {mark ? (
         <span

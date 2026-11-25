@@ -148,6 +148,7 @@ export async function endRepliedTurn(
     ...(turn.opener ? { openerItemId: turn.opener.itemId } : {}),
     outcome: end.news.outcome,
     prose: turn.turnProse ?? '',
+    toolsRan: turn.turnToolsRan === true,
     bot: Boolean(link.bot),
     links: link.bot ? await links() : [],
     ...turnTimesOf(end.ended),

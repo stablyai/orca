@@ -7,6 +7,8 @@ import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-typ
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
+import { displayedTabOrder } from '@/components/bots/bot-home-tab-order'
+import type { HomeBotLookup } from '@/components/tab-bar/model/pinned-home-tab'
 
 type TabNumberShortcutState = Pick<
   AppState,
@@ -22,7 +24,9 @@ type TabNumberShortcutState = Pick<
 
 export function resolveTabNumberShortcutTarget(
   state: TabNumberShortcutState,
-  index: number
+  index: number,
+  /** Defaults to the bot catalog, as the tab bar reads it. */
+  homeBotFor?: HomeBotLookup
 ): Tab | null {
   if (state.activeView !== 'terminal' || state.activeWorktreeId === null || index < 0) {
     return null
@@ -43,10 +47,12 @@ export function resolveTabNumberShortcutTarget(
   )
   const tabById = new Map(groupTabs.map((tab) => [tab.id, tab]))
   // Match TabBar reconciliation: stored order is authoritative, but append mounted tabs missing during hydration/drag races.
-  const orderedIds = dedupeTabOrder([
+  const storedIds = dedupeTabOrder([
     ...group.tabOrder.filter((tabId) => tabById.has(tabId)),
     ...groupTabs.map((tab) => tab.id)
   ])
+  // The tab bar pins a bot's Home first wherever the stored order holds it; digits match what it shows.
+  const orderedIds = displayedTabOrder(storedIds, groupTabs, worktreeId, homeBotFor)
 
   return tabById.get(orderedIds[index] ?? '') ?? null
 }

@@ -15,10 +15,6 @@
     "terminalPromptFailed": "Orca가 {{value0}}의 터미널을 열었지만 프롬프트를 전달하지 못했습니다. 해당 터미널에서 프롬프트를 보내세요."
   },
   "app": {
-    "saving": {
-      "delayedTitle": "프로필 저장소 작업에 평소보다 오래 걸리고 있습니다",
-      "delayedDescription": "이 작업이 완료될 때까지 이후 저장이 지연될 수 있습니다."
-    },
     "recoverableError": {
       "rootTitle": "Orca에 렌더러 오류가 발생했습니다.",
       "rootDescription": "앱 셸에서 렌더링을 완료할 수 없습니다. 다시 마운트해 보거나 오류가 지속되면 Orca를 다시 시작하세요.",
@@ -22544,7 +22540,7 @@
         "turnDiffsSearchChangedFiles": "변경된 파일",
         "turnDiffsSearchEdits": "편집",
         "promptSuggestionsTitle": "추천 프롬프트",
-        "promptSuggestionsCopy": "Claude가 답한 뒤, 다음 메시지로 추측한 내용이 빈 메시지 입력란에 표시됩니다. Tab 키를 눌러 사용하세요. 추천마다 요청이 하나 더 발생하며 Claude 사용량에 포함됩니다.",
+        "promptSuggestionsCopy": "Claude 또는 Codex가 답한 뒤, 다음 메시지로 추측한 내용이 빈 메시지 입력란에 표시됩니다. Tab 키를 눌러 사용하세요. 추천마다 요청이 하나 더 발생하며 해당 에이전트 사용량에 포함됩니다.",
         "promptSuggestionsSearchNext": "다음 프롬프트",
         "promptSuggestionsSearchGhost": "고스트 텍스트"
       },
