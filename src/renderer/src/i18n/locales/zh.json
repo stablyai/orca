@@ -21337,12 +21337,7 @@
         "workflow": "工作流程",
         "monitor": "监控任务",
         "task": "任务",
-        "taskCount_other": "{{count}} 项任务",
         "workerCount_other": "{{count}} 个工作者",
-        "commandCount_other": "{{count}} 条命令",
-        "workflowCount_other": "{{count}} 个工作流程",
-        "monitorCount_other": "{{count}} 个监控任务",
-        "agentCount_other": "{{count}} 个智能体",
         "stoppedByYou": "已由你停止",
         "finished": "已完成",
         "failedCount": "{{count}} 个失败",
@@ -21358,11 +21353,11 @@
         "cleared_other": "已清除 {{count}} 个工作者",
         "stopAll": "全部停止",
         "clearFailed": "清除失败项",
-        "pillLabel_other": "{{count}} 个工作者，最新：{{title}}",
         "unlistedDetail": "部分后台工作未在此列出",
         "unlisted": "后台工作正在运行",
         "unread": "无法加载工作者",
-        "unreadDetail": "工作者加载后将显示在此处"
+        "unreadDetail": "工作者加载后将显示在此处",
+        "chipLabel": "{{label}}，最新：{{title}}"
       },
       "editDeliveryNotice": "编辑",
       "signIn": {

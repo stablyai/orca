@@ -20826,12 +20826,7 @@
         "workflow": "ワークフロー",
         "monitor": "モニター",
         "task": "タスク",
-        "taskCount_other": "{{count}} 件のタスク",
         "workerCount_other": "{{count}} 件のワーカー",
-        "commandCount_other": "{{count}} 件のコマンド",
-        "workflowCount_other": "{{count}} 件のワークフロー",
-        "monitorCount_other": "{{count}} 件のモニター",
-        "agentCount_other": "{{count}} 個の Agent",
         "stoppedByYou": "手動で停止しました",
         "finished": "完了",
         "failedCount": "失敗 {{count}} 件",
@@ -20847,11 +20842,11 @@
         "cleared_other": "ワーカー {{count}} 件をクリアしました",
         "stopAll": "すべて停止",
         "clearFailed": "失敗したものをクリア",
-        "pillLabel_other": "ワーカー {{count}} 件、最新: {{title}}",
         "unlistedDetail": "一部のバックグラウンド処理はここに表示されません",
         "unlisted": "バックグラウンド処理を実行中",
         "unread": "ワーカーを読み込めませんでした",
-        "unreadDetail": "読み込みが終わると、ここにワーカーが表示されます"
+        "unreadDetail": "読み込みが終わると、ここにワーカーが表示されます",
+        "chipLabel": "{{label}}、最新: {{title}}"
       },
       "sideChat": {
         "description": "このチャットの横に分岐して、別の質問をする",
