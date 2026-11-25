@@ -165,6 +165,22 @@ function admittedRecord(
   }
   const agents = { definition: (agent: string) => (agent === definition.agent ? definition : null) }
   if (!agentDrivesSession(agents, record)) {
+    // A transport migration (OMP's ACP-to-RPC cutover) leaves same-agent handles nothing can resume;
+    // dropping those relics opens the session fresh instead of hard-erroring every migrated chat.
+    const migrated = {
+      ...record,
+      providerHandleChain: record.providerHandleChain.filter(
+        (link) =>
+          link.handle.transport === definition.handleTransport ||
+          link.handle.agent !== definition.agent
+      )
+    }
+    if (
+      migrated.providerHandleChain.length !== record.providerHandleChain.length &&
+      agentDrivesSession(agents, migrated)
+    ) {
+      return migrated
+    }
     const pin = definition.accountHomeVariable ?? definition.accountLocatorKind
     throw new Error(
       `session ${sessionId}'s account home or handles are not ${definition.agent}'s: its sessions pin ${pin} and hold ${definition.handleTransport} handles`

@@ -15,7 +15,12 @@ import { AgentCliInstallationError } from '../../../native-chat/agent-launch/age
 import type { PiBackgroundWorkLaunch } from '../background-work/rpc-background-work-bridge'
 import { PI_BACKGROUND_WORK_DIR_ENV } from '../background-work/rpc-background-work-bridge-source'
 import { PI_BOT_TOOLS_ENV } from '../../../bots/bot-tools-pi'
-import { PI_RPC_FAMILY_PI, type PiRpcFamily, type PiRpcFamilyAgent } from '../pi-rpc-family'
+import {
+  PI_RPC_FAMILY_PI,
+  piRpcFamilyFor,
+  type PiRpcFamily,
+  type PiRpcFamilyAgent
+} from '../pi-rpc-family'
 
 export type PiRpcLaunchOptions = {
   command: string
@@ -96,7 +101,6 @@ const PI_TOOL_SELECTION_FLAGS = [
 export type PiToolLimit = 'read' | 'none'
 
 // A run limited to some tools also turns MCP off, which --no-mcp does from Pi 1.0.4.
-const PI_LIMITED_TOOLS_MINIMUM_VERSION = '1.0.4'
 
 /** A look reads only; a reply-only run has no tools. Null runs every tool Pi has. */
 export function piToolLimit(
@@ -108,11 +112,11 @@ export function piToolLimit(
   if (
     tools &&
     launchVersion.status === 'ready' &&
-    compareAppVersions(launchVersion.version, PI_LIMITED_TOOLS_MINIMUM_VERSION) < 0
+    compareAppVersions(launchVersion.version, piRpcFamilyFor(agent).limitedToolsMinimumVersion) < 0
   ) {
     throw AgentCliInstallationError.tooOld(agent, {
       version: launchVersion.version,
-      minimumVersion: PI_LIMITED_TOOLS_MINIMUM_VERSION
+      minimumVersion: piRpcFamilyFor(agent).limitedToolsMinimumVersion
     })
   }
   return tools
@@ -191,7 +195,10 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
         ? [
             '--tools',
             (options.family ?? PI_RPC_FAMILY_PI).readTools.join(','),
-            ...((options.family ?? PI_RPC_FAMILY_PI).supportsNoMcpFlag ? ['--no-mcp'] : [])
+            // Without `--no-mcp` the big hammer is the only way MCP tools stay out.
+            ...((options.family ?? PI_RPC_FAMILY_PI).supportsNoMcpFlag
+              ? ['--no-mcp']
+              : ['--no-tools'])
           ]
         : []),
       ...(options.tools === 'none'

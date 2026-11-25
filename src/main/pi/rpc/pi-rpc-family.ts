@@ -16,6 +16,8 @@ export type PiRpcFamily = {
   supportsNoMcpFlag: boolean
   /** Tool names a read-only launch selects. */
   readTools: readonly string[]
+  /** OMP before 19.2.0 does not strip MCP/extension tools under `--no-tools`, so limited launches are unsafe. */
+  limitedToolsMinimumVersion: string
 }
 
 export const PI_RPC_FAMILY_PI: PiRpcFamily = {
@@ -26,7 +28,8 @@ export const PI_RPC_FAMILY_PI: PiRpcFamily = {
   supportsSkillDirFlag: true,
   supportsBackgroundWorkBridge: true,
   supportsNoMcpFlag: true,
-  readTools: ['read', 'grep', 'find', 'ls']
+  readTools: ['read', 'grep', 'find', 'ls'],
+  limitedToolsMinimumVersion: '1.0.4'
 }
 
 export const PI_RPC_FAMILY_OMP: PiRpcFamily = {
@@ -37,7 +40,8 @@ export const PI_RPC_FAMILY_OMP: PiRpcFamily = {
   supportsSkillDirFlag: false,
   supportsBackgroundWorkBridge: false,
   supportsNoMcpFlag: false,
-  readTools: ['read', 'grep', 'glob']
+  readTools: ['read', 'grep', 'glob'],
+  limitedToolsMinimumVersion: '19.2.0'
 }
 
 export function piRpcFamilyFor(agent: string): PiRpcFamily {
