@@ -18,7 +18,7 @@ import type { MobileNativeChatAskDraft } from '../../session/native-chat/input/p
 // what stays is one card per item still open when last read.
 // What the list can't retire, as it holds no waiting ask: a card whose ask was answered or replaced
 // elsewhere on an item that stays open (until that item's page opens again or it closes), and cards
-// of items closed past the first Closed page before any list read, deleted, or on a host removed.
+// of items closed past the Closed pages read since, deleted, or on a host removed.
 // Each is one entry per item ever typed into (about 1 KiB), in memory for this app session only.
 // The clock counts what the phone saw in order, not the host's: a slow page read that still shows
 // the ask waiting re-stamps its card, so a list read asked before that can't drop it.
