@@ -2,7 +2,7 @@ import type { RuntimeWorktreePsResult } from '../../../../shared/worktree/catalo
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   isWorkspaceOwnedBySomeoneElse
-} from '../../../../shared/workspace-creator-visibility'
+} from '../../../../shared/workspace-view/workspace-creator-visibility'
 import type { RpcContext } from '../core'
 import { isHostOwnPhone } from '../callers/host-own-phone'
 

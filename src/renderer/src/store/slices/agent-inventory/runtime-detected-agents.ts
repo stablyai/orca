@@ -60,10 +60,6 @@ function capturePairingFence(environmentId: string): PairingFence {
   }
 }
 
-export function _getRuntimeDetectPromiseCountForTest(): number {
-  return runtimeDetectPromises.size
-}
-
 function withoutKeys<T>(record: Record<string, T>, drop: (key: string) => boolean) {
   let changed = false
   const next: Record<string, T> = {}

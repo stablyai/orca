@@ -1,3 +1,4 @@
+import type { PromptStandingRead } from '../agent-session-wire/observations/structured-agent-session-prompt-standing'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
@@ -5,7 +6,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLatestTurn } from '../../../shared/agent-session/agent-session-wire'
 import type { HostUsageLimitCut } from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
-import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
+import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import type { StructuredAgentSessionWorkEvidence } from '../agent-session-wire/observations/structured-agent-session-work-evidence'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import type { JournalStatusState } from './journal-status-state'
@@ -38,6 +39,8 @@ export type JournalObserverRead = {
   start: number
   floor?: number
   firstInputSubmissionKey: string | null
+  /** A bot's session, whose quiet-marker answers the preview skips. */
+  botSession?: true
 }
 
 export type JournalObserverResult = {
@@ -45,11 +48,13 @@ export type JournalObserverResult = {
   physicalCursor: AgentJournalCursor
   lastActivityAt: number
   authority: JournalWorkAuthority
-  state: JournalStatusState
+  /** goalContinues: the live provider starts the next turn itself, so a settled success is not the end. */
+  state: JournalStatusState & { goalContinues?: true }
   indicators: JournalStatusIndicators
   usageLimitCut: HostUsageLimitCut | null
   orcaStopCut: NativeChatOrcaStopCut | null
   work: {
+    promptStandings?: PromptStandingRead
     liveFence: number | null
     allowsObservation: boolean
     working: boolean
@@ -58,6 +63,8 @@ export type JournalObserverResult = {
     owedEnteredSubmissions: AgentJournalSubmission[]
     owedSendingSubmissions: AgentJournalSubmission[]
     activeTurn: { item: AgentJournalRenderItem; turnId: string } | null
+    /** The message that opened the running turn (one sent into it joined it); null when none runs. */
+    activeTurnOpener?: AgentJournalRenderItem | null
     latestTurn: AgentSessionLatestTurn | null
     actionablePrompts: AgentJournalRenderItem[]
     restatedSubmissions: AgentJournalSubmission[]

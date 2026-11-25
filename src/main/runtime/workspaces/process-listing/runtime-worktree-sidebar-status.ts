@@ -5,7 +5,7 @@ import {
   createAgentPaneActivityFlags,
   rankWorktreeStatus,
   type WorktreeStatus
-} from '../../../../shared/worktree-status-rollup'
+} from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 import type { RuntimeTerminalTitleEvidence } from './runtime-worktree-ps-activity'
 

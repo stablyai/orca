@@ -12,7 +12,7 @@ import {
   type DiagnosticsStatus
 } from '../observability'
 import { translateMain } from '../i18n/main-i18n'
-import { diagnosticsBundleFailure } from '../../shared/diagnostics-bundle-failure-copy'
+import { diagnosticsBundleFailure } from '../../shared/diagnostics/bundles/diagnostics-bundle-failure-copy'
 import type { CollectedBundle } from '../observability/bundle'
 import type { UploadBundleResult } from '../observability/diagnostic-bundle-upload'
 import {

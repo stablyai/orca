@@ -1,5 +1,5 @@
 import type { AgentStatusOrchestrationContext } from '../../agent-status/contracts/agent-status-types'
-import type { OrcaSessionId } from '../../orca-session-address'
+import type { OrcaSessionId } from '../../agent-session/identity/orca-session-address'
 import type { RuntimeRpcResponse } from '../../remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeWorktreePsSummary } from './runtime-worktree-contracts'
 

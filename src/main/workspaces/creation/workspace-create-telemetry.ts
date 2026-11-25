@@ -1,11 +1,11 @@
 import type { WorktreeCreateTiming } from '../../../shared/worktree/create-types'
 import type { WorkspaceCreateEntryPoint } from '../../../shared/worktree/creation/create-timing-vocabulary'
-import { workspaceSourceSchema } from '../../../shared/telemetry-property-schemas'
-import type { EventProps } from '../../../shared/telemetry-event-classification'
-import type { WorkspaceSource } from '../../../shared/workspace-source'
+import { workspaceSourceSchema } from '../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { EventProps } from '../../../shared/telemetry/telemetry-event-classification'
+import type { WorkspaceSource } from '../../../shared/workspace/creation/workspace-source'
 import { isTelemetryEnabled, track } from '../../telemetry/client'
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
-import { classifyWorkspaceCreateError } from '../../ipc/workspace-create-error-classifier'
+import { classifyWorkspaceCreateError } from '../../ipc/worktrees/creation/workspace-create-error-classifier'
 import { probeCreateEventRepoFacts } from '../../git/worktrees/creation/create-event-repo-probe'
 import {
   createWorktreeCreateTimingRecorder,

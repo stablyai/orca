@@ -5,7 +5,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtim
 import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
-} from '../../../../../../shared/managed-account-types'
+} from '../../../../../../shared/agent-accounts/managed-account-types'
 import { Button } from '../../../ui/button'
 import { Badge } from '../../../ui/badge'
 import {
@@ -114,7 +114,7 @@ export function ManagedDataAccountsSection({
           >
             {copied
               ? t('accounts.managedData.copied', 'Copied')
-              : t('accounts.managedData.add', 'Copy add account command')}
+              : t('accounts.managedData.add', 'Copy setup command')}
           </Button>
           <Button
             variant="ghost"

@@ -1,5 +1,8 @@
 import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'
-import type { BrowserCertificateFailure, BrowserLoadError } from '../../browser-workspace-types'
+import type {
+  BrowserCertificateFailure,
+  BrowserLoadError
+} from '../../browser/workspaces/browser-workspace-types'
 import type { RuntimeBrowserPlacement } from '../../browser/client-hosting/runtime-browser-placement'
 import type { TerminalColorOverrides } from '../../terminal-themes/terminal-color-overrides'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
@@ -24,7 +27,11 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string | null
   terminalTheme?: RuntimeMobileTerminalTheme
+  /** Same-build renderer graph input; main never returns this in client frames. */
+  statusSuppressionTitle?: string
   agentStatus?: AgentStatusEntry | null
+  /** The desktop Agents list says this tab's agent has an unread turn. Phones only; hosts with no verdict omit it. */
+  unread?: true
   /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
   turnCompletedAt?: number
   launchAgent?: TuiAgent
@@ -87,6 +94,13 @@ export type RuntimeMobileSessionFileTab = {
   hostRuntimeEnvironmentId?: string
 }
 
+export type RuntimeMobileSessionBrowserClientHost = {
+  /** Null when the server no longer knows the desktop's name. */
+  deviceName: string | null
+  /** The desktop disconnected; the page stays listed so it can still be closed. */
+  offline?: true
+}
+
 export type RuntimeMobileSessionBrowserTab = {
   type: 'browser'
   id: string
@@ -96,6 +110,8 @@ export type RuntimeMobileSessionBrowserTab = {
   browserProfileId?: string
   executionHostKey?: string
   placement?: RuntimeBrowserPlacement
+  /** The paired desktop showing this client-placed page, for clients that list it but can't stream it. */
+  clientHost?: RuntimeMobileSessionBrowserClientHost
   url: string
   /** Current runtime initialization disposition; never saved or echoed by a renderer. */
   initializationState?: 'pending' | 'stopped'
@@ -106,6 +122,12 @@ export type RuntimeMobileSessionBrowserTab = {
   faviconUrl?: string | null
   loadError?: BrowserLoadError | null
   certificateFailure?: BrowserCertificateFailure | null
+  /** The page is playing sound; absent when silent and from older hosts. */
+  audible?: true
+  /** The host muted the tab's sound; absent when unmuted and from older hosts. */
+  audioMuted?: true
+  /** An agent is using the page; absent otherwise and from older hosts. */
+  agentDriving?: true
   color?: string | null
   isPinned?: boolean
   isActive: boolean
@@ -125,6 +147,8 @@ export type RuntimeMobileSessionAgentTab = {
   forked?: true
   /** The host's structured status row for this chat. Optional: old hosts never send it. */
   chatStatus?: RuntimeMobileSessionAgentTabStatus
+  /** The desktop Agents list says this tab's agent has an unread turn. Phones only; hosts with no verdict omit it. */
+  unread?: true
   color?: string | null
   isPinned?: boolean
   isActive: boolean

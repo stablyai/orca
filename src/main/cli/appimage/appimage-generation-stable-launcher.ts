@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path'
-import { resolveAppImageGenerationOfExecutable } from '../../../shared/appimage-cache-identity'
+import { resolveAppImageGenerationOfExecutable } from '../../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import {
   isAppImageStableLauncherReady,
   resolveAppImageStableLauncherPath

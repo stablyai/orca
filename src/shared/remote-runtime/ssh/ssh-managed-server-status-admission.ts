@@ -16,8 +16,8 @@ import {
   SSH_CONNECTION_ERROR_MAX_UTF8_BYTES,
   SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES
 } from './ssh-retained-payload-limits'
-import { clampUtf8TextPrefix } from '../../utf8-byte-limits'
-import { isNodeDistMirrorAttempt } from '../../node-dist-mirror'
+import { clampUtf8TextPrefix } from '../../text/utf8-byte-limits'
+import { isNodeDistMirrorAttempt } from '../../node-runtime/node-dist-mirror'
 
 // Drop an unknown kind alone so newer-host fields do not discard the whole retained state.
 export function admitSshManagedServerStatus(value: unknown): {

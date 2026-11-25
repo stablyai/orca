@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import {
   getMobileWorkspaceLineageChildren,

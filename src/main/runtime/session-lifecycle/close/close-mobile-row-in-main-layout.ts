@@ -6,8 +6,8 @@ import { startedMainTerminalSurfaces } from '../../terminal/surface/main-termina
 import {
   closeInMainLayout,
   type MainLayoutClose
-} from '../../session-tabs/main-layout-close-command'
-import type { ExplicitCloseStop } from '../../session-tabs/explicit-terminal-close-pty-stops'
+} from '../../session-tabs/layout/main-layout-close-command'
+import type { ExplicitCloseStop } from '../../session-tabs/terminal-retirement/explicit-terminal-close-pty-stops'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 
 export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {

@@ -1,4 +1,4 @@
-import type { UpdateStatus } from '../../../shared/update-status-types'
+import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import {
   captureLinuxPackageArtifact,
   clearTrackedLinuxPackageArtifact,
@@ -6,7 +6,7 @@ import {
 } from './linux-package-update-recovery'
 import { getLinuxPackageType } from './linux-update-package-type'
 import type { LinuxPackageArtifact } from './linux-package-update-recovery'
-import { updaterCodedMessage } from '../../../shared/updater-failure-copy'
+import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 
 export function createLinuxPackageManualInstallStatus(
   artifact: Pick<LinuxPackageArtifact, 'packageType' | 'version'>

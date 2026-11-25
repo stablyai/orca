@@ -1,4 +1,4 @@
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
@@ -6,11 +6,10 @@ import {
   type WorkspaceMetadataSet
 } from '../../../shared/worktree/metadata/workspace-metadata-set'
 import type { WorkspaceAttachment } from '../../../shared/worktree/types'
-import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../shared/execution-host/execution-host'
 import type { Store } from '../../persistence/loading-store/store'
 import { getLocalProjectGhExecOptions } from '../../workspaces/execution-host/project-runtime-git-options'
-import { getIssue } from '../issues/issues'
-import { getWorkItemByOwnerRepo } from '../client/fetch/get-work-item'
+import { getGitHubIssueLinkMetadata } from './github-issue-link-metadata'
 import { installGitHubIssueLinkTitleFill } from './github-issue-link-title-fill'
 import { readGitHubRepoUnlessWslStopped } from '../../ipc/source-control/github-repo-routing'
 
@@ -43,24 +42,15 @@ async function readGitHubIssueLinkTitle(
     if (!route || Number(route[3]) !== link.number) {
       return null
     }
-    const item = await getWorkItemByOwnerRepo(
-      repo.path,
-      { owner: route[1], repo: route[2], host: url.hostname },
-      link.number,
-      'issue',
-      connectionId,
-      options,
-      { preview: true }
-    )
-    return item?.type === 'issue' && item.number === link.number && sameIssueUrl(item.url, link.url)
-      ? item.title
-      : null
+    const issue = await getGitHubIssueLinkMetadata(repo.path, link.number, connectionId, options, {
+      owner: route[1],
+      repo: route[2],
+      host: url.hostname
+    })
+    return issue && sameIssueUrl(issue.url, link.url) ? issue.title : null
   }
-  const issue = await getIssue(repo.path, link.number, connectionId, options)
-  // The issues endpoint also answers PR numbers; a PR's title must not label an issue link.
-  return issue && issue.number === link.number && !/\/pull\/\d+$/.test(issue.url)
-    ? issue.title
-    : null
+  const issue = await getGitHubIssueLinkMetadata(repo.path, link.number, connectionId, options)
+  return issue?.title ?? null
 }
 
 export function wireGitHubIssueLinkTitleFill(

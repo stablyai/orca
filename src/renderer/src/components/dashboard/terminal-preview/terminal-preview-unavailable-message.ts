@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { DashboardCardHostKind } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardCardHostKind } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 

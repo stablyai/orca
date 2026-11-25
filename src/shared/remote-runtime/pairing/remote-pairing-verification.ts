@@ -2,7 +2,7 @@ import { evaluateRuntimeCompat } from '../protocol/protocol-compat'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../protocol-version'
+} from '../protocol/protocol-version'
 import type { PublicKnownRuntimeEnvironment } from '../host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 

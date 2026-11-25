@@ -1,4 +1,4 @@
-import type { ManagedSkillInstall } from '../../../../../shared/skill-install-contract'
+import type { ManagedSkillInstall } from '../../../../../shared/skills/installation/skill-install-contract'
 
 export type SkillManagedInstallGroup = {
   key: string

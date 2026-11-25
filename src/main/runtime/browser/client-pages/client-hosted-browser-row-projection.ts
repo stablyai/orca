@@ -1,4 +1,4 @@
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type { RuntimeBrowserClientPage } from './runtime-browser-page-registry'
 
 export type ClientHostedBrowserRowSources = {

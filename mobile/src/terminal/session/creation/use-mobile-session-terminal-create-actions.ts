@@ -35,8 +35,9 @@ import {
   withoutPendingHandle
 } from '../../../session/tabs/pending-session-selection'
 import { releaseTerminalCreateLock } from './terminal-create-lock'
-import { placeCreatedSessionTab } from '../../../../../src/shared/session-tab-placement'
-import '../../../../../src/shared/protocol-version'
+import { hostViewModeForNewAgentTab } from '../../../storage/session-view-preferences'
+import { placeCreatedSessionTab } from '../../../../../src/shared/workspace-layout/tab-groups/session-tab-placement'
+import '../../../../../src/shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
@@ -68,7 +69,8 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
   type CreateOutcome = 'created' | 'accepted' | 'busy' | 'unavailable' | 'reported-failure'
   async function handleCreateTerminal(
     agent?: MobileNewTabAgentOption['agent'],
-    options?: MobileSessionTerminalCreateOptions
+    options?: MobileSessionTerminalCreateOptions,
+    nativeChatDefault?: boolean
   ): Promise<CreateOutcome | undefined> {
     const sourceFork = options?.sourceChatFork
     const sourceOutcome = (value: CreateOutcome): CreateOutcome | undefined =>
@@ -112,6 +114,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           worktreeId,
           agent,
           options,
+          nativeChatDefault,
           lock: clientMutationId,
           activeSessionTabId,
           pendingSelectionRef,
@@ -157,7 +160,10 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         clientMutationId,
         agent,
         options,
-        ...(sourceFork ? { sourceChatFork: { sessionId: sourceFork.sessionId } } : {})
+        shell: options?.shell,
+        ...(sourceFork ? { sourceChatFork: { sessionId: sourceFork.sessionId } } : {}),
+        viewMode:
+          sourceFork || options?.terminalView ? undefined : await hostViewModeForNewAgentTab(agent)
       })
       if (!isCurrent()) {
         return sourceOutcome('accepted')

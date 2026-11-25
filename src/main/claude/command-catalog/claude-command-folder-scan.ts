@@ -2,7 +2,7 @@ import type { Dirent } from 'node:fs'
 import { opendir, readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
-import { summarizeSkillMarkdown } from '../../../shared/skill-metadata'
+import { summarizeSkillMarkdown } from '../../../shared/skills/discovery/skill-metadata'
 
 const MARKDOWN_EXTENSION = '.md'
 const MAX_SCAN_DEPTH = 24

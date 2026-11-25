@@ -5,7 +5,7 @@ import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import { WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP } from '../viewport/virtual-rows'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatusGroupKey } from '../../../../../../shared/workspace-statuses'
+import { getWorkspaceStatusGroupKey } from '../../../../../../shared/workspace/status/workspace-statuses'
 import { expandDraggedWorktreeIdsForVisibleLineage } from './worktree-manual-order'
 import type { WorktreeRowGeometry } from '../viewport/use-row-geometry'
 import {

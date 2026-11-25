@@ -1,12 +1,9 @@
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import {
-  resolveTuiAgentLaunchEnv,
-  type AgentLaunchProfileSettings
-} from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import type { AgentLaunchProfileSettings } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { structuredAgentSettingsEnv } from '../environment/structured-agent-launch-env'
 import {
   checkAgentCliVersion,
   launchableRelease,
@@ -30,15 +27,26 @@ import {
   createStructuredAgentEnvironmentResolvers
 } from '../environment/structured-agent-shell-environment'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
+import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/settings/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
+import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/capabilities/structured-chat-platform-support'
+import type { AgentCliInstallationProblem } from '../../../../shared/agent-launch/catalog/agent-cli-installation-problem'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 
 export type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
-  'agentDefaultEnv' | 'nativeChatInheritShellEnvironment' | 'nativeChatShellEnvironmentVariables'
+  | 'agentDefaultEnv'
+  | 'nativeChatInheritShellEnvironment'
+  | 'nativeChatShellEnvironmentVariables'
+  | 'httpProxyUrl'
+  | 'httpProxyBypassRules'
 > &
-  Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'antigravityChatAuth'>> &
+  Partial<
+    Pick<
+      GlobalSettings,
+      'agentCmdOverrides' | 'antigravityChatAuth' | 'antigravityManagedAgyEnabled'
+    >
+  > &
   AgentLaunchProfileSettings
 
 /** What the check reads from the runtime asking it. */
@@ -73,25 +81,52 @@ export async function observeStructuredAgentLaunch(
     { env: ({ env }) => env, cwd: once }
   )
   return checkAgentCliVersion(
-    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: await once(), env: launch.env },
+    {
+      program: launch.command,
+      prefixArgs: [...launch.prefixArgs, ...(check.versionArgs ?? [])],
+      cwd: await once(),
+      env: launch.env
+    },
     check.minimumVersions
   )
 }
 
+/** Whether a new chat would start on the host's own program, as its account home selects one. */
+export async function structuredAgentHostAlternativeReady(
+  agent: string,
+  runtime: LaunchSettingsRuntime
+): Promise<boolean> {
+  const program = structuredAgentRuntimeMetadata(agent)?.chatProgram
+  if (!program?.hostAlternative) {
+    return false
+  }
+  const settings = runtime.requireStore().getSettings()
+  const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+  return program.hostAlternative(env, settings).catch(() => false)
+}
+
 /** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary keeps the
- *  terminal. */
-export async function structuredAgentSupportsLaunch(
+ *  terminal, or, where Orca installs no release, a host program that cannot serve the chat. A too-old
+ *  release names itself, so a refusal can say which version chats need. */
+export async function structuredAgentLaunchAdmission(
   agent: string,
   cwd: () => Promise<string>,
   runtime: LaunchSettingsRuntime
-): Promise<boolean> {
+): Promise<{ supported: boolean; installation?: AgentCliInstallationProblem }> {
+  if (structuredAgentRuntimeMetadata(agent)?.chatProgram?.onlyHostAlternative?.()) {
+    return { supported: await structuredAgentHostAlternativeReady(agent, runtime) }
+  }
   try {
     const release = await observeStructuredAgentLaunch(agent, cwd, runtime, true)
-    return release === null || launchableRelease(release)
+    if (release?.status === 'tooOld' && isTuiAgent(agent)) {
+      const { version: installedVersion, minimumVersion } = release
+      return { supported: false, installation: { agent, installedVersion, minimumVersion } }
+    }
+    return { supported: release === null || launchableRelease(release) }
   } catch (error) {
     // An unrunnable Command setting is the launch's refusal to state, not a terminal.
     if (isAgentSessionPreSpawnError(error)) {
-      return true
+      return { supported: true }
     }
     throw error
   }
@@ -104,7 +139,7 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
 ): Promise<Record<string, string>> {
   return overlayEnvironmentVariables(
     await resolveHostAgentBaseEnvironment(settings),
-    isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
+    structuredAgentSettingsEnv(agent, settings),
     process.platform
   )
 }
@@ -124,7 +159,7 @@ export async function structuredAgentHostLaunchSources(
 }> {
   const settings = runtime.requireStore().getSettings()
   const policy = nativeChatShellEnvironmentPolicy(settings)
-  const overlay = isTuiAgent(agent) ? { ...resolveTuiAgentLaunchEnv(agent, settings) } : {}
+  const overlay = structuredAgentSettingsEnv(agent, settings)
   const environment = createStructuredAgentEnvironmentResolvers({
     prewarm: false,
     processEnvironment: { ...process.env },
@@ -155,16 +190,16 @@ export async function resolveHostStructuredAgentCreateSupport(input: {
   const { agent, location, runtime } = input
   const supportsLocation =
     structuredAgentRuntimeMetadata(agent)?.supportsLocation(location) ?? false
-  const supportsLaunch =
-    supportsLocation &&
-    (await structuredAgentSupportsLaunch(
-      agent,
-      async () => (await runtime.resolveRuntimeFileTarget(input.worktreeSelector)).worktree.path,
-      runtime
-    ))
+  const launch = supportsLocation
+    ? await structuredAgentLaunchAdmission(
+        agent,
+        async () => (await runtime.resolveRuntimeFileTarget(input.worktreeSelector)).worktree.path,
+        runtime
+      )
+    : null
   const support = resolveStructuredAgentSessionCreateSupport({
     location,
-    adapterSupportsCreate: supportsLaunch,
+    adapterSupportsCreate: launch?.supported ?? false,
     unavailableOnPlatform: structuredChatUnavailableOnPlatform(agent, process.platform)
   })
   warnStructuredAgentSessionCreateUnsupported(
@@ -172,5 +207,5 @@ export async function resolveHostStructuredAgentCreateSupport(input: {
     support,
     supportsLocation ? 'installed-agent' : 'location'
   )
-  return support
+  return launch?.installation ? { ...support, installation: launch.installation } : support
 }

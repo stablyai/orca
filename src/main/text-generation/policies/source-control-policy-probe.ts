@@ -1,5 +1,6 @@
-import { abortSignalReason } from '../../../shared/abort-signal-reason'
-import { mergeCommandEnvironment } from '../../../shared/command-environment'
+import type { GenerationArgument } from '../../../shared/source-control/ai/generation/generation-argument'
+import { abortSignalReason } from '../../../shared/concurrency/abort-signal-reason'
+import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import { killSourceControlAgentProcess } from '../execution/source-control-agent-termination'
 import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../execution/source-control-generation-limits'
@@ -11,7 +12,7 @@ import type {
 
 /** Effective configuration may contain credentials; keep both streams private even on failure. */
 export function runSourceControlPolicyProbe(input: {
-  plan: CommitMessagePlan
+  plan: CommitMessagePlan<GenerationArgument>
   args: string[]
   target: LocalGenerationTarget
   signal: AbortSignal

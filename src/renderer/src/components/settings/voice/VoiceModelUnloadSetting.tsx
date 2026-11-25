@@ -1,10 +1,10 @@
 import { useId } from 'react'
-import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech-types'
+import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech/speech-types'
 import {
   UNLOAD_MODEL_AFTER_MINUTES_CHOICES,
   unloadModelAfterMinutes,
   type UnloadModelAfterMinutes
-} from '../../../../../shared/voice-model-unload'
+} from '../../../../../shared/speech/models/voice-model-unload'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatMinutesDuration } from '@/i18n/ui-intl-formatters'

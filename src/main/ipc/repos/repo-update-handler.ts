@@ -1,16 +1,16 @@
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../shared/repo-host-identity'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 
 import {
   type ExecutionHostId,
   getRepoExecutionHostId,
   normalizeExecutionHostId
-} from '../../../shared/execution-host'
-import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
-import { sanitizeRepoIcon } from '../../../shared/repo-icon'
+} from '../../../shared/execution-host/execution-host'
+import { normalizeRepoBadgeColor } from '../../../shared/repository/appearance/repo-badge-color'
+import { sanitizeRepoIcon } from '../../../shared/repository/appearance/repo-icon'
 import {
   normalizeGhAccountBinding,
   type GhAccountBinding
@@ -23,7 +23,7 @@ import {
 } from '../../../shared/worktree/visibility/visibility-sources'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
-import { normalizeDictationTerms } from '../../../shared/dictation-dictionary'
+import { normalizeDictationTerms } from '../../../shared/speech/dictation/dictation-dictionary'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -74,6 +74,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | null
           hiddenAt?: Repo['hiddenAt'] | null
           ghAccount?: GhAccountBinding | null
+          browserProfileId?: string | null
         }
       }
     ): Promise<Repo | null> => {

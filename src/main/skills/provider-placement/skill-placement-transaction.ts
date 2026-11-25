@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises'
 import { basename, resolve } from 'node:path'
-import type { SkillPlacementResult } from '../../../shared/skill-install-contract'
+import type { SkillPlacementResult } from '../../../shared/skills/installation/skill-install-contract'
 import {
   nativeSkillInstallFilesystem,
   type SkillInstallFilesystem

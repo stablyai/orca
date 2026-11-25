@@ -22,7 +22,7 @@ import {
 } from './configure-process'
 import { installServeSupervisorDisconnectQuit } from '../updater/serve-update-handoff'
 import {
-  installUncaughtPipeErrorGuard,
+  installUncaughtExceptionQuitGuard,
   installUnhandledRejectionLogging
 } from './process-failure/main-process-error-guards'
 import { hydrateShellPath, mergePathSegments } from './shell-environment/hydrate-shell-path'
@@ -52,6 +52,8 @@ import {
   startMainThreadChurnProbe
 } from '../diagnostics/main-thread-churn-probe'
 import { setSpawnObserver } from '@orca/process-host/spawn-observer'
+import { setDefaultProcessLauncher } from '@orca/process-host'
+import { launchPlainProcessSpecOnPosixWorker } from '../git/command-runner/process-capture/process-spec-worker-launch'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
 import { createServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
@@ -62,11 +64,11 @@ import {
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure
 } from './profile-startup/single-instance-lock'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
-import { setAppEnvironment } from '../../shared/app-environment'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/app-lifecycle/launch/single-instance-exit-code'
+import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
 import { installMainProcessTreeKillGate } from '../pty/process-retirement/own-chromium-tree-kill-guard'
-import { setSecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secure-storage/secret-store'
 import { ElectronSecretStore } from '../host/electron-secret-store'
 import { selectLinuxKeyringBackend } from './linux-runtime/select-linux-keyring-backend'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
@@ -164,7 +166,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     },
     onBlocked: (reason) => console.error(`[serve] Desktop activation blocked: ${reason}`)
   })
-  installUncaughtPipeErrorGuard()
+  installUncaughtExceptionQuitGuard()
   // #9441: log background rejections so restore failure cannot silently kill main.
   installUnhandledRejectionLogging()
   // Expose version without Electron imports for main/daemon TERM_PROGRAM_VERSION.
@@ -222,6 +224,10 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   if (isMainThreadDiagnosticsEnabled()) {
     // Include process-host spawns too; Git-only probe sites miss rg/ps/PTY helpers.
     setSpawnObserver(recordSubprocessSpawn)
+  }
+  // posix_spawn blocks its caller; under memory/disk pressure a launch on main froze the window for minutes.
+  if (process.platform !== 'win32' && process.env.ORCA_CHILD_PROCESS_WORKER_DISABLED !== '1') {
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
   }
   startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
   // Lock after userData override so dev/packaged namespaces differ; concurrent dev copies also need separate profiles to avoid store corruption (#1326, #1312).

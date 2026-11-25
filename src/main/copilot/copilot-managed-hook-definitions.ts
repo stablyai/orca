@@ -22,9 +22,18 @@ export const COPILOT_EVENTS = [
   'Notification'
 ] as const
 
+// The script answers {} before any guard, so the skipped-script path answers the same.
+export function getPosixManagedCommand(scriptPath: string, eventName: string): string {
+  return wrapPosixHookCommand(
+    scriptPath,
+    { ORCA_COPILOT_HOOK_EVENT: eventName },
+    { fallbackStdout: '{}' }
+  )
+}
+
 export function getManagedCommand(scriptPath: string, eventName: string): string {
   if (process.platform !== 'win32') {
-    return wrapPosixHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
+    return getPosixManagedCommand(scriptPath, eventName)
   }
   // Arguments survive runners that ignore hook env maps and keep managed commands distinct per event.
   const direct = wrapWindowsDirectCmdHookCommand(scriptPath)

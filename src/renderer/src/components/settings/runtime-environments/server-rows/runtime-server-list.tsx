@@ -1,4 +1,4 @@
-import { Server } from 'lucide-react'
+import { Link2, Server } from 'lucide-react'
 import type { ComponentProps } from 'react'
 import {
   getOrcadSshDeployment,
@@ -6,10 +6,10 @@ import {
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
-import type { UpdateCheckOptions } from '../../../../../../shared/update-status-types'
+import type { UpdateCheckOptions } from '../../../../../../shared/updater/update-status-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { duplicatePairedServerNames } from '@/lib/workspace/ownership/duplicate-paired-servers'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import { Button } from '../../../ui/button'
 import { migrationPhaseLabel } from '../managed-servers/managed-server-copy'
 import type { RuntimeHostDetails } from '../catalog/runtime-environment-host-details'
@@ -53,6 +53,7 @@ type RuntimeServerListProps = {
   onRecheck: () => void
   rechecking: boolean
   onChanged: () => void
+  onPasteAccessLink: (trigger: HTMLButtonElement) => void
 }
 
 export function RuntimeServerList({
@@ -75,7 +76,8 @@ export function RuntimeServerList({
   onCheckForUpdates,
   onRecheck,
   rechecking,
-  onChanged
+  onChanged,
+  onPasteAccessLink
 }: RuntimeServerListProps): React.JSX.Element {
   const t = useTranslate()
   const { api, pending, targets, resumingId, resume, reload } = managedCatalog
@@ -86,17 +88,18 @@ export function RuntimeServerList({
         <span className="flex size-10 items-center justify-center rounded-lg bg-accent text-muted-foreground">
           <Server className="size-5" />
         </span>
-        <div className="space-y-1">
-          <div className="text-sm font-medium">
-            {t('auto.components.settings.serverList.noSavedServers', 'No saved servers')}
-          </div>
-          <p className="max-w-sm text-xs text-muted-foreground">
-            {t(
-              'auto.components.settings.serverList.emptyDescription',
-              'Pair a dev box, a cloud machine, or a desktop at home. Its sessions keep running there when this computer sleeps.'
-            )}
-          </p>
+        <div className="text-sm font-medium">
+          {t('auto.components.settings.serverList.noSavedServers', 'No saved servers')}
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={(event) => onPasteAccessLink(event.currentTarget)}
+        >
+          <Link2 />
+          {t('auto.components.settings.serverList.pasteAccessLink', 'Paste access link')}
+        </Button>
       </div>
     )
   }

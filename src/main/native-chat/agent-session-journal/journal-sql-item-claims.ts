@@ -59,6 +59,21 @@ export function claimJournalSqlItemInputs(
       goals.acquired(claim.referenced, claim.inserted)
       referencedUploads.push(...claim.referenced)
     }
+    // Tool-returned images are host-written, so a gone one only loses its preview.
+    for (const { body } of publication.items) {
+      if (body.kind !== 'tool-call' || !body.outputImagePaths?.length) {
+        continue
+      }
+      const claim = claimAgentSessionAttachmentsInTransaction(db, {
+        stateDirectory,
+        sessionId: target.sessionId,
+        body,
+        required: false,
+        now: command.savedAt ?? Date.now()
+      })
+      goals.acquired(claim.referenced, claim.inserted)
+      referencedUploads.push(...claim.referenced)
+    }
   }
   return {
     referencedUploads,

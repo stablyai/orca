@@ -1,8 +1,11 @@
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { setMigrationUnsupportedPty } from '../../../agent-hooks/observations/migration-unsupported-pty-state'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
@@ -30,22 +33,38 @@ import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-ses
 import type { SessionSnapshotOperations } from './session-snapshot-operations'
 import { getSessionSnapshotOperationsContext } from './session-snapshot-operations-context'
 import { scheduleSave } from '../profile-writing/write-scheduling'
+import {
+  membershipRewritesFor,
+  withStoreRewrites,
+  type WrittenWorkspaceScope
+} from './workspace-session-write-listeners'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 
 export function setLocalWorkspaceSession(
   owner: SessionSnapshotOperations,
   session: PersistedState['workspaceSession'],
-  deferSnapshotFiles = false
+  deferSnapshotFiles = false,
+  written?: WrittenWorkspaceScope
 ): void {
   const context = getSessionSnapshotOperationsContext(owner)
   const prior = context.runtime.state.workspaceSession
+  const rewrites = membershipRewritesFor(written)
+  // A prune can strip scrollback from workspaces the caller never named.
+  let pruned = false
+  const pruneScrollback = (next: WorkspaceSessionState): WorkspaceSessionState => {
+    const kept = pruneLocalTerminalScrollbackBuffers(next, context.runtime.state.repos)
+    pruned ||= kept !== next
+    return kept
+  }
   session = keepWslMoveFrozenSessionsForStore(session, prior)
   // Quit staging bypasses caller guards; preserve runtime fields at the shared write boundary.
-  session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
-  session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
-  session = pruneWorkspaceSessionBrowserHistory(
-    pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
+  session = dropClosedTerminalTabs(
+    preserveRuntimeAuthoredWorkspaceSessionFields(session, prior),
+    undefined,
+    rewrites?.worktreeIds
   )
+  session = sanitizeWorkspaceSessionTerminalRetirements(session, prior, rewrites)
+  session = pruneWorkspaceSessionBrowserHistory(pruneScrollback(session))
 
   // Recover bindings from stale pre-spawn snapshots without reviving proven closes.
   const normalized = normalizeWorkspaceSessionPaneIdentities(session, prior?.terminalLayoutsByTabId)
@@ -98,13 +117,15 @@ export function setLocalWorkspaceSession(
     context.runtime.state.sshRemotePtyLeases = remappedLeases.leases
   }
   session = preserveMissingWorkspaceSessionTerminalBindings(session, prior, context.bindingRecovery)
-  session = pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
+  session = pruneScrollback(session)
+  let migratedTabIds: readonly string[] = []
   if (!deferSnapshotFiles) {
     const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
       session,
       context.runtime.terminalScrollbackSnapshotStorage
     )
     session = migratedScrollback.session
+    migratedTabIds = migratedScrollback.tabIds
     deleteRemovedTerminalScrollbackSnapshots(
       prior,
       session,
@@ -113,7 +134,7 @@ export function setLocalWorkspaceSession(
     )
   }
   // Apply group ordering after prior steps finish rebasing stored rows.
-  session = orderTerminalRowsByTabGroups(session)
+  session = orderTerminalRowsByTabGroups(session, rewrites?.worktreeIds)
   context.runtime.state.workspaceSession = session
   if (deferSnapshotFiles) {
     enqueueTerminalScrollbackSnapshotWork(owner, prior, session)
@@ -133,7 +154,11 @@ export function setLocalWorkspaceSession(
     scheduleSave(
       context.scheduling,
       remappedLeases.changed ? ['workspaceSession', 'sshRemotePtyLeases'] : ['workspaceSession'],
-      LOCAL_EXECUTION_HOST_ID
+      LOCAL_EXECUTION_HOST_ID,
+      // Renormalized pane ids can belong to any workspace.
+      normalized.changed || remappedLeases.changed || pruned
+        ? undefined
+        : withStoreRewrites(written, rewrites, migratedTabIds)
     )
   }
 }

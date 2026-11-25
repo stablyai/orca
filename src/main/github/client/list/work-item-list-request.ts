@@ -1,5 +1,5 @@
-import type { ClassifiedError } from '../../../../shared/classified-error'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { ClassifiedError } from '../../../../shared/errors/classified-error'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-items/work-item-ssh-error'
 import { shouldProbeGitRemote } from '../../../git/remotes/remote-name-listing'
@@ -54,8 +54,12 @@ export function buildWorkItemListRequest(args: {
   if (query.assignee) {
     searchParts.push(`assignee:${quoteGitHubSearchValue(query.assignee)}`)
   }
-  if (query.author) {
-    searchParts.push(`author:${quoteGitHubSearchValue(query.author)}`)
+  const authorTerms = query.authors.map((author) => `author:${quoteGitHubSearchValue(author)}`)
+  // search/issues ORs repeated author:, but gh pr list's advanced search ANDs them.
+  if (kind === 'pr' && authorTerms.length > 1) {
+    searchParts.push(`(${authorTerms.join(' OR ')})`)
+  } else {
+    searchParts.push(...authorTerms)
   }
   if (query.labels.length > 0) {
     for (const label of query.labels) {

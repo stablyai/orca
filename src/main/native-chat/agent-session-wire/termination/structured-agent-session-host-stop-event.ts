@@ -1,7 +1,7 @@
 import type { AgentSessionCloseObserver } from '../providers/structured-agent-session-adapter-stop'
 import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import { heldStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import type { StructuredAgentSessionStopCause } from './structured-agent-session-stop-cause'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
@@ -21,6 +21,9 @@ export type StructuredAgentSessionStopEnding =
       quit?: AgentSessionResumeTrigger
       /** Idle retirement of unanswered sends records no active-work Stop. */
       resting?: true
+      /** Decided at the instant the child would be marked closing: false, or provider work still
+       *  entering the journal, leaves it running. */
+      onlyIf?: () => boolean
     }
 
 const STOP_EVENT_DRAIN_TIMEOUT_MS = 1_000

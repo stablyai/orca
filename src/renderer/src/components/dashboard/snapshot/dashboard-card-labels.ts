@@ -1,5 +1,5 @@
 import { getAgentRowConversationName } from '../../../../../shared/agent-status/presentation/agent-row-conversation-name'
-import { DASHBOARD_MAX_LABEL_LENGTH } from '../../../../../shared/dashboard-snapshot'
+import { DASHBOARD_MAX_LABEL_LENGTH } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { resolveAgentRowPaneLiveTitle } from '../rows/agent-row-pane-live-title'
 import { structuredChatTabById } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
@@ -55,7 +55,8 @@ export function rowConversationName(
   const paneLiveTitle = resolveAgentRowPaneLiveTitle(
     layout,
     paneTitles,
-    parsePaneKey(row.paneKey)?.leafId
+    parsePaneKey(row.paneKey)?.leafId,
+    row.runtimePaneId
   )
   return (
     getAgentRowConversationName(

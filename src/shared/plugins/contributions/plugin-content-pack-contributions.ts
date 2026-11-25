@@ -5,7 +5,7 @@ import {
   pluginIdSchema,
   pluginRelativePathSchema
 } from '../manifest/plugin-manifest-fields'
-import { normalizeKeybinding } from '../../keybindings'
+import { normalizeKeybinding } from '../../keybindings/normalization'
 import { PLUGIN_COMMAND_WHEN_SINCE, pluginCommandWhenSchema } from './plugin-command-contribution'
 import {
   pluginFieldDoc,
@@ -93,6 +93,11 @@ export const pluginKeybindingContributionSchema = z
         const normalized = normalizeKeybinding(value)
         if (!normalized.ok) {
           ctx.addIssue({ code: 'custom', message: normalized.error })
+          return z.NEVER
+        }
+        // Older Orca builds reject a literal `+` key (`Mod++`), so require the portable `Plus` spelling.
+        if (normalized.value.endsWith('+Plus') && !/\bplus\b/i.test(value)) {
+          ctx.addIssue({ code: 'custom', message: 'write the + key as Plus, like Mod+Plus' })
           return z.NEVER
         }
         return normalized.value

@@ -1,11 +1,9 @@
 import { z } from 'zod'
-import { RepoSelector, SlugRepo } from './github-repo-target-params'
+import { RepoSelector, RepoWithGitHubTarget, SlugRepo } from './github-repo-target-params'
 import { requiredString } from '../rpc-param-primitives'
 import { IssueUpdate } from './github-issue-update-params'
 
-export const Issue = RepoSelector.extend({
-  number: z.number().int().positive()
-})
+export const Issue = RepoWithGitHubTarget.extend({ number: z.number().int().positive() })
 
 export const CreateIssue = RepoSelector.extend({
   title: requiredString('Missing title'),

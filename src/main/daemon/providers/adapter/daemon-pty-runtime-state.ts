@@ -9,7 +9,7 @@ import type {
 import type {
   DaemonAuditTrigger,
   DaemonEvidenceSource
-} from '../../../../shared/daemon-audit-eligibility'
+} from '../../../../shared/terminal/daemon/daemon-audit-eligibility'
 import { CheckpointSessionQueue } from '../checkpointing/daemon-checkpoint-session-queue'
 import {
   SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,

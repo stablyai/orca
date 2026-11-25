@@ -1,4 +1,4 @@
-import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { buildPosixCommandPathLookupScript } from '../../shared/shell/command-resolution/posix-command-path-lookup'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,

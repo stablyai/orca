@@ -1,4 +1,4 @@
-import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { recordCoalescedDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 
 /**

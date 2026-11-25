@@ -94,6 +94,15 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Alt+Z'])
   },
   {
+    id: 'editor.toggleChangesView',
+    title: 'Toggle Changes View',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'changes', 'diff', 'diff viewer', 'uncommitted', 'edit'],
+    // Why: unbound by default so it never collides with existing chords; users opt in via Settings.
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'editor.copyContext',
     title: 'Copy Context',
     group: 'Editors',
@@ -284,22 +293,6 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     group: 'Terminal Panes',
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'split', 'equalize', 'resize', 'balance', 'size'],
-    defaultBindings: platformBindings([])
-  },
-  {
-    id: 'terminal.expandPane',
-    title: 'Expand / collapse pane',
-    group: 'Terminal Panes',
-    scope: 'terminal',
-    searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
-    defaultBindings: platformBindings(['Mod+Shift+Enter'])
-  },
-  {
-    id: 'terminal.setTitle',
-    title: 'Set Title…',
-    group: 'Terminal Panes',
-    scope: 'terminal',
-    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
     defaultBindings: platformBindings([])
   }
 ]

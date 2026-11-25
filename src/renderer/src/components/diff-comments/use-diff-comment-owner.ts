@@ -11,7 +11,7 @@ import {
   type DiffCommentView
 } from '@/store/slices/diff-comments/diff-comment-owner'
 import type { WorkspaceCopySource } from '@/lib/workspace/ownership/workspace-copy-owner'
-import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../shared/file-review/diff-comment-types'
 
 /**
  * The notes a surface shows and the copy they belong to, from one read. A retained surface passes

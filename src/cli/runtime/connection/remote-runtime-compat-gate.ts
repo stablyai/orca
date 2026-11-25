@@ -6,7 +6,7 @@ import {
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../shared/protocol-version'
+} from '../../../shared/remote-runtime/protocol/protocol-version'
 import type {
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
@@ -56,7 +56,7 @@ export class RemoteRuntimeCompatGate {
       )) === 'reload'
     ) {
       // A resume re-pairs the VM's server: this and later requests use the saved pairing.
-      this.connectionAfterWake = resolveRemoteConnection(
+      this.connectionAfterWake = await resolveRemoteConnection(
         this.userDataPath,
         null,
         this.environmentSelector

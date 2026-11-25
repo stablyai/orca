@@ -1,6 +1,6 @@
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { retirementProofKey as proofKey } from '../../../../../shared/workspace-layout/terminal-surfaces/terminal-retirement-proof-ledger'
 

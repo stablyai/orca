@@ -1,4 +1,4 @@
-import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../shared/file-review/diff-comment-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

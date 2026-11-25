@@ -3,7 +3,7 @@ import type { OrcaRuntimeWithInvalidateAllHandlesForPty } from '../lifecycle/pty
 import { randomUUID } from 'node:crypto'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import { forgetPtySurface } from '../surface/pty-recorded-surface-topology'
-import { RuntimeMobileSessionTabSubscriptions } from '../../session-tabs/mobile-session-tab-subscriptions'
+import { RuntimeMobileSessionTabSubscriptions } from '../../session-tabs/publication/mobile-session-tab-subscriptions'
 export abstract class RuntimePreallocatedTerminalHandles extends RuntimeMobileSessionTabSubscriptions {
   protected abstract deliverPendingMessagesForPty(ptyId: string): void
 

@@ -1,10 +1,11 @@
 // An admin's device removal on the host (or the pairing CLI's add) lands in the file while orcad
 // runs; a later save from orcad's memory must never resurrect a removed device.
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { removeTreeSync } from '../../../../../shared/file-write/windows-transient-lock-removal'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
@@ -17,7 +18,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
-  rmSync(dir, { recursive: true, force: true })
+  removeTreeSync(dir)
 })
 
 function fileIds(): string[] {
@@ -45,6 +46,16 @@ function pairedRegistry() {
 }
 
 describe('device registry saves over an externally edited file', () => {
+  it('announces an external runtime grant when a fresh list adopts it', () => {
+    const registry = new DeviceRegistry(dir)
+    const notify = vi.fn()
+    registry.setOnPairedDevicesChanged(notify)
+    new DeviceRegistry(dir).addDevice('Remote Orca', 'runtime')
+
+    expect(registry.listDevices({ fresh: true }).map(({ name }) => name)).toEqual(['Remote Orca'])
+    expect(notify).toHaveBeenCalled()
+  })
+
   it('keeps a device removed on disk removed through a pending lastSeen flush', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const { registry, desktop, phone } = pairedRegistry()

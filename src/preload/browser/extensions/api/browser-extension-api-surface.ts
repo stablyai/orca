@@ -153,7 +153,8 @@ export const BROWSER_EXTENSION_API_SURFACE: BrowserExtensionSurface = {
   },
   // Why Orca's events: Electron never fires these, and a native one would double-fire if it starts.
   runtime: {
-    methods: { openOptionsPage: {} },
+    // getContexts: Electron's answer plus the side panels Orca hosts, which Electron never sees.
+    methods: { openOptionsPage: {}, getContexts: { native: {} } },
     events: ['onInstalled', 'onStartup']
   },
   extension: {
@@ -245,6 +246,19 @@ export const BROWSER_EXTENSION_API_SURFACE: BrowserExtensionSurface = {
       MAX_NUMBER_OF_STATIC_RULESETS: 100,
       MAX_NUMBER_OF_ENABLED_STATIC_RULESETS: 50
     }
+  },
+  sidePanel: {
+    permission: 'sidePanel',
+    methods: {
+      setOptions: {},
+      getOptions: {},
+      setPanelBehavior: {},
+      getPanelBehavior: {},
+      open: {},
+      close: {},
+      getLayout: {}
+    },
+    events: ['onOpened', 'onClosed']
   },
   // Added beside Electron's native getSelf/uninstallSelf.
   management: {

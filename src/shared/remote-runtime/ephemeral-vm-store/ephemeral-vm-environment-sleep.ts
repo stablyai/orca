@@ -1,6 +1,6 @@
 import { listEphemeralVmRuntimes } from './ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from './ephemeral-vm-runtimes'
-import { isRuntimeOwnedSshTargetId } from '../../execution-host'
+import { isRuntimeOwnedSshTargetId } from '../../execution-host/execution-host'
 import {
   getOrcadSshDeployment,
   isEphemeralVmRuntimeEnvironment,

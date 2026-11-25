@@ -1,8 +1,11 @@
 import {
   createMarkdownCodeSpanScanner,
   skipMarkdownBacktickRun
-} from './markdown-code-span-scanner'
-import { forEachMarkdownLine, getMarkdownFenceRanges } from './markdown-fence-scanner'
+} from '../../../../../../shared/markdown/markdown-code-span-scanner'
+import {
+  forEachMarkdownLine,
+  getMarkdownFenceRanges
+} from '../../../../../../shared/markdown/markdown-fence-scanner'
 
 export function stripMarkdownCode(content: string): string {
   const ranges = getMarkdownCodeRanges(content)

@@ -33,7 +33,3 @@ export async function mutateStoredHosts(
     hostListLoads.dropSharedHostListLoad()
   })
 }
-
-export function resetHostListMutationQueueForTests(): void {
-  hostListMutation = Promise.resolve()
-}

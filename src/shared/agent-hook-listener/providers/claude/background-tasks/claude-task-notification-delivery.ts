@@ -1,4 +1,4 @@
-import type { readClaudeBackgroundAgentTasks } from '../../../../claude-background-task-inventory'
+import type { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import {
   forgetStoppedClaudeShellTask,
   oweClaudeShellTaskNotifications,
@@ -7,7 +7,7 @@ import {
   recordClaudeUnconfirmedAgentNotification,
   settleClaudeTaskNotification
 } from './claude-owed-task-notifications'
-import { readClaudeTaskNotification } from '../../../../claude-task-notification-text'
+import { readClaudeTaskNotification } from './claude-task-notification-text'
 import type { HookListenerState } from '../../../listener-state'
 import { readString } from '../../../tool-input-preview'
 

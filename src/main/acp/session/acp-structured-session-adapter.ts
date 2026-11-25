@@ -23,6 +23,11 @@ import {
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
 import { readAcpLiveOptions } from '../options/acp-live-options'
+import {
+  acpPermissionWritesSettled,
+  acpRunningPermission,
+  applyAcpLivePermissionMode
+} from '../options/acp-live-permission-mode'
 import { acpControlsSettled, writeAcpSessionOption } from '../options/acp-session-option-write'
 import { acpOptionWriteBound, withAcpModelFallback } from '../turns/acp-model-command'
 import {
@@ -130,6 +135,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         return rejectedAcpDispatch(session)
       }
       await acpControlsSettled(session, signal)
+      // A mode picked before this send must reach the agent before the prompt does.
+      await acpPermissionWritesSettled(session)
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.signal?.throwIfAborted()
@@ -178,6 +185,29 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   settlePermissionTransition = stop.acpPermissionTransition((id) => this.live(id), this.graceMs)
 
+  permissionModeRequiresAcquisition: NonNullable<
+    SessionAdapter['permissionModeRequiresAcquisition']
+  > = (sessionId, mode) => {
+    const session = this.children.sessions.get(sessionId)
+    return childState.isAcpReadySession(session)
+      ? acpRunningPermission(session) !== mode
+      : undefined
+  }
+
+  runningPermissionMode: NonNullable<SessionAdapter['runningPermissionMode']> = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    return childState.isAcpReadySession(session)
+      ? (acpRunningPermission(session) ?? undefined)
+      : undefined
+  }
+
+  applyPermissionMode: NonNullable<SessionAdapter['applyPermissionMode']> = async (input) => {
+    const session = this.live(input.sessionId)
+    if (session.fence === input.fence) {
+      await applyAcpLivePermissionMode(session, input.mode, this.writeBound(session))
+    }
+  }
+
   answerPrompt: SessionAdapter['answerPrompt'] = (input) =>
     this.live(input.sessionId).prompts.answer(input)
 
@@ -207,12 +237,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return readAcpLiveOptions(session, session.permissionModes)
   }
 
-  readCommands = (sessionId: string) => {
-    const session = this.children.sessions.get(sessionId)
-    return session && childState.isAcpReadySession(session)
-      ? session.options.readCommands()
-      : undefined
-  }
+  // Not gated on ready: a list reported mid-startup is published only when it arrives.
+  readCommands = (sessionId: string) =>
+    this.children.sessions.get(sessionId)?.options.readCommands()
 
   capturePendingOutput: SessionAdapter['capturePendingOutput'] = (input) =>
     this.children.capturePendingOutput?.(input)

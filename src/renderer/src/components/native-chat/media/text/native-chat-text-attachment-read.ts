@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
-import { sharedPromiseSettlementWaiters } from '../../../../../../shared/promise-settlement-waiters'
+import { sharedPromiseSettlementWaiters } from '../../../../../../shared/concurrency/promise-settlement-waiters'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   captureRuntimeEnvironmentRequestRevision,
@@ -9,7 +9,7 @@ import {
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { AttachmentTextRead } from '../../../../../../shared/attachment-text/attachment-text-source'
-import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 
 export function createChatAttachmentReader(
   target: RuntimeClientTarget | null,

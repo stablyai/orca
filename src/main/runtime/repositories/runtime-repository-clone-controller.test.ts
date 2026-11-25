@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'

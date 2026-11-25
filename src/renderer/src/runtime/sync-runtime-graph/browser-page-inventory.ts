@@ -1,0 +1,86 @@
+import type { BrowserPageInventoryEntry } from '../../../../shared/browser/runtime/browser-page-inventory'
+import { getBrowserPageRuntimeEnvironmentId } from '../../../../shared/browser/browser-page-runtime-owner'
+import { isDocPreviewUrl } from '../../../../shared/document-preview/doc-preview-scheme'
+import type { MobileSessionWorktreeInputs } from './types'
+import type {
+  RuntimeMobileSessionTabsPublication,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+
+export function buildBrowserPageInventory(
+  inputs: Pick<
+    MobileSessionWorktreeInputs,
+    | 'browserWorkspaces'
+    | 'browserRuntimeEnvironmentId'
+    | 'pagesByBrowserWorkspaceId'
+    | 'certificateFailureByBrowserPageId'
+  >
+): BrowserPageInventoryEntry[] {
+  const inventory: BrowserPageInventoryEntry[] = []
+  for (const workspace of inputs.browserWorkspaces) {
+    const pages = inputs.pagesByBrowserWorkspaceId.get(workspace.id)
+    // Legacy workspace-as-page records have no modern page membership to enumerate.
+    if (
+      !pages?.length &&
+      workspace.pageIds === undefined &&
+      workspace.activePageId &&
+      inputs.browserRuntimeEnvironmentId === null &&
+      !workspace.docLocation &&
+      !isDocPreviewUrl(workspace.url)
+    ) {
+      inventory.push({
+        browserPageId: workspace.activePageId,
+        browserWorkspaceId: workspace.id,
+        title: workspace.title,
+        url: workspace.url,
+        profileId:
+          workspace.sessionProfileId === undefined
+            ? null
+            : (workspace.sessionProfileId ?? 'default'),
+        loadError: workspace.loadError,
+        certificateFailure: null
+      })
+    }
+    for (const page of pages ?? []) {
+      if (
+        page.docLocation ||
+        isDocPreviewUrl(page.url) ||
+        getBrowserPageRuntimeEnvironmentId(page, inputs.browserRuntimeEnvironmentId)
+      ) {
+        continue
+      }
+      inventory.push({
+        browserPageId: page.id,
+        browserWorkspaceId: workspace.id,
+        title: page.title,
+        url: page.url,
+        profileId:
+          workspace.sessionProfileId === undefined
+            ? null
+            : (workspace.sessionProfileId ?? 'default'),
+        loadError: page.loadError,
+        certificateFailure: inputs.certificateFailureByBrowserPageId.get(page.id) ?? null
+      })
+    }
+  }
+  return inventory
+}
+
+/** Main reuses the inventory it accepted at the base version; the cached and published snapshots stay complete. */
+export function withAcknowledgedBrowserPageInventory(
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  published: RuntimeMobileSessionTabsSnapshot | undefined
+): RuntimeMobileSessionTabsPublication {
+  if (
+    !published ||
+    snapshot.browserPageInventory === undefined ||
+    published.browserPageInventory !== snapshot.browserPageInventory ||
+    published.publicationEpoch !== snapshot.publicationEpoch ||
+    published.worktreeInstanceId !== snapshot.worktreeInstanceId ||
+    published.snapshotVersion >= snapshot.snapshotVersion
+  ) {
+    return snapshot
+  }
+  const { browserPageInventory: _unchanged, ...rest } = snapshot
+  return { ...rest, browserPageInventoryBaseVersion: published.snapshotVersion }
+}

@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMetadata } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
@@ -62,6 +63,33 @@ describe('CLI runtime response framing', () => {
       await expect(pending).rejects.toMatchObject({ code })
     }
   )
+
+  it('marks a timeout before the request is written as never sent', async () => {
+    vi.useFakeTimers()
+    const settled = sendRequest(metadata, 'orchestration.send', {}, 100).then(
+      () => undefined,
+      (error: unknown) => error
+    )
+    // The socket never connects, so nothing was written.
+    await vi.advanceTimersByTimeAsync(100)
+    expect(await settled).toMatchObject({ code: 'runtime_timeout', data: { requestSent: false } })
+  })
+
+  it('leaves a timeout after the request is written as possibly delivered', async () => {
+    vi.useFakeTimers()
+    const write = vi.spyOn(socket, 'write')
+    const pending = sendRequest(metadata, 'orchestration.send', {}, 100)
+    const settled = pending.then(
+      () => undefined,
+      (error: unknown) => error
+    )
+    socket.emit('connect')
+    await vi.advanceTimersByTimeAsync(100)
+    const error = await settled
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(error).toMatchObject({ code: 'runtime_timeout' })
+    expect(error).not.toHaveProperty('data.requestSent')
+  })
 
   it('rejects close with an incomplete frame and does not parse later data', async () => {
     const pending = sendRequest(metadata, 'terminal.read', {}, 30000)

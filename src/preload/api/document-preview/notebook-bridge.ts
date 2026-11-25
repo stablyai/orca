@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../../api-types'
-import type { KernelFrameEvent } from '../../../shared/notebook-kernel-types'
+import type { KernelFrameEvent } from '../../../shared/editor/notebooks/notebook-kernel-types'
 
 export const notebookApi = {
   listPythonEnvironments: (args) => ipcRenderer.invoke('notebook:listPythonEnvironments', args),

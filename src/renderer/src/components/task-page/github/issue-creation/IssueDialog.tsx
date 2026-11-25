@@ -12,7 +12,7 @@ import {
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { useTranslate } from '@/i18n/use-translate'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import IssueSourceSelector from '@/components/github/IssueSourceSelector'
 import {
@@ -172,7 +172,7 @@ export function TaskPageGitHubIssueDialog({
                 <SelectContent>
                   {selectedRepos.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
-                      <RepoBadgeLabel name={r.displayName} color={r.badgeColor} />
+                      <RepoBadgeLabel name={r.displayName} color={r.badgeColor} repo={r} />
                     </SelectItem>
                   ))}
                 </SelectContent>

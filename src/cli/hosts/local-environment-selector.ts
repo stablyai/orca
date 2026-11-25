@@ -1,4 +1,4 @@
-import { normalizeTypedName } from '../../shared/typed-name-normalization'
+import { normalizeTypedName } from '../../shared/text/typed-name-normalization'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
@@ -16,7 +16,7 @@ export async function savedEnvironmentNamedLocal(): Promise<{ id: string } | und
     import('../runtime/profile/metadata.js'),
     import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
-  return listEnvironments(getDefaultUserDataPath()).find((environment) =>
+  return (await listEnvironments(getDefaultUserDataPath())).find((environment) =>
     isLocalEnvironmentSelector(environment.name)
   )
 }

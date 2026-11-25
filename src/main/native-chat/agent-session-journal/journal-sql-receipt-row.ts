@@ -21,6 +21,7 @@ export function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptS
     case 'queue-hold':
     case 'queue-withdraw':
     case 'queue-move':
+    case 'queue-steer':
       return 'queue'
     case 'dispatch':
       return 'dispatch'

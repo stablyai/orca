@@ -20,6 +20,8 @@ type ScriptState = {
   failed: Error | null
 }
 const states = new WeakMap<Electron.Session, Map<string, ScriptState>>()
+/** Profile → extension → scripts registered with persistAcrossSessions false; kept across idle unloads. */
+const sessionScripts = new Map<string, Map<string, Record<string, unknown>[]>>()
 const scriptSchema = z.object({ id: z.string() }).loose()
 const replySchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), scripts: z.array(scriptSchema), value: z.unknown() }),
@@ -99,6 +101,31 @@ function stateFor(session: Electron.Session, extensionId: string): ScriptState {
   return state
 }
 
+export function forgetBrowserExtensionSessionContentScripts(
+  profileId: string,
+  extensionId: string
+): void {
+  keepSessionContentScripts(profileId, extensionId, [])
+}
+
+function keepSessionContentScripts(
+  profileId: string,
+  extensionId: string,
+  scripts: Record<string, unknown>[]
+): void {
+  const byExtension = sessionScripts.get(profileId) ?? new Map<string, Record<string, unknown>[]>()
+  if (scripts.length > 0) {
+    byExtension.set(extensionId, scripts)
+  } else {
+    byExtension.delete(extensionId)
+  }
+  if (byExtension.size > 0) {
+    sessionScripts.set(profileId, byExtension)
+  } else {
+    sessionScripts.delete(profileId)
+  }
+}
+
 export function forgetBrowserExtensionContentScriptRestore(
   session: Electron.Session,
   extensionId: string
@@ -122,7 +149,12 @@ function enqueue(
       throw state.failed
     }
     const store = getBrowserExtensionProfileStateStore()
-    const restore = state.restored ? [] : store.read(profileId, extension.id).contentScripts
+    const restore = state.restored
+      ? []
+      : [
+          ...store.read(profileId, extension.id).contentScripts,
+          ...(sessionScripts.get(profileId)?.get(extension.id) ?? [])
+        ]
     if (!method && restore.length === 0) {
       state.restored = true
       return
@@ -147,14 +179,65 @@ function enqueue(
     if (!reply.ok) {
       throw new Error(reply.error)
     }
-    store.update(profileId, extension.id, (stored) => ({
-      ...stored,
-      contentScripts: reply.scripts.filter((script) => script.persistAcrossSessions !== false)
-    }))
+    const contentScripts = reply.scripts.filter((script) => script.persistAcrossSessions !== false)
+    keepSessionContentScripts(
+      profileId,
+      extension.id,
+      reply.scripts.filter((script) => script.persistAcrossSessions === false)
+    )
+    // Why compare: a restore after reattach returns what was saved, and each write rewrites every profile.
+    if (
+      JSON.stringify(contentScripts) !==
+      JSON.stringify(store.read(profileId, extension.id).contentScripts)
+    ) {
+      store.update(profileId, extension.id, (stored) => ({ ...stored, contentScripts }))
+    }
     return reply.value
   })
   state.queue = run.catch(() => undefined)
   return run
+}
+
+// Serialized into a native-only extension page; keep all its dependencies inside this function.
+function unregisterAllNativeScripts(): Promise<unknown> {
+  const root: { chrome?: { scripting?: unknown } } = globalThis
+  const scripting = root.chrome?.scripting
+  if (!scripting || typeof scripting !== 'object' || !('unregisterContentScripts' in scripting)) {
+    throw new Error('Native scripting API is unavailable')
+  }
+  const { unregisterContentScripts } = scripting
+  if (typeof unregisterContentScripts !== 'function') {
+    throw new Error('Native scripting API is unavailable')
+  }
+  return Promise.resolve(unregisterContentScripts.call(scripting))
+}
+
+/**
+ * A resumed extension whose restore failed partway starts clean: no registration it half-restored
+ * stays, its scripting calls work again, and only its persistent scripts come back.
+ */
+export async function restartBrowserExtensionContentScripts(
+  session: Electron.Session,
+  profileId: string,
+  extension: Electron.Extension,
+  timeoutMs: number
+): Promise<void> {
+  forgetBrowserExtensionContentScriptRestore(session, extension.id)
+  forgetBrowserExtensionSessionContentScripts(profileId, extension.id)
+  const state = stateFor(session, extension.id)
+  const unregistered = runBrowserExtensionNativePage({
+    session,
+    extensionId: extension.id,
+    code: `(${unregisterAllNativeScripts.toString()})()`,
+    timeoutMs,
+    signal: state.signal
+  })
+  // Why first in the fresh owner's queue: a call arriving meanwhile must not restore before it.
+  state.queue = unregistered.catch((error: unknown) => {
+    state.failed = error instanceof Error ? error : new Error(String(error))
+  })
+  await unregistered
+  await restoreBrowserExtensionContentScripts(session, profileId, extension, timeoutMs)
 }
 
 export async function restoreBrowserExtensionContentScripts(

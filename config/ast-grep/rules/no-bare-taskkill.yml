@@ -1,0 +1,35 @@
+# Windows tree-kill helpers must spawn the System32 taskkill.exe, never a PATH lookup.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: no-bare-taskkill
+language: typescript
+severity: error
+message: A bare taskkill name is resolved from the cwd and PATH, so a stripped Electron PATH fails and a shadowing taskkill.exe runs instead (#44827). Spawn windowsSystem32Binary('taskkill.exe').
+files:
+  - src/**
+ignores:
+  - '**/*.test.*'
+  - '**/__tests__/**'
+rule:
+  kind: string
+  regex: '^.(?i:taskkill(\.exe)?).$'
+  not:
+    inside:
+      kind: arguments
+      inside: { kind: call_expression, has: { field: function, regex: '^windowsSystem32Binary$' } }
+---
+id: no-bare-taskkill-tsx
+language: tsx
+severity: error
+message: A bare taskkill name is resolved from the cwd and PATH, so a stripped Electron PATH fails and a shadowing taskkill.exe runs instead (#44827). Spawn windowsSystem32Binary('taskkill.exe').
+files:
+  - src/**
+ignores:
+  - '**/*.test.*'
+  - '**/__tests__/**'
+rule:
+  kind: string
+  regex: '^.(?i:taskkill(\.exe)?).$'
+  not:
+    inside:
+      kind: arguments
+      inside: { kind: call_expression, has: { field: function, regex: '^windowsSystem32Binary$' } }

@@ -108,7 +108,7 @@ One thing the release adds to Orca.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"panels"` \| `"commands"` \| `"events"` \| `"hooks"` \| `"languagePacks"` \| `"keybindings"` \| `"vmRecipes"` \| `"themes"` \| `"terminalThemes"` \| `"iconThemes"` \| `"fonts"` \| `"syntaxes"` \| `"customEditors"` \| `"newFiles"` \| `"settings"` \| `"statusBarItems"` | yes | 1.4.245 | Contribution point. Example: `"themes"` |
+| `kind` | `"panels"` \| `"commands"` \| `"events"` \| `"hooks"` \| `"languagePacks"` \| `"keybindings"` \| `"vmRecipes"` \| `"themes"` \| `"terminalThemes"` \| `"iconThemes"` \| `"fonts"` \| `"syntaxes"` \| `"customEditors"` \| `"newFiles"` \| `"settings"` \| `"statusBarItems"` \| `"mcpServers"` | yes | 1.4.245 | Contribution point. Example: `"themes"` |
 | `name` | string | yes | 1.4.245 | What the item is called in Orca. Example: `"Dusk"` |
 | `detail` | string | no | 1.4.245 | Extra context, such as file extensions. |
 
@@ -130,7 +130,7 @@ One thing the release adds to Orca.
 
 Orca's plugin browser folds related `categories` slugs into one filter and shows an unknown slug as its own. Pick the slug for what the plugin adds:
 
-- **Code languages:** `languages`, `syntaxes`, `syntax`. Syntax highlighting and grammars for programming languages.
+- **Languages:** `languages`, `syntaxes`, `syntax`. Syntax highlighting and grammars for programming languages.
 - **Translations:** `language-packs`, `localization`, `i18n`, `translations`. Language packs that show Orca's interface in another language.
 
 ## One repository can hold many plugins

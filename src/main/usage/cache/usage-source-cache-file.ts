@@ -7,16 +7,17 @@ import {
   writeFileDurable,
   type DurableFilePayload
 } from '../../filesystem/durable-file-write'
-import { encodeUsageCacheJson, readUsageCacheJson } from './usage-cache-json'
+import { encodeUsageCacheJson, parseUsageCacheJson, readUsageCacheJson } from './usage-cache-json'
+import { decodedUsageCacheText, publishGzipUsageCache } from './usage-cache-gzip'
+import { reattributeUsageSourcesForWorktrees } from '../worktree-attribution/usage-attribution-invalidation'
 
 // Only scans need bulky per-source records; worker-owned sidecars keep them off main.
 
-/** Where one provider's per-source scan cache lives, and whether this scan may start from it. */
+/** Where one provider's per-source scan cache lives, and the worktrees this scan attributes against. */
 export type UsageSourceCacheRef = {
   path: string
   schemaVersion: number
   worktreeFingerprint: string | null
-  reuse: boolean
 }
 
 export type UsageCacheSplitRequest = { cacheFile: string; sourceKey: string; providerId?: 'claude' }
@@ -31,23 +32,23 @@ export function usageSourceCachePath(cacheFile: string): string {
   return join(dir, `${name}-sources.json`)
 }
 
-/** The last scan's records; none when unreadable or from another schema, so the scan starts cold. */
+/** The last scan's records still attributed correctly; none when unreadable or from another schema. */
 export async function readUsageSourceCache<T>(ref: UsageSourceCacheRef): Promise<T[]> {
-  if (!ref.reuse) {
-    return []
-  }
   try {
-    const parsed = await readUsageCacheJson<{
+    const parsed = await parseUsageCacheJson<{
       schemaVersion: number
       worktreeFingerprint: string | null
       sources: T[]
-    }>(ref.path)
-    // The sidecar can commit before its report, so validate attribution independently.
-    return parsed?.schemaVersion === ref.schemaVersion &&
-      parsed.worktreeFingerprint === ref.worktreeFingerprint &&
-      Array.isArray(parsed.sources)
-      ? parsed.sources.filter(isSourceRecord)
-      : []
+    }>(decodedUsageCacheText(ref.path))
+    if (parsed?.schemaVersion !== ref.schemaVersion || !Array.isArray(parsed.sources)) {
+      return []
+    }
+    // The sidecar can commit before its report, so validate attribution against its own fingerprint.
+    return await reattributeUsageSourcesForWorktrees(
+      parsed.sources.filter(isSourceRecord),
+      typeof parsed.worktreeFingerprint === 'string' ? parsed.worktreeFingerprint : null,
+      ref.worktreeFingerprint
+    )
   } catch {
     return []
   }
@@ -62,14 +63,15 @@ export async function writeUsageSourceCache(
   ref: UsageSourceCacheRef,
   sources: readonly unknown[]
 ): Promise<void> {
-  await writeUsageSourceCacheData(
-    ref,
+  const encode = () =>
     encodeUsageCacheJson({
       schemaVersion: ref.schemaVersion,
       worktreeFingerprint: ref.worktreeFingerprint,
       sources
     })
-  )
+  if (!(await publishGzipUsageCache(ref.path, encode()))) {
+    await writeUsageSourceCacheData(ref, encode())
+  }
 }
 
 export async function writeUsageSourceCacheText(
@@ -117,8 +119,7 @@ export async function splitUsageCacheFile(
       path: usageSourceCachePath(request.cacheFile),
       schemaVersion: typeof report.schemaVersion === 'number' ? report.schemaVersion : 0,
       worktreeFingerprint:
-        typeof report.worktreeFingerprint === 'string' ? report.worktreeFingerprint : null,
-      reuse: true
+        typeof report.worktreeFingerprint === 'string' ? report.worktreeFingerprint : null
     },
     sources
   )

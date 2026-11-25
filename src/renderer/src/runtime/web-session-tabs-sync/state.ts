@@ -1,4 +1,5 @@
-import type { BrowserInitializationPresentation } from './browser-initialization-presentation'
+import type { PresentationRecordDrafts } from './snapshots/presentation-record-drafts'
+import type { BrowserInitializationPresentation } from './tab-projection/browser-initialization-presentation'
 import type { AppState } from '../../store/types'
 import type { RetiredTerminalTabSweepState } from '../../store/terminals/retirement/retired-terminal-tab-state-sweep'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -12,8 +13,8 @@ import type {
   BrowserCertificateFailure,
   BrowserPage,
   BrowserWorkspace
-} from '../../../../shared/browser-workspace-types'
-import type { Tab } from '../../../../shared/tab-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -43,6 +44,7 @@ export type SessionTabsListAllResult = {
 export type SnapshotFreshness = {
   publicationEpoch: string
   snapshotVersion: number
+  followApplied?: true
 }
 
 export type ReceivedSessionTabsSnapshot = SnapshotFreshness & {
@@ -156,6 +158,31 @@ export const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
   string,
   Map<string, Set<string>>
 >()
+const MAX_TRACKED_MAPPING_REVISIONS = 4096
+let hostSessionTabMappingChangeSequence = 0
+let hostSessionTabMappingsResetAt = 0
+const hostSessionTabMappingChangedAtByWorktree = new Map<string, number>()
+/** Records which workspace's host tab mappings changed; no workspace means all of them. */
+export function markHostSessionTabMappingsChanged(worktreeId?: string): void {
+  hostSessionTabMappingChangeSequence += 1
+  // Entries outlive removed workspaces; a reset bounds them and hands every workspace a new revision.
+  if (
+    worktreeId === undefined ||
+    hostSessionTabMappingChangedAtByWorktree.size >= MAX_TRACKED_MAPPING_REVISIONS
+  ) {
+    hostSessionTabMappingsResetAt = hostSessionTabMappingChangeSequence
+    hostSessionTabMappingChangedAtByWorktree.clear()
+  } else {
+    hostSessionTabMappingChangedAtByWorktree.set(worktreeId, hostSessionTabMappingChangeSequence)
+  }
+}
+/** Differs from an earlier read exactly when this workspace's host tab mappings may have changed. */
+export function hostSessionTabMappingRevision(worktreeId: string): number {
+  return Math.max(
+    hostSessionTabMappingsResetAt,
+    hostSessionTabMappingChangedAtByWorktree.get(worktreeId) ?? 0
+  )
+}
 export const hostWorkingClientBoundaryByPaneKey = new Map<
   string,
   {
@@ -193,6 +220,9 @@ export type MirroredBrowserTab = {
   previousPage?: BrowserPage
   preservesLoading: boolean
   certificateFailure: BrowserCertificateFailure | null
+  audible: boolean
+  audioMuted: boolean
+  agentDriving: boolean
   remotePageId: string
   browserProfileId?: string
   placement?: RuntimeBrowserPlacement
@@ -219,6 +249,8 @@ export type WebSessionTabsSyncState = Pick<
   | 'agentStatusEpoch'
   | 'browserPagesByWorkspace'
   | 'browserCertificateFailuresByPageId'
+  | 'browserAudiblePageIds'
+  | 'browserAudioMutedTabIds'
   | 'browserTabsByWorktree'
   | 'editorBuffers'
   | 'groupsByWorktree'
@@ -260,6 +292,8 @@ export type WebSessionTabsBatchRecordKey =
   | 'agentStatusByPaneKey'
   | 'automaticAgentResumeClaimsByTabId'
   | 'browserCertificateFailuresByPageId'
+  | 'browserAudiblePageIds'
+  | 'browserAudioMutedTabIds'
   | 'browserPagesByWorkspace'
   | 'browserTabsByWorktree'
   | 'groupsByWorktree'
@@ -282,7 +316,7 @@ export type WebSessionOpenFilesIndex = {
 export type WebSessionTabsBatchContext = {
   changedAgentPaneKeys?: Set<string>
   retractionPaneKeysByRecord?: WeakMap<object, Map<string, Set<string>>>
-  agentPaneKeysByTabId: Map<string, Set<string>> | null
   changedRecords: Set<WebSessionTabsBatchRecordKey>
+  presentationDrafts?: PresentationRecordDrafts
   openFilesIndex: WebSessionOpenFilesIndex | null
 }

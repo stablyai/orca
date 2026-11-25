@@ -5,7 +5,7 @@
 import type {
   BrowserPasswordFieldRole,
   BrowserPasswordFormKind
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import {
   autocompleteRoleToken,
   isCandidatePasswordFormField,

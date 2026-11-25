@@ -3,7 +3,7 @@ import { OrcadBundledRuntimeError } from '../runtime-launch/orcad-bundled-runtim
 import { OrcadInstanceLockError } from '../instance-lock/orcad-data-root-privacy'
 import { ProfileStateAccessError } from '../../persistence/profile-state/access/profile-state-access-error'
 import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../shared/single-instance-exit-code'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../shared/app-lifecycle/launch/single-instance-exit-code'
 import { ORCAD_EXIT_TERMINALS_NOT_DURABLE } from '../../../shared/remote-runtime/serve-supervisor/serve-supervised-terminal-durability'
 import { OrcadTerminalsNotDurableError } from './orcad-serve-supervision'
 

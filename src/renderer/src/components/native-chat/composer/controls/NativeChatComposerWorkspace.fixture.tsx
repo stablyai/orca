@@ -1,7 +1,7 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { NativeChatComposerWorkspace } from './NativeChatComposerWorkspace'
 import { nativeChatAppearanceStyle } from '../../appearance/native-chat-appearance-style'
 import { useAppStore } from '@/store'
@@ -12,6 +12,7 @@ function workspaceFixture({
   hostId = 'local',
   folder = false,
   checkout = 'orca',
+  folderName = 'notes',
   machineName = '',
   fontSize
 }: {
@@ -20,6 +21,7 @@ function workspaceFixture({
   hostId?: 'local' | `runtime:${string}` | `ssh:${string}`
   folder?: boolean
   checkout?: string
+  folderName?: string
   machineName?: string
   fontSize?: number
 } = {}) {
@@ -38,7 +40,7 @@ function workspaceFixture({
     hostId,
     instanceId: 'composer-preview-instance',
     path: repo.path,
-    displayName: folder ? 'notes' : checkout,
+    displayName: folder ? folderName : checkout,
     branch: folder ? '' : branch,
     head: folder ? '' : 'a1b2c3d4e5f6',
     isBare: false,
@@ -99,13 +101,38 @@ function workspaceFixture({
           throw new Error('The large-text case must include the visible machine context')
         }
       }
+      if (folder) {
+        const folderButton = frame.querySelector<HTMLButtonElement>(
+          `[aria-label="Copy ${folderName}"]`
+        )
+        if (!folderButton) {
+          throw new Error('The folder chip must be present')
+        }
+        // The folder icon already names the kind, so the chip shows only the name.
+        if (folderButton.textContent !== folderName) {
+          throw new Error('The folder chip must show only the folder name, with no kind suffix')
+        }
+        const name = folderButton.querySelector('span')
+        const row = folderButton.closest<HTMLElement>('[class~="@container"]')
+        if (
+          !name ||
+          !row ||
+          folderButton.getBoundingClientRect().right > row.getBoundingClientRect().right + 1
+        ) {
+          throw new Error('The folder chip must fit inside the composer footer')
+        }
+        if (folderName.length > 40 && name.scrollWidth <= name.clientWidth) {
+          throw new Error('A long folder name must truncate in a narrow composer')
+        }
+        return
+      }
       const button =
         frame.querySelector<HTMLButtonElement>('[aria-label^="Switch branch:"]') ??
         Array.from(frame.querySelectorAll<HTMLButtonElement>('button')).at(-1)
-      if (!button && !folder) {
+      if (!button) {
         throw new Error('The workspace identity control must be present')
       }
-      if (button && !folder) {
+      if (button) {
         const expectedAction = !branch
           ? 'Copy Commit a1b2c3d (not a branch)'
           : hostId.startsWith('ssh:')
@@ -203,3 +230,8 @@ export const remoteBranch = workspaceFixture({ hostId: 'runtime:preview-server' 
 export const sshBranch = workspaceFixture({ hostId: 'ssh:preview-server' })
 export const detachedCommit = workspaceFixture({ branch: '' })
 export const folderWorkspace = workspaceFixture({ folder: true, width: 320 })
+export const narrowLongFolder = workspaceFixture({
+  folder: true,
+  width: 260,
+  folderName: 'quarterly-planning-notes-and-research-for-the-design-team'
+})

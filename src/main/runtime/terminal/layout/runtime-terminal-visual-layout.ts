@@ -8,7 +8,7 @@ import type {
   RuntimeTerminalVisualPaneNode,
   RuntimeTerminalVisualTab
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 type RuntimeTerminalVisualLayoutArgs = {

@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  normalizeExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { PluginHostCallError } from './plugin-host-call-scope'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 

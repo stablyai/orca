@@ -1,5 +1,6 @@
 import type {
   RuntimeOrchestrationEnvelope,
+  RuntimeRequestGuard,
   RuntimeRequestPreparation
 } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
@@ -11,4 +12,7 @@ export type RuntimeEnvironmentCall = {
   envelope?: RuntimeOrchestrationEnvelope
   signal?: AbortSignal
   prepareRequest?: RuntimeRequestPreparation
+  prepareGuard?: RuntimeRequestGuard
+  /** A background request (a poll): an idle host's passive control socket doesn't count it as use. */
+  idlePassive?: boolean
 }

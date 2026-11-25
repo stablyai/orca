@@ -5,6 +5,8 @@ export type BrowserScreencastSubscriber = {
   done: Promise<void>
   connectionKey: string
   drivesAsMobile: boolean
+  /** Set from `ready` on when the viewer asked with `driverEvents: 1`. */
+  emitDriver?: (driver: RuntimeTerminalDriverState) => void
 }
 
 /** Only phone pairing scope claims mobile presence; the stream is shared by all client kinds. */

@@ -7,6 +7,7 @@ import { agentJournalSubmissionKey } from '../../../../shared/agent-session/jour
 import { restoreRetainedJournalInputs } from './journal-retained-inputs'
 import { readJournalLegacyCards } from '../queued-messages/journal-queue-import'
 import { journalInputOrder } from '../input-order/journal-input-order'
+import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 import { journalOutcomeSource } from '../outcomes/journal-outcome-format'
 import { readJournalOutcomes } from '../outcomes/journal-outcome-table'
 import {
@@ -123,6 +124,7 @@ export function restoreJournal(
       // Admission evidence cannot resurrect common keys retired by the frozen decoder or tail.
       state.inputs = observations.state.inputs
       state.inputs.candidates.clear()
+      getJournalInputOrder(state)?.echoClaims.readmit(state)
       acceptedPrefix = memoryJournalMap(observations.state.submissions)
     }
     restoreRetainedJournalInputs(db, state, source, prefixRevisions, acceptedPrefix)

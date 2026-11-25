@@ -1,8 +1,7 @@
 import { useEffect } from 'react'
 import { useGlobalSearchParams, useSegments } from 'expo-router'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import { usePageBridgeClient } from '../transport/connection/client-context.web'
-import { firstParam } from './route-param-reader'
+import { firstParam, readWorkspaceRouteExecutionHost } from './route-param-reader'
 import { workspaceRouteHref } from './workspace-execution-host'
 import { STANDALONE_SESSION_PARAM } from './host-stack-navigation'
 
@@ -24,7 +23,7 @@ export function useReportedPageLocation(): void {
     segments.at(-2) === 'session' && worktreeId !== ''
       ? workspaceRouteHref(
           `${host}/session/${encodeURIComponent(worktreeId)}${standalone ? `?${STANDALONE_SESSION_PARAM}=1` : ''}`,
-          normalizeExecutionHostId(firstParam(params.executionHost)) ?? undefined
+          readWorkspaceRouteExecutionHost(params.executionHost)
         )
       : host
   useEffect(() => {

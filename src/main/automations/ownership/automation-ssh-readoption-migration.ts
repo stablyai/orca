@@ -1,11 +1,14 @@
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
   TaskSourceContext,
   WorkspaceRunContext
 } from '../../../shared/work-items/task-source-context'
-import { toSshExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import {
   hostStableKey,
   parseHostStableKey

@@ -1,4 +1,4 @@
-import type { ManagedRuntimeInstallState } from '../../../../../shared/managed-runtime-install'
+import type { ManagedRuntimeInstallState } from '../../../../../shared/agent-launch/installation/managed-runtime-install'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   createRevisionedHostStateStore,
@@ -54,10 +54,17 @@ function callHost<T>(
   )
 }
 
+/** The program the shown status describes, so an action never lands on another the host now
+ *  prefers; only hosts that name it accept it. */
+function shownProgram(subject: ManagedRuntimeInstallSubject): { program?: string } {
+  const shown = installs.read(subject)
+  return shown.kind === 'known' && shown.state.program ? { program: shown.state.program } : {}
+}
+
 /** Starts, or joins, the host's install; rejects with the host's refusal. */
 export function installManagedRuntime(subject: ManagedRuntimeInstallSubject): Promise<void> {
   return installs.applyReply(subject, () =>
-    callHost<ManagedRuntimeInstallState>(subject, 'managedRuntime.install', {})
+    callHost<ManagedRuntimeInstallState>(subject, 'managedRuntime.install', shownProgram(subject))
   )
 }
 
@@ -72,6 +79,6 @@ export async function cancelManagedRuntimeInstall(
 /** Starts, or joins, the host's removal; it fails, keeping the files, while anything may run them. */
 export function removeManagedRuntime(subject: ManagedRuntimeInstallSubject): Promise<void> {
   return installs.applyReply(subject, () =>
-    callHost<ManagedRuntimeInstallState>(subject, 'managedRuntime.remove', {})
+    callHost<ManagedRuntimeInstallState>(subject, 'managedRuntime.remove', shownProgram(subject))
   )
 }

@@ -1,7 +1,7 @@
 import type {
   ActiveRightSidebarTab,
   RightSidebarExplorerView
-} from '../../../../shared/ui-chrome-types'
+} from '../../../../shared/ui-chrome/ui-chrome-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 
 const MAC_APP_DATA_SEGMENT_RE = /(^|\/)Library\/(Containers|Group Containers)\//

@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { ProviderCheckSummary } from '../../../src/shared/github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../src/shared/github/repositories/repository-identity'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -14,6 +14,7 @@ export type RepoSummary = {
   executionHostId?: ExecutionHostId | null
   issueSourcePreference?: IssueSourcePreference
   upstream?: { owner: string; repo: string; host?: string } | null
+  hiddenAt?: number
 }
 
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
@@ -27,6 +28,7 @@ export type GitHubWorkItem = {
   url: string
   labels: string[]
   updatedAt: string
+  createdAt?: string
   author: string | null
   branchName?: string
   baseRefName?: string
@@ -44,6 +46,9 @@ export type GitHubWorkItem = {
   checksSummary?: ProviderCheckSummary
   mergeable?: GitHubPRMergeableState
   mergeStateStatus?: string | null
+  autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
+  mergeQueueRequired?: boolean | null
 }
 
 export type GitHubAssignableUser = {
@@ -127,16 +132,6 @@ export type GitPushTarget = {
 export type SetupDecision = 'inherit' | 'run' | 'skip'
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
-
-export type RepoHooksResponse = {
-  hooks: { scripts?: { setup?: string } } | null
-  source: string | null
-  setupRunPolicy?: SetupRunPolicy
-  setupTrust?: {
-    contentHash: string
-    scriptContent: string
-  }
-}
 
 export type LinearProject = {
   id: string

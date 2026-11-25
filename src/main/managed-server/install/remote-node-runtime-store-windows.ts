@@ -21,7 +21,7 @@ import {
   type RemoteHostPlatform
 } from '../../ssh/remote-host/ssh-remote-platform'
 import { powerShellCommand } from '../../ssh/remote-exec/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 
 const REPARSE = '[IO.FileAttributes]::ReparsePoint'
 

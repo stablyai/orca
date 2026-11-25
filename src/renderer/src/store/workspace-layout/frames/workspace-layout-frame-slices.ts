@@ -1,6 +1,6 @@
 // Build main-owned frame slices through Serializer/restore builders (E2a); global selection stays window-owned, remote server workspaces mirror-owned. Sleeping/closed records, default marks and startup reattach remain outside frames.
 
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type {
   CarriedSessionFields,
   DesktopLayoutView,
@@ -21,10 +21,10 @@ import { openFileOfLayoutEditorView } from '../../slices/editor/tabs/open-file-l
 import type { OpenFile } from '../../slices/editor/types/open-file'
 import { editorTabLabelOf } from '../../slices/editor/tabs/editor-tab-label'
 import { isEditorTabContentType } from '../../slices/editor/tabs/editor-tab-content-type'
-import type { EditorTabView } from '../../../../../shared/editor-tab-view-types'
+import type { EditorTabView } from '../../../../../shared/editor/views/editor-tab-view-types'
 import { migrateHydratedEditorTabsAndGroups } from '../../slices/editor/file-ids/hydrated-editor-file-ids'
 import { buildHydratedTabState } from '../../slices/tabs/tabs-hydration'
-import { buildByIdIndex } from '../../../../../shared/first-row-by-id-index'
+import { buildByIdIndex } from '../../../../../shared/collections/first-row-by-id-index'
 import { restoreActiveTabIdByWorktree } from '../../terminals/hydration/workspace-terminal-active-tabs'
 import { buildWorkspaceTerminalLayoutPlan } from '../../terminals/hydration/workspace-terminal-layout-plan'
 import { buildWorkspaceTerminalRowPlan } from '../../terminals/hydration/workspace-terminal-row-plan'

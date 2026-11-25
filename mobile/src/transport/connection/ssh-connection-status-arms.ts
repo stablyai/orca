@@ -1,5 +1,5 @@
 import type { SshConnectionStatus } from '../../../../src/shared/remote-runtime/ssh/ssh-types'
-import { hostUnionArms } from '../../../../src/shared/zod-salvage'
+import { hostUnionArms } from '../../../../src/shared/validation/zod-salvage'
 
 // hostUnionArms makes additions or removals in the host union fail typecheck here.
 export const SSH_CONNECTION_STATUS = hostUnionArms<SshConnectionStatus>({

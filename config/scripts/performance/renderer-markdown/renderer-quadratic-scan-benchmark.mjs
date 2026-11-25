@@ -141,7 +141,9 @@ const importShared = (relativePath) =>
 const { buildSourceControlTree } = await importShared(
   'source-control/listing/source-control-tree.ts'
 )
-const { normalizeRelativePath, splitPathSegments } = await importShared('cross-platform-path.ts')
+const { normalizeRelativePath, splitPathSegments } = await importShared(
+  'file-access/cross-platform-path.ts'
+)
 const { compareFileNames } = await importShared('file-name-sort.ts')
 
 const changedEntries = Array.from({ length: CHANGED_FILES }, (_, index) => ({

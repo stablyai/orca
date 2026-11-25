@@ -35,6 +35,7 @@ import {
 import {
   assertLegacyHostTarget,
   createLaunchPromptInputs,
+  createdWorkspaceReport,
   legacyHostCreateResult
 } from './agent-launch-legacy-host'
 import {
@@ -118,7 +119,7 @@ export async function openAgentLaunch(
         },
         worktreeId: placed.worktreeId,
         receipt: preflight,
-        ...(placed.warning ? { warning: placed.warning } : {}),
+        ...createdWorkspaceReport(placed),
         ...promptReceipt(intent, settledAtCreation(intent, placed))
       })
       surfacePublished = true
@@ -189,7 +190,7 @@ export async function openAgentLaunch(
       outcome: created.outcome,
       worktreeId: placed.worktreeId,
       receipt: settled,
-      ...(warning ? { warning } : {}),
+      ...createdWorkspaceReport({ warning, setupTrustMismatch: placed.setupTrustMismatch }),
       ...promptReceipt(intent, settledAtCreation(intent, created))
     })
     surfacePublished = true

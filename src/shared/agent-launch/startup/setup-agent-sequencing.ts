@@ -1,18 +1,22 @@
 import { quotePosixShellUnlessPlainNoAt } from '../../shell/launch/shell-argument-quoting'
-import { encodePowerShellCommand } from '../../powershell-command-encoding'
-import { getPosixCodexShellLaunchPreflight } from '../../codex-shell-function'
-import { getPosixClaudeShellFunction } from '../../claude-shell-function'
+import { encodePowerShellCommand } from '../../shell/launch/powershell-command-encoding'
+import { getPosixCodexShellLaunchPreflight } from '../../shell/launch/agents/codex-shell-function'
+import { getPosixClaudeShellFunction } from '../../shell/launch/agents/claude-shell-function'
 import {
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
   type SetupRunnerShell
 } from './setup-runner-command'
-import { createNonSecureContextUuid } from '../../non-secure-context-uuid'
-import { quotePowerShellLiteral } from '../../powershell-native-argument'
+import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
+import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
+import { setupCompletionMarkerPrefix } from './setup-completion-marker'
 
-const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
+export const SETUP_AGENT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
+export const SETUP_WAIT_MESSAGE = 'Waiting for setup to finish before starting agent...'
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
+export const SETUP_FAILED_MESSAGE_PREFIX = 'Setup failed (exit '
+export const SETUP_WAIT_TIMEOUT_MESSAGE = 'Timed out waiting for setup before starting agent.'
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
 export const SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV = 'ORCA_SEQUENCED_SETUP_SCRIPT'
@@ -43,6 +47,8 @@ export function createSequencedSetupAgentCommands(args: {
   shell?: SetupRunnerShell
   nonce?: string
   waitTimeoutSeconds?: number
+  /** Setup also prints its completion line, so the runtime sees it finish (`isSetupTerminalRunning`). */
+  completionToken?: string
 }): SequencedSetupAgentCommands {
   const nonce = args.nonce ?? createSetupAgentSequenceNonce()
   const resolution = resolveSetupRunnerCommand(args.runnerScriptPath, args.platform, args.shell)
@@ -54,14 +60,15 @@ export function createSequencedSetupAgentCommands(args: {
     : resolution.runnerScriptPathForShell
   // Use distinct markers for overlapping launches of one setup runner.
   const markerPath = `${markerBasePath}.${nonce}.done`
-  const waitTimeoutSeconds = args.waitTimeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS
+  const waitTimeoutSeconds = args.waitTimeoutSeconds ?? SETUP_AGENT_WAIT_TIMEOUT_SECONDS
 
   if (resolution.shell === 'windows' && !posixGateForWindowsRunner) {
     return {
       setupCommand: buildWindowsSetupCommand(
         resolution.runnerScriptPathForShell,
         markerPath,
-        nonce
+        nonce,
+        args.completionToken
       ),
       startupCommand: buildWindowsStartupCommand(markerPath, nonce, waitTimeoutSeconds),
       startupEnv: {
@@ -83,7 +90,8 @@ export function createSequencedSetupAgentCommands(args: {
       [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: buildPosixSetupScript(
         resolution.command,
         markerPath,
-        nonce
+        nonce,
+        args.completionToken
       )
     },
     startupCommand: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}"'`,
@@ -94,7 +102,12 @@ export function createSequencedSetupAgentCommands(args: {
   }
 }
 
-function buildPosixSetupScript(setupCommand: string, markerPath: string, nonce: string): string {
+function buildPosixSetupScript(
+  setupCommand: string,
+  markerPath: string,
+  nonce: string,
+  completionToken?: string
+): string {
   const marker = quotePosixShellUnlessPlainNoAt(markerPath)
   const tmp = quotePosixShellUnlessPlainNoAt(`${markerPath}.tmp`)
   const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
@@ -105,6 +118,11 @@ function buildPosixSetupScript(setupCommand: string, markerPath: string, nonce: 
     'status=$?',
     `printf '%s:%s\\n' ${nonceValue} "$status" > ${tmp}`,
     `mv -f ${tmp} ${marker}`,
+    ...(completionToken
+      ? [
+          `printf '\\n%s%s\\n' ${quotePosixShellUnlessPlainNoAt(setupCompletionMarkerPrefix(completionToken))} "$status"`
+        ]
+      : []),
     'exit "$status"'
   ].join('; ')
 }
@@ -123,7 +141,7 @@ function buildPosixStartupScript(
   // Keep the interactive wrapper one line to avoid visible quote-continuation prompts.
   const script = [
     `deadline=$((SECONDS + ${timeout}));`,
-    'echo "Waiting for setup to finish before starting agent..." >&2;',
+    `echo ${quotePosixShellUnlessPlainNoAt(SETUP_WAIT_MESSAGE)} >&2;`,
     'while :; do',
     `if [ -f ${marker} ]; then`,
     `IFS=: read -r seen status < ${marker} || true;`,
@@ -132,12 +150,12 @@ function buildPosixStartupScript(
     // Announce success so “Waiting for setup...” does not linger. Install launch functions only after setup
     // may have supplied codex; fresh bash -lc does not read Orca’s wrapper.
     `if [ "$status" = "0" ]; then echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
-    'echo "Setup failed; skipping agent startup." >&2;',
+    `echo "${SETUP_FAILED_MESSAGE_PREFIX}\${status:-1}); skipping agent startup. See the Setup terminal for details." >&2;`,
     'exit "${status:-1}";',
     'fi;',
     'fi;',
     'if [ "$SECONDS" -ge "$deadline" ]; then',
-    'echo "Timed out waiting for setup before starting agent." >&2;',
+    `echo ${quotePosixShellUnlessPlainNoAt(SETUP_WAIT_TIMEOUT_MESSAGE)} >&2;`,
     'exit 124;',
     'fi;',
     'sleep 1;',
@@ -193,7 +211,8 @@ function hasUnquotedPosixCommandSeparator(command: string): boolean {
 function buildWindowsSetupCommand(
   runnerScriptPath: string,
   markerPath: string,
-  nonce: string
+  nonce: string,
+  completionToken?: string
 ): string {
   // Why: delayed expansion keeps path metacharacters as data when cmd invokes the batch runner.
   const script = [
@@ -213,6 +232,11 @@ function buildWindowsSetupCommand(
     '$utf8 = [System.Text.UTF8Encoding]::new($false)',
     '[System.IO.File]::WriteAllText($tmp, ($nonce + ":" + $setupStatus + [Environment]::NewLine), $utf8)',
     'Move-Item -LiteralPath $tmp -Destination $marker -Force',
+    ...(completionToken
+      ? [
+          `Write-Output (${quotePowerShellLiteral(setupCompletionMarkerPrefix(completionToken))} + $setupStatus)`
+        ]
+      : []),
     'exit $setupStatus'
   ].join('; ')
 
@@ -244,7 +268,7 @@ function buildWindowsStartupCommand(
     '$tmp = $marker + ".tmp"',
     `$nonce = ${quotePowerShellLiteral(nonce)}`,
     `$deadline = (Get-Date).AddSeconds(${timeout})`,
-    '[Console]::Error.WriteLine("Waiting for setup to finish before starting agent...")',
+    `[Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_WAIT_MESSAGE)})`,
     'while ($true) {',
     '  if (Test-Path -LiteralPath $marker) {',
     '    $content = Get-Content -LiteralPath $marker -TotalCount 1',
@@ -252,7 +276,7 @@ function buildWindowsStartupCommand(
     '      $setupStatus = [int]$Matches[2]',
     '      Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     '      if ($setupStatus -ne 0) {',
-    '        [Console]::Error.WriteLine("Setup failed; skipping agent startup.")',
+    `        [Console]::Error.WriteLine("${SETUP_FAILED_MESSAGE_PREFIX}$setupStatus); skipping agent startup. See the Setup terminal for details.")`,
     '        exit $setupStatus',
     '      }',
     `      $startup = $env:${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}`,
@@ -268,7 +292,7 @@ function buildWindowsStartupCommand(
     '    }',
     '  }',
     '  if ((Get-Date) -ge $deadline) {',
-    '    [Console]::Error.WriteLine("Timed out waiting for setup before starting agent.")',
+    `    [Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_WAIT_TIMEOUT_MESSAGE)})`,
     '    exit 124',
     '  }',
     '  Start-Sleep -Seconds 1',

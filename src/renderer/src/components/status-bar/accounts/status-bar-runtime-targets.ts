@@ -1,6 +1,7 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { RateLimitRuntimeTarget } from '../../../../../shared/rate-limit-types'
-import { resolveLocalAccountRuntimeTarget } from '../../../../../shared/local-account-runtime'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { RateLimitRuntimeTarget } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { resolveLocalAccountRuntimeTarget } from '../../../../../shared/agent-accounts/local-account-runtime'
+import { claudeInactiveUsageId } from '../../../../../shared/agent-accounts/claude/claude-system-default-usage'
 import { getRendererAppPlatform } from '../../../app-shell/platform/renderer-app-platform'
 import { translate } from '@/i18n/i18n'
 import { getHostRuntimeLabel } from '../../../lib/provider-accounts/account-runtime-label'
@@ -29,6 +30,9 @@ export type CodexStatusSwitchGroup = {
 }
 
 export type ClaudeStatusSwitchTarget = {
+  usageAccountId?: string
+  usableAccountId?: string | null
+  detail?: string
   id: string | null
   label: string
   active: boolean
@@ -38,6 +42,11 @@ export type ClaudeStatusSwitchTarget = {
   /** Its folder holds no login yet; the switcher offers Sign in on it. */
   needsSignIn?: boolean
   hint?: string | null
+}
+
+/** Inactive-usage key: a saved row reads its usable duplicate; System default reads the host login. */
+export function claudeRowUsageId(target: ClaudeStatusSwitchTarget): string | null {
+  return target.id ? (target.usageAccountId ?? target.id) : claudeInactiveUsageId(target)
 }
 
 export type ClaudeStatusSwitchGroup = {

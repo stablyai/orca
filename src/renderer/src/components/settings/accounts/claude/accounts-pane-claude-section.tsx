@@ -1,7 +1,12 @@
-import { Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
+import {
+  getSystemDefaultLanes,
+  clearsHiddenWslLanes,
+  systemDefaultCandidates
+} from '../scope/system-default-lanes'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { ButtonGroup } from '../../../ui/button-group'
@@ -10,21 +15,13 @@ import { ClaudeIcon } from '../../../status-bar/accounts/provider-icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ClaudeOAuthUsageSetting } from './claude-oauth-usage-setting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
-import {
-  getProviderAccountRuntime,
-  providerAccountIsActiveInView
-} from '../../../provider-accounts/provider-account-visibility'
-import {
-  formatAccountTimestamp,
-  getClaudeAccountRuntimeLabel
-} from '../scope/accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import {
   canOfferClaudeSignInLink,
   ClaudeSignInLinkMenu,
   withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
-import { addClaudeAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
+import { signInClaudeAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { HostAccountSignInPrompt } from '../sign-in/HostAccountSignInPrompt'
 import {
   accountAdditionShownInPrompt,
@@ -32,6 +29,7 @@ import {
   trackAccountAddition
 } from '../sign-in/account-add-cancel-target'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { renderClaudeAccountRow } from './accounts-pane-claude-account-row'
 
 export function renderClaudeAccountsSection(
   model: AccountsPaneSectionModel,
@@ -49,7 +47,6 @@ export function renderClaudeAccountsSection(
     recordFeatureInteraction,
     remoteAccountScopeNotice,
     runClaudeAccountAction,
-    setRemoveClaudeTarget,
     settings,
     accountOwner,
     systemClaudeActive,
@@ -57,6 +54,21 @@ export function renderClaudeAccountsSection(
     visibleClaudeAccounts,
     wslCapabilitiesLoading
   } = model
+  // Remote Claude has no targeted select, so System default resets only the shown lane and says so.
+  const skipsWslLanes = clearsHiddenWslLanes(
+    getSystemDefaultLanes(
+      accountRuntime,
+      systemDefaultCandidates(
+        claudeAccounts.accounts,
+        visibleClaudeAccounts,
+        accountVisibilityOptions
+      ),
+      claudeAccounts,
+      isRemoteAccountScope
+    )
+  )
+  // The shown lane itself is a remote WSL lane, which the host cannot reset at all.
+  const shownLaneBlocked = isRemoteAccountScope && accountRuntime.runtime === 'wsl'
   // System default belongs to the host home, never a WSL distro.
   const systemDefaultEmail =
     accountRuntime.runtime === 'host' ? claudeAccounts.systemDefaultEmail : undefined
@@ -74,7 +86,7 @@ export function renderClaudeAccountsSection(
     runClaudeAccountAction('adding', () =>
       trackAccountAddition('claude', accountOwner, () =>
         accountOwner.kind === 'environment'
-          ? addClaudeAccountOnHost(accountOwner)
+          ? signInClaudeAccountOnHost(accountOwner)
           : withCopiedClaudeLink(
               copyLink,
               window.api.claudeAccounts.add({
@@ -189,7 +201,7 @@ export function renderClaudeAccountsSection(
                   })
                 )
               }
-              disabled={claudeAction !== 'idle' || accountRuntimeUnavailable}
+              disabled={claudeAction !== 'idle' || accountRuntimeUnavailable || shownLaneBlocked}
               className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
                 systemClaudeActive
                   ? 'border-foreground/20 bg-accent/15'
@@ -215,11 +227,16 @@ export function renderClaudeAccountsSection(
                   ) : null}
                 </div>
                 <span className="truncate text-[11px] text-muted-foreground">
-                  {t(
-                    'auto.components.settings.AccountsPane.e05d0ff737',
-                    'Use your current {{value0}} Claude login.',
-                    { value0: accountRuntimeSentenceLabel }
-                  )}
+                  {skipsWslLanes || shownLaneBlocked
+                    ? t(
+                        'accounts.selection.claudeWslLanesNotReset',
+                        "WSL Claude accounts can't be reset from here yet."
+                      )
+                    : t(
+                        'auto.components.settings.AccountsPane.e05d0ff737',
+                        'Use your current {{value0}} Claude login.',
+                        { value0: accountRuntimeSentenceLabel }
+                      )}
                 </span>
               </div>
             </button>
@@ -256,132 +273,9 @@ export function renderClaudeAccountsSection(
                     )}
               </div>
             ) : (
-              visibleClaudeAccounts.map((account) => {
-                const isActive = providerAccountIsActiveInView(
-                  account,
-                  claudeAccounts,
-                  accountRuntime,
-                  accountVisibilityOptions
-                )
-                const isReauthing = claudeAction === `reauth:${account.id}`
-                const isBusy = claudeAction !== 'idle' || accountRuntimeUnavailable
-                const accountRuntimeView = getProviderAccountRuntime(account)
-                const reauthenticate = (copyLink: boolean): Promise<void> =>
-                  runClaudeAccountAction(
-                    `reauth:${account.id}`,
-                    () =>
-                      withCopiedClaudeLink(
-                        copyLink,
-                        window.api.claudeAccounts.reauthenticate({
-                          accountId: account.id,
-                          copyLink
-                        })
-                      ),
-                    accountRuntimeView
-                  )
-
-                return (
-                  <div
-                    key={account.id}
-                    className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-                      isActive
-                        ? 'border-foreground/20 bg-accent/15'
-                        : 'border-border/70 hover:border-border hover:bg-accent/8'
-                    }`}
-                  >
-                    <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void runClaudeAccountAction(
-                            `select:${account.id}`,
-                            () =>
-                              selectClaudeProviderAccount(accountOwner, {
-                                accountId: account.id,
-                                ...accountRuntimeView
-                              }),
-                            accountRuntimeView
-                          )
-                        }}
-                        disabled={isBusy || account.needsSignIn}
-                        className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="truncate text-sm font-medium">{account.email}</span>
-                          <Badge
-                            variant="outline"
-                            className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
-                          >
-                            {getClaudeAccountRuntimeLabel(account, accountRuntime.label)}
-                          </Badge>
-                          {isActive ? (
-                            <Badge
-                              variant="outline"
-                              className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
-                            >
-                              {t('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <span className="truncate text-[11px] text-muted-foreground">
-                          {account.needsSignIn
-                            ? t(
-                                'accounts.claude.signInRequired',
-                                'Sign in again to use this account'
-                              )
-                            : account.organizationName
-                              ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}`
-                              : formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}
-                        </span>
-                      </button>
-                      <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
-                        <ButtonGroup>
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              void reauthenticate(false)
-                            }}
-                            disabled={isRemoteAccountScope || isBusy}
-                            className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                          >
-                            {isReauthing ? (
-                              <Loader2 className="size-3 animate-spin" />
-                            ) : (
-                              <RefreshCw className="size-3" />
-                            )}
-                            {t('accounts.claude.signInAgain', 'Sign in again')}
-                          </Button>
-                          {canOfferClaudeSignInLink(accountRuntimeView.runtime) ? (
-                            <ClaudeSignInLinkMenu
-                              variant="ghost"
-                              disabled={isRemoteAccountScope || isBusy}
-                              onCopyLink={() => void reauthenticate(true)}
-                            />
-                          ) : null}
-                        </ButtonGroup>
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            setRemoveClaudeTarget({
-                              id: account.id,
-                              runtime: getProviderAccountRuntime(account)
-                            })
-                          }}
-                          disabled={isBusy}
-                          className="h-6 px-2 text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="size-3" />
-                          {t('auto.components.settings.AccountsPane.db209ee572', 'Remove')}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })
+              visibleClaudeAccounts.map((account) =>
+                renderClaudeAccountRow(account, model, t, intlLocale)
+              )
             )}
           </div>
         </SearchableSetting>

@@ -9,7 +9,10 @@ import {
 
 import { cancelUnreadResponseBody } from '../../../lib/unread-response-body'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 const API_TIMEOUT_MS = 15_000
 

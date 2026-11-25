@@ -12,7 +12,7 @@ import {
   continueMainAgentStatus,
   mainAgentTurnInterrupted
 } from '../../../../agent-status/lifecycle/agent-lead-status-fold'
-import type { ClaudeSubagentRoster } from '../../../../claude-subagent-roster'
+import type { ClaudeSubagentRoster } from './claude-subagent-roster'
 import type { AgentHookEventPayload } from '../../../listener-event'
 import type { HookListenerState } from '../../../listener-state'
 import type { ClaudeLeadTurnState } from '../../../main-agent-turn-state'
@@ -102,17 +102,29 @@ export function getOrCreateClaudeSubagentRoster(
 export function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
   paneKey: string,
-  hasRunningNonAgentTask: boolean
+  inventory: { hasRunningNonAgentTask: boolean; runningNonAgentTaskCommands: readonly string[] }
 ): void {
-  if (hasRunningNonAgentTask) {
-    state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+  if (inventory.hasRunningNonAgentTask) {
+    state.claudeRunningNonAgentTasksByPaneKey.set(paneKey, inventory.runningNonAgentTaskCommands)
   } else {
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
   }
 }
 
 export function readClaudeLeadModel(hookPayload: Record<string, unknown>): string | undefined {
   return normalizeOptionalField(hookPayload.model, AGENT_MODEL_MAX_LENGTH)
+}
+
+/** A model observed outside the hooks (/model fires none); later lead events rebuild the row from it. */
+export function retainClaudeLeadModel(
+  state: HookListenerState,
+  paneKey: string,
+  model: string
+): void {
+  const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+  if (lead && lead.model !== model) {
+    state.claudeLeadStateByPaneKey.set(paneKey, { ...lead, model })
+  }
 }
 
 /** Keep same-state lead clocks continuous; explicit restored stash times take precedence. */
@@ -123,12 +135,16 @@ export function setClaudeMainAgentTurnState(
   now = Date.now()
 ): ClaudeLeadTurnState {
   const previous = state.claudeLeadStateByPaneKey.get(paneKey)
-  const { state: nextState, outcome, stateStartedAt, model, ...rest } = next
+  const { state: nextState, outcome, failure, stateStartedAt, model, ...rest } = next
   // Lead events that omit the model keep the last reported one.
   const retainedModel = model || previous?.model
   const record: ClaudeLeadTurnState = {
     ...rest,
-    ...continueMainAgentStatus(previous, { state: nextState, outcome, stateStartedAt }, now),
+    ...continueMainAgentStatus(
+      previous,
+      { state: nextState, outcome, failure, stateStartedAt },
+      now
+    ),
     ...(retainedModel ? { model: retainedModel } : {})
   }
   state.claudeLeadStateByPaneKey.set(paneKey, record)
@@ -146,6 +162,9 @@ export function claudeMainAgentStatusForPayload(
   return {
     state: own.state,
     ...(own.state === 'done' && own.outcome ? { outcome: own.outcome } : {}),
+    ...(own.state === 'done' && own.outcome === 'failure' && own.failure
+      ? { failure: own.failure }
+      : {}),
     stateStartedAt: own.stateStartedAt
   }
 }
@@ -224,6 +243,7 @@ export function seedClaudeLeadTurnFromPersistedStatus(
     setClaudeMainAgentTurnState(state, paneKey, {
       state: 'done',
       ...(mainAgent.outcome ? { outcome: mainAgent.outcome } : {}),
+      ...(mainAgent.failure ? { failure: mainAgent.failure } : {}),
       stateStartedAt: mainAgent.stateStartedAt,
       ...(status.payload.turnCompletedAt !== undefined
         ? { turnCompletedAt: status.payload.turnCompletedAt }

@@ -9,7 +9,7 @@ import { useAppStore } from '@/store/index'
 import {
   bundledSkillNudgeEntries,
   bundledSkillNudgeKey
-} from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
 import { autoUpdateUnmodifiedSkills } from './skill-freshness-auto-update'
 

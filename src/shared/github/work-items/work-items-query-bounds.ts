@@ -1,4 +1,4 @@
-import { isClipboardTextByteLengthOverLimit } from '../../clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-text'
 
 export const GITHUB_WORK_ITEMS_QUERY_MAX_BYTES = 8 * 1024
 

@@ -1,8 +1,9 @@
+import { useNativeChatPaneLifetimeEffect } from '../../../pane/ownership/native-chat-pane-lifetime'
 // Give each press its own operation ID; join pending targeted Stops only for older hosts. Command settlement survives provider changes; late pane presentation does not.
 
 import { AGENT_SESSION_GOAL_CONTROL_COPY as GOAL_COPY } from '../../../../../../../shared/agent-session/view/agent-session-goal-control-copy'
 import { agentSessionGoalControlWords } from '../../goals/agent-session-goal-control-words'
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import type { AgentSessionMutationResult } from '../../../../../../../shared/agent-session/agent-session-wire'
 import {
@@ -89,12 +90,14 @@ export function useStructuredAgentSessionMutate(args: {
   const inFlightStops = useRef(new Map<string, Promise<ExecutionResult<unknown>>>())
   const presentation = useRef<object | null>(null)
   const hostKey = structuredAgentSessionHostKey(target)
-  useLayoutEffect(() => {
-    presentation.current = enabled ? {} : null
-    return () => {
-      presentation.current = null
-    }
-  }, [enabled, hostKey, sessionId])
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      presentation.current = enabled ? {} : null
+      return () => {
+        presentation.current = null
+      }
+    }, [enabled, hostKey, sessionId])
+  )
   const capturePresentation = useCallback(() => {
     const visit = presentation.current
     return () => visit !== null && presentation.current === visit

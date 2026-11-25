@@ -1,5 +1,5 @@
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
-import '../../../../../shared/keybindings'
+
 import {
   getEffectiveKeybindingsForDefinition,
   keybindingIsActiveInContext

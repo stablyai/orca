@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { useGlobalSearchParams, usePathname } from 'expo-router'
-import { isRemoteExecutionHostId } from '../../../../src/shared/execution-host'
+import { isRemoteExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { firstParam } from '../../navigation/route-param-reader'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { useHostClient } from '../../transport/connection/host-client-hooks'

@@ -1,8 +1,8 @@
 import type { ActiveWorktreeStateTransition } from '../../worktrees/session/worktree-selection-contract'
-import type { TabGroup } from '../../../../../../shared/tab-types'
+import type { TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../../types'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { sanitizeRecentTabIds } from '../../tabs/tab-selection-history'
 import {
   nextActiveIdAfterRemoval,
@@ -17,7 +17,10 @@ import type {
 } from '../types/restored-editor-owner'
 import { resolveRestoredEditorOwnerDestination } from './restored-editor-owner-destination'
 import { rekeyRestoredEditorTabsInPlace } from './restored-editor-owner-in-place'
-import { replaceRecordEntries, replaceTabBuckets } from '../../../keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../../record-transitions/keyed-record-transitions'
 
 /** The group a moved restored tab joins: the workspace's active one, else its first, else a new one. */
 export function restoredEditorTargetGroupId(

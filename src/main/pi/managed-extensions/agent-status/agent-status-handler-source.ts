@@ -1,7 +1,7 @@
 import { getOmpModelCommandSourceLines } from './omp-model-command-source'
 import { getPiPrefillHandlerSourceLines } from '../prefill-extension-source'
 import { getAgentStatusInputRedactionSourceLines } from './agent-status-input-redaction-source'
-import type { PiAgentKind } from '../../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { getOmpSessionOwnerHandlerSourceLines } from './omp-session-status-owner-source'
 import { getOmpPlanReviewHandlerSourceLines } from './omp-plan-review-source'
 import { getPiAgentStatusUiPromptHandlerSourceLines } from './agent-status-ui-prompt-source'
@@ -21,7 +21,8 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
       ? [
           "  onStatus('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
-          ...(kind === 'pi' ? ['    piUiPromptDepth = 0'] : []),
+          ...(kind === 'pi' ? ['    piUiPromptDepth = 0', '    captureNativeChatUi(ctx)'] : []),
+          '    syncHeldTurnRepostCheck()',
           '    // Reload replaces registration without ending the turn; preserve status and unread state.',
           "    if (event.reason === 'reload') return",
           "    post('session_start')",

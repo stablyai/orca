@@ -1,6 +1,6 @@
 import { githubRepoIdentityKey } from '../github/repositories/repository-identity-key'
 import type { TaskProvider } from './task-providers'
-import type { ProjectProviderIdentity } from '../project-types'
+import type { ProjectProviderIdentity } from '../project/project-types'
 
 export type GitHubTaskProviderIdentity = ProjectProviderIdentity & {
   provider: 'github'

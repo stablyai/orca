@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { advertisedUrlWatcher } from '../../ports/advertised-url-watcher'
 import { localhostWorktreeLabelProxy } from '../../ports/workspace-labels/localhost-worktree-label-proxy'
 import { deleteWorktreeHistoryDir } from '../../pty/history/terminal-history-deletion'

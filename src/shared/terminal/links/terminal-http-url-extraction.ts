@@ -3,7 +3,7 @@ import {
   IPV6_HTTP_HOST_SOURCE,
   isProseUrlTerminator,
   PROSE_HTTP_URL_SOURCE
-} from '../../prose-url-boundary'
+} from '../../text/prose-url-boundary'
 
 const IPV6_HTTP_AUTHORITY = new RegExp(String.raw`^https?:\/\/${IPV6_HTTP_HOST_SOURCE}`, 'iu')
 

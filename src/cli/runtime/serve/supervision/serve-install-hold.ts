@@ -2,7 +2,7 @@ import { existsSync, statSync } from 'node:fs'
 import {
   isShipItRunningForBundle,
   listProcessCommands
-} from '../../../../shared/shipit-process-listing'
+} from '../../../../shared/desktop-distribution/macos/shipit-process-listing'
 import { macAppBundleOf } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 
 export type ServeInstallEvidence =

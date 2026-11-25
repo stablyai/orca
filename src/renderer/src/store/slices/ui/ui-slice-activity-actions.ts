@@ -1,5 +1,7 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
+import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
+import { linkRecordWrite } from '@/store/record-transitions/keyed-record-transitions'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   collectAcknowledgedAgentNotificationId,
@@ -18,6 +20,8 @@ type ActivityActions = Pick<
   | 'manuallyUnreadTurnsByPaneKey'
   | 'clearManuallyUnreadTurns'
 >
+
+const ACKNOWLEDGEMENT_REFRESH_MS = 24 * 60 * 60 * 1000
 
 export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): ActivityActions {
   return {
@@ -39,8 +43,8 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             delete nextUnreadCompletions[key]
           }
           const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
-          let stamp = now
-          const liveEntry = s.agentStatusByPaneKey?.[key]
+          let known = 0
+          const liveEntry = s.agentStatusByPaneKey.get(key)
           if (liveEntry) {
             collectAcknowledgedAgentNotificationId({
               state: s,
@@ -50,13 +54,23 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
               stateStartedAt: liveEntry.stateStartedAt,
               previousAckAt: prev
             })
-            stamp = Math.max(stamp, latestAgentTurnTimestamp(liveEntry))
+            known = latestAgentTurnTimestamp(liveEntry)
           }
           for (const unsupported of migrationUnsupported) {
             if (unsupported.paneKey === key) {
-              stamp = Math.max(stamp, usableTimestamp(unsupported.updatedAt))
+              known = Math.max(known, usableTimestamp(unsupported.updatedAt))
             }
           }
+          // A stamp already covering every known turn changes no reader; re-stamping costs a persisted UI write per click.
+          // Refresh it once a day anyway so hydration's newest-entries cap can't drop a stamp the user keeps renewing.
+          if (
+            s.acknowledgedAgentsByPaneKey[key] !== undefined &&
+            prev >= known &&
+            now - prev < ACKNOWLEDGEMENT_REFRESH_MS
+          ) {
+            continue
+          }
+          const stamp = Math.max(now, known)
           if (prev < stamp) {
             next ??= { ...s.acknowledgedAgentsByPaneKey }
             next[key] = stamp
@@ -73,7 +87,16 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           return s
         }
         return {
-          ...(next ? { acknowledgedAgentsByPaneKey: next } : {}),
+          ...(next
+            ? {
+                // Card unread readers skip acknowledgements of panes they do not show.
+                acknowledgedAgentsByPaneKey: linkRecordWrite(
+                  next,
+                  s.acknowledgedAgentsByPaneKey,
+                  paneKeys
+                )
+              }
+            : {}),
           ...(nextUnreadCompletions ? { unreadAgentCompletionPanes: nextUnreadCompletions } : {}),
           ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
         }
@@ -95,7 +118,8 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             next ??= { ...s.acknowledgedAgentsByPaneKey }
             delete next[key]
           }
-          const turnTimestamp = s.agentStatusByPaneKey?.[key]?.stateStartedAt
+          const liveEntry = s.agentStatusByPaneKey.get(key)
+          const turnTimestamp = liveEntry ? agentAttentionTurnAt(liveEntry) : undefined
           if (
             turnTimestamp !== undefined &&
             s.manuallyUnreadTurnsByPaneKey[key] !== turnTimestamp
@@ -108,7 +132,16 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           return s
         }
         return {
-          ...(next ? { acknowledgedAgentsByPaneKey: next } : {}),
+          ...(next
+            ? {
+                // Card unread readers skip acknowledgements of panes they do not show.
+                acknowledgedAgentsByPaneKey: linkRecordWrite(
+                  next,
+                  s.acknowledgedAgentsByPaneKey,
+                  paneKeys
+                )
+              }
+            : {}),
           ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
         }
       }),

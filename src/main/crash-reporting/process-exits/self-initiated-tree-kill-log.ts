@@ -1,4 +1,4 @@
-import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
+import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import type { ProcessTreeKillScope } from '@orca/process-host/process-tree-kill-gate'
 import { recordCoalescedDurableCrashBreadcrumb } from '../breadcrumbs/durable-crash-breadcrumb'
 
@@ -132,8 +132,4 @@ export function selfInitiatedTreeKillDetails(
       : {}),
     selfInitiatedKills: dropped > 0 ? `${kept.join(', ')} (+${dropped} more)` : kept.join(', ')
   }
-}
-
-export function resetSelfInitiatedTreeKillLogForTest(): void {
-  selfInitiatedKills = []
 }

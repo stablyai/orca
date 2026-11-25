@@ -89,7 +89,7 @@ export function openTerminal(
     () => pane.webglAddon != null
   )
 
-  pane.compositionHandler = installTerminalImeCandidateAnchor(terminal)
+  pane.imeCandidateAnchorCleanup = installTerminalImeCandidateAnchor(terminal)
 
   pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
   pane.domBlockFillCleanup = attachDomBlockFill(terminal)
@@ -196,11 +196,8 @@ export function disposePane(
     pane.arabicShapingJoinerCleanup?.()
   } catch {}
   pane.arabicShapingJoinerCleanup = null
-  if (pane.compositionHandler) {
-    pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler)
-    pane.terminal.element?.removeEventListener('compositionupdate', pane.compositionHandler)
-    pane.compositionHandler = null
-  }
+  pane.imeCandidateAnchorCleanup?.()
+  pane.imeCandidateAnchorCleanup = null
   try {
     clearPendingSplitScrollRestore(pane)
   } catch {}

@@ -8,11 +8,8 @@ import {
   beginPtySpawnForWorktree
 } from '../host-env/fresh-spawn-routing'
 import { makePaneSpawnReservationKey } from '../pane/spawn-reservation'
-import {
-  assemblePtySpawnEnvDeletions,
-  assemblePtySpawnLaunchOptions,
-  seedPtySpawnSize
-} from '../spawn-options-assembly'
+import { assemblePtySpawnLaunchOptions, seedPtySpawnSize } from '../spawn/spawn-options-assembly'
+import { assemblePtySpawnEnvDeletions } from '../spawn/spawn-env-deletions'
 import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
@@ -85,13 +82,18 @@ export async function buildRuntimePtySpawnOptions(
     sessionId: ctx.sessionId,
     spawnIntent: ctx.preAdoptedStablePane ? undefined : args.spawnIntent,
     historyIsolationEnabled,
+    headlessHost: ctx.deps.runtime?.servesWithoutWindow?.() === true,
     getSettings: ctx.deps.getSettings,
     store: ctx.deps.store,
     claudeAuth: ctx.claudeAuth
   })
   ctx.spawnOptions = launch.spawnOptions
   ctx.env = launch.env
+  if (launch.env) {
+    ctx.deps.runtime?.shareClaudeAgentTeamsLeadMcpEnv(launch.env)
+  }
   ctx.launchCommand = launch.launchCommand
+  ctx.terminalMcp = launch.terminalMcp
   ctx.provisionalPtySize = seedPtySpawnSize({
     sessionId: ctx.sessionId,
     sessionAppId: ctx.effectiveSessionAppId,

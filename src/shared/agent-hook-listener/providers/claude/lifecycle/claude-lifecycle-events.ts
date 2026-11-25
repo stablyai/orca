@@ -11,7 +11,7 @@ import {
   idleClaudeTeammateByName,
   stopClaudeSubagent,
   upsertWorkingClaudeSubagent
-} from '../../../../claude-subagent-roster'
+} from './claude-subagent-roster'
 import type { HookListenerState } from '../../../listener-state'
 import { claudeRowHasUnlistedLiveWork, resolveClaudePaneStatus } from './claude-pane-hold-evidence'
 import { readString } from '../../../tool-input-preview'

@@ -14,7 +14,7 @@ import {
 import { PluginVmRecipeRegistry } from './plugin-vm-recipe-registry'
 import { PluginCommandRegistry } from '../commands/plugin-command-registry'
 import { verifyDeclarativePluginContent } from '../artifacts/plugin-declarative-content-integrity'
-import type { KeybindingOverrides } from '../../../shared/keybindings'
+import type { KeybindingOverrides } from '../../../shared/keybindings/types'
 import type { PluginAppearanceService } from '../appearance/plugin-appearance-service'
 import type { PluginServiceOptions } from '../plugin-service-options'
 

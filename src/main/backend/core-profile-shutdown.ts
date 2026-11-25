@@ -6,6 +6,8 @@ import { flushOrcadProfileStoreForShutdown } from '../orcad/host-lifecycle/orcad
 export class BackendCoreProfileShutdown {
   store?: Pick<Store, 'flushPendingOrThrowAsync' | 'flushFinalOrThrowAsync' | 'freezeWritesAsync'>
   paneGrids?: { flushPaneGrids(): Promise<void> | null }
+  /** A restart on a daemon that can't repaint trusts a quiet agent's frame only through this. */
+  paintLedger?: { saveReattachedPaintLedger(): Promise<void> }
 
   private checkpointing?: Promise<void>
 
@@ -17,8 +19,13 @@ export class BackendCoreProfileShutdown {
 
   readonly finalize = async (): Promise<void> => {
     await this.checkpointing?.catch(() => {})
-    if (this.store) {
-      await flushOrcadProfileStoreForShutdown(this.store, this.paneGrids)
+    // Saved while the daemon is still connected; its disconnect runs after this cleanup.
+    const [, flushed] = await Promise.allSettled([
+      this.paintLedger?.saveReattachedPaintLedger(),
+      this.store ? flushOrcadProfileStoreForShutdown(this.store, this.paneGrids) : undefined
+    ])
+    if (flushed.status === 'rejected') {
+      throw flushed.reason
     }
   }
 }

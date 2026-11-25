@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
-import type { GitLabMRInvolvement } from '../../../shared/gitlab-types'
+import type { GitLabMRInvolvement } from '../../../shared/gitlab/gitlab-types'
 import {
   normalizeGitLabMRInvolvement,
   normalizeGitLabMRListState,

@@ -1,11 +1,11 @@
 // Mark the first row that arrived or kept growing while the reader was away.
 
 import { useCallback, useMemo, useState } from 'react'
-import { useOrcaWindowForegroundFocused } from '@/hooks/use-orca-window-foreground-focused'
+import { useOrcaWindowForegroundFocused } from '@/attention/use-orca-window-foreground-focused'
 import { compareAgentJournalPositions } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
 import type { AgentJournalPosition } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { useAppStore } from '@/store'
-import { nativeChatMarksNewMessages } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
+import { nativeChatMarksNewMessages } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import {
   nativeChatSlotIndexOf,
   nativeChatSlotKey
@@ -13,10 +13,21 @@ import {
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 
 /** Use journal positions for conversation rows, including folded-turn bars; terminal-backed rows have none and remain unmarked. */
-function rowPosition(slot: NativeChatTranscriptSlot): AgentJournalPosition | undefined {
-  return slot.kind === 'message' && (slot.drawsMessage || slot.statusAbove)
-    ? slot.message.journalPosition
-    : undefined
+export function nativeChatSlotJournalPosition(
+  slot: NativeChatTranscriptSlot
+): AgentJournalPosition | undefined {
+  if (slot.kind !== 'message' || !(slot.drawsMessage || slot.statusAbove)) {
+    return undefined
+  }
+  // Item notes are as new as the newest note in them, folded ones included.
+  let newest = slot.message.journalPosition
+  for (const note of slot.itemNotes ?? []) {
+    const at = note.botItemNote?.position ?? note.journalPosition
+    if (at && (!newest || compareAgentJournalPositions(at, newest) > 0)) {
+      newest = at
+    }
+  }
+  return newest
 }
 
 /** Before every row the journal places: what the reader has read to when no row precedes. */
@@ -42,7 +53,7 @@ function newestRowPosition(
 ): AgentJournalPosition {
   let newest = BEFORE_EVERY_ROW
   for (const slot of slots) {
-    const at = rowPosition(slot)
+    const at = nativeChatSlotJournalPosition(slot)
     if (
       at &&
       (!limit || compareAgentJournalPositions(at, limit) < 0) &&
@@ -65,9 +76,9 @@ function nativeChatLeftAt(
       slot.kind === 'message' &&
       slot.activeTurnIsWorking &&
       slot.message.role !== 'user' &&
-      rowPosition(slot) !== undefined
+      nativeChatSlotJournalPosition(slot) !== undefined
   )
-  const at = writer && rowPosition(writer)
+  const at = writer && nativeChatSlotJournalPosition(writer)
   const writing = at
     ? { key: nativeChatSlotKey(writer), size: rowSize(writer), before: newestRowPosition(all, at) }
     : null
@@ -88,7 +99,7 @@ function isMissedRow(
   after: AgentJournalPosition,
   through: AgentJournalPosition
 ): boolean {
-  const at = rowPosition(slot)
+  const at = nativeChatSlotJournalPosition(slot)
   return (
     at !== undefined &&
     compareAgentJournalPositions(at, after) > 0 &&

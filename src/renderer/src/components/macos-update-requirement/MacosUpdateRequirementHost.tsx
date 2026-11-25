@@ -1,5 +1,5 @@
 import { Suspense, type JSX } from 'react'
-import { ModalBoundary } from '@/app-shell/app-root-surface-boundaries'
+import { ModalBoundary } from '@/app-shell/root-surfaces/app-root-surface-boundaries'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'

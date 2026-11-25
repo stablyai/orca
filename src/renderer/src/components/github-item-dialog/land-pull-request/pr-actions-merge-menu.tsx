@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/class-names'
-import type { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import type { presentGitHubPRMergeState } from '@/components/github/github-pr-merge-state'
 import type { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
 import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { useTranslate } from '@/i18n/use-translate'

@@ -1,9 +1,15 @@
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { AgentSessionWorkspaceKind } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { projectGroupIdFromRepoId } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
-import type { AgentSessionRestartActivity } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
+import {
+  restartActivityWaitsOnPerson,
+  type AgentSessionRestartActivity
+} from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 import type { StructuredAgentId } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 
 export type ResumeCandidate = {
@@ -11,7 +17,7 @@ export type ResumeCandidate = {
   workspaceId: string
   /** Older clients without registered-agent support receive only Claude/Codex offers. */
   agent: StructuredAgentId
-  trigger: 'quit' | 'update'
+  trigger: 'quit' | 'update' | 'crash'
   latestPrompt: string
   recordedAt: number
   /** Optional on the wire: an older host omits them, and a row must still render. */
@@ -20,6 +26,8 @@ export type ResumeCandidate = {
   model?: string
   /** What the chat was doing, snapshotted by the host as it stopped; an older host omits it. */
   activity?: AgentSessionRestartActivity
+  /** A terminal worker offered beside the chats: there is no chat to open. */
+  surface?: 'terminal'
 }
 
 /** Keep refused/unconfirmed offers until manual continuation, successful retry, dismissal or chat closure. */
@@ -216,4 +224,11 @@ export function resolveResumeGroupHeader(
 
 export function allResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
   return candidates.map((candidate) => candidate.sessionId)
+}
+
+/** Chats that were working; chats waiting on the person stay offered until they choose. */
+export function launchResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
+  return allResumeSessionIds(
+    candidates.filter((candidate) => !restartActivityWaitsOnPerson(candidate.activity))
+  )
 }

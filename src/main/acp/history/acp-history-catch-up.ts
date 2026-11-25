@@ -1,27 +1,12 @@
-import {
-  agentJournalItemKey,
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { nativeChatRowRendersContent } from '../../../shared/native-chat/transcript/row-content/native-chat-row-content'
-import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
-import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
-import {
-  nativeCopyCoverage,
-  journalImportTime
-} from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import type { JournalLifecycleIdentityMutationInput } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
-import { isProviderTimelineTurnInNamespace } from '../../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import {
   HISTORY_CATCH_UP_MAX_BYTES,
   continuedOutsideRecordId,
   createHistoryCatchUpBatch,
-  captureHistoryCatchUpView,
   runHistoryCatchUp
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
@@ -32,6 +17,11 @@ import {
 } from './acp-history-replay'
 import { translateHistoryTurn, type AcpHistoryScope } from './acp-history-translation'
 import { matchAcpHistoryTurns, type AcpHistoryCandidate } from './acp-history-turn-matching'
+import {
+  acpHistoryDividerKey,
+  readAcpHistoryBodies,
+  readAcpHistoryJournal
+} from './acp-history-journal-view'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 
 export type AcpHistoryCatchUpInput = AcpHistoryScope & {
@@ -55,8 +45,8 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
     signal: input.signal,
     timeoutMs: input.timeoutMs ?? 30_000,
     ...(input.logger ? { logger: input.logger } : {}),
-    readView: (history) => journalView(input, history, candidates),
-    prepare: async ({ view, check, yieldTurn }) => {
+    readView: (history) => readAcpHistoryJournal(input, history, candidates),
+    prepare: async ({ view, history, check, yieldTurn }) => {
       // Derive source keys once without saved facts, then capture before any saved read or yield.
       candidates = acpHistoryTurns(input.frames, input.identity, check)
         .filter((turn): turn is AcpIdentifiedHistoryTurn => turn.turn !== null)
@@ -67,7 +57,7 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
       const baseline = await view()
       const { kind } = matchAcpHistoryTurns(
         input,
-        baseline,
+        baseline.journal,
         candidates,
         baseline.importedAt,
         baseline.requests,
@@ -77,7 +67,17 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
       const batch = createHistoryCatchUpBatch()
       // The rows written name the import, so a later open's additions settle under their own id.
       const written: string[] = []
-      const read = (key: string) => baseline.items.get(key) ?? null
+      // Only rows a plan may write need saved bodies: dividers, and turns no copy covers yet.
+      const { read, canonical } = await readAcpHistoryBodies(
+        history,
+        baseline,
+        candidates.flatMap(({ source, items }) => [
+          acpHistoryDividerKey(input, source.turn),
+          ...(kind.get(source.turn) === 'native' || kind.get(source.turn) === 'adopted'
+            ? []
+            : items.map((item) => agentJournalItemKey(item.identity)))
+        ])
+      )
       const desired = new Map<
         string,
         {
@@ -90,7 +90,7 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
       const compose = (mutation: JournalLifecycleIdentityMutationInput) => {
         check()
         const key = agentJournalItemKey(mutation.identity)
-        if ((baseline.canonical.get(key) ?? key) !== key) {
+        if ((canonical.get(key) ?? key) !== key) {
           throw new Error('unowned-history-target')
         }
         const previous = desired.get(key)
@@ -115,7 +115,7 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
           sessionId: input.sessionId,
           recordId: continuedOutsideRecordId(source.turn)
         } as const
-        const dividerKey = agentJournalItemKey(dividerIdentity)
+        const dividerKey = acpHistoryDividerKey(input, source.turn)
         const savedDivider = read(dividerKey)
         if (savedDivider) {
           compose({ kind: 'tombstone', identity: dividerIdentity })
@@ -163,113 +163,5 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
           ])
         : null
     }
-  })
-}
-
-/** Only dependencies used for coverage, ownership, bodies and boundary policy enter the view. */
-async function journalView(
-  scope: AcpHistoryCatchUpInput,
-  history: StructuredAgentSessionHistoryJournal,
-  candidates: readonly AcpHistoryCandidate[]
-) {
-  return captureHistoryCatchUpView(history, async () => {
-    const all: AgentJournalRenderItem[] = []
-    const [accepted] = await Promise.all([
-      history.reads.input({ kind: 'accepted-submissions' }),
-      history.reads.visitItems(
-        { kinds: ['message', 'tool-call', 'diff', 'approval', 'question', 'status', 'turn'] },
-        (_key, _sequence, _body, _attribution, item) => {
-          all.push(item)
-        }
-      )
-    ])
-    const submissions = accepted.submissions
-    const eligible = submissions.filter(
-      (send) => send.handedOverAt !== undefined || send.handoverRecorded !== true
-    )
-    const eligibleUsers = new Set(
-      eligible
-        .filter((send) => send.keptAsQueuedMessageId === undefined)
-        .map((send) => agentJournalSubmissionKey(send.clientMessageId))
-    )
-    const retained = projectNativeChatTranscriptMessages(
-      projectStructuredAgentSessionMessages(all, [], submissions)
-    ).some(
-      (message) =>
-        nativeChatRowRendersContent(message.blocks) &&
-        (parseAgentJournalItemKey(message.id)?.provider !== 'orca' ||
-          (message.role === 'user' && eligibleUsers.has(message.id)))
-    )
-    const turnKeys = new Set(
-      all.flatMap((item) => {
-        const turn = readAgentJournalTurn(item.body)
-        const id = parseAgentJournalItemKey(item.itemId)
-        return turn &&
-          id?.provider === 'legacy' &&
-          id.agent === scope.agent &&
-          id.sessionId === scope.sessionId &&
-          isProviderTimelineTurnInNamespace(turn.turnId, scope.providerSessionId)
-          ? [item.itemId]
-          : []
-      })
-    )
-    const userKeys = new Set(
-      all.flatMap((item) => {
-        const turn = readAgentJournalTurn(item.body)
-        return turnKeys.has(item.itemId) && turn?.userItemId ? [turn.userItemId] : []
-      })
-    )
-    const dividerKeys = new Set(
-      candidates.map(({ source }) =>
-        agentJournalItemKey({
-          provider: 'legacy',
-          agent: scope.agent,
-          sessionId: scope.sessionId,
-          recordId: continuedOutsideRecordId(source.turn)
-        })
-      )
-    )
-    const items = new Map(
-      all
-        .filter((item) => {
-          const id = parseAgentJournalItemKey(item.itemId)
-          return (
-            (dividerKeys.has(item.itemId) &&
-              item.turnScope?.kind === 'thread' &&
-              item.body.kind === 'status' &&
-              (item.body.presentation === 'continued-outside' ||
-                item.body.presentation === 'continued-outside-rewound' ||
-                item.body.presentation === 'history-loaded')) ||
-            turnKeys.has(item.itemId) ||
-            userKeys.has(item.itemId) ||
-            (item.turnScope?.kind === 'turn' && turnKeys.has(item.turnScope.turnItemId)) ||
-            (id?.provider === 'legacy' &&
-              id.agent === scope.agent &&
-              id.sessionId === scope.providerSessionId)
-          )
-        })
-        .map((item) => [item.itemId, item])
-    )
-    const keys = candidates.flatMap(({ source, items }) => [
-      ...items.map((item) => agentJournalItemKey(item.identity)),
-      agentJournalItemKey({
-        provider: 'legacy',
-        agent: scope.agent,
-        sessionId: scope.sessionId,
-        recordId: continuedOutsideRecordId(source.turn)
-      })
-    ])
-    const canonical = new Map(
-      (await history.reads.canonicalItemIds([...new Set([...keys, ...items.keys()])])).map(
-        ({ itemId, canonicalItemId }) => [itemId, canonicalItemId]
-      )
-    )
-    // Aliases are rejected; their target bodies cannot establish exact provider coverage.
-    const requests = new Set(eligible.map((send) => `prompt:${send.clientMessageId}`))
-    const rawOrigin = await history.reads.historyOrigin()
-    const handle = { kind: 'opaque' as const, agent: scope.agent, value: scope.providerSessionId }
-    const importedAt = journalImportTime(rawOrigin, handle)
-    const covered = nativeCopyCoverage(rawOrigin, scope.agent, 'acp-user-message', handle)
-    return { items, canonical, requests, importedAt, covered, retained }
   })
 }

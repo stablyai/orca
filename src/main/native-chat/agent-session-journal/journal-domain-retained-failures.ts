@@ -2,6 +2,7 @@ import type Database from '../../sqlite/sync-database'
 import { isDeepStrictEqual } from 'node:util'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -30,7 +31,7 @@ export function retainedFailures(
       const failedAt = Number(row.queue_failed_at)
       return {
         itemId,
-        item: JSON.parse(String(row.payload_json)),
+        item: readJournalStoredItem(db, prefix, row.payload_json),
         at: Math.max(
           failedAt,
           boundary > Number(row.queue_failure_witnessed_through) ? boundary : 0
@@ -51,7 +52,7 @@ export function restoreRetainedFailures(
   for (const { itemId, item, at, reports } of retained) {
     const row = kept.get(...prefix, itemId)
     const next: AgentJournalRenderItem | undefined = row
-      ? JSON.parse(String(row.payload_json))
+      ? readJournalStoredItem(db, prefix, row.payload_json)
       : undefined
     if (
       !next ||

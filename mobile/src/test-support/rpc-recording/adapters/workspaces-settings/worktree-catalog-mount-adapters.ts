@@ -49,7 +49,8 @@ export function worktreeCatalogMountAdapters(
           return homeWorktreeCountsQuery
             .fetch(context.client, { exec: 'local' }, {}, counts, {
               live: false,
-              previousFromStore: false
+              previousFromStore: false,
+              hostId: HOST
             })
             .then(
               (next) => {

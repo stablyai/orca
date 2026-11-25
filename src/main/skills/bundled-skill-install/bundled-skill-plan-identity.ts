@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { BundledSkillObserved } from '../../../shared/bundled-skill-plan'
+import type { BundledSkillObserved } from '../../../shared/skills/bundled/bundled-skill-plan'
 
 /** Fixed plan construction order makes JSON serialization canonical. */
 export function bundledSkillDigestOf(value: unknown): string {

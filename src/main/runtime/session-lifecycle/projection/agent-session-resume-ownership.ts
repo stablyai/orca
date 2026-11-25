@@ -70,6 +70,10 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
     tab: RuntimeMobileSessionTerminalTab
   ): Promise<PaneResumeStartup | Record<string, never> | undefined> {
     const stored = this.getPaneSleepingAgentRecord(worktreeId, tab)
+    const identity = this.readPaneAgentIdentity(makePaneKey(tab.parentTabId, tab.leafId), stored)
+    if (identity?.ended || identity?.executionHost === 'shared') {
+      return {}
+    }
     const record = stored
       ? this.isPaneOwnedResumeRecord(stored)
         ? stored
@@ -150,7 +154,7 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
   /** The hook store names the held session in its pane, from a row since the claim. */
   private hookStoreReportsResumeHold(hold: AgentSessionResumeHold): boolean {
     // Why since the claim: the pane's earlier agent may have named the same session.
-    return (this.getAgentProviderSessionSnapshotFn?.() ?? []).some(
+    return (this.getAgentProviderSessionRowsForPaneFn?.(hold.paneKey) ?? []).some(
       (row) =>
         row.paneKey === hold.paneKey &&
         agentProviderSessionsEqual(hold.agent, row.providerSession, hold.providerSession) &&
@@ -164,9 +168,10 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
     ownPaneKey: string | null
   ): Promise<boolean> {
     const otherPaneKeys = new Set(
-      (this.getAgentProviderSessionSnapshotFn?.() ?? [])
+      this.getAgentRowsForProviderSession(session.agent, session.providerSession)
         .filter(
           (row) =>
+            !row.paneSleep &&
             row.paneKey !== ownPaneKey &&
             agentProviderSessionsEqual(session.agent, row.providerSession, session.providerSession)
         )

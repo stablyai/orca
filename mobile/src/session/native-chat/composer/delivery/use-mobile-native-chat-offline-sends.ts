@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { appendReturnedDraftText } from '../../../../../../src/shared/returned-draft-text'
+import { appendReturnedDraftText } from '../../../../../../src/shared/native-chat/input/drafts/returned-draft-text'
 import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import type { MobileNativeChatInputLockReason } from '../../MobileNativeChatView'
 import { useSettledMobileNativeChatInputLock } from '../field/use-mobile-native-chat-input-lease'

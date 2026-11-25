@@ -3,7 +3,7 @@
  * data file at creation, so the shared test directory only has to point at it while it opens.
  */
 import { join } from 'node:path'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import {
   createStore,
   readPersistedStateJson,

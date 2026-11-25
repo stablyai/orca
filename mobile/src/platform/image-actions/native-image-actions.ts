@@ -7,7 +7,7 @@ import { saveImageToPhotos, shareImage } from '../../../modules/orca-mobile-web-
 import {
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
-} from '../../../../src/shared/clipboard-image'
+} from '../../../../src/shared/clipboard/clipboard-image'
 import { isKnownRasterImageMimeType } from '../../../../src/shared/file-preview/raster-image-preview-limits'
 import {
   imageParamsSchema,

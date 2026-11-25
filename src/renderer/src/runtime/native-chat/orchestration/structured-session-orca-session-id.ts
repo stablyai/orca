@@ -1,7 +1,7 @@
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationSessionAddressResult } from '../../../../../shared/orchestration/orchestration-caller-status'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'

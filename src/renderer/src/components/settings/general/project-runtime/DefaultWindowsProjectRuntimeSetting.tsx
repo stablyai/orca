@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { GlobalWindowsRuntimeDefault } from '../../../../../../shared/execution-host/project-runtime-preference'
 import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../../shared/execution-host/project-runtime-preference'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'

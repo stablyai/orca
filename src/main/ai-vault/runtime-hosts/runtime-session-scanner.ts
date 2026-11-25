@@ -9,7 +9,7 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   listEnvironments,
   resolveEnvironment
@@ -34,11 +34,7 @@ import {
   readRuntimeAiVaultDeleteSessionResponse,
   runtimeAiVaultDeleteSessionParams
 } from '../../../shared/ai-vault/contracts/ai-vault-runtime-session-delete'
-import type { RuntimeAiVaultHostInfo } from './ai-vault-runtime-scan'
-
-export type RuntimeAiVaultScanOptions = {
-  timeoutMs?: number
-}
+import type { RuntimeAiVaultHostInfo, RuntimeAiVaultScanOptions } from './ai-vault-runtime-scan'
 
 // Zod strips undeclared keys; keep the repinned home so resume uses the correct account.
 const aiVaultPrepareSessionResumeResultSchema = z.object({
@@ -54,10 +50,10 @@ const aiVaultPrepareSessionResumeResultSchema = z.object({
     .optional()
 })
 
-export function getSavedRuntimeAiVaultHostInfos(
+export async function getSavedRuntimeAiVaultHostInfos(
   userDataPath: string
-): readonly RuntimeAiVaultHostInfo[] {
-  return listEnvironments(userDataPath)
+): Promise<readonly RuntimeAiVaultHostInfo[]> {
+  return (await listEnvironments(userDataPath))
     .filter((environment) => !isGatedOffWslHost(environment))
     .map((environment) => ({
       environmentId: environment.id,
@@ -76,7 +72,7 @@ export async function scanRuntimeAiVaultSessions(
 ): Promise<AiVaultListResult> {
   const executionHostId = toRuntimeExecutionHostId(environmentId)
   // Captured before the call: a re-pair mid-scan leaves rows fenced to the older pairing, never the newer.
-  const pairingRevision = savedPairingRevision(userDataPath, environmentId)
+  const pairingRevision = await savedPairingRevision(userDataPath, environmentId)
   const response = await callRuntimeEnvironment(
     userDataPath,
     environmentId,
@@ -91,7 +87,10 @@ export async function scanRuntimeAiVaultSessions(
       ...boundedAiVaultScopeArgs(args.scopePaths, args.scopeOnly),
       executionHostId
     },
-    options.timeoutMs
+    options.timeoutMs,
+    undefined,
+    undefined,
+    { signal: options.signal, responseTimeoutMs: options.responseTimeoutMs }
   )
   if (response.ok === true) {
     try {
@@ -206,9 +205,12 @@ export async function deleteRuntimeAiVaultSession(
   return readRuntimeAiVaultDeleteSessionResponse(response, args.agent)
 }
 
-function savedPairingRevision(userDataPath: string, environmentId: string): number | undefined {
+async function savedPairingRevision(
+  userDataPath: string,
+  environmentId: string
+): Promise<number | undefined> {
   try {
-    const environment = resolveEnvironment(userDataPath, environmentId)
+    const environment = await resolveEnvironment(userDataPath, environmentId)
     return environment.pairingRevision ?? environment.createdAt
   } catch {
     return undefined

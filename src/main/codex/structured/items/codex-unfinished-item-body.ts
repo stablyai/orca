@@ -1,7 +1,7 @@
 import {
   endedRunningAgentJournalToolCall,
   type AgentJournalRunningCallEnd
-} from '../../../../shared/agent-journal-tool-call-lifecycle'
+} from '../../../../shared/agent-session/journal/agent-journal-tool-call-lifecycle'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import {

@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { PRGroupKey } from '../../../../../../shared/workspace-view/workspace-pr-groups'
 import type { SidebarPRGroupReader } from '../../../../../../shared/sidebar-list/row-types'

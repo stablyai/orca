@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type React from 'react'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { PendingText } from './useMarkupKeyboardShortcuts'
 import type { MarkupPoint, MarkupTool } from './markup-drawing-model'
 import {

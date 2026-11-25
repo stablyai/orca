@@ -8,7 +8,7 @@ import Foundation
 //     ios/MobileWebShellOrigin.swift ios/MobileWebShellGeneration.swift ios/MobileWebShellCsp.swift \
 //     ios/MobileWebShellLoadState.swift ios/MobileWebShellResponseHeaders.swift \
 //     ios/MobileWebShellBridge.swift ios/MobileWebShellAppliedProps.swift \
-//     ios/MobileWebShellNavigationPolicy.swift \
+//     ios/MobileWebShellNavigationPolicy.swift ios/MobileWebShellChatVisualFrame.swift \
 //     tests/MobileWebShellChecks.swift && /tmp/mobile-web-shell-checks
 @main struct MobileWebShellChecks {
   static func manifest(

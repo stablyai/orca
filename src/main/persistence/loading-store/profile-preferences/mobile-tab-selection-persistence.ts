@@ -1,4 +1,4 @@
-import type { PersistedMobileClientTabSelections } from '../../../../shared/persisted-state-types'
+import type { PersistedMobileClientTabSelections } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { WriteSchedulingOperations } from '../profile-writing/write-scheduling'
 import { scheduleSave } from '../profile-writing/write-scheduling'

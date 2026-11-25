@@ -2,7 +2,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import {
   CLAUDE_AGENT_VIEW_SUBSCRIBE,
   ClaudeAgentViewSnapshot
-} from '../../../../../shared/claude-agent-view'
+} from '../../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 import { subscribeRuntimeRpc } from '../../rpc/subscriptions/runtime-rpc-subscribe'
 
 type Resource = {

@@ -62,7 +62,7 @@ export async function collectHostPtyEvidence(
   const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
   const attentionByWorktreeId: HostPtyEvidence['attentionByWorktreeId'] = {}
   const completedTabIds = new Set<string>()
-  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey.values())) {
     const tabId = entry?.state === 'done' ? getEntryTabId(entry) : null
     if (tabId) {
       completedTabIds.add(tabId)
@@ -98,7 +98,8 @@ export async function collectHostPtyEvidence(
             includeVisualLayouts: false,
             includeAttention: true
           },
-          { timeoutMs: 10_000 }
+          // A periodic evidence pass: no use of an idle WSL host (#46567).
+          { timeoutMs: 10_000, background: true }
         )
         if (result.truncated) {
           return

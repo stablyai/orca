@@ -1,8 +1,8 @@
 import type { AgentSessionOptionCatalog } from '../catalog-providers/agent-session-option-catalog-types'
 import type { AgentSessionModelCatalogResult } from '../../agent-session-wire'
 import type { AgentSessionOptionsResult } from '../protocol/agent-session-options-result'
-import { createCoalescingKeyedRunner } from '../../../coalescing-keyed-runner'
-import { structuralValuesEqualIgnoringUndefined } from '../../../structural-value-equality'
+import { createCoalescingKeyedRunner } from '../../../concurrency/coalescing-keyed-runner'
+import { structuralValuesEqualIgnoringUndefined } from '../../../collections/structural-value-equality'
 import { cloneStructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
 import {
   applyStructuredAgentSessionModelCatalog,
@@ -198,6 +198,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
           record: cloneStructuredAgentSessionOptionRecord(current.record),
           reportedPermissionMode: undefined,
           reportedEffort: undefined,
+          fallbackModel: undefined,
           sessionNeverStarted: undefined,
           catalogNamesConfiguredModel: undefined,
           ...(current.acceptedInputSources ? { acceptedInputSources: {} } : {})
@@ -217,6 +218,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
                 record: cloneStructuredAgentSessionOptionRecord(current.record),
                 reportedPermissionMode: undefined,
                 reportedEffort: undefined,
+                fallbackModel: undefined,
                 sessionNeverStarted: undefined
               }
             : context.seed()

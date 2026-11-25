@@ -3,7 +3,7 @@ import {
   getMarkdownFenceRanges,
   isInsideMarkdownFenceRange,
   type MarkdownFenceRanges
-} from '../../markdown/source-scanning/markdown-fence-scanner'
+} from '../../../../../../shared/markdown/markdown-fence-scanner'
 
 // Match the slash menu and toolbar’s heading scales.
 export type ToggleHeadingVariant =

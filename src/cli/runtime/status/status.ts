@@ -9,7 +9,7 @@ import {
 } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { tryReadMetadata } from '../profile/metadata'
 import { sendRequest } from '../connection/transport'
-import { resolveDesktopWindowStatus } from '../../../shared/cli-app-status-projection'
+import { resolveDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/cli-app-status-projection'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../connection/types'
 import type {
   RuntimeRpcResponse,
@@ -21,7 +21,7 @@ import { runtimeAccessDeniedError } from '../connection/runtime-access-denied'
 export async function getCliStatus(
   userDataPath: string
 ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-  const metadata = tryReadMetadata(userDataPath)
+  const metadata = tryReadMetadata(userDataPath, { throwOnAccessDenied: true })
   const transport = metadata ? findTransport(metadata, 'unix', 'named-pipe') : null
   if (!transport || !metadata?.authToken) {
     return buildCliStatusResponse({

@@ -1,7 +1,7 @@
 import type { AiVaultScope } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   canJumpToAiVaultSessionWorktree,
   type AiVaultSessionWorktreeInfo,

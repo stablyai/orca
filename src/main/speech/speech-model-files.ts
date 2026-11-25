@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
-import type { SpeechModelDownloadFile } from '../../shared/speech-types'
+import type { SpeechModelDownloadFile } from '../../shared/speech/speech-types'
 
 /** Whether every listed file is in `modelDir` at its expected size. */
 export function hasSpeechModelFiles(

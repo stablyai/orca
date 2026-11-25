@@ -1,5 +1,5 @@
 import { basename, dirname, join } from 'node:path'
-import type { DiscoveredSkill } from '../../../shared/skills'
+import type { DiscoveredSkill } from '../../../shared/skills/discovery/skills'
 import { BUNDLED_SKILL_SOURCES } from '../bundled-skill-install/bundled-skill-sources'
 import {
   bundledSkillTextDigest,

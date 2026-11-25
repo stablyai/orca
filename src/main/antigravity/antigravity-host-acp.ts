@@ -1,31 +1,35 @@
 // The execution host's own `agy acp`: preferred for new chats when it answers as a compatible server.
 
-import { existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
-import { AcpConnectionClosedError } from '../acp/transport/acp-errors'
+import { AcpAgentError, AcpConnectionClosedError } from '../acp/transport/acp-errors'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
-import { compareAppVersions, isValidAppVersion } from '../../shared/app-version'
-import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import {
-  createAntigravityHostCredentialBackend,
-  isAntigravityFileStorageHost
-} from './native-credential-backend'
-import { hasAntigravityMacOSCredential } from './native-macos-credentials'
+  compareAppVersions,
+  isValidAppVersion
+} from '../../shared/app-lifecycle/identity/app-version'
+import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
+import { antigravityTakesSystemPrompt } from '../acp/launch/acp-instructions'
 
-/** First release verified with Orca chats; it also leaves the chat's folder untouched. */
-export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
+/** The oldest agy shown to run a chat on a home it is given (`--gemini-dir`) and to ignore an
+ *  inherited GEMINI_API_KEY unless its own settings pick a key provider (checked on 1.5.5, 1.5.13
+ *  and 1.5.16), so Orca passes the key through untouched. */
+export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.5'
 /** agy keeps its sign-in and conversations here and ignores GEMINI_HOME, so this only pins the chat. */
 const AGY_HOME_FOLDER = '.gemini'
 /** Approves tools, not plans; the check launches with it, so a build without it stays managed. */
 export const AGY_SKIP_PERMISSIONS_FLAG = '--dangerously-skip-permissions'
-const PROBE_TIMEOUT_MS = 5_000
+// agy.exe took 6-7s to list sessions while Orca started, and Windows has no managed fallback.
+const PROBE_TIMEOUT_MS = process.platform === 'win32' ? 15_000 : 5_000
 const RECHECK_MS = 5 * 60_000
+// ACP's "authentication required" error.
+const ACP_AUTH_REQUIRED_CODE = -32000
 
 export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse): boolean {
   const capabilities = initialized.agentCapabilities
@@ -38,13 +42,32 @@ export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse):
     capabilities?.loadSession === true &&
     Boolean(capabilities.sessionCapabilities?.resume) &&
     // Readiness is checked by listing sessions.
-    Boolean(capabilities.sessionCapabilities?.list)
+    Boolean(capabilities.sessionCapabilities?.list) &&
+    // A managed agent's identity rides the system prompt; without it Orca's own server runs.
+    antigravityTakesSystemPrompt(initialized)
   )
 }
 
 /** The account home of chats pinned to the host's agy and its own sign-in. */
 export function antigravityHostAccountHome(homePath: string): AgentSessionAccountHome {
   return { variable: 'GEMINI_HOME', path: join(homePath, AGY_HOME_FOLDER) }
+}
+
+/** The catalogs listed with the host's agy login: under `launchHome`, or each home Orca itself
+ *  resolves it from. */
+export function antigravityHostCatalogFingerprints(launchHome?: string): string[] {
+  const homes = new Set(
+    (launchHome ? [launchHome] : [homedir(), process.env.HOME, process.env.USERPROFILE]).filter(
+      Boolean
+    )
+  )
+  return [...homes].map((home) =>
+    agentModelCatalogFingerprint({
+      agent: 'antigravity',
+      accountHome: antigravityHostAccountHome(home!),
+      wslDistro: null
+    })
+  )
 }
 
 /** Managed chats pin `<userData>/antigravity-chat`, so only this folder name selects the host's agy. */
@@ -56,29 +79,110 @@ export function isAntigravityHostAccountHome(home: AgentSessionAccountHome): boo
   )
 }
 
+/** What `agy acp` answered: serving sessions, a compatible server asking to sign in, a binary
+ *  that can't serve Orca's chats, or no answer (hung or crashed). */
+export type AntigravityHostAcpAnswer = 'ready' | 'signedOut' | 'incompatible' | 'unanswered'
 // Keyed by the binary's identity so an upgrade or reinstall is checked again.
-type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number }
+type HostCheck = {
+  identity: string
+  answer: Promise<AntigravityHostAcpAnswer>
+  retryAt?: number
+  version?: string
+}
 const checks = new Map<string, HostCheck>()
 
 class IncompatibleHostAcp extends Error {}
 
-/** Whether `command acp` initializes as a compatible server that serves session requests. An
- *  incompatible binary is not asked again; a sign-in can lapse or a hung agy recover, so any other
- *  answer is checked again after a while. */
+let answersRevision = 0
+const answerListeners = new Set<() => void>()
+
+function answersChanged(): void {
+  answersRevision += 1
+  answerListeners.forEach((listener) => listener())
+}
+
+/** After agy's login changes, the next check asks again instead of trusting the last answer. */
+export function forgetAntigravityHostAcpChecks(): void {
+  checks.clear()
+  latestAsked = null
+  answersChanged()
+}
+
+// The check behind the latest answer, cached or not, so the version is never another binary's.
+let latestAsked: HostCheck | null = null
+
+/** The version of the agy the latest answer vouched for, for naming what chats run on; null when it
+ *  did not pass. Reads the cache only, so it never starts agy. */
+export function readyAntigravityHostAcpVersion(): string | null {
+  return latestAsked?.version ?? null
+}
+
+/** Rises when checks are forgotten or a recheck answers differently, so remembered choices retire. */
+export function antigravityHostAcpChecksRevision(): number {
+  return answersRevision
+}
+
+export function onAntigravityHostAcpAnswersChanged(listener: () => void): () => void {
+  answerListeners.add(listener)
+  return () => answerListeners.delete(listener)
+}
+
+/** Whether `command acp` initializes as a compatible server that serves session requests. */
 export async function antigravityHostAcpReady(
   command: string,
   env: Record<string, string>,
   envToDelete: string[],
   now = Date.now
 ): Promise<boolean> {
+  return (await checkAntigravityHostAcp(command, env, envToDelete, now)) === 'ready'
+}
+
+/** One check answers every question about `command acp`. An incompatible binary is not asked
+ *  again; a sign-in can land or lapse and a hung agy recover, so other answers are rechecked. */
+export function checkAntigravityHostAcp(
+  command: string,
+  env: Record<string, string>,
+  envToDelete: string[],
+  now: () => number = Date.now
+): Promise<AntigravityHostAcpAnswer> {
+  return askAntigravityHostAcp(command, env, envToDelete, now, true)
+}
+
+/** Whether `command acp` is a compatible server, asked without a session request, which would make
+ *  agy read its login: `ready` here means compatible, signed in or not. */
+export function checkAntigravityHostAcpCompatible(
+  command: string,
+  env: Record<string, string>,
+  envToDelete: string[],
+  { start }: { start: boolean }
+): Promise<AntigravityHostAcpAnswer> {
+  return askAntigravityHostAcp(command, env, envToDelete, Date.now, false, start)
+}
+
+async function askAntigravityHostAcp(
+  command: string,
+  env: Record<string, string>,
+  envToDelete: string[],
+  now: () => number,
+  sessions: boolean,
+  start = true
+): Promise<AntigravityHostAcpAnswer> {
   const stats = await stat(command).catch(() => null)
   if (!stats?.isFile()) {
-    return false
+    return 'unanswered'
   }
   const identity = `${stats.size}:${stats.mtimeMs}`
-  const cached = checks.get(command)
+  const key = sessions ? command : `${command}\u0000initialize`
+  const cached = checks.get(key)
   if (cached?.identity === identity && (cached.retryAt === undefined || now() < cached.retryAt)) {
+    if (sessions) {
+      latestAsked = cached
+    }
     return cached.answer
+  }
+  // Nobody is using Antigravity yet, so agy isn't started to answer.
+  if (!start) {
+    return 'unanswered'
   }
   let answered = false
   const check: HostCheck = {
@@ -96,23 +200,47 @@ export async function antigravityHostAcpReady(
         // A present keychain item does not prove agy can sign in silently; session requests
         // answer "Authentication required" until it has. Unlike session/new, listing writes no
         // conversation into agy's history.
-        await connection.listSessions(folder)
+        if (sessions) {
+          await connection.listSessions({ cwd: folder })
+        }
       }
     ).then(
-      () => true,
-      (error: unknown) => {
+      (initialized): AntigravityHostAcpAnswer => {
+        if (sessions) {
+          check.version = initialized.agentInfo?.version
+        } else {
+          // Compatibility changes only with the binary, whose identity keys this check.
+          check.retryAt = undefined
+        }
+        return 'ready'
+      },
+      (error: unknown): AntigravityHostAcpAnswer => {
+        if (error instanceof AcpAgentError && error.code === ACP_AUTH_REQUIRED_CODE) {
+          return 'signedOut'
+        }
         // An exit before initialize answers is a binary rejecting the launch flag, not a lapse.
         if (
           error instanceof IncompatibleHostAcp ||
           (!answered && error instanceof AcpConnectionClosedError)
         ) {
           check.retryAt = undefined
+          return 'incompatible'
         }
-        return false
+        return 'unanswered'
       }
     )
   }
-  checks.set(command, check)
+  checks.set(key, check)
+  if (sessions) {
+    latestAsked = check
+  }
+  // A first answer or a changed one retires choices made without it.
+  const previous = cached?.answer ?? Promise.resolve(null)
+  void Promise.all([previous, check.answer]).then(([before, after]) => {
+    if (before !== after) {
+      answersChanged()
+    }
+  })
   return check.answer
 }
 
@@ -133,27 +261,5 @@ export async function agyUsesApiKey(homePath: string): Promise<boolean> {
   } catch {
     // Settings agy may read differently than JSON.parse could select a provider.
     return true
-  }
-}
-
-/** Whether Orca's own Chat holds the managed server's personal sign-in token. */
-export async function hasManagedAntigravityChatSignIn(managedHome: string): Promise<boolean> {
-  const token = join(managedHome, ANTIGRAVITY_ACP_HOME, 'acp_token.json')
-  return (await stat(token).catch(() => null)) !== null
-}
-
-/** Whether agy itself is signed in on this host; an unreadable store counts as signed out. */
-export async function hasAgyCredential(homePath: string): Promise<boolean> {
-  try {
-    // Reading the macOS secret would ask the person for keychain access; its attributes do not.
-    if (process.platform === 'darwin' && !isAntigravityFileStorageHost(process.env)) {
-      return (
-        (await hasAntigravityMacOSCredential()) ||
-        existsSync(join(homePath, '.gemini', 'antigravity-cli', 'antigravity-oauth-token'))
-      )
-    }
-    return (await createAntigravityHostCredentialBackend(homePath).read()) !== null
-  } catch {
-    return false
   }
 }

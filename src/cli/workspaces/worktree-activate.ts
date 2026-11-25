@@ -1,7 +1,7 @@
 import type { CommandHandler } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { getRequiredWorktreeSelector } from '../workspace-selection/workspace-selector'
-import { folderIdOfSelector } from '../../shared/workspace-scope'
+import { folderIdOfSelector } from '../../shared/workspace/identity/workspace-scope'
 import { refuseFolderWorkspaceActivation } from './folder-workspace-mutations'
 
 export const WORKTREE_ACTIVATE_HANDLERS: Record<string, CommandHandler> = {

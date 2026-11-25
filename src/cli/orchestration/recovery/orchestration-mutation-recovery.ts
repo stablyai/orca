@@ -5,13 +5,16 @@ import {
   resolveOrchestrationCliExecutable
 } from './orchestration-recovery-command'
 import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
-import { quotePowerShellNativeArgument } from '../../../shared/powershell-native-argument'
-import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
+import { quotePowerShellNativeArgument } from '../../../shared/shell/launch/powershell-native-argument'
+import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
 import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 export function orchestrationMutationRecoveryError(
   error: unknown,
-  { unsent = false }: { unsent?: boolean } = {}
+  {
+    unsent = false,
+    flags
+  }: { unsent?: boolean; flags?: ReadonlyMap<string, string | boolean> } = {}
 ): unknown {
   if (!(error instanceof RuntimeClientError) || !isUnknownMutationOutcomeCode(error.code)) {
     return error
@@ -21,6 +24,8 @@ export function orchestrationMutationRecoveryError(
   if (typeof requestId !== 'string' || requestId.length === 0) {
     return error
   }
+  // The same mail is still being admitted on the paired server; only the same request id joins it.
+  const inProgress = error.code === 'delivery_in_progress'
   const dispatchId = typeof data?.dispatchId === 'string' ? data.dispatchId : undefined
   const parsedOriginalCommand = commandParts(data?.originalCommand)
   const originalCommand = parsedOriginalCommand
@@ -32,26 +37,30 @@ export function orchestrationMutationRecoveryError(
     ? [...originalCommand, '--retry-request', requestId]
     : undefined
   const executable = originalCommand?.[0] ?? resolveOrchestrationCliExecutable()
+  // A command forwarded to a paired server keeps its receipt there; else ask the Orca it chose.
+  const target = recoveryTargetArgs(flags)
+  const receiptTarget = typeof data?.server === 'string' ? [...target, '--on', data.server] : target
   // Without a dispatch id, query by request id to inspect the outcome before retrying a mutation.
-  const queryCommand = dispatchId
-    ? [executable, 'orchestration', 'worker-show', '--dispatch', dispatchId, '--json']
+  const query = dispatchId
+    ? [executable, 'orchestration', 'worker-show', '--dispatch', dispatchId, ...target, '--json']
     : [
         executable,
         'orchestration',
         'request-show',
         '--request',
         requestId,
-        // A command forwarded to a paired server keeps its receipt there.
-        ...(typeof data?.server === 'string' ? ['--on', data.server] : []),
+        ...receiptTarget,
         '--json'
       ]
+  // Without the pairing code it would ask a different Orca, whose answer would mislead.
+  const queryCommand = typeof flags?.get('pairing-code') === 'string' ? undefined : query
   const recovery = {
     orchestrationRequestId: requestId,
     ...(dispatchId ? { dispatchId } : {}),
-    queryCommand,
+    ...(queryCommand ? { queryCommand } : {}),
     ...(retryCommand ? { retryCommand } : {}),
     recoveryBlocked: !retryCommand,
-    disposition: unsent ? 'not_sent' : 'outcome_unknown',
+    disposition: inProgress ? 'in_progress' : unsent ? 'not_sent' : 'outcome_unknown',
     workerDeathInferred: false
   }
   const retryStep = retryCommand
@@ -63,18 +72,29 @@ export function orchestrationMutationRecoveryError(
     (arg, i) => arg === '-' && /^--[\w-]+-file$/.test(retryCommand[i - 1] ?? '')
   )
   const nextSteps = [
-    ...(unsent
+    ...(inProgress && retryCommand
       ? [
-          `Once Orca responds, run ${retryCommand ? renderCommand(retryCommand) : `the same original command with --retry-request ${requestId}`} from this same terminal. --retry-request keeps the same operation identity, so the rerun cannot apply it twice.`
+          `In a moment, run ${renderCommand(retryCommand)} from this same terminal. --retry-request resends the same message, so it is delivered once; a fresh send would be a second message.`
         ]
-      : [`Run ${renderCommand(queryCommand)} before retrying.`, retryStep]),
+      : unsent
+        ? [
+            `Once Orca responds, run ${retryCommand ? renderCommand(retryCommand) : `the same original command with --retry-request ${requestId}`} from this same terminal. --retry-request keeps the same operation identity, so the rerun cannot apply it twice.`
+          ]
+        : [
+            queryCommand
+              ? `Run ${renderCommand(queryCommand)} before retrying.`
+              : `Run ${renderCommand(query)} with the same --pairing-code this command used (it is not repeated here) before retrying.`,
+            retryStep
+          ]),
     ...(readsStdin ? ['Pipe the same input into the retry again; it reads stdin.'] : [])
   ]
   const message = [
     stripUnsafeRetryAdvice(error.message, requestId),
-    unsent
-      ? 'Nothing was sent: Orca did not answer the check that runs before the orchestration mutation, so the mutation did not run.'
-      : 'The orchestration mutation may already have taken effect; do not assume it failed.',
+    inProgress
+      ? undefined
+      : unsent
+        ? 'Nothing was sent: Orca did not answer the check that runs before the orchestration mutation, so the mutation did not run.'
+        : 'The orchestration mutation may already have taken effect; do not assume it failed.',
     ...nextSteps,
     typeof data?.failedStage === 'string' ? `Failed stage: ${data.failedStage}.` : undefined,
     Array.isArray(data?.residualResources)
@@ -102,12 +122,22 @@ export function orchestrationMutationRecoveryError(
   return new RuntimeClientError(error.code, message.join('\n'), recoveredData)
 }
 
+function recoveryTargetArgs(flags?: ReadonlyMap<string, string | boolean>): string[] {
+  // An outer --on send goes through the caller's Orca, suppressing any ambient pairing.
+  if (flags?.has('on')) {
+    return ['--environment', 'local']
+  }
+  const environment = flags?.get('environment')
+  return typeof environment === 'string' ? ['--environment', environment] : []
+}
+
 function isUnknownMutationOutcomeCode(code: string): boolean {
   return [
     'runtime_unavailable',
     'remote_runtime_unavailable',
     'runtime_timeout',
-    'invalid_runtime_response'
+    'invalid_runtime_response',
+    'delivery_in_progress'
   ].includes(code)
 }
 
@@ -215,8 +245,14 @@ function resolveRecoveryShell(
   )
 }
 
+// Characters literal in cmd, batch shims and CommandLineToArgvW.
+const SAFE_WINDOWS_CMD_TOKEN = /^[A-Za-z0-9_.-]+$/
+
 function quoteRecoveryArgument(value: string, shell: AgentStartupShell): string {
   if (shell === 'cmd') {
+    if (SAFE_WINDOWS_CMD_TOKEN.test(value)) {
+      return value
+    }
     // cmd expands %VAR% inside double quotes; its argv encoder must escape percent pairs too.
     return quoteWindowsCmdArgument(value)
   }

@@ -1,5 +1,5 @@
-import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
-import type { DictationCleanupResult } from '../../../shared/dictation-cleanup'
+import type { SecretAtRestProtection } from '../../../shared/secure-storage/secret-at-rest-protection'
+import type { DictationCleanupResult } from '../../../shared/speech/dictation/dictation-cleanup'
 import { ipcRenderer } from 'electron'
 import type {
   DictationContext,
@@ -12,7 +12,7 @@ import type {
   SpeechModelState,
   SpeechPendingEvent,
   SpeechTranscriptEvent
-} from '../../../shared/speech-types'
+} from '../../../shared/speech/speech-types'
 import type { PreloadApi } from '../../api-types'
 
 // On-device sessions get a port to the speech process, so their audio skips main.

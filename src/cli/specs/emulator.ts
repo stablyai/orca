@@ -1,5 +1,5 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -30,7 +30,7 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['emulator', 'type'],
-    summary: 'Type text (US ASCII only)',
+    summary: 'Type any text (Android without a stream: US ASCII)',
     usage: 'orca emulator type <text> [--device <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'text', 'device', 'emulator', 'worktree'],
     positionalArgs: ['text']

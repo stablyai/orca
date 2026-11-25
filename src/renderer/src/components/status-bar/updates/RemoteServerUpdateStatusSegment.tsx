@@ -4,11 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 
-export function RemoteServerUpdateStatusSegment({
-  iconOnly
-}: {
-  iconOnly: boolean
-}): React.JSX.Element | null {
+export function RemoteServerUpdateStatusSegment(): React.JSX.Element | null {
   const t = useTranslate()
   const entryMap = useAppStore((state) => state.remoteServerUpdates)
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
@@ -75,7 +71,7 @@ export function RemoteServerUpdateStatusSegment({
           aria-label={segment.tooltip}
         >
           {segment.icon}
-          {!iconOnly ? <span className="text-[11px] tabular-nums">{segment.label}</span> : null}
+          <span className="text-[11px] tabular-nums">{segment.label}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>

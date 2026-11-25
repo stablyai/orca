@@ -1,5 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { psLocaleEnvironment } from '../../../../shared/ps-locale-environment'
+import { psLocaleEnvironment } from '../../../../shared/process-observation/tables/ps-locale-environment'
 
 const PS_IDENTITY_TIMEOUT_MS = 2_000
 

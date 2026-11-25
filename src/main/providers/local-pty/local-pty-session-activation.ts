@@ -1,15 +1,15 @@
 import { ptyForegroundGroupReader } from '../../pty/process-retirement/pty-master-foreground-observation'
-import { createGitBashConsoleCapacityDetector } from '../../../shared/git-bash-console-capacity'
+import { createGitBashConsoleCapacityDetector } from '../../../shared/terminal/pty/lifecycle/git-bash-console-capacity'
 import { withInitialOutputDiagnostic } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 
 import type * as pty from 'node-pty'
-import { isBracketedPasteSafeShell } from '../../../shared/startup-command-submission'
+import { isBracketedPasteSafeShell } from '../../../shared/shell/launch/startup-command-submission'
 import {
   discardStagedStartupCommand,
   stageStartupCommand,
   startupStagingFailureNotice,
   type StartupCommandStaging
-} from '../../../shared/startup-command-staging'
+} from '../../../shared/shell/launch/startup-command-staging'
 import { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
 import type { PtyIngressEmission } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 import { resolvePtyOwnerBackend } from '../../../shared/terminal/pty/lifecycle/pty-owner-backend'

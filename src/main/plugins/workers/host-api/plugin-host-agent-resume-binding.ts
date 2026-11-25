@@ -4,7 +4,7 @@ import { pluginResumeKey } from '../../../../shared/plugins/workers/plugin-agent
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { preparePluginPastSession, resumableTranscript } from './plugin-past-session-resume'
 import {

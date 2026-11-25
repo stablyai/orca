@@ -14,7 +14,7 @@ import type {
   PRCheckDetail,
   PRCheckRunDetails
 } from '../../../../../../shared/github/checks/check-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'

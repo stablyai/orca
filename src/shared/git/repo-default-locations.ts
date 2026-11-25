@@ -1,8 +1,8 @@
-import { getDefaultWorkspaceDir } from '../constants'
-import { normalizeRuntimePathForComparison } from '../cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
+import { getDefaultWorkspaceDir } from '../orca-profiles/constants'
+import { normalizeRuntimePathForComparison } from '../file-access/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../execution-host/execution-host'
 import { getEffectiveHostSetting } from '../execution-host/host-setting-overrides'
-import type { GlobalSettings } from '../global-settings-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
 
 export type RepoDefaultLocationSettings = {
   workspaceDir?: string | null

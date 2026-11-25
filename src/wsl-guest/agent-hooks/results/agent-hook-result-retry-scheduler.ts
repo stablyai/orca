@@ -1,5 +1,9 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
-import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
+import {
+  pollCodexTranscriptStatus,
+  readCodexTranscriptPoll,
+  type CodexTranscriptPollReads
+} from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
 // Retry late transcript results against the same cached event; one owner cancels both timer families before cache teardown.
 import {
   hasPendingAgentResultText,
@@ -20,6 +24,7 @@ import {
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-owed-notification-expiry-timers'
+import { AgentHookStopTranscriptReads } from './agent-hook-stop-transcript-reads'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -53,9 +58,14 @@ export class AgentHookResultRetryScheduler {
   private host: AgentHookResultRetryHost
   private readonly claudeHelperKills: ClaudeHelperKillPoller
   private claudeOwedNotificationExpiry: ClaudeOwedNotificationExpiryTimers
+  readonly stopTranscriptReads: AgentHookStopTranscriptReads
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
+    this.stopTranscriptReads = new AgentHookStopTranscriptReads(
+      host,
+      this.assistantMessageRetryTimers
+    )
     this.claudeHelperKills = new ClaudeHelperKillPoller(host.state, {
       current: (paneKey) => host.state.lastStatusByPaneKey.get(paneKey),
       publish: (event) => {
@@ -75,6 +85,7 @@ export class AgentHookResultRetryScheduler {
       clearTimeout(timer)
     }
     this.assistantMessageRetryTimers.clear()
+    this.stopTranscriptReads.clearAll()
     this.transcriptPollScheduler.clearAll()
     this.claudeHelperKills.clearAll()
     this.claudeOwedNotificationExpiry.clearAll()
@@ -95,11 +106,7 @@ export class AgentHookResultRetryScheduler {
   }
 
   clearAssistantMessageRetry(paneKey: string): void {
-    const timer = this.assistantMessageRetryTimers.get(paneKey)
-    if (!timer) {
-      return
-    }
-    clearTimeout(timer)
+    clearTimeout(this.assistantMessageRetryTimers.get(paneKey))
     this.assistantMessageRetryTimers.delete(paneKey)
   }
 
@@ -166,22 +173,53 @@ export class AgentHookResultRetryScheduler {
     }
   }
 
-  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
-    const { source, body, original, env, version } = poll
-    // Keep the identity check at callback time: a newer event supersedes this
-    // payload even when its pane still has transcript children.
-    if (
-      paneKey !== original.paneKey ||
-      !this.host.isListening() ||
-      this.host.state.lastStatusByPaneKey.get(original.paneKey) !== original
-    ) {
+  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void | Promise<void> {
+    if (!this.ownsTranscriptPoll(paneKey, poll)) {
       return
     }
+    if (poll.source !== 'codex') {
+      this.applyTranscriptPoll(paneKey, poll, undefined)
+      return
+    }
+    // Why: rollout reads stay off the event loop; the next tick waits for this one.
+    return readCodexTranscriptPoll(this.host.state, paneKey).then((reads) => {
+      // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
+      const current = this.transcriptPollScheduler.peek(paneKey)
+      const owner = this.ownsTranscriptPoll(paneKey, poll)
+        ? poll
+        : current?.source === 'codex' && this.ownsTranscriptPoll(paneKey, current)
+          ? current
+          : undefined
+      try {
+        if (owner) {
+          this.applyTranscriptPoll(paneKey, owner, reads)
+        }
+      } finally {
+        reads.batch.release()
+      }
+    })
+  }
+
+  // Keep the identity check at callback time: a newer event supersedes this
+  // payload even when its pane still has transcript children.
+  private ownsTranscriptPoll(paneKey: string, { original }: TranscriptPoll): boolean {
+    return (
+      paneKey === original.paneKey &&
+      this.host.isListening() &&
+      this.host.state.lastStatusByPaneKey.get(original.paneKey) === original
+    )
+  }
+
+  private applyTranscriptPoll(
+    paneKey: string,
+    poll: TranscriptPoll,
+    codexReads: CodexTranscriptPollReads | undefined
+  ): void {
+    const { source, body, original, env, version } = poll
     const logOffset = source === 'muse' ? museLogOffset(this.host.state, paneKey) : undefined
-    const event =
-      source === 'codex'
-        ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env)
-        : normalizeHookPayload(this.host.state, source, body, this.host.env)
+    const event = codexReads
+      ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env, codexReads)
+      : normalizeHookPayload(this.host.state, source, body, this.host.env)
     if (!event) {
       return
     }

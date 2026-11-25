@@ -1,10 +1,10 @@
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   isManagedBrowserProfileOf,
   managedBrowserProfileOwnerKey,
   type ManagedBrowserProfileOwner
 } from '../../../../shared/browser/profiles/browser-profile-scope'
-import { InFlightPromiseDedupe } from '../../../../shared/in-flight-promise-dedupe'
+import { InFlightPromiseDedupe } from '../../../../shared/concurrency/in-flight-promise-dedupe'
 import { browserSessionRegistry } from './browser-session-registry'
 
 const creations = new InFlightPromiseDedupe<BrowserSessionProfile | null>()

@@ -1,6 +1,6 @@
 /** Stop files reach only the watching orcad; signals from stale PID records could stop an unrelated reused process. */
 import { z } from 'zod'
-import { openEnum } from '../../zod-salvage'
+import { openEnum } from '../../validation/zod-salvage'
 
 /** Plain request in the slot directory: the same graceful stop as SIGTERM. */
 export const ORCAD_STOP_REQUEST_FILENAME = '.orcad-stop-request'

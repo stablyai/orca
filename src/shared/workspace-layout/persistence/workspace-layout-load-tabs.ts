@@ -1,4 +1,4 @@
-import type { Tab } from '../../tab-types'
+import type { Tab } from '../tab-groups/tab-types'
 import type { TerminalTab } from '../terminal-tab-types'
 import type {
   LayoutContentTab,
@@ -6,7 +6,7 @@ import type {
   LayoutTerminalTab
 } from '../workspace-layout-model'
 import { pickStoredFields } from './stored-record-fields'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 
 const TERMINAL_CREATION_FIELDS = [
   'defaultTitle',

@@ -7,7 +7,7 @@ import {
   NODE_RUNTIME_ASSETS,
   NODE_RUNTIME_PIN,
   SERVER_TARGETS
-} from '../../../../src/shared/node-runtime-pin.ts'
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import { orcadNodeRuntimeRelativePath } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { ORCAD_PREBUILDS_DIR } from './build-orcad-prebuilds.mjs'
 import { findSlotProblems, readManifest } from './orcad-prebuild-slot-contents.mjs'
@@ -61,6 +61,7 @@ function ensurePrebuildSlot(target, isCurrent) {
     const result = runProcessSync({
       program: process.execPath,
       args: [
+        '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON',
         join(root, 'config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs'),
         `--slot=${target}`
       ],
@@ -85,7 +86,10 @@ async function main() {
   const runtimePath = isCurrent ? await placeRuntime(outputDir, target) : null
   const result = runProcessSync({
     program: process.execPath,
-    args: [join(root, 'config/scripts/orcad-distribution/server-bundle/build-orcad.mjs')],
+    args: [
+      '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON',
+      join(root, 'config/scripts/orcad-distribution/server-bundle/build-orcad.mjs')
+    ],
     cwd: root,
     env: {
       ...process.env,

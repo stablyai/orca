@@ -31,7 +31,7 @@ import type {
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
   LocalLogTailWatchArgs
-} from '../../../shared/local-log-tail-types'
+} from '../../../shared/file-content/local-log-tail-types'
 import type { PreloadApi } from '../../api-types'
 
 export const fsApi = {
@@ -192,8 +192,8 @@ export const fsApi = {
     wakeWslDistro?: boolean
   }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
     ipcRenderer.invoke('fs:stat', args),
-  hasSymlinkBelowRoot: (args: { rootPath: string; path: string }): Promise<boolean> =>
-    ipcRenderer.invoke('fs:hasSymlinkBelowRoot', args),
+  findDeepestSymlinkBelowRoot: (args: { rootPath: string; path: string }): Promise<string | null> =>
+    ipcRenderer.invoke('fs:findDeepestSymlinkBelowRoot', args),
   pathsExist: (args: {
     filePaths: string[]
     connectionId?: string

@@ -33,7 +33,8 @@ export const WORKSPACE_CLEANUP_KEEP_CAUSE_LABELS: Record<WorkspaceCleanupKeepCau
   'git-unknown': 'Git status unknown',
   'archive-unavailable': 'archive not available',
   'archive-script': 'has an archive script',
-  removing: 'already being removed'
+  removing: 'already being removed',
+  'folder-workspace-sibling': 'another repository in this workspace is still in use'
 }
 
 // A newer host can send a value this build has no label for; show it raw rather than nothing.

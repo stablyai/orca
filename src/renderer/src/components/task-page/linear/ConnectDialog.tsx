@@ -1,6 +1,6 @@
 import { useTranslate } from '@/i18n/use-translate'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
+import { LinearApiKeyDialog } from '@/components/integrations/task-trackers/linear-api-key-dialog'
 export function TaskPageLinearConnectDialog({
   model
 }: {

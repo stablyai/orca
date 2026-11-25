@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import { isAgentSessionOptions } from '../../agent-session/lifecycle/agent-session-record'
-import { measureUtf8ByteLength } from '../../utf8-byte-limits'
+import { measureUtf8ByteLength } from '../../text/utf8-byte-limits'
 
 export const AgentSessionOptions = z.record(z.string(), z.string()).refine(isAgentSessionOptions)
 

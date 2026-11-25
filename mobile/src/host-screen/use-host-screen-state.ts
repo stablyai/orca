@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { ExecutionHostHealth } from '../../../src/shared/execution-host/execution-host-health'
 import { storedHostDescriptor, type HostStoredDescriptor } from './identity/host-stored-identity'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -10,13 +10,13 @@ import {
   type MobileViewState
 } from '../worktree/workspace-list/workspace-view-settings'
 
-import type { ServedProjectSections } from '../../../src/shared/project-section-catalog-schema'
+import type { ServedProjectSections } from '../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
 import type { SectionRepo, Worktree } from '../worktree/workspace-list/workspace-list-types'
 import {
   NO_SERVER_WORKSPACES,
   type ServerWorkspaces
 } from '../worktree/execution-hosts/server-workspaces'
-import type { ProjectGroup } from '../../../src/shared/project-group-types'
+import type { ProjectGroup } from '../../../src/shared/project/groups/project-group-types'
 import { cachedHostWorktrees } from './catalog/host-list-queries'
 import { cachedHostView, useHostViewMemory } from './view-settings/host-view-memory'
 

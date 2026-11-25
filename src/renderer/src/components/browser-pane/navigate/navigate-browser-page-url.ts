@@ -10,9 +10,9 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../shared/browser-url'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
-import '../../../../../shared/constants'
+} from '../../../../../shared/browser/navigation/browser-url'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
 import {
@@ -83,6 +83,10 @@ export function navigateBrowserPageToUrl({
     recoveryNavigationValidationRef.current = recoveryLoadError
       ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }
       : null
+    if (webview.dataset.orcaAttachWaiting) {
+      // No page yet: it opens with this once its profile's extensions are ready (unredacted).
+      webview.dataset.orcaAttachRequestedUrl = targetUrl
+    }
     issueBrowserGuestNavigation(webview, () => {
       webview.src = targetUrl
     })

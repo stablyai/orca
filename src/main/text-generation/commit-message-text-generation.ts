@@ -1,4 +1,4 @@
-import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
+import type { TextGenerationFailureFields } from '../../shared/text-generation/text-generation-failure-copy'
 import type { BranchNameWorkContext } from '../../shared/source-control/ai/naming/branch-name-from-work'
 import type { ConversationNameContext } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import type { CommitMessageDraftContext } from '../../shared/source-control/ai/generation/commit-message-generation'
@@ -8,7 +8,7 @@ import type {
   GeneratedPullRequestFields,
   PullRequestDraftContext
 } from '../../shared/source-control/ai/generation/pull-request-generation'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import {
   resolveSourceControlAiForOperation,
   type ResolvedSourceControlAiGenerationParams

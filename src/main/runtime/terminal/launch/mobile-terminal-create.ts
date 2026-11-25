@@ -1,4 +1,4 @@
-import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/session-tabs-change-publication'
+import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/publication/session-tabs-change-publication'
 import { OrcaRuntimeWithFailedStartPanes } from './failed-start-pane'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -164,7 +164,9 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
         this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
         (await this.resolveWorkspaceSelector(worktreeSelector)).id
       this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId, undefined, { includeAgentSenders: false }),
+        await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+          includeAgentSenders: false
+        }),
         result.tab.id,
         navigation,
         opts.clientNavigationId

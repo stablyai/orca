@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/class-names'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { formatStateCount } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary'
-import type { WorktreeStatus } from '../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import type {
   OrchestrationCrewRow,
   OrchestrationCrewSnapshot
@@ -17,14 +17,8 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { CrewRowView, IconButton } from './CrewRowView'
-import {
-  CREW_STATUS_GROUPS,
-  CrewAgentStack,
-  crewStatusGroup,
-  useCrewRowLooks,
-  type CrewRowLook,
-  type CrewStatusGroup
-} from './CrewAgentIcons'
+import { CrewAgentStack, useCrewRowLooks, type CrewRowLook } from './CrewAgentIcons'
+import { CREW_STATUS_GROUPS, crewStatusGroup, type CrewStatusGroup } from './crew-party-status'
 
 function runningWorker(row: OrchestrationCrewRow): boolean {
   return Boolean(

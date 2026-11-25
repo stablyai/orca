@@ -8,7 +8,7 @@ import { runProcessSync } from '@orca/process-host'
 import {
   FEATURE_WALL_TILES,
   isFeatureWallMediaTile
-} from '../../../../src/shared/feature-wall-tiles.ts'
+} from '../../../../src/shared/feature-education/explore/feature-wall-tiles.ts'
 
 const ROOT = path.resolve(import.meta.dirname, '../../..', '..')
 const ASSET_DIR = 'resources/onboarding/feature-wall'

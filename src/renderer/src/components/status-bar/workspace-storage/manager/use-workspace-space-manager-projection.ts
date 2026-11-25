@@ -15,7 +15,7 @@ import {
   getWorkspaceSpaceWorktreeIdentity
 } from './workspace-space-delete-selection'
 import type { WorkspaceSpaceWorktree } from '../../../../../../shared/workspace-disk-space/workspace-space-types'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { useAppStore } from '@/store/index'
 import { getWorkspaceSpaceProgressLabel } from '../workspace-space-format'
 import type { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'

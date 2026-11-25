@@ -54,6 +54,22 @@ export function isAgentSessionAttachmentStorePath(filePath: string): boolean {
   return filePath.split(/[\\/]/).includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)
 }
 
+const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** The store's own `<upload id>/<name>` layout, whose files never change once committed. */
+export function isCommittedAgentSessionAttachmentPath(filePath: string): boolean {
+  const segments = filePath.split(/[\\/]/)
+  const store = segments.lastIndexOf(AGENT_SESSION_ATTACHMENTS_DIR_NAME)
+  const name = segments[store + 2]
+  return (
+    store !== -1 &&
+    store === segments.length - 3 &&
+    UPLOAD_ID.test(segments[store + 1] ?? '') &&
+    !!name &&
+    name !== '.upload.part'
+  )
+}
+
 /** The upload a stored path belongs to, read from the segment after the store's directory. */
 export function agentSessionAttachmentUploadIdOfPath(filePath: string): string | undefined {
   const segments = filePath.split(/[\\/]/)

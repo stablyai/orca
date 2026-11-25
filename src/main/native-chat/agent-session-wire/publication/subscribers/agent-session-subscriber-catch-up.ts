@@ -101,6 +101,9 @@ async function deliver(
     hostNow,
     ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
   }
+  if (subscriber.owedSnapshotFence !== undefined) {
+    return publishSnapshotFrame(port, subscriber, journal, subscriber.owedSnapshotFence, shared)
+  }
   const reader = subscriberHistoryReader(subscriber)
   const readPage = createAgentSessionCatchUpReader(journal, reader)
   while (true) {
@@ -269,6 +272,8 @@ async function publishSnapshotFrame(
   fence: number,
   shared: { hostNow: number; activity?: AgentSessionTurnActivity | null }
 ): Promise<SubscriberFrameCapture<unknown> | undefined> {
+  // Owed until emitted: batches onto a view the client never received would leave it empty.
+  subscriber.owedSnapshotFence = fence
   const reader = subscriberHistoryReader(subscriber)
   const frame = await captureSubscriberFrame(port, subscriber, journal, (work) =>
     readAgentSessionHydrationFrame(journal, fence, reader, work, true)
@@ -291,6 +296,7 @@ async function publishSnapshotFrame(
   }
   subscriber.cursor = page.liveCursor ?? page.window.nextCursor
   subscriber.fence = fence
+  subscriber.owedSnapshotFence = undefined
   // The replacement dropped client restatements; owe them until every follow-up lands.
   subscriber.workView = undefined
   await refreshPublishedWork(delivery, subscriber, journal, frame.work, shared)

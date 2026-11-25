@@ -1,5 +1,5 @@
 import { join, posix } from 'node:path'
-import type { SkillPackageManifestV1 } from '../../../shared/skill-package-manifest'
+import type { SkillPackageManifestV1 } from '../../../shared/skills/packages/skill-package-manifest'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {
   SKILL_PACKAGE_OBSERVATION_LIMITS,
@@ -18,7 +18,7 @@ import {
   WSL_INSPECT_PATHS_SCRIPT,
   WSL_LIST_ENTRIES_SCRIPT
 } from './skill-wsl-enumeration-protocol'
-import { SKILL_INSTALL_PROVIDERS } from '../../../shared/skill-install-providers'
+import { SKILL_INSTALL_PROVIDERS } from '../../../shared/skills/installation/skill-install-providers'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 

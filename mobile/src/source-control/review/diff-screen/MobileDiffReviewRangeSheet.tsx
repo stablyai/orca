@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { KeyboardAvoidingView, Pressable, Text, View } from 'react-native'
 import { Sparkles } from 'lucide-react-native'
-import { getRuntimePathBasename } from '../../../../../src/shared/cross-platform-path'
+import { getRuntimePathBasename } from '../../../../../src/shared/file-access/cross-platform-path'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { hostOs } from '../../../platform/host-os'

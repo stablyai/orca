@@ -44,7 +44,7 @@ import {
 import { collectOrcadMigrationSourceCatalog } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-catalog'
 import type { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'
 import { orcadMigrationRefusalReason } from './orcad-migration-refusal-reason'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 
 type OrcadDeltaMoveArgs = {
   userDataPath: string
@@ -150,7 +150,7 @@ async function commitDelta(
   store.updateSshTarget(target.id, { orcadFence: { environmentId: plan.environmentId } })
   await args.claims.flush()
   // Record before any new/resumed commit so rollback cannot cross the migration.
-  recordManagedOrcadMigration(userDataPath, plan.environmentId, now().toISOString())
+  await recordManagedOrcadMigration(userDataPath, plan.environmentId, now().toISOString())
   let destination: OrcadMigrationDestinationCatalog
   try {
     destination = await args.connectDestination()

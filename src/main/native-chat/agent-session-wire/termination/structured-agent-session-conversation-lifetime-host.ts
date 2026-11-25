@@ -19,6 +19,7 @@ export type StructuredAgentSessionConversationLifetimeHost = {
   /** Retain status rows while a tab still lists the chat. */
   closeStatus: (sessionId: string, options: { listed: boolean }) => void
   childWorkOpen: (sessionId: string) => boolean
+  viewed: (sessionId: string) => boolean
 }
 
 export function createStructuredAgentSessionStopStartingChild(

@@ -10,7 +10,7 @@ const {
 } = require('../../macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
 const {
   daemonProtocolVersion
-} = require('../../../../src/shared/local-build-compatibility-contract.json')
+} = require('../../../../src/shared/remote-runtime/orcad-distribution/local-build-compatibility-contract.json')
 
 // Require exact asar-unpacked daemon entry on every platform; missing path indicates layout regression and must not silently skip.
 function assertPackagedDaemonEntryExists(resourcesDir) {

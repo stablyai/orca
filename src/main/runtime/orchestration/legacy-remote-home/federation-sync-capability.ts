@@ -1,12 +1,12 @@
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import '../../../../shared/protocol-version'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_AUTO_RELEASE_RUNTIME_CAPABILITY
 } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
-import type { RuntimeCapability } from '../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import { STRUCTURED_WORKER_HANDLE_PREFIX } from '../../../../shared/orchestration/workers/structured-worker-handle'
 import type { FederationRuntime } from '../federation/federation-runtime'
 import type { FederatedDispatchRow } from '../db/orchestration-records'

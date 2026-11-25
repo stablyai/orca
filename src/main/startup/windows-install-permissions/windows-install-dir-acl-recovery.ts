@@ -1,6 +1,6 @@
 // @protected-copy
 import { dirname } from 'node:path'
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import { translateMain } from '../../i18n/main-i18n'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import {
@@ -56,16 +56,6 @@ function settleVerdictWaiters(): void {
     wake()
   }
   verdictWaiters.clear()
-}
-
-export function resetWindowsInstallDirAclRecoveryForTest(): void {
-  poison = null
-  probePendingSince = null
-  installDirReadClean = false
-  installDirReadPoisonedMidRepair = false
-  gpuMarkerClearedByRepairClaim = null
-  blockingRepairInFlight = false
-  settleVerdictWaiters()
 }
 
 /** Call when the install-DACL probe is dispatched: its verdict is not in yet. */

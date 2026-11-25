@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
+import { basename } from 'node:path'
 import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
 import { isZCodeHooksEnabled, readZCodeEventMap, type ZCodeConfig } from './hook-settings'
 
@@ -25,6 +26,18 @@ export function parseZCodeConfigText(text: string, diagnosticName: string): ZCod
   return isPlainObject(parsed) ? (parsed as ZCodeConfig) : null
 }
 
+/** Null text means the file is absent. */
+export function toZCodeConfigSource(
+  text: string | null,
+  diagnosticName: string
+): ZCodeConfigSource | null {
+  if (text === null) {
+    return { text: null, config: {} }
+  }
+  const config = parseZCodeConfigText(text, diagnosticName)
+  return config === null ? null : { text, config }
+}
+
 export function readZCodeConfigSource(configPath: string): ZCodeConfigSource | null {
   let text: string
   try {
@@ -33,8 +46,7 @@ export function readZCodeConfigSource(configPath: string): ZCodeConfigSource | n
     // Only definitive absence is a fresh install; unreadable files must never be replaced by stub configs.
     return isDefinitiveAbsence(error) ? { text: null, config: {} } : null
   }
-  const config = parseZCodeConfigText(text, 'ZCode config.json')
-  return config === null ? null : { text, config }
+  return toZCodeConfigSource(text, `ZCode ${basename(configPath)}`)
 }
 
 const JSON_EDIT_FORMATTING = { formattingOptions: { insertSpaces: true, tabSize: 2 } } as const

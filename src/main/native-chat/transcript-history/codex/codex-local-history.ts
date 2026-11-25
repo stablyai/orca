@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../../ai-vault/parsing/session-json-object'
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import { codexHistorySources, codexPhysicalRolloutId } from './codex-rollout-history-source'
@@ -148,10 +148,16 @@ export async function readCodexLocalHistory(input: {
   return bytes
 }
 
+// Codex serializes timestamp, ordinal and type before the payload.
+const COMPACTED_RECORD_HEAD =
+  /^\{"timestamp":"[^"\\]*",(?:"ordinal":\d+,)?"type":"compacted","payload":\{/
+
+/** Codex does not bound compaction checkpoints and Orca shows none of their content. */
 function lines(path: string, end?: HistoryPosition) {
   return splitTranscriptStreamLines(
     readCodexRolloutBytes(path, end?.end_byte_offset),
-    16 * 1024 * 1024
+    16 * 1024 * 1024,
+    (head) => COMPACTED_RECORD_HEAD.exec(head)?.[0].concat('}}')
   )
 }
 

@@ -28,7 +28,7 @@ export function sourceKey(request: Request, ingress?: Ingress | null): string {
 export async function admitPreAuth(
   env: Env,
   request: Request,
-  kind: 'phone' | 'data' | 'health',
+  kind: 'phone' | 'data' | 'health' | 'resolve',
   ingress?: Ingress | null
 ): Promise<boolean> {
   if (!env.PREAUTH_LIMITER) { return true }

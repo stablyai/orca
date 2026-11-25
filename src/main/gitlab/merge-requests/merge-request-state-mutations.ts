@@ -1,11 +1,11 @@
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { acquire, release } from '../requests/glab-request-admission'
 import { glabHostEnvOptions, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
 import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { withProjectRef } from './merge-request-project-resolution'
-import { codeHostFailure } from '../../../shared/code-host-failure-copy'
+import { codeHostFailure } from '../../../shared/source-control/code-host-failure-copy'
 import { invalidateReviewLookupsAfterPRMutation } from '../../github/pull-requests/refresh/pr-mutation-review-invalidation'
 
 // Why: glab's MRCheckErrors refuses a no-op close/reopen with these fixed texts; every other

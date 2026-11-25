@@ -2,7 +2,7 @@ import type { BrowserGuestMetadata } from '../../../../../../shared/browser/gues
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../../shared/browser-url'
+} from '../../../../../../shared/browser/navigation/browser-url'
 
 type Listener = (state: BrowserGuestMetadata | null) => void
 type GuestMetadataEntry = {
@@ -170,18 +170,11 @@ export function acceptBrowserGuestMetadata(state: BrowserGuestMetadata): void {
 }
 
 export function issueBrowserGuestNavigation<T>(
-  webview: Electron.WebviewTag,
-  issue: (guest: Electron.WebviewTag) => T
-): T
-export function issueBrowserGuestNavigation<T>(
-  webview: Electron.WebviewTag | null | undefined,
-  issue: (guest: Electron.WebviewTag) => T
-): T | undefined
-export function issueBrowserGuestNavigation<T>(
   webview: Electron.WebviewTag | null | undefined,
   issue: (guest: Electron.WebviewTag) => T
 ): T | undefined {
-  if (!webview) {
+  // Still waiting for its profile's extensions: no guest yet, and the attach loads the latest URL.
+  if (!webview || webview.dataset.orcaAttachWaiting) {
     return undefined
   }
   const id = readBrowserGuestId(webview)

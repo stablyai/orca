@@ -1,5 +1,5 @@
 import type Database from '../../../../sqlite/sync-database'
-import { isOrcaSessionId } from '../../../../../shared/orca-session-address'
+import { isOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import {
   STRUCTURED_WORKER_HANDLE_PREFIX,
   isStructuredWorkerHandle

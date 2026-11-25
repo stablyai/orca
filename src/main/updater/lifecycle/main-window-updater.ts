@@ -1,17 +1,24 @@
 import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { join } from 'node:path'
 import type {
   ReleaseBuildListResult,
   UpdateCheckOptions
-} from '../../../shared/update-status-types'
-import { RELEASE_CHANNELS, type ReleaseChannel } from '../../../shared/release-channel'
+} from '../../../shared/updater/update-status-types'
+import { RELEASE_CHANNELS, type ReleaseChannel } from '../../../shared/updater/release-channel'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer } from '../../ipc/ui'
-import type { Store } from '../../persistence/loading-store/store'
+import type { NativeSettingsProjection } from '../../core-desktop/native-settings-projection'
 import { logStartupMilestone } from '../../startup/diagnostics/startup-diagnostics'
 import { applyProxyToElectronUpdaterSession } from './electron-updater-proxy-session'
 import { updaterErrorMessage } from './updater-coded-error'
-import { updaterCodedMessage } from '../../../shared/updater-failure-copy'
-import { normalizeUpdateDelayDays } from '../../../shared/update-delay'
+import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
+import { normalizeUpdateDelayDays } from '../../../shared/updater/update-delay'
+import {
+  getActiveTeamCapabilities,
+  getActiveTeamProfileScope,
+  onTeamCapabilitiesInvalidated
+} from '../../orca-profiles/cloud-auth/active-team-capabilities'
+import { getOrcaProfileDirectory } from '../../orca-profiles/profile-storage-paths'
 import {
   checkForUpdatesFromMenu,
   dismissAvailableUpdate,
@@ -22,10 +29,18 @@ import {
   listAvailableReleaseBuilds,
   quitAndInstall,
   setupAutoUpdater,
-  showLinuxPackage
+  showLinuxPackage,
+  snoozeRequiredUpdate
 } from '../updater-service'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
 import type { UpdaterSetupOptions } from './updater-setup'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { hasWorkingUpdateAgents } from './update-agent-activity'
+import {
+  getEmergencyUpdateFloor,
+  watchEmergencyUpdateFloor
+} from '../releases/updater-emergency-policy'
+import { applyEmergencyUpdateFloor } from '../releases/updater-release-policy'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -40,37 +55,86 @@ type UpdaterSetupHooks = {
   onBeforeUpdateQuit?: () => void | Promise<void>
   onBeforeUpdateQuitFailure?: PreQuitCleanupFailureMode
   updateInstallMode?: UpdateInstallMode
+  hasWorkingAgents?: () => boolean
 }
 
-function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): UpdaterSetupOptions {
+function buildUpdaterSetupOptions(
+  nativeSettings: NativeSettingsProjection,
+  options?: UpdaterSetupHooks
+): UpdaterSetupOptions {
   return {
     getMainWindow: getTrustedUIRendererWindow,
-    getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+    getLastUpdateCheckAt: () => nativeSettings.getUI().lastUpdateCheckAt,
     onBeforeQuit: async () => {
       try {
         await options?.onBeforeUpdateQuit?.()
       } finally {
-        await store.flushPendingAsync()
+        await nativeSettings.requestCoreWrite({ kind: 'flush-pending' })
       }
     },
     setLastUpdateCheckAt: (timestamp) => {
-      store.updateUI({ lastUpdateCheckAt: timestamp })
+      void nativeSettings.requestCoreWrite({
+        kind: 'ui',
+        updates: { lastUpdateCheckAt: timestamp }
+      })
     },
-    getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
-    getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
+    getPendingUpdateNudgeId: () => nativeSettings.getUI().pendingUpdateNudgeId ?? null,
+    getDismissedUpdateNudgeId: () => nativeSettings.getUI().dismissedUpdateNudgeId ?? null,
     setPendingUpdateNudgeId: (id) => {
       // Applying a new campaign clears the hidden card; clearing a campaign must preserve dismissal.
       if (id) {
-        store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
+        void nativeSettings.requestCoreWrite({
+          kind: 'ui',
+          updates: { pendingUpdateNudgeId: id, dismissedUpdateVersion: null }
+        })
       } else {
-        store.updateUI({ pendingUpdateNudgeId: null })
+        void nativeSettings.requestCoreWrite({
+          kind: 'ui',
+          updates: { pendingUpdateNudgeId: null }
+        })
       }
     },
     setDismissedUpdateNudgeId: (id) => {
-      store.updateUI({ dismissedUpdateNudgeId: id })
+      void nativeSettings.requestCoreWrite({ kind: 'ui', updates: { dismissedUpdateNudgeId: id } })
     },
-    getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
-    getUpdateDelayDays: () => normalizeUpdateDelayDays(store.getSettings().updateDelayDays),
+    getReleaseChannelOverride: () => nativeSettings.getUI().releaseChannelOverride ?? null,
+    getTeamUpdatePolicy: () =>
+      applyEmergencyUpdateFloor(
+        getActiveTeamCapabilities()?.teamPolicy,
+        getEmergencyUpdateFloor(),
+        app.getVersion()
+      ),
+    onTeamUpdatePolicyChanged: (listener) => {
+      const syncEmergencyFloor = watchEmergencyUpdateFloor(listener)
+      const syncPolicies = (): void => {
+        syncEmergencyFloor(getActiveTeamCapabilities() !== undefined)
+        listener()
+      }
+      const unsubscribe = onTeamCapabilitiesInvalidated(syncPolicies)
+      syncPolicies()
+      app.once('will-quit', () => {
+        unsubscribe()
+        syncEmergencyFloor(false)
+      })
+    },
+    teamRestart: {
+      scope: () => {
+        const scope = getActiveTeamProfileScope()
+        return (
+          scope && {
+            file: join(
+              getOrcaProfileDirectory(scope.profileId, scope.root),
+              'required-orca-update.json'
+            ),
+            accountId: scope.userId
+          }
+        )
+      },
+      hasWorkingAgents: options?.hasWorkingAgents ?? (() => false)
+    },
+    getUpdateDelayDays: () =>
+      normalizeUpdateDelayDays(nativeSettings.getSettings().updateDelayDays),
+    getAutomaticUpdates: () => nativeSettings.getSettings().automaticUpdates === true,
     onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
     installMode: options?.updateInstallMode
   }
@@ -78,19 +142,26 @@ function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): Up
 
 function setupAutoUpdaterWithAppProxy(
   mainWindow: BrowserWindow | null,
-  store: Store,
+  nativeSettings: NativeSettingsProjection,
   options?: UpdaterSetupHooks
 ): void {
   // Starts synchronously, so the session request guard holds the first update check until it settles.
-  void applyProxyToElectronUpdaterSession(store.getSettings())
-  setupAutoUpdater(mainWindow, buildUpdaterSetupOptions(store, options))
+  void applyProxyToElectronUpdaterSession(nativeSettings.getSettings())
+  setupAutoUpdater(mainWindow, buildUpdaterSetupOptions(nativeSettings, options))
 }
 
 /** Headless serve has no window-driven setup; defer the slow require past readiness so remote updater support becomes available (#22261). */
-export function setupHeadlessServeAutoUpdater(store: Store, options: UpdaterSetupHooks): void {
+export function setupHeadlessServeAutoUpdater(
+  nativeSettings: NativeSettingsProjection,
+  runtime: Pick<OrcaRuntimeService, 'getAgentStatusSnapshotFn'>,
+  options: UpdaterSetupHooks
+): void {
   setImmediate(() => {
     try {
-      setupAutoUpdaterWithAppProxy(null, store, options)
+      setupAutoUpdaterWithAppProxy(null, nativeSettings, {
+        ...options,
+        hasWorkingAgents: () => hasWorkingUpdateAgents(runtime.getAgentStatusSnapshotFn?.() ?? [])
+      })
       logStartupMilestone('updater-setup-done')
     } catch (error) {
       console.warn(
@@ -103,7 +174,7 @@ export function setupHeadlessServeAutoUpdater(store: Store, options: UpdaterSetu
 
 export function scheduleMainWindowAutoUpdaterSetup(
   mainWindow: BrowserWindow,
-  store: Store,
+  nativeSettings: NativeSettingsProjection,
   options?: UpdaterSetupHooks
 ): void {
   // Cold Windows/Defender makes electron-updater require slow (#7225); defer past paint, with a timer for crash-looping renderers.
@@ -124,7 +195,7 @@ export function scheduleMainWindowAutoUpdaterSetup(
     }
     updaterSetupDone = true
     try {
-      setupAutoUpdaterWithAppProxy(mainWindow, store, options)
+      setupAutoUpdaterWithAppProxy(mainWindow, nativeSettings, options)
       logStartupMilestone('updater-setup-done')
     } finally {
       clearDeferredSetup()
@@ -142,7 +213,7 @@ export function scheduleMainWindowAutoUpdaterSetup(
   }
 }
 
-export function registerUpdaterHandlers(_store: Store): void {
+export function registerUpdaterHandlers(): void {
   ipcMain.removeHandler('updater:getStatus')
   ipcMain.removeHandler('updater:getVersion')
   ipcMain.removeHandler('updater:check')
@@ -150,6 +221,7 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:quitAndInstall')
   ipcMain.removeHandler('updater:dismissNudge')
   ipcMain.removeHandler('updater:dismissAvailableUpdate')
+  ipcMain.removeHandler('updater:snoozeRequiredUpdate')
   ipcMain.removeHandler('updater:getLinuxPackageInstallInstructions')
   ipcMain.removeHandler('updater:showLinuxPackage')
   ipcMain.removeHandler('updater:listBuilds')
@@ -164,6 +236,10 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
   ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
+  ipcMain.handle('updater:snoozeRequiredUpdate', (event) => {
+    assertTrustedUpdaterRecoverySender(event)
+    return snoozeRequiredUpdate()
+  })
   // Package paths/native reveal belong only to the current trusted main renderer; refuse guests, popouts and stale/utility windows.
   ipcMain.handle('updater:getLinuxPackageInstallInstructions', (event) => {
     assertTrustedUpdaterRecoverySender(event)

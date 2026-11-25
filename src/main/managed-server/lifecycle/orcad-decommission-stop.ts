@@ -9,7 +9,7 @@ import type {
   OrcadDaemonRetirementVerdict,
   OrcadManagedStopRequest
 } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 type OrcadDecommissionStopSettlement =
   | { state: 'exited'; retirement: OrcadDaemonRetirementVerdict }

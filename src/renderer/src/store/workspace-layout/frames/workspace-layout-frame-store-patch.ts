@@ -14,7 +14,7 @@ import {
   type HeldDrawnTabs
 } from './workspace-layout-frame-held-tabs'
 import { noteFramesTakingOverStagedBrowserTabs } from './workspace-layout-frame-browser-handover'
-import { markFullResync } from '../../keyed-record-transitions'
+import { markFullResync } from '../../record-transitions/keyed-record-transitions'
 
 /** Keep window spawn/recovery and live bindings; main publishes saved bindings until it owns live ones. */
 const WINDOW_TERMINAL_TAB_FIELDS = [

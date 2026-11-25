@@ -3,16 +3,17 @@ import { app } from 'electron'
 import type {
   ReactErrorBoundaryReportArgs,
   ReactErrorBoundaryReportResult
-} from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-reporting'
 import {
   CRASH_REPORT_ATTRIBUTION_DETAIL_KEY,
   CRASH_REPORT_ATTRIBUTION_NOTE_DETAIL_KEY,
   UNRELIABLE_BOUNDARY_ATTRIBUTION,
   UNRELIABLE_BOUNDARY_ATTRIBUTION_NOTE
-} from '../../../shared/react-update-depth-attribution'
+} from '../../../shared/crash-reporting/react-update-depth-attribution'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
-import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-breadcrumb-origin'
+import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-reporting/crash-breadcrumb-origin'
 import { getCrashBreadcrumbSnapshot } from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
+import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 
 export const recentRendererErrorReportKeys = new Map<string, number>()
 
@@ -155,6 +156,8 @@ export async function recordRendererErrorReport(
   // Bound IPC-controlled dedupe keys by count as well as age.
   pruneRendererErrorReportKeys(now)
 
+  const origin =
+    webContentsId === undefined ? undefined : rendererCrashBreadcrumbOrigin(webContentsId)
   const report = await store.record({
     source: 'renderer',
     processType: 'react-render',
@@ -190,10 +193,21 @@ export async function recordRendererErrorReport(
         : {})
     },
     // Boundary-caught React failures need the same pre-crash breadcrumbs as native crashes.
-    breadcrumbs: getCrashBreadcrumbSnapshot(
-      webContentsId === undefined ? undefined : rendererCrashBreadcrumbOrigin(webContentsId)
-    )
+    breadcrumbs: getCrashBreadcrumbSnapshot(origin)
   })
+  // A contained crash leaves only a fallback on screen; the trace keeps what it was.
+  recordDurableCrashBreadcrumb(
+    'react_error_boundary_crash',
+    {
+      boundary_id: normalized.boundaryId,
+      surface: normalized.surface,
+      error_name: normalized.errorName,
+      error_message: normalized.errorMessage,
+      ...(normalized.componentStack ? { component_stack: normalized.componentStack } : {})
+    },
+    undefined,
+    origin
+  )
 
   return { ok: true, report, deduped: false }
 }

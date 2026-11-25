@@ -4,8 +4,8 @@ import { spawnProcess } from '@orca/process-host'
 import { existsSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
-import { isVsCodeLauncherExecutable } from '../../shared/remote-ssh-editor-launcher'
-import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
+import { isVsCodeLauncherExecutable } from '../../shared/editor/launch/remote-ssh-editor-launcher'
+import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import { envWithoutAppImageRuntime } from '../pty/shell-startup/appimage-terminal-env'
 import {
   getLauncherBaseName,
@@ -17,7 +17,10 @@ import {
   resolveColocatedJetBrainsGuiExecutable
 } from './jetbrains-windows-gui-launchers'
 import { findInstalledVsCodeCli } from './vscode-cli-install-paths'
-import { getCmdExePath, getSpawnArgsForWindows } from '../../shared/windows-batch-spawn'
+import {
+  getCmdExePath,
+  getSpawnArgsForWindows
+} from '../../shared/shell/launch/windows-batch-spawn'
 
 export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
 const WINDOWS_CONSOLE_EDITORS = new Set(['nvim', 'vim'])

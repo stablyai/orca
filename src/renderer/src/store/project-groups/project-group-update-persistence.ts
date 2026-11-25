@@ -1,11 +1,14 @@
-import { getNextRootProjectOrder } from '../../../../shared/root-project-order'
-import type { ProjectGroup, ProjectGroupMutation } from '../../../../shared/project-group-types'
+import { getNextRootProjectOrder } from '../../../../shared/sidebar-list/sections/root-project-order'
+import type {
+  ProjectGroup,
+  ProjectGroupMutation
+} from '../../../../shared/project/groups/project-group-types'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RepoSlice } from '../repos/repo-state'
 import {
   PROJECT_GROUP_UPDATE_MANY_RUNTIME_CAPABILITY,
   PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
-} from '../../../../shared/project-group-order-capability'
+} from '../../../../shared/project/groups/project-group-order-capability'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 

@@ -27,20 +27,21 @@ export function closeBrowserPage(
   return withPageIds(model, command, (pageIds) => pageIds.filter((id) => id !== command.pageId))
 }
 
-export function replaceBrowserPage(
+export function replaceTabContent(
   model: WorkspaceLayoutModel,
-  command: CommandOf<'replaceBrowserPage'>
+  command: CommandOf<'replaceTabContent'>
 ): Applied {
-  return withPageIds(model, command, (pageIds) => {
-    if (pageIds.includes(command.newPageId)) {
+  const { browserTabId, pageId, newPageId } = command.replacement
+  return withPageIds(model, { workspace: command.workspace, browserTabId }, (pageIds) => {
+    if (pageIds.includes(newPageId)) {
       return pageIds
     }
-    if (holdsBrowserPage(model, command.newPageId)) {
+    if (holdsBrowserPage(model, newPageId)) {
       return 'page_exists'
     }
-    return pageIds.includes(command.pageId)
-      ? pageIds.map((id) => (id === command.pageId ? command.newPageId : id))
-      : [...pageIds, command.newPageId]
+    return pageIds.includes(pageId)
+      ? pageIds.map((id) => (id === pageId ? newPageId : id))
+      : [...pageIds, newPageId]
   })
 }
 

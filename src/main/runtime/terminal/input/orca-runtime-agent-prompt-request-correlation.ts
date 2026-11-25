@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithSerializeAgentPromptSubmission } from './terminal-agent-status-and-submission'
+import { OrcaRuntimeWithHookSilentSendGuard } from './terminal-hook-silent-send-guard'
 import type { RuntimeTerminalPromptDelivery } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type {
   AgentPromptTurnStartEvidence,
@@ -6,8 +6,14 @@ import type {
 } from './agent-prompt-submission-verification'
 import { verifyAgentPromptSubmission } from './agent-prompt-submission-verification'
 import { AgentPromptRequestCorrelation } from './agent-prompt-request-correlation'
+import {
+  readAgentPromptAftermath,
+  type AgentPromptAftermath,
+  type AgentStatusReport
+} from './agent-prompt-aftermath'
+import { mapExplicitAgentStateToRuntimeTerminalStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 
-export abstract class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWithSerializeAgentPromptSubmission {
+export abstract class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWithHookSilentSendGuard {
   private readonly agentPromptCorrelation = new AgentPromptRequestCorrelation()
 
   getTerminalPromptRequestBinding(handle: string): {
@@ -84,6 +90,39 @@ export abstract class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaR
       }
       throw error
     }
+  }
+
+  /** One read of what followed `prompt` in its terminal; null when the handle no longer resolves. */
+  readTerminalAgentPromptAftermath(
+    handle: string,
+    prompt: RuntimeTerminalPromptDelivery
+  ): AgentPromptAftermath | null {
+    try {
+      const binding = this.getTerminalPromptRequestBinding(handle)
+      if (binding.processIncarnation !== prompt.processIncarnation) {
+        return { processReplaced: true }
+      }
+      return readAgentPromptAftermath(
+        prompt,
+        this.getAgentPromptActivity(handle, binding.ptyId),
+        this.readLastAgentStatusReport(handle, binding.ptyId)
+      )
+    } catch {
+      return null
+    }
+  }
+
+  /** The newer of the agent's hook status and the status it printed into its own terminal. */
+  private readLastAgentStatusReport(handle: string, ptyId: string): AgentStatusReport | null {
+    const hook = this.getFreshExplicitAgentStatusForHandle(handle, ptyId)
+    const printed = this.ptysById.get(ptyId)?.lastExplicitAgentStatus
+    if (printed && (!hook || printed.updatedAt > hook.updatedAt)) {
+      return {
+        status: mapExplicitAgentStateToRuntimeTerminalStatus(printed.state),
+        at: printed.updatedAt
+      }
+    }
+    return hook ? { status: hook.status, at: hook.updatedAt } : null
   }
 
   protected registerAgentPromptRequest(

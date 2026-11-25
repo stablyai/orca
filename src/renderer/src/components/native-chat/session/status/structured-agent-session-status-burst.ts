@@ -1,4 +1,4 @@
-import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared/structural-value-equality'
+import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared/collections/structural-value-equality'
 import {
   sameSemanticTab,
   type Member,

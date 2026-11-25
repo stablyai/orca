@@ -1,4 +1,4 @@
-import type { RuntimeNativeChatFileContext } from '../../../../src/shared/native-chat/native-chat-file-context'
+import type { RuntimeNativeChatFileContext } from '../../../../src/shared/native-chat/file-access/native-chat-file-context'
 import type { RpcFailure } from '../../transport/rpc/rpc-wire-types'
 import {
   terminalArtifactPathResolve,

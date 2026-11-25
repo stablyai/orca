@@ -1,5 +1,5 @@
 import { lstat } from 'node:fs/promises'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { captureDescendantSnapshot } from '../../../pty/process-retirement/pty-descendant-termination'
 import {
   endpointIsProvenDead,
@@ -73,7 +73,7 @@ async function recoverJob(
   ) {
     throw new Error('Could not verify the retired macOS terminal service for recovery')
   }
-  const verdict = await terminateShutdownDescendants(snapshot)
+  const verdict = await terminateShutdownDescendants(snapshot, false)
   if (verdict !== 'exited') {
     throw new Error(`Retired macOS terminal service descendants are ${verdict}`)
   }

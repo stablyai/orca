@@ -1,4 +1,4 @@
-import { isUtf8ByteLengthWithinLimit } from '../../../../../../shared/utf8-byte-limits'
+import { isUtf8ByteLengthWithinLimit } from '../../../../../../shared/text/utf8-byte-limits'
 import { useState } from 'react'
 import { Check, ListFilter, Pencil, Plus, Trash2 } from 'lucide-react'
 import {

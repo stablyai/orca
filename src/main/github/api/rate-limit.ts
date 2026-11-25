@@ -5,7 +5,7 @@ import type {
   GitHubRateLimitSnapshot
 } from '../../../shared/github/api/rate-limit-types'
 import { isDefaultGitHubHost } from '../../../shared/github/repositories/repository-identity-key'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
 import {

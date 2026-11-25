@@ -1,5 +1,5 @@
 import { readTranslatedWorktreeGraph } from './worktree-list-reader'
-import { abortSignalReason } from '../../../../shared/abort-signal-reason'
+import { abortSignalReason } from '../../../../shared/concurrency/abort-signal-reason'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   annotateSparseCheckoutStatus,
@@ -56,13 +56,6 @@ function pruneWorktreeScanGeneration(repoPath: string): void {
   }
   if (!hasInFlightWorktreeScanForRepo(repoPath)) {
     worktreeScanGenerations.delete(repoPath)
-  }
-}
-
-export function _getWorktreeScanCacheSizesForTests(): { inFlight: number; generations: number } {
-  return {
-    inFlight: inFlightWorktreeScans.size,
-    generations: worktreeScanGenerations.size
   }
 }
 

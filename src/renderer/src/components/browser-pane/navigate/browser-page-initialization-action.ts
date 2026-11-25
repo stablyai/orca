@@ -2,7 +2,7 @@ import {
   captureBrowserInitializationDelivery,
   isBrowserInitializationDeliveryCurrent,
   recordBrowserInitializationReceipt
-} from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'
+} from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
 import { sameRuntimeBrowserPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { useAppStore } from '@/store'
 import type { BrowserPageInitializationAction } from '../../../../../shared/browser/client-hosting/browser-page-initialization-action'
@@ -15,7 +15,7 @@ import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtim
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { nextReceivedSessionTabsFrame } from '@/runtime/web-session-tabs-sync/state'
-import { getSessionTabsRuntimeIdFromResponse } from '@/runtime/web-session-tabs-sync/publisher-identity-fences'
+import { getSessionTabsRuntimeIdFromResponse } from '@/runtime/web-session-tabs-sync/tracking/publisher-identity-fences'
 import {
   applyWebRuntimeSessionTabsAnswer,
   refreshWebRuntimeSessionTabsSnapshot

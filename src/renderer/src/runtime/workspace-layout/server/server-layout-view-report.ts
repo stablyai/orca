@@ -1,6 +1,6 @@
 // Report each frame-drawn workspace’s shown group to server main so CLI/phone opens land in view; group IDs stay server-native. Fire-and-forget.
 
-import { errorMessage } from '../../../../../shared/error-message'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { changedActiveGroups } from '../../sync-runtime-graph/active-group-publication'

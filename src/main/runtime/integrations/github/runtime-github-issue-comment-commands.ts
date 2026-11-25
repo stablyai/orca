@@ -2,10 +2,10 @@ import '../../../github/api/rate-limit'
 import type {
   GitHubCreateIssueFields,
   GitHubIssueUpdate
-} from '../../../../shared/issue-mutation-types'
+} from '../../../../shared/work-items/issue-mutation-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { GitHubPRReviewCommentInput } from '../../../../shared/github/comments/comment-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { LocalProjectGhExecOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { addIssueComment } from '../../../github/issues/issue-comment'
 import {
@@ -14,7 +14,7 @@ import {
 } from '../../../github/client/create/add-pr-review-comment'
 import { createIssue } from '../../../github/issues/issue-create'
 import { updateIssue } from '../../../github/issues/issue-update'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { GitHubAttachmentTarget } from '../../../../shared/rpc-contract/github/github-attachment-params'
 import { uploadGitHubImage } from '../../../github/attachments/image-attachment-upload'
 import {

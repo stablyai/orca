@@ -1,5 +1,5 @@
 import type { MessagePortMain } from 'electron'
-import type { SpeechAudioPortMessage } from '../../shared/speech-types'
+import type { SpeechAudioPortMessage } from '../../shared/speech/speech-types'
 import type { SttRecognizer, SttRecognizerInit, SttRecognizerPost } from './stt-recognizer'
 import { createTranscribeCppRecognizer } from './stt-transcribe-cpp-recognizer'
 import { connectSttWorkerParentPort } from './stt-worker-parent-port'

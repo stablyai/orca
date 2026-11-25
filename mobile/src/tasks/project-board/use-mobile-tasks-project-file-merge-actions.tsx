@@ -246,7 +246,9 @@ export function useMobileTasksProjectFileMergeActions<Model extends ProjectFileM
             repo: `id:${repo.id}`,
             prNumber: row.content.number,
             prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
-            method
+            method,
+            expectedHeadSha:
+              projectRowDetail?.provider === 'github' ? projectRowDetail.headSha : undefined
           },
           { timeoutMs: 60_000 }
         )
@@ -279,7 +281,7 @@ export function useMobileTasksProjectFileMergeActions<Model extends ProjectFileM
         setProjectMutating(false)
       }
     },
-    [activeGitHubProjectHost, client, findProjectRowRepo, projectMutating]
+    [activeGitHubProjectHost, client, findProjectRowRepo, projectMutating, projectRowDetail]
   )
 
   const toggleGitHubStatus = useCallback(

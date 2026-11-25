@@ -1,4 +1,4 @@
-import type { ComputerUsePermissionStatusResult } from '../../../shared/computer-use-permissions-types'
+import type { ComputerUsePermissionStatusResult } from '../../../shared/computer/computer-use-permissions-types'
 
 // Each macOS probe launches a helper that settles TCC for ~2s; 5s between real spawns allows 12 per 60s window.
 // performance.now is monotonic, so a wall-clock step can't stretch or skip the floor.

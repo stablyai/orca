@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard } from 'react-native'
-import { getComposerRepoWorktreeBranches } from '../../../../../src/shared/composer-branch-selection'
+import { getComposerRepoWorktreeBranches } from '../../../../../src/shared/new-workspace/composer-branch-selection'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../src/shared/execution-host'
-import { getProjectIdentityKey } from '../../../../../src/shared/project-host-setup-projection'
+} from '../../../../../src/shared/execution-host/execution-host'
+import { getProjectIdentityKey } from '../../../../../src/shared/project/host-setup/project-host-setup-projection'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../../../src/shared/new-workspace/workspace-source'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { SmartModeAvailabilityInput } from '../../source-selection/mobile-smart-source-modes'
@@ -184,10 +184,10 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     existingWorktreePaths,
     retiredWorktreeNames,
     setupCommand: setupScript.setupCommand,
-    setupTrust: setupScript.setupTrust,
     setupRunPolicy: setupScript.setupRunPolicy,
     setupDecisionChoice: setupScript.setupDecisionChoice,
     runSetup: setupScript.runSetup,
+    setupWait: setupScript.waitForSetupChoice,
     trustedOrcaHooks: runtime.trustedOrcaHooks,
     setTrustedOrcaHooks: runtime.setTrustedOrcaHooks,
     getWorktreeCreateCutoverSupport,
@@ -311,6 +311,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         setupRunPolicy={setupScript.setupRunPolicy}
         setupDecisionChoice={setupScript.setupDecisionChoice}
         runSetup={setupScript.runSetup}
+        waitForSetup={setupScript.waitForSetup}
         error={error}
         creating={createSubmit.creating}
         canCreate={canCreate}
@@ -331,6 +332,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         onNoteChange={setNote}
         onSetupDecisionChange={setupScript.setSetupDecisionChoice}
         onRunSetupChange={setupScript.setRunSetup}
+        onWaitForSetupChange={setupScript.setWaitForSetup}
         onCreate={() => void createSubmit.create()}
       />
 

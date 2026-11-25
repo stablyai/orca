@@ -1,4 +1,4 @@
-import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../../../shared/review-refresh-policy'
+import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import type { OwningHostCadence } from './owning-host-cadence-replan'
 
 export type VisibleHostedReviewRefreshTarget = {
@@ -15,7 +15,8 @@ export type VisibleHostedReviewRefreshTarget = {
   refresh: (
     force?: boolean,
     signal?: AbortSignal,
-    intent?: 'discovery' | 'timer'
+    /** `retry`: a never-successful read's backoff (no gh on the host), a poll like `timer`. */
+    intent?: 'discovery' | 'timer' | 'retry'
   ) => Promise<VisibleHostedReviewRefreshResult>
 } & OwningHostCadence
 
@@ -76,13 +77,15 @@ function discoveryIdentityChanged(
 }
 
 // One timer and one admission queue serve every visible branch.
+type InFlight = { target: VisibleHostedReviewRefreshTarget; controller: AbortController }
+
+// A never-successful read's backoff (no gh on the host) is a poll, like a timer read (#46567).
+const retryOrTimer = (entry: Entry) => (entry.target.fetchedAt === null ? 'retry' : 'timer')
+
 export function createVisibleHostedReviewRefreshScheduler() {
   const entries = new Map<string, Entry>()
   const recent = new Map<string, Entry>()
-  const inFlight = new Map<
-    string,
-    { target: VisibleHostedReviewRefreshTarget; controller: AbortController }
-  >()
+  const inFlight = new Map<string, InFlight>()
   let timer: ReturnType<typeof setTimeout> | null = null
   let visible = false
   let disposed = false
@@ -190,7 +193,7 @@ export function createVisibleHostedReviewRefreshScheduler() {
         continue
       }
       const force = entry.discovery || entry.failures > 0 || entry.target.fetchedAt === null
-      const intent = entry.discovery || entry.target.fetchedAt === null ? 'discovery' : 'timer'
+      const intent = entry.discovery ? 'discovery' : retryOrTimer(entry)
       entry.lastAttemptAt = now
       entry.discovery = false
       const startedTarget = entry.target

@@ -1,6 +1,11 @@
 import type { WebSocket } from 'ws'
-import type { WsOutboundBackpressureQueue } from '../../../../../shared/ws-outbound-backpressure-queue'
-import { createLegacyMobileE2EEReplyQueue } from './mobile-e2ee-outbound-admission'
+import type { WsOutboundBackpressureQueue } from '../../../../../shared/network/websocket/ws-outbound-backpressure-queue'
+import {
+  createLegacyMobileE2EEReplyQueue,
+  isMobileE2EEOutboundItemWithinLimit,
+  type MobileE2EEOutboundBudgetClose,
+  type MobileE2EEOutboundCap
+} from './mobile-e2ee-outbound-admission'
 import { encryptBytes } from '../../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   createDesktopMobileE2EEV2OutboundQueue,
@@ -23,11 +28,13 @@ export class MobileE2EEDesktopOutboundOwner {
   // Why: one queue for text and binary, so a binary frame can neither overtake parked text nor drop silently.
   private legacyQueue: WsOutboundBackpressureQueue<string | Buffer> | null = null
   private v2Queue: WsOutboundBackpressureQueue<DesktopMobileE2EEV2OutboundItem> | null = null
+  // Bytes each phone request's replies queued since the backlog was last empty; names an overflow's cause.
+  private readonly backlogBytes = new Map<string, number>()
 
   constructor(
     private readonly ws: WebSocket,
     private readonly isLegacyKeyed: () => boolean,
-    private readonly onOverflow: () => void,
+    private readonly onClose: (close: MobileE2EEOutboundBudgetClose) => void,
     private readonly clientCapabilities: RuntimeClientCapabilities,
     memoryBudget: MobileE2EEOutboundMemoryBudget = createMobileE2EEOutboundMemoryBudget()
   ) {
@@ -37,20 +44,22 @@ export class MobileE2EEDesktopOutboundOwner {
 
   sendLegacyFrame(frame: string): boolean {
     if (this.socketMemory?.canSend(frame.length) !== true || this.ws.readyState !== this.ws.OPEN) {
-      this.onOverflow()
+      this.overflow(this.socketMemory ? 'bufferedBytes' : 'socketSources', 'control')
       return false
     }
     this.ws.send(frame)
     return true
   }
 
-  enqueueLegacyText(frame: string): boolean {
-    return this.legacy()?.enqueue(frame) ?? false
+  enqueueLegacyText(frame: string, method: string): boolean {
+    const queue = this.legacy()
+    return queue ? this.enqueue(queue, frame, frame.length, method) : false
   }
 
   enqueueLegacyBinary(
     bytes: Uint8Array<ArrayBufferLike>,
     sharedKey: Uint8Array,
+    method: string,
     options?: RpcBinarySendOptions
   ): boolean | 'backlogged' {
     const queue = this.legacy()
@@ -61,17 +70,23 @@ export class MobileE2EEDesktopOutboundOwner {
     if (options?.dropWhenBacklogged && !queue.isIdle(bytes.byteLength + 40)) {
       return 'backlogged'
     }
-    return queue.enqueue(Buffer.from(encryptBytes(bytes, sharedKey)))
+    const sealed = Buffer.from(encryptBytes(bytes, sharedKey))
+    return this.enqueue(queue, sealed, sealed.byteLength, method)
   }
 
   enqueueV2(
     plain: DesktopMobileE2EEV2OutboundItem,
     session: DesktopMobileE2EEV2Session,
+    method: string,
     options?: RpcBinarySendOptions
   ): boolean | 'backlogged' {
+    if (!isMobileE2EEOutboundItemWithinLimit(plain)) {
+      this.onClose({ emitter: 'size', cap: 'maxFrameBytes', top_method: method })
+      return false
+    }
     const item = compressMobileE2EEV2Item(plain, this.clientCapabilities.current, options)
     if (!this.socketMemory) {
-      this.onOverflow()
+      this.overflow('socketSources')
       return false
     }
     this.v2Queue ??= createDesktopMobileE2EEV2OutboundQueue({
@@ -79,20 +94,43 @@ export class MobileE2EEDesktopOutboundOwner {
       session,
       memoryBudget: this.memoryBudget,
       socketMemory: this.socketMemory,
-      onOverflow: this.onOverflow
+      onOverflow: (evidence) => this.overflow(evidence.cap)
     })
-    if (
-      options?.dropWhenBacklogged &&
-      !this.v2Queue.isIdle(desktopMobileE2EEV2OutboundItemBytes(item))
-    ) {
+    const bytes = desktopMobileE2EEV2OutboundItemBytes(item)
+    if (options?.dropWhenBacklogged && !this.v2Queue.isIdle(bytes)) {
       return 'backlogged'
     }
-    return this.v2Queue.enqueue(item)
+    return this.enqueue(this.v2Queue, item, bytes, method)
+  }
+
+  private enqueue<T>(
+    queue: WsOutboundBackpressureQueue<T>,
+    frame: T,
+    bytes: number,
+    method: string
+  ): boolean {
+    if (queue.queuedBytes() === 0) {
+      this.backlogBytes.clear()
+    }
+    this.backlogBytes.set(method, (this.backlogBytes.get(method) ?? 0) + bytes)
+    return queue.enqueue(frame)
+  }
+
+  /** `method` names a frame that never reached the queue; otherwise the backlog's largest. */
+  private overflow(cap: MobileE2EEOutboundCap, method?: string): void {
+    let top: [string, number] | undefined
+    for (const entry of this.backlogBytes) {
+      if (!top || entry[1] > top[1]) {
+        top = entry
+      }
+    }
+    const topMethod = method ?? top?.[0]
+    this.onClose({ emitter: 'queue', cap, ...(topMethod ? { top_method: topMethod } : {}) })
   }
 
   private legacy(): WsOutboundBackpressureQueue<string | Buffer> | null {
     if (!this.socketMemory) {
-      this.onOverflow()
+      this.overflow('socketSources')
       return null
     }
     this.legacyQueue ??= createLegacyMobileE2EEReplyQueue({
@@ -100,7 +138,7 @@ export class MobileE2EEDesktopOutboundOwner {
       isKeyed: this.isLegacyKeyed,
       memoryBudget: this.memoryBudget,
       socketMemory: this.socketMemory,
-      onOverflow: this.onOverflow
+      onOverflow: (evidence) => this.overflow(evidence.cap)
     })
     return this.legacyQueue
   }

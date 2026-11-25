@@ -1,5 +1,6 @@
 import { Editor, getSchema } from '@tiptap/core'
 import { MarkdownManager } from '@tiptap/markdown'
+import { hasMarkdownReferenceDefinitionLines } from '../source-scanning/markdown-reference-link-normalization'
 import { encodeRawMarkdownHtmlForRichEditor } from '../../rich-markdown/raw-source/raw-markdown-html'
 import { createRichMarkdownExtensions } from '../../rich-markdown/schema/rich-markdown-extensions'
 import {
@@ -24,6 +25,32 @@ function createRoundTripExtensions(codec: RichMarkdownEditorCodec) {
   })
 }
 
+function createRoundTripMarkdownManager(
+  codec: RichMarkdownEditorCodec,
+  extensions = createRoundTripExtensions(codec)
+): MarkdownManager {
+  return new MarkdownManager({ marked: codec.marked, markedOptions: { gfm: true }, extensions })
+}
+
+/** Rich mode drops definitions: the encoder strips its own, and the production parser consumes the rest. */
+export function hasRichMarkdownReferenceDefinition(content: string): boolean {
+  if (hasMarkdownReferenceDefinitionLines(content)) {
+    return true
+  }
+  try {
+    const codec = createRichMarkdownEditorCodec()
+    const { instance } = createRoundTripMarkdownManager(codec)
+    // Lex the encoded source like MarkdownManager.parse: HTML placeholders and extension blocks can expose definitions.
+    const encoded = encodeRawMarkdownHtmlForRichEditor(content, codec, {
+      htmlSuperscriptLinks: true
+    })
+    return Object.keys(instance.lexer(encoded).links).length > 0
+  } catch {
+    // Deeply nested containers can overflow marked's recursive lexer.
+    return true
+  }
+}
+
 /** Validate encoded passthrough markup with the production parser, without an EditorView. */
 export function getRichMarkdownPassthroughOutput(
   encoded: string,
@@ -31,11 +58,7 @@ export function getRichMarkdownPassthroughOutput(
 ): string | null {
   try {
     const extensions = createRoundTripExtensions(codec)
-    const manager = new MarkdownManager({
-      marked: codec.marked,
-      markedOptions: { gfm: true },
-      extensions
-    })
+    const manager = createRoundTripMarkdownManager(codec, extensions)
     const document = manager.parse(encoded)
     getSchema(extensions).nodeFromJSON(document).check()
     return manager.serialize(document)

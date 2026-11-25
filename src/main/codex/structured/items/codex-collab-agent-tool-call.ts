@@ -1,4 +1,4 @@
-import { codexCollabToolRowName } from '../../../../shared/codex-collab-agent-tools'
+import { codexCollabToolRowName } from '../../../../shared/agent-hook-listener/providers/codex/codex-collab-agent-tools'
 import { collapsedToolInputPrefix } from '../../../../shared/native-chat/tools/native-chat-tool-preview-prefix'
 import { readRecord, readString } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'

@@ -4,7 +4,7 @@
  * Keep terminal.show non-resolving: fabricated PTY ids would expose writable terminal operations. */
 
 import type { RuntimeTerminalRead } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import { formatWorkerTranscriptMessage } from '../../../../../shared/worker-transcript-text'
+import { formatWorkerTranscriptMessage } from '../../../../../shared/native-chat/transcript/worker-transcript-text'
 import '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals'
 import type { OrchestrationDb } from '../../db/orchestration-db'

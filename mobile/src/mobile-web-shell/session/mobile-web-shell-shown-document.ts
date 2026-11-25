@@ -21,7 +21,11 @@ import { step } from './mobile-web-shell-session-step'
 import { AWAIT_DOCUMENT_LOAD } from '../page-document/page-document-lifecycle'
 
 // The reducer's flow entry, for a document the verdict sends back through the manifest.
-type Reenter = (session: MobileWebShellSession, gates: MobileWebShellGates) => MobileWebShellStep
+type Reenter = (
+  session: MobileWebShellSession,
+  gates: MobileWebShellGates,
+  patch?: Partial<MobileWebShellSession>
+) => MobileWebShellStep
 
 // A page on screen or about to open from cache, as opposed to a download about to become one.
 export function showsDocument(state: MobileWebShellSessionState): boolean {
@@ -48,10 +52,12 @@ export function onDocumentGates(
   }
   const wall = cachedGenerationWall(verdict, gates, compat)
   if (wall === null) {
-    // The first open verdict checks for a newer build behind the running page; reconnects don't ask again.
-    return session.verdicted
+    // The first open verdict, and the first after a resume, check for a newer build behind the running page.
+    return session.verdicted && !session.resumeCheckDue
       ? step(session, { gates })
-      : step(session, { gates, verdicted: true }, [{ kind: 'read-manifest' }])
+      : step(session, { gates, verdicted: true, resumeCheckDue: false }, [
+          { kind: 'read-manifest' }
+        ])
   }
   // A page that may have talked walls instead of reloading under the user (design 3.11).
   if (session.verdicted) {
@@ -61,7 +67,27 @@ export function onDocumentGates(
   return reenter(session, gates)
 }
 
-// A newer build behind a running page downloads for the next entry; the page itself is never swapped.
+// A resume asks again, since a desktop updated while the app was away would otherwise wait for the next launch.
+// A swap reopens through the same gates: the open-cache commits the waiting build and the page reopens where it was.
+export function onResumeEvent(
+  session: MobileWebShellSession,
+  event: 'app-resumed' | 'update-swap',
+  reenter: Reenter
+): MobileWebShellStep {
+  const gates = session.gates
+  if (session.state.kind !== 'ready' || gates === null) {
+    return step(session, {})
+  }
+  if (event === 'update-swap') {
+    return reenter(session, gates, { cached: null })
+  }
+  // A page still awaiting its first verdict asks once that verdict opens.
+  return session.verdicted
+    ? onDocumentGates({ ...session, resumeCheckDue: true }, gates, session.state.compat, reenter)
+    : step(session, {})
+}
+
+// A newer build behind a running page stages for a later entry, or for a resume where every page reading it may reload.
 export function onUpdateManifest(
   session: MobileWebShellSession,
   gates: MobileWebShellGates,

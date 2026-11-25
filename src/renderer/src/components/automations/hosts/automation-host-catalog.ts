@@ -8,7 +8,7 @@ import type {
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
 } from '../../../../../shared/automations/ownership/automation-owner-ref'
-import { isOwnedSshTargetId } from '../../../../../shared/execution-host'
+import { isOwnedSshTargetId } from '../../../../../shared/execution-host/execution-host'
 import {
   automationAuthorityCatalogKey,
   type AutomationCatalogSshMirrorInput,

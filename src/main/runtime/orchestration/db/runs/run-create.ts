@@ -1,7 +1,7 @@
 import type { RunRow } from '../orchestration-records'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
-import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { mailboxAddressOf } from '../../addressing/orchestration-caller-identity'
 
 type RunCoordinatorParams = {

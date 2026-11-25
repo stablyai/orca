@@ -10,7 +10,14 @@ import {
 import { createPortal } from 'react-dom'
 import type { BrowserPageContextMenuState } from '../../describe-page/browser-page-types'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
-import { BrowserPageContextMenuItems } from './browser-page-context-menu-items'
+import { issueBrowserGuestNavigation } from '../../host-guest/metadata/browser-guest-metadata-cache'
+import { openLinkInNewBrowserTab } from '@/lib/browser/palette/open-client-hosted-link-beside-page'
+import { normalizeExternalBrowserUrl } from '../../../../../../shared/browser/navigation/browser-url'
+import { getRemoteRoutedOpenableExternalUrl } from '../../describe-page/browser-page-url-display'
+import {
+  BrowserPageContextMenuItems,
+  type BrowserPageContextMenuActions
+} from './browser-page-context-menu-items'
 
 export function BrowserPageContextMenu({
   browserPageId,
@@ -18,7 +25,10 @@ export function BrowserPageContextMenu({
   canGoBack,
   canGoForward,
   webviewRef,
-  onReload
+  onReload,
+  remoteRoutedNetwork = false,
+  externalUrl,
+  openExternal
 }: {
   browserPageId: string
   worktreeId: string
@@ -26,6 +36,12 @@ export function BrowserPageContextMenu({
   canGoForward: boolean
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   onReload: () => void
+  /** The page browses through a remote host, whose loopback this desktop's browser cannot reach. */
+  remoteRoutedNetwork?: boolean
+  /** Overrides what the system browser opens, e.g. an SSH host's localhost through its port forward. */
+  externalUrl?: (url: string) => string | null
+  /** Opens what externalUrl returned, e.g. through the forward it names. */
+  openExternal?: (url: string) => void
 }): React.JSX.Element | null {
   const [contextMenu, setContextMenu] = useState<BrowserPageContextMenuState | null>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
@@ -168,6 +184,30 @@ export function BrowserPageContextMenu({
     return null
   }
 
+  const webviewMenuActions = (pagePoint: {
+    x: number
+    y: number
+  }): BrowserPageContextMenuActions => ({
+    edit: (command) => webviewRef.current?.[command](),
+    replaceMisspelling: (word) => webviewRef.current?.replaceMisspelling(word),
+    addWordToDictionary: (word) =>
+      void window.api.browser.addWordToDictionary({ browserPageId, word }),
+    openInNewTab: (url, activate) =>
+      openLinkInNewBrowserTab({ sourcePageId: browserPageId, worktreeId, url, activate }),
+    externalUrl:
+      externalUrl ??
+      (remoteRoutedNetwork ? getRemoteRoutedOpenableExternalUrl : normalizeExternalBrowserUrl),
+    openExternal,
+    // Use guest download rules for local Downloads or the client-hosted remote workspace.
+    saveImage: (url) => webviewRef.current?.downloadURL(url),
+    copyImage: () => void window.api.browser.copyImageAt({ browserPageId, point: pagePoint }),
+    inspect: () => void window.api.browser.openDevTools({ browserPageId, inspectAt: pagePoint }),
+    goBack: () => issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack()),
+    goForward: () =>
+      issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward()),
+    reload: onReload
+  })
+
   return createPortal(
     <>
       <div className="fixed inset-0 z-50" onPointerDown={closeMenu} />
@@ -183,12 +223,9 @@ export function BrowserPageContextMenu({
       >
         <BrowserPageContextMenuItems
           menu={contextMenu}
-          browserPageId={browserPageId}
-          worktreeId={worktreeId}
           canGoBack={canGoBack}
           canGoForward={canGoForward}
-          webviewRef={webviewRef}
-          onReload={onReload}
+          actions={webviewMenuActions(contextMenu.pagePoint)}
           onClose={closeMenu}
         />
       </div>

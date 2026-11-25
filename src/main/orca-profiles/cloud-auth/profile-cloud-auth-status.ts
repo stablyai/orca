@@ -1,7 +1,8 @@
-import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles/orca-profiles'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
 import { getOrcaCloudAuthConfig, isOrcaCloudDevAuthEnabled } from './profile-cloud-auth-config'
 import { readCloudSession } from '../cloud-session/profile-cloud-session-owner'
+import { sessionBelongsToProfile } from '../cloud-session/profile-cloud-session-identity'
 
 export function getOrcaProfileAuthStatusFromProfile(
   active: ActiveOrcaProfileState,
@@ -34,6 +35,16 @@ export function getOrcaProfileAuthStatusFromProfile(
           ? session.error
           : undefined,
       setupMessage: configState.setupMessage
+    }
+  }
+  if (session.status === 'found' && !sessionBelongsToProfile(session.session, cloud)) {
+    return {
+      activeProfileId: active.profile.id,
+      configured,
+      state: 'reconnect-required',
+      persistence: 'none',
+      cloud,
+      credentialError: 'The saved sign-in belongs to a different Orca account. Sign in again.'
     }
   }
   if (session.status === 'found') {

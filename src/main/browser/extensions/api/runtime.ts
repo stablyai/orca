@@ -5,8 +5,12 @@ import {
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace
 } from '../api-runtime/browser-extension-namespace-registry'
+import {
+  browserExtensionContextFilterSchema,
+  listBrowserExtensionSidePanelContexts
+} from '../side-panel/browser-extension-side-panel-contexts'
 
-/** Only what Electron leaves unimplemented (lifecycle events: runtime-lifecycle); the rest is native. */
+/** Only what Electron leaves unimplemented or can't see (side panels); the rest is native. */
 export function registerRuntimeNamespace(): void {
   registerBrowserExtensionNamespace('runtime', {
     methods: {
@@ -16,6 +20,18 @@ export function registerRuntimeNamespace(): void {
           caller.extension,
           placeBrowserExtensionCallerTab(caller, true)
         )
+      ),
+      getContexts: defineBrowserExtensionMethod(
+        // Why optional: MV2 pages have no native getContexts to answer first.
+        z.tuple([browserExtensionContextFilterSchema, z.array(z.unknown()).optional()]),
+        (caller, filter, nativeContexts) => [
+          ...(nativeContexts ?? []),
+          ...listBrowserExtensionSidePanelContexts(
+            caller.browserProfileId,
+            caller.extension.id,
+            filter
+          )
+        ]
       )
     },
     events: ['onInstalled', 'onStartup']

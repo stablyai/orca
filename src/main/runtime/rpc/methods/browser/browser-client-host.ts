@@ -1,6 +1,6 @@
 import { requireCommandResultIdentity } from './browser-client-host-command-result-identity'
 import { BROWSER_PAGE_INITIALIZATION_ACTION_METHODS } from './browser-page-initialization-action'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY

@@ -1,9 +1,13 @@
 import { getSystemLanguageDetection } from './system-language'
 import type { i18n as I18nInstance } from 'i18next'
 
-import { createOrcaI18n } from '../../shared/orca-i18n-instance'
-import { DEFAULT_UI_LOCALE, resolveUiLocale, type SupportedUiLocale } from '../../shared/ui-locale'
-import { UI_LANGUAGE_SYSTEM, type UiLanguage } from '../../shared/ui-language'
+import { createOrcaI18n } from '../../shared/i18n/orca-i18n-instance'
+import {
+  DEFAULT_UI_LOCALE,
+  resolveUiLocale,
+  type SupportedUiLocale
+} from '../../shared/i18n/ui-locale'
+import { UI_LANGUAGE_SYSTEM, type UiLanguage } from '../../shared/i18n/ui-language'
 
 let languageGeneration = 0
 

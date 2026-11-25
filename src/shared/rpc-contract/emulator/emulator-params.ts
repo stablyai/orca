@@ -26,6 +26,8 @@ export const GestureParams = z.object({
 
 export const TypeParams = z.object({
   text: z.string(),
+  // The pane's paste: one pasteboard insert that keeps newlines as text.
+  paste: z.boolean().optional(),
   device: z.string().optional(),
   emulator: z.string().optional(),
   worktree: z.string().optional()

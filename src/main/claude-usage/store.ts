@@ -1,4 +1,4 @@
-import { claudeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
+import { claudeTokenDays } from '../usage/reporting/token-usage/agent-token-usage'
 import { join } from 'node:path'
 import type {
   ClaudeUsageBreakdownKind,
@@ -9,7 +9,7 @@ import type {
   ClaudeUsageSessionRow,
   ClaudeUsageSnapshot,
   ClaudeUsageSummary
-} from '../../shared/claude-usage-types'
+} from '../../shared/agent-usage/analytics/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
 import type { UsageStoreHost } from '../usage/usage-store-host'
 import type { ClaudeUsagePersistedState } from './types'
@@ -72,7 +72,7 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
     super(host, {
       tokenUsage: {
         provider: 'claude',
-        selectSessions: (state) => claudeTokenSessions(state.sessions)
+        selectDays: (state) => claudeTokenDays(state.dailyAggregates)
       },
       logTag: '[claude-usage]',
       resolveCacheFile: () => join(host.userDataPath, 'orca-claude-usage.json'),

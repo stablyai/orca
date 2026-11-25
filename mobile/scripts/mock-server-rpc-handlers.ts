@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws'
 import {
   DESKTOP_PROTOCOL_VERSION,
   MIN_COMPATIBLE_MOBILE_VERSION
-} from '../../src/shared/protocol-version'
+} from '../../src/shared/remote-runtime/protocol/protocol-version'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
@@ -224,7 +224,7 @@ export function handleRequest(
 
     case 'preflight.detectAgents':
     case 'preflight.detectRemoteAgents':
-      respond(success(request.id, ['claude', 'codex', 'gemini']))
+      respond(success(request.id, ['claude', 'codex', 'antigravity']))
       break
 
     case 'ssh.getState':

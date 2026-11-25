@@ -102,21 +102,34 @@ export async function installCodexHooksRemote(
     // Preserve other managers' metadata in the user's remote hooks.json.
     await writeHooksJsonRemote(sftp, remoteConfigPath, { ...config, hooks: nextHooks })
     try {
-      const existingTomlRaw = await readTextFileRemote(sftp, remoteTomlPath)
-      if (existingTomlRaw === null && options?.deferTrustUntilConfigToml === true) {
-        return {
-          agent: 'codex',
-          state: 'installed',
-          configPath: remoteConfigPath,
-          managedHooksPresent: true,
-          detail: 'Trust entries deferred until config.toml is seeded by the launch path'
+      for (let attempt = 0; ; attempt++) {
+        const existingTomlRaw = await readTextFileRemote(sftp, remoteTomlPath)
+        if (existingTomlRaw === null && options?.deferTrustUntilConfigToml === true) {
+          return {
+            agent: 'codex',
+            state: 'installed',
+            configPath: remoteConfigPath,
+            managedHooksPresent: true,
+            detail: 'Trust entries deferred until config.toml is seeded by the launch path'
+          }
         }
-      }
-      const existingToml = existingTomlRaw ?? ''
-      const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
-      if (updatedToml !== existingToml) {
+        const existingToml = existingTomlRaw ?? ''
+        const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
+        if (updatedToml === existingToml) {
+          break
+        }
         assertLoadableHookTrustConfig(remoteTomlPath, existingToml, updatedToml)
-        await writeTextFileRemoteAtomic(sftp, remoteTomlPath, updatedToml)
+        // A save after the read is kept; redo the edit on it.
+        if (
+          await writeTextFileRemoteAtomic(sftp, remoteTomlPath, updatedToml, {
+            computedFrom: existingTomlRaw
+          })
+        ) {
+          break
+        }
+        if (attempt === 2) {
+          throw new Error(`${remoteTomlPath} kept changing while Orca updated it`)
+        }
       }
     } catch (error) {
       return {

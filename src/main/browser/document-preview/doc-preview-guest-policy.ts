@@ -3,7 +3,7 @@ import {
   parseDocPreviewUrl,
   type DocPreviewExternalLink
 } from '../../../shared/document-preview/doc-preview-scheme'
-import { normalizeExternalBrowserUrl } from '../../../shared/browser-url'
+import { normalizeExternalBrowserUrl } from '../../../shared/browser/navigation/browser-url'
 import { enforceBrowserRouteWebRtcPolicy } from '../network/egress/browser-route-webrtc-policy'
 import { getDocPreviewGrant } from './doc-preview-grant-registry'
 

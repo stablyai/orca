@@ -1,11 +1,11 @@
+import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { useMemo } from 'react'
-import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { selectNativeChatForkSourceOpenable } from './native-chat-fork-source-openable'
 import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import {
   NativeChatForkContext,
   NativeChatForkedFromContext,
-  NativeChatForkSlotContext,
   NativeChatSideChatForkPointContext
 } from '@/components/native-chat/messages/actions/native-chat-fork-context'
 import { NativeChatRewindContext } from '@/components/native-chat/messages/actions/native-chat-rewind-context'
@@ -13,9 +13,14 @@ import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/o
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatRewindSurface } from '@/components/native-chat/messages/actions/use-native-chat-rewind-host'
 import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
+import {
+  NativeChatWaitingAgentMailContext,
+  NativeChatWaitingAgentMailRowsContext,
+  type NativeChatWaitingAgentMail
+} from '@/components/native-chat/queue/NativeChatWaitingAgentMailActions'
 
-/** What the pane's transcript rows offer: rewind on prompts, fork on responses, and the chat a
- *  "Forked from" divider opens. */
+/** What the pane's transcript rows offer: rewind on prompts, fork on responses, the chat a
+ *  "Forked from" divider opens, and Steer and Delete on other agents' waiting mail. */
 export function NativeChatRowActionsProvider({
   pane,
   chat,
@@ -23,7 +28,11 @@ export function NativeChatRowActionsProvider({
   children
 }: {
   pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'target'>
-  chat: { rewind: { surface: NativeChatRewindSurface | undefined } }
+  chat: {
+    rewind: { surface: NativeChatRewindSurface | undefined }
+    waitingAgentMail: NativeChatWaitingAgentMail
+    waitingAgentRows: readonly NativeChatMessage[]
+  }
   /** The session's fork, shared with its `/fork` and `/btw` commands. */
   forks: NativeChatPaneForks
   children: React.ReactNode
@@ -31,8 +40,9 @@ export function NativeChatRowActionsProvider({
   const worktreeId = useNativeChatTabOwnerWorktreeId(pane.tabId)
   const { agent, target } = pane
   // An unreachable host cannot open the source, so its divider shows plain words until it returns.
-  const sourceOpenable = useAppStore(
-    (state) => worktreeId !== null && selectNativeChatForkSourceOpenable(state, worktreeId, target)
+  const sourceOpenable = useAppStoreWithHostStatuses(
+    (state, statuses) =>
+      worktreeId !== null && selectNativeChatForkSourceOpenable(state, statuses, worktreeId, target)
   )
   // A fork and its source share a workspace and host.
   const openSource = useMemo(
@@ -45,7 +55,7 @@ export function NativeChatRowActionsProvider({
                 structuredSession: { sessionId: sourceSessionId, workspaceId: worktreeId },
                 agent
               },
-              target
+              { target, retry: 'open' }
             )
         : undefined,
     [agent, target, worktreeId, sourceOpenable]
@@ -55,9 +65,11 @@ export function NativeChatRowActionsProvider({
       <NativeChatForkContext.Provider value={forks.fork}>
         <NativeChatSideChatForkPointContext.Provider value={forks.sideChat?.reportForkPoint}>
           <NativeChatForkedFromContext.Provider value={openSource}>
-            <NativeChatForkSlotContext.Provider value>
-              {children}
-            </NativeChatForkSlotContext.Provider>
+            <NativeChatWaitingAgentMailContext.Provider value={chat.waitingAgentMail}>
+              <NativeChatWaitingAgentMailRowsContext.Provider value={chat.waitingAgentRows}>
+                {children}
+              </NativeChatWaitingAgentMailRowsContext.Provider>
+            </NativeChatWaitingAgentMailContext.Provider>
           </NativeChatForkedFromContext.Provider>
         </NativeChatSideChatForkPointContext.Provider>
       </NativeChatForkContext.Provider>

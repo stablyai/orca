@@ -1,7 +1,7 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { getAgentRowConversationName } from '../../../../../shared/agent-status/presentation/agent-row-conversation-name'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { structuredChatDisplayName } from '../../../../../shared/structured-chat-row-name'
+import { structuredChatDisplayName } from '../../../../../shared/agent-session/view/structured-chat-row-name'
 import { resolveAgentRowPaneLiveTitle } from './agent-row-pane-live-title'
 import { structuredChatTabById } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import { useStructuredChatTabNaming } from '@/runtime/native-chat/naming/structured-conversation-name'
@@ -66,7 +66,8 @@ export function useAgentRowConversationNaming(agent: DashboardAgentRow): {
       : resolveAgentRowPaneLiveTitle(
           s.terminalLayoutsByTabId?.[agent.tab.id],
           s.runtimePaneTitlesByTabId?.[agent.tab.id],
-          ownLeafId
+          ownLeafId,
+          agent.runtimePaneId
         )
   )
   // Why: synthetic and same-tab child rows do not own the parent tab's name.

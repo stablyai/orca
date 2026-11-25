@@ -1,5 +1,5 @@
 import { addWslEnvKeys } from '../../../../shared/shell/wsl/wsl-env'
-import { detectExplicitPiAgentKindFromCommand } from '../../../../shared/pi-agent-kind'
+import { detectExplicitPiAgentKindFromCommand } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { resolveLoginShellEnvironment } from '../../../startup/shell-environment/login-shell-environment'
 

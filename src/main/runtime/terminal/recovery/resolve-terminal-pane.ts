@@ -23,7 +23,7 @@ import {
 } from '../output/tail/terminal-tail-read'
 import { getTerminalState } from '../wait/terminal-wait-results'
 import { readStructuredWorkerTerminal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-read'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { workspaceSessionListsTerminalTab } from '../../../../shared/workspace-session/workspace-session-terminal-tab-close'
 
 export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithRestoredHandlePaneStart {

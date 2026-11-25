@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getProviderSessionClaimKey } from '../../../../../../shared/sleeping-record-legacy-pane-key'
+import { getProviderSessionClaimKey } from '../../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

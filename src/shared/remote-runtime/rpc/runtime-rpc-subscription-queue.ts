@@ -1,4 +1,4 @@
-import { abortSignalReason } from '../../abort-signal-reason'
+import { abortSignalReason } from '../../concurrency/abort-signal-reason'
 import { isTimedPRRead, type RuntimeRpcCallQueuePool } from './runtime-rpc-call-queue'
 
 export function enqueueRuntimeSubscription<T>(

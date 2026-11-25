@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../../store/index'
-import type { ZcodePlanCredentialsStatus } from '../../../../../../shared/zcode-plan-sites'
+import type { ZcodePlanCredentialsStatus } from '../../../../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   callZcodePlanCredentials,

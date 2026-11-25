@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'n
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SKILL_PACKAGE_CONTENT_TYPE } from '../../../shared/skill-package-manifest'
+import { SKILL_PACKAGE_CONTENT_TYPE } from '../../../shared/skills/packages/skill-package-manifest'
 import { downloadSkillPackageGrant } from './skill-package-download'
 
 const roots: string[] = []

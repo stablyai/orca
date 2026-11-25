@@ -3,13 +3,51 @@ import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceDir } from '../../../shared/constants'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import type { Repo } from '../../../shared/repo-types'
+import { getDefaultWorkspaceDir } from '../../../shared/orca-profiles/constants'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
+
+// Inlined from the retired orca-runtime-tests fixture (upstream #46786 cut the suite):
+// a runtime store fake with empty reads and refused writes beyond the members a test supplies.
+type PartialRuntimeStore = Partial<Omit<RuntimeStore, 'getSettings'>> & {
+  getSettings?: () => Partial<ReturnType<RuntimeStore['getSettings']>> &
+    Partial<Omit<GlobalSettings, keyof ReturnType<RuntimeStore['getSettings']>>>
+}
+
+function unstubbedWrite(member: string): () => never {
+  return () => {
+    throw new Error(`runtime store fake does not stub ${member}`)
+  }
+}
+
+function partialRuntimeStore(overrides: PartialRuntimeStore = {}): RuntimeStore {
+  const { getSettings, ...members } = overrides
+  return {
+    getRepos: () => [],
+    getRepo: () => undefined,
+    getAllWorktreeMeta: () => ({}),
+    getWorktreeMeta: () => undefined,
+    getGitHubCache: () => ({ pr: {}, issue: {} }),
+    addRepo: unstubbedWrite('addRepo'),
+    updateRepo: unstubbedWrite('updateRepo'),
+    setWorktreeMeta: unstubbedWrite('setWorktreeMeta'),
+    removeWorktreeMeta: unstubbedWrite('removeWorktreeMeta'),
+    ...members,
+    getSettings: () => ({
+      workspaceDir: '',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      branchPrefix: 'none',
+      branchPrefixCustom: '',
+      ...getSettings?.()
+    })
+  }
+}
+
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
-import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectRepoLocalMetadata: vi.fn().mockResolvedValue({})

@@ -1,5 +1,5 @@
 // A WSL host refuses projects on a Windows drive: drvfs reports false CRLF changes, misses Windows-side edits and searches slowly.
-import { stripWin32LongPathPrefix } from '../../windows-path-access'
+import { stripWin32LongPathPrefix } from '../../file-access/windows-path-access'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 
 export const WSL_HOST_WINDOWS_DRIVE_REFUSAL_KIND = 'wsl_host_windows_drive_path'

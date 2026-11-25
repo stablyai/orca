@@ -1,6 +1,6 @@
 import type { OrcadMigrationDormantStatePayload } from './orcad-migration-manifest'
 import { getRepoIdFromWorktreeId } from '../worktree/id'
-import { parseWorkspaceKey } from '../workspace-scope'
+import { parseWorkspaceKey } from '../workspace/identity/workspace-scope'
 import {
   assertOrcadMigrationDormantWorkspaceSessionReferences,
   parseOrcadMigrationDormantWorkspaceSession

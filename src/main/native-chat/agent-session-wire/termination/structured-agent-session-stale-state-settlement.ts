@@ -2,7 +2,7 @@ import { providerTimelineExecutionItems } from '../../agent-session-timeline/pro
 // Plan against queued journal state; death/replacement proof interrupts only matching owners,
 // otherwise settle unverifiable and revise when later proof arrives.
 
-import type { AgentSessionReplacedRuntime } from '../../../runtime/agent-session/agent-session-replaced-runtime'
+import type { AgentSessionReplacedRuntime } from '../../../runtime/agent-session/ownership/agent-session-replaced-runtime'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,

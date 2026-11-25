@@ -10,6 +10,15 @@ export const BASELINE_SOURCE_HASHES = {
   'own-retained-string.ts': 'addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2',
   'owned-utf16-suffix.ts': '1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475'
 }
+export const currentSourcePaths = {
+  'ansi-escape-sequences.ts': 'terminal/protocol/escape/ansi-escape-sequences.ts',
+  'check-job-log-tail-slice.ts': 'source-control/checks/logs/check-job-log-tail-slice.ts',
+  'check-job-log-excerpt.ts': 'source-control/checks/logs/check-job-log-excerpt.ts',
+  'utf8-byte-limits.ts': 'text/utf8-byte-limits.ts',
+  'own-retained-string.ts': 'text/own-retained-string.ts',
+  'owned-utf16-suffix.ts': 'text/owned-utf16-suffix.ts'
+}
+
 export const LIMIT = 16 * 1024
 export const SEED = 0xc0ffee16
 const mib = 1024 * 1024

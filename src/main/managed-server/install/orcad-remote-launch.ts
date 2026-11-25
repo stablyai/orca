@@ -13,7 +13,7 @@ import {
   type RemoteHostPlatform
 } from '../../ssh/remote-host/ssh-remote-platform'
 import { RELAY_REMOTE_DIR } from './remote-install-root'
-import { ORCAD_WSL_HOST_ENV } from '../../ipc/wsl-guest-windows-drive-path'
+import { ORCAD_WSL_HOST_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 import {
   assertPosixOrcadHost as assertPosixHost,
   ORCAD_LOG_FILENAME,

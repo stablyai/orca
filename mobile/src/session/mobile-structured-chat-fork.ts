@@ -5,9 +5,9 @@ import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agen
 import type {
   StructuredAgentSessionCreateParams,
   StructuredAgentSessionForkSource
-} from '../../../src/shared/agent-session/structured-agent-session-create'
-import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
-import { createMobileStructuredAgentSession } from './native-chat/agent-session/mobile-structured-agent-session-launch'
+} from '../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-create'
+import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import { forkMobileStructuredAgentSession } from './native-chat/agent-session/mobile-structured-agent-session-launch'
 import {
   launchedSelection,
   withLaunchReply,
@@ -68,7 +68,7 @@ export async function forkMobileStructuredChat(
   // Arm before requesting so later user tab picks supersede the fork.
   scope.pendingSelectionRef.current = launchedSelection(lock, {}, null)
   try {
-    const result = await createMobileStructuredAgentSession(
+    const result = await forkMobileStructuredAgentSession(
       client,
       scope.worktreeId,
       agent,
@@ -83,12 +83,7 @@ export async function forkMobileStructuredChat(
     } else if (result.kind === 'unknown') {
       report(mobileChatForkCopy.unconfirmed(agentName))
     } else {
-      report(
-        mobileChatForkCopy.failed(
-          agentName,
-          result.kind === 'failed' ? result.message : mobileChatForkCopy.unsupported()
-        )
-      )
+      report(mobileChatForkCopy.failed(agentName, result.message))
     }
   } catch {
     report(mobileChatForkCopy.unconfirmed(agentName))
@@ -118,10 +113,5 @@ const mobileChatForkCopy = {
     translate('chat.fork.failed', "{{agent}} couldn't fork this chat. {{detail}}", {
       agent,
       detail
-    }),
-  unsupported: () =>
-    translate(
-      'chat.fork.unsupported',
-      'This host runs an older Orca. Update Orca on the host, then try again.'
-    )
+    })
 }

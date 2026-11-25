@@ -1,4 +1,4 @@
-import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import {

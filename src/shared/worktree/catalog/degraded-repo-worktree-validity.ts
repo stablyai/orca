@@ -1,7 +1,7 @@
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import type { DetectedWorktreeListResult, Worktree } from '../types'
-import { parseWorkspaceKey } from '../../workspace-scope'
+import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../id'
 
 type WorktreeValidityCatalog = {

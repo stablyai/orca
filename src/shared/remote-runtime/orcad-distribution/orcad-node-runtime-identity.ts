@@ -1,4 +1,4 @@
-import { NODE_RUNTIME_PIN } from '../../node-runtime-pin'
+import { NODE_RUNTIME_PIN } from '../../node-runtime/node-runtime-pin'
 import type { OrcadPreflightRuntimeIdentity } from './orcad-profile-preflight'
 
 /** What a Node slot's candidate must report: the pinned runtime, never a host Node. */

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { MobilePushFilter } from '../../../../src/shared/mobile-push-contract'
+import { Platform } from 'react-native'
+import type { MobilePushFilter } from '../../../../src/shared/notifications/mobile-push-contract'
 
 const KEY = 'orca:notificationDeliveryPreferences'
 export type NotificationDeliveryPreferences = {
@@ -47,6 +48,8 @@ export function notificationPreferencesFilter(
   return {
     onlyWhenDesktopAway: value.onlyWhenDesktopAway,
     onlyWhenAgentNeedsInput: value.onlyWhenAgentNeedsInput,
-    sound: value.sound
+    sound: value.sound,
+    // Only iOS shows a count on the icon; an older app never lowered or cleared one, so it never asks.
+    badge: Platform.OS === 'ios'
   }
 }

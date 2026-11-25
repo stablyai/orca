@@ -1,7 +1,7 @@
 import { readTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { Socket } from 'node:net'
 import { NOTIFY_PREFIX, type DaemonRequest } from '../protocol/daemon-rpc-contract'
-import { encodeNdjson } from '../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../shared/json-stream/main-process-ndjson-framer'
 
 export async function answerDaemonControlRequest(
   socket: Socket,

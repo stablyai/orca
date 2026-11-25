@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { track } from '../../telemetry/client'
-import type { EventProps } from '../../../shared/telemetry-events'
+import type { EventProps } from '../../../shared/telemetry/telemetry-event-classification'
 import type { DaemonAuditObservation } from './daemon-audit-classifier'
 import { PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'
 

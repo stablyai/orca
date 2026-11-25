@@ -1,4 +1,4 @@
-import { ownRetainedString } from '../../../../../shared/own-retained-string'
+import { ownRetainedString } from '../../../../../shared/text/own-retained-string'
 
 // Splice strings once per run; unchanged/revisited rows reuse cached newline snapshots.
 export type RetainedTerminalRow = {

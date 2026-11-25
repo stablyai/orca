@@ -5,7 +5,7 @@ import {
   capturedPanesByTabId,
   isTerminalTabParked
 } from '../../parking/output-watchers/terminal-parked-watcher-registry'
-import type { TerminalTabCloseIntent } from '../../../terminal/terminal-tab-close-intent'
+import type { TerminalTabCloseIntent } from '../../../terminal/tab-lifecycle/terminal-tab-close-intent'
 
 /** Remove main-closed leaves idempotently so this notice and local exit handling can arrive in either order. */
 export function applyClosedTerminalLeafNotice(

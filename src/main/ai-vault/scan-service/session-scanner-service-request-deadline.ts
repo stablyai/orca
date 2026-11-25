@@ -1,5 +1,11 @@
-import type { AiVaultServicePendingCall } from './session-scanner-service-client-state'
-import type { AiVaultServiceRequest } from './session-scanner-service-protocol'
+import {
+  clearAiVaultServiceCall,
+  type AiVaultServicePendingCall
+} from './session-scanner-service-client-state'
+import type {
+  AiVaultServiceChildMessage,
+  AiVaultServiceRequest
+} from './session-scanner-service-protocol'
 import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
 
 export const AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS = 15_000
@@ -50,4 +56,24 @@ export function noteAiVaultServiceScanProgress(
     return
   }
   call.scanListener?.work(work)
+}
+
+/** Returns whether the child's answer finished the call. */
+export function answerAiVaultServiceCall(
+  call: AiVaultServicePendingCall,
+  message: Extract<AiVaultServiceChildMessage, { type: 'result' | 'error' | 'progress' }>
+): boolean {
+  if (message.type === 'progress') {
+    noteAiVaultServiceScanProgress(call, message.work)
+    return false
+  }
+  clearAiVaultServiceCall(call)
+  if (!call.cancelled) {
+    if (message.type === 'error') {
+      call.reject(new Error(message.message))
+    } else {
+      call.resolve(message.value)
+    }
+  }
+  return true
 }

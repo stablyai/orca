@@ -5,7 +5,7 @@ import type {
   GitUpstreamStatus
 } from '../../../../shared/git/status/git-status-types'
 import { resolveGitStatusLimit } from '../../../../shared/git/status/git-status-limit'
-import { stableInFlightKey } from '../../../../shared/in-flight-promise-dedupe'
+import { stableInFlightKey } from '../../../../shared/concurrency/in-flight-promise-dedupe'
 import { beginGitStatusLineStatsCacheWrite } from '../../../../shared/git/status/git-status-line-stats-write-token'
 import {
   clearGitStatusLineStatsCacheKey,
@@ -21,6 +21,7 @@ import {
 } from '../../worktrees/content-paths/worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from '../git-read-cache-invalidation'
+import { readRebaseIndexObservation } from '../mutations/rebase-index-observation'
 import { detectConflictOperation } from '../mutations/git-conflict-operation'
 import { parseUnmergedEntry } from '../../../../shared/git/status/git-status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from '../upstream/effective-upstream-status-cache'
@@ -232,9 +233,14 @@ async function runGetStatus(
     throw error
   }
 
+  const indexObservation =
+    statusSucceeded && conflictOperation === 'rebase'
+      ? await readRebaseIndexObservation(worktreePath, options)
+      : null
   return {
     entries,
     conflictOperation,
+    ...(indexObservation ? { rebaseIndexObservation: indexObservation } : {}),
     head,
     branch,
     ...(readError !== undefined ? { readError } : {}),

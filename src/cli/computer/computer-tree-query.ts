@@ -2,7 +2,7 @@ import {
   joinComputerTreeText,
   parseComputerTreeText,
   type ComputerTreeElement
-} from '../../shared/computer-use-tree-text'
+} from '../../shared/computer/computer-use-tree-text'
 
 export type ComputerTreeQuery = {
   query?: string

@@ -1,4 +1,4 @@
-import type { DictationTerm } from '../../dictation-dictionary'
+import type { DictationTerm } from '../../speech/dictation/dictation-dictionary'
 import type { SmartTier } from '../../sidebar-list/sorting/sort-stamps'
 import type {
   AgentStatusState,
@@ -15,7 +15,7 @@ import type {
 import type { AgentChildWorkView } from '../../agent-status/child-work/agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from '../../agent-status/contracts/agent-status-subagent-snapshot'
 import type { RuntimeTerminalInteractiveWait } from '../../terminal/runtime/runtime-terminal-contracts'
-import type { BaseRefSearchResult, Repo } from '../../repo-types'
+import type { BaseRefSearchResult, Repo } from '../../repository/repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from '../create-types'
 import type {
   CrossStoreWorkspaceLineage,
@@ -26,8 +26,8 @@ import type {
 } from '../lineage-types'
 import type { RuntimeListingHostScope } from '../../execution-host/runtime-listing-host-scope'
 import type { GitWorktreeInfo, Worktree } from '../types'
-import type { WorkspaceStatusWarning } from '../../workspace-status-warning'
-import type { WorktreeStatus } from '../../worktree-status-rollup'
+import type { WorkspaceStatusWarning } from '../../workspace/status/workspace-status-warning'
+import type { WorktreeStatus } from '../row-display/worktree-status-rollup'
 
 export type RuntimeWorktreeSetResult = {
   worktree: RuntimeWorktreeRecord
@@ -37,7 +37,9 @@ export type RuntimeWorktreeSetResult = {
 
 export type RuntimeWorktreeAgentRow = {
   paneKey: string
-  /** The host's Orca id for this terminal agent's conversation; old hosts omit it. */
+  /** What `worker-start --terminal` takes for this agent: its terminal handle, or a chat's session address. Old hosts omit it. */
+  address?: string
+  /** The host's Orca id for this agent's conversation (a chat's /clear root); old hosts omit it. */
   orcaSessionId?: string
   parentPaneKey: string | null
   state: AgentStatusState
@@ -152,6 +154,10 @@ export type RuntimeWorktreePsSummary = {
    * Older hosts omit these facts. */
   defaultBranch?: boolean
   automationCreated?: true
+  /** The bot this workspace is under (its workers made it, or it was handed to it). Old hosts omit it. */
+  bot?: string
+  /** A bot's own home folder, not a workspace of work. Old hosts omit it. */
+  botHome?: true
   /** The automation's name when it made the row; older hosts send only `automationCreated`. */
   automationName?: string
   cliCreated?: true
@@ -238,6 +244,9 @@ export type RuntimeWorktreePsResult = {
   truncated: boolean
   /** Absent from hosts that predate the field; treat that scope as unverifiable. */
   hostScope?: RuntimeListingHostScope
+  /** This host's store identity, so a reader of several hosts can join their cross-machine parents.
+   *  Absent from older hosts. */
+  installationId?: string
 }
 
 export type RuntimeRepoList = { repos: Repo[] }

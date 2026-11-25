@@ -1,4 +1,4 @@
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { hardenExistingSecureFile } from '../../../shared/secure-storage/secure-file'

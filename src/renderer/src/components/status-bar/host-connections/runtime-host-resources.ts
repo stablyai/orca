@@ -3,8 +3,11 @@ import type { Translate } from '@/i18n/use-translate'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { SessionMemory, WorktreeMemory } from '../../../../../shared/process-stats-types'
+} from '../../../../../shared/execution-host/execution-host'
+import type {
+  SessionMemory,
+  WorktreeMemory
+} from '../../../../../shared/diagnostics/process-stats-types'
 import type { RuntimeHostResourceSample } from '../resources/workspace-attribution/resource-usage-merge-types'
 
 export type RuntimeHostResourceResult =
@@ -14,6 +17,26 @@ export type RuntimeHostResourceResult =
   | { status: 'update-required' }
 
 export type RuntimeHostResourceCall = (environmentId: string) => Promise<unknown>
+
+export type RuntimeHostResourceState = {
+  key: string | null
+  results: Readonly<Record<string, RuntimeHostResourceResult>>
+}
+
+/** The state after one host's answer; a repeated failure keeps the same state so nothing re-renders. */
+export function withRuntimeHostResult(
+  prev: RuntimeHostResourceState,
+  key: string,
+  environmentId: string,
+  result: RuntimeHostResourceResult
+): RuntimeHostResourceState {
+  const results = prev.key === key ? prev.results : {}
+  const before = results[environmentId]
+  if (before && before.status !== 'sampled' && before.status === result.status) {
+    return prev
+  }
+  return { key, results: { ...results, [environmentId]: result } }
+}
 
 /** Paired servers that host at least one of this client's projects or folder workspaces. */
 export function collectRuntimeResourceEnvironmentIds(
@@ -29,12 +52,18 @@ export function collectRuntimeResourceEnvironmentIds(
   return [...environmentIds].sort()
 }
 
+/** Null when the reply arrives after the asking view stopped wanting it, so it is never parsed. */
 export async function readRuntimeHostResources(
   environmentId: string,
-  call: RuntimeHostResourceCall
-): Promise<RuntimeHostResourceResult> {
+  call: RuntimeHostResourceCall,
+  isWanted: () => boolean = () => true
+): Promise<RuntimeHostResourceResult | null> {
   try {
-    const worktrees = parseSnapshotWorktrees(await call(environmentId))
+    const reply = await call(environmentId)
+    if (!isWanted()) {
+      return null
+    }
+    const worktrees = parseSnapshotWorktrees(reply)
     return worktrees ? { status: 'sampled', worktrees } : { status: 'update-required' }
   } catch (error) {
     return hasErrorCode(error, 'method_not_found')
@@ -60,28 +89,41 @@ export function toRuntimeHostResourceSamples(
   return samples
 }
 
+/** A paired server the panel cannot sample: shown as a row whose memory is unknown, not zero. */
+export type RuntimeHostResourceNotice = { environmentId: string; hostLabel: string; reason: string }
+
 export function getRuntimeHostResourceNotices(
   results: Readonly<Record<string, RuntimeHostResourceResult>>,
   hostLabel: (environmentId: string) => string,
   t: Translate = translate
-): string[] {
+): RuntimeHostResourceNotice[] {
   return Object.entries(results).flatMap(([environmentId, result]) => {
     if (result.status === 'unreachable') {
+      const label = hostLabel(environmentId)
       return [
-        t(
-          'auto.components.status.bar.ResourceUsageStatusSegment.8a0472ab54',
-          "Couldn't reach {{value0}}; its resources are unknown.",
-          { value0: hostLabel(environmentId) }
-        )
+        {
+          environmentId,
+          hostLabel: label,
+          reason: t(
+            'auto.components.status.bar.ResourceUsageStatusSegment.8a0472ab54',
+            "Couldn't reach {{value0}}; its resources are unknown.",
+            { value0: label }
+          )
+        }
       ]
     }
     if (result.status === 'update-required') {
+      const label = hostLabel(environmentId)
       return [
-        t(
-          'auto.components.status.bar.ResourceUsageStatusSegment.1ea066b73f',
-          'Update {{value0}} to see its resources.',
-          { value0: hostLabel(environmentId) }
-        )
+        {
+          environmentId,
+          hostLabel: label,
+          reason: t(
+            'auto.components.status.bar.ResourceUsageStatusSegment.1ea066b73f',
+            'Update {{value0}} to see its resources.',
+            { value0: label }
+          )
+        }
       ]
     }
     return []

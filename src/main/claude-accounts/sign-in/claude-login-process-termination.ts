@@ -1,6 +1,8 @@
 import { spawnProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 import type { ChildProcess } from 'node:child_process'
-import type { WindowsHostInteractiveLoginSpawn } from '../../../shared/windows-interactive-login-spawn'
+import type { WindowsHostInteractiveLoginSpawn } from '../../providers/shell-launch/windows/windows-interactive-login-spawn'
 import { recordSelfInitiatedTreeKill } from '../../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import { admitSelfInitiatedTreeKill } from '../../pty/process-retirement/own-chromium-tree-kill-guard'
 
@@ -24,7 +26,7 @@ export function terminateClaudeProcess(
       return
     }
     const taskkill = spawnProcess({
-      program: 'taskkill.exe',
+      program: windowsSystem32Binary('taskkill.exe'),
       args: ['/pid', String(windowsTerminationPid), '/t', '/f'],
       stdio: 'ignore'
     })
@@ -51,7 +53,10 @@ export function terminateClaudeProcess(
     // The login tree belongs to the relayed PID, not the wrapper.
     const resolveTerminationPid = interactiveLogin?.waitForTerminationPid
       ? interactiveLogin.waitForTerminationPid()
-      : Promise.resolve(interactiveLogin?.getTerminationPid?.() ?? child.pid ?? null)
+      : Promise.resolve(
+          interactiveLogin?.getTerminationPid?.() ??
+            (childProcessHasExited(child) ? null : (child.pid ?? null))
+        )
     void resolveTerminationPid
       .then((windowsTerminationPid) => {
         if (windowsTerminationPid) {

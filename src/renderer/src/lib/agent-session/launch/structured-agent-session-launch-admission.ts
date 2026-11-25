@@ -1,7 +1,7 @@
 import { terminalLaunchOpened } from './new-tab/launch-agent-in-new-tab-host-agents'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import {
   adoptAgentSessionLaunchVerdict,
@@ -177,7 +177,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
     notify = plan.requestedSurface === 'chat'
   ): StructuredAgentLaunchSettlement => {
     if (notify && !admitted) {
-      notifyExplicitChatFailure(plan.agent, reason)
+      notifyExplicitChatFailure(plan.agent, reason, args.worktreeId)
       resolveDelivery(NOT_DELIVERED_NOTIFIED)
       return { kind: 'failed', error, notified: true }
     }

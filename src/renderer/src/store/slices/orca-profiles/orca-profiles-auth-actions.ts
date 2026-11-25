@@ -7,7 +7,7 @@ import type {
   RefreshCurrentOrcaProfileAuthResult,
   SelectOrcaProfileOrgResult,
   SignOutCurrentOrcaProfileResult
-} from '../../../../../shared/orca-profiles'
+} from '../../../../../shared/orca-profiles/orca-profiles'
 import type { AppState } from '../../types'
 
 export type OrcaProfilesAuthActions = {

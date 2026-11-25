@@ -1,12 +1,13 @@
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   type RuntimeEnvironmentSetupFailure,
   runtimeEnvironmentSetupFailure
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { assertCrewSourceCurrent } from '../subscriptions/runtime-environment-subscription-setup'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
+import { desktopRuntimeClientCapabilities } from '../connections/runtime-environment-shared-control-policy'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   resolveManagedRuntimeEnvironment,
@@ -27,6 +28,12 @@ import {
 } from './runtime-environment-support-routing'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
+// A browser pane on a host's page or dev server is use the host's idle probes cannot see.
+const HOLDING_STREAMS: ReadonlySet<string> = new Set([
+  'browser.screencast',
+  'network.browserTunnel',
+  'browser.clientHost.attach'
+])
 
 export async function subscribeRuntimeEnvironment(
   userDataPath: string,
@@ -48,7 +55,7 @@ export async function subscribeRuntimeEnvironment(
   signal?: AbortSignal,
   preparation?: ManagedRuntimeCallPreparation,
   crewAttempt?: {
-    assertCurrent: () => void
+    assertCurrent: () => Promise<void>
     observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
   }
 ): Promise<RemoteRuntimeTransportSubscription> {
@@ -69,11 +76,12 @@ export async function subscribeRuntimeEnvironment(
       rawCallbacks.onClose()
     }
   }
-  crewAttempt?.assertCurrent()
+  await crewAttempt?.assertCurrent()
   const environment = crewAttempt
-    ? resolveEnvironment(userDataPath, selector)
+    ? await resolveEnvironment(userDataPath, selector)
     : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation, method, signal)
-  crewAttempt?.assertCurrent()
+  await crewAttempt?.assertCurrent()
+  throwIfSignalAborted(signal)
   if (crewAttempt) {
     assertCrewSourceCurrent(environment)
   }
@@ -138,12 +146,21 @@ export async function subscribeRuntimeEnvironment(
         params,
         effectiveTimeoutMs,
         callbacksWithMarkUsed,
-        { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, signal }
+        {
+          // Passive like the control socket, except browser streams: no idle probe sees a page.
+          clientCapabilities:
+            HOLDING_STREAMS.has(method) && !preparation?.background
+              ? ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+              : desktopRuntimeClientCapabilities(environment.id),
+          idlePassive: preparation?.background,
+          signal
+        }
       )
       if (crewAttempt) {
         try {
           throwIfSignalAborted(signal)
-          crewAttempt.assertCurrent()
+          await crewAttempt.assertCurrent()
+          throwIfSignalAborted(signal)
           assertCrewSourceCurrent(environment)
         } catch (error) {
           subscription.close()

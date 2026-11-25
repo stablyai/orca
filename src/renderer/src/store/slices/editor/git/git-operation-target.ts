@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { getConnectionExecutionHostId } from '../../../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { AppState } from '../../../types'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'

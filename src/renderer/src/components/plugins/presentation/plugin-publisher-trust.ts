@@ -30,11 +30,12 @@ export type PluginPublisherNotice = 'none' | 'translations' | 'code'
 export function pluginPublisherNotice(
   subject: PluginSafetySubject & {
     official: boolean
+    managedByTeams?: string[] | undefined
     /** Its catalog types; null when nothing verified says yet. */
     types: readonly PluginCatalogType[] | null
   }
 ): PluginPublisherNotice {
-  if (subject.official) {
+  if (subject.official || subject.managedByTeams) {
     return 'none'
   }
   if (!isSafeContentOnlyPlugin(subject)) {

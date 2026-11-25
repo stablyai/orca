@@ -28,7 +28,12 @@ export function hookRowPaneResumeRecord(args: {
 }): SleepingAgentSessionRecord | null {
   const { worktreeId, tab } = args
   const row = args.rows
-    .filter((candidate) => candidate.providerSession && isPaneLocalHookRow(candidate, worktreeId))
+    .filter(
+      (candidate) =>
+        !candidate.paneSleep &&
+        candidate.providerSession &&
+        isPaneLocalHookRow(candidate, worktreeId)
+    )
     .reduce<AgentStatusIpcPayload | null>(
       (latest, candidate) =>
         !latest || candidate.receivedAt > latest.receivedAt ? candidate : latest,

@@ -1,6 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { getTerminalQuickCommandScope } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { Button } from '@/components/ui/button'
@@ -8,10 +8,11 @@ import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { TerminalQuickCommandScopeField } from './TerminalQuickCommandScopeField'
+import type { RepoMarkRepo } from '@/components/repo/RepoMark'
 
 type TerminalQuickCommandAdvancedSectionProps = {
   disabled: boolean
-  repos: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  repos: readonly (RepoMarkRepo & Pick<Repo, 'path'>)[]
   advancedOpen: boolean
   selectedScope: ReturnType<typeof getTerminalQuickCommandScope>
   selectedRepo: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'> | null

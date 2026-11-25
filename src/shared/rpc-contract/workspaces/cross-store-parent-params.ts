@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { isWorkspaceKey } from '../../workspace-scope'
+import { isWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import type { CrossStoreParentRef } from '../../worktree/lineage-types'
 
 /** A parent in another Orca store, named by that store's verified installationId. */

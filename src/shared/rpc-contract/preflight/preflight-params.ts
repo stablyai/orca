@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../constants'
-import { parseRoutableExecutionHostId } from '../../execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../workspace/identity/floating-workspace-id'
+import { parseRoutableExecutionHostId } from '../../execution-host/execution-host'
 import { OptionalExecutionHostId } from '../workspaces/worktree-params'
 import { RepoSelector } from '../github/github-repo-target-params'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'

@@ -3,9 +3,9 @@ import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
 } from '../../../../../../shared/workspace-disk-space/workspace-space-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { formatCompactCount } from '../workspace-space-format'
-import { formatBytes } from '../../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../../shared/text/format-bytes'
 import { getLargestWorkspaceSpaceItemSize } from '../manager/workspace-space-presentation'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -164,7 +164,7 @@ export function WorkspaceSpaceBreakdownList({
                       breakdownItems.length <= 4 && '[@media(min-height:651px)]:hidden'
                     )}
                   >
-                    {t('workspaceSpace.breakdown.viewAll', 'Show more folder details')}
+                    {t('workspaceSpace.breakdown.viewAll', 'Folder details')}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-80">

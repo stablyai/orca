@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { powerShellCommand } from '../../remote-exec/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/shell/launch/powershell-native-argument'
 import { normalizeWindowsRemotePath } from '../../remote-host/ssh-remote-platform'
 
 /** Unique staging names avoid locks from prior writers: contact loss never proves their death (docs/reference/ssh-execution-boundary.md). */

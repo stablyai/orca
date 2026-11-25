@@ -1,13 +1,13 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { CustomPet } from '../../../../shared/pet-types'
+import type { CustomPet } from '../../../../shared/pets/pet-types'
 import {
   CUSTOM_PET_DEFAULT_LABEL,
   PET_BUNDLE_DEFAULT_LABEL,
   PET_IMPORT_FAILURE_COPY as EN,
   type PetImportFailure,
   type PetImportFailureCode
-} from '../../../../shared/pet-import-failure-copy'
+} from '../../../../shared/pets/pet-import-failure-copy'
 
 type Values = {
   text: (name: string) => string | null

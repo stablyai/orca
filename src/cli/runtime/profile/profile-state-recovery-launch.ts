@@ -6,10 +6,10 @@ import {
   profileStateRecoveryResponseSchema,
   type ProfileStateRecoveryRequest,
   type ProfileStateRollbackResult
-} from '../../../shared/profile-state-recovery-command'
+} from '../../../shared/orca-profiles/profile-state-recovery-command'
 import {
   getExecutableAppArgs,
-  resolveAppRoot,
+  resolveAppChildCwd,
   resolveForegroundOrcaExecutable,
   stripElectronRunAsNode
 } from '../orca-app-executable'
@@ -33,7 +33,7 @@ export async function launchProfileStateRecovery(
       PROFILE_STATE_RECOVERY_FLAG,
       JSON.stringify({ ...request, userDataPath })
     ],
-    cwd: resolveAppRoot(),
+    cwd: resolveAppChildCwd(userDataPath),
     env: {
       ...stripElectronRunAsNode(process.env),
       ORCA_BACKGROUND_LAUNCH: '1',

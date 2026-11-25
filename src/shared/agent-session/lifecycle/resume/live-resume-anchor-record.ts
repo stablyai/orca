@@ -4,7 +4,7 @@ type AnchorStatus = Pick<AgentStatusEntry, 'state' | 'agentType' | 'providerSess
 import { isResumableTuiAgent, type SleepingAgentSessionRecord } from '../agent-session-resume'
 import { agentProviderSessionsEqual } from './agent-provider-session-equality'
 import { getAgentResumeArgv } from '../../../agent-launch/startup/agent-resume-argv'
-import { isPiCompatibleAgentType } from '../../../pi-agent-kind'
+import { isPiCompatibleAgentType } from '../../../agent-launch/catalog/pi-agent-kind'
 
 /** Identify a completed pane’s own live resume anchor written at turn end, not a sleep capture.
  * No vendor/automatic-resume gate: this checks record identity, not hibernation eligibility. */

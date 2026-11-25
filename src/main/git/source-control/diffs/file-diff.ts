@@ -1,7 +1,7 @@
 import * as path from 'node:path'
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
-import { stableInFlightKey } from '../../../../shared/in-flight-promise-dedupe'
+import { stableInFlightKey } from '../../../../shared/concurrency/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 import { gitRuntimeOptionsKey } from '../git-runtime-options-cache-key'
 import { gitDiffReadDedupe, settledDiffCache } from '../git-read-cache-invalidation'

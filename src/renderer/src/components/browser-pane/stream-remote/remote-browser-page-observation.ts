@@ -1,7 +1,7 @@
 import type {
   BrowserPage,
   BrowserCertificateFailure
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { readBrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
 
 type BrowserObservationState = {

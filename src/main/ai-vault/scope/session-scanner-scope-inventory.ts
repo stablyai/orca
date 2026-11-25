@@ -1,5 +1,5 @@
 import { extname, join } from 'node:path'
-import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { wslGatedReaddir } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'

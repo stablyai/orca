@@ -1,4 +1,4 @@
-import type { RepoIconPickResult } from '../../../shared/repo-icon-pick-failure-copy'
+import type { RepoIconPickResult } from '../../../shared/repository/appearance/repo-icon-pick-failure-copy'
 import { ipcRenderer } from 'electron'
 import type {
   ShellOpenExternalEditorRequest,
@@ -7,9 +7,13 @@ import type {
   ShellOpenLocalPathResult
 } from '../../../shared/shell/opening/shell-open-types'
 import type { RuntimeFileOpenPosition } from '../../../shared/file-access/runtime-editor-file-open'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { ShellPathExistence } from '../../../shared/file-access/path-existence-batch'
 import type { PreloadApi } from '../../api-types'
+import type {
+  ForwardedUrlOpenRequest,
+  ForwardedUrlOpenResult
+} from '../../../shared/workspace/ports/forwarded-url-open'
 
 export const shellApi = {
   openPath: (path: string, ownerHostId: ExecutionHostId): Promise<void> =>
@@ -27,6 +31,9 @@ export const shellApi = {
     ipcRenderer.invoke('shell:openInExternalEditor', request),
 
   openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
+
+  openForwardedUrl: (request: ForwardedUrlOpenRequest): Promise<ForwardedUrlOpenResult> =>
+    ipcRenderer.invoke('shell:openForwardedUrl', request),
 
   openFilePath: (
     path: string,

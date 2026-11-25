@@ -4,8 +4,8 @@ import {
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
   resolveRuntimePath
-} from '../../../shared/cross-platform-path'
-import { isFolderRepo } from '../../../shared/repo-kind'
+} from '../../../shared/file-access/cross-platform-path'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { resolveConfiguredWorktreeBasePaths } from '../../../shared/worktree/paths/configured-worktree-base-path'
 import { buildKnownOrcaWorkspaceLayouts } from '../../../shared/worktree/visibility/ownership'
 import type { SessionSearchScopeCatalog } from './session-search-scope-catalog'

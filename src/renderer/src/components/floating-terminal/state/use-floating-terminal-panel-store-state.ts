@@ -1,6 +1,7 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { useAppStore } from '@/store/index'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
 
 export function useFloatingTerminalPanelStoreState() {
@@ -27,10 +28,11 @@ export function useFloatingTerminalPanelStoreState() {
   const generatedTabTitlesEnabled = useAppStore(
     (state) => state.settings?.tabAutoGenerateTitle === true
   )
-  const managedBrowserCreationEnabled = useAppStore(
-    (state) =>
-      getClientCreationActionPolicy(state, FLOATING_TERMINAL_WORKTREE_ID)['managed-browser']
-        .state === 'enabled'
+  const managedBrowserCreationEnabled = useAppStoreWithHostStatuses(
+    (state, statuses) =>
+      getClientCreationActionPolicy(state, FLOATING_TERMINAL_WORKTREE_ID, statuses)[
+        'managed-browser'
+      ].state === 'enabled'
   )
 
   return {

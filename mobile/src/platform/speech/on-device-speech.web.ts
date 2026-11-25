@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import type { DictationTerm } from '../../../../src/shared/dictation-dictionary'
-import { createDictationTextPipeline } from '../../../../src/shared/dictation-text-pipeline'
+import type { DictationTerm } from '../../../../src/shared/speech/dictation/dictation-dictionary'
+import { createDictationTextPipeline } from '../../../../src/shared/speech/dictation/dictation-text-pipeline'
 import {
   useNativeVerbs,
   type NativeVerbs

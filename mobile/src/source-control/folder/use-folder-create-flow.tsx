@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { Repo } from '../../../../src/shared/repo-types'
-import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
+import type { Repo } from '../../../../src/shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { ConfirmModal } from '../../components/sheets/ConfirmModal'
 import { NewWorktreeModalController } from '../../new-workspace/creation/modal/NewWorktreeModalController'
 import type { MobileWorkspaceRepo } from '../../new-workspace/creation/forms/new-worktree-modal-types'

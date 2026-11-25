@@ -6,9 +6,9 @@ import type {
   CrashReportSubmitResult,
   ReactErrorBoundaryReportArgs,
   ReactErrorBoundaryReportResult
-} from '../../../shared/crash-reporting'
-import type { RendererHeapStatistics } from '../../../shared/renderer-heap-statistics'
-import type { RendererProcessMemory } from '../../../shared/renderer-process-memory'
+} from '../../../shared/crash-reporting/crash-reporting'
+import type { RendererHeapStatistics } from '../../../shared/crash-reporting/renderer-heap-statistics'
+import type { RendererProcessMemory } from '../../../shared/crash-reporting/renderer-process-memory'
 import { readRendererHeapStatistics } from '../../renderer/diagnostics/renderer-heap-statistics-reader'
 import { readRendererProcessMemory } from '../../renderer/diagnostics/renderer-process-memory-reader'
 import type { PreloadApi } from '../../api-types'

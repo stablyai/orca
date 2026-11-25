@@ -6,12 +6,12 @@ import {
 } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { Repo } from '../../../../shared/repo-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { getRepoSshConnectionId } from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { getRepoSshConnectionId } from '../../../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
-import { getWorktreePathSettings } from '../../../ipc/worktree-logic'
+import { getWorktreePathSettings } from '../../../ipc/worktrees/paths/worktree-logic'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   resolveLocalLaunchScopeRuntime,

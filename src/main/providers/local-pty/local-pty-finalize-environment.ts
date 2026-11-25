@@ -1,6 +1,6 @@
 import { win32 as pathWin32 } from 'node:path'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
-import { expandWindowsPathEnvironmentVariables } from '../../../shared/windows-environment-expansion'
+import { expandWindowsPathEnvironmentVariables } from '../../../shared/shell/launch/windows-environment-expansion'
 import { dropInheritedOrcaFishHistory } from '../../pty/history/fish-history-session'
 import { dropIncoherentCondaActivationEnv } from '../../pty/shell-startup/conda-activation-env'
 import { stripLegacyTerminalShimEnv } from '../../pty/shell-startup/legacy-terminal-shim-dir'

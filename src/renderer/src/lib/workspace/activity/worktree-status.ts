@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
 import { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
-import { tabHasLivePty } from '../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import {
   collectRuntimePaneLeafIds,
   isRuntimePaneTitleOrphan,
@@ -19,7 +19,7 @@ import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list
 import {
   rankWorktreeStatus,
   type WorktreeStatus
-} from '../../../../../shared/worktree-status-rollup'
+} from '../../../../../shared/worktree/row-display/worktree-status-rollup'
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus
@@ -197,7 +197,7 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  * Map args are narrowed to this worktree. `hasPermission`/`hasLiveWorking`/
  * `hasLiveDone` are fresh hook entries ({blocked,waiting} / {working} / {done});
  */
-export function resolveWorktreeStatus(args: {
+type ResolveWorktreeStatusArgs = {
   tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[]
   browserTabs: readonly { id: string }[]
   hasStructuredChat?: boolean
@@ -214,7 +214,13 @@ export function resolveWorktreeStatus(args: {
   hasInterrupted?: boolean
   hasUnconfirmed?: boolean
   hasLiveDone: boolean
-}): WorktreeStatus {
+}
+
+export function resolveWorktreeStatusParts(args: ResolveWorktreeStatusArgs): {
+  /** What the terminal titles alone say, before explicit agent rows rank over it. */
+  heuristic: WorktreeStatus
+  status: WorktreeStatus
+} {
   const heuristic = getWorktreeStatus(
     args.tabs,
     args.browserTabs,
@@ -228,5 +234,9 @@ export function resolveWorktreeStatus(args: {
       terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
     }
   )
-  return rankWorktreeStatus(heuristic, args)
+  return { heuristic, status: rankWorktreeStatus(heuristic, args) }
+}
+
+export function resolveWorktreeStatus(args: ResolveWorktreeStatusArgs): WorktreeStatus {
+  return resolveWorktreeStatusParts(args).status
 }

@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { RepoKind } from '../../../../../shared/repo-types'
+import type { RepoKind } from '../../../../../shared/repository/repo-types'
 
 export function ExistingFolderForm({
   setupPath,

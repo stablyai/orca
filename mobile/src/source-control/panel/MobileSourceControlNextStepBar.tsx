@@ -48,6 +48,7 @@ type ComposerState = Pick<
   | 'commitMessage'
   | 'setCommitMessage'
   | 'generatingMessage'
+  | 'commitMessageAiEnabled'
   | 'stagedCount'
   | 'generateCommitMessage'
   | 'cancelGenerateCommitMessage'
@@ -253,6 +254,7 @@ function CommitComposer({
     commitMessage,
     setCommitMessage,
     generatingMessage,
+    commitMessageAiEnabled,
     stagedCount,
     generateCommitMessage,
     cancelGenerateCommitMessage
@@ -260,7 +262,8 @@ function CommitComposer({
   const ioBusy = busyAction !== null
   // Unmounting a focused field sends no blur, so let go of focus on the way out.
   useEffect(() => () => onFocusChange(false), [onFocusChange])
-  const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
+  // As desktop, Generate follows the Source Control AI switch; a running generation stays cancelable.
+  const shouldShowGenerateButton = (commitMessageAiEnabled && stagedCount > 0) || generatingMessage
   // Typed text blocks regeneration; the same button cancels active generation.
   const generateBlockedByMessage = !generatingMessage && commitMessage.trim().length > 0
   const generateDisabled = busyAction !== null || generateBlockedByMessage

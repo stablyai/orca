@@ -1,6 +1,9 @@
-import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../shared/execution-host'
+import {
+  isUnresolvedOwnerHostId,
+  parseExecutionHostId
+} from '../../shared/execution-host/execution-host'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { CrossStoreParentRef } from '../../shared/worktree/lineage-types'
 import { LOCAL_ENVIRONMENT } from '../hosts/local-environment-selector'
 import type { RuntimeClient } from '../runtime/client'
@@ -50,7 +53,9 @@ export type AddressContext = {
 const LOCAL: WorkspaceEnvironment = { id: LOCAL_ENVIRONMENT, name: LOCAL_ENVIRONMENT }
 
 /** The environment the client routes to; a saved route is named by its stored id and name. */
-export function describeClientEnvironment(client: RuntimeClient): WorkspaceEnvironment {
+export async function describeClientEnvironment(
+  client: RuntimeClient
+): Promise<WorkspaceEnvironment> {
   if (!client.isRemote) {
     return LOCAL
   }
@@ -58,7 +63,7 @@ export function describeClientEnvironment(client: RuntimeClient): WorkspaceEnvir
   if (!selector) {
     return { id: null, name: null }
   }
-  const saved = listEnvironments(client.userDataPath).find(
+  const saved = (await listEnvironments(client.userDataPath)).find(
     (environment) => environment.id === selector || environment.name === selector
   )
   return saved ? { id: saved.id, name: saved.name } : { id: selector, name: selector }
@@ -69,7 +74,7 @@ export async function readAddressContext(
   rows: readonly AddressableRow[],
   readLocalInstallationId: () => Promise<string | undefined>
 ): Promise<AddressContext> {
-  const environment = describeClientEnvironment(client)
+  const environment = await describeClientEnvironment(client)
   if (!rows.some((row) => row.crossStoreParent)) {
     return { environment }
   }

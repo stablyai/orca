@@ -1,11 +1,11 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 
 export function buildCatalogOwnerIndex<
   T extends { id: string; connectionId?: string | null; executionHostId?: string | null }

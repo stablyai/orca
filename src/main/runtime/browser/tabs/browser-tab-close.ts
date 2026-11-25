@@ -1,3 +1,4 @@
+import { closeBrowserMemoryPage } from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { RuntimeBrowserTabQueries } from './browser-tab-queries'
 import {
   resolveClientPageToClose,
@@ -24,9 +25,9 @@ export class RuntimeBrowserTabClose {
       | 'notifyHeadlessBrowserSessionTabsChanged'
       | 'getAgentBrowserBridge'
       | 'resolveWorkspaceSelector'
-      | 'getAvailableAuthoritativeWindow'
+      | 'getAvailableAuthoritativeWindowId'
       | 'getOffscreenBrowserBackend'
-      | 'getAuthoritativeWindow'
+      | 'getAuthoritativeWindowId'
     >,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
@@ -64,10 +65,20 @@ export class RuntimeBrowserTabClose {
       pageParam === null && params.index !== undefined
         ? await this.listedTabAt(params.index, params.worktree)
         : null
-    const namedPageId = pageParam ?? indexed?.browserPageId ?? null
+    const current =
+      pageParam === null && params.index === undefined
+        ? await this.queries.browserTabCurrent({ worktree: params.worktree }).catch((error) => {
+            if (error instanceof BrowserError && error.code === 'browser_no_tab') {
+              return null
+            }
+            throw error
+          })
+        : null
+    const selected = indexed ?? current?.tab
+    const namedPageId = pageParam ?? selected?.browserPageId ?? null
     const explicitPage = namedPageId !== null
-    const worktreeId = indexed
-      ? (indexed.worktreeId ?? undefined)
+    const worktreeId = selected
+      ? (selected.worktreeId ?? undefined)
       : explicitPage
         ? params.worktree
           ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
@@ -97,8 +108,8 @@ export class RuntimeBrowserTabClose {
       return { closed: true }
     }
 
-    const authoritativeWindow = this.host.getAvailableAuthoritativeWindow()
-    const offscreen = authoritativeWindow ? null : this.host.getOffscreenBrowserBackend()
+    const authoritativeWindowId = this.host.getAvailableAuthoritativeWindowId()
+    const offscreen = authoritativeWindowId !== null ? null : this.host.getOffscreenBrowserBackend()
     if (offscreen) {
       // An implicit close needs a real active page or would falsely report success.
       const resolvedTabId = tabId ?? bridge.getActivePageId(worktreeId)
@@ -107,6 +118,8 @@ export class RuntimeBrowserTabClose {
       }
       if (explicitPage && !bridge.getRegisteredTabs(worktreeId).has(resolvedTabId)) {
         if (this.targets.retireGhostBrowserSessionRow(worktreeId, resolvedTabId)) {
+          // A freed page keeps its history and downloads in the backend until closed there too.
+          await offscreen.closeTab(resolvedTabId)
           return { closed: true }
         }
         const scope = worktreeId ? ' in this worktree' : ''
@@ -127,7 +140,11 @@ export class RuntimeBrowserTabClose {
       return { closed: true }
     }
 
-    if (!authoritativeWindow && tabId && !bridge.getRegisteredTabs(worktreeId).has(tabId)) {
+    if (
+      authoritativeWindowId === null &&
+      tabId &&
+      !bridge.getRegisteredTabs(worktreeId).has(tabId)
+    ) {
       if (this.targets.retireGhostBrowserSessionRow(worktreeId, tabId)) {
         return { closed: true }
       }
@@ -135,8 +152,11 @@ export class RuntimeBrowserTabClose {
       throw new BrowserError('browser_tab_not_found', `Browser page ${tabId} was not found${scope}`)
     }
 
-    const win = authoritativeWindow ?? this.host.getAuthoritativeWindow()
-    await closeBrowserTabInRenderer(win, tabId, worktreeId)
+    const windowId = authoritativeWindowId ?? this.host.getAuthoritativeWindowId()
+    await closeBrowserTabInRenderer(windowId, tabId, worktreeId)
+    if (tabId) {
+      closeBrowserMemoryPage(tabId)
+    }
 
     return { closed: true }
   }

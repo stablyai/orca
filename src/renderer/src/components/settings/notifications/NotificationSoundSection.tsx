@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { usesCustomNotificationSound } from '../../../../../shared/notification-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { usesCustomNotificationSound } from '../../../../../shared/notifications/notification-settings-types'
 import { Label } from '../../ui/label'
 import { Slider } from '../../ui/slider'
 import {
@@ -13,7 +13,7 @@ import {
   SelectValue
 } from '../../ui/select'
 import { FileAudio, Upload, Volume2 } from 'lucide-react'
-import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { getNotificationSoundOptions } from '@/components/notifications/notification-sound-options'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 

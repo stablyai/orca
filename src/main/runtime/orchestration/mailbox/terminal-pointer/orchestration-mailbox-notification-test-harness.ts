@@ -9,11 +9,11 @@ import type Database from '../../../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import type { RuntimeStore } from '../../../construction/runtime-store-contract'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   bindPaneFirst,
   registerBoundPty
-} from '../../../orca-runtime-tests/bind-first-pane.test-fixture'
+} from '../../../terminal/layout/bind-first-pane.test-fixture'
 import { publishHeadlessRuntimeGraph } from '../../../session-graph/headless-runtime-graph'
 
 export const TAB_ID = '11111111-1111-4111-8111-111111111111'
@@ -38,7 +38,7 @@ export function createDatabase(prefix: string): OrchestrationDb {
 }
 
 export function sqliteFor(db: OrchestrationDb): Database.Database {
-  return (db as unknown as { db: Database.Database }).db
+  return db.db
 }
 
 /** `rebind` then run-uses it, so the pane keeps only the new Run. */
@@ -85,6 +85,7 @@ class MailboxRuntime extends OrcaRuntimeService {
 export type MailboxNotificationHarness = {
   runtime: MailboxRuntime
   write: ReturnType<typeof vi.fn>
+  requestRepaint: ReturnType<typeof vi.fn>
 }
 
 /** Keep main-owned pane bindings in the fixture's session layout. */
@@ -109,7 +110,7 @@ function mailboxLayoutStore(): RuntimeStore {
   }
 }
 
-export function createRuntime(
+export async function createRuntime(
   db: OrchestrationDb,
   options: {
     connectionId?: string
@@ -119,8 +120,9 @@ export function createRuntime(
     getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
     launchAgent?: TuiAgent | null
+    foregroundProcess?: string
   } = {}
-): MailboxNotificationHarness {
+): Promise<MailboxNotificationHarness> {
   const runtime = new MailboxRuntime(
     ORCA_LAYOUT_OWNER_IS_MAIN ? mailboxLayoutStore() : null,
     undefined,
@@ -134,12 +136,14 @@ export function createRuntime(
     }
   )
   const write = vi.fn(() => true)
+  const requestRepaint = vi.fn(async (_ptyId: string) => true)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
     write,
     writeWithSettlement: settledWriteStub(write),
     kill: vi.fn(),
-    getForegroundProcess: async () => null
+    getForegroundProcess: async () => options.foregroundProcess ?? null,
+    requestRepaint
   })
   bindPaneFirst(runtime, { worktreeId: WORKTREE_ID, tabId: TAB_ID, leafId: LEAF_ID, ptyId: PTY_ID })
   runtime.registerPty(
@@ -164,10 +168,10 @@ export function createRuntime(
   runtime.registerPreAllocatedHandleForPty(PTY_ID, TERMINAL_HANDLE)
   if (options.headless) {
     publishHeadlessRuntimeGraph(runtime)
-    return { runtime, write }
+    return { runtime, write, requestRepaint }
   }
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: TAB_ID,
@@ -187,14 +191,14 @@ export function createRuntime(
       }
     ]
   })
-  return { runtime, write }
+  return { runtime, write, requestRepaint }
 }
 
-export function registerSecondPane(
+export async function registerSecondPane(
   runtime: OrcaRuntimeService,
   leafId = SECOND_LEAF_ID,
   includeFirstPane = true
-): void {
+): Promise<void> {
   registerBoundPty(runtime, SECOND_PTY_ID, WORKTREE_ID, null, {
     tabId: SECOND_TAB_ID,
     leafId,
@@ -202,7 +206,7 @@ export function registerSecondPane(
     agentLaunchAuthority: { launchToken: SECOND_LAUNCH_TOKEN, launchAgent: 'codex' }
   })
   runtime.registerPreAllocatedHandleForPty(SECOND_PTY_ID, SECOND_TERMINAL_HANDLE)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       ...(includeFirstPane
         ? [

@@ -1,3 +1,6 @@
+import type { SetupTrustMismatch } from '../../../../src/shared/worktree/create-types'
+import { readSetupTrustMismatch } from './created-worktree-setup-review'
+import { EMPTY_ORCA_HOOK_CONTENT_HASH } from '../../../../src/shared/hashing/orca-hook-content-hash'
 import { translate } from '../../i18n/mobile-i18n'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -34,7 +37,7 @@ import {
 
 // Branches and remote PRs outlive worktrees and escape local preflight dedupe; retry host collision errors with numeric suffixes.
 export type WorktreeCreateResult =
-  | { worktreeId: string; name: string; warning?: string }
+  | { worktreeId: string; name: string; warning?: string; setupTrustMismatch?: SetupTrustMismatch }
   /** `replayed`: the refusal answered a resend after a lost reply, so the first send may have created it. */
   | { error: string; replayed?: true }
 
@@ -53,6 +56,8 @@ export type CreateWorktreeWithNameRetryArgs = {
   maxAttempts?: number
   /** The workspace the new worktree is attached to, on every attempt. */
   parent?: WorktreeCreateParent
+  /** Pins setup to the content the user approved; repo trust sends none. */
+  approvedSetupHash?: string
   mintMutationId?: () => string
   mintLaunchOperationId?: () => string
 }
@@ -64,7 +69,7 @@ export async function createWorktreeWithNameRetry(
   // Wait for status before create or slow networks could silently disable safe replay.
   const worktreeCreateIdempotency = await args.worktreeCreateIdempotency
   // Fix the launch route before creating so collision retries cannot change methods.
-  let launch = await resolveAgentLaunchRoute(args.agentLaunch)
+  let launch = await resolveAgentLaunchRoute(args.agentLaunch, args.approvedSetupHash)
   const maxAttempts = args.maxAttempts ?? CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
   const mintLaunchOperationId = args.mintLaunchOperationId ?? structuredSessionOperationId
@@ -74,7 +79,11 @@ export async function createWorktreeWithNameRetry(
     const candidateName = args.nameWasGenerated
       ? getGeneratedWorktreeCreateRetryCandidate(baseName, attempt)
       : getClientWorktreeCreateCandidate(baseName, attempt)
-    const candidateParams = { ...buildParams(candidateName, attempt), ...args.parent }
+    const candidateParams = {
+      ...buildParams(candidateName, attempt),
+      ...args.parent,
+      ...(args.approvedSetupHash ? { approvedSetupHash: args.approvedSetupHash } : {})
+    }
     if (attempt === 0 && candidateParams.branchIntent) {
       if ((await args.branchIntentSupported) !== true) {
         return {
@@ -126,7 +135,8 @@ export async function createWorktreeWithNameRetry(
         return {
           worktreeId: created.worktreeId,
           name: created.displayName?.trim() ? created.displayName : candidateName,
-          ...(created.warning ? { warning: created.warning } : {})
+          ...(created.warning ? { warning: created.warning } : {}),
+          ...(created.setupTrustMismatch ? { setupTrustMismatch: created.setupTrustMismatch } : {})
         }
       }
       lastError = translate('tasks.worktreeCreateRetry.createFailed', 'Failed to create workspace')
@@ -153,25 +163,45 @@ export async function createWorktreeWithNameRetry(
 }
 
 async function resolveAgentLaunchRoute(
-  launch: WorktreeCreateAgentLaunch | undefined
+  launch: WorktreeCreateAgentLaunch | undefined,
+  approvedSetupHash: string | undefined
 ): Promise<{ agent: TuiAgent; replay: boolean } | null> {
   if (!launch) {
     return null
   }
   const support = await launch.supported
-  return support ? { agent: launch.agent, replay: support.replay } : null
+  // A host whose launch receipt can't report skipped setup would drop approved setup silently; worktree.create reports it.
+  // An empty pin can only skip setup nobody saw, so it keeps agent.launch.
+  if (
+    !support ||
+    (approvedSetupHash &&
+      approvedSetupHash !== EMPTY_ORCA_HOOK_CONTENT_HASH &&
+      !support.reportsSetupTrustMismatch)
+  ) {
+    return null
+  }
+  return { agent: launch.agent, replay: support.replay }
 }
 
 // Launch lacks display name; use the candidate until the host resolves it, preserving warnings from either route.
 function readCreateResult(
   response: RpcResponse,
   launch: { replay: boolean } | null
-): { worktreeId: string; displayName?: string; warning?: string } | null {
+): {
+  worktreeId: string
+  displayName?: string
+  warning?: string
+  setupTrustMismatch?: SetupTrustMismatch
+} | null {
   if (launch) {
     const operation = launch.replay ? agentLaunchReplayRun : agentLaunchRun
-    return readAgentLaunchCreateOutcome(operation.interpret(response))
+    const result = operation.interpret(response)
+    const outcome = readAgentLaunchCreateOutcome(result)
+    const setupTrustMismatch = readSetupTrustMismatch(result)
+    return outcome && setupTrustMismatch ? { ...outcome, setupTrustMismatch } : outcome
   }
   const created = worktreeCreateRun.interpret(response)
+  const setupTrustMismatch = readSetupTrustMismatch(created)
   const worktreeId = created.worktree.id
   if (!worktreeId) {
     return null
@@ -182,7 +212,8 @@ function readCreateResult(
   return {
     worktreeId,
     ...(typeof displayName === 'string' ? { displayName } : {}),
-    ...(warning ? { warning } : {})
+    ...(warning ? { warning } : {}),
+    ...(setupTrustMismatch ? { setupTrustMismatch } : {})
   }
 }
 

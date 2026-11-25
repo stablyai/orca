@@ -1,5 +1,5 @@
 import { session, type AuthInfo, type Session } from 'electron'
-import type { NetworkProxySettings } from '../../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../../shared/network/network-proxy'
 import { getElectronProxyCredentialsForChallenge } from '../../network/electron-proxy-credentials'
 import { installElectronProxyRequestGuard } from '../../network/electron-proxy-request-guard'
 import { applyElectronProxySettings } from '../../network/proxy-settings'

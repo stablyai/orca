@@ -2,7 +2,7 @@ import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
   OrcaProfileCloudSummary
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 
 export type OrcaCloudSessionExchangeResponse = {
   accessToken: string

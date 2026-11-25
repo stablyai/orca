@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import type { ContextualTourStepId } from '../../../../shared/contextual-tours'
+import type { ContextualTourStepId } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 
 export type LocalizedContextualTourStepCopy = {
   title: string

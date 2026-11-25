@@ -6,23 +6,16 @@ import {
   type CrashReportCopyDiagnosticsArgs,
   type CrashReportSubmitArgs,
   formatCrashReportText
-} from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-reporting'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
-import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-breadcrumb-origin'
+import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-reporting/crash-breadcrumb-origin'
 import {
   assertClipboardTextWriteWithinLimit,
   isClipboardTextWriteTooLargeError
-} from '../../../shared/clipboard-text'
+} from '../../../shared/clipboard/clipboard-text'
 import { formatCrashReportCopyText } from '../../crash-reporting/reports/crash-report-copy-text'
-import {
-  recentRendererErrorReportKeys,
-  recordRendererErrorReport
-} from './crash-reporting-renderer-error-report'
+import { recordRendererErrorReport } from './crash-reporting-renderer-error-report'
 import { recordRendererBreadcrumbFromRenderer } from './crash-reporting-renderer-breadcrumbs'
-import {
-  profiledRendererFor,
-  profileRendererMemoryBreadcrumb
-} from '../../crash-reporting/memory/renderer-heap-allocation-profile'
 import {
   getLatestPendingReport,
   getLatestSendableReport,
@@ -31,24 +24,6 @@ import {
   submittedReportIds
 } from './crash-reporting-sendable-reports'
 import { buildUncapturedCrashReportText, submitCrashReport } from './crash-reporting-submission'
-
-export function _resetRendererErrorReportDedupeForTests(): void {
-  recentRendererErrorReportKeys.clear()
-  submittedReportIds.clear()
-  inFlightSubmissions.clear()
-}
-
-export function _getCrashReportingStateSizesForTests(): {
-  submittedReportIds: number
-  inFlightSubmissions: number
-  recentRendererErrorReportKeys: number
-} {
-  return {
-    submittedReportIds: submittedReportIds.size,
-    inFlightSubmissions: inFlightSubmissions.size,
-    recentRendererErrorReportKeys: recentRendererErrorReportKeys.size
-  }
-}
 
 export function registerCrashReportingHandlers(store: CrashReportStore): void {
   const directory = nativeHangCaptureDirectory(getCanonicalUserDataPath())
@@ -89,9 +64,6 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
       const origin =
         typeof sender?.id === 'number' ? rendererCrashBreadcrumbOrigin(sender.id) : undefined
       recordRendererBreadcrumbFromRenderer(args, origin)
-      if (sender && origin) {
-        profileRendererMemoryBreadcrumb(profiledRendererFor(sender), args, origin)
-      }
     }
   )
 

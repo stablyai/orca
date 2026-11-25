@@ -1,8 +1,11 @@
 /** Empty-host claims refuse all referencing state; migrations block only state their manifest cannot carry. */
 import type { Store } from '../../persistence/loading-store/store'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { toSshExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
+import {
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import { getRepoRegistrationHostIds } from '../../../shared/repository/repo-host-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { GLOBAL_WORKSPACE_SESSION_FIELDS } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 import {

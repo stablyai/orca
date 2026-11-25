@@ -3,7 +3,10 @@
 import { chmodSync, copyFileSync, existsSync, linkSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../../shared/node-runtime-pin'
+import {
+  NODE_RUNTIME_ASSETS,
+  type ServerTarget
+} from '../../../shared/node-runtime/node-runtime-pin'
 import {
   ORCAD_SERVER_ENTRY_FILENAME,
   ORCAD_VERSION_FILENAME,
@@ -27,7 +30,7 @@ import {
   type AppImageNodeRuntime
 } from '../../node-runtime/appimage-bundled-node-runtime'
 import { serveProfileHasSshTargets } from '../profile-state/serve-profile-ssh-targets'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 const NATIVE_PREFLIGHT_TIMEOUT_MS = 30_000
 

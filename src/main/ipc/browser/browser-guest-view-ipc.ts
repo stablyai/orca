@@ -1,7 +1,7 @@
 import { ipcMain, webContents, type IpcMainInvokeEvent } from 'electron'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { browserSiteDisplayController } from '../../browser/site-settings/display/browser-site-display-controller'
-import { isBrowserPageZoomDirection } from '../../../shared/browser-page-zoom'
+import { isBrowserPageZoomDirection } from '../../../shared/browser/site-settings/browser-page-zoom'
 import { publishBrowserClientPageMetadata } from '../../browser/client-pages/renderer/browser-client-page-metadata-transport'
 import {
   BrowserClientPageMetadataParams,
@@ -9,12 +9,12 @@ import {
 } from '../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
-import type { BrowserViewportOverride } from '../../../shared/browser-workspace-types'
+import type { BrowserViewportOverride } from '../../../shared/browser/workspaces/browser-workspace-types'
 import { isValidBrowserGrabRect } from '../../../shared/browser/annotations/browser-annotation-viewport-report'
 import {
   isBrowserSiteColorScheme,
   type BrowserPageSiteDisplay
-} from '../../../shared/browser-site-display'
+} from '../../../shared/browser/site-settings/browser-site-display'
 import {
   isValidBrowserAnnotationViewportBridgeMarkers,
   isValidBrowserAnnotationViewportBridgeToken,

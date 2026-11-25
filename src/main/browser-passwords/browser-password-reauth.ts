@@ -1,7 +1,7 @@
 import { systemPreferences } from 'electron'
 import { runProcess } from '@orca/process-host'
 import { browserPasswordSettings } from './browser-password-vault-access'
-import type { BrowserPasswordReauthMethod } from '../../shared/browser-passwords-types'
+import type { BrowserPasswordReauthMethod } from '../../shared/browser/passwords/browser-passwords-types'
 
 // Chrome and Firefox both keep a successful check for five minutes.
 const REAUTH_VALIDITY_MS = 5 * 60 * 1000

@@ -7,7 +7,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   isKnownAiVaultResumeWorkspaceTarget,
   type AiVaultSessionResumeTargetState

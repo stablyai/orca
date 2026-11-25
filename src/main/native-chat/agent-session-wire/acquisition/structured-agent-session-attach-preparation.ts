@@ -1,4 +1,4 @@
-import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../shared/workspace/identity/floating-workspace-worktree'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import type {
   StructuredAgentSessionAttachContext,
@@ -56,13 +56,15 @@ export async function prepareStructuredAgentSessionAttach(
   if (!opened.ok) {
     return opened
   }
-  const launchDirectory =
-    !priorRecord && isFloatingWorkspaceId(params.location.workspaceId)
-      ? (options.hostLaunchDirectory ??
-        (await lock.wait(
-          Promise.resolve(context.deps.resolveWorkspacePath?.(params.location.workspaceId))
-        )))
-      : undefined
+  // Pinned when the host named a folder (an adopted sub-folder conversation) or the workspace floats.
+  const launchDirectory = priorRecord
+    ? undefined
+    : (options.hostLaunchDirectory ??
+      (isFloatingWorkspaceId(params.location.workspaceId)
+        ? await lock.wait(
+            Promise.resolve(context.deps.resolveWorkspacePath?.(params.location.workspaceId))
+          )
+        : undefined))
   if (!priorRecord && isFloatingWorkspaceId(params.location.workspaceId) && !launchDirectory) {
     throw new Error('floating_agent_session_launch_directory_unavailable')
   }

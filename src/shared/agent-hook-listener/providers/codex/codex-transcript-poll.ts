@@ -1,29 +1,85 @@
-import { record } from '../../../codex-rollout-jsonl-cursor'
+import { RolloutReadBatch } from './codex-rollout-async-reads'
+import { record } from './codex-rollout-jsonl-format'
 import {
-  hasPendingCodexSubagentIdentity,
-  retryPendingCodexSubagentIdentities
-} from '../../../codex-subagent-roster'
+  createPrefetchedRolloutReads,
+  withPrefetchedRolloutReads
+} from './codex-rollout-prefetch-scope'
+import { hasPendingCodexSubagentIdentity, type CodexSubagentRoster } from './codex-subagent-roster'
+import {
+  applyPendingCodexSubagentIdentities,
+  readPendingCodexSubagentIdentities,
+  type CodexSubagentIdentityRead
+} from './codex-subagent-identity-reads'
+import {
+  applyCodexSubagentTranscriptReads,
+  readCodexSubagentTranscript,
+  type CodexSubagentTranscriptReads
+} from './codex-subagent-transcript-reads'
 import {
   codexTranscriptTurnEnd,
-  reconcileCodexSubagentTranscript
-} from '../../../codex-subagent-transcript'
+  type CodexSubagentTranscriptState
+} from './codex-subagent-transcript'
 import { normalizeHookPayload } from '../../normalization/normalize-hook-payload'
 import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import { buildCodexChildDrivenStatusPayload } from './codex-events'
 import { getOrCreateCodexSubagentRoster, markCodexLeadTurnInterrupted } from './codex-state'
 
-/** Poll new host rollout records without replaying starting hooks; replay ended root turns as Stops skipped for internal subagents. */
+export type CodexTranscriptPollReads = {
+  /** Holds the read buffers' share of the budget; callers release it once the reads are applied or dropped. */
+  batch: RolloutReadBatch
+  roster?: CodexSubagentRoster
+  transcript?: CodexSubagentTranscriptState
+  transcriptReads?: CodexSubagentTranscriptReads
+  identities: CodexSubagentIdentityRead[]
+}
+
+/** Reads the pane's rollouts off the main thread; slow opens (Windows on-access scans) must never block it. */
+export async function readCodexTranscriptPoll(
+  state: HookListenerState,
+  paneKey: string
+): Promise<CodexTranscriptPollReads> {
+  const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
+  const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  // A replaced or cleared pane makes the rest of these reads unappliable; stop opening rollouts for it.
+  const batch = new RolloutReadBatch(
+    () =>
+      state.codexSubagentRosterByPaneKey.get(paneKey) === roster &&
+      state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript,
+    paneKey
+  )
+  try {
+    const transcriptReads = transcript?.parent.filePath
+      ? await readCodexSubagentTranscript(transcript, batch)
+      : undefined
+    return {
+      batch,
+      roster,
+      transcript,
+      transcriptReads,
+      identities: roster ? await readPendingCodexSubagentIdentities(roster, batch) : []
+    }
+  } catch (error) {
+    // Callers release on success; a rejected read must not keep its share of the budget.
+    batch.release()
+    throw error
+  }
+}
+
+/** Apply polled rollout records without replaying starting hooks; replay ended root turns as Stops skipped for internal subagents. Callers apply only while `original` is still the pane's row. */
 export function pollCodexTranscriptStatus(
   state: HookListenerState,
   original: AgentHookEventPayload,
   body: unknown,
-  env: string
+  env: string,
+  reads: CodexTranscriptPollReads
 ): AgentHookEventPayload | undefined {
   const roster = getOrCreateCodexSubagentRoster(state, original.paneKey)
   const transcript = state.codexSubagentTranscriptByPaneKey.get(original.paneKey)
+  const applyIdentities = (): boolean =>
+    reads.roster === roster && applyPendingCodexSubagentIdentities(roster, reads.identities)
   if (!transcript?.parent.filePath) {
-    const named = retryPendingCodexSubagentIdentities(roster)
+    const named = applyIdentities()
     // Without a parent rollout, keep polling only while a child's own rollout still owes its name.
     const payload = named
       ? buildCodexChildDrivenStatusPayload(state, undefined, original.paneKey, {})
@@ -33,12 +89,11 @@ export function pollCodexTranscriptStatus(
     }
     return hasPendingCodexSubagentIdentity(roster) ? original : undefined
   }
-  const reconciled = reconcileCodexSubagentTranscript(
-    transcript,
-    roster,
-    transcript.parent.filePath
-  )
-  const changed = retryPendingCodexSubagentIdentities(roster) || reconciled
+  const reconciled =
+    reads.transcript === transcript && reads.transcriptReads !== undefined
+      ? applyCodexSubagentTranscriptReads(transcript, roster, reads.transcriptReads)
+      : false
+  const changed = applyIdentities() || reconciled
   const lead = state.codexLeadStateByPaneKey.get(original.paneKey)
   const interrupted = transcript.rootTurn.interrupted && lead?.state !== 'done'
   const envelope = record(body)
@@ -60,7 +115,12 @@ export function pollCodexTranscriptStatus(
         transcript_path: transcript.parent.filePath
       }
     }
-    return normalizeHookPayload(state, 'codex', stop, env) ?? undefined
+    // The poll just read this rollout; its replayed Stop must not reopen it on the main thread.
+    return (
+      withPrefetchedRolloutReads(createPrefetchedRolloutReads(), () =>
+        normalizeHookPayload(state, 'codex', stop, env)
+      ) ?? undefined
+    )
   }
   if (!changed && !interrupted) {
     return original

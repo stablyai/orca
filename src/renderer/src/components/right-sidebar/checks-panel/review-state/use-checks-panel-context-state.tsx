@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { useNow } from '@/hooks/use-now'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { useNow } from '@/lib/window-activity/use-now'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/cache/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review/hosted-review-cache-state'
@@ -40,10 +40,8 @@ type ChecksPanelContextStateInput = Pick<
   | 'repo'
   | 'settings'
   | 'setAgentComposerState'
-  | 'setChecks'
   | 'setChecksLoading'
   | 'setCommentResolutionAckBusyNow'
-  | 'setComments'
   | 'setCommentsLoading'
   | 'setConflictDetailsRefreshing'
   | 'setCreatePrError'
@@ -83,10 +81,8 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     repo,
     settings,
     setAgentComposerState,
-    setChecks,
     setChecksLoading,
     setCommentResolutionAckBusyNow,
-    setComments,
     setCommentsLoading,
     setConflictDetailsRefreshing,
     setCreatePrError,
@@ -132,9 +128,9 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     setTitleDraft('')
     setTitleSaving(false)
     clearTitleInputFocusTimer()
-    setChecks([])
+    // Each section's own read owner resets its results when its read inputs change (checks timer,
+    // comments effect); a push-target-only change keeps them, since no read would settle a reset.
     setChecksLoading(false)
-    setComments([])
     setCommentsLoading(false)
     setIsRefreshing(false)
     setEmptyRefreshing(false)
@@ -201,9 +197,16 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     ? null
     : (prCacheEntry?.data ?? null)
   const prCachedHasPR = prCacheEntry ? pr !== null : null
-  const hostedReview = useAppStore((s) =>
+  const hostedReviewEntryData = useAppStore((s) =>
     hostedReviewCacheKey ? (s.hostedReviewCache[hostedReviewCacheKey]?.data ?? null) : null
   )
+  // A merged review cached before HEAD moved is not this branch's review; it would block Create as "already exists".
+  const hostedReview = isStaleMergedGitHubReviewForHead(
+    { data: hostedReviewEntryData },
+    activeWorktree?.head
+  )
+    ? null
+    : hostedReviewEntryData
   const linkedReviewNumber =
     activeWorktree?.linkedPR ??
     activeWorktree?.linkedGitLabMR ??

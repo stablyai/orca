@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getAutomationRunRepoId } from '../../../../../shared/automations/history/automation-run-identity'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AutomationListRow } from './automation-list-row-identity'

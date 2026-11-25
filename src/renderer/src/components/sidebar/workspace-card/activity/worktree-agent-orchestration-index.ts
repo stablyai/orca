@@ -70,10 +70,6 @@ export function releaseWorktreeAgentOrchestrationIndexCache(): void {
   orchestrationIndexCache = null
 }
 
-export function _getWorktreeAgentOrchestrationIndexBuildCountForTest(): number {
-  return indexBuildCount
-}
-
 /** Key on live attribution for exact runtime pane keys, preserving early SSH rows and ignoring stale entry.paneKey fields. */
 function projectPaneWorktreeIds(
   runtimeSource: OrchestrationIndexState['runtimeAgentOrchestrationByPaneKey'],
@@ -95,7 +91,7 @@ function projectPaneWorktreeIds(
     : new Map<string, string>()
   for (const [paneKey, context] of runtimeEntries) {
     paneWorktreeIds.push(
-      agentStatusByPaneKey[paneKey]?.worktreeId,
+      agentStatusByPaneKey.get(paneKey)?.worktreeId,
       represented.get(paneKey),
       represented.size > 0 && context.parentPaneKey
         ? represented.get(context.parentPaneKey)

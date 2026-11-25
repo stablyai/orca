@@ -8,7 +8,7 @@ import { dirname, join, resolve } from 'node:path'
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 
 const PENDING_DELETES_FILE_NAME = 'browser-route-partition-pending-deletes.json'
 

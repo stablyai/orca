@@ -10,7 +10,7 @@ import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/ru
 import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
-} from '../../shared/managed-account-types'
+} from '../../shared/agent-accounts/managed-account-types'
 import {
   withInteractiveLoginCleanup,
   type InteractiveLoginSession

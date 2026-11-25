@@ -19,7 +19,7 @@ import {
   PLUGIN_HOST_ID_MAX_LENGTH,
   pluginWorkspaceId
 } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 /** One terminal of a workspace, as main's runtime lists it. */

@@ -4,7 +4,7 @@ import {
   COMBINED_DIFF_ROW_SELECTOR,
   COMBINED_DIFF_HEADER_SELECTOR
 } from './combined-diff-viewport'
-import { hasLayoutBox } from '@/hooks/virtualized-hidden-row-measurement'
+import { hasLayoutBox } from '@/lib/list-interaction/virtualized-hidden-row-measurement'
 
 export function installCombinedDiffCursorReveal(diff: editor.IStandaloneDiffEditor): () => void {
   const root = diff.getContainerDomNode()

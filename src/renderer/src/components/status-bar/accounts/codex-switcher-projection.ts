@@ -1,10 +1,10 @@
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { formatResetCreditExpiry } from '../usage/provider-usage-panel'
 import type { Translate } from '../../../i18n/use-translate'
 
 export function getCodexResetProjection(
   codex: ProviderRateLimits,
-  hasActiveRuntimeEnvironment: boolean,
+  redeemable: boolean,
   t?: Translate
 ): {
   resetCreditCount: number | null
@@ -19,8 +19,6 @@ export function getCodexResetProjection(
   return {
     resetCreditCount,
     resetCreditExpiry,
-    // Why: reset credits redeem against the desktop's own Codex login, not a remote account owner's.
-    canRedeemReset:
-      !hasActiveRuntimeEnvironment && resetCreditCount !== null && resetCreditCount > 0
+    canRedeemReset: redeemable && resetCreditCount !== null && resetCreditCount > 0
   }
 }

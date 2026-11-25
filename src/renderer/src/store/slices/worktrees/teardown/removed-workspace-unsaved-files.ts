@@ -10,7 +10,7 @@ import {
 import { worktreePurgeClosedFileIds } from './worktree-purge-closed-files'
 import { resolveEditorModelOwner } from '@/components/editor/model-lifetime/identity/editor-model-owner'
 import { isRemovedRuntimeHostId } from '../../../host-catalog/removed-runtime-host-rows'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { findFolderWorkspaceRecord } from '../../../folder-workspaces/folder-workspace-record-index'
 import {
   selectFolderWorkspaces,

@@ -20,8 +20,3 @@ let sharedClock = createAgentStatusEpochClock()
 /** Read only with a subscribed live epoch; sentinel epochs must not evict the shared sample. The scheduler must bump every stale boundary or expired rows stay live until another bump. */
 export const getAgentStatusEpochNow = (agentStatusEpoch: number): number =>
   sharedClock(agentStatusEpoch)
-
-/** Reset with store epochs in tests or epoch 0 can reuse an earlier test’s timestamp. */
-export function resetAgentStatusEpochClockForTests(): void {
-  sharedClock = createAgentStatusEpochClock()
-}

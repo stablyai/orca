@@ -12,7 +12,7 @@ import {
   sshTargetLabelsEqual
 } from '@/store/slices/ssh/ssh-target-metadata'
 import { sanitizeSshTargetGeneration } from '../../../../../shared/remote-runtime/ssh/ssh-target-generation'
-import { forEachWithConcurrency } from '../../../../../shared/map-with-concurrency'
+import { forEachWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 
 /** Mirror server-owned SSH state into only its per-environment bucket so paired desktops get reconnect overlays (STA-1468); local SSH maps remain independent. */
 

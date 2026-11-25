@@ -26,7 +26,7 @@ import type {
 import {
   agentSessionCompactCommandText,
   type AgentSessionConversationCommand
-} from '../../../../shared/agent-session/agent-session-conversation-command'
+} from '../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { agentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'

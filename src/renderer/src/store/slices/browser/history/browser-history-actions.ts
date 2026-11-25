@@ -1,4 +1,4 @@
-import type { BrowserHistoryEntry } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserHistoryEntry } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserSlice,
   BrowserSliceGet,
@@ -6,7 +6,7 @@ import type {
   RemovedBrowserHistory
 } from '../browser-slice-contract'
 
-import { redactKagiSessionToken } from '../../../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../../../shared/browser/navigation/browser-url'
 import {
   MAX_BROWSER_HISTORY_ENTRIES,
   normalizeBrowserHistoryUrl
@@ -18,8 +18,8 @@ import {
   normalizeWorkspaceDocHistoryTitle,
   workspaceDocHistoryEntriesEqual
 } from '../../../../../../shared/workspace-session/workspace-doc-history'
-import { browserPageDocLocationsEqual } from '../../../../../../shared/browser-page-doc-location'
-import '../../../../../../shared/constants'
+import { browserPageDocLocationsEqual } from '../../../../../../shared/browser/workspaces/browser-page-doc-location'
+import '../../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 
 export function createBrowserHistoryActions(

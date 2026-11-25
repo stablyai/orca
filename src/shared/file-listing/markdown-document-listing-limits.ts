@@ -1,5 +1,5 @@
 import type { MarkdownDocument } from './file-document'
-import { measureUtf8ByteLength } from '../utf8-byte-limits'
+import { measureUtf8ByteLength } from '../text/utf8-byte-limits'
 
 export const MARKDOWN_DOCUMENT_LISTING_MAX_DOCUMENTS = 20_000
 export const MARKDOWN_DOCUMENT_LISTING_MAX_METADATA_BYTES = 8 * 1024 * 1024

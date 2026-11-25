@@ -1,16 +1,16 @@
 import {
   DEFAULT_STATUS_BAR_USAGE_FORMAT,
   normalizeStatusBarUsageFormat
-} from '../../../../../shared/status-bar-usage-format'
+} from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
-  DEFAULT_SHOW_SLEEPING_WORKSPACES,
-  DEFAULT_STATUS_BAR_ITEMS,
   normalizeAgentActivityDisplayMode
-} from '../../../../../shared/constants'
+} from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
+import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../../shared/workspace-view/sleeping-workspace-visibility'
+import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/status-bar/status-bar-defaults'
 import {
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeUpdates,
@@ -19,16 +19,16 @@ import {
 import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
   normalizeUsagePercentageDisplay
-} from '../../../../../shared/usage-percentage-display'
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import {
   DEFAULT_STATUS_BAR_USAGE_MODE,
   normalizeStatusBarUsageMode
-} from '../../../../../shared/status-bar-usage-mode'
+} from '../../../../../shared/status-bar/status-bar-usage-mode'
 import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   ALL_AUTOMATION_HOSTS_FILTER,
   toPersistedAutomationHostFilter
@@ -39,8 +39,10 @@ import {
   cloneDefaultWorkspaceStatuses,
   normalizeWorkspaceStatuses,
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
-} from '../../../../../shared/workspace-statuses'
+} from '../../../../../shared/workspace/status/workspace-statuses'
 import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
+import { createUiBotPreferenceActions } from './ui-slice-bot-preference-actions'
+import { toggleCollapsedGroupSet } from './collapsed-group-toggle'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
@@ -111,6 +113,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     setHideWorkspacesFromOtherDevices: (v) => set({ hideWorkspacesFromOtherDevices: v }),
     alwaysShowDefaultBranchWorkspace: true,
     setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
+    ...createUiBotPreferenceActions(set, get),
 
     explorerDisplayRootByWorktree: {},
     /** Stores an explicit root choice while rejecting empty IDs and prototype-related record keys. */
@@ -159,6 +162,23 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         return { showDotfilesByWorktree: next }
       }),
 
+    notificationsMutedByWorktree: {},
+    toggleWorktreeNotificationsMuted: (worktreeId) =>
+      set((s) => {
+        if (!worktreeId) {
+          return s
+        }
+        const nextMuted = s.notificationsMutedByWorktree[worktreeId] !== true
+        const next = { ...s.notificationsMutedByWorktree }
+        // Why: not muted is the default; only persist worktree-level opt-ins.
+        if (nextMuted) {
+          next[worktreeId] = true
+        } else {
+          delete next[worktreeId]
+        }
+        return { notificationsMutedByWorktree: next }
+      }),
+
     filterRepoIds: [],
     setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
@@ -167,12 +187,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     collapsedGroups: new Set<string>(),
     toggleCollapsedGroup: (key) =>
       set((s) => {
-        const next = new Set(s.collapsedGroups)
-        if (next.has(key)) {
-          next.delete(key)
-        } else {
-          next.add(key)
-        }
+        const next = toggleCollapsedGroupSet(s.collapsedGroups, key)
         window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
         return { collapsedGroups: next }
       }),

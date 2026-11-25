@@ -25,6 +25,7 @@ import {
 } from '../../runtime/runtime-environment-subscriptions'
 import type { PreloadApi } from '../../api-types'
 import { managedOrcadApi } from './managed-orcad-api'
+import { runtimePortForwardsApi } from './runtime-port-forwards-api'
 import { getWslHostsApi } from '../wsl/wsl-hosts-api'
 
 export const runtimeEnvironmentsApi = {
@@ -80,6 +81,7 @@ export const runtimeEnvironmentsApi = {
     selector: string
     timeoutMs?: number
     observeOnly?: true
+    force?: true
   }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatus', args),
   onSharedControlDiagnostics: (
@@ -121,6 +123,8 @@ export const runtimeEnvironmentsApi = {
     timeoutMs?: number
     expectedEnvironmentPairingRevision?: number
     expectedEnvironmentRuntimeId?: string
+    background?: boolean
+    wake?: boolean
   }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtimeEnvironments:call', args),
   cancelSubscription: (args: { subscriptionId: string }): Promise<void> =>
     cancelRuntimeEnvironmentSubscriptionFromPreload(ipcRenderer, args.subscriptionId),
@@ -135,6 +139,8 @@ export const runtimeEnvironmentsApi = {
       timeoutMs?: number
       expectedEnvironmentPairingRevision?: number
       expectedEnvironmentRuntimeId?: string
+      background?: boolean
+      wake?: boolean
     },
     callbacks: {
       onResponse: (response: RuntimeRpcResponse<unknown>) => void
@@ -145,5 +151,6 @@ export const runtimeEnvironmentsApi = {
   ): Promise<RuntimeEnvironmentSubscriptionHandle> =>
     subscribeRuntimeEnvironmentFromPreload(ipcRenderer, args, callbacks),
   managedOrcad: managedOrcadApi,
+  portForwards: runtimePortForwardsApi,
   wslHosts: getWslHostsApi()
 } satisfies PreloadApi['runtimeEnvironments']

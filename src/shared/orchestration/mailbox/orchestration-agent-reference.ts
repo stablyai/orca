@@ -1,6 +1,12 @@
-import { parseOrcaSessionAddress } from '../../orca-session-address'
+import { parseOrcaSessionAddress } from '../../agent-session/identity/orca-session-address'
 
-export type OrchestrationAgentReference = { label: string; address: string; hostKey: string }
+export type OrchestrationAgentReference = {
+  label: string
+  address: string
+  hostKey: string
+  /** The agent's logo on its composer pill; never part of the sent text. */
+  agentType?: string
+}
 
 export function isPublicOrchestrationAddress(address: string): boolean {
   return (
@@ -31,7 +37,7 @@ export function agentReferenceToken(reference: OrchestrationAgentReference): str
 
 /** The routing line a sent message ends with, one per mentioned agent. */
 export function agentReferenceNote(label: string, address: string): string {
-  return `[Orca agent "${label}": ${address} — message it with orca orchestration send --to ${address}]`
+  return `[Orca agent "${label}": ${address} — message it with orca orchestration send --to ${address} --subject "<topic>" --body "<message>"]`
 }
 
 export function terminalAgentReference(reference: OrchestrationAgentReference): string | null {

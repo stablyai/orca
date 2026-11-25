@@ -1,4 +1,4 @@
-import type { StandardEmojiShortcodeEntry } from '../../../../../shared/emoji-shortcode-catalog'
+import type { StandardEmojiShortcodeEntry } from '../../../../../shared/text/emoji-shortcode-catalog'
 
 // Lives apart from the shortcode index so only the lazily loaded picker panel ships it.
 // Shown before the user searches: emoji that read well as workspace markers.

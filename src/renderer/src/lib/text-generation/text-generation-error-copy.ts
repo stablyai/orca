@@ -2,7 +2,7 @@ import '@/i18n/i18n'
 import {
   TEXT_GENERATION_FAILURE_COPY,
   type TextGenerationFailureCode
-} from '../../../../shared/text-generation-failure-copy'
+} from '../../../../shared/text-generation/text-generation-failure-copy'
 import './agent-output-error-copy'
 import {
   TEXT_GENERATION_ERROR_COPY,

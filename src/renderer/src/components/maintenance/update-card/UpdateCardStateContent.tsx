@@ -3,10 +3,10 @@ import type {
   ChangelogData,
   LinuxPackageInstallRecovery,
   UpdateStatus
-} from '../../../../../shared/update-status-types'
-import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
-import { UpdateErrorCardContent, type UpdateErrorCardModel } from '../../UpdateErrorCardContent'
-import { LinuxPackageInstallRecoveryCard } from '../../LinuxPackageInstallRecoveryCard'
+} from '../../../../../shared/updater/update-status-types'
+import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
+import { UpdateErrorCardContent, type UpdateErrorCardModel } from './UpdateErrorCardContent'
+import { LinuxPackageInstallRecoveryCard } from './LinuxPackageInstallRecoveryCard'
 import { useTranslate } from '@/i18n/use-translate'
 import { UpdateCheckFeedback } from './UpdateCheckFeedback'
 import {
@@ -14,6 +14,7 @@ import {
   UpdateAvailableSimpleContent
 } from './UpdateAvailableCardContent'
 import { UpdateDownloadingContent, UpdateReadyToInstallContent } from './UpdateDownloadCardContent'
+import { RequiredUpdateRestartContent } from './RequiredUpdateRestartContent'
 
 export function UpdateCardStateContent({
   status,
@@ -114,13 +115,25 @@ export function UpdateCardStateContent({
         </div>
       )
     }
-    return hasStartedDownload ? (
+    if (status.teamRestart) {
+      return (
+        <RequiredUpdateRestartContent
+          version={status.version}
+          restart={status.teamRestart}
+          requiredByOrca={status.requiredByOrca}
+          onRestart={onInstallRetry}
+        />
+      )
+    }
+    return hasStartedDownload && !status.automaticDownload && !status.requiredByTeam ? (
       <div className="p-4">
         <p className="text-sm">{t('auto.components.UpdateCard.09a55c39b5', 'Installing...')}</p>
       </div>
     ) : (
       <UpdateReadyToInstallContent
         version={status.version}
+        requiredByTeam={status.requiredByTeam}
+        requiredByOrca={status.requiredByOrca}
         onRestart={onInstallRetry}
         onClose={onCollapse}
       />

@@ -3,7 +3,7 @@ import type {
   BrowserPasswordCopyResult,
   BrowserPasswordEntryDetailsResult,
   BrowserPasswordEntryEditResult
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import { toBrowserPasswordOrigin } from '../../browser-passwords/browser-password-origin'
 import { confirmBrowserPasswordOwner } from '../../browser-passwords/browser-password-reauth'
 import type { BrowserPasswordStoreResult } from '../../browser-passwords/browser-password-vault-file'

@@ -2,14 +2,14 @@
 
 import { useAppStore } from '@/store/index'
 
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import { rememberAgentLaunchPanePrompt } from '@/lib/agent-session/launch/pane/agent-launch-pane-prompt'
 import { awaitAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 
 export type HostAgentLaunchArgs = {

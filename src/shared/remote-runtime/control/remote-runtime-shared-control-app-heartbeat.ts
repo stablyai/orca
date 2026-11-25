@@ -24,6 +24,7 @@ export class SharedControlAppHeartbeat {
   private lastAnswerAt = 0
   private lastTickAt = 0
   private probeInFlight = false
+  private incarnation = 0
   private unresponsiveSince: number | null = null
 
   constructor(
@@ -32,7 +33,7 @@ export class SharedControlAppHeartbeat {
       probe: Probe
       isCurrent: (generation: number) => boolean
       /** False skips probing, e.g. for an asleep or manually disconnected host. */
-      shouldProbe: () => boolean
+      shouldProbe: () => boolean | (() => boolean) | Promise<boolean | (() => boolean)>
       /** The runtime missed a probe on this socket; retire it so reconnect backoff runs. */
       onUnresponsive: (generation: number) => void
       /** The runtime answered on a ready socket after it had been marked unresponsive. */
@@ -69,6 +70,7 @@ export class SharedControlAppHeartbeat {
       clearInterval(this.timer)
     }
     this.timer = null
+    this.incarnation += 1
     this.generation = null
     this.probeInFlight = false
   }
@@ -96,12 +98,42 @@ export class SharedControlAppHeartbeat {
       this.lastAnswerAt = now
       return
     }
-    if (now - this.lastAnswerAt < intervalMs || !this.args.shouldProbe()) {
+    if (now - this.lastAnswerAt < intervalMs) {
       return
     }
     this.probeInFlight = true
+    const incarnation = this.incarnation
+    void this.prepareProbe(generation, incarnation, intervalMs).catch(() => {
+      if (this.incarnation === incarnation) {
+        this.probeInFlight = false
+      }
+    })
+  }
+
+  private async prepareProbe(
+    generation: number,
+    incarnation: number,
+    intervalMs: number
+  ): Promise<void> {
+    const allowed = await this.args.shouldProbe()
+    if (
+      this.incarnation !== incarnation ||
+      this.generation !== generation ||
+      !this.args.isCurrent(generation)
+    ) {
+      return
+    }
+    if (
+      !(typeof allowed === 'function' ? allowed() : allowed) ||
+      this.now() - this.lastAnswerAt < intervalMs ||
+      this.now() - this.lastTickAt > intervalMs * 1.5
+    ) {
+      this.probeInFlight = false
+      return
+    }
+    const now = this.now()
     const timeoutMs = this.options.timeoutMs ?? SHARED_CONTROL_APP_HEARTBEAT_TIMEOUT_MS
-    this.args.probe(timeoutMs).then(
+    await this.args.probe(timeoutMs).then(
       () => this.settle(generation, true),
       (error: unknown) => {
         // Why: a deadline that fired late means this process slept (Windows timers count through suspend).

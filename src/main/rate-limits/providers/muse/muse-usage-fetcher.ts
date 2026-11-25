@@ -1,11 +1,11 @@
 import { stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
-import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type {
   ProviderRateLimits,
   UsageRateLimitFailureKind
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { resolveCommandOnLocalPath } from '../../../ipc/command-path/command-path-resolver'
 import { hostShellEnvironment } from '../../../runtime/agent-session/environment/structured-agent-shell-environment'
 import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'

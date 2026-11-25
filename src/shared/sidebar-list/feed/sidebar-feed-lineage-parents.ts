@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId } from '../../execution-host/execution-host'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity

@@ -13,7 +13,7 @@ import {
   parseOrcadProfilePreflight
 } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-profile-preflight.ts'
 import { ORCAD_SERVER_ENTRY_FILENAME } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
-import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime-pin.ts'
+import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 
 async function initializeFixture(directory, databasePath, profileId) {
   const fixture = join(directory, 'initialize.cjs')

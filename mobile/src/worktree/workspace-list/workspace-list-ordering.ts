@@ -1,5 +1,5 @@
 import type { Worktree } from './workspace-list-types'
-import type { WorktreeStatus } from '../../../../src/shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../src/shared/worktree/row-display/worktree-status-rollup'
 import type { WorkspaceSortBy } from '../../../../src/shared/workspace-view/workspace-view-options'
 import {
   buildWorkspaceRowComparator,

@@ -1,7 +1,7 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import { buildByIdIndex } from '../../../../../shared/first-row-by-id-index'
+import { buildByIdIndex } from '../../../../../shared/collections/first-row-by-id-index'
 import { buildWorktreeByIdIndex } from './workspace-terminal-worktree-index'
 
 export type WorkspaceTerminalReconnectPlan = {

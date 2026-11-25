@@ -1,5 +1,5 @@
 import type { editor } from 'monaco-editor'
-import type { ReadClipboardTextOptions } from '../../../../../shared/clipboard-text'
+import type { ReadClipboardTextOptions } from '../../../../../shared/clipboard/clipboard-text'
 import { measureTextControlPasteByteLength } from '@/lib/text-input/paste/text-control-paste'
 import {
   MONACO_PASTE_DIRECT_MAX_BYTES,

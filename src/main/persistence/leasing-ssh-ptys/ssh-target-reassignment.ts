@@ -1,6 +1,7 @@
-import type { ProjectHostSetup } from '../../../shared/project-types'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import { replaceWorkspaceSessionPartitions } from '../restoring-sessions/workspace-session-partition-replacement'
+import type { ProjectHostSetup } from '../../../shared/project/project-types'
+import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   migrateFolderWorkspaceHostSshTargetId,
   migrateUiHostScopeSshTargetId,
@@ -89,22 +90,32 @@ export function reassignSshTargetId(
     }
   }
   // Stale carrier IDs otherwise cause SSH target not found on later use.
-  let carrierChanged = migrateWorkspaceSessionSshTargetId(
+  // Publish replacements: rollback of an in-flight session write keeps the previous objects.
+  let carrierChanged = false
+  const localSession = migrateWorkspaceSessionSshTargetId(
     operations.state.workspaceSession,
     oldTargetId,
     newTargetId
   )
-  for (const session of Object.values(operations.state.workspaceSessionsByHostId ?? {})) {
-    if (session && migrateWorkspaceSessionSshTargetId(session, oldTargetId, newTargetId)) {
-      carrierChanged = true
-    }
+  if (localSession) {
+    operations.state.workspaceSession = localSession
+    carrierChanged = true
   }
+  const published = operations.state.workspaceSessionsByHostId
+  let partitions = replaceWorkspaceSessionPartitions(published, (session) =>
+    migrateWorkspaceSessionSshTargetId(session, oldTargetId, newTargetId)
+  )
   // Host-keyed partitions follow the new ID; existing destinations win.
-  const partitions = operations.state.workspaceSessionsByHostId
   const oldPartition = partitions?.[oldHostId]
   if (partitions && oldPartition) {
-    delete partitions[oldHostId]
-    partitions[newHostId] ??= oldPartition
+    // Rekey the private copy when there is one; never the published map.
+    const rekeyed = partitions === published ? { ...partitions } : partitions
+    delete rekeyed[oldHostId]
+    rekeyed[newHostId] ??= oldPartition
+    partitions = rekeyed
+  }
+  if (partitions !== published) {
+    operations.state.workspaceSessionsByHostId = partitions
     carrierChanged = true
   }
   if (migrateUiHostScopeSshTargetId(operations.state.ui, oldTargetId, newTargetId)) {

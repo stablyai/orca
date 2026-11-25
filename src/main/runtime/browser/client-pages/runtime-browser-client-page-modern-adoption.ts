@@ -1,7 +1,7 @@
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../shared/browser-url'
+} from '../../../../shared/browser/navigation/browser-url'
 import { batchBrowserPageInitializationNotifications } from './browser-page-initialization-notifications'
 import {
   RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,

@@ -1,6 +1,9 @@
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { WORKSPACE_LINEAGE_DOMAINS } from '../../profile-save-domains'
-import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import { ownsRawIdBucket } from './metadata-lineage-operations'
 import type { StoreRuntimeState } from '../store-runtime-state'

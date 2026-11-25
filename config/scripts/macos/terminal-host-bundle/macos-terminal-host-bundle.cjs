@@ -324,7 +324,8 @@ function assembleMacTerminalHost({ appPath, nodeExecutable, iconPath, info }) {
 
 async function loadNodeRuntimePin() {
   return import(
-    pathToFileURL(resolve(__dirname, '../../../../src/shared/node-runtime-pin.ts')).href
+    pathToFileURL(resolve(__dirname, '../../../../src/shared/node-runtime/node-runtime-pin.ts'))
+      .href
   )
 }
 

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isUtf8ByteLengthWithinLimit } from '../../utf8-byte-limits'
+import { isUtf8ByteLengthWithinLimit } from '../../text/utf8-byte-limits'
 import { pluginGrammarScopeSchema } from '../contributions/plugin-content-pack-contributions'
 import type { PluginArtifactStrictness } from './plugin-theme-artifact'
 

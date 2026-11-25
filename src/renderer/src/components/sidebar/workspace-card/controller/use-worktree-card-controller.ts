@@ -1,6 +1,7 @@
+import { useCallback } from 'react'
 import { useWorkspaceReferenceDetails } from '../review/use-workspace-reference-details'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
-import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-review-checks'
+import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import { canShowWorkspaceDeleteQuickAction } from '../../workspace-actions/deletion/workspace-delete-quick-action'
 import { useWorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'
@@ -13,8 +14,8 @@ import { useWorktreeCardSecondaryDetails } from '../details/use-worktree-card-se
 import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-actions'
 
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
-  const { worktree, repo } = props
-  const foundation = useWorktreeCardFoundation({ worktree, repo })
+  const { worktree, repo, compactLine } = props
+  const foundation = useWorktreeCardFoundation({ worktree, repo, compactLine })
   const review = useWorktreeCardReviewDetails({
     worktree,
     repo,
@@ -34,7 +35,9 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     prDisplay: review.prDisplay
   })
 
-  const showStatus = foundation.cardProps.includes('status')
+  // A bot's worker line on a disconnected server can't know its live state, so it shows none.
+  const showStatus =
+    foundation.cardProps.includes('status') && !(compactLine && foundation.isRuntimeDisconnected)
   const {
     issue: showIssue,
     linearIssue: showLinearIssue,
@@ -48,6 +51,18 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const shouldRefreshHostedReview = foundation.newCardStyle ? showStatus : showPR
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
+  const { closeHover } = detailsHoverControl
+  const { setTitleRenaming: setFoundationTitleRenaming } = foundation
+  // The details hover stays mounted (held shut) while renaming; close it so it can't reopen when the rename ends.
+  const setTitleRenaming = useCallback(
+    (renaming: boolean) => {
+      if (renaming) {
+        closeHover()
+      }
+      setFoundationTitleRenaming(renaming)
+    },
+    [closeHover, setFoundationTitleRenaming]
+  )
   const referenceDetails = useWorkspaceReferenceDetails(
     worktree,
     repo,
@@ -134,7 +149,9 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     showJiraIssue,
     showPR,
     showAutomation,
-    showCli,
+    // A line under its bot: the bot's avatar and its worker's CLI mark only repeat the section.
+    showCli: showCli && !compactLine,
+    showBot: !compactLine,
     showComment,
     showPorts,
     issueDisplay: linked.issueDisplay,
@@ -161,6 +178,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     ...foundation,
     ...review,
     ...linked,
+    setTitleRenaming,
     detailsHoverControl,
     referenceDetails,
     reviewChecks,

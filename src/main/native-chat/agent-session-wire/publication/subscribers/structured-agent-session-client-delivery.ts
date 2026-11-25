@@ -99,7 +99,9 @@ export class StructuredAgentSessionClientDelivery {
       now,
       readStatusState: async (sessionId, journal) =>
         (await this.journalProjection(sessionId, journal))?.state ?? null,
-      readChildWork: (sessionId) => this.statusFeed.readChildWork(sessionId)
+      readChildWork: (sessionId) => this.statusFeed.readChildWork(sessionId),
+      readAsyncQuestionsSkippedThrough: (sessionId) =>
+        this.deps().store.getRecord(sessionId)?.asyncQuestionsSkippedThrough
     })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
       this.settlementReading(sessionId, this.requireJournal(sessionId))
@@ -121,7 +123,9 @@ export class StructuredAgentSessionClientDelivery {
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
       readCurrentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
       readWorkFrame: (sessionId, journal, rows) =>
-        this.statusFeed.journalProjection.workFrame(sessionId, journal, rows)
+        this.statusFeed.journalProjection.workFrame(sessionId, journal, rows),
+      onPromptSuggestionInterest: (sessionId, wanted) =>
+        this.deps().adapter.promptSuggestionInterestChanged?.(sessionId, wanted)
     })
   }
 
@@ -206,13 +210,16 @@ export class StructuredAgentSessionClientDelivery {
 
   /** Publish generation-end evidence even without cleanup rows; wake queue without renewing idle time.
    * restate rebaselines readers after fence movement. */
-  publishGenerationEnded = (sessionId: string, options: { restate?: boolean } = {}): void => {
+  publishGenerationEnded = (
+    sessionId: string,
+    options: { restate?: boolean; settled?: boolean } = {}
+  ): void => {
     const session = this.sessions.get(sessionId)
     if (!session) {
       return
     }
     try {
-      this.requestFailures.generationEnded(sessionId)
+      this.requestFailures.generationEnded(sessionId, { settled: options.settled })
     } catch (error) {
       this.deps().logger.warn('observing a request death failed', {
         scope: 'request-outcomes',
@@ -262,6 +269,9 @@ export class StructuredAgentSessionClientDelivery {
 
   readStatusSummary = (sessionId: string): AgentSessionStatusSummary | undefined =>
     this.statusFeed.readPublished(sessionId)
+
+  /** A live chat's current work as of its last status publish; sync, for bot readers. */
+  readPublishedWork = (sessionId: string) => this.statusFeed.readPublishedWork(sessionId)
 
   subscribeTurnCompletions = (subscriber: TurnCompletionSubscriber): (() => void) =>
     this.turnCompletionFeed.subscribe(subscriber)

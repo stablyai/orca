@@ -1,5 +1,5 @@
 import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
-import { structuralValuesEqualIgnoringUndefined } from '../../../shared/structural-value-equality'
+import { structuralValuesEqualIgnoringUndefined } from '../../../shared/collections/structural-value-equality'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
   AgentHookStatusRowIdentity,
@@ -18,6 +18,8 @@ function toMutationIdentity(
   }
   return {
     paneKey: row.paneKey,
+    ...(row.providerSession ? { providerSession: row.providerSession } : {}),
+    ...(row.payload.agentType ? { agentType: row.payload.agentType } : {}),
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
     ...(row.terminalHandle ? { terminalHandle: row.terminalHandle } : {})
   }
@@ -58,6 +60,13 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
   protected applyRestatedStatus(
     incoming: AgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
+    if (
+      incoming.payload.state === 'done' &&
+      this.terminalPaneLifecycle?.isStopping(incoming.paneKey) &&
+      this.state.lastStatusByPaneKey.get(incoming.paneKey)?.payload.state !== 'done'
+    ) {
+      return undefined
+    }
     this.restatingStatus = true
     try {
       return this.applyNormalizedStatus(incoming)
@@ -68,6 +77,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
 
   _resetRowOwnershipForTests(): void {
     this.paneKeyByTerminalHandle.clear()
+    this.statusQueryIndex = null
   }
 
   subscribeStatusRowMutations(listener: StatusRowMutationListener): () => void {
@@ -116,6 +126,11 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     if (after?.terminalHandle) {
       this.paneKeyByTerminalHandle.set(after.terminalHandle, after.paneKey)
     }
+    for (const key of new Set([before?.paneKey, after?.paneKey])) {
+      if (key) {
+        this.updateStatusQueryIndex(key)
+      }
+    }
     if (!emit || semanticRowsEqual(before, after)) {
       return false
     }
@@ -124,6 +139,35 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
       after: toMutationIdentity(after)
     })
     return true
+  }
+
+  /** A Codex question, or a wait over one, keeps its row identical across hooks, so their arrival renews its freshness.
+   *  Orca's own restatements, polls and replays are no evidence that the agent still runs. */
+  protected commitAppliedStatusRow(
+    before: EnrichedAgentHookEventPayload | null | undefined,
+    row: EnrichedAgentHookEventPayload,
+    fromAgentHook: boolean
+  ): void {
+    if (
+      this.commitStatusRowMutation(before, row) ||
+      !fromAgentHook ||
+      !row.hookEventName ||
+      row.isReplay === true ||
+      row.restoredUnconfirmed === true ||
+      row.providerSessionOnly === true ||
+      row.payload.agentType !== 'codex' ||
+      row.payload.state !== 'waiting'
+    ) {
+      return
+    }
+    this.emitStatusFreshnessObservation({
+      paneKey: row.paneKey,
+      state: row.payload.state,
+      receivedAt: row.receivedAt,
+      observedInCurrentRuntime: true,
+      ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
+      ...(row.terminalHandle ? { terminalHandle: row.terminalHandle } : {})
+    })
   }
 
   /** Facet-only ticks reach row/window readers, without triggering enriched transition subscribers. */

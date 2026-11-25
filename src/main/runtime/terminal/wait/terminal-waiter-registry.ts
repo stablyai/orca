@@ -51,9 +51,14 @@ export class RuntimeTerminalWaiterRegistry {
     }
   }
 
-  rejectAll(code: string): void {
-    for (const ptyId of this.byPtyId.keys()) {
-      this.rejectPty(ptyId, code)
+  /** Graph retirement: handle-named waits end with the handles; input custody follows its process instead. */
+  rejectRendererBound(code: string): void {
+    for (const ptyId of Array.from(this.byPtyId.keys())) {
+      for (const waiter of this.forPty(ptyId)) {
+        if (!waiter.outlivesRenderer) {
+          this.reject(waiter, code)
+        }
+      }
     }
   }
 

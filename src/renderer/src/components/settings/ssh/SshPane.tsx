@@ -26,15 +26,15 @@ import { EMPTY_FORM, getEditingTargetForSshTarget } from '../../ssh-host-form/ss
 import type { EditingTarget } from '../../ssh-host-form/ssh-target-draft'
 import { buildSshTargetSavePayload } from './targets/ssh-target-save-payload'
 import { formatSshUserFacingError } from './targets/ssh-user-facing-error'
-import { HostRemoveDialog } from '../../sidebar/HostRemoveDialog'
+import { HostRemoveDialog } from '../../sidebar/host-lifecycle/HostRemoveDialog'
 import {
   isManagedServerSshHost,
   SshManagedHostRemoveDialog
 } from './targets/SshManagedHostRemoveDialog'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
-import { resolveSshHostRemoval } from '../../sidebar/ssh-host-remove-resolution'
+import { resolveSshHostRemoval } from '../../sidebar/host-lifecycle/ssh-host-remove-resolution'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import { toSshExecutionHostId } from '../../../../../shared/execution-host'
+import { toSshExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useSshAddTargetIntent } from './targets/use-ssh-add-target-intent'

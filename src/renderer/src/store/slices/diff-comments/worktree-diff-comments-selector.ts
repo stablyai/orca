@@ -1,4 +1,4 @@
-import type { DiffComment } from '../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import {
   authorityKey,
   type HostAuthority
@@ -12,7 +12,7 @@ import {
 } from '@/lib/workspace/ownership/workspace-copy-owner'
 import { findIndexedWorktreeRows } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 
 const EMPTY_DIFF_COMMENTS = Object.freeze([]) as unknown as DiffComment[]

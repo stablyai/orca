@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../../mobile-web-shell/page-storage/page-storage-keys'
 import { persistMirrored, readMirroredKeyOrStore } from '../../storage/mirrored-storage-keys'
 import {

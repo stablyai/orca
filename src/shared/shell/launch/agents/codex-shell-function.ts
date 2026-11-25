@@ -1,0 +1,171 @@
+import {
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+  REMOTE_VIEWER_CLIPBOARD_ENV
+} from '../../../clipboard/remote-viewer-clipboard-env'
+import {
+  CODEX_KITTY_WINDOW_ID,
+  ORCA_IMAGE_PROTOCOL_ENV,
+  ORCA_IMAGE_PROTOCOL_VALUE
+} from '../../../terminal/images/terminal-image-protocol'
+
+// Embed launch-prep/--no-daemon wrappers on all hosts. Codex 0.156+ otherwise shares CODEX_HOME servers with the first tab’s Orca hooks/env and lifetime (#22873). agents/queue/--remote require sharing; any -c opts out.
+const CODEX_SHARED_SERVER_ARGS = ['agents', 'queue', '--remote'] as const
+export const CODEX_NO_DAEMON_SKIP_ARGS = [...CODEX_SHARED_SERVER_ARGS, '--no-daemon'] as const
+const argPattern = (args: readonly string[]): string => `^(${args.join('|')}|--remote=.*)$`
+const CODEX_SHARED_SERVER_ARG_PATTERN = argPattern(CODEX_SHARED_SERVER_ARGS)
+const CODEX_NO_DAEMON_SKIP_ARG_PATTERN = argPattern(CODEX_NO_DAEMON_SKIP_ARGS)
+
+/** Restore nonsecret Orca caller identity stripped by inherit=core (#25775). set overrides inherit/exclude but include_only still wins; never send tokens through locally readable argv. */
+export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
+  'ORCA_TERMINAL_HANDLE',
+  'ORCA_PANE_KEY',
+  'ORCA_WORKTREE_ID',
+  'ORCA_WORKSPACE_ID',
+  'ORCA_USER_DATA_PATH'
+] as const
+
+// Blank Orca's clipboard marker for commands Codex runs: agy reads SSH_CONNECTION as a remote host and ignores its local login (#37723).
+// Why set, not exclude: -c exclude would replace the user's own exclude list. Real SSH never reports port 0.
+const CLEAR_SSH_MARKER_ARG = "shell_environment_policy.set.SSH_CONNECTION=''"
+
+// Skip apostrophes: TOML literals cannot hold them and Codex parse fallback may truncate paths; missing identity is safer than wrong identity.
+const identitySetArg = (key: string, value: string): string =>
+  `shell_environment_policy.set.${key}='${value}'`
+
+export function getPosixCodexShellLaunchPreflight(): string {
+  return `# Why: a typed alias expands inside the shell, after pane launch prep.
+# Why unalias inside the substitution: an alias named codex makes command -v
+# report the alias text, and the subshell leaves the user's own alias intact.
+# Why || : twice — zsh alone aborts inside the substitution, but every shell's
+# assignment adopts its exit status, so an absent codex trips set -e in bash too.
+__orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
+# Why typeset -f: a user's own codex function wins; command -v prints its bare name, which -x tests against the cwd.
+if ! typeset -f codex >/dev/null 2>&1 && [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
+  # Why the function reserved word: it suppresses alias expansion of the name,
+  # which otherwise rewrites this header at parse time and aborts the whole file.
+  function codex {
+    # Why local: zsh's warn_create_global warns for each global a function creates.
+    local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}"
+    if [[ "\${${REMOTE_VIEWER_CLIPBOARD_ENV}:-}" == 1 && -z "\${SSH_CONNECTION+x}" && -z "\${SSH_TTY+x}" ]]; then
+      local -x SSH_CONNECTION='${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
+    fi
+    if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
+      "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+    fi
+    for __orca_codex_arg in "$@"; do
+      case "$__orca_codex_arg" in
+        --no-daemon) __orca_codex_isolate=0 ;;
+        ${CODEX_SHARED_SERVER_ARGS.join('|')}|--remote=*) __orca_codex_isolate=0 __orca_codex_identity=0 ;;
+      esac
+    done
+    if [[ "$__orca_codex_identity" != 0 ]]; then
+${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      [[ -z "\${${key}:-}" || "\${${key}}" == *"'"* ]] || set -- -c "${identitySetArg(key, `\${${key}}`)}" "$@"`).join('\n')}
+      [[ "\${SSH_CONNECTION:-}" != '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' ]] || set -- -c "${CLEAR_SSH_MARKER_ARG}" "$@"
+    fi
+    # Why probe every launch: a cached answer goes stale across an upgrade, and 0.155 and older exit 2 on the flag.
+    if [[ "$__orca_codex_isolate" != 0 ]]; then
+      case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
+    fi
+    if [[ "\${${ORCA_IMAGE_PROTOCOL_ENV}:-}" == '${ORCA_IMAGE_PROTOCOL_VALUE}' && -z "\${KITTY_WINDOW_ID+x}" ]]; then
+      local -x KITTY_WINDOW_ID='${CODEX_KITTY_WINDOW_ID}'
+    fi
+    command codex "$@"
+  }
+fi
+unset __orca_codex_binary
+`
+}
+
+export function getFishCodexShellLaunchPreflight(): string {
+  return `# Why captured: an unquoted (type -t codex) expands to zero words when codex is
+# absent, leaving "test = file" — fish then errors instead of failing closed.
+# Quoting in place is not the fix; fish never substitutes inside double quotes.
+set -l __orca_codex_type (type -t codex 2>/dev/null)
+if test "$__orca_codex_type" = file
+  function codex
+    if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"
+      command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
+    end
+    if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_SHARED_SERVER_ARG_PATTERN}' $argv
+${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not string match -q -- "*'*" "$${key}"; and set argv -c "${identitySetArg(key, `$${key}`)}" $argv`).join('\n')}
+      if test "$SSH_CONNECTION" = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'; or begin; test "$${REMOTE_VIEWER_CLIPBOARD_ENV}" = 1; and not set -q SSH_CONNECTION; and not set -q SSH_TTY; end
+        set argv -c "${CLEAR_SSH_MARKER_ARG}" $argv
+      end
+    end
+    if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
+      set argv --no-daemon $argv
+    end
+    # A top-level and-chain keeps -l scoped to this function on fish before 3.5.
+    test "$${ORCA_IMAGE_PROTOCOL_ENV}" = '${ORCA_IMAGE_PROTOCOL_VALUE}'; and not set -q KITTY_WINDOW_ID; and set -lx KITTY_WINDOW_ID '${CODEX_KITTY_WINDOW_ID}'
+    if test "$${REMOTE_VIEWER_CLIPBOARD_ENV}" = 1; and not set -q SSH_CONNECTION; and not set -q SSH_TTY
+      set -lx SSH_CONNECTION '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
+      command codex $argv
+    else
+      command codex $argv
+    end
+  end
+end
+set -e __orca_codex_type`
+}
+
+// Keep the identity loop compact to share PowerShell’s command-line budget with startup commands.
+export function getPowerShellCodexShellLaunchPreflight(): string {
+  return `$orcaCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($orcaCodexCommand -and
+    $orcaCodexCommand.CommandType -in @("Application", "ExternalScript")) {
+    function Global:codex {
+        $exe = Get-Command codex -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
+        if (-not $exe) {
+            Write-Error "codex executable not found"
+            $global:LASTEXITCODE = 127
+            return
+        }
+        $flags = @()
+        # Why: execution policy can block npm's codex.ps1 shim, so run the Node entry point it wraps.
+        $dir = Split-Path $exe
+        $js = "$dir/node_modules/@openai/codex/bin/codex.js"
+        if ($exe -like '*.ps1' -and (Test-Path -LiteralPath $js)) {
+            $exe = if (Test-Path -LiteralPath "$dir/node.exe") { "$dir/node.exe" } else { 'node.exe' }
+            $flags = @($js)
+        }
+        # Why try/catch: under the user's $ErrorActionPreference = 'Stop', a failing prep or probe must not abort the launch.
+        if ($env:ORCA_CODEX_LAUNCH_PREFLIGHT) {
+            try {
+                & $env:ORCA_CODEX_LAUNCH_PREFLIGHT agent hooks prepare-codex *> $null
+            } catch {
+            }
+        }
+        if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}')) {
+            try {
+                if ((& $exe @flags --help 2>$null) -match '--no-daemon') {
+                    $flags += '--no-daemon'
+                }
+            } catch {
+            }
+        }
+        $remoteClip = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY)
+        $identity = @()
+        if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_SHARED_SERVER_ARG_PATTERN}')) {
+            foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $identity += '-c', "${identitySetArg('$k', '$v')}" } }
+            if ($remoteClip -or $env:SSH_CONNECTION -ceq '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}') { $identity += '-c', "${CLEAR_SSH_MARKER_ARG}" }
+        }
+        $argv = @(__OrcaEscapeNativeArgs $exe (@($identity) + @($args)))
+        if ($remoteClip) { $env:SSH_CONNECTION = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' }
+        $kitty = $env:${ORCA_IMAGE_PROTOCOL_ENV} -ceq '${ORCA_IMAGE_PROTOCOL_VALUE}' -and -not (Test-Path Env:KITTY_WINDOW_ID)
+        if ($kitty) { $env:KITTY_WINDOW_ID = '${CODEX_KITTY_WINDOW_ID}' }
+        # Why: a native command inside a function never sees the function's pipeline input on its own.
+        try {
+            if ($MyInvocation.ExpectingInput) {
+                $input | & $exe @flags @argv
+            } else {
+                & $exe @flags @argv
+            }
+        } finally {
+            if ($remoteClip) { Remove-Item Env:SSH_CONNECTION }
+            if ($kitty) { Remove-Item Env:KITTY_WINDOW_ID }
+        }
+        $global:LASTEXITCODE = $LASTEXITCODE
+    }
+}
+Remove-Variable orcaCodexCommand -ErrorAction SilentlyContinue`
+}

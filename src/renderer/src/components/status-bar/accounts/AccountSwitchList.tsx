@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../store/index'
-import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 
 export function AccountSwitchList({
   heading,

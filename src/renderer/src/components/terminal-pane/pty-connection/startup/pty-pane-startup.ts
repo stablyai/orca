@@ -1,5 +1,5 @@
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
-import type { EventProps } from '../../../../../../shared/telemetry-event-classification'
+import type { EventProps } from '../../../../../../shared/telemetry/telemetry-event-classification'
 import type { StartupCommandDelivery } from '../../../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type {

@@ -1,11 +1,11 @@
 /** Each process scans the repos it owns: desktop main over IPC, every paired or SSH host's own server over RPC. */
 import type { AppState } from '../../types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   parseRoutableExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,
   type WorkspaceCleanupCandidate,

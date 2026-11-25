@@ -1,4 +1,4 @@
-import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
+import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import type { SwapVolumeFreeSpace } from './swap-volume-free-space'
 
 // Post-exit memory can look healthier; pre-gone samples retain earlier pressure evidence.
@@ -46,10 +46,6 @@ function readElectronSystemMemoryInfo(): SystemMemoryInfoLike | null {
 }
 
 let systemMemoryInfoReader: SystemMemoryInfoReader = readElectronSystemMemoryInfo
-
-export function setSystemMemoryInfoReaderForTest(reader: SystemMemoryInfoReader | null): void {
-  systemMemoryInfoReader = reader ?? readElectronSystemMemoryInfo
-}
 
 function numericDetail(details: CrashReportDetails, suffix: string): number | undefined {
   const value = details[`${SYSTEM_MEMORY_KEY_PREFIX}${suffix}`]

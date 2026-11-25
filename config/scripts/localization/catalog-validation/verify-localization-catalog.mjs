@@ -6,9 +6,12 @@ import process from 'node:process'
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
 
-import { canonicalGenericRenderings } from '../../locale-catalog/locale-generic-ui-terms.mjs'
 import { LOCALIZATION_SURFACES, readLocalizationSurface } from './localization-surfaces.mjs'
-import { repairTranslatedValue } from '../../locale-catalog/locale-translation-policy.mjs'
+import {
+  collectGenericTermRegressions,
+  collectGlossaryViolations,
+  reportGlossaryProblems
+} from './locale-glossary-checks.mjs'
 import {
   interpolationVariablesMatch,
   pluralFamilyDefaults,
@@ -47,6 +50,9 @@ function isSkippedFile(root, filePath) {
 }
 
 export async function collectSourceFiles(root, dir) {
+  if (SOURCE_EXTENSIONS.has(path.extname(dir))) {
+    return isSkippedFile(root, dir) ? [] : [dir]
+  }
   const entries = await fs.readdir(dir, { withFileTypes: true })
   const files = []
 
@@ -344,46 +350,6 @@ function applyMissingEnglishEntries(catalog, missing) {
   return changed
 }
 
-// Check repair policy too: parity passed while repair rewrote translated generic terms into English (#12113).
-export function collectGenericTermRegressions(enEntries, localeEntries, localeName) {
-  const renderings = canonicalGenericRenderings(localeName)
-  if (renderings.length === 0) {
-    return []
-  }
-
-  const regressions = []
-  for (const [key, enValue] of enEntries) {
-    const localeValue = localeEntries.get(key)
-    if (typeof enValue !== 'string' || typeof localeValue !== 'string') {
-      continue
-    }
-    const repaired = repairTranslatedValue({ key, enValue, localeValue, locale: localeName })
-    if (repaired === localeValue) {
-      continue
-    }
-    // Why: {{agent}} is an interpolation name, not English copy the reader sees.
-    const repairedCopy = repaired.replace(PLACEHOLDER_RE, '')
-    for (const { form, terms } of renderings) {
-      if (!localeValue.includes(form) || repaired.includes(form)) {
-        continue
-      }
-      if (
-        terms.some((term) => new RegExp(`(^|[^A-Za-z])${term}($|[^A-Za-z])`).test(repairedCopy))
-      ) {
-        regressions.push({ key, form, localeValue, repaired })
-        break
-      }
-    }
-  }
-  return regressions
-}
-
-function formatGenericTermRegressions(regressions) {
-  return regressions
-    .map((entry) => `${entry.key}: ${entry.form} -> English (${entry.repaired})`)
-    .join('\n')
-}
-
 // Why: JSON.parse silently keeps the last duplicate key.
 function collectDuplicateCatalogKeys(fileName, text) {
   const sourceFile = ts.parseJsonText(fileName, text)
@@ -429,6 +395,7 @@ function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
   const { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
     collectLocaleParityIssues(enCatalog, localeCatalog, localeName)
   const genericTermRegressions = collectGenericTermRegressions(enEntries, localeEntries, localeName)
+  const glossaryViolations = collectGlossaryViolations(localeEntries, localeName)
 
   // Feature PRs own English declarations; missing target translations use i18next fallback until localization supplies them.
   console.log(
@@ -438,7 +405,8 @@ function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
   if (
     extraInLocale.length > 0 ||
     interpolationMismatches.length > 0 ||
-    genericTermRegressions.length > 0
+    genericTermRegressions.length > 0 ||
+    glossaryViolations.length > 0
   ) {
     console.error(`Locale catalog validation failed for ${localeName}.json.`)
     if (extraInLocale.length > 0) {
@@ -457,18 +425,7 @@ function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
         console.error(`...and ${interpolationMismatches.length - 20} more interpolation mismatches`)
       }
     }
-    if (genericTermRegressions.length > 0) {
-      console.error('')
-      console.error(
-        'repair-locale-catalog would rewrite these translated terms back to English.',
-        'Treat the term as generic in config/scripts/locale-catalog/locale-generic-ui-terms.mjs',
-        'instead of listing its translation as a mistranslation.'
-      )
-      console.error(formatGenericTermRegressions(genericTermRegressions.slice(0, 20)))
-      if (genericTermRegressions.length > 20) {
-        console.error(`...and ${genericTermRegressions.length - 20} more generic term regressions`)
-      }
-    }
+    reportGlossaryProblems(localeName, genericTermRegressions, glossaryViolations)
     return 1
   }
 

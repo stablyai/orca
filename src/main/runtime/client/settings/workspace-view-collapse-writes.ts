@@ -1,4 +1,4 @@
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
   SetCollapsedRequest,
   SetCollapsedResult

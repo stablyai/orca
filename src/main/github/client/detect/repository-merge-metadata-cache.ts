@@ -70,14 +70,3 @@ export function cacheRepositoryMergeMetadata(
   })
   pruneRepositoryMergeMetadataCache(now)
 }
-
-export function _resetMergeQueueCacheForTests(): void {
-  repositoryMergeMetadataCache.clear()
-  repositoryMergeMetadataReads.clear()
-  signaledReads = new WeakMap()
-  repositoryMergeMetadataWriters.clear()
-}
-
-export function _getMergeQueueCacheSizeForTests(): number {
-  return repositoryMergeMetadataCache.size
-}

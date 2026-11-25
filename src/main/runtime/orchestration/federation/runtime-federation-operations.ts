@@ -6,8 +6,13 @@ import type { RuntimeOrchestrationEnvelope } from '../../../../shared/remote-run
 import { OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity } from '../../workspaces/persisted-surfaces/has-exact-persisted-terminal-surface-identity'
 
 export abstract class RuntimeFederationOperations extends OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity {
-  resolveOrchestrationWorkerServer(selector: string): OrchestrationWorkerServer {
-    return this.orchestrationFederation.resolveWorkerServer(selector)
+  async resolveOrchestrationWorkerServer(selector: string): Promise<OrchestrationWorkerServer> {
+    return await this.orchestrationFederation.resolveWorkerServer(selector)
+  }
+
+  /** Every server paired to this host; none in a runtime that can't dial servers. */
+  listOrchestrationWorkerServers(): Promise<readonly { environmentId: string; name: string }[]> {
+    return this.orchestrationFederation.listWorkerServers()
   }
 
   callOrchestrationWorkerServer(

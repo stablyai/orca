@@ -4,7 +4,7 @@ import { PLUGIN_TERMINAL_READ_MAX_LINES } from '../../../../shared/plugins/worke
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { PluginHostCallError } from './plugin-host-call-scope'
 import { claimPluginReplacedActionRun } from '../../commands/plugin-command-replacement-deadline'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   pluginHostEffect as effect,
   pluginHostRenderer as renderer,

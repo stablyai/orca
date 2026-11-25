@@ -1,4 +1,4 @@
-import { isTerminalDropWindowsPathLike } from '../../../../../../shared/image-path-paste'
+import { isTerminalDropWindowsPathLike } from '../../../../../../shared/terminal/input/image-path-paste'
 import { isWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import { isWindowsUserAgent } from '../../../../app-shell/platform/user-agent-platform'
 

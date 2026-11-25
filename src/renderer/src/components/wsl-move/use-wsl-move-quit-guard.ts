@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { translate } from '@/i18n/i18n'
 import { isIntentionalAppRestartInProgress } from '@/app-shell/updates/updater-beforeunload'
-import type { ConfirmationDialogOptions } from '../confirmation-dialog-context'
-import { registerWindowCloseGuard } from '../window-close-request-coordinator'
+import type { ConfirmationDialogOptions } from '../dismiss/confirmation/confirmation-dialog-context'
+import { registerWindowCloseGuard } from '../../app-shell/shutdown/window-close-request-coordinator'
 
 // The close request is already acknowledged when guards run; a hung ask would block quitting.
 const IS_RUNNING_TIMEOUT_MS = 2_000

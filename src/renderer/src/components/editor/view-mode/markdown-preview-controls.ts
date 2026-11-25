@@ -1,5 +1,5 @@
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
-import '../../../../../shared/keybindings'
+
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import type { EditorToggleValue } from './EditorViewToggle'
@@ -7,7 +7,7 @@ import { isSvgFilePath } from '../../../../../shared/file-preview/svg-document'
 import {
   normalizeMarkdownDefaultViewMode,
   type MarkdownDefaultViewMode
-} from '../../../../../shared/markdown-default-view-mode'
+} from '../../../../../shared/editor/markdown/markdown-default-view-mode'
 
 type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
   language: string

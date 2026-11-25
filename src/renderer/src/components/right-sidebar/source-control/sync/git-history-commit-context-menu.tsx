@@ -1,4 +1,5 @@
-import { useSourceControlState, useSourceControlScope } from '../panel/worktree-scope'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useSourceControlScope } from '../panel/worktree-scope'
 import { Copy, Globe, Hash, Sparkles } from 'lucide-react'
 import {
   ContextMenuContent,
@@ -23,9 +24,9 @@ export function GitHistoryCommitContextMenu({
 }): React.JSX.Element {
   const t = useTranslate()
   const scope = useSourceControlScope()
-  const managedBrowserCreationEnabled = useSourceControlState(
-    (state) =>
-      getClientCreationActionPolicy(state, scope?.worktreeId ?? state.activeWorktreeId)[
+  const managedBrowserCreationEnabled = useAppStateValueWithHostStatuses(
+    (state, statuses) =>
+      getClientCreationActionPolicy(state, scope?.worktreeId ?? state.activeWorktreeId, statuses)[
         'managed-browser'
       ].state === 'enabled'
   )

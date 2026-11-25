@@ -1,6 +1,6 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import type { Tab } from '../../../../../../shared/tab-types'
-import type { TopLevelView } from '../../../../../../shared/ui-chrome-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { TopLevelView } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 type EditorCmdSaveState = {

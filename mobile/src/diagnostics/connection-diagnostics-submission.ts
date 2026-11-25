@@ -1,4 +1,4 @@
-import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
+import { clampUtf8TextPrefix } from '../../../src/shared/text/utf8-byte-limits'
 
 const CONNECTION_DIAGNOSTICS_ENDPOINT = 'https://orca.dev/v1/feedback'
 const SUBMISSION_TIMEOUT_MS = 10_000

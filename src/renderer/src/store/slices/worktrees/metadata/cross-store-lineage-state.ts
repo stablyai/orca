@@ -4,7 +4,7 @@ import type {
   WorkspaceLineage,
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { reuseEqualRecordMap } from '../../../../lib/catalog-reconciliation/catalog-record-reconciliation'
 import { OWN_LINEAGE_STORE_KEY } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 

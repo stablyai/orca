@@ -13,7 +13,7 @@ import {
 import { spawnSystemSshCommand } from '../system-ssh-command'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../remote-host/ssh-remote-platform'
 import { powerShellCommand } from '../../remote-exec/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/shell/launch/powershell-native-argument'
 import {
   awaitWithSystemSshAbort,
   throwIfAborted,
@@ -51,6 +51,7 @@ export async function downloadFileViaSystemSsh(
     : `cat ${quotePosixShell(remotePath)}`
   const channel = spawnSystemSshCommand(target, command, {
     wrapCommand: !isWindows,
+    closeStdin: true,
     ...getSystemSshBuildArgsFromOperationOptions(options)
   })
   const output = createWriteStream(localPath, { flags: 'wx' })

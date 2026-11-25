@@ -11,8 +11,10 @@ import {
 import {
   rejectClaudeDispatchWaiters,
   releaseClaudeDispatchWaitersInDoubt
-} from '../claude-structured-dispatch'
-import { readClaudeFrameString } from '../claude-structured-init-proof'
+} from '../dispatch/claude-structured-dispatch'
+import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
+import { claudeText } from '../journal/claude-structured-item-translation'
+import { isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import type { ClaudeSession, ClaudeStartedSend } from '../claude-structured-session-state'
 
@@ -78,6 +80,44 @@ export function claudeStartedUnechoedSend(session: ClaudeSession): ClaudeStarted
         ...(waiter.requestedAt === null ? {} : { requestedAt: waiter.requestedAt })
       }
     : null
+}
+
+/** Claude also announces resume replays, hook titles and Orca's own renames; only a title inside the
+ *  user's started rename send is the user's. */
+function claudeUserRenamedSession(
+  session: ClaudeSession | null,
+  message: Record<string, unknown>
+): string | null {
+  if (
+    !session ||
+    message.type !== 'system' ||
+    message.subtype !== 'session_title_changed' ||
+    !isRootClaudeFrame(message) ||
+    !session.dispatchWaiters.some(
+      (waiter) => waiter.renamesSession && waiter.commandLifecycle === 'started'
+    )
+  ) {
+    return null
+  }
+  return claudeText(message.title)
+}
+
+type ClaudeFrameSendFacts = { startedSend?: ClaudeStartedSend; renamedTo?: string }
+// Most frames carry neither fact; this runs on every frame, streaming deltas included.
+const NO_SEND_FACTS: ClaudeFrameSendFacts = Object.freeze({})
+
+/** Send facts read when the frame arrives: its delivery can run after the send's echo settles it. */
+export function claudeFrameSendFacts(
+  session: ClaudeSession | null,
+  message: Record<string, unknown>,
+  startsTurn: boolean
+): ClaudeFrameSendFacts {
+  const startedSend = !startsTurn && session ? claudeStartedUnechoedSend(session) : null
+  const renamedTo = claudeUserRenamedSession(session, message)
+  if (!startedSend && !renamedTo) {
+    return NO_SEND_FACTS
+  }
+  return { ...(startedSend ? { startedSend } : {}), ...(renamedTo ? { renamedTo } : {}) }
 }
 
 /** Include settlements until the host hears them, avoiding a gap in dispatch ownership. */

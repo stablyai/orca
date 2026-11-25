@@ -1,8 +1,7 @@
 import { reenterPackagedElectron } from '../runtime/app-launch/packaged-cli-interpreter'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
-import { runProcess } from '@orca/process-host'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { getOptionalServePort } from '../runtime/commands/serve-port-flag'
@@ -20,24 +19,18 @@ import {
   type ServeServiceSpec
 } from '../runtime/serve/supervision/serve-service-unit'
 import { resolveServiceCommand, resolveServicePath } from '../runtime/app-launch/serve-app-launcher'
-
-type Run = (program: string, args: string[]) => Promise<{ code: number | null; out: string }>
+import {
+  removeServeServiceUnit,
+  runServeServiceManager,
+  type ServeServiceRun
+} from '../../shared/remote-runtime/serve-supervisor/serve-service-unit-removal'
 
 export type ServeServiceDeps = {
   platform: NodeJS.Platform
   env: NodeJS.ProcessEnv
   homeDir: string
   uid: number
-  run: Run
-}
-
-const defaultRun: Run = async (program, args) => {
-  try {
-    const result = await runProcess({ program, args, timeoutMs: 20_000 })
-    return { code: result.timedOut ? null : result.code, out: `${result.stdout}${result.stderr}` }
-  } catch (error) {
-    return { code: null, out: error instanceof Error ? error.message : String(error) }
-  }
+  run: ServeServiceRun
 }
 
 function defaultDeps(): ServeServiceDeps {
@@ -46,7 +39,7 @@ function defaultDeps(): ServeServiceDeps {
     env: process.env,
     homeDir: homedir(),
     uid: process.getuid?.() ?? 0,
-    run: defaultRun
+    run: runServeServiceManager
   }
 }
 
@@ -242,14 +235,7 @@ export async function uninstallServeService(
 ): Promise<Record<string, unknown>> {
   requireManager(deps.platform)
   const spec = serviceSpec(deps, { command: 'orca' })
-  await (spec.manager === 'launchd'
-    ? deps.run('launchctl', ['bootout', `gui/${deps.uid}/${spec.name}`])
-    : deps.run('systemctl', ['--user', 'disable', '--now', spec.name]))
-  const existed = existsSync(spec.unitPath)
-  rmSync(spec.unitPath, { force: true })
-  if (spec.manager === 'systemd') {
-    await deps.run('systemctl', ['--user', 'daemon-reload'])
-  }
+  const existed = await removeServeServiceUnit(spec, deps.run, deps.uid)
   return { removed: existed, manager: spec.manager, name: spec.name, unitPath: spec.unitPath }
 }
 
@@ -277,7 +263,7 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
       pairingAddress: optionalString(flags.get('pairing-address')),
       allowPublic: flags.get('allow-public') === true,
       refusePublic: flags.get('refuse-public') === true,
-      dryRun: flags.get('dry-run') === true
+      dryRun: flags.has('dry-run')
     }
     reenterPackagedElectron()
     const result = await installServeService(options)

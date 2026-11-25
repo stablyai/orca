@@ -50,7 +50,13 @@ export function mobileNativeChatComposerPasteHandler({
       return
     }
     const imageFile = onPasteImages ? clipboardEventImageFile(event) : null
-    const text = clipboardEventPromptText(event, imageFile !== null)
+    // A link copied without plain text (iOS share sheet) is still text; an image's source URL is not.
+    const listsImage = Array.from(event.clipboardData?.items ?? []).some((item) =>
+      item.type.startsWith('image/')
+    )
+    const text =
+      clipboardEventPromptText(event, imageFile !== null) ||
+      (listsImage ? '' : (event.clipboardData?.getData('text/uri-list') ?? ''))
     if (text && onAttachPastedText && isNativeChatLongPaste(text)) {
       event.preventDefault()
       onAttachPastedText(text)

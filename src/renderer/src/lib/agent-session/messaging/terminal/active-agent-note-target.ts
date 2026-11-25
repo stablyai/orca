@@ -50,7 +50,7 @@ export type ActiveTerminalNoteTargetState = {
     | undefined
   >
   runtimePaneTitlesByTabId?: Record<string, Record<number, string> | undefined>
-  agentStatusByPaneKey?: Record<string, AgentStatusEntry | undefined>
+  agentStatusByPaneKey?: ReadonlyMap<string, AgentStatusEntry | undefined>
 } & Pick<WorktreeRuntimeOwnerState, 'repos' | 'worktreesByRepo'>
 
 type ActiveAgentRuntimeProbeDescriptor = {
@@ -95,7 +95,7 @@ export function getActiveAgentNoteTarget(
     return null
   }
 
-  const entry = state.agentStatusByPaneKey?.[makePaneKey(noteTarget.tabId, noteTarget.leafId)]
+  const entry = state.agentStatusByPaneKey?.get(makePaneKey(noteTarget.tabId, noteTarget.leafId))
   if (entry && isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
     return noteTarget
   }

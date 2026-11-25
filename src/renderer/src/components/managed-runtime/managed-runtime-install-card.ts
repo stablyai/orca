@@ -3,7 +3,7 @@ import type { Translate } from '@/i18n/use-translate'
 import type {
   ManagedRuntimeInstallState,
   ManagedRuntimeOperation
-} from '../../../../shared/managed-runtime-install'
+} from '../../../../shared/agent-launch/installation/managed-runtime-install'
 import { megabytes, type ManagedRuntimeInstallAction } from './managed-runtime-install-view'
 
 /** Hero fills an empty chat pane; strip sits above the composer. Both render the same host snapshot. */
@@ -52,7 +52,7 @@ function runningCard(
     current === 1
       ? t('components.managed-runtime.unpackingDetail', 'Unpacking the runtime')
       : current === 2
-        ? t('components.managed-runtime.checkingDetail', 'Checking the downloaded runtime')
+        ? t('components.managed-runtime.checkingDetail', 'Verifying {{agent}}…', { agent })
         : total === null
           ? t('components.managed-runtime.downloading', 'Downloading {{done}} MB.', {
               done: megabytes(done)

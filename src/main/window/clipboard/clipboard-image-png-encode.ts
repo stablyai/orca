@@ -1,5 +1,5 @@
 import type { NativeImage } from 'electron'
-import { encodeClipboardImageWithinLimit } from '../../../shared/clipboard-image'
+import { encodeClipboardImageWithinLimit } from '../../../shared/clipboard/clipboard-image'
 
 export function encodeClipboardNativeImagePng(
   image: Pick<NativeImage, 'getSize' | 'resize' | 'toPNG'>

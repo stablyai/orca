@@ -7,15 +7,15 @@ import {
   uniqueNormalizedCmdJPaletteKeywords
 } from './palette-query-tokens'
 import type { PaletteResultQualityClass } from '../../../../shared/palette-match/match-quality'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getProjectGroupHeaderKey } from '../../../../shared/sidebar-list/sections/group-keys'
-import { getDistinctProjectGroups } from '../../../../shared/project-groups'
-import { getProjectHeaderRevealTarget } from '../../../../shared/project-section-grouping'
-import type { ProjectGroupingModel } from '../../../../shared/project-section-grouping'
+import { getDistinctProjectGroups } from '../../../../shared/project/groups/project-groups'
+import { getProjectHeaderRevealTarget } from '../../../../shared/sidebar-list/sections/project-section-grouping'
+import type { ProjectGroupingModel } from '../../../../shared/sidebar-list/sections/project-section-grouping'
 
 export type CmdJProjectGroupResult = {
   id: string

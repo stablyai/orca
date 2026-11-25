@@ -1,5 +1,5 @@
 import type { CloseTerminalPaneDetail } from '@/constants/terminal'
-import type { TerminalTabCloseIntent } from '../../../terminal/terminal-tab-close-intent'
+import type { TerminalTabCloseIntent } from '../../../terminal/tab-lifecycle/terminal-tab-close-intent'
 
 type TerminalPaneCloseManager = {
   closePane: (paneId: number) => void

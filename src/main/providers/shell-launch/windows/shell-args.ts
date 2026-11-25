@@ -2,7 +2,7 @@ import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../../../pty/shell-startup/git-bash'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { toLinuxPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
-import { msysDrivePathToWindows } from '../../../../shared/cross-platform-path'
+import { msysDrivePathToWindows } from '../../../../shared/file-access/cross-platform-path'
 import {
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand
@@ -10,7 +10,7 @@ import {
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { getBashWrapperLaunchArgs } from '../../local-pty/local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from '../../local-pty/local-pty-shell-ready-wrapper-generation'
-import { encodePowerShellCommand } from '../../../../shared/powershell-command-encoding'
+import { encodePowerShellCommand } from '../../../../shared/shell/launch/powershell-command-encoding'
 import {
   getPowerShellOsc133Bootstrap,
   getPowerShellOsc133StartupCommandMark

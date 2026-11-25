@@ -3,8 +3,8 @@ import {
   recordClosedTerminalPanes,
   type ClosedTerminalPane
 } from '../terminal-surfaces/closed-terminal-panes'
-import type { ExecutionHostId } from '../../execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../layout-owner-switch'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import type { DroppedLeafReason } from '../workspace-layout-command-types'
 import { leafIdsOf } from './workspace-layout-command-steps'
 import {

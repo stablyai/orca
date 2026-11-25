@@ -1,12 +1,13 @@
 import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
+import { knownUnreachableRuntimeHostError } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { getWorkItemPageErrorTypes } from '../../../../../shared/github/work-items/work-item-page-errors'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { ClassifiedError } from '../../../../../shared/classified-error'
+import type { ClassifiedError } from '../../../../../shared/errors/classified-error'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../../../shared/github/work-items/work-item-ssh-error'
-import { sortWorkItemsByNumber } from '../../../../../shared/work-items/work-item-order'
+import { sortWorkItemsByRecency } from '../../../../../shared/work-items/work-item-order'
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-item-pagination'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { isGitHubWorkItemsQueryTooLarge } from '../../../../../shared/github/work-items/work-items-query-bounds'
@@ -45,6 +46,9 @@ export const createWorkItemAggregateActions = (
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         try {
+          if (r.hostUnreachable) {
+            throw knownUnreachableRuntimeHostError('github.listWorkItems')
+          }
           return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, {
             ...options,
             sourceContext: r.sourceContext ?? options?.sourceContext
@@ -91,10 +95,10 @@ export const createWorkItemAggregateActions = (
     if (perProjectResults.some((result) => result === undefined)) {
       return undefined
     }
-    const merged = sortWorkItemsByNumber(perProjectResults.flatMap((result) => result ?? [])).slice(
-      0,
-      displayLimit
-    )
+    const merged = sortWorkItemsByRecency(
+      perProjectResults.flatMap((result) => result ?? []),
+      (item) => item
+    ).slice(0, displayLimit)
     // Why: only claim global unavailability when every eligible source failed for a reachability reason; skipped SSH repos aren't GitHub sources here.
     const githubUnavailable =
       requestFailureCount > 0 &&
@@ -126,6 +130,10 @@ export const createWorkItemAggregateActions = (
           r.sourceContext
         )
         const attempt = requestState.githubSourceCollections.capture(repo, r.sourceContext)
+        if (r.hostUnreachable) {
+          failedCount += 1
+          return [] as GitHubWorkItem[]
+        }
         await acquireWorkItemSlot()
         try {
           if (!get().githubSourceCollections.current(attempt)) {
@@ -192,10 +200,10 @@ export const createWorkItemAggregateActions = (
     if (perProjectResults.some((result) => result === undefined)) {
       return undefined
     }
-    const merged = sortWorkItemsByNumber(perProjectResults.flatMap((result) => result ?? [])).slice(
-      0,
-      displayLimit
-    )
+    const merged = sortWorkItemsByRecency(
+      perProjectResults.flatMap((result) => result ?? []),
+      (item) => item
+    ).slice(0, displayLimit)
     return { items: merged, failedCount, errorTypes }
   },
 

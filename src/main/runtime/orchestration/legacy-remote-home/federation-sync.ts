@@ -2,7 +2,7 @@ import { federationRelayPrefix } from '../federation/relay/federation-relay-pref
 import { federationRelayWireItem } from '../legacy-remote/federation-relay-wire'
 import type { FederationRuntime } from '../federation/federation-runtime'
 import type { FederatedLifecycleSettlement } from '../legacy-remote/federation-lifecycle-settlement'
-import '../../../../shared/protocol-version'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrchestrationError } from '../orchestration-error'
 import {
@@ -63,7 +63,7 @@ async function syncFederatedDispatchPages(
       `Federated Dispatch ${dispatchId} was not found.`
     )
   }
-  const currentServer = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
+  const currentServer = await runtime.resolveOrchestrationWorkerServer(federated.environment_id)
   if (currentServer.peerFingerprint !== federated.peer_fingerprint) {
     throw new OrchestrationError(
       'peer_changed',
@@ -132,6 +132,7 @@ async function syncFederatedDispatchPages(
       message: {
         id: item.message_id,
         runId: dispatch.run_id,
+        // isFederatedRelaySender depends on this exact shape: this from and no sender pane key.
         from: `dispatch:${dispatchId}`,
         to: `run:${dispatch.run_id}`,
         subject: message.subject,

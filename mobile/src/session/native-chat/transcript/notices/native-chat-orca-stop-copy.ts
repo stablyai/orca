@@ -1,4 +1,4 @@
-import type { NativeChatOrcaStopSay } from '../../../../../../src/shared/native-chat/native-chat-orca-stop-words'
+import type { NativeChatOrcaStopSay } from '../../../../../../src/shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 
 export function nativeChatOrcaStopSay(t: Translate): NativeChatOrcaStopSay {

@@ -2,7 +2,7 @@ import type {
   SkillDiscoveryResult,
   SkillDiscoveryTarget,
   SkillSourceKind
-} from '../../../../../shared/skills'
+} from '../../../../../shared/skills/discovery/skills'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { discoverSkillsForRuntimeTarget } from '@/runtime/skills/configuration/runtime-skills-client'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
@@ -11,7 +11,6 @@ import {
   deleteInstalledAgentSkillDiscoveryCache,
   peekInstalledAgentSkillDiscoveryCache,
   readInstalledAgentSkillDiscoveryCache,
-  resetInstalledAgentSkillDiscoveryCacheForTests,
   writeInstalledAgentSkillDiscoveryCache
 } from './installed-agent-skill-discovery-cache'
 
@@ -58,13 +57,6 @@ export function evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(
       }
     }
   }
-}
-
-export function resetSkillDiscoveryCacheForTests(): void {
-  invalidateInstalledAgentSkillDiscovery()
-  resetInstalledAgentSkillDiscoveryCacheForTests()
-  pendingDiscoveryByTarget = new Map()
-  pendingDiscoverySatisfiesForcedRefreshByTarget = new Map()
 }
 
 function normalizeSkillDiscoveryTarget(

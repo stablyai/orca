@@ -62,6 +62,7 @@ async function previewPrepared(
     heldByHost: plan.heldByHost,
     refused: plan.refused,
     blockers: prepared.blockers,
+    mappedDrives: plan.mappedDrives ?? [],
     ...(host.browserLoginsNotCarried
       ? { browserLoginsNotCarried: host.browserLoginsNotCarried }
       : {})

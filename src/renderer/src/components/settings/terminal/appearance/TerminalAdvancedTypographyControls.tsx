@@ -21,7 +21,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { defaultTerminalFontWeight } from '../../../../../../shared/terminal/appearance/terminal-platform-defaults'
 import { isWindowsDesktopClient } from '@/lib/files/os-open/windows-path-access'
 import { getTerminalAdvancedTypographySearchEntries } from './terminal-typography-search'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 type TerminalAdvancedTypographyControlsProps = {
   settings: GlobalSettings

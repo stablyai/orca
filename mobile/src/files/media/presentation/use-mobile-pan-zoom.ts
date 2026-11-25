@@ -10,7 +10,7 @@ import {
   getPanZoomViewOffset,
   panView,
   zoomViewAt
-} from '../../../../../src/shared/pan-zoom-view'
+} from '../../../../../src/shared/document-preview/pan-zoom-view'
 import { useBackClaim } from '../../../navigation/use-back-claim'
 
 const DOUBLE_TAP_MS = 300

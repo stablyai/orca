@@ -1,5 +1,5 @@
-import type { MiniMaxCredentialsStatus } from '../../../../../shared/minimax-credentials-status'
-import type { ZcodePlanCredentialsStatus } from '../../../../../shared/zcode-plan-sites'
+import type { MiniMaxCredentialsStatus } from '../../../../../shared/agent-accounts/usage-credentials/minimax-credentials-status'
+import type { ZcodePlanCredentialsStatus } from '../../../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'

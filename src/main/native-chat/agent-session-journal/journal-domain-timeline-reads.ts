@@ -8,6 +8,7 @@ import {
 } from './journal-domain-item-normalization'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import { assertJournalDomainItemAuthority } from './journal-domain-item'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 /** Typed named selections used only during the owning synchronous writer command. */
 export function journalDomainTimelineReads(
@@ -18,7 +19,7 @@ export function journalDomainTimelineReads(
 ): JournalTimelineView {
   const prefix = [target.sessionId, target.epoch] as const
   const decode = (row: Record<string, unknown> | undefined): AgentJournalRenderItem | null =>
-    row ? JSON.parse(String(row.payload_json)) : null
+    row ? readJournalStoredItem(db, prefix, row.payload_json) : null
   const item = (key: string) =>
     decode(
       db

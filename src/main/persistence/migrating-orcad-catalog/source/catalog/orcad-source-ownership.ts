@@ -1,12 +1,15 @@
 // Export and subtraction must share repo/folder host attribution or migrated rows can remain behind.
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import {
   resolveFolderWorkspaceHost,
   type FolderWorkspaceHostState
 } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 export function repoBelongsToOrcadSource(repo: Repo, targetId: string): boolean {
   if (repo.connectionId === targetId) {

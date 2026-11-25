@@ -22,12 +22,7 @@ import {
 import { renderResourceUsageKillDialog } from './popover/resource-usage-kill-dialog'
 import { WorkspaceSpaceCompactPanel } from '../workspace-storage/WorkspaceSpaceCompactPanel'
 
-export function ResourceUsageStatusSegment({
-  iconOnly
-}: {
-  compact?: boolean
-  iconOnly: boolean
-}): React.JSX.Element {
+export function ResourceUsageStatusSegment(): React.JSX.Element {
   const t = useTranslate()
   const controller = useResourceUsageStatusController()
   const {
@@ -53,10 +48,7 @@ export function ResourceUsageStatusSegment({
     orphanCount,
     triggerSessionCount,
     memoryMetricCopy,
-    commitMetricCopy,
-    totalMemory,
-    totalCpu,
-    memBadgeLabel,
+    ownerSplit,
     commitToneClass,
     commitBadgeLabel,
     daemonUnreachable,
@@ -67,6 +59,9 @@ export function ResourceUsageStatusSegment({
     toggleWorktree,
     navigateToWorktree,
     navigateToTab,
+    openChat,
+    takeChatOpenedClose,
+    sharedAgentUsage,
     deleteWorktree,
     handleOpenWorkspaceCleanup,
     handleKillSession,
@@ -80,6 +75,7 @@ export function ResourceUsageStatusSegment({
       open={open}
       onOpenChange={(nextOpen) => {
         if (nextOpen) {
+          takeChatOpenedClose()
           recordFeatureInteraction('resource-manager')
         }
         setOpen(nextOpen)
@@ -90,9 +86,7 @@ export function ResourceUsageStatusSegment({
           daemonUnreachable,
           resourceManagerAriaLabel,
           spaceScanReady,
-          iconOnly,
           commitToneClass,
-          memBadgeLabel,
           triggerSessionCount,
           orphanCount,
           resourceManagerTooltipLines
@@ -107,6 +101,11 @@ export function ResourceUsageStatusSegment({
         {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
         className="flex h-[min(40rem,var(--radix-popover-content-available-height))] w-[26rem] max-w-[calc(100vw-2rem)] flex-col"
         onOpenAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => {
+          if (takeChatOpenedClose()) {
+            event.preventDefault()
+          }
+        }}
         // Why: activating a tab focuses xterm's DOM node; Radix would read that as focus-outside and close. Outside-click and Escape still close.
         onFocusOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => {
@@ -158,15 +157,12 @@ export function ResourceUsageStatusSegment({
             )}
             {daemonUnreachable && renderDaemonUnreachableBanner({ daemonActions }, t)}
             {!daemonUnreachable && sessionsOnlyError && renderSessionsOnlyErrorBanner(t)}
-            {resourceSnapshot && (
+            {ownerSplit && (
               <div className="min-h-0 max-h-[40%] overflow-y-auto scrollbar-sleek">
                 {renderResourceUsageSummary(
                   {
-                    totalCpu,
-                    totalMemory,
-                    memoryMetricCopy,
+                    ownerSplit,
                     commitBadgeLabel,
-                    commitMetricCopy,
                     commitToneClass,
                     orphanCount
                   },
@@ -189,6 +185,8 @@ export function ResourceUsageStatusSegment({
                 toggleWorktree,
                 navigateToWorktree,
                 navigateToTab,
+                openChat,
+                sharedAgentUsage,
                 deleteWorktree,
                 handleKillSession,
                 appCollapsed,
@@ -233,13 +231,7 @@ export function ResourceUsageStatusSegment({
         },
         t
       )}
-      <DaemonActionDialog
-        api={daemonActions}
-        extraDescription={t(
-          'resourceManager.localDaemonScope',
-          'This affects terminals on this computer.'
-        )}
-      />
+      <DaemonActionDialog api={daemonActions} />
     </Popover>
   )
 }

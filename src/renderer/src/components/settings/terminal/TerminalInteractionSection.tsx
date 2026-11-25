@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { RotateCcw } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'

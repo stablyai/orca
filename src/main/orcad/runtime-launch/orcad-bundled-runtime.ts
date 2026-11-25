@@ -10,7 +10,7 @@ import {
   ORCAD_VERSION_FILENAME,
   orcadNodeRuntimeRelativePath
 } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
-import { NODE_RUNTIME_PIN, nodeRuntimeAsset } from '../../../shared/node-runtime-pin'
+import { NODE_RUNTIME_PIN, nodeRuntimeAsset } from '../../../shared/node-runtime/node-runtime-pin'
 
 export class OrcadBundledRuntimeError extends Error {}
 export const ORCAD_BUNDLED_LAUNCHER_ENV = 'ORCA_BUNDLED_LAUNCHER_CHANNEL'

@@ -18,23 +18,9 @@
   (`getByRole`, `toBeVisible`, `toHaveText`). Writing state and reading it back cannot
   catch broken rendering. This applies to hidden CDP-driven renderers too.
 
-## Layout Regression Gates
+## Layout Changes
 
-- Terminal-topology refactors must preserve behavior or fix a named bug. Run
-  `ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e:terminal-layout-parity` to compare the working
-  tree with its merge-base on `origin/main`. See the
-  [runner](../../config/scripts/runtime-verification/terminal-e2e/run-terminal-layout-parity.mjs)
-  for commit comparisons and scenario filters. The head's journeys must work against both builds.
-- Declare intended fixes in [declared differences](terminal-layout-parity-declared-differences.ts)
-  with scenario, bug ID, and report path prefixes; undeclared or unmatched declarations fail.
-  Preserve PTY-binding and main/renderer agreement waits before quitting. Unstable-on-main
-  exclusions need evidence in `TERMINAL_LAYOUT_PARITY_UNSTABLE_ON_MAIN`.
-- Use the [window](workspace-layout-oracle.spec.ts) and
-  [headless](workspace-layout-oracle-headless.spec.ts) layout oracles for live/saved layout,
-  DOM/client agreement, command effects, restarts, terminal output, and remount checks.
-- New [known-on-main](workspace-layout-oracle-known-on-main.ts) entries must cite a reproducing
-  run on `main` in the PR; rerun intermittent findings until reproduced. Use
-  `ORCA_LAYOUT_ORACLE_REPEAT=<n>` for repeats and `ORCA_LAYOUT_ORACLE_REPORT_DIR` for JSON
-  reports. `ORCA_LAYOUT_ORACLE_RECORD=1` records without failing; do not use it as a passing gate.
-- Inspect any profile with
+- Terminal-topology refactors must preserve behavior or fix a named bug. The retired
+  layout-oracle and parity programs provide no current automated regression gate.
+- Inspect a profile with
   `node config/scripts/static-analysis/repository-layout/check-workspace-layout-rules.mjs <userDataDir>`.

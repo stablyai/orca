@@ -6,7 +6,7 @@ import { isAbsolute, join, relative } from 'node:path'
 import process from 'node:process'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-managed-launch-env'
 import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../../shared/remote-runtime/orcad-distribution/orcad-node-runtime-identity'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import { listOrcadArtifactFilenames } from '../artifact-slots/orcad-artifact-identity'
 import { detectNativeHostAbi } from '../native-runtime/native-host-abi'
 

@@ -1,5 +1,5 @@
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import type {
   CodexDispatchEchoes,
   CodexDispatchRequestOrigin
@@ -25,6 +25,8 @@ export type CodexActiveJournalItem = {
 
 export type CodexJournalTranslatorDeps = {
   account?: () => AgentSessionAccountKind | undefined
+  /** Codex runs on this machine (not WSL or another host), so a local time its text names is ours. */
+  localClock?: boolean
   sink: StructuredAgentSessionEventSink
   /** Prevent later connections from revising this connection's frame rows. */
   acquisitionId?: string

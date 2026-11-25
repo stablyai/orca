@@ -14,8 +14,8 @@ import {
   AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/lifecycle/resume/agent-session-resume-runtime-capabilities'
-import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import type { RuntimeCapability } from '../../../../../../shared/protocol-version'
+import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import type { RuntimeCapability } from '../../../../../../shared/remote-runtime/protocol/protocol-version'
 
 // New resumable enum members can make older hosts return invalid_argument instead of legacy fallback, killing panes. Probe per-agent capability; exhaustive Record requires an explicit gate or deliberate undefined for additions.
 const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
@@ -27,7 +27,6 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   qoder: AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
   'qoder-cn': AGENT_SESSION_QODER_CN_RESUME_RUNTIME_CAPABILITY,
   'qwen-code': AGENT_SESSION_QWEN_CODE_RESUME_RUNTIME_CAPABILITY,
-  gemini: undefined,
   antigravity: undefined,
   opencode: undefined,
   opencode2: AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,

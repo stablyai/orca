@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, statSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { copyFileWithWindowsRetry } from '../../../../shared/windows-retry-file-operations'
+import { copyFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
 
 const SNAPSHOT_ATTEMPTS = 5
 

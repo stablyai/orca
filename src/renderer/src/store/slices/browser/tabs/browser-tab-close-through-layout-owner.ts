@@ -4,7 +4,7 @@ import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser
 import type {
   BrowserPage,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { dedupeTabOrder } from '../../../../../../shared/workspace-layout/tab-groups/tab-order'
 import type { AppState } from '../../../types'
 import { pickNextActiveTab } from '../../tabs/tab-selection-history'

@@ -1,6 +1,6 @@
 import { lstat, realpath } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
-import type { SkillInstallRequest } from '../../../shared/skill-install-contract'
+import type { SkillInstallRequest } from '../../../shared/skills/installation/skill-install-contract'
 
 type WorkspaceIdentity = {
   id: string

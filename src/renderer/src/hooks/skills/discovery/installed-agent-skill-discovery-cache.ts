@@ -1,4 +1,4 @@
-import type { SkillDiscoveryResult } from '../../../../../shared/skills'
+import type { SkillDiscoveryResult } from '../../../../../shared/skills/discovery/skills'
 
 // Bound runtime/project keys accumulated across long renderer sessions to recent targets.
 export const INSTALLED_AGENT_SKILL_DISCOVERY_CACHE_MAX = 256
@@ -66,16 +66,4 @@ export function deleteInstalledAgentSkillDiscoveryCache(matches: (key: string) =
       cachedDiscoveryByTarget.delete(key)
     }
   }
-}
-
-export function getInstalledAgentSkillDiscoveryCacheSizeForTests(): number {
-  return cachedDiscoveryByTarget.size
-}
-
-export function hasInstalledAgentSkillDiscoveryCacheEntryForTests(key: string): boolean {
-  return cachedDiscoveryByTarget.has(key)
-}
-
-export function resetInstalledAgentSkillDiscoveryCacheForTests(): void {
-  cachedDiscoveryByTarget = new Map()
 }

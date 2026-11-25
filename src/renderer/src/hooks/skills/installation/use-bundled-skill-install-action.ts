@@ -1,4 +1,5 @@
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import { bundledSkillSetupAttentionMessage } from '@/components/skills/setup/bundled-skill-setup-result-copy'
 import {
   bundledSkillSetupChanges,
@@ -8,7 +9,7 @@ import { useEffect, useState } from 'react'
 import {
   bundledSkillInstallAction,
   type BundledSkillInstallAction
-} from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import {
   bundledSkillTargetKey,
   type BundledSkillTarget
@@ -22,8 +23,12 @@ import {
   INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
 } from '../discovery/installed-agent-skills-change-event'
 import { useActiveProjectSkillRuntime } from '../runtime/useActiveProjectSkillRuntime'
-import { useAppStore } from '@/store/index'
 import { getManagedOrcadSshTargetId } from '../../../../../shared/execution-host/managed-orcad-execution-host'
+import {
+  skillBackupHost,
+  skillBackupLocation,
+  type SkillBackupLocation
+} from '@/components/skills/freshness/skill-backup-location'
 
 /** `unknown`: the owning host's check failed. */
 export type BundledSkillInstallActionState =
@@ -31,6 +36,8 @@ export type BundledSkillInstallActionState =
       changes?: BundledSkillSetupChanges
       attentionMessage?: string
       plan?: BundledSkillPlan
+      /** Where Replace would move the current copy, on the planned host. */
+      backup?: SkillBackupLocation
     })
   | { kind: 'loading' }
   | { kind: 'unsupported'; reason: BundledSkillUnsupportedReason }
@@ -46,11 +53,11 @@ export function useBundledSkillInstallAction(
   const activeTarget = useActiveProjectSkillRuntime().bundledSkillTarget
   const target = options.target === undefined ? activeTarget : options.target
   const targetKey = target ? bundledSkillTargetKey(target) : null
-  const unavailable = useAppStore((state) => {
+  const unavailable = useAppStoreWithHostStatuses((state, statuses) => {
     if (target?.kind !== 'environment') {
       return null
     }
-    const snapshot = state.runtimeStatusByEnvironmentId.get(target.environmentId)?.snapshot
+    const snapshot = statuses.get(target.environmentId)?.snapshot
     if (!snapshot?.retired && snapshot?.transport !== 'disconnected') {
       return null
     }
@@ -87,6 +94,7 @@ export function useBundledSkillInstallAction(
             ? {
                 ...bundledSkillInstallAction(planned.plan),
                 plan: planned.plan,
+                backup: skillBackupLocation(planned.plan.homeDirectory, skillBackupHost(target)),
                 changes: bundledSkillSetupChanges(planned.plan),
                 attentionMessage: bundledSkillSetupAttentionMessage(planned.plan)
               }

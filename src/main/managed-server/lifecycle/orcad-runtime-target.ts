@@ -1,4 +1,4 @@
-import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import { resolveOrcadDeploymentTargetFacts } from '../install/orcad-deployment-target'
 import { OrcadHostUnsupportedError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import type { OrcadHostTransport } from '../install/orcad-host-transport'

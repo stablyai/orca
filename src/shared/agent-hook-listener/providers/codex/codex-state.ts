@@ -1,7 +1,7 @@
 import type { AgentMainAgentStatus } from '../../../agent-status/lifecycle/main-agent-status'
 import type { ParsedAgentStatusPayload } from '../../../agent-status/contracts/agent-status-types'
 import { isAskUserQuestionTool } from '../../../agent-status/lifecycle/agent-question-answered-intent'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../native-chat/input/questions/codex-async-question-input'
 import {
   continueMainAgentStatus,
   foldAgentLeadStatus,
@@ -14,13 +14,14 @@ import {
   finishCodexSubagent,
   seedCodexSubagentRoster,
   type CodexSubagentRoster
-} from '../../../codex-subagent-roster'
+} from './codex-subagent-roster'
 import {
   createCodexSubagentTranscriptState,
   hasTrackedCodexTranscriptSubagents,
   type CodexSubagentTranscriptState
-} from '../../../codex-subagent-transcript'
+} from './codex-subagent-transcript'
 import type { HookListenerState } from '../../listener-state'
+import { parentReadDeferred } from './codex-rollout-prefetch-scope'
 import type { CodexLeadTurnState } from '../../main-agent-turn-state'
 
 export function getOrCreateCodexSubagentRoster(
@@ -49,6 +50,16 @@ export function getOrCreateCodexSubagentTranscriptState(
 
 export function hasCodexTranscriptSubagents(state: HookListenerState, paneKey: string): boolean {
   return hasTrackedCodexTranscriptSubagents(state.codexSubagentTranscriptByPaneKey.get(paneKey))
+}
+
+/**
+ * Whether a replayed hook left rollout work only the transcript poll can do: a child whose path is
+ * unresolved, or a parent read the replay scope gave up on. A stale root-only row would otherwise
+ * poll a dead rollout forever.
+ */
+export function codexReplayLeftTranscriptWork(state: HookListenerState, paneKey: string): boolean {
+  const subagents = state.codexSubagentTranscriptByPaneKey.get(paneKey)?.subagents.values()
+  return parentReadDeferred() || [...(subagents ?? [])].some((child) => !child.filePath)
 }
 
 /** The only writer of the root record; the root's clock keeps continuity across same-state writes. */
@@ -188,14 +199,19 @@ export function codexHookEventState(
 export function codexLeadStateForHookEvent(
   eventName: string | undefined,
   normalizedState?: ParsedAgentStatusPayload['state'],
-  toolName?: string
+  toolName?: string,
+  hostLeadState?: AgentMainAgentStatus['state']
 ): CodexLeadTurnState['state'] | undefined {
   // Preserve execution-host reviewer ownership; event names alone would turn every relayed approval into waiting.
   if (eventName === 'PermissionRequest' && normalizedState === 'working') {
     return 'working'
   }
-  // The execution host tracks Codex's async questions; its waiting outlasts the events around it.
-  if (normalizedState === 'waiting' && toolName === CODEX_ASYNC_QUESTION_TOOL) {
+  // The execution host tracks Codex's async questions; its waiting lead outlasts the events around it.
+  // An approval can cover the question and the tool name outlive it, so trust it only without that lead.
+  if (
+    normalizedState === 'waiting' &&
+    (hostLeadState ? hostLeadState === 'waiting' : toolName === CODEX_ASYNC_QUESTION_TOOL)
+  ) {
     return 'waiting'
   }
   return codexHookEventState(eventName, toolName)
@@ -260,7 +276,12 @@ export function reconcileRemoteCodexState(
       finishCodexSubagent(roster, agentId)
     }
   } else {
-    const leadState = codexLeadStateForHookEvent(eventName, payload.state, payload.toolName)
+    const leadState = codexLeadStateForHookEvent(
+      eventName,
+      payload.state,
+      payload.toolName,
+      payload.mainAgent?.state
+    )
     if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
       roster.clear()
     }

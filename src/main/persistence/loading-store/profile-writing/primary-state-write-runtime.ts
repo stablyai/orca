@@ -1,4 +1,5 @@
 import type { StoreRuntimeState } from '../store-runtime-state'
+import { suspendGithubCachePersistence } from '../github-cache/github-cache-persistence'
 
 export type PrimaryStateWriteOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -10,6 +11,8 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'flushOrThrow'
   | 'runDurableMutation'
   | 'firstPendingSaveAt'
+  | 'githubCachePersistTimer'
+  | 'githubCacheRows'
   | 'lastDurableWriteGeneration'
   | 'lastWrittenStateHash'
   | 'pendingSnapshotFileWork'
@@ -65,5 +68,6 @@ export async function stopAfterFailedPrimaryStateMutation(
     clearTimeout(runtime.writeTimer)
     runtime.writeTimer = null
   }
+  suspendGithubCachePersistence(runtime)
   await runtime.profileStateAuthority?.close?.()
 }

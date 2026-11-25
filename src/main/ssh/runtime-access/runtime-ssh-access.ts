@@ -106,7 +106,7 @@ function requireFence(
   return target
 }
 
-export function linkRuntimeSshAccess(
+export async function linkRuntimeSshAccess(
   userDataPath: string,
   input: RuntimeSshAccessLinkRequest,
   options: {
@@ -115,11 +115,11 @@ export function linkRuntimeSshAccess(
   } = {}
 ) {
   const args = RuntimeSshAccessLinkRequestSchema.parse(input)
-  const environmentId = resolveEnvironment(userDataPath, args.selector).id
+  const environmentId = (await resolveEnvironment(userDataPath, args.selector)).id
   return runTargetLifecycle(`runtime-ssh-access:${userDataPath}:${environmentId}`, () =>
     runTargetLifecycle(args.sshTargetId, async () => {
       const { claims, connectionManager } = requireManagedOrcadInfrastructure()
-      const environment = resolveEnvironment(userDataPath, environmentId)
+      const environment = await resolveEnvironment(userDataPath, environmentId)
       assertRuntimeEnvironmentNotReconciling(environment)
       if (environment.orcadDeployment) {
         throw new Error('Managed deployments cannot use independent SSH access.')
@@ -144,9 +144,9 @@ export function linkRuntimeSshAccess(
         await ensureOrcadManagedTunnel(userDataPath, environmentId)
         requireFence(claims, environmentId, access)
         await options.invalidateTransport?.(environmentId)
-        return redactRuntimeEnvironment(resolveEnvironment(userDataPath, environmentId))
+        return redactRuntimeEnvironment(await resolveEnvironment(userDataPath, environmentId))
       }
-      const prepared = prepareRuntimeEnvironmentSshAccessLink(userDataPath, {
+      const prepared = await prepareRuntimeEnvironmentSshAccessLink(userDataPath, {
         expectedEnvironment: environment,
         requestId: args.requestId,
         remotePort: args.remotePort,
@@ -184,7 +184,7 @@ export function linkRuntimeSshAccess(
         requireAccessOnlyTarget(claims, target.id, environmentId)
         requireFence(claims, environmentId, fence)
         const linked = redactRuntimeEnvironment(
-          linkVerifiedRuntimeEnvironmentSshAccess(userDataPath, {
+          await linkVerifiedRuntimeEnvironmentSshAccess(userDataPath, {
             expectedEnvironment: prepared,
             requestId: args.requestId,
             ...proof,
@@ -209,15 +209,15 @@ export function linkRuntimeSshAccess(
   )
 }
 
-export function unlinkRuntimeSshAccess(
+export async function unlinkRuntimeSshAccess(
   userDataPath: string,
   input: RuntimeSshAccessUnlinkRequest,
   options: { invalidateTransport: (environmentId: string) => void | Promise<void> }
 ) {
   const args = RuntimeSshAccessUnlinkRequestSchema.parse(input)
-  const environmentId = resolveEnvironment(userDataPath, args.selector).id
+  const environmentId = (await resolveEnvironment(userDataPath, args.selector)).id
   return runTargetLifecycle(`runtime-ssh-access:${userDataPath}:${environmentId}`, async () => {
-    const environment = resolveEnvironment(userDataPath, environmentId)
+    const environment = await resolveEnvironment(userDataPath, environmentId)
     assertRuntimeEnvironmentNotReconciling(environment)
     if (environment.orcadDeployment) {
       throw new Error('Managed deployments cannot unlink independent SSH access.')
@@ -231,11 +231,11 @@ export function unlinkRuntimeSshAccess(
       requireFence(claims, environmentId, access, !!environment.pendingSshAccessOperation)
       const prepared =
         environment.pendingSshAccessOperation?.operation === 'link'
-          ? cancelRuntimeEnvironmentSshAccessLink(userDataPath, {
+          ? await cancelRuntimeEnvironmentSshAccessLink(userDataPath, {
               expectedEnvironment: environment,
               requestId: args.requestId
             })
-          : prepareRuntimeEnvironmentSshAccessUnlink(userDataPath, {
+          : await prepareRuntimeEnvironmentSshAccessUnlink(userDataPath, {
               expectedEnvironment: environment,
               requestId: args.requestId
             })
@@ -248,7 +248,7 @@ export function unlinkRuntimeSshAccess(
       await claims.flush()
       requireFence(claims, environmentId, access, true)
       return redactRuntimeEnvironment(
-        completeRuntimeEnvironmentSshAccessUnlink(userDataPath, {
+        await completeRuntimeEnvironmentSshAccessUnlink(userDataPath, {
           expectedEnvironment: prepared,
           requestId: args.requestId
         })

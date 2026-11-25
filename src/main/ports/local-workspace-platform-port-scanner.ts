@@ -1,6 +1,7 @@
-import { readFile, readdir, readlink } from 'node:fs/promises'
-import { LSOF_NONBLOCKING_ARGS } from '../../shared/lsof-nonblocking-args'
-import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
+import { readFile, readlink } from 'node:fs/promises'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import { LSOF_NONBLOCKING_ARGS } from '../../shared/process-observation/lsof-nonblocking-args'
+import { getProcessOutputFields } from '../../shared/process-observation/process-output-field-scanner'
 import { readWindowsProcessTable } from '../windows/windows-process-table'
 import { runPortScanCommand } from './port-scan-command-client'
 import { parseDarwinNetstatListeners } from './darwin-netstat-listeners'
@@ -15,11 +16,9 @@ import {
   type RawListeningPort,
   type WorkspacePortScanOptions
 } from './local-workspace-port-scan-state'
-import {
-  dedupeRawPorts,
-  parseAddressWithPort,
-  parseProcAddress
-} from './local-workspace-port-address'
+import { dedupeRawPorts, parseAddressWithPort } from './local-workspace-port-address'
+import { parseProcNetTcp, type ProcNetListener } from './linux-proc-net-listeners'
+import { resolveLinuxSocketOwners } from './linux-socket-owners'
 
 export function parseLsofListeningOutput(output: string): RawListeningPort[] {
   const ports: RawListeningPort[] = []
@@ -72,24 +71,6 @@ export function parseNetstatListeningOutput(output: string): RawListeningPort[] 
   return dedupeRawPorts(ports)
 }
 
-export function parseProcNetTcp(content: string): { host: string; port: number; inode: number }[] {
-  const results: { host: string; port: number; inode: number }[] = []
-  const lines = content.split('\n')
-  for (let i = 1; i < lines.length; i++) {
-    const fields = getProcessOutputFields(lines[i], 10)
-    if (fields.length < 10 || fields[3] !== '0A') {
-      continue
-    }
-    const parsed = parseProcAddress(fields[1])
-    const inode = Number.parseInt(fields[9], 10)
-    if (!parsed || !Number.isFinite(inode) || inode === 0) {
-      continue
-    }
-    results.push({ ...parsed, inode })
-  }
-  return results
-}
-
 export async function scanPlatformListeningPorts(
   options: WorkspacePortScanOptions
 ): Promise<PlatformListeningPortScan> {
@@ -107,7 +88,7 @@ async function dispatchPlatformListeningPortScan(
   options: WorkspacePortScanOptions
 ): Promise<PlatformListeningPortScan> {
   if (process.platform === 'linux') {
-    return scanLinuxProcPorts()
+    return scanLinuxProcPorts(options)
   }
   if (process.platform === 'darwin') {
     return scanDarwinLsofPorts(options)
@@ -166,7 +147,11 @@ async function scanDarwinLsofPorts(
 async function scanWindowsNetstatPorts(
   options: WorkspacePortScanOptions
 ): Promise<PlatformListeningPortScan> {
-  const { stdout, spawnMs } = await runPortScanCommand('netstat', ['-ano', '-p', 'tcp'])
+  const { stdout, spawnMs } = await runPortScanCommand(windowsSystem32Binary('netstat.exe'), [
+    '-ano',
+    '-p',
+    'tcp'
+  ])
   const ports = parseNetstatListeningOutput(stdout)
   if (shouldSkipMetadataCommands(spawnMs, options)) {
     return { ports, metadataAvailable: false }
@@ -180,13 +165,21 @@ async function scanWindowsNetstatPorts(
   }
 }
 
-async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
+async function scanLinuxProcPorts(
+  options: WorkspacePortScanOptions
+): Promise<PlatformListeningPortScan> {
+  const ownUid = process.getuid?.()
   const [tcp4, tcp6] = await Promise.all([
-    readProcNet('/proc/net/tcp'),
-    readProcNet('/proc/net/tcp6')
+    readProcNet('/proc/net/tcp', ownUid),
+    readProcNet('/proc/net/tcp6', ownUid)
   ])
   const sockets = [...tcp4, ...tcp6]
-  const inodeToPid = await mapLinuxInodesToPids(new Set(sockets.map((socket) => socket.inode)))
+  const inodeToPid = await resolveLinuxSocketOwners(
+    new Set(sockets.map((socket) => socket.inode)),
+    {
+      requireExact: options.requireMetadata
+    }
+  )
   const metadata = new Map<number, ProcessMetadata>()
   const rawPorts: RawListeningPort[] = []
 
@@ -207,53 +200,14 @@ async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
 }
 
 async function readProcNet(
-  filePath: string
-): Promise<{ host: string; port: number; inode: number }[]> {
+  filePath: string,
+  ownUid: number | undefined
+): Promise<ProcNetListener[]> {
   try {
-    return parseProcNetTcp(await readFile(filePath, 'utf-8'))
+    return parseProcNetTcp(await readFile(filePath, 'utf-8'), ownUid)
   } catch {
     return []
   }
-}
-
-async function mapLinuxInodesToPids(inodes: Set<number>): Promise<Map<number, number>> {
-  const result = new Map<number, number>()
-  if (inodes.size === 0) {
-    return result
-  }
-  let pids: string[]
-  try {
-    pids = (await readdir('/proc')).filter((entry) => /^\d+$/.test(entry))
-  } catch {
-    return result
-  }
-
-  for (const pidText of pids) {
-    let fds: string[]
-    try {
-      fds = await readdir(`/proc/${pidText}/fd`)
-    } catch {
-      continue
-    }
-    const pid = Number.parseInt(pidText, 10)
-    for (const fd of fds) {
-      let link: string
-      try {
-        link = await readlink(`/proc/${pidText}/fd/${fd}`)
-      } catch {
-        continue
-      }
-      const match = link.match(/^socket:\[(\d+)\]$/)
-      if (!match) {
-        continue
-      }
-      const inode = Number.parseInt(match[1], 10)
-      if (inodes.has(inode)) {
-        result.set(inode, pid)
-      }
-    }
-  }
-  return result
 }
 
 async function loadLinuxProcessMetadata(pid: number): Promise<ProcessMetadata> {

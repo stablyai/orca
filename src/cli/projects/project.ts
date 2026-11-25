@@ -9,8 +9,11 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
-} from '../../shared/project-types'
-import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
+} from '../../shared/project/project-types'
+import {
+  getSshTargetIdForExecutionHost,
+  type ExecutionHostId
+} from '../../shared/execution-host/execution-host'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'

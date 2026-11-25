@@ -157,7 +157,13 @@ async function releaseLeftoverShell(
   const requested = db.requestWorkerTerminalRelease(dispatchId)
   if (requested.disposition === 'requested') {
     release.requested(dispatchId)
-    await completeWorkerTerminalRelease({ runtime, db, dispatchId, resource: requested.resource })
+    await completeWorkerTerminalRelease({
+      runtime,
+      db,
+      dispatchId,
+      resource: requested.resource,
+      keepBound: true
+    })
   }
 }
 
@@ -190,7 +196,10 @@ export async function userTabHoldingSession(
   runtime: OrcaRuntimeService,
   session: WorkerResumeSession
 ): Promise<string | undefined> {
-  for (const row of runtime.getAgentStatusSnapshotFn?.() ?? []) {
+  for (const row of runtime.getAgentRowsForProviderSession(
+    session.agent,
+    session.providerSession
+  )) {
     const handle =
       row.agentType === session.agent &&
       !row.structuredHost &&
@@ -207,7 +216,7 @@ export async function userTabHoldingSession(
 function unverifiable(dispatchId: string, reason: string): OrchestrationError {
   return new OrchestrationError(
     'worker_unverifiable',
-    `Orca cannot tell whether Dispatch ${dispatchId}'s worker still runs (${reason}), so it starts no second one. Send again once worker-show reads it. No effects were applied.`,
+    `Orca cannot tell whether Dispatch ${dispatchId}'s worker still runs (${reason}), so it starts no second one. Send again once worker-show reads it, or start a new worker if it stays unreadable. No effects were applied.`,
     { effectsApplied: false }
   )
 }

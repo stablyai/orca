@@ -1,4 +1,4 @@
-import { usesCustomNotificationSound } from '../../../../shared/notification-settings-types'
+import { usesCustomNotificationSound } from '../../../../shared/notifications/notification-settings-types'
 
 export async function playDesktopNotificationSound(
   customSoundId: string | null | undefined,

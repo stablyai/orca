@@ -12,7 +12,7 @@ import {
 import {
   isHostAccountSignInPage,
   type HostAccountSignInProvider
-} from '../../../../../../shared/host-account-sign-in-types'
+} from '../../../../../../shared/agent-accounts/host-account-sign-in-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { Button } from '../../../ui/button'
 import { showHostCancelFailure } from './account-add-cancel-target'

@@ -2,7 +2,7 @@ import type { RemoteInstallTransport } from '../../managed-server/install/remote
 import {
   getProcessOutputFields,
   iterateProcessOutputLines
-} from '../../../shared/process-output-field-scanner'
+} from '../../../shared/process-observation/process-output-field-scanner'
 import {
   parseUnameToRelayPlatform,
   type RelayPlatform,

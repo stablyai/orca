@@ -9,9 +9,9 @@ import {
   SKILL_SHARE_NAME_TAKEN_ERROR,
   type SkillSharePreview,
   type SkillShareProgress
-} from '../../../../../shared/skill-sharing-contract'
-import type { ManagedSkillInstall } from '../../../../../shared/skill-install-contract'
-import type { DiscoveredSkill } from '../../../../../shared/skills'
+} from '../../../../../shared/skills/sharing/skill-sharing-contract'
+import type { ManagedSkillInstall } from '../../../../../shared/skills/installation/skill-install-contract'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 import {
   SkillShareDialogHeader,
   SkillSharePreparationReview,

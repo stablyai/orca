@@ -26,7 +26,7 @@ import type {
 import { translate } from '@/i18n/i18n'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 import { gitHubSlugApiForWorkspace } from '@/runtime/repository-github/github-slug-owner-api'
-import { errorMessage } from '../../../../../../shared/error-message'
+import { errorMessage } from '../../../../../../shared/errors/error-message'
 
 type ChecksPanelCommentMutationsInput = Pick<
   ChecksPanelControllerState,

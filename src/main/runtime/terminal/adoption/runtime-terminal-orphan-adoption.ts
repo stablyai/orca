@@ -28,7 +28,9 @@ type RuntimeTerminalOrphanAdoptionPorts = RuntimeTerminalOrphanAdoptionPlanPorts
   flushSession: () => Promise<void>
   hydrateSession: (worktreeId: string) => void
   notifySessionChanged: (worktreeId: string) => void
-  getSnapshot: (worktreeId: string) => RuntimeMobileSessionTabsResult
+  getSnapshot: (
+    worktreeId: string
+  ) => RuntimeMobileSessionTabsResult | Promise<RuntimeMobileSessionTabsResult>
 }
 
 export async function adoptRuntimeTerminalOrphansFromInventory(
@@ -101,7 +103,7 @@ export async function adoptRuntimeTerminalOrphansFromInventory(
     return {
       adopted: false,
       topologyRevision: planned.currentRevision,
-      snapshot: ports.getSnapshot(workspace.id)
+      snapshot: await ports.getSnapshot(workspace.id)
     }
   }
   for (const { claim, pty, paneKey } of planned.validated) {
@@ -114,6 +116,6 @@ export async function adoptRuntimeTerminalOrphansFromInventory(
     topologyRevision:
       planned.persisted.terminalTopologyRevisionByRepoId?.[args.repoId] ??
       planned.currentRevision + 1,
-    snapshot: ports.getSnapshot(workspace.id)
+    snapshot: await ports.getSnapshot(workspace.id)
   }
 }

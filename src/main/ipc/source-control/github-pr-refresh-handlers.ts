@@ -6,7 +6,7 @@ import type {
   GitHubPRRefreshReason,
   PRSnapshotReply
 } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getPRForBranch } from '../../github/client/lookup/get-pr-for-branch'
 import type { GitHubPRBranchLookupOptions } from '../../github/client/lookup/pull-request-lookup-data'
@@ -33,7 +33,7 @@ import {
   readGitHubRepoUnlessWslStopped,
   validateAutomaticPRRefreshCandidate
 } from './github-repo-routing'
-import { abortWhenRendererGone } from '../renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 
 const visibilityCleanupRegistered = new Set<number>()
 
@@ -79,6 +79,7 @@ export function registerGitHubPRRefreshHandlers(
         repoPath: string
         branch: string
         linkedPRNumber?: number | null
+        linkedPRUrl?: string
         fallbackPRNumber?: number | null
         acceptMergedFallbackPR?: boolean
         currentHeadOid?: string | null
@@ -100,7 +101,8 @@ export function registerGitHubPRRefreshHandlers(
         ? { ...hostedReviewOptions }
         : args.acceptMergedFallbackPR === true ||
             currentHeadOid !== null ||
-            args.userRefresh === true
+            args.userRefresh === true ||
+            args.linkedPRUrl !== undefined
           ? {}
           : undefined
       if (lookupOptions && args.userRefresh === true) {
@@ -111,6 +113,9 @@ export function registerGitHubPRRefreshHandlers(
       }
       if (lookupOptions && currentHeadOid !== null) {
         lookupOptions.currentHeadOid = currentHeadOid
+      }
+      if (lookupOptions && args.linkedPRUrl !== undefined) {
+        lookupOptions.linkedPRUrl = args.linkedPRUrl
       }
       const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] = lookupOptions
         ? [lookupOptions]

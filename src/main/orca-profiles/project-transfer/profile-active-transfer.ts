@@ -1,7 +1,7 @@
 import type {
   TransferOrcaProfileProjectArgs,
   TransferOrcaProfileProjectResult
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import type { Store } from '../../persistence/loading-store/store'
 import { transferOrcaProfileProject } from './profile-project-transfer'
 import { hasOrcaProfileStateDatabase } from '../profile-storage-paths'

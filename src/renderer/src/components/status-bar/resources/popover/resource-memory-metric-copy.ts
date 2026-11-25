@@ -1,11 +1,10 @@
-import type { ProcessMemoryMetric } from '../../../../../../shared/process-stats-types'
+import type { ProcessMemoryMetric } from '../../../../../../shared/diagnostics/process-stats-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
 export type ResourceMemoryMetricCopy = {
   columnLabel: string
   summaryLabel: string
-  description: string
 }
 
 export function getResourceMemoryMetricCopy(
@@ -15,49 +14,18 @@ export function getResourceMemoryMetricCopy(
   if (metric === 'footprint') {
     return {
       columnLabel: t('auto.components.status.bar.resource.memory.metric.memColumn', 'Mem'),
-      summaryLabel: t(
-        'auto.components.status.bar.resource.memory.metric.memorySummary',
-        'Σ Memory'
-      ),
-      description: t(
-        'auto.components.status.bar.resource.memory.metric.footprintDescription',
-        'Summed memory footprint, the same figure Activity Monitor shows: memory each process owns, including graphics memory. Pages shared between processes are not counted twice.'
-      )
+      summaryLabel: t('auto.components.status.bar.resource.memory.metric.memorySummary', 'Σ Memory')
     }
   }
   if (metric === 'working-set') {
     return {
       columnLabel: 'WS',
-      summaryLabel: 'Σ WS',
-      description: t(
-        'auto.components.status.bar.resource.memory.metric.workingSetDescription',
-        'Summed working set (WS): pages resident in RAM right now. Shared pages can appear in more than one process, and memory Windows has paged out is not counted here.'
-      )
+      summaryLabel: 'Σ WS'
     }
   }
   return {
     columnLabel: 'RSS',
-    summaryLabel: 'Σ RSS',
-    description: t(
-      'auto.components.status.bar.resource.memory.metric.rssDescription',
-      'Summed resident set size (RSS). Shared or aliased pages can appear in more than one process.'
-    )
-  }
-}
-
-/** Private bytes appear only in the summary. */
-export function getResourceCommitMetricCopy(
-  t: Translate = translate
-): Omit<ResourceMemoryMetricCopy, 'columnLabel'> {
-  return {
-    summaryLabel: t(
-      'auto.components.status.bar.resource.memory.metric.privateSummary',
-      'Σ Private'
-    ),
-    description: t(
-      'auto.components.status.bar.resource.memory.metric.privateBytesDescription',
-      'Summed private bytes: memory these processes have committed, counted whether it is resident or paged out. This is what the host charges against its commit limit, so it keeps rising while the working set above shrinks under paging.'
-    )
+    summaryLabel: 'Σ RSS'
   }
 }
 

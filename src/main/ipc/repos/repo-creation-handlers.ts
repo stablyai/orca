@@ -1,14 +1,15 @@
 import { type BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
-import { resolveDefaultCreateProjectParent } from '../../../shared/git/repo-default-locations'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { probeGitAvailability } from '../../git/command-runner/host-routing/git-availability'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
@@ -19,10 +20,14 @@ import {
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
-import { repoCreateFailure, type RepoCreateFailure } from '../../../shared/repo-create-failure-copy'
+import {
+  repoCreateFailure,
+  type RepoCreateFailure
+} from '../../../shared/repository/creation/repo-create-failure-copy'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { addLocalRepoFromPath } from './local-repo-registration'
+import { getDefaultCreateProjectParent } from '../../runtime/repositories/default-create-project-parent'
 
 const GIT_AVAILABILITY_TIMEOUT_MS = 1500
 
@@ -34,23 +39,15 @@ export async function probeLocalGitAvailability(): Promise<boolean> {
   })
 }
 
-/**
- * Where the "Create new project" Location field starts. Settings -> Workspace
- * Directory owns this once the user has actually set it, including a per-host
- * override for the local host, which is the only scope this handler answers for.
- * Ignore seeded workspaceDir: treating it as user intent nests projects inside the worktree root.
- */
-function getDefaultCreateProjectParent(store: Store): string {
-  return resolveDefaultCreateProjectParent({ settings: store.getSettings(), home: homedir() })
-}
-
 export function registerRepoCreationHandlers(
   mainWindow: BrowserWindow,
   store: Store,
   enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
 ): void {
   ipcMain.handle('repos:isGitAvailable', () => probeLocalGitAvailability())
-  ipcMain.handle('repos:getDefaultCreateProjectParent', () => getDefaultCreateProjectParent(store))
+  ipcMain.handle('repos:getDefaultCreateProjectParent', () =>
+    getDefaultCreateProjectParent(store.getSettings())
+  )
 
   ipcMain.handle(
     'repos:add',

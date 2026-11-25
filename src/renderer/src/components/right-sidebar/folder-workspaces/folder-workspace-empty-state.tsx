@@ -8,7 +8,7 @@ import { findIndexedProjectGroupOwner } from '@/lib/workspace/ownership/worktree
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { getFolderSourceRepos } from '../../../../../shared/folder-workspaces/folder-workspace-source-repos'
 import {

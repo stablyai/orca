@@ -40,6 +40,9 @@ export const createWorkItemCountActions = (
     )
     const counts = await Promise.all(
       repos.map(async (r, index) => {
+        if (r.hostUnreachable) {
+          return undefined
+        }
         const requestState = get(),
           attempt = attempts[index]
         const requestContext = getGitHubWorkItemRequestContext(

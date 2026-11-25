@@ -6,7 +6,7 @@ import type {
   BrowserTabInfo
 } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { redactKagiSessionToken } from '../../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
 import { deferBrowserPageNavigation } from '../navigate/browser-page-deferred-navigation'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 
@@ -45,7 +45,8 @@ export async function runRemoteBrowserNavigationCommand(
     applyRemoteTabMetadata
   }: RemoteBrowserNavigationCommandOptions,
   method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
-  url?: string
+  url?: string,
+  ignoreCache?: boolean
 ): Promise<void> {
   const target = runtimeTarget()
   if (!target) {
@@ -104,7 +105,8 @@ export async function runRemoteBrowserNavigationCommand(
     const params =
       method === 'browser.goto'
         ? { worktree: runtimeWorktree, page: pageId, url: url ?? 'about:blank' }
-        : { worktree: runtimeWorktree, page: pageId }
+        : // Older hosts drop ignoreCache and reload normally, as both chords did before.
+          { worktree: runtimeWorktree, page: pageId, ...(ignoreCache ? { ignoreCache } : {}) }
     let commandError: unknown
     let result: BrowserGotoResult | BrowserBackResult | BrowserReloadResult | undefined
     try {

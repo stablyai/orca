@@ -1,10 +1,10 @@
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage, AgentSessionTurnActivity } from '../agent-session-wire'
-import type { AgentSessionBackgroundTaskState } from '../agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskState } from '../background-tasks/agent-session-background-task-wire'
 import type {
   StructuredAgentHostClock,
   StructuredAgentSessionState
-} from '../structured-agent-session-reducer'
+} from './live-read/structured-agent-session-reducer'
 import { compareAgentJournalItems } from '../journal/agent-session-journal-position'
 import {
   MAX_RETAINED_ITEMS,
@@ -12,8 +12,8 @@ import {
   ownItemCount
 } from './structured-agent-session-item-retention'
 import { foldStructuredAgentSubagentRosterPage } from './structured-agent-session-subagent-roster'
-import { admitAgentSessionBackgroundTaskState } from '../agent-session-background-task-state-admission'
-import { agentSessionHasOlderTranscript } from '../agent-session-context-clear'
+import { admitAgentSessionBackgroundTaskState } from '../background-tasks/agent-session-background-task-state-admission'
+import { agentSessionHasOlderTranscript } from '../conversation-context/agent-session-context-clear'
 
 /** A frame without `hostNow` (older host) leaves the previous sample in place. */
 export function hostClockField(

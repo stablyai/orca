@@ -1,5 +1,5 @@
 import type { FileDocument } from '../../../../../shared/file-listing/file-document'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { EditorFilesSlice } from '@/store/slices/editor/types/editor-files-slice'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 

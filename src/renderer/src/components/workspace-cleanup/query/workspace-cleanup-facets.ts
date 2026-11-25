@@ -1,12 +1,12 @@
 import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
 import {
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupHostIdentity
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { getWorkspaceStatus } from '../../../../../shared/workspace-statuses'
+import { getWorkspaceStatus } from '../../../../../shared/workspace/status/workspace-statuses'
 import {
   canQueueWorkspaceCleanupCandidate,
   WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS,

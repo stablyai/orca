@@ -1,4 +1,4 @@
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 // A null slot means loading to readers; a disabled meter must settle instead.
 export function disabledUsageSnapshot(
   provider: ProviderRateLimits['provider'],

@@ -1,4 +1,4 @@
-import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech-types'
+import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech/speech-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { VoiceMicrophoneSetting } from './VoiceMicrophoneSetting'

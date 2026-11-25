@@ -14,7 +14,7 @@ import type {
 } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { LinearConnectionStatus } from '../../../../shared/linear/workspace-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import SmartWorkspaceNameField from './SmartWorkspaceNameField'
 import type { SmartWorkspaceNameFieldProps } from './name-field/smart-workspace-name-field-model'
 

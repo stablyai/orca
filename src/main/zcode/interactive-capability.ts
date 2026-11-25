@@ -1,8 +1,19 @@
 import { runProcess } from '@orca/process-host'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import {
   isZCodeMissingTuiOutput,
   type ZCodeInteractiveCapability
-} from '../../shared/zcode-missing-tui'
+} from '../../shared/agent-launch/installation/zcode-missing-tui'
+import { structuredAgentCommandPlan } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
+import {
+  resolveExecutableCommandAsync,
+  withCliRuntimeOnPathAsync
+} from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import {
+  expandHomeArgs,
+  isSpawnableCommand,
+  type ResolveCommandOptions
+} from '../../shared/shell/command-resolution/node-cli-command-resolution'
 
 /** Probe before opening a pane to avoid racing fast startup failure. version/doctor never load TUI; no-TTY launch distinguishes missing @zcode/tui from loaded UI rejecting a terminal. npm resolves the package, SEA embeds assets, bundled desktop lacks both. */
 export type { ZCodeInteractiveCapability }
@@ -10,19 +21,34 @@ export type { ZCodeInteractiveCapability }
 // Measured answers arrive under a second; timeouts mean unknown, never proven missing TUI.
 const PROBE_TIMEOUT_MS = 6_000
 
-let cached: ZCodeInteractiveCapability | undefined
-let inFlight: Promise<ZCodeInteractiveCapability> | undefined
+const cached = new Map<string, ZCodeInteractiveCapability>()
+const inFlight = new Map<string, Promise<ZCodeInteractiveCapability>>()
 
-export function _resetZCodeInteractiveCapabilityForTests(): void {
-  cached = undefined
-  inFlight = undefined
+type ZCodeCommand = { program: string; prefixArgs: string[] }
+
+/** Resolve what a ZCode pane runs as chats do; null when nothing runnable exists, so no spawn can misreport it. */
+async function resolveZCodeCommand(
+  settings: Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> | null | undefined,
+  options: ResolveCommandOptions
+): Promise<ZCodeCommand | null> {
+  const platform = options.platform ?? process.platform
+  const override = settings?.agentCmdOverrides?.zcode?.trim()
+  const plan = override
+    ? structuredAgentCommandPlan(override, platform)
+    : { program: 'zcode', prefixArgs: [] }
+  const program = plan && (await resolveExecutableCommandAsync(plan.program, options))
+  return plan && program && isSpawnableCommand(platform, program)
+    ? { program, prefixArgs: expandHomeArgs(plan.prefixArgs, options.homePath) }
+    : null
 }
 
-async function probe(command: string): Promise<ZCodeInteractiveCapability> {
+async function probe({ program, prefixArgs }: ZCodeCommand): Promise<ZCodeInteractiveCapability> {
   try {
     const result = await runProcess({
-      program: command,
-      args: [],
+      program,
+      args: prefixArgs,
+      // A CLI found in a version-manager dir needs its sibling node, as chats give it.
+      env: await withCliRuntimeOnPathAsync(program, process.env),
       // Pipe explicit EOF so capable builds reject missing TTY instead of taking the probe interactive.
       input: '',
       timeoutMs: PROBE_TIMEOUT_MS
@@ -39,20 +65,31 @@ async function probe(command: string): Promise<ZCodeInteractiveCapability> {
   }
 }
 
-/** Cache definitive capability for this process; transient unknown verdicts may retry. */
-export function readZCodeInteractiveCapability(
-  command = 'zcode'
+/** Cache definitive capability per resolved command; transient unknown verdicts may retry. */
+export async function readZCodeInteractiveCapability(
+  settings: Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> | null | undefined,
+  options: ResolveCommandOptions = {}
 ): Promise<ZCodeInteractiveCapability> {
-  if (cached !== undefined) {
-    return Promise.resolve(cached)
+  const command = await resolveZCodeCommand(settings, options)
+  if (!command) {
+    return 'unknown'
   }
-  inFlight ??= probe(command).then((verdict) => {
-    // Retry transient unknowns so temporary load cannot suppress the missing-TUI notice for the whole session.
-    if (verdict !== 'unknown') {
-      cached = verdict
-    }
-    inFlight = undefined
+  const key = [command.program, ...command.prefixArgs].join('\0')
+  const verdict = cached.get(key)
+  if (verdict !== undefined) {
     return verdict
-  })
-  return inFlight
+  }
+  let pending = inFlight.get(key)
+  if (!pending) {
+    pending = probe(command).then((result) => {
+      // Retry transient unknowns so temporary load cannot suppress the missing-TUI notice for the whole session.
+      if (result !== 'unknown') {
+        cached.set(key, result)
+      }
+      inFlight.delete(key)
+      return result
+    })
+    inFlight.set(key, pending)
+  }
+  return pending
 }

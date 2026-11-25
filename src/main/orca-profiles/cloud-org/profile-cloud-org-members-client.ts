@@ -3,7 +3,7 @@ import type {
   OrcaOrgMembersRoster,
   OrcaOrgPendingInvite,
   OrcaOrgRole
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import type { OrcaCloudAuthConfig } from '../cloud-auth/profile-cloud-auth-config'
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import { OrcaCloudRequestError } from '../cloud-auth/profile-cloud-client'

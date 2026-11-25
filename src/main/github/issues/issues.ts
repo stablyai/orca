@@ -1,6 +1,7 @@
-import type { ClassifiedError } from '../../../shared/classified-error'
+import type { ClassifiedError } from '../../../shared/errors/classified-error'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { IssueInfo } from '../../../shared/github/pull-requests/pull-request-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { mapIssueInfo } from '../api/github-read-response'
 import type { LocalGitExecOptions } from '../repositories/github-repository-identity'
 import {
@@ -19,21 +20,23 @@ export type IssueListResult = {
   error?: ClassifiedError
 }
 
-/** Linked issue numbers keep heuristic source resolution; changing list preference must not retarget existing links. */
+/** Linked URLs pin the repository; number-only links keep heuristic resolution so list preference cannot retarget them. */
 export async function getIssue(
   repoPath: string,
   issueNumber: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  repositoryOverride?: GitHubOwnerRepo
 ): Promise<IssueInfo | null> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
-    () => getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
+    repositoryOverride ??
+      (() => getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions)),
     connectionId,
     localGitOptions
   )
-  // Without local cwd, unresolved connection-backed requests could target gh's default repository.
-  if (connectionId && !ownerRepo) {
+  // Without local cwd, unresolved connection-backed or pinned requests could target gh's default repository.
+  if ((connectionId || repositoryOverride) && !ownerRepo) {
     return null
   }
   await acquire()

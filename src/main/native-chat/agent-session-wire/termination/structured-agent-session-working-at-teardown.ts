@@ -1,4 +1,4 @@
-import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 // Capture live host work immediately before stopping its child; stale persisted turns must never create resume offers.
 // Include pending prompts and running child work while that evidence still reflects the pre-stop state.
 
@@ -31,7 +31,7 @@ import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle
 import {
   isStructuredAgentSessionCommandEntry,
   isStructuredAgentSessionCommandTurn
-} from '../../../../shared/agent-session/structured-agent-session-command-entry'
+} from '../../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn,

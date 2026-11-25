@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { SkillDiscoveryTargetSchema } from '../../skills'
+import { SkillDiscoveryTargetSchema } from '../../skills/discovery/skills'
 
 export const SkillsGetInstallProgressParams = z
   .object({ operationId: z.string().min(1).max(128) })

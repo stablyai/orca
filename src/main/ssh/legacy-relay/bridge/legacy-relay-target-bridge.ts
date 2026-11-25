@@ -5,7 +5,7 @@ import { toAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type {
   LegacyRelayBridgeAttachResult,
   LegacyRelayBridgedPane
-} from '../../../../shared/legacy-relay-bridge-contract'
+} from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 import type { LegacyRelayClient, LegacyRelayOwnerClaim } from './legacy-relay-client'
 import type { LegacyRelayEndpoint } from '../endpoints/legacy-relay-endpoints'
 import { LegacyRelayRetry, LegacyRelayWaiters } from './legacy-relay-bridge-timers'

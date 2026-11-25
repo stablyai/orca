@@ -1,7 +1,8 @@
 import { useRef, useState, useSyncExternalStore } from 'react'
 import { StyleSheet, View, type HostInstance } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { ChevronLeft, ListChecks, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
 import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
@@ -11,7 +12,7 @@ import { MobileSessionTabBar } from './tabs/MobileSessionTabBar'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
 import type { SessionTitleCard } from './tabs/use-session-title-card'
 import { styles } from './mobile-session-styles'
-import { spacing } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
@@ -44,8 +45,14 @@ export function MobileSessionHeader({
     connectionEscalated,
     terminalSummary,
     handlePanelTap,
+    routeBot,
+    botStatus,
+    itemsOnPhone,
+    botPanel,
+    openBotPanel,
     terminalResume,
-    connState
+    connState,
+    statusDot
   } = controller
   // A switched-back terminal shows its last screen at once; only a slow catch-up shows the refresh line.
   const catchingUp = useSyncExternalStore(terminalResume.subscribe, terminalResume.anyCatchingUp)
@@ -62,12 +69,16 @@ export function MobileSessionHeader({
   const tabsInTopBar = (layout.isLandscapePhone || sideRail) && hasTabs
   // Bar buttons otherwise leave the tab bar too narrow to read on a narrow header.
   const actionsCollapsed = tabsInTopBar && (headerWidth ?? layout.width) < 600
-  const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed
+  // A bot's screen has no source control (its home isn't a repository): Items takes its place.
+  const itemsInBar = itemsOnPhone && routeBot !== null
+  const homeChatId = routeBot?.bot.chatSessionId
+  const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed && !itemsInBar
   const tabStrip = hasTabs ? (
     <MobileSessionTabBar
       controller={controller}
       inTopBar={tabsInTopBar}
       actionsCollapsed={actionsCollapsed}
+      homeChatId={homeChatId ?? null}
     />
   ) : null
   const leading = (
@@ -94,10 +105,20 @@ export function MobileSessionHeader({
   const titleBlock =
     !sideRail || !hasTabs || showConnectionRetry || connectionEscalated ? (
       <MobileSessionTitleBlock
-        title={worktreeName || t('session.header.terminalTitle', 'Terminal')}
-        connState={presentedConnState}
+        title={
+          routeBot
+            ? routeBot.bot.name
+            : worktreeName || t('session.header.terminalTitle', 'Terminal')
+        }
+        leading={routeBot ? <MobileBotAvatar avatar={routeBot.avatar} size={18} /> : undefined}
+        connState={statusDot.state}
+        verdict={statusDot.verdict}
         details={details}
-        meta={terminalSummary}
+        meta={
+          botStatus && presentedConnState === 'connected' && !connectionEscalated
+            ? botStatus.line
+            : terminalSummary
+        }
         centered={!tabsInTopBar}
         showConnectionRetry={showConnectionRetry}
         onRetry={() => {
@@ -109,6 +130,21 @@ export function MobileSessionHeader({
     ) : null
   const trailing = (
     <>
+      {itemsInBar ? (
+        <NavBarButton
+          active={botPanel !== null}
+          accessibilityLabel={
+            routeBot.needsYou > 0
+              ? t('session.header.itemsNeedYou', 'Items, {{count}} need you', {
+                  count: routeBot.needsYou
+                })
+              : t('session.header.items', 'Items')
+          }
+          icon={ListChecks}
+          badge={{ count: routeBot.needsYou, color: colors.agentQuestion }}
+          onPress={() => openBotPanel({ tab: 'items' })}
+        />
+      ) : null}
       {sourceControlInBar ? (
         <MobileSourceControlButton
           hostId={hostId}

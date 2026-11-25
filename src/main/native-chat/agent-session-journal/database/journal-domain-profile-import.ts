@@ -1,4 +1,5 @@
 import { JOURNAL_DOMAIN_PROFILE_TABLES } from './journal-domain-profile-columns'
+import { journalLegacyChatRevision, recordJournalLegacyChatRevision } from './journal-legacy-source'
 import type Database from '../../../sqlite/sync-database'
 import {
   JOURNAL_DB_OLDEST_RELEASED_VERSION,
@@ -27,12 +28,27 @@ export function importJournalDomainProfile(
     )
   }
   copyChatCatalog(source, destination)
-  for (const { name, columns, requiredFrom } of JOURNAL_DOMAIN_PROFILE_TABLES) {
-    copyProfileTable(source, destination, name, columns, version < (requiredFrom ?? Infinity))
+  // The copy keeps rows as the original saved them, even a receipt whose chat record is gone.
+  destination.pragma('foreign_keys = OFF')
+  try {
+    for (const { name, columns } of JOURNAL_DOMAIN_PROFILE_TABLES) {
+      copyProfileTable(source, destination, name, columns)
+    }
+  } finally {
+    destination.pragma('foreign_keys = ON')
   }
+  // The baseline later launches compare with, so only chats an older Orca writes move.
+  runJournalTransaction(destination, () => {
+    for (const { session_id: id } of source
+      .prepare('SELECT session_id FROM agent_session_records')
+      .all()) {
+      const revision = journalLegacyChatRevision(source, String(id)) ?? 'null'
+      recordJournalLegacyChatRevision(destination, String(id), revision)
+    }
+  })
   if (source.prepare("SELECT 1 FROM sqlite_schema WHERE name='sqlite_sequence'").get()) {
     const highWater = source
-      .prepare("SELECT seq FROM sqlite_sequence WHERE name='pr_check_events'")
+      .prepare("SELECT seq FROM main.sqlite_sequence WHERE name='pr_check_events'")
       .get()
     if (highWater) {
       destination.prepare("DELETE FROM sqlite_sequence WHERE name='pr_check_events'").run()
@@ -72,15 +88,8 @@ function copyProfileTable(
   source: Database.Database,
   destination: Database.Database,
   table: string,
-  columns: readonly string[],
-  optional = false
+  columns: readonly string[]
 ): void {
-  if (
-    optional &&
-    !source.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?").get(table)
-  ) {
-    return
-  }
   const names = columns.join(',')
   const insert = destination.prepare(
     `INSERT INTO ${table}(rowid,${names}) VALUES(${columns.map(() => '?').join(',')},?)`

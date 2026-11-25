@@ -1,8 +1,13 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useAppStore } from '../store'
-import { i18n, setRendererPluginLanguagePacks, loadRendererUiLanguage } from './i18n'
+import {
+  i18n,
+  setRendererPluginLanguagePacks,
+  loadRendererUiLanguage,
+  RendererLanguageLoadError
+} from './i18n'
 import { usePluginLanguagePacks } from '../store/plugins/localization/plugin-language-packs'
-import { isPluginUiLanguage } from '../../../shared/ui-language'
+import { isPluginUiLanguage } from '../../../shared/i18n/ui-language'
 import { initializeLanguageDetection, useLanguageReadiness } from './language-readiness'
 import { TranslationScopeProvider } from './translation-scope-provider'
 
@@ -29,6 +34,15 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
     }
     const request = ++generation.current
     let cancelled = false
+    const applyLocale = async (locale: string, error: boolean): Promise<void> => {
+      if (cancelled || request !== generation.current) {
+        return
+      }
+      await i18n.changeLanguage(locale)
+      if (!cancelled && request === generation.current) {
+        useLanguageReadiness.setState({ ready: true, error, loading: false })
+      }
+    }
     useLanguageReadiness.setState({ loading: true })
     void (async () => {
       const detection = initializeLanguageDetection()
@@ -40,19 +54,16 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
           }
         }
         const [, locale] = await Promise.all([detection, loadRendererUiLanguage(uiLanguage)])
-        if (cancelled || request !== generation.current) {
-          return
-        }
-        await i18n.changeLanguage(locale)
-        if (!cancelled && request === generation.current) {
-          useLanguageReadiness.setState({ ready: true, error: false, loading: false })
-        }
-      } catch {
+        await applyLocale(locale, false)
+      } catch (error) {
         await detection
-        if (!cancelled && request === generation.current) {
-          await i18n.changeLanguage('en')
-          if (!cancelled && request === generation.current) {
-            useLanguageReadiness.setState({ ready: true, error: true, loading: false })
+        await applyLocale('en', true)
+        if (error instanceof RendererLanguageLoadError) {
+          try {
+            // A slow startup must not leave a successfully loaded saved language on English.
+            await applyLocale(await error.completion, false)
+          } catch {
+            // A failed request stays on English until the user retries.
           }
         }
       }

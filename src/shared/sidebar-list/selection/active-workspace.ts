@@ -1,8 +1,4 @@
-import type { ExecutionHostId } from '../../execution-host'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../worktree/host-qualified-identity'
+import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host/execution-host'
 import type { Worktree } from '../../worktree/types'
 import { folderWorkspaceToWorktree } from '../../folder-workspaces/folder-workspace-worktree'
 import type { HostSectionRow } from '../hosts/host-section-rows'
@@ -15,13 +11,20 @@ export type ActiveSidebarWorkspace = {
 
 /** Every occurrence of the open workspace highlights, so a pinned duplicate shows twice. */
 export function isActiveSidebarWorkspace(
-  worktree: Pick<Worktree, 'id' | 'hostId'>,
+  worktree: Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>,
   active: ActiveSidebarWorkspace
 ): boolean {
+  if (active.worktreeId !== worktree.id) {
+    return false
+  }
+  if (!active.hostId || active.hostId === worktree.hostId) {
+    return true
+  }
+  const activeHost = parseExecutionHostId(active.hostId)
   return (
-    active.worktreeId === worktree.id &&
-    (!active.hostId ||
-      getWorktreeHostIdentity(worktree) === composeWorktreeHostIdentity(active.hostId, worktree.id))
+    activeHost?.kind === 'runtime' &&
+    activeHost.environmentId === worktree.runtimeOwnerEnvironmentId?.trim() &&
+    parseExecutionHostId(worktree.hostId)?.kind === 'ssh'
   )
 }
 

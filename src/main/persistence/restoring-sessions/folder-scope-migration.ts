@@ -1,8 +1,8 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
-import type { Repo } from '../../../shared/repo-types'
-import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
-import { getProjectGroupSubtreeIds } from '../../../shared/project-groups'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
+import { getProjectGroupSubtreeIds } from '../../../shared/project/groups/project-groups'
 
 export function inferFolderScopeConnectionIdForMigration(args: {
   folderPath: string

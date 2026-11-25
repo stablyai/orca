@@ -19,7 +19,7 @@ import {
   type AgentSubagentSnapshot
 } from '../../../../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { mainAgentStatusEqual } from '../../../../../../shared/agent-status/lifecycle/main-agent-status'
-import { structuredChildWorkLegacySubagents } from '../../../../../../shared/agent-session/structured-agent-session-child-work-legacy'
+import { structuredChildWorkLegacySubagents } from '../../../../../../shared/agent-session/background-tasks/structured-agent-session-child-work-legacy'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredAgentSessionAgentStatus } from '../../../../../../shared/agent-session/view/structured-agent-session-agent-status'
 import {
@@ -27,8 +27,9 @@ import {
   structuredAgentSessionRowStateStartedAt
 } from '../../../../../../shared/agent-session/view/structured-agent-session-status-started-at'
 import { agentMainAgentVerdict } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status/agent-status-contract'
+import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status/contracts/agent-status-contract'
 import type { StructuredTab } from './structured-agent-session-tabs'
+import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 
 /** Copy modern child views verbatim; convert legacy host task lists and retain the legacy live-agent roster. */
 function childWorkFor(summary: AgentSessionStatusSummary): {
@@ -56,7 +57,7 @@ function projectFailedStart(
   failedAt: number
 ): void {
   const store = transaction.getState()
-  const current = store.agentStatusByPaneKey?.[paneKey]
+  const current = store.agentStatusByPaneKey.get(paneKey)
   if (
     current?.state === 'done' &&
     agentMainAgentVerdict(current) === 'failure' &&
@@ -91,6 +92,23 @@ function projectFailedStart(
   })
 }
 
+/** Match host continuity: monitoring/working labels are distinct states and must restart their own clocks.
+ *  An opened row keeps its first clock; the host dates every republish of an empty journal with now(). */
+function keptRowStateStartedAt(
+  current: AgentStatusEntry | undefined,
+  desired: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'sessionBoundary'>
+): number | undefined {
+  if (!current) {
+    return undefined
+  }
+  const keeps = desired.sessionBoundary
+    ? current.sessionBoundary === true
+    : desired.state !== 'done' &&
+      current.state === desired.state &&
+      current.workingMode === desired.workingMode
+  return keeps ? current.stateStartedAt : undefined
+}
+
 export function projectStatus(
   transaction: AgentStatusBatchTransaction,
   tab: StructuredTab,
@@ -100,23 +118,31 @@ export function projectStatus(
 ): void {
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
   const store = transaction.getState()
-  if (!summary?.status) {
-    if (launchFailedAt !== null) {
-      projectFailedStart(transaction, tab, paneKey, launchFailedAt)
-    } else if (store.agentStatusByPaneKey?.[paneKey]) {
+  if (!summary?.status && launchFailedAt !== null) {
+    projectFailedStart(transaction, tab, paneKey, launchFailedAt)
+    return
+  }
+  if (!summary) {
+    if (store.agentStatusByPaneKey.get(paneKey)) {
       store.removeAgentStatus(paneKey)
     }
     return
   }
+  // Before its first request a chat reads as a TUI after SessionStart: an idle session boundary, not a finished turn.
+  const opened = !summary.status
   const { children, subagents } = childWorkFor(summary)
   // Shared with `worktree ps`, so the CLI and this row cannot disagree about one session.
   const agentStatus = structuredAgentSessionAgentStatus({
-    status: summary.status,
+    status: summary.status ?? 'idle',
     childWork: children ?? summary.backgroundTasks,
     turnOutcome: summary.turnOutcome,
-    ...(summary.stopping ? { stopping: summary.stopping } : {})
+    ...(summary.stopping ? { stopping: summary.stopping } : {}),
+    ...(summary.awaitsAnswer ? { awaitsAnswer: summary.awaitsAnswer } : {}),
+    ...(summary.attentionAsksOnlyQuestions
+      ? { attentionAsksOnlyQuestions: summary.attentionAsksOnlyQuestions }
+      : {})
   })
-  const current = store.agentStatusByPaneKey?.[paneKey]
+  const current = store.agentStatusByPaneKey.get(paneKey)
   // Same continuity rule as the host ingest, on the main agent's own clock.
   const mainAgent = continueMainAgentStatus(
     current?.mainAgent,
@@ -139,7 +165,7 @@ export function projectStatus(
     ...(subagents ? { subagents } : {}),
     ...(children ? { children } : {}),
     ...(subagents || children ? { subagentObservation: observation } : {}),
-    sessionBoundary: false
+    sessionBoundary: opened
   } as const
   if (
     current?.state === desired.state &&
@@ -178,14 +204,10 @@ export function projectStatus(
       updatedAt: summary.updatedAt,
       // This ordered host feed can correct a legacy publication clock after upgrade.
       allowOlderTimestamp: true,
-      // Match host continuity: monitoring/working labels are distinct states and must restart their own clocks.
       stateStartedAt:
         structuredAgentSessionRowStateStartedAt(desired, summary) ??
-        (desired.state !== 'done' &&
-        current?.state === desired.state &&
-        current.workingMode === desired.workingMode
-          ? current.stateStartedAt
-          : summary.updatedAt),
+        keptRowStateStartedAt(current, desired) ??
+        summary.updatedAt,
       // Child-only work outlives the lead’s journal clock; date its evidence by local observation, as host ingest does.
       evidenceObservedAt: isAgentStatusHeldOpenByChildWork(desired) ? Date.now() : summary.updatedAt
     },

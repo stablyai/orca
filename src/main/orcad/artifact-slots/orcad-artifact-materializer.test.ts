@@ -14,7 +14,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+import {
+  pinnedNodeRuntimeAsset,
+  type NodeRuntimeTarget
+} from '../../../shared/node-runtime/node-runtime-pin'
 import {
   ORCAD_MOBILE_WEB_MANIFEST,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
@@ -30,7 +33,7 @@ import {
   hasAppEnvironment,
   setAppEnvironment,
   type AppEnvironment
-} from '../../../shared/app-environment'
+} from '../../../shared/app-lifecycle/app-environment'
 import {
   assembleOrcadArtifact,
   getOrcadTemplateCandidates,

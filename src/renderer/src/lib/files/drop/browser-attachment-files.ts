@@ -1,4 +1,4 @@
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 // Browser Files lack paths; use claim tokens ending in the filename so path-based chips still display basename correctly.
 const TOKEN_PREFIX = 'orca-browser-file:'

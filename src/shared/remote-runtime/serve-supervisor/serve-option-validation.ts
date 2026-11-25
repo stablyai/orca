@@ -1,4 +1,4 @@
-import { levenshtein } from '../../edit-distance'
+import { levenshtein } from '../../text/edit-distance'
 
 export type ServeOptionValidationInput = {
   /** Explicit --bind value; undefined/null means the host's default listener. */

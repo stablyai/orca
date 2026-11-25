@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
-import type { CliInstallStatus } from '../../../../../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../../../../../shared/cli/cli-install-types'
 import { useWindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../../ui/button'

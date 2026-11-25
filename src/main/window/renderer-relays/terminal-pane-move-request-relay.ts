@@ -8,7 +8,7 @@ import type {
   TerminalPaneMoveToNewTabRequest
 } from '../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import { addFanoutListener } from '../../runtime/events/event-listener-fanout'
-import { abortWhenRendererGone } from '../../ipc/renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../../ipc/renderer-requests/renderer-lifetime-abort'
 import { holdRelayedPaneMove, type RelayedPaneMove } from './terminal-pane-move-commit-fence'
 
 // Why: under the client's 15s call timeout, so the client hears a refusal rather than losing the reply.

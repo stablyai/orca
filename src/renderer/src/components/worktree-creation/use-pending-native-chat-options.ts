@@ -10,7 +10,7 @@ import {
   type StructuredAgentSessionOptionState
 } from '../../../../shared/agent-session/options/structured-agent-session-options'
 import { structuredLaunchSeedOptions } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
-import { joinHostModelListingWait } from '../../../../shared/host-model-listing-waits'
+import { joinHostModelListingWait } from '../../../../shared/agent-session/options/model-catalog/host-model-listing-waits'
 import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'

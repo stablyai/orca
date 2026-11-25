@@ -16,9 +16,9 @@ import {
   toWindowsWslUncPathSpellings
 } from '../../../shared/file-access/wsl-paths'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
-import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import type { FileWithMtime } from '../session-scanner-types'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../parsing/session-json-object'
 import { scanIssueTextFromError } from '../parsing/session-scan-issues'
 import { isMissingTranscriptPathError } from '../discovery/session-path-absence'

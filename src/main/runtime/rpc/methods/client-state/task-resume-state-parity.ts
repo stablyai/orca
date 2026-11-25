@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { TaskResumeState as TaskResumeStateType } from '../../../../../shared/ui-chrome-types'
+import type { TaskResumeState as TaskResumeStateType } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { AssertNoMissingKeys } from './ui-state-schema-parity'
 import type { TaskResumeState } from '../../../../../shared/rpc-contract/client-ui/task-resume-state-params'
 import '../../../../../shared/rpc-contract/client-ui/task-resume-state-params'

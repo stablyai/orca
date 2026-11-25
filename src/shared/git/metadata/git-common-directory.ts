@@ -1,6 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { waitForPromiseWithSignal } from '../../abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../concurrency/abort-signal-reason'
 import { resolveGitMetadataPath, type GitMetadataPathOptions } from './git-metadata-path'
 import { parseGitdirMarkerPayload } from './gitdir-marker-payload'
 

@@ -5,7 +5,7 @@ import type {
   RuntimeGeneratePullRequestFieldsOverrides,
   RuntimeGitContext
 } from '@/runtime/source-control/git/runtime-git-client-context'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { SourceControlAiPrCreationDefaults } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type {

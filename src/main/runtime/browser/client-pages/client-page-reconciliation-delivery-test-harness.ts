@@ -17,13 +17,13 @@ class ReconciliationDeliveryRuntime extends OrcaRuntimeService {
     this.projectedFrames += 1
     return super.projectMobileSessionTabsForClient(result, clientId)
   }
-  peekSnapshotForClient(worktree: string, clientId: string) {
-    return this.getMobileSessionTabsForWorktree(worktree, clientId, {
+  async peekSnapshotForClient(worktree: string, clientId: string) {
+    return await this.getMobileSessionTabsForWorktree(worktree, clientId, {
       includeAgentSenders: false
     })
   }
-  snapshotForClient(worktree: string, clientId: string) {
-    const result = this.peekSnapshotForClient(worktree, clientId)
+  async snapshotForClient(worktree: string, clientId: string) {
+    const result = await this.peekSnapshotForClient(worktree, clientId)
     this.observeClientHostedPageSnapshots([result], clientId)
     return result
   }

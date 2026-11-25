@@ -2,9 +2,9 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/structured-agent-session-command-entry'
+import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { withoutNativeChatVisualDirectiveLines } from '../../../shared/native-chat/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../../shared/native-chat/visuals/native-chat-visual-directive'
 
 /** Row-local facts status selection seeks by index instead of decoding bodies; never cross-row verdicts. */
 export function journalItemStatusMetadata(item: AgentJournalRenderItem) {

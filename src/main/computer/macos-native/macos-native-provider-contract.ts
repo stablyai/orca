@@ -1,5 +1,5 @@
 import type net from 'node:net'
-import type { ComputerProviderCapabilities } from '../../../shared/computer-use-runtime-types'
+import type { ComputerProviderCapabilities } from '../../../shared/computer/computer-use-runtime-types'
 
 export type NativeMethod =
   | 'handshake'
