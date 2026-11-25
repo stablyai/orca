@@ -71,7 +71,9 @@ export class BotItemsEdits extends BotItemsReads {
         ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.doneMeans !== undefined ? { doneMeans: input.doneMeans } : {}),
         ...(input.links.length > 0 ? { links: input.links.map(linkWords) } : {}),
-        ...(input.startedIn ? { startedIn: input.startedIn } : {})
+        // `startedInOwed`: set since only a handoff or the item's own thread gives a place; an older
+        // item's may be the thread of a question it answered, whose result goes to the asking bot.
+        ...(input.startedIn ? { startedIn: input.startedIn, startedInOwed: true } : {})
       },
       false,
       now

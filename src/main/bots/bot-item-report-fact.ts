@@ -27,13 +27,15 @@ export function botItemOfReport(items: { store(): BotItemsRemote }): StructuredM
     if (!fact || !isOpenBotItemStatus(fact.item.status)) {
       return null
     }
-    const { item, startedIn } = fact
+    const { item, startedIn, startedInOwed } = fact
     return {
       number: item.number,
       title: item.title,
       status: item.status,
       doneMeans: item.doneMeans,
-      ...(startedIn ? { startedIn } : {})
+      ...(startedIn
+        ? { startedIn, ...(startedInOwed ? { startedInOwed: true as const } : {}) }
+        : {})
     }
   }
 }

@@ -94,6 +94,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...optional('doneMeans', await readTextOrFileFlag(flags, cwd, 'done-means', false)),
       ...(status ? { status: statusFlag(status) } : {}),
       ...(links.length > 0 ? { links } : {}),
+      ...optional('request', getOptionalStringFlag(flags, 'request')),
       ...optional('forBot', getOptionalStringFlag(flags, 'for')),
       ...optional('chat', getOptionalStringFlag(flags, 'chat'))
     })

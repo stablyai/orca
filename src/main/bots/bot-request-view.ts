@@ -44,7 +44,8 @@ export type BotRequestRecord = {
    *  chain sends carries it on. */
   origin?: AutomationTriggeredBy
   /** The thread, issue or pull request the chain started in, from the host's record of the turn that
-   *  woke there; every request the chain sends carries it on. */
+   *  woke there. Only a handoff hands it on to the receiving turn; a question or status shows it as
+   *  context and leaves its results with the sender. */
   originPlace?: BotWakingPlace
   /** The sending chat, when the turn that sent it was its conversation's: answers to it go there. */
   askedInConversation?: string
@@ -125,7 +126,7 @@ function postCommandOf(link: string): string {
 
 /** Said beside a request an event started: what the event says is never the asker's instruction,
  *  and where it started, so a handed-over job's later results go back there. */
-function originLine(record: BotRequestRecord): Record<string, string> {
+function originLine(record: BotRequestRecord, messageId: string): Record<string, string> {
   const place = record.originPlace
   return {
     ...(record.origin
@@ -135,10 +136,11 @@ function originLine(record: BotRequestRecord): Record<string, string> {
       : {}),
     ...(place
       ? {
-          // Item add links only a place with a link, so only that one is promised.
+          // Item add links only a place with a link, so only that one is promised. `--request` reads
+          // this request's own record, so the promise holds whatever else the turn took.
           startedIn:
             record.purpose === 'handoff' && place.url
-              ? `${place.url}${postCommandOf(place.url)}. An item you add for it links this, and its worker's report names it, so what the job finds later goes back there.`
+              ? `${place.url}${postCommandOf(place.url)}. What the job finds later goes back there, not to ${senderOf(record)}, unless a post there is refused: then mail it to ${senderOf(record)} as a new message, or tell your owner. Add its item with orca bot item add --request ${messageId} so its workers' reports name it.`
               : (place.url ?? place.placeId)
         }
       : {})
@@ -199,7 +201,7 @@ export function botRequestView(
     return {
       from: sender,
       for: askers,
-      ...originLine(record),
+      ...originLine(record, messageId),
       kind: 'status: for your information; there is no job to take and nothing to answer',
       next: `Use it in your own work if it bears on it. If it needs nothing from you, stay silent with ${BOT_QUIET_MARKER}.`
     }
@@ -214,7 +216,7 @@ export function botRequestView(
     return {
       from: sender,
       for: askers,
-      ...originLine(record),
+      ...originLine(record, messageId),
       kind,
       answer: `orca slack post ${ref} "<your answer>", then ${reply('Posted in the thread.')}`,
       answerAppears: `the Slack thread where ${askers} asked, as you`,
@@ -224,7 +226,7 @@ export function botRequestView(
   return {
     from: sender,
     for: askers,
-    ...originLine(record),
+    ...originLine(record, messageId),
     kind,
     answer: reply('<your answer>'),
     answerAppears:

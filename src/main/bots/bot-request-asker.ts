@@ -60,7 +60,8 @@ export type BotActingTurn = {
    *  waking request carries. A request the turn sends carries it on, its text marked as content. */
   origin?: AutomationTriggeredBy
   /** The thread, issue or pull request this turn's work started in: where it was woken, or the one
-   *  its waking request carries. Its requests carry it on and `bot item add` links it. */
+   *  its waking handoff carries (a question or status leaves it with the sender). Its requests carry
+   *  it on and `bot item add` links it. */
   originPlace?: BotWakingPlace
 }
 
@@ -86,8 +87,6 @@ export type BotRequestActsFor = {
   origin?: AutomationTriggeredBy
   /** A handoff's place only. */
   originPlace?: BotWakingPlace
-  /** Status mail: no job, so it never makes a turn's place ambiguous. */
-  wantsNothing?: true
 }
 
 const MAX_REQUEST_TEXT = 500
@@ -266,7 +265,7 @@ export function readBotActingTurnWithin(
       const records = requestIds.map((messageId) => lookups.botRequestActsFor(messageId))
       const origin = records.find((record) => record?.origin)?.origin
       const originPlace = requestsOriginPlace(
-        records.filter((record) => !record?.wantsNothing).map((record) => record?.originPlace),
+        records.map((record) => record?.originPlace),
         index > 0 ||
           readings.some(
             (entry) => entry.reading.kind === 'asker' || entry.reading.kind === 'conversation'

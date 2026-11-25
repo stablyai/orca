@@ -38,6 +38,9 @@ export const BotItemsAdd = z.object({
   doneMeans: OptionalString,
   status: z.enum(['planned', 'working']).optional(),
   links: z.array(z.string()).optional(),
+  /** `--request <msg_id>`: the bot request whose job the item is; a handoff's place is then where
+   *  the item's result goes. */
+  request: OptionalString,
   /** `--for bot:<name>`: the item is made for that bot, through its request mail. */
   forBot: OptionalString,
   /** With `--for`, that bot's chat; alone, another chat of the caller's bot. */

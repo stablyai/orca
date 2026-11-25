@@ -7,6 +7,9 @@ import { slackThreadRefOfLink } from '../connectors/slack-mirror-state'
 export type BotItemReportFact = Pick<BotItem, 'number' | 'title' | 'status' | 'doneMeans'> & {
   /** The thread, issue or pull request the item's work started in, where its result is owed. */
   startedIn?: string
+  /** Set for an item whose place only a handoff or its own thread gave; an older item's place may be
+   *  the thread of a question it answered, whose result belongs to the asking bot. */
+  startedInOwed?: true
 }
 
 const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim()
@@ -35,7 +38,9 @@ export function formatBotItemReportHint(item: BotItemReportFact, cli = 'orca'): 
     `If this result changes the item, update it with ${cli} bot item <cancel|comment|done|set> ${item.number}.`,
     ...(item.startedIn
       ? [
-          `Its work started in ${item.startedIn}: post what this result settles there${postedIn(item.startedIn, cli)}.`
+          item.startedInOwed
+            ? `Its work started in ${item.startedIn}: post what this result settles there${postedIn(item.startedIn, cli)}. Once it is posted, don't also send it to a bot that handed you this job, which would pass it on there again; if the post is refused, mail the result to that bot as a new message instead, or tell your owner.`
+            : `Its work started in ${item.startedIn}, but this item is older than Orca's record of whether that place is owed its result: post what this result settles there${postedIn(item.startedIn, cli)} only if that place handed you this job; otherwise, or if you can't tell, give the result to whoever asked you for it (another bot by mail), or tell your owner, never that place.`
         ]
       : [])
   ].join(' ')
