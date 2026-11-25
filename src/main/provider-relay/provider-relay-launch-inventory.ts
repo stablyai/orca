@@ -69,8 +69,10 @@ export function keptProviderRelaySpawnToken(chatKey: string): string | null {
 }
 
 async function listOne(client: DaemonClient): Promise<boolean> {
-  if (!client.getDaemonIdentity()?.providerRelay) {
-    return true
+  const identity = client.getDaemonIdentity()
+  // A disconnected client's daemon is unknown, not one without relays.
+  if (!identity?.providerRelay) {
+    return identity !== null
   }
   const channel = providerRelayChannel(client)
   const result = await withTimeout(

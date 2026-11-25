@@ -38,6 +38,8 @@ export function createCodexStructuredItemStreams(
   const states = new CodexItemStreamRetention()
   const checkpointLengths = new Map<string, number>()
   const pendingCheckpoints = new Set<string>()
+  /** Kept commands whose saved row is a truncated preview: it stays until their own end. */
+  const heldUntilEnd = new Set<string>()
   // Resolve attribution on each append so later-discovered parents reach existing rows.
   const producers = new Map<string, { threadId: string; turnId: string | null }>()
   const attributionOf = (key: string): AgentJournalRowAttribution => {
@@ -55,6 +57,7 @@ export function createCodexStructuredItemStreams(
     states.forget(key)
     checkpointLengths.delete(key)
     pendingCheckpoints.delete(key)
+    heldUntilEnd.delete(key)
     producers.delete(key)
     const pending = pendingPatches.get(key)
     if (pending) {
@@ -271,6 +274,9 @@ export function createCodexStructuredItemStreams(
       const delta = method === REASONING_PART_METHOD ? '\n' : paramsRecord.delta
       if (typeof delta === 'string') {
         const key = codexStructuredItemKey(threadId, state.item.id)
+        if (heldUntilEnd.has(key)) {
+          return { handled: true, admission: { accepted: true } }
+        }
         pendingCheckpoints.add(key)
         const accepted = coalescer.append(key, delta)
         if (!accepted) {
@@ -281,6 +287,10 @@ export function createCodexStructuredItemStreams(
     },
     seedText: (threadId, itemId, text) => {
       const key = codexStructuredItemKey(threadId, itemId)
+      if (text === null) {
+        heldUntilEnd.add(key)
+        return
+      }
       // The row already holds this text: it is where the stream resumes, not a change to save.
       if (states.get(key) && !coalescer.snapshot(key) && coalescer.append(key, text)) {
         checkpointLengths.set(key, text.length)
