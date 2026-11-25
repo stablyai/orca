@@ -7,6 +7,7 @@ import {
   setWindowsSecurityForTests
 } from '../../../shared/secure-storage/windows-security-addon'
 import { browserTunnelTargetBlockReason } from '../../browser/network/tunnels/browser-network-tunnel-destination-policy'
+import { addForwardOnFreeLocalPort } from '../../ssh/port-forwarding/forward-local-port-choice'
 import { holdsIpv6Loopback, PairedPortForwardProvider } from './paired-port-forward-provider'
 import type { PairedPortForwardTunnel } from './paired-port-forward-tunnel'
 
@@ -100,20 +101,35 @@ describe('PairedPortForwardProvider', () => {
       resetWindowsSecurityLoadForTests()
     })
 
-    it('refuses to start instead of admitting other accounts unchecked', async () => {
+    it('refuses to start, once, instead of admitting other accounts unchecked', async () => {
       Object.defineProperty(process, 'platform', { value: 'win32' })
-      setWindowsSecurityForTests(null)
-      const opened: { host: string; port: number }[] = []
+      // A load error naming EACCES must not read as a bind failure that walks every candidate port.
+      setWindowsSecurityForTests(
+        null,
+        "EACCES: permission denied, open 'orca_windows_security.node'"
+      )
+      const provider = new PairedPortForwardProvider()
+      let starts = 0
       await expect(
-        new PairedPortForwardProvider().start(echoTunnel(opened), {
-          id: 'pf-1',
-          connectionId: 'environment-a',
-          localHost: '127.0.0.1',
-          localPort: 0,
-          remoteHost: 'localhost',
-          remotePort: 5173
+        addForwardOnFreeLocalPort({
+          remotePort: 5173,
+          add: async (localPort) => {
+            starts++
+            const forward = await provider.start(echoTunnel([]), {
+              id: 'pf-1',
+              connectionId: 'environment-a',
+              localHost: '127.0.0.1',
+              localPort,
+              remoteHost: 'localhost',
+              remotePort: 5173
+            })
+            return forward.entry
+          },
+          remove: async () => undefined,
+          holdsIpv6Loopback: true
         })
       ).rejects.toThrow(/can't confirm which account/)
+      expect(starts).toBe(1)
     })
   })
 

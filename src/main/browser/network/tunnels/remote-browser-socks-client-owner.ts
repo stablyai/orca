@@ -98,38 +98,69 @@ export function findProcNetTcpClientUid(
   return null
 }
 
+/** How this computer names a loopback client's account; macOS has none, so any local account passes its loopback check. */
+type OwnerLookup =
+  | { kind: 'none' }
+  | { kind: 'uid'; uid: number }
+  | { kind: 'windows'; security: WindowsSecurity }
+  /** `reason` is fixed text, so a raw load error (which may name EACCES) never reads as a bind failure. */
+  | { kind: 'unavailable'; reason: string; detail?: string }
+
+async function readOwnerLookup(): Promise<OwnerLookup> {
+  if (process.platform === 'win32') {
+    const security = await loadWindowsSecurityAsync()
+    if ('error' in security) {
+      return {
+        kind: 'unavailable',
+        reason: 'the Windows security addon did not load',
+        detail: security.error
+      }
+    }
+    return security.addon.hasNativeExport('tcpClientOwnerAsync')
+      ? { kind: 'windows', security }
+      : { kind: 'unavailable', reason: 'the Windows security addon predates the owner lookup' }
+  }
+  if (process.platform !== 'linux') {
+    return { kind: 'none' }
+  }
+  const uid = process.getuid?.()
+  return uid === undefined
+    ? { kind: 'unavailable', reason: 'this process has no user id' }
+    : { kind: 'uid', uid }
+}
+
 /** Why this computer can't name a loopback client's account, or null when it can or has no lookup (macOS). */
 export async function socksClientOwnerLookupGap(): Promise<string | null> {
-  if (process.platform === 'win32') {
-    const lookup = await loadWindowsOwnerLookup()
-    return typeof lookup === 'string' ? lookup : null
-  }
-  return process.platform === 'linux' && process.getuid === undefined
-    ? 'this process has no user id'
-    : null
+  const lookup = await readOwnerLookup()
+  return lookup.kind === 'unavailable' ? lookup.reason : null
 }
 
 /** Refuses to open a listener whose connections would all be refused for want of an owner lookup. */
 export async function assertSocksClientOwnerLookup(listener: string): Promise<void> {
-  const gap = await socksClientOwnerLookupGap()
-  if (gap) {
-    throw new Error(
-      `Can't start the ${listener}: Orca can't confirm which account on this computer opens each connection (${gap}).`
-    )
+  const lookup = await readOwnerLookup()
+  if (lookup.kind !== 'unavailable') {
+    return
   }
+  if (lookup.detail) {
+    console.warn(`[browser-tunnel] ${lookup.reason}: ${lookup.detail}`)
+  }
+  throw new Error(
+    `Can't start the ${listener}: Orca can't confirm which account on this computer opens each connection (${lookup.reason}).`
+  )
 }
 
-/** Linux and Windows list every user's connections with their owner; the client end must be ours. macOS has no lookup, so any local account passes its loopback check. */
+/** Linux and Windows list every user's connections with their owner; the client end must be ours. */
 export async function verifySocksClientOwner(
   socket: AcceptedSocket,
   readTable: (path: string) => Promise<string> = (path) => readFile(path, 'utf-8')
 ): Promise<SocksClientOwnerVerdict> {
-  if (process.platform !== 'win32' && process.platform !== 'linux') {
+  const lookup = await readOwnerLookup()
+  if (lookup.kind === 'none') {
     return { allowed: true }
   }
-  const ownUid = process.getuid?.()
-  if (process.platform === 'linux' && ownUid === undefined) {
-    return { allowed: false, reason: 'lookup-failed', detail: 'this process has no user id' }
+  if (lookup.kind === 'unavailable') {
+    const detail = lookup.detail ? `${lookup.reason}: ${lookup.detail}` : lookup.reason
+    return { allowed: false, reason: 'lookup-failed', detail }
   }
   const client = toEndpoint(socket.remoteAddress, socket.remotePort)
   const listener = toEndpoint(socket.localAddress, socket.localPort)
@@ -137,8 +168,8 @@ export async function verifySocksClientOwner(
     return { allowed: false, reason: 'lookup-failed', detail: 'socket has no address' }
   }
   try {
-    if (process.platform === 'win32') {
-      return await verifyWindowsClientOwner(client, listener)
+    if (lookup.kind === 'windows') {
+      return await verifyWindowsClientOwner(lookup.security, client, listener)
     }
     // The kernel pages these tables and can skip a row that moved mid-read, so look twice before refusing.
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -146,7 +177,7 @@ export async function verifySocksClientOwner(
       for (const path of ['/proc/net/tcp', '/proc/net/tcp6']) {
         const uid = findProcNetTcpClientUid(await readTable(path), client, listener)
         if (uid !== null) {
-          return uid === ownUid
+          return uid === lookup.uid
             ? { allowed: true }
             : { allowed: false, reason: 'foreign-owner', owner: `uid ${uid}` }
         }
@@ -163,13 +194,10 @@ export async function verifySocksClientOwner(
 }
 
 async function verifyWindowsClientOwner(
+  security: WindowsSecurity,
   client: Endpoint,
   listener: Endpoint
 ): Promise<SocksClientOwnerVerdict> {
-  const security = await loadWindowsOwnerLookup()
-  if (typeof security === 'string') {
-    return { allowed: false, reason: 'lookup-failed', detail: security }
-  }
   const owner = await security.addon.tcpClientOwnerAsync(
     client.host,
     client.port,
@@ -188,17 +216,6 @@ async function verifyWindowsClientOwner(
   return owner.sid === security.userSid
     ? { allowed: true }
     : { allowed: false, reason: 'foreign-owner', owner: owner.sid }
-}
-
-/** The loaded addon, or why it can't look an owner up. */
-async function loadWindowsOwnerLookup(): Promise<WindowsSecurity | string> {
-  const security = await loadWindowsSecurityAsync()
-  if ('error' in security) {
-    return `the Windows security addon did not load: ${security.error}`
-  }
-  return security.addon.hasNativeExport('tcpClientOwnerAsync')
-    ? security
-    : 'the Windows security addon predates the connection owner lookup'
 }
 
 const OWN_APP_PIDS_TTL_MS = 1_000
