@@ -13,7 +13,7 @@ import {
   type BotItem
 } from '../../../../src/shared/bots/bot-items'
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
-import { isBotItemReplyingTo } from '../../../../src/shared/bots/bot-item-pending-comments'
+import { isBotItemReplyingTo } from '../../../../src/shared/bots/bot-item-replying'
 import type { BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tree'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { MobileEdgeFade } from '../../components/list/MobileEdgeFade'

@@ -352,14 +352,3 @@ function hostEventId(result: unknown): string | null {
     ? result.eventId
     : null
 }
-
-/** A reply on its way that answers `askId`, before the host's read says so: one sent for that ask.
- *  A plain comment answers none, and one sent for another ask (a replaced one) isn't this one's;
- *  a reply with no origin known (an older path) counts, as every reply used to. */
-export function isBotItemReplyingTo(
-  entry: Pick<BotItemPendingComment, 'failed' | 'plain' | 'origin' | 'intent'>,
-  askId: string | null
-): boolean {
-  const origin = entry.origin ?? entry.intent?.askId
-  return !entry.failed && !entry.plain && (origin === undefined || origin === askId)
-}

@@ -73,7 +73,7 @@ const two: BotItemQuestionShape = {
 }
 
 type Ask = { askId: string; shape: BotItemQuestionShape; open: number[] } | null
-const ask1: Ask = { askId: 'ask-1', shape: one, open: [0] }
+const ask1: Ask = { askId: 'e1', shape: one, open: [0] }
 
 type Host = { item: BotItem; events: readonly BotItemEvent[] }
 
@@ -87,7 +87,7 @@ const read = (
   events
 })
 const askEvent: BotItemEvent = {
-  id: 'ask-1',
+  id: 'e1',
   kind: 'commented',
   actor: { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' },
   data: {
@@ -168,7 +168,7 @@ it('keeps one item’s typed words off another item', async () => {
 })
 
 it('keeps the whole card after a Send that didn’t go, though only one line changed since', async () => {
-  const ask: Ask = { askId: 'ask-2', shape: two, open: [0, 1] }
+  const ask: Ask = { askId: 'e2', shape: two, open: [0, 1] }
   const send = vi.fn()
   open('host\0bot\0item-4', ask, send)
   typeOther('hotfix')
@@ -193,7 +193,7 @@ it('keeps the card while the host names its ask, though the loaded history doesn
   await close()
 
   // The page read the item, but not yet the older events that hold the ask.
-  open('host\0bot\0item-5', null, undefined, read('ask-1'))
+  open('host\0bot\0item-5', null, undefined, read('e1'))
   await close()
   open('host\0bot\0item-5')
   expect(otherInput()?.props.value).toBe('Ship it')
@@ -215,7 +215,7 @@ it('opens a newer ask’s card empty, and forgets the replaced ask’s words', a
   typeOther('For the first question')
   await close()
 
-  open('host\0bot\0item-6', { askId: 'ask-9', shape: one, open: [0] })
+  open('host\0bot\0item-6', { askId: 'e9', shape: one, open: [0] })
   expect(otherInput()).toBeUndefined()
   await close()
   open('host\0bot\0item-6')
@@ -243,4 +243,17 @@ it('keeps the card when the host names no ask but its event isn’t loaded yet',
   await close()
   open('host\0bot\0item-9')
   expect(otherInput()?.props.value).toBe('Still typing')
+})
+
+it('keeps a newer ask’s card when an older item read still names the earlier ask', async () => {
+  const newer: Ask = { askId: 'e9', shape: one, open: [0] }
+  open('host\0bot\0item-10', newer)
+  typeOther('For the newer question')
+  await close()
+
+  // A read split across two moments: the item from before e9, the events after it.
+  open('host\0bot\0item-10', newer, undefined, read('e1'))
+  await close()
+  open('host\0bot\0item-10', newer)
+  expect(otherInput()?.props.value).toBe('For the newer question')
 })
