@@ -81,7 +81,7 @@ export function WorkerDockPill({
       onClick={onToggle}
       onKeyDown={onKeyDown}
     >
-      <WorkerDockGlyph glyph={glyph} />
+      <WorkerDockGlyph glyph={glyph} still />
       <span
         key={title}
         data-worker-dock-pill-title=""
