@@ -7,7 +7,7 @@ import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../../../
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import { useCallback, useEffect, useEffectEvent, useSyncExternalStore } from 'react'
 import type { StructuredAgentSessionReadOwner } from '../read/structured-agent-session-read-owner-contract'
-import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   structuredAgentSessionQueueRequest,
@@ -35,7 +35,7 @@ export function useStructuredAgentSessionSends(args: {
   target: RuntimeClientTarget
   fence: number | null
   readOwner: StructuredAgentSessionReadOwner
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
   queuedMessageIds: readonly string[]
   queue: StructuredAgentSessionQueueDelivery
   /** The chat's history has loaded, so its rows and cards can answer for a legacy copy. */

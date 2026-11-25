@@ -292,7 +292,10 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
       ...legacyLaunchStop,
       host: stopControl,
       transportState,
-      sends: { sending, stopSends: sends.stopSends }
+      sends: {
+        sending: sending || transcriptPending.some((entry) => entry.phase === 'recorded'),
+        stopSends: sends.stopSends
+      }
     }),
     stopPressed: stopControl.pressed,
     queuedMessages: queuedController,

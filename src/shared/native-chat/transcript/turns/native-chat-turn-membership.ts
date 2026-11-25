@@ -9,10 +9,10 @@ import { agentJournalSubmissionKey } from '../../../agent-session/journal/agent-
 import { isRootAgentJournalItem } from '../../../agent-session/journal/agent-session-journal-producer'
 import { isQueuedAgentJournalSubmission } from '../../../agent-session/requests/agent-session-queued-submission'
 import type {
+  AgentJournalSubmissionFields,
   AgentJournalRenderItem,
   AgentJournalTurnLifecycle
 } from '../../../agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSubmission } from '../../../agent-session/view/structured-agent-session-submissions'
 import { readAgentJournalTurn } from '../../../agent-session/lifecycle/records/agent-session-turn-record'
 import {
   nativeChatJournalOrderTurnKeys,
@@ -38,7 +38,7 @@ export function hostStatesTurnScopes(items: readonly AgentJournalRenderItem[]): 
 
 export type NativeChatTurnJournal = {
   items: readonly AgentJournalRenderItem[]
-  submissions: readonly StructuredAgentSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
   /** Host’s latest turn anchors live rows when its record is unloaded; older hosts omit it. */
   latestTurn?: AgentSessionLatestTurn | null
   /** The host's answer to whether the session's own agent is working; absent from older hosts. */
@@ -50,7 +50,7 @@ export type NativeChatTurnJournal = {
  * A steer may echo the shared provider key first, but the earliest in-flight send opened the turn. */
 export function structuredAgentTurnAnchors(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly StructuredAgentSubmission[] = [],
+  submissions: readonly AgentJournalSubmissionFields[] = [],
   /** Anchored too while it runs with its record above the loaded rows; nothing loaded precedes it. */
   latestTurn?: AgentSessionLatestTurn | null
 ): ReadonlyMap<string, string> {
@@ -171,7 +171,7 @@ export function structuredAgentTurnAnchors(
 
 /** Only taken-back sends with answeredInTurn.via:start open turns; steers and unknown newer modes do not. */
 export function stoppedTurnOpeners(
-  takenBack: readonly StructuredAgentSubmission[]
+  takenBack: readonly AgentJournalSubmissionFields[]
 ): ReadonlyMap<string, string> {
   const openers = new Map<string, string>()
   for (const { answeredInTurn, clientMessageId } of takenBack) {
@@ -187,7 +187,7 @@ export function stoppedTurnOpeners(
 function sentBeforeAndTakenBackAfter(
   record: AgentJournalRenderItem,
   turn: AgentJournalTurnLifecycle,
-  submission: StructuredAgentSubmission,
+  submission: AgentJournalSubmissionFields,
   sent: AgentJournalRenderItem
 ): boolean {
   if (submission.submittedSequence !== undefined) {

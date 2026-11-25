@@ -8,7 +8,7 @@ import {
   type AgentSessionFailureFact
 } from './agent-session-failure'
 import type { AgentSessionFailureWordsContext } from './agent-session-failure-words'
-import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../journal/agent-session-journal-types'
 import { agentSessionFailureStatedByRow } from './agent-session-visible-failures'
 import { classifyDispatchRejection } from '../requests/structured-agent-session-dispatch-rejection'
 
@@ -44,7 +44,7 @@ export function structuredAgentSessionRejectionParts(
 
 /** Deduplicate against visible start-failure facts so one recorded rejection says its reason once. */
 export function structuredAgentSessionRecordedRejectionParts(
-  submission: AgentJournalSubmission,
+  submission: AgentJournalSubmissionFields,
   context: AgentSessionFailureWordsContext,
   startFailures: readonly AgentSessionFailureFact[]
 ): AgentSessionWriteNoticePart[] {

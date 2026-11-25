@@ -105,10 +105,13 @@ type Arm<T, S> = S extends object
     : never
   : never
 type Keys<A> = A extends unknown ? keyof A : never
+// JSON records cannot carry symbol-keyed type brands.
+type StoredKeys<T> = Exclude<keyof T, symbol>
 type ArmKeys<T, A> = [A] extends [never]
   ? 'a value no storage arm declares'
-  : | Exclude<keyof T, Keys<A>>
-    | { [K in keyof T & Keys<A>]: UndeclaredStorageKeys<T[K], At<A, K>> }[keyof T & Keys<A>]
+  : | Exclude<StoredKeys<T>, Keys<A>>
+    | { [K in StoredKeys<T> & Keys<A>]: UndeclaredStorageKeys<T[K], At<A, K>> }[StoredKeys<T> &
+        Keys<A>]
 
 /** Keys of a persisted type, at any depth and in any union member, that its storage schema's
  * output `S` leaves undeclared; `never` when it declares them all. An unknown-kind value never

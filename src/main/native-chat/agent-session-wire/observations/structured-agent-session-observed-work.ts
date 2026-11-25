@@ -8,9 +8,14 @@ import type { JournalSqlWorkResult } from '../../agent-session-journal/journal-w
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { currentRequestsProjection } from './agent-session-current-requests'
 
+type SubmissionPresentation = Pick<
+  AgentJournalSubmission,
+  'fence' | 'handedOverAt' | 'dispatchState' | 'reason' | 'recovered'
+>
+
 /** Finished observer answers; selection and live-work policy remain in the reader snapshot. */
 export class StructuredAgentSessionObservedWork {
-  private readonly restated: ReadonlyMap<string, AgentJournalSubmission>
+  private readonly restated: ReadonlyMap<string, SubmissionPresentation>
 
   constructor(
     private readonly journal: Pick<SqlAgentSessionJournal, 'cursor'>,
@@ -18,7 +23,14 @@ export class StructuredAgentSessionObservedWork {
     readonly cursor: AgentJournalCursor,
     readonly readSource?: JournalSqlWorkResult
   ) {
-    this.restated = new Map(work.restatedSubmissions.map((send) => [send.clientMessageId, send]))
+    this.restated = new Map(
+      work.restatedSubmissions.map(
+        ({ clientMessageId, fence, handedOverAt, dispatchState, reason, recovered }) => [
+          clientMessageId,
+          { fence, handedOverAt, dispatchState, reason, recovered }
+        ]
+      )
+    )
   }
 
   get liveFence() {
@@ -40,10 +52,25 @@ export class StructuredAgentSessionObservedWork {
   actionablePromptIds = () => this.work.actionablePrompts.map((item) => item.itemId)
   hasActionablePrompt = () => this.work.actionablePrompts.length > 0
   publishedLatestTurn = (_latest: AgentSessionLatestTurn | null) => this.work.latestTurn
-  // Frames read rows and work at one position, where a restated send is unanswered on both.
-  publishedSubmission = (submission: AgentJournalSubmission) =>
-    this.restated.get(submission.clientMessageId) ?? submission
-  restatedSubmissions = () => this.work.restatedSubmissions
+  // Work can outlive receipts. A page owns the attempt and its receipt metadata.
+  publishedSubmission = (submission: AgentJournalSubmission): AgentJournalSubmission => {
+    const presentation = this.restated.get(submission.clientMessageId)
+    if (
+      !presentation ||
+      presentation.fence !== submission.fence ||
+      presentation.handedOverAt !== submission.handedOverAt
+    ) {
+      return submission
+    }
+    const { dispatchState, reason, recovered } = presentation
+    return {
+      ...submission,
+      dispatchState,
+      reason,
+      ...(recovered === undefined ? {} : { recovered })
+    }
+  }
+  restatedSubmissionIds = () => this.restated.keys()
   viewKey = () => this.work.viewKey
   workViewKey = () => this.work.workViewKey
   requestProjection = (sessionId: string) =>

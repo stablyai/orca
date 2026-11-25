@@ -1,7 +1,7 @@
 import { agentJournalSubmissionKey } from '../../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalMessageItem,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields
 } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionWriteNoticePart } from '../../../../../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
@@ -79,7 +79,7 @@ const recovering = new Set<string>()
 export async function recoverLegacyStructuredAgentSessionOutbox(args: {
   sessionId: string
   target: RuntimeClientTarget
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
   queuedMessageIds: readonly string[]
 }): Promise<void> {
   const { sessionId } = args

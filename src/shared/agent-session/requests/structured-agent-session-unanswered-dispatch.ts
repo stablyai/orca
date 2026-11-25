@@ -1,8 +1,8 @@
-import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../journal/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
 
 export function isUnansweredStructuredAgentSessionDispatch(
-  submission: AgentJournalSubmission,
+  submission: AgentJournalSubmissionFields,
   currentFence?: number | null
 ): boolean {
   if (isQueuedAgentJournalSubmission(submission)) {
@@ -22,7 +22,7 @@ export function isUnansweredStructuredAgentSessionDispatch(
 /** Use the send as Working evidence before a provider opens its turn: real Claude echoes took 3.4s median/18s p90,
  * or never arrived during rate-limit retries, versus ~150ms Codex starts. Live unknown remains owed; recovered unknown outlived its sending generation. */
 export function hasUnansweredStructuredAgentSessionDispatch(
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   currentFence?: number | null
 ): boolean {
   return submissions.some((submission) =>

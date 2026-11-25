@@ -14,8 +14,7 @@ export function mobileNativeChatFooterStatus(
     onToggleReasoning
   }: Pick<ReturnType<typeof useMobileNativeChatTurnDisclosure>, 'liveLine' | 'onToggleReasoning'>,
   fontScale: number,
-  awaitingInput: NativeChatAwaitingInput | null,
-  stopping = false
+  awaitingInput: NativeChatAwaitingInput | null
 ): ReactElement | null {
   if (awaitingInput === 'unshown') {
     return <MobileNativeChatAwaitingInputRow subject={null} pending fontScale={fontScale} />
@@ -23,8 +22,11 @@ export function mobileNativeChatFooterStatus(
   if (!liveLine) {
     return null
   }
-  const status = <MobileNativeChatLiveLine line={liveLine} {...{ onToggleReasoning, fontScale }} />
-  return stopping ? status : <StructuredAgentWorkingGate>{status}</StructuredAgentWorkingGate>
+  return (
+    <StructuredAgentWorkingGate>
+      <MobileNativeChatLiveLine line={liveLine} {...{ onToggleReasoning, fontScale }} />
+    </StructuredAgentWorkingGate>
+  )
 }
 
 export function mobileNativeChatListFooter(

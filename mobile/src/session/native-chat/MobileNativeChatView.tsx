@@ -274,7 +274,7 @@ export function MobileNativeChatView({
   const layoutKey = `${fontScale}:${font}:${lineSpacing}`
   const mailRows = mobileWaitingAgentMailRows(tray.waitingAgentMail, fontScale, tail.viewport)
   const footer = mobileNativeChatListFooter(
-    mobileNativeChatFooterStatus(turns, fontScale, awaitingInput, turnIndicator?.stopping),
+    mobileNativeChatFooterStatus(turns, fontScale, awaitingInput),
     turns.waitingRows,
     renderItem,
     mailRows

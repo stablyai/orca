@@ -1,10 +1,10 @@
 // Fresh submission IDs differ from draft IDs; queuedMessageId alone proves the host took over a queued draft.
 
-import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../journal/agent-session-journal-types'
 
 /** Include handoffs in every dispatch state; the host card/bubble now owns their text. */
 export function handedOffQueuedMessageIds(
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
 ): Set<string> {
   const ids = new Set<string>()
   for (const submission of submissions) {

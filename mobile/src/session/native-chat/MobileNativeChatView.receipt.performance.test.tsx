@@ -1,4 +1,10 @@
-import { placement, viewRenders } from './mobile-native-chat-view-receipt.test-fixture'
+import {
+  activityRenders,
+  listRenders,
+  messageRenders,
+  placement,
+  viewRenders
+} from './mobile-native-chat-view-receipt.test-fixture'
 import { createElement, useMemo } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
@@ -141,7 +147,7 @@ it.each([4096, 40960])(
       observedAt: 1000,
       turn: { turnId: 'run', state: 'running', startedAt: 1000, userItemId: 'orca:opener' }
     } satisfies AgentSessionLatestTurn
-    function Session() {
+    function Session({ hostStopping = false }: { hostStopping?: boolean }) {
       sessionRenders += 1
       const read = useMobileStructuredAgentState({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fake implements every RPC method the transcript subscription needs.
@@ -164,7 +170,7 @@ it.each([4096, 40960])(
         turnId,
         isWorking,
         canStop: isWorking,
-        hostStopping: false,
+        hostStopping,
         stopPressed: false,
         queueCapable: true,
         queueFollowUps: true,
@@ -192,6 +198,7 @@ it.each([4096, 40960])(
             agentWorking: isWorking,
             structuredActivityUi: true,
             workingStartedAt: 1000,
+            turnIndicator,
             turnJournal: timing.turnJournal,
             structuredSending: sending,
             workerApprovals: WORKER_APPROVALS,
@@ -226,6 +233,9 @@ it.each([4096, 40960])(
       expect(shows(mounted, 'Sending…')).toBe(true)
       expect(shows(mounted, 'Working')).toBe(false)
       expect(placement).toHaveBeenCalled()
+      expect(listRenders).toHaveBeenCalled()
+      expect(messageRenders).toHaveBeenCalledWith('orca:opener')
+      expect(messageRenders).toHaveBeenCalledWith('history:1')
       expect(timestampReads).toBeGreaterThanOrEqual(rowCount)
 
       const sequence = rowCount + 2
@@ -241,19 +251,25 @@ it.each([4096, 40960])(
       rowReads = timestampReads = sessionRenders = 0
       viewRenders.mockClear()
       placement.mockClear()
+      listRenders.mockClear()
+      messageRenders.mockClear()
       await deliverBatch(batch(sequence, [{ ...SEND, writtenAt: 2000 }], [], latestTurn))
       expect({
         sessionRenders,
         rowReads,
         timestampReads,
         viewRenders: viewRenders.mock.calls.length,
-        placementRuns: placement.mock.calls.length
+        placementRuns: placement.mock.calls.length,
+        listRenders: listRenders.mock.calls.length,
+        messageRenders: messageRenders.mock.calls.length
       }).toEqual({
         sessionRenders: 0,
         rowReads: 0,
         timestampReads: 0,
         viewRenders: 0,
-        placementRuns: 0
+        placementRuns: 0,
+        listRenders: 0,
+        messageRenders: 0
       })
       expect(shows(mounted, 'Sending…')).toBe(false)
       expect(shows(mounted, 'Working')).toBe(true)
@@ -281,6 +297,25 @@ it.each([4096, 40960])(
       expect(placement).toHaveBeenCalledWith([['closed', expect.any(String)]])
       expect(timestampReads).toBeGreaterThanOrEqual(rowCount)
       expect(sendingSource).toBe(stableSending)
+
+      act(() => mounted.update(createElement(Session, { hostStopping: true })))
+      const retry = { ...SEND, handedOverAt: 2600 }
+      activityRenders.mockClear()
+      await deliverBatch(batch(sequence + 2, [retry], [], latestTurn))
+      expect(sendingSource?.getSnapshot()).toEqual(new Set(['orca:opener']))
+      expect(activityRenders).not.toHaveBeenCalled()
+
+      await deliverBatch(
+        batch(
+          sequence + 3,
+          [{ ...retry, dispatchState: 'rejected', resolvedAt: 2700 }],
+          [],
+          latestTurn
+        )
+      )
+      expect(sendingSource?.getSnapshot().size).toBe(0)
+      expect(activityRenders).toHaveBeenLastCalledWith(true, false)
+      expect(activityRenders).not.toHaveBeenCalledWith(true, true)
     } finally {
       act(() => mounted.unmount())
       vi.useRealTimers()

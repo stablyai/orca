@@ -9,7 +9,8 @@ import { isHistoricalProviderTimelineItem } from '../../agent-session-timeline/p
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,
-  type AgentJournalSubmission
+  type AgentJournalSubmission,
+  type AgentJournalSubmissionFields
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -153,7 +154,7 @@ export class StructuredAgentSessionWorkPolicy {
       ? admittedStructuredSubmission(submission, this.generationEnded(submission))
       : submission
 
-  private unanswered(submission: AgentJournalSubmission): boolean {
+  private unanswered(submission: AgentJournalSubmissionFields): boolean {
     return (
       this.facts.continuingInput(submission.clientMessageId) ||
       (submission.dispatchState === 'pending' &&
@@ -173,7 +174,7 @@ export class StructuredAgentSessionWorkPolicy {
     return this.unansweredSends().map(this.publishedSubmission)
   }
 
-  private holds(submission: AgentJournalSubmission): boolean {
+  private holds(submission: AgentJournalSubmissionFields): boolean {
     const held = this.heldSends?.()
     return (
       held === undefined ||
@@ -195,12 +196,12 @@ export class StructuredAgentSessionWorkPolicy {
   }
 
   /** Hand over only this process’s accepted sends; earlier-process sends remain ordinary history. */
-  handsOver(submission: AgentJournalSubmission): boolean {
+  handsOver(submission: AgentJournalSubmissionFields): boolean {
     return structuredAgentSessionHandsOver(this.facts, submission)
   }
 
   /** Work means admissible queued sends or unanswered sends the live child still holds, never stale delivery rows. */
-  owesSend(submission: AgentJournalSubmission): boolean {
+  owesSend(submission: AgentJournalSubmissionFields): boolean {
     if (isQueuedAgentJournalSubmission(submission)) {
       return this.handsOver(submission)
     }

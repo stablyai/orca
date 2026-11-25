@@ -11,7 +11,7 @@ import {
 import { isQueuedAgentJournalSubmission } from '../../requests/agent-session-queued-submission'
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields
 } from '../../journal/agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from '../../agent-session-wire'
 
@@ -91,7 +91,7 @@ export type AgentSessionRewindRecord = z.infer<typeof AgentSessionRewindRecordSc
 export type AgentSessionRewindFork = NonNullable<AgentSessionRewindRecord['providerFork']>
 
 // Accepted messages keep Orca's key until a rewind rebuilds the epoch with provider keys.
-export function savedRewindKeys(submissions: readonly AgentJournalSubmission[]) {
+export function savedRewindKeys(submissions: readonly AgentJournalSubmissionFields[]) {
   const providerKeys = new Map<string, string>()
   const omitted = new Set<string>()
   for (const submission of submissions) {

@@ -1,7 +1,10 @@
 import { settleStructuredLaunchFirstMessageFromJournal } from '@/lib/agent-session/launch/structured-agent-session-launch-input'
 import type { AgentJournalCursor } from '../../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { structuredAgentSessionSendBody } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalSubmission,
+  AgentJournalSubmissionFields
+} from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionFirstMessage } from '../../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import type { AgentSessionWriteFailure } from '../../../../../../../shared/agent-session/failures/agent-session-write-failure'
@@ -239,7 +242,7 @@ export function reserveStructuredAgentSessionSend(
 
 export function settleStructuredAgentSessionSendsFromJournal(
   sessionId: string,
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   queuedMessageIds: readonly string[],
   cursor?: AgentJournalCursor | null
 ): void {

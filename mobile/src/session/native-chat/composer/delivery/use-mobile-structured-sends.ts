@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AgentJournalCursor } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalSubmission } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
@@ -45,7 +45,7 @@ export function useMobileStructuredSends(args: {
   sessionId?: string | null
   connected?: boolean
   cursor?: AgentJournalCursor | null
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   onSendError: MobileNativeChatSendErrorReporter
   /** Asks the host whether it recorded a send; null where only the loaded pages can say. */

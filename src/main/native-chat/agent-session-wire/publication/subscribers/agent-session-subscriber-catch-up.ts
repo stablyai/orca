@@ -146,7 +146,7 @@ async function deliver(
       }
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.workView = undefined
-      await refreshPublishedWork(delivery, subscriber, journal, work, shared)
+      await refreshPublishedWork(delivery, subscriber, journal, work, frame.current, shared)
       return frame
     }
     const page = result.page
@@ -189,7 +189,7 @@ async function deliver(
     if (!page.hasNewer) {
       // The contiguous page already carries current fields and changed submissions.
       if (work && work.workViewKey() !== subscriber.workView) {
-        await refreshPublishedWork(delivery, subscriber, journal, work, shared)
+        await refreshPublishedWork(delivery, subscriber, journal, work, frame.current, shared)
       }
       return frame
     }
@@ -235,6 +235,7 @@ async function emitCaughtUp(
       subscriber,
       journal,
       work,
+      frame.current,
       shared
     )
     return
@@ -299,6 +300,6 @@ async function publishSnapshotFrame(
   subscriber.owedSnapshotFence = undefined
   // The replacement dropped client restatements; owe them until every follow-up lands.
   subscriber.workView = undefined
-  await refreshPublishedWork(delivery, subscriber, journal, frame.work, shared)
+  await refreshPublishedWork(delivery, subscriber, journal, frame.work, frame.current, shared)
   return frame
 }

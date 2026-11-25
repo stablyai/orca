@@ -10,7 +10,7 @@ import { pendingPromptsAllUnanswerableHere } from '../../../../../../../shared/a
 import type { StructuredPromptItem } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields
 } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionPendingSend } from '../delivery/structured-agent-session-pending-sends'
 import type {
@@ -117,7 +117,7 @@ export function structuredConversationCommandRunner(args: {
     /** The queue's send is the host's next update: the pane reads working. */
     queueSendsNext: boolean
     backgroundTasks: { isMonitoring: boolean; show: boolean }
-    submissions: readonly AgentJournalSubmission[]
+    submissions: readonly AgentJournalSubmissionFields[]
   }
   /** The chat's pending prompts: a card would wait forever on ones this build cannot answer. */
   prompts: readonly StructuredPromptItem[]

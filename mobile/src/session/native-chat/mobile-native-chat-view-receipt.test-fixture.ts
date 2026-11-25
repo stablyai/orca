@@ -1,24 +1,53 @@
 import { createElement, Fragment, type ReactNode } from 'react'
+import type { ImageStyle, TextStyle, ViewStyle } from 'react-native'
 import { vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
+import { useStructuredAgentDisplayedSendPending } from '../../../../src/shared/agent-session/view/use-structured-agent-sending'
 
-const { viewRenders, translate } = vi.hoisted(() => ({
+const { viewRenders, listRenders, messageRenders, activityRenders, translate } = vi.hoisted(() => ({
   viewRenders: vi.fn(() => ({ bottom: 0 })),
+  listRenders: vi.fn(),
+  messageRenders: vi.fn(),
+  activityRenders: vi.fn(),
   translate: (_key: string, fallback: string) => fallback
 }))
-export { viewRenders }
+export { viewRenders, listRenders, messageRenders, activityRenders }
 
-vi.mock('react-native', () => ({ View: 'div', Text: 'span', Pressable: 'button' }))
+vi.mock('react-native', () => ({
+  View: 'div',
+  Text: 'span',
+  Pressable: 'button',
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
+  Platform: {
+    OS: 'ios',
+    select: (options: { ios?: unknown; default?: unknown }) => options.ios ?? options.default
+  },
+  StyleSheet: { create: (styles: Record<string, ImageStyle | TextStyle | ViewStyle>) => styles },
+  // Mount two real rows and the footer without the native virtualizer.
+  FlatList: ({
+    data,
+    renderItem,
+    ListFooterComponent
+  }: {
+    data: readonly NativeChatMessage[]
+    renderItem: (row: { item: NativeChatMessage; index: number }) => ReactNode
+    ListFooterComponent?: ReactNode
+  }) => {
+    listRenders()
+    return createElement(
+      Fragment,
+      null,
+      data
+        .slice(0, 2)
+        .map((item, index) =>
+          createElement(Fragment, { key: item.id }, renderItem({ item, index }))
+        ),
+      ListFooterComponent
+    )
+  }
+}))
 vi.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: viewRenders }))
 vi.mock('react-native-gesture-handler', () => ({ GestureHandlerRootView: 'div' }))
-vi.mock('lucide-react-native', () => ({
-  ArrowUpRight: 'span',
-  ShieldCheck: 'span',
-  ShieldMinus: 'span',
-  ShieldQuestion: 'span',
-  ShieldX: 'span'
-}))
-
 vi.mock('./transcript/agent-messages/MobileWaitingAgentMailRows', () => ({
   mobileWaitingAgentMailRows: () => null
 }))
@@ -48,19 +77,25 @@ vi.mock('./transcript/viewport/MobileNativeChatEmptyStateView', () => ({
   MobileNativeChatEmptyStateView: () => null
 }))
 vi.mock('./transcript/viewport/mobile-native-chat-pinch-zoom', () => ({
+  MobileNativeChatPinchZoom: ({ children }: { children: ReactNode }) => children,
   useMobileNativeChatPinchGesture: () => ({ fontScale: 1, pinchGesture: null })
 }))
 vi.mock('./preferences/native-chat-text-settings', () => ({
-  useNativeChatTextSettings: () => ({ font: 'default', lineSpacing: 1 })
+  useNativeChatTextSettings: () => ({ font: 'default', lineSpacing: 1 }),
+  useNativeChatProseText: () => ({ textScale: 1, lineSpacing: 1 })
 }))
 vi.mock('./transcript/viewport/use-mobile-native-chat-tail-follow', () => ({
+  mobileNativeChatRowAnchor: () => undefined,
   useMobileNativeChatTailFollow: () => ({ viewport: null })
 }))
 vi.mock('./composer/field/use-mobile-native-chat-input-lease', () => ({
   mobileNativeChatComposerPlaceholder: () => undefined
 }))
 vi.mock('./transcript/messages/MobileNativeChatLiveLine', () => ({
-  MobileNativeChatLiveLine: () => createElement('span', null, 'Working')
+  MobileNativeChatLiveLine: ({ line }: { line: { stopping: boolean } }) => {
+    activityRenders(line.stopping, useStructuredAgentDisplayedSendPending())
+    return createElement('span', null, line.stopping ? 'Stopping…' : 'Working')
+  }
 }))
 vi.mock('./transcript/messages/MobileNativeChatAwaitingInputRow', () => ({
   MobileNativeChatAwaitingInputRow: () => null
@@ -112,63 +147,23 @@ vi.mock('../../i18n/use-mobile-translation', () => ({
 vi.mock('../../theme/use-mobile-color-scheme', () => ({
   useMobileColorScheme: () => undefined
 }))
-vi.mock('../../theme/mobile-theme', () => ({
-  colors: {},
-  spacing: {},
-  typography: { metaSize: 12, monoSize: 12 },
-  pressedStyle: {}
-}))
-vi.mock('../../theme/themed-styles', () => ({
-  themedStyleSheet: () => ({})
-}))
 vi.mock('./transcript/messages/mobile-native-chat-message-styles', () => ({
   styles: {},
   scaledType: () => ({}),
   MONO_SIZE: 12
 }))
-// Draw one virtualized row plus the footer while the full list goes through the view's placement code.
-vi.mock('./transcript/MobileNativeChatRowList', () => ({
-  MobileNativeChatRowList: ({
-    rows,
-    renderItem,
-    footer
-  }: {
-    rows: readonly NativeChatMessage[]
-    renderItem: (row: { item: NativeChatMessage; index: number }) => ReactNode
-    footer: ReactNode
-  }) => {
-    const index = rows.findIndex((row) => row.id === 'orca:opener')
-    return createElement(
-      Fragment,
-      null,
-      index === -1 ? null : renderItem({ item: rows[index]!, index }),
-      footer
-    )
+vi.mock('./transcript/viewport/MobileNativeChatPageList', () => ({
+  MobileNativeChatPageList: () => null
+}))
+vi.mock('./transcript/message-content/MobileNativeChatFullContent', () => ({
+  useMobileNativeChatFullMessage: (message: NativeChatMessage) => {
+    messageRenders(message.id)
+    return { shown: message, showFull: null, recovery: null }
   }
 }))
-vi.mock('./transcript/projection/MobileNativeChatRowItemSource', async () => {
-  const { MobileNativeChatMessageTime } = await vi.importActual<{
-    MobileNativeChatMessageTime: (props: {
-      submissionItemId: string
-      timestamp: number | null
-      fontScale: number
-    }) => ReactNode
-  }>('./transcript/messages/MobileNativeChatMessageTime')
-  return {
-    MobileNativeChatRow: ({
-      message,
-      fontScale
-    }: {
-      message: NativeChatMessage
-      fontScale: number
-    }) =>
-      createElement(MobileNativeChatMessageTime, {
-        submissionItemId: message.id,
-        timestamp: message.timestamp,
-        fontScale
-      })
-  }
-})
+vi.mock('./transcript/message-content/MobileNativeChatMarkdown', () => ({
+  MobileNativeChatMarkdown: () => null
+}))
 
 const { placement } = vi.hoisted(() => ({ placement: vi.fn() }))
 export { placement }

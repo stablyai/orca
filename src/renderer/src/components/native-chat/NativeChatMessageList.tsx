@@ -373,24 +373,20 @@ export function NativeChatMessageList({
                     newRowsMarker={newRows.marker}
                   />
                   {liveLine && tailRow === 'activity' ? (
-                    stopping ? (
-                      <NativeChatTurnActivityLine line={liveLine} />
-                    ) : (
-                      <>
-                        <StructuredAgentWorkingGate>
-                          <NativeChatTurnActivityLine line={liveLine} />
+                    <>
+                      <StructuredAgentWorkingGate>
+                        <NativeChatTurnActivityLine line={liveLine} />
+                      </StructuredAgentWorkingGate>
+                      {!stopping && liveLine.reasoning ? (
+                        <StructuredAgentWorkingGate whileSending>
+                          <NativeChatReasoningRow
+                            message={liveLine.reasoning.message}
+                            markdown={liveLine.reasoning.markdown}
+                            turnIsWorking
+                          />
                         </StructuredAgentWorkingGate>
-                        {liveLine.reasoning ? (
-                          <StructuredAgentWorkingGate whileSending>
-                            <NativeChatReasoningRow
-                              message={liveLine.reasoning.message}
-                              markdown={liveLine.reasoning.markdown}
-                              turnIsWorking
-                            />
-                          </StructuredAgentWorkingGate>
-                        ) : null}
-                      </>
-                    )
+                      ) : null}
+                    </>
                   ) : liveLine?.reasoning ? (
                     <NativeChatReasoningRow
                       message={liveLine.reasoning.message}

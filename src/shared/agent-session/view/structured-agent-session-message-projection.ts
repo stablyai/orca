@@ -1,9 +1,9 @@
 import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type {
+  AgentJournalSubmissionFields,
   AgentJournalMessageItem,
   AgentJournalRenderItem
 } from '../journal/agent-session-journal-types'
-import type { StructuredAgentSubmission } from './structured-agent-session-submissions'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { selectAgentSessionCurrentRequests } from '../requests/agent-session-current-requests'
 import {
@@ -65,13 +65,13 @@ export function structuredAgentSessionCommandItemIds(
 /** Rejected sends shown as unsent in submission order; withdrawals use stop notices, queued handoffs/cards keep their cards,
  * and commands carry rejection in their own reply. `resent`: rejected sends a later copy stands in for. */
 export function structuredAgentSessionRejectedShownInPlace(
-  submissions: readonly StructuredAgentSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   commandItemIds: ReadonlySet<string>,
   clearSequences: readonly number[] = []
 ): { shown: Set<string>; resent: Set<string> } {
   const latest = new Map<string, number>()
   const later = Array.from<number | undefined>({ length: submissions.length })
-  const scopeKey = (submission: StructuredAgentSubmission) =>
+  const scopeKey = (submission: AgentJournalSubmissionFields) =>
     JSON.stringify([
       agentSessionContextSequenceFor(submission.acceptedSequence ?? 0, clearSequences),
       submission.payloadFingerprint
@@ -131,7 +131,7 @@ function startFailureRowsAfter(
 export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
-  submissions: readonly StructuredAgentSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   projectItems = projectStructuredItemsToNativeChat
 ): NativeChatMessage[] {
   return projectStructuredAgentSessionMessageRows(items, optimistic, submissions, projectItems)
@@ -152,7 +152,7 @@ export type StructuredAgentSessionMessageRows = {
 export function projectStructuredAgentSessionMessageRows(
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
-  submissions: readonly StructuredAgentSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   projectItems: StructuredAgentSessionItemProjector
 ): StructuredAgentSessionMessageRows {
   // Keep stopped-before-start sends in conversation history; queued handoffs stay in their cards.

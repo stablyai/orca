@@ -145,6 +145,7 @@ export function useMobileStructuredAgentSession(
     sessionKey,
     turnId,
     isWorking,
+    hasPendingSend: sending.candidates.size > 0,
     stopsConversation: hostSupport?.conversationStop === true
   })
   const turnIndicator = useMobileStructuredTurnIndicator({

@@ -1,7 +1,11 @@
 import { structuralValuesEqual } from '../../collections/structural-value-equality'
-import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import type {
+  AgentJournalSubmission,
+  AgentJournalSubmissionFields
+} from '../journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../journal/agent-session-journal-written-stamp'
 
-export type StructuredAgentSubmission = Omit<AgentJournalSubmission, 'writtenAt'>
+export type { StructuredAgentSubmission }
 export type SubmissionReceipts = Pick<ReadonlyMap<string, number>, 'get'>
 
 const indexes = new WeakMap<readonly StructuredAgentSubmission[], ReadonlyMap<string, number>>()
@@ -92,7 +96,8 @@ export function splitStructuredAgentSubmissions(
 ): StructuredAgentSubmissions {
   const submissions = records.map((record) => {
     const { writtenAt: _writtenAt, ...submission } = record
-    return submission
+    const fields: AgentJournalSubmissionFields = submission
+    return fields
   })
   return {
     submissions,
@@ -108,7 +113,8 @@ export function materializeStructuredAgentSubmissions({
 }: StructuredAgentSubmissions): AgentJournalSubmission[] {
   return submissions.map((submission) => {
     const writtenAt = writtenAtById.get(submission.clientMessageId)
-    return writtenAt === undefined ? submission : { ...submission, writtenAt }
+    const fields: AgentJournalSubmissionFields = submission
+    return writtenAt === undefined ? fields : { ...fields, writtenAt }
   })
 }
 

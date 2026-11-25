@@ -5,7 +5,7 @@ import { isRootAgentJournalItem } from '../journal/agent-session-journal-produce
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields
 } from '../journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../journal/agent-session-journal-turn-scope'
 import { readAgentJournalTurn } from '../lifecycle/records/agent-session-turn-record'
@@ -24,7 +24,7 @@ export type StructuredAgentSessionOpeningSendItem = {
  * Echo/refusal/doubt/child-end/successful Stop journal commits settle it; failed/refused Stop leaves subsequent messages waiting. */
 export function structuredAgentSessionSendOpeningTurn(
   submissions: readonly Pick<
-    AgentJournalSubmission,
+    AgentJournalSubmissionFields,
     'clientMessageId' | 'dispatchState' | 'handedOverAt' | 'fence'
   >[],
   visitItems: (visit: (item: StructuredAgentSessionOpeningSendItem) => void) => void,
@@ -36,7 +36,7 @@ export function structuredAgentSessionSendOpeningTurn(
 /** Newest still-opening send’s item, or null; clients treat it as live while the turn opens. */
 export function structuredAgentSessionOpeningSendItemId(
   submissions: readonly Pick<
-    AgentJournalSubmission,
+    AgentJournalSubmissionFields,
     'clientMessageId' | 'dispatchState' | 'handedOverAt' | 'fence'
   >[],
   visitItems: (visit: (item: StructuredAgentSessionOpeningSendItem) => void) => void,
@@ -77,7 +77,7 @@ export function structuredAgentSessionOpeningSendItemId(
 
 export function structuredAgentSessionOpeningSendIn(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
 ): string | null {
   return structuredAgentSessionOpeningSendItemId(submissions, (visit) => {
     for (const item of items) {

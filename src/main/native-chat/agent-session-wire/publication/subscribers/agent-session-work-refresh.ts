@@ -12,6 +12,7 @@ import {
 } from '../../observations/agent-session-published-work'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import type { Subscriber } from './agent-session-subscribe-input'
+import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
 
 /** Restatements cannot share a history page's already allocated byte budget. */
 export async function refreshPublishedWork(
@@ -19,6 +20,7 @@ export async function refreshPublishedWork(
   subscriber: Subscriber,
   journal: AgentSessionJournal,
   work: AgentSessionPublishedWork | undefined,
+  current: () => boolean,
   shared: { hostNow: number; activity?: AgentSessionTurnActivity | null }
 ): Promise<void> {
   if (!work || !port.isActive(subscriber)) {
@@ -27,6 +29,26 @@ export async function refreshPublishedWork(
   const view = work.workViewKey()
   const fields = agentSessionPublishedWorkFields(journal, work)
   const { budgetBytes } = subscriberHistoryReader(subscriber)
+  const ids = [...work.restatedSubmissionIds()]
+  // Off-page restatements need the same authoritative attempt metadata as the page.
+  const records = ids.length
+    ? await journal.readInOrder(async (reads) => {
+        if (!current()) {
+          throw new SubscriberFrameSuperseded()
+        }
+        const submissions: AgentJournalSubmission[] = []
+        for (const id of ids) {
+          const submission = await reads.submission(id)
+          if (submission) {
+            submissions.push(work.publishedSubmission(submission))
+          }
+        }
+        if (!current()) {
+          throw new SubscriberFrameSuperseded()
+        }
+        return submissions
+      })
+    : []
   let pending: AgentJournalSubmission[] = []
   let bytes = 0
   const emit = async (): Promise<void> => {
@@ -45,7 +67,7 @@ export async function refreshPublishedWork(
     pending = []
     bytes = 0
   }
-  for (const submission of work.restatedSubmissions()) {
+  for (const submission of records) {
     const submissionBytes = Buffer.byteLength(JSON.stringify(submission), 'utf8') + 1
     if (
       pending.length > 0 &&

@@ -1,6 +1,6 @@
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields
 } from '../journal/agent-session-journal-types'
 import { activeStructuredAgentSessionTurnId } from './structured-agent-session-live-turn'
 import {
@@ -12,7 +12,7 @@ import { agentSessionCurrentContextRows } from '../conversation-context/agent-se
 /** Journal main-agent rule: running turn or unanswered send, including work hidden beneath an attention prompt. */
 export function owesStructuredAgentSessionWork(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   currentFence?: number | null,
   scope?: StructuredAgentSessionWorkScope
 ): boolean {

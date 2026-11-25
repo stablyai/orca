@@ -31,9 +31,9 @@ export function MobileNativeChatStopButton({
         <Square size={13} color={colors.textPrimary} strokeWidth={2.4} fill={colors.textPrimary} />
       }
       pending={held}
+      pressWhilePending
       onPress={() => {
-        // Every Stop press sends; a terminal chat's Stop ends the turn at once, so it has no wait to show.
-        if (onStop) {
+        if (onStop && !held) {
           triggerSelection()
           onStop()
         }

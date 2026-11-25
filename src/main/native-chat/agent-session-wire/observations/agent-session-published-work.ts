@@ -15,7 +15,7 @@ export type AgentSessionPublishedWork = Pick<
   | 'viewKey'
   | 'workViewKey'
   | 'publishedSubmission'
-  | 'restatedSubmissions'
+  | 'restatedSubmissionIds'
   | 'requestProjection'
 >
 
