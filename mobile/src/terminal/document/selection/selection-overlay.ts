@@ -1,6 +1,8 @@
 import { getCellHeight, getTotalScale } from '../viewport/cell-metrics'
 import { cellToViewportPx } from '../viewport/cell-geometry'
 import type { TerminalDocumentScope } from '../document-scope'
+
+const MENU_CLEARANCE = 60
 import { notify } from '../host-bridge/host-notify'
 import { applyXtermSelection, selRange } from './selection-range'
 import { viewportPoint, viewportToCell } from '../viewport/viewport-cell'
@@ -28,12 +30,13 @@ export function repositionOverlay(scope: TerminalDocumentScope) {
   scope.handleStart!.style.visibility = startVisible ? 'visible' : 'hidden'
   scope.handleEnd!.style.visibility = endVisible ? 'visible' : 'hidden'
   let menuCenterX: number, menuY: number, vTransform: string, marginTop: string
-  if (startVisible && sPx.y > 56) {
+  // The menu's 44 pt row, its edge and the 12 px gap must fit on that side.
+  if (startVisible && sPx.y > MENU_CLEARANCE) {
     menuCenterX = sPx.x
     menuY = sPx.y
     vTransform = 'translateY(-100%)'
     marginTop = '-12px'
-  } else if (endVisible && ePx.y + cellH + 56 < viewport.height) {
+  } else if (endVisible && ePx.y + cellH + MENU_CLEARANCE < viewport.height) {
     menuCenterX = ePx.x
     menuY = ePx.y + cellH
     vTransform = 'translateY(0)'
@@ -145,4 +148,24 @@ export function handleDragMove(
 
 export function stopSelectionOverlay(scope: TerminalDocumentScope) {
   stopEdgeScroll(scope)
+}
+
+const CHROME_COLOR_KEYS: ReadonlySet<string> = new Set([
+  'surface',
+  'text',
+  'line',
+  'pressed',
+  'accent'
+])
+
+// The app's scheme colours as variables the selection menu and handles read; native owns the tokens.
+export function applyChromeColors(scope: TerminalDocumentScope, chrome: unknown) {
+  if (!scope.selectionOverlay || !chrome || typeof chrome !== 'object') {
+    return
+  }
+  for (const [key, value] of Object.entries(chrome)) {
+    if (CHROME_COLOR_KEYS.has(key) && typeof value === 'string') {
+      scope.selectionOverlay.style.setProperty(`--sel-${key}`, value)
+    }
+  }
 }

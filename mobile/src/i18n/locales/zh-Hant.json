@@ -2934,7 +2934,6 @@
       "creatingTab": "建立中…",
       "fileTitle": "檔案",
       "loadingTerminal": "正在載入終端機",
-      "retryLoadingTerminal": "重試載入終端機",
       "terminalTakingLonger": "終端機載入時間超出預期"
     },
     "agentChildRow": {
@@ -3720,14 +3719,9 @@
     "terminalLayoutSheet": {
       "title": "終端機版面配置",
       "oneTerminal": "一個終端機",
-      "selected": "已選取",
       "auto": "自動",
-      "autoHint": "依可用空間分割",
       "sideBySide": "並排",
-      "sideBySideHint": "即使側邊欄開啟也顯示為兩欄",
-      "stacked": "上下排列",
-      "stackedHint": "任何螢幕方向皆顯示為兩列",
-      "selectedHint": "已選取 · {{hint}}"
+      "stacked": "上下排列"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "無法儲存版面配置",
@@ -3748,8 +3742,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}，已聚焦",
       "terminal": "終端機",
-      "tapToFocusPane": "{{title}}，點一下以聚焦",
-      "inputPane": "{{title}} · 輸入"
+      "tapToFocusPane": "{{title}}，點一下以聚焦"
     },
     "structuredOpen": {
       "goneGeneric": "代理程式的聊天已不在此主機上，因此無法在此重新開啟。",
@@ -5250,7 +5243,6 @@
     },
     "webviewEngineErrorState": {
       "code": "錯誤碼 {{code}}",
-      "reload": "重新載入",
       "rendererCrashed": "算繪器已當機",
       "status": "狀態碼 {{statusCode}}",
       "title": "終端機載入失敗"

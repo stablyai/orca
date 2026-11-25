@@ -66,9 +66,6 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
-  newTerminalButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
   contentFrame: {
     flex: 1,
     minHeight: 0
