@@ -9,7 +9,10 @@ export type AgentSessionMcpServerGroup = {
   servers: AgentSessionMcpServer[]
 }
 
-/** Groups keep the order the agent listed their first server in. */
+/** Servers Orca added from the host's list (`withOrcaMcpSource` on the host). */
+export const ORCA_MCP_SOURCE = 'orca'
+
+/** Orca's group comes first; the others keep the order the agent listed their first server in. */
 export function groupAgentSessionMcpServers(
   servers: readonly AgentSessionMcpServer[]
 ): AgentSessionMcpServerGroup[] {
@@ -22,7 +25,10 @@ export function groupAgentSessionMcpServers(
       groups.set(server.source, { source: server.source, servers: [server] })
     }
   }
-  return [...groups.values()]
+  const orca = groups.get(ORCA_MCP_SOURCE)
+  return orca
+    ? [orca, ...[...groups.values()].filter((group) => group !== orca)]
+    : [...groups.values()]
 }
 
 const CLAUDE_AI_PREFIX = 'claude.ai '

@@ -23,7 +23,6 @@ import {
   type ClaudeOAuthUsageEnabledResolver,
   type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
-  type GeminiCliOAuthEnabledResolver,
   type InactiveCodexAccountInfo
 } from './service-types'
 import {
@@ -86,10 +85,6 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
     resolver: () => ZcodePlanRateLimitConfig | Promise<ZcodePlanRateLimitConfig>
   ): void {
     this.zcodePlanConfigResolver = resolver
-  }
-
-  setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
-    this.geminiCliOAuthEnabledResolver = resolver
   }
 
   setClaudeOAuthUsageEnabledResolver(resolver: ClaudeOAuthUsageEnabledResolver): void {

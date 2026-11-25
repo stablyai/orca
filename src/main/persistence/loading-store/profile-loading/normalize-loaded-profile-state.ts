@@ -12,6 +12,7 @@ import { dropInferredParentsOverFolderParents } from '../workspace-lineage/folde
 import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/lineage/cross-store-lineage-records'
 import { normalizePersistedBots } from '../../../../shared/bot-types'
 import { splitBotsByOlderBuildSupport } from '../../../../shared/bots/bot-older-build-support'
+import { migrateRetiredBotAgent } from '../../../../shared/bots/bot-retired-agents'
 import {
   markImmutableBotSnapshot,
   orderBotsBySavedOrder
@@ -55,13 +56,18 @@ export function normalizeLoadedProfileState(
   const parsedBotOrder = Array.isArray(parsed.botOrder)
     ? parsed.botOrder.filter((id): id is string => typeof id === 'string')
     : undefined
+  const savedBots = [
+    ...(Array.isArray(parsed.bots) ? parsed.bots : []),
+    ...(Array.isArray(parsed.botsNewerAgents) ? parsed.botsNewerAgents : [])
+  ]
   const normalizedBots =
     parsed.bots === undefined && parsed.botsNewerAgents === undefined
       ? undefined
-      : normalizePersistedBots([
-          ...(Array.isArray(parsed.bots) ? parsed.bots : []),
-          ...(Array.isArray(parsed.botsNewerAgents) ? parsed.botsNewerAgents : [])
-        ])
+      : normalizePersistedBots(savedBots)
+  // Saved Gemini CLI bots load as Antigravity bots; save once so the switch is on disk.
+  if (savedBots.some((bot) => migrateRetiredBotAgent(bot) !== bot)) {
+    markNeedsSave()
+  }
   const allBots =
     normalizedBots && parsedBotOrder
       ? orderBotsBySavedOrder(normalizedBots, parsedBotOrder)

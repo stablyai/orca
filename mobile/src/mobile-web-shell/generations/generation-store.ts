@@ -12,7 +12,6 @@ import { parseGenerationManifest, readWaitingStage } from './generation-manifest
 import { dropKeptAssets, keepingAssets } from './generation-kept-assets'
 import { reusableAssetsOf, reusableAssetsOfHosts } from './generation-reuse'
 import { stagingAssetsOf } from './generation-staging-assets'
-import { deferredAssetsFiller, type DeferredAssetsFiller } from './generation-deferred-assets'
 import type { GenerationFileSystem } from './generation-store-file-system'
 import {
   GENERATIONS_DIRECTORY_NAME,
@@ -66,8 +65,6 @@ export type GenerationStore = {
   // A release once this page may fetch the build for a deferred commit, after any page already fetching it; null when it already waits.
   claimUpdate(hostKey: string, buildId: string): Promise<(() => void) | null>
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
-  // Put the active build's deferred code on disk the first time a page asks for it.
-  fillDeferredAssets: DeferredAssetsFiller
   deleteHostCache(hostKey: string): Promise<void>
   // Best-effort Troubleshoot evidence; must never reject.
   recordUpdateFailure(failure: MobileWebShellUpdateFailure): Promise<void>
@@ -337,9 +334,6 @@ export function createGenerationStore(options: {
     claimUpdate: deferred.claim,
     abortStagedGeneration: (staged) =>
       serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
-    fillDeferredAssets: deferredAssetsFiller(fs, serialize, (hostKey) =>
-      readActive(hostKey, false)
-    ),
     deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey)),
     recordUpdateFailure: (failure) =>
       serialize(() => recordUpdateFailureIn(fs, failure)).catch(() => undefined),

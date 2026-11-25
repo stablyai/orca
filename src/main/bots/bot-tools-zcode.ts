@@ -1,7 +1,7 @@
 // A ZCode bot's own tools reach it as the `mcpServers` of the session it creates or resumes, sent over
 // stdin, so they need no folder trust or config file, and a session started anywhere else never sees them.
 import type { BotToolServer } from '../../shared/bot-tools'
-import type { BotLaunchTools } from './bot-launch-tools'
+import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 
 type Pair = { name: string; value: string }
 
@@ -25,6 +25,6 @@ export function zcodeSessionMcpServer(server: BotToolServer): ZcodeSessionMcpSer
     : { name: server.name, command: server.command, args: [...server.args], env: pairs(server.env) }
 }
 
-export function zcodeBotMcpServers(tools: BotLaunchTools): ZcodeSessionMcpServer[] {
+export function zcodeBotMcpServers(tools: SessionMcpTools): ZcodeSessionMcpServer[] {
   return tools.servers.map(zcodeSessionMcpServer)
 }

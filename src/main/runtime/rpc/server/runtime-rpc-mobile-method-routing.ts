@@ -1,6 +1,7 @@
 import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
 import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-methods'
 import { MOBILE_BOT_RPC_METHODS } from './runtime-rpc-mobile-bot-methods'
+import { MOBILE_MCP_SERVER_RPC_METHODS } from './runtime-rpc-mobile-mcp-server-methods'
 import { DEFAULT_SCOPE_HOST_METHODS } from './runtime-rpc-mobile-tracker-methods'
 
 // Execution-host routes follow the configured target; paired-desktop routes stay with the relaying Mac;
@@ -34,6 +35,7 @@ export const EXECUTION_HOST_METHODS = [
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
   ...MOBILE_BOT_RPC_METHODS,
+  ...MOBILE_MCP_SERVER_RPC_METHODS,
   // A bot chat's Slack thread switch and its posts' Retry, Dismiss and Delete, on the bot's host.
   'connector.slackMirror.set',
   'connector.slackMirror.post',

@@ -9,6 +9,8 @@ export const ZCODE_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   agent: 'zcode',
   handleTransport: ZCODE_STRUCTURED_HANDLE_NAMESPACE.transport,
   accountHomeVariable: 'ZCODE_HOME',
+  // Every start re-reads the folder's AGENTS.md, a resumed session included.
+  instructionsEachStart: true,
   capabilities: {
     // No rewind RPC: Orca rewinds by resuming the fork that keeps the earlier turns, which the
     // adapter performs over a disposable backend even when the chat has no live child.

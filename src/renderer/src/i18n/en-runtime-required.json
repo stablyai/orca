@@ -21,7 +21,19 @@
     "heading_one": "{{count}} CLI update available",
     "heading_other": "{{count}} CLI updates available",
     "statusCount_one": "{{count}} CLI update",
-    "statusCount_other": "{{count}} CLI updates"
+    "statusCount_other": "{{count}} CLI updates",
+    "cardNamesSome_one": "{{first}}, {{second}} and {{count}} more",
+    "cardNamesSome_other": "{{first}}, {{second}} and {{count}} more",
+    "cardNamesMany_one": "{{first}} and {{count}} more",
+    "cardNamesMany_other": "{{first}} and {{count}} more",
+    "cardHostsTitle_one": "{{count}} CLI update on {{hosts}} hosts",
+    "cardHostsTitle_other": "{{count}} CLI updates on {{hosts}} hosts",
+    "cardUpdateSome_one": "Update {{count}} CLI",
+    "cardUpdateSome_other": "Update {{count}} CLIs",
+    "cardDone_one": "{{count}} CLI is up to date",
+    "cardDone_other": "All {{count}} CLIs are up to date",
+    "cardFailed_one": "{{count}} CLI didn’t update",
+    "cardFailed_other": "{{count}} CLIs didn’t update"
   },
   "agentLaunch": {
     "opencode": {
@@ -1189,8 +1201,6 @@
             "runningSkills_other": "Updating {{count}} skills…"
           },
           "SshStatusSegment": {
-            "connectedHostCount_one": "{{count}} host",
-            "connectedHostCount_other": "{{count}} hosts",
             "moreSshHostMatches_one": "{{count}} more match. Keep typing to narrow it down.",
             "moreSshHostMatches_other": "{{count}} more matches. Keep typing to narrow them down.",
             "moreSshHosts_one": "Find {{count}} more SSH host…",
@@ -1378,11 +1388,6 @@
           "failedToLoadUsage": "Failed to load usage data",
           "failedToParseCliOutput": "Failed to parse CLI output",
           "fetchAborted": "Rate-limit fetch aborted",
-          "geminiCredentialsNotFound": "Gemini CLI credentials not found",
-          "geminiOauthDisabled": "Gemini CLI OAuth is disabled in settings",
-          "geminiProjectIdLoadFailed": "Failed to load Gemini project ID (HTTP {{status}})",
-          "geminiProjectIdMissingInResponse": "Gemini project ID not found in API response",
-          "geminiProjectIdNotFound": "Gemini project ID not found",
           "grokAuthInvalid": "Grok auth file is invalid",
           "grokAuthUnreadable": "Unable to read Grok auth file",
           "grokBillingConfigMissing": "Grok billing response did not include config",
@@ -1417,13 +1422,11 @@
           "opencodeNoWorkspaceIdShort": "No workspace ID found",
           "ptyTimeout": "PTY timeout",
           "ptyUsageTimeout": "PTY timeout — /usage panel did not render",
-          "quotaFetchFailed": "Quota fetch failed ({{status}})",
           "rpcFailed": "RPC failed",
           "rpcProcessExited": "RPC process exited unexpectedly",
           "rpcTimeout": "RPC timeout",
           "sessionCookieNotConfigured": "Session cookie not configured",
           "signInWithChatgpt": "Sign in with ChatGPT",
-          "tokenRefreshFailed": "Token refresh failed",
           "unknown": "Unknown error",
           "usagePageFetchFailed": "Usage page fetch failed ({{status}})",
           "waitingForClaudeSession": "Waiting for Claude session",
@@ -1625,11 +1628,15 @@
         "zoom": "Meetings, recordings and transcripts"
       },
       "line": {
+        "airtable": "Query and edit bases, tables and records",
         "atlassian": "Jira issues and Confluence pages",
+        "clickup": "Manage tasks, lists and docs",
         "cloudflare": "Manage Workers, DNS and the rest of an account",
         "context7": "Current docs and examples for code libraries",
         "datadog": "Search logs, metrics and monitors",
         "gitlab": "Read and update issues and merge requests",
+        "granola": "Search meeting notes and transcripts",
+        "intercom": "Search conversations, contacts and articles",
         "neon": "Run SQL and manage Postgres branches",
         "netlify": "Deploy sites and check their builds",
         "notion": "Search, read and edit pages",
@@ -1637,7 +1644,9 @@
         "sentry": "Look into errors and the events behind them",
         "stripe": "Look up payments, customers and subscriptions",
         "supabase": "Query databases and manage projects",
-        "vercel": "Check deployments and read their logs"
+        "todoist": "Add, sort and complete tasks",
+        "vercel": "Check deployments and read their logs",
+        "zapier": "Run actions in the apps you set up in Zapier"
       }
     },
     "chats": {
@@ -2555,6 +2564,7 @@
         "someMemberAccess": "Someone on Who can ask sent this when it ran.",
         "someoneWrote": "Someone wrote",
         "startError": "Error",
+        "thenAt": "Runs once at {{time}}",
         "thenLine": "Then",
         "thenOnce": "Runs once, when it happens",
         "thenOnceBy": "Runs once; at {{time}} if nothing came",
@@ -3128,26 +3138,12 @@
         "changedFiles_other": "{{count}} changed files"
       },
       "workerDock": {
-        "agentCount_one": "{{count}} agent",
-        "agentCount_other": "{{count}} agents",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
-        "cleared_one": "Cleared 1 worker",
-        "cleared_other": "Cleared {{count}} workers",
-        "commandCount_one": "{{count}} command",
-        "commandCount_other": "{{count}} commands",
-        "monitorCount_one": "{{count}} monitor",
-        "monitorCount_other": "{{count}} monitors",
         "newQuestions_one": "{{count}} new worker question waiting on you",
         "newQuestions_other": "{{count}} new worker questions waiting on you",
-        "pillLabel_one": "{{count}} worker, latest: {{title}}",
-        "pillLabel_other": "{{count}} workers, latest: {{title}}",
-        "taskCount_one": "{{count}} task",
-        "taskCount_other": "{{count}} tasks",
         "workerCount_one": "{{count}} worker",
-        "workerCount_other": "{{count}} workers",
-        "workflowCount_one": "{{count}} workflow",
-        "workflowCount_other": "{{count}} workflows"
+        "workerCount_other": "{{count}} workers"
       },
       "writeNotice": {
         "agentRefused": "The agent turned this down.",
@@ -3947,18 +3943,6 @@
         "noAgentAvailable": "No chat-name agent can run in this workspace.",
         "noName": "The chat-name agent returned no name."
       }
-    }
-  },
-  "tabStrip": {
-    "overflow": {
-      "chipOnlyName_one": "{{title}}, {{count}} tab",
-      "chipOnlyName_other": "{{title}}, {{count}} tabs",
-      "moreTabs_one": "{{count}} more tab",
-      "moreTabs_other": "{{count}} more tabs",
-      "needAttention_one": ", {{count}} needs attention",
-      "needAttention_other": ", {{count}} need attention",
-      "openTabs_one": "{{count}} open tab",
-      "openTabs_other": "{{count}} open tabs"
     }
   },
   "taskProviders": {

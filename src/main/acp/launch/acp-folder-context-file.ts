@@ -16,17 +16,21 @@ function withOrcaText(existing: string | null, rawText: string, agentName: strin
     return `${header(agentName)}\n\n${text}\n`
   }
   const block = `${BLOCK_START}\n${text}\n${BLOCK_END}`
+  const range = orcaBlockRange(existing)
+  if (range) {
+    return existing.slice(0, range.start) + block + existing.slice(range.end)
+  }
+  return `${existing.trimEnd()}\n\n${block}\n`
+}
+
+function orcaBlockRange(existing: string): { start: number; end: number } | null {
   // Only markers alone on their lines count, so text that quotes them is left alone; the last
   // pair wins, so a stray one the user wrote earlier cannot swallow their text.
   const marks = [...existing.matchAll(/^<!-- orca:(begin|end) -->\r?$/gm)]
   // Take the last begin that is followed by an end with no other begin between them.
   const start = marks.findLast((mark, i) => mark[1] === 'begin' && marks[i + 1]?.[1] === 'end')
   const end = start && marks[marks.indexOf(start) + 1]
-  if (start && end) {
-    const endAt = end.index + end[0].length
-    return existing.slice(0, start.index) + block + existing.slice(endAt)
-  }
-  return `${existing.trimEnd()}\n\n${block}\n`
+  return start && end ? { start: start.index, end: end.index + end[0].length } : null
 }
 
 /** Writes Orca's text into `cwd`'s `path` whole, so the agent never reads a half-written file.
@@ -64,7 +68,35 @@ export async function writeFolderContextFile(
   } else {
     await mkdir(dirname(target), { recursive: true })
   }
-  const content = withOrcaText(existing, text, agentName)
+  return replaceWhole(target, withOrcaText(existing, text, agentName)).catch(() => null)
+}
+
+/** Takes Orca's text back out of `cwd`'s `path`: deletes a file Orca wrote for `agentName`, or
+ *  removes only Orca's block from a file the user wrote. A symlink or unreadable file stays. */
+export async function removeFolderContextFile(
+  cwd: string,
+  path: string,
+  agentName: string
+): Promise<void> {
+  const target = join(await realpath(cwd).catch(() => cwd), path)
+  const info = await lstat(target).catch(() => null)
+  const existing = info?.isFile() ? await readFile(target, 'utf8').catch(() => null) : null
+  if (existing === null) {
+    return
+  }
+  if (existing.startsWith(header(agentName))) {
+    await rm(target, { force: true })
+    return
+  }
+  const range = orcaBlockRange(existing)
+  if (range) {
+    const before = existing.slice(0, range.start).trimEnd()
+    const after = existing.slice(range.end).trimStart()
+    await replaceWhole(target, `${[before, after].filter(Boolean).join('\n\n')}\n`)
+  }
+}
+
+async function replaceWhole(target: string, content: string): Promise<number> {
   const staged = `${target}.${randomUUID()}`
   try {
     await writeFile(staged, content, { mode: 0o600 })

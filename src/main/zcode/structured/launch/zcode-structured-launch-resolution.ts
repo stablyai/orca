@@ -11,7 +11,7 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { linkedSkillsSection } from '../../../native-chat/native-chat-skill-roots'
-import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import { withSessionMcpToolsEnv } from '../../../mcp-servers/session-mcp-tools'
 import { zcodeBotMcpServers } from '../../../bots/bot-tools-zcode'
 import { zcodeStructuredLaunchArgs } from './zcode-structured-launch-args'
 import {
@@ -177,7 +177,7 @@ export function zcodeStructuredLaunchPart(
         mcpServers: zcodeBotMcpServers(tools),
         readOnly: basis.readOnly
       },
-      env: withBotLaunchToolsEnv(env, tools),
+      env: withSessionMcpToolsEnv(env, tools),
       // Clear the enclosing desktop's runtime env plus inherited scratch paths.
       inheritedEnvToDelete: [
         ...desktopEnvKeys,
