@@ -72,3 +72,16 @@ describe('a Links list page', () => {
     expect(opened(links, 1)).toEqual({ rows: botItemLinkRows(links), more: 0 })
   })
 })
+
+describe('a worker chain on a Links page', () => {
+  it('dates its PR by the chain’s newest step, as its worker row is', () => {
+    const step = (ref: string): BotItemLinkView => ({ ...worker(0, 7), ref, latest: 'ctx_next' })
+    const links: BotItemLinkView[] = [
+      step('ctx_first'),
+      ...Array.from({ length: 59 }, (_, i): BotItemLinkView => ({ kind: 'file', ref: `f${i}.md` })),
+      step('ctx_next')
+    ]
+    const keys = opened(links, 1).rows.map((row) => row.key)
+    expect(keys.slice(0, 2)).toEqual(['dispatch:ctx_first', 'pr:acme/app#7'])
+  })
+})
