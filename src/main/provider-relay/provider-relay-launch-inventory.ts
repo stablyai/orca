@@ -14,6 +14,8 @@ export type KeptProviderRelay = { channel: ProviderRelayChannel; info: ProviderR
 /** Relays the daemons kept for chats while no app was attached, found once per launch. */
 const listed = new Map<string, KeptProviderRelay>()
 let listing: Promise<void> | null = null
+let firstListing: Promise<void> | null = null
+let complete = false
 /** After a daemon didn't answer, callers use what is known until this; then one asks again. */
 let retryAt = 0
 const RETRY_AFTER_MS = 30_000
@@ -84,26 +86,34 @@ async function listOne(client: DaemonClient): Promise<boolean> {
 }
 
 /**
- * One `relayList` per daemon. A daemon that didn't answer is asked again by the next caller, so a
- * slow start never reads as "no kept agents" for good.
+ * One `relayList` per daemon. Callers wait for the first listing only; a daemon that didn't answer
+ * is asked again in the background by a later caller, so a slow start never reads as "no kept
+ * agents" for good and an unreachable daemon never stalls a chat open again.
  */
 export function listKeptProviderRelays(clients: () => Promise<DaemonClient[]>): Promise<void> {
-  if (!listing && Date.now() < retryAt) {
-    return Promise.resolve()
-  }
-  listing ??= (async () => {
-    const all = await withTimeout(
-      clients().catch(() => null),
-      DAEMON_WAIT_MS,
-      null
-    )
-    const answered = all ? await Promise.all(all.map(listOne)) : [false]
-    if (answered.includes(false)) {
+  if (!listing && !complete && Date.now() >= retryAt) {
+    listing = (async () => {
+      const all = await withTimeout(
+        clients().catch(() => null),
+        DAEMON_WAIT_MS,
+        null
+      )
+      const answered = all ? await Promise.all(all.map(listOne)) : [false]
+      if (answered.includes(false)) {
+        retryAt = Date.now() + RETRY_AFTER_MS
+      } else {
+        complete = true
+      }
       listing = null
-      retryAt = Date.now() + RETRY_AFTER_MS
-    }
-  })()
-  return listing
+    })()
+    firstListing ??= listing
+  }
+  return firstListing ?? Promise.resolve()
+}
+
+/** Every daemon answered a listing, so a kept agent not in it isn't kept. */
+export function providerRelayInventoryComplete(): boolean {
+  return complete
 }
 
 export function keptProviderRelay(chatKey: string): KeptProviderRelay | undefined {

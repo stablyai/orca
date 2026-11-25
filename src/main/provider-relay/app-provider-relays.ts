@@ -8,6 +8,7 @@ export {
   dropListedProviderRelay,
   keptProviderRelaySpawnToken,
   keptRunningProviderRelayPid,
+  providerRelayInventoryComplete,
   providerRelayKeptFromLastRun,
   liveKeptProviderRelayChats as liveProviderRelayChats,
   registerReattachableProviderRelayAgent
