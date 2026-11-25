@@ -8,9 +8,9 @@ it('normalizes the default issue repository, drops invalid updates, and preserve
       updates: { displayName: 'Project', defaultIssueRepository }
     }).updates
 
-  expect(parseUpdate({ owner: ' Acme-Tools ', repo: ' Planning_v2.1 ' })).toStrictEqual({
+  expect(parseUpdate({ owner: ' jdoe_acme ', repo: ' Planning_v2.1 ' })).toStrictEqual({
     displayName: 'Project',
-    defaultIssueRepository: { owner: 'Acme-Tools', repo: 'Planning_v2.1' }
+    defaultIssueRepository: { owner: 'jdoe_acme', repo: 'Planning_v2.1' }
   })
   for (const invalid of ['Acme/Planning', { owner: 'Acme' }, { owner: 'Acme', repo: '..' }]) {
     expect(parseUpdate(invalid)).toStrictEqual({ displayName: 'Project' })

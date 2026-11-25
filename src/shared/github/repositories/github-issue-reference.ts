@@ -1,4 +1,6 @@
 import { buildGitHubRepoUrl, parseGitHubIssueOrPRLink, type RepoSlug } from './links'
+import { isGitHubOwnerSlug } from './owner-slug'
+import { isGitHubRepositorySlug } from './repository-slug'
 
 export type IssueRepository = Pick<RepoSlug, 'owner' | 'repo'>
 type BareIssueReference = { kind: 'bare'; number: number }
@@ -12,8 +14,6 @@ type IssueReferenceContext = {
 }
 
 const SHORTHAND = /^([^/]+)\/([^/#]+)#(\d+)$/
-const OWNER = /^[a-z\d]+(?:-[a-z\d]+)*$/i
-const REPOSITORY = /^[a-z\d_.-]{1,100}$/i
 
 function parseIssueNumber(digits: string): number | null {
   const number = Number(digits)
@@ -21,13 +21,7 @@ function parseIssueNumber(digits: string): number | null {
 }
 
 function isIssueRepository(owner: string, repo: string): boolean {
-  return (
-    owner.length <= 39 &&
-    OWNER.test(owner) &&
-    REPOSITORY.test(repo) &&
-    repo !== '.' &&
-    repo !== '..'
-  )
+  return isGitHubOwnerSlug(owner) && isGitHubRepositorySlug(repo)
 }
 
 export function parseIssueRepository(input: string): IssueRepository | undefined {
