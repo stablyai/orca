@@ -24,7 +24,7 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import { BOTS_SLACK_ICON_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { wornBotOutfit } from '../../../../shared/bots/bot-avatar-outfit'
-import { botSlackIconLook } from '../../../../shared/bots/bot-slack-icon'
+import { botSlackIconLegacyLook, botSlackIconLook } from '../../../../shared/bots/bot-slack-icon'
 import { allowOutfitReadsAgain } from './bot-outfit-art'
 import { drawBotSlackIcon } from './bot-slack-icon-raster'
 import { botSlackIconWanted, uploadBotSlackIcon } from './bot-slack-icon-rpc'
@@ -124,7 +124,17 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
   }
   try {
     const parsed = parseBotAvatar(bot.avatar)
-    const want = parsed?.kind === 'mascot' ? await botSlackIconWanted(bot, look) : null
+    let requestedLook = look
+    let want = parsed?.kind === 'mascot' ? await botSlackIconWanted(bot, look) : null
+    const legacy = want?.current === false ? botSlackIconLegacyLook(look) : null
+    if (legacy && stillCurrent(bot, attempt)) {
+      requestedLook = legacy
+      want = await botSlackIconWanted(bot, legacy)
+    }
+    if (!stillCurrent(bot, attempt)) {
+      forget(bot, attempt)
+      return
+    }
     if (!want?.current || parsed?.kind !== 'mascot') {
       // The host hasn't saved this look yet (its saved record asks again), or its own bots are off (this
       // window can't see that switch): either way the next real step, such as focusing the window, asks.
@@ -135,15 +145,19 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
       clearFailure(bot)
       return
     }
-    const png = stillCurrent(bot, attempt)
-      ? await drawBotSlackIcon(parsed.id, bot.avatarColor ?? null, wornBotOutfit(bot.avatarOutfit))
-      : undefined
-    if (png === undefined || !stillCurrent(bot, attempt)) {
+    const png = await drawBotSlackIcon(
+      parsed.id,
+      bot.avatarColor ?? null,
+      wornBotOutfit(bot.avatarOutfit)
+    )
+    if (!stillCurrent(bot, attempt)) {
       forget(bot, attempt)
       return
     }
-    if (png && (await uploadBotSlackIcon(bot, look, png))) {
-      clearFailure(bot)
+    if (png && (await uploadBotSlackIcon(bot, requestedLook, png))) {
+      if (stillCurrent(bot, attempt)) {
+        clearFailure(bot)
+      }
       return
     }
     // No drawing, or one the host didn't take (its bots turned off, or its look changed meanwhile): it
