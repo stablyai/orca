@@ -11,6 +11,7 @@ import {
 import { PrThreadScreen } from '../pull-request/comments/PrThreadScreen'
 import { useNow } from '../../../hooks/use-now'
 import { useBackClaim } from '../../../navigation/use-back-claim'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileDiffReviewDrawers } from './MobileDiffReviewDrawers'
 import { MobileDiffReviewFileSummary } from './MobileDiffReviewFileSummary'
 import { MobileDiffReviewFooter } from './MobileDiffReviewFooter'
@@ -41,6 +42,7 @@ type Props = {
 
 export function MobileDiffReviewScreenView({ controller, hostConnection, onBack }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
   const [contentRowWidth, setContentRowWidth] = useState(0)
@@ -252,6 +254,7 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
             focusReply={openThread.focusReply}
             now={now}
             onBack={() => setOpenThread(null)}
+            backLabel={t('components.diffReviewScreen.backToDiff', 'Back to diff')}
             bottomInset={insets.bottom}
           />
         </View>

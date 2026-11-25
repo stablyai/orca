@@ -59,21 +59,20 @@ export function MobileDiffReviewRangeSheet({
         ? controller
             .commentOnGitHub({ item, startLine: range.startLine, line: range.line, body })
             .then((posted) => {
-              if (!posted.ok) {
-                return posted.error
+              if (posted.ok) {
+                controller.clearSavedNote(body)
+                // Only this sheet; text typed since stays.
+                controller.closeSheet('range', range)
               }
-              controller.clearSavedNote(body)
-              // Only this sheet; text typed since stays.
-              controller.closeSheet('range', range)
-              return null
+              return posted
             })
         : controller.sendRange(range, terminals ?? undefined)
     void sent
-      .then((error) => {
-        if (error) {
-          setPostError(error)
-        } else {
+      .then((result) => {
+        if (result.ok) {
           controller.clearLines(range)
+        } else {
+          setPostError(result.error)
         }
       })
       .finally(() => setBusy(false))
