@@ -2,6 +2,7 @@ import { app } from 'electron'
 import {
   beginMacUpdateDownload,
   deferMacQuitUntilInstallerReady,
+  holdMacInstallUntilInstallerReady,
   isMacInstallRequested,
   resumeHeldMacQuit,
   retireMacInstallIntentAfterStagingFailure,
@@ -11,7 +12,7 @@ import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { isExternallyManagedLinuxInstall } from '../linux-package/linux-update-package-type'
 import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
-import { isMacStagingStillRunning } from '../../../shared/updater/update-staging-status'
+import { isShowingMacStaging } from '../../../shared/updater/update-staging-status'
 import {
   AUTO_UPDATE_RETRY_INTERVAL_MS,
   MAC_INTERACTIVE_STAGING_TIMEOUT_MS,
@@ -19,7 +20,7 @@ import {
 } from './updater-state'
 import { UpdaterRequiredRestart } from './updater-required-restart'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
-import type { UpdateInstallTrigger } from './updater-state'
+import type { DownloadStatusOptions, UpdateInstallTrigger } from './updater-state'
 
 export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
   private macStagingTimer: ReturnType<typeof setTimeout> | null = null
@@ -49,6 +50,11 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     // A queued check must not repoint the feed while native staging or installation is pending.
     this.finishActiveUpdateCheckAttempt()
     this.clearBackgroundCheckLaunchPending()
+    if (this.macInstallerStagingVersion !== null) {
+      // Squirrel still owns staging, before or after the guidance deadline: only its native result may start an install.
+      holdMacInstallUntilInstallerReady()
+      return
+    }
     if (
       !this.isMacStagingDeferredToInstall() &&
       deferMacQuitUntilInstallerReady(
@@ -123,28 +129,39 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     }, MAC_INTERACTIVE_STAGING_TIMEOUT_MS)
   }
 
-  /** Squirrel's native error ends interactive staging; the JS updater ignores it once the timeout card shows, so replace that card here. */
+  /** Squirrel's native error ends interactive staging. JS failures were held back while it owned the attempt, so publish the failure here. */
   protected failNativeMacStaging(error: unknown): void {
     const version = this.finishMacStaging()
     if (version !== null) {
       // Retire a saved Restart and its fallback before the failure card re-enables Check, Switch and Retry.
       const resumeQuit = retireMacInstallIntentAfterStagingFailure()
-      const status = this.currentStatus
-      if (isMacStagingStillRunning(status) && status.version === version) {
+      if (isShowingMacStaging(this.currentStatus, version)) {
         const cause =
           error instanceof Error ? error.message : typeof error === 'string' ? error : ''
-        this.sendStatus({
-          state: 'error',
-          failurePhase: 'download',
-          version,
-          message: cause || 'Unknown error'
-        })
+        const message = cause || 'Unknown error'
+        if (this.activeUpdateSource === 'local') {
+          this.sendLocalBuildErrorAndRestore(message)
+        } else {
+          this.sendStatus({ state: 'error', failurePhase: 'download', version, message })
+          if (this.isPinnedBuildActive) {
+            this.restoreReleaseUpdateSource()
+          }
+        }
       }
       if (resumeQuit) {
         resumeHeldMacQuit()
       }
     }
     this.failMacStaging(error)
+  }
+
+  /** While Squirrel owns interactive staging the visible status stays the staging status; only its native result may settle it. */
+  protected ignoreJsFailureDuringMacStaging(source: 'error_event' | 'download_promise'): boolean {
+    if (this.macInstallerStagingVersion === null) {
+      return false
+    }
+    recordUpdaterLifecycle('macos_js_failure_during_native_staging', { source })
+    return true
   }
 
   protected finishMacStaging(): string | null {
@@ -157,7 +174,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     return version
   }
 
-  protected publishDownloadStatus(status: UpdateStatus): void {
+  protected publishDownloadStatus(status: UpdateStatus, options?: DownloadStatusOptions): void {
     if (status.state === 'downloading' && this.isRequiredTeamUpdate(status.version)) {
       this.sendStatus({ ...status, ...this.requiredUpdateStatusFields() })
       return
@@ -179,7 +196,8 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     if (this.pendingQuitAndInstallTimer || this.quitAndInstallInProgress) {
       return
     }
-    const automatic = this.getAutomaticUpdates?.() === true
+    const automatic =
+      this.getAutomaticUpdates?.() === true && options?.allowAutomaticInstall !== false
     this.sendStatus(automatic ? { ...status, installing: true } : status, { force: true })
     if (automatic) {
       this.quitAndInstall('automatic')
@@ -273,6 +291,9 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
         .catch((err) => {
           this.downloadInFlight = false
           const message = String(err?.message ?? err)
+          if (this.ignoreJsFailureDuringMacStaging('download_promise')) {
+            return
+          }
           if (localBuildDownload) {
             this.sendLocalBuildErrorAndRestore(message)
           } else {

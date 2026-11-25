@@ -39,7 +39,7 @@ const jsUpdater = Object.assign(new EventEmitter(), {
     jsUpdater.emit('checking-for-update')
     jsUpdater.emit('update-available', { version })
   },
-  downloadUpdate: async () => [],
+  downloadUpdate: vi.fn(async (): Promise<string[]> => []),
   quitAndInstall: vi.fn()
 })
 
@@ -47,6 +47,7 @@ afterEach(() => {
   vi.mocked(app.quit).mockClear()
   jsUpdater.setFeedURL.mockClear()
   jsUpdater.quitAndInstall.mockClear()
+  jsUpdater.downloadUpdate.mockClear()
   vi.clearAllTimers()
   vi.useRealTimers()
   autoUpdater.removeAllListeners()
@@ -118,13 +119,16 @@ it.runIf(process.platform === 'darwin')(
   }
 )
 
-async function startStaging(): Promise<UpdaterSetup> {
+async function startStaging({ automatic = false } = {}): Promise<UpdaterSetup> {
   vi.useFakeTimers({ now: 0 })
   const updater = new UpdaterSetup()
-  updater.setupAutoUpdater(null, { getLastUpdateCheckAt: () => Date.now() })
+  updater.setupAutoUpdater(null, {
+    getLastUpdateCheckAt: () => Date.now(),
+    getAutomaticUpdates: () => automatic
+  })
   updater.checkForUpdatesFromMenu()
   await vi.advanceTimersByTimeAsync(0)
-  updater.downloadUpdate()
+  updater.downloadUpdate(automatic)
   jsUpdater.emit('update-downloaded', { version })
   return updater
 }
@@ -190,9 +194,9 @@ const pinnedFeedCalls = (): unknown[] =>
   jsUpdater.setFeedURL.mock.calls.filter(([options]) => options.url?.includes('v1.4.274'))
 
 it.runIf(process.platform === 'darwin')(
-  'shows the ready update when native readiness ends a held Quit that a window then vetoes',
+  'shows the ready update without an automatic install when readiness ends a held Quit a window vetoes',
   async () => {
-    const updater = await startStaging()
+    const updater = await startStaging({ automatic: true })
     vi.advanceTimersByTime(899_000)
     expect(requestQuit().preventDefault).toHaveBeenCalledOnce()
     vi.advanceTimersByTime(1_000)
@@ -202,12 +206,10 @@ it.runIf(process.platform === 'darwin')(
     autoUpdater.emit('update-downloaded')
     // The mocked app.quit stands in for a Quit whose window close was vetoed: the app keeps running.
     expect(app.quit).toHaveBeenCalledOnce()
-    expect(updater.getUpdateStatus()).toEqual({
-      state: 'downloaded',
-      version,
-      releaseUrl: undefined,
-      installOnQuit: true
-    })
+    const ready = updater.getUpdateStatus()
+    expect(ready).toMatchObject({ state: 'downloaded', version, installOnQuit: true })
+    expect(ready).not.toHaveProperty('installing')
+    // No install preflight was queued, so the continued Quit is not vetoed.
     expect(requestQuit().preventDefault).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(60_000)
@@ -220,13 +222,31 @@ it.runIf(process.platform === 'darwin')(
 )
 
 it.runIf(process.platform === 'darwin')(
-  'retires a saved Restart when macOS staging fails after the deadline',
+  'still installs automatically on readiness when no Quit is held',
   async () => {
+    const updater = await startStaging({ automatic: true })
+    vi.advanceTimersByTime(901_000)
+    autoUpdater.emit('update-downloaded')
+    expect(updater.getUpdateStatus()).toMatchObject({
+      state: 'downloaded',
+      version,
+      installing: true
+    })
+  }
+)
+
+// A Restart delivered late (before or after the guidance deadline) waits for Squirrel; its failure retires it.
+describe.runIf(process.platform === 'darwin').each([
+  { when: 'before the deadline', restartAt: 899_000 },
+  { when: 'after the deadline', restartAt: 901_000 }
+])('a Restart delivered $when', ({ restartAt }) => {
+  it('is retired by a native failure and leaves no install or quit behind', async () => {
     const updater = await startStaging()
-    vi.advanceTimersByTime(899_000)
+    vi.advanceTimersByTime(restartAt)
     updater.quitAndInstall()
     expect(isMacInstallRequested()).toBe(true)
-    vi.advanceTimersByTime(2_000)
+    vi.advanceTimersByTime(902_000 - restartAt)
+    expect(updater.getUpdateStatus()).toMatchObject({ messageCode: 'macStagingTimeout' })
 
     failNativeStaging('Could not locate update bundle')
     expect(isMacInstallRequested()).toBe(false)
@@ -238,13 +258,75 @@ it.runIf(process.platform === 'darwin')(
     })
 
     vi.advanceTimersByTime(60_000)
-    expect(app.quit).not.toHaveBeenCalled()
     expect(jsUpdater.quitAndInstall).not.toHaveBeenCalled()
+    expect(app.quit).not.toHaveBeenCalled()
     updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.4.274' })
     await vi.advanceTimersByTimeAsync(0)
     expect(pinnedFeedCalls()).toHaveLength(1)
+  })
+})
+
+it.runIf(process.platform === 'darwin')(
+  'admits a Restart once Squirrel has staged the update',
+  async () => {
+    const updater = await startStaging()
+    vi.advanceTimersByTime(901_000)
+    autoUpdater.emit('update-downloaded')
+    updater.quitAndInstall()
+    expect(isMacInstallRequested()).toBe(false)
+    // The admitted install holds quits while its preflight runs.
+    expect(requestQuit().preventDefault).toHaveBeenCalledOnce()
   }
 )
+
+// Squirrel still owns the attempt after a JS-side failure; the staging status (and its guidance) stays until a native result.
+describe.runIf(process.platform === 'darwin').each([
+  {
+    source: 'error event',
+    fail: (): void => {
+      jsUpdater.emit('error', new Error('ZIP read failed'))
+    }
+  },
+  { source: 'download promise rejection', fail: null }
+])('a JS-only $source while Squirrel stages', ({ fail }) => {
+  it('keeps the staging status and fence until the native result, then recovers', async () => {
+    let rejectDownload: (error: Error) => void = () => {}
+    if (!fail) {
+      jsUpdater.downloadUpdate.mockImplementationOnce(
+        () =>
+          new Promise<string[]>((_resolve, reject) => {
+            rejectDownload = reject
+          })
+      )
+    }
+    const updater = await startStaging()
+    vi.advanceTimersByTime(60_000)
+    if (fail) {
+      fail()
+    } else {
+      rejectDownload(new Error('ZIP read failed'))
+      await vi.advanceTimersByTimeAsync(0)
+    }
+    expect(updater.getUpdateStatus()).toEqual({ state: 'downloading', version, percent: 100 })
+    updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.4.274' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(pinnedFeedCalls()).toHaveLength(0)
+
+    vi.advanceTimersByTime(840_000)
+    expect(updater.getUpdateStatus()).toMatchObject({ messageCode: 'macStagingTimeout' })
+
+    failNativeStaging('Could not locate update bundle')
+    expect(updater.getUpdateStatus()).toEqual({
+      state: 'error',
+      failurePhase: 'download',
+      version,
+      message: 'Could not locate update bundle'
+    })
+    updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.4.274' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(pinnedFeedCalls()).toHaveLength(1)
+  })
+})
 
 // A held ordinary Quit ends only on a native result or its 15 s fallback, on both sides of the guidance deadline.
 describe.runIf(process.platform === 'darwin').each([
@@ -267,8 +349,14 @@ describe.runIf(process.platform === 'darwin').each([
   }
 
   it('resumes once when Squirrel reports a staging failure', async () => {
-    await holdQuit()
+    const updater = await holdQuit()
     failNativeStaging('Could not locate update bundle')
+    expect(updater.getUpdateStatus()).toEqual({
+      state: 'error',
+      failurePhase: 'download',
+      version,
+      message: 'Could not locate update bundle'
+    })
     expectOneUpdaterContinuation()
   })
 
@@ -280,6 +368,16 @@ describe.runIf(process.platform === 'darwin').each([
     expect(app.quit).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
     expectOneUpdaterContinuation()
+  })
+
+  it('survives a Restart that arrives while held, then resumes once on native failure', async () => {
+    const updater = await holdQuit()
+    updater.quitAndInstall()
+    jsUpdater.emit('error', new Error('ZIP read failed'))
+    failNativeStaging('Could not locate update bundle')
+    expect(isMacInstallRequested()).toBe(false)
+    expectOneUpdaterContinuation()
+    expect(jsUpdater.quitAndInstall).not.toHaveBeenCalled()
   })
 
   it('falls back once after 15 s of native silence', async () => {

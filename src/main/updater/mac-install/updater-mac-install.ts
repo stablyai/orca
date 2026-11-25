@@ -1,6 +1,7 @@
 import { app, autoUpdater as nativeUpdater } from 'electron'
 import { homedir } from 'node:os'
 import type { UpdateStatus } from '../../../shared/updater/update-status-types'
+import type { DownloadStatusOptions } from '../lifecycle/updater-state'
 import { macCoordinationRoot } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { commitServeSupervisorParkOnQuit } from '../lifecycle/serve-supervisor-install-park'
@@ -30,7 +31,7 @@ export function registerMacUpdaterEvents({
   failMacStaging: (error: unknown) => void
   isAwaitingMacStaging: () => boolean
   shouldDeferMacQuitForInstall: () => boolean
-  sendStatus: (status: UpdateStatus) => void
+  sendStatus: (status: UpdateStatus, options?: DownloadStatusOptions) => void
 }): void {
   if (process.platform === 'darwin') {
     nativeUpdater.on('error', failMacStaging)
@@ -44,13 +45,21 @@ export function registerMacUpdaterEvents({
       // Commit before MacUpdater's later listener calls app.quit.
       commitStagedMacInstall()
       const hasInstallableVersion = hasInstallableDownloadedVersion()
-      handleMacInstallerReady(stagingVersion, hasInstallableVersion, performQuitAndInstall, () => {
-        sendStatus({
-          state: 'downloaded',
-          version: stagingVersion ?? getPendingInstallVersion(),
-          releaseUrl: getKnownReleaseUrl()
-        })
-      })
+      handleMacInstallerReady(
+        stagingVersion,
+        hasInstallableVersion,
+        performQuitAndInstall,
+        (allowAutomaticInstall) => {
+          sendStatus(
+            {
+              state: 'downloaded',
+              version: stagingVersion ?? getPendingInstallVersion(),
+              releaseUrl: getKnownReleaseUrl()
+            },
+            { allowAutomaticInstall }
+          )
+        }
+      )
     })
     // will-quit is past every quit veto; prepend so quit teardown sees the commit it must wait for.
     // Squirrel installs whatever it staged once this process exits.
@@ -106,6 +115,8 @@ export function setMacInstallPreflightInProgress(value: boolean): void {
 }
 // Defer early quit/install requests until Squirrel stages the update, or the update is lost.
 let requestedActionAfterSquirrelReady: 'quit' | 'install' | null = null
+// The user's ordinary Quit is waiting on this staging attempt; a later Restart upgrades the action but must not erase it.
+let ordinaryQuitHeld = false
 // Do not re-block the shutdown triggered by quitAndInstall.
 let quitAndInstallInFlight = false
 // Timeout recovery must allow both quit passes.
@@ -124,7 +135,7 @@ export function resetMacInstallState(): void {
   quitAndInstallInFlight = false
   bypassMacInstallGuardUntilNextAttempt = false
   // A held ordinary Quit ends only on a native staging result or its bounded fallback; JS-side events cannot know Squirrel is done.
-  if (requestedActionAfterSquirrelReady !== 'quit') {
+  if (!ordinaryQuitHeld) {
     requestedActionAfterSquirrelReady = null
     clearPendingInstallTimeout()
   }
@@ -132,11 +143,12 @@ export function resetMacInstallState(): void {
 
 /** Squirrel failed staging, so no readiness is coming: retire the held request and its fallback. Returns whether a held ordinary Quit must resume. */
 export function retireMacInstallIntentAfterStagingFailure(): boolean {
-  const quitWasHeld = requestedActionAfterSquirrelReady === 'quit'
+  const quitWasHeld = ordinaryQuitHeld
   if (requestedActionAfterSquirrelReady === 'install') {
     recordUpdaterLifecycle('macos_deferred_install_retired')
   }
   requestedActionAfterSquirrelReady = null
+  ordinaryQuitHeld = false
   clearPendingInstallTimeout()
   return quitWasHeld
 }
@@ -155,6 +167,7 @@ export function beginMacUpdateDownload(): void {
 
 export function markMacQuitAndInstallInFlight(): void {
   requestedActionAfterSquirrelReady = null
+  ordinaryQuitHeld = false
   quitAndInstallInFlight = true
   bypassMacInstallGuardUntilNextAttempt = false
   clearPendingInstallTimeout()
@@ -200,17 +213,28 @@ export function deferMacQuitUntilInstallerReady(
   if (!isWaitingForMacInstallerReadiness(currentStatus, hasNewerDownloadedVersion)) {
     return false
   }
+  holdMacRequestUntilInstallerReady(intent)
+  sendStatus({ state: 'downloading', percent: 100, version: getPendingInstallVersion() })
+  return true
+}
 
+/** Squirrel still owns staging (on either side of the guidance deadline): a Restart waits for its native result, never starts an install. */
+export function holdMacInstallUntilInstallerReady(): void {
+  holdMacRequestUntilInstallerReady('install')
+}
+
+function holdMacRequestUntilInstallerReady(intent: 'quit' | 'install'): void {
   if (intent === 'install') {
     bypassMacInstallGuardUntilNextAttempt = false
+  } else {
+    ordinaryQuitHeld = true
   }
   if (intent === 'install' || requestedActionAfterSquirrelReady !== 'install') {
     requestedActionAfterSquirrelReady = intent
   }
-  sendStatus({ state: 'downloading', percent: 100, version: getPendingInstallVersion() })
 
   if (pendingInstallTimeout) {
-    return true
+    return
   }
 
   pendingInstallTimeout = setTimeout(() => {
@@ -228,37 +252,28 @@ export function deferMacQuitUntilInstallerReady(
       }
     )
     requestedActionAfterSquirrelReady = null
+    ordinaryQuitHeld = false
     // Native readiness may never arrive; let the user quit rather than trapping the app.
     bypassMacInstallGuardUntilNextAttempt = true
     app.quit()
   }, MAC_INSTALL_READY_TIMEOUT_MS)
-
-  return true
 }
 
 function handleMacInstallerReady(
   version: string | null,
   hasNewerDownloadedVersion: boolean,
   onReadyToInstall: () => void | Promise<void>,
-  onReadyToReportDownloaded: () => void
+  onReadyToReportDownloaded: (allowAutomaticInstall: boolean) => void
 ): void {
   macInstallerReady = { version }
   clearPendingInstallTimeout()
+  const quitWasHeld = ordinaryQuitHeld
+  ordinaryQuitHeld = false
   recordUpdaterLifecycle('macos_installer_ready', {
     deferredInstallRequested: requestedActionAfterSquirrelReady === 'install',
-    deferredQuitRequested: requestedActionAfterSquirrelReady === 'quit',
+    deferredQuitRequested: quitWasHeld,
     hasNewerDownloadedVersion
   })
-
-  if (requestedActionAfterSquirrelReady === 'quit') {
-    requestedActionAfterSquirrelReady = null
-    // A window can still veto this Quit; the surviving window must show the ready update, not the staging card.
-    if (hasNewerDownloadedVersion) {
-      onReadyToReportDownloaded()
-    }
-    app.quit()
-    return
-  }
 
   if (requestedActionAfterSquirrelReady === 'install' && hasNewerDownloadedVersion) {
     setMacInstallPreflightInProgress(true)
@@ -278,6 +293,11 @@ function handleMacInstallerReady(
 
   requestedActionAfterSquirrelReady = null
   if (hasNewerDownloadedVersion) {
-    onReadyToReportDownloaded()
+    // A window can still veto the held Quit; it must then show the ready update. The Quit itself is the
+    // continuation, so it must not also start an automatic install that would veto that Quit.
+    onReadyToReportDownloaded(!quitWasHeld)
+  }
+  if (quitWasHeld) {
+    app.quit()
   }
 }

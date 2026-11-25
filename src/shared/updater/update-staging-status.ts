@@ -8,3 +8,11 @@ type MacStagingTimeoutStatus = Extract<UpdateStatus, { state: 'error' }> & {
 export function isMacStagingStillRunning(status: UpdateStatus): status is MacStagingTimeoutStatus {
   return status.state === 'error' && status.messageCode === 'macStagingTimeout'
 }
+
+/** The visible status is still this attempt's staging status (before or after the guidance deadline). */
+export function isShowingMacStaging(status: UpdateStatus, version: string): boolean {
+  if (status.state === 'downloading') {
+    return status.percent === 100 && status.version === version
+  }
+  return isMacStagingStillRunning(status) && status.version === version
+}

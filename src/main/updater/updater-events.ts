@@ -35,6 +35,7 @@ export function registerAutoUpdaterHandlers({
   getUserInitiatedCheck,
   handleQuitAndInstallFailure,
   isQuitAndInstallHandoffActive,
+  ignoreJsFailureDuringMacStaging,
   hasInstallableDownloadedVersion,
   isLocalBuildCheck,
   isPinnedBuildCheck,
@@ -290,6 +291,10 @@ export function registerAutoUpdaterHandlers({
       return
     }
     if (isQuitAndInstallHandoffActive()) {
+      return
+    }
+    // MacUpdater also forwards Squirrel's own failure here first; the native listener publishes it.
+    if (ignoreJsFailureDuringMacStaging()) {
       return
     }
     // Fallback promise handlers may own this error; preserve their context.

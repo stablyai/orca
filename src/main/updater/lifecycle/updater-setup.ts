@@ -249,6 +249,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       getUserInitiatedCheck: () => this.userInitiatedCheck,
       handleQuitAndInstallFailure: (error) => this.handleQuitAndInstallFailure(error),
       isQuitAndInstallHandoffActive: () => this.isQuitAndInstallHandoffActive(),
+      ignoreJsFailureDuringMacStaging: () => this.ignoreJsFailureDuringMacStaging('error_event'),
       hasInstallableDownloadedVersion: () => this.hasInstallableDownloadedVersion(),
       isLocalBuildCheck: () => this.activeUpdateSource === 'local',
       // Explicit pinned jumps may target versions older than the running build.
@@ -277,7 +278,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       sendCheckFailureStatus: (message, userInitiated, source, sourceError) =>
         this.sendCheckFailureStatus(message, userInitiated, source, sourceError),
       sendErrorStatus: (message, userInitiated) => this.sendErrorStatus(message, userInitiated),
-      sendStatus: (status) => this.publishDownloadStatus(status),
+      sendStatus: (status, options) => this.publishDownloadStatus(status, options),
       publishUpdateOffer: (status, options) => this.publishUpdateOffer(status, options),
       scheduleAutomaticUpdateCheck: (delayMs) => this.scheduleAutomaticUpdateCheck(delayMs),
       shouldSuppressMissingManifestPrereleaseFallbackEvent: (message, error) =>

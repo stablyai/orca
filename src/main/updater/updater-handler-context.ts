@@ -1,5 +1,6 @@
 import type { UpdateStatus } from '../../shared/updater/update-status-types'
 import type { ElectronAutoUpdater } from './electron-updater-loader'
+import type { DownloadStatusOptions } from './lifecycle/updater-state'
 
 export type UpdaterHandlerContext = {
   autoUpdater: ElectronAutoUpdater
@@ -15,6 +16,7 @@ export type UpdaterHandlerContext = {
   getUserInitiatedCheck: () => boolean
   handleQuitAndInstallFailure: (error?: unknown) => boolean
   isQuitAndInstallHandoffActive: () => boolean
+  ignoreJsFailureDuringMacStaging: () => boolean
   hasInstallableDownloadedVersion: () => boolean
   isLocalBuildCheck: () => boolean
   isPinnedBuildCheck: () => boolean
@@ -42,7 +44,7 @@ export type UpdaterHandlerContext = {
     sourceError?: unknown
   ) => Promise<void>
   sendErrorStatus: (message: string, userInitiated?: boolean) => void
-  sendStatus: (status: UpdateStatus) => void
+  sendStatus: (status: UpdateStatus, options?: DownloadStatusOptions) => void
   publishUpdateOffer: (
     status: UpdateStatus,
     options: { eligible: boolean; backgroundCheck: boolean }
