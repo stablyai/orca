@@ -203,7 +203,9 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/orca-profiles/profile-index-store.test.ts',
   'src/shared/secure-storage/secure-path-windows-acl.win32.test.ts',
   'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts',
-  'src/main/browser/network/tunnels/remote-browser-socks-client-owner.test.ts'
+  'src/main/browser/network/tunnels/remote-browser-socks-client-owner.test.ts',
+  'src/main/managed-agent-cli/managed-agent-spawn-program.test.ts',
+  'src/main/runtime/rpc/methods/host-management/managed-copy-detection.test.ts'
 ]
 
 const WINDOWS_BOUNDARY_PREFIXES = [
@@ -236,8 +238,10 @@ const WINDOWS_BOUNDARY_PREFIXES = [
   'src/main/browser/network/tunnels/remote-browser-socks-client-owner',
   'src/main/cli/wsl/',
   'src/main/codex/hooks/',
+  'src/main/managed-agent-cli/managed-agent-spawn-program',
   'src/main/orca-profiles/',
   'src/main/persistence/profile-state/',
+  'src/main/runtime/rpc/methods/host-management/managed-copy-detection',
   'src/main/runtime/rpc/server/pairing/',
   'src/main/windows/',
   'src/shared/file-write/windows-',
