@@ -249,7 +249,8 @@ export async function setClaudeAllowedPermissionMode(
 export function observeClaudeRootInit(
   session:
     | (Parameters<typeof setClaudeAllowedPermissionMode>[0] &
-        Parameters<typeof claudeOwesFullAccessFallback>[0])
+        Parameters<typeof claudeOwesFullAccessFallback>[0] &
+        Pick<ClaudeSession, 'permissionPick' | 'appliedInputOptions'>)
     | null
     | undefined,
   firstRootInit: ClaudeSession['firstRootInit']
