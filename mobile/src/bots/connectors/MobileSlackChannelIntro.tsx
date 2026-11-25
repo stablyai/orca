@@ -14,7 +14,7 @@ export function MobileSlackChannelIntro(props: {
 }) {
   const t = useMobileTranslation()
   const { bot } = props
-  const title = t('bots.slack.channelIntro.title', 'Post an intro when added to a channel')
+  const title = t('bots.slack.channelIntro.title', 'Intro when added to a channel')
   const subtitle =
     botSlackApps(bot).length > 1
       ? t(

@@ -3,6 +3,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import { publishBots } from '@/lib/bot-catalog-snapshot'
+import { useCardBot } from '@/lib/bot-catalog'
 import { refreshAccessRequests } from '@/lib/bot-access-requests'
 import type { Bot } from '../../../../../shared/bot-types'
 import { clickWhenShown, Panel, settle, slackOnly, stub } from '../bot-connectors-host-fixture'
@@ -138,6 +139,11 @@ const pickComputer = async () => {
 const openPage = () =>
   clickWhenShown((button) => button.textContent?.startsWith('Slack · Globex') === true)
 
+// As the app does, the list reads the bot from the catalog, so a saved switch shows at once.
+function LivePanel({ bot, width }: { bot: Bot; width: number }): React.JSX.Element {
+  return <Panel bot={useCardBot(bot.id).bot ?? bot} width={width} />
+}
+
 const panel = (
   width: number,
   bot: Bot,
@@ -148,7 +154,12 @@ const panel = (
   defineFixture({
     width: width + 40,
     setup: () => host(bot, { requests, intro }),
-    render: () => <Panel bot={bot} width={width} />,
+    render: () =>
+      intro === undefined ? (
+        <Panel bot={bot} width={width} />
+      ) : (
+        <LivePanel bot={bot} width={width} />
+      ),
     interact: async () => {
       await (intro === undefined ? openRow() : openPage())
       await settle(300)
@@ -178,12 +189,8 @@ const twoWorkspaces: Bot = {
 }
 const flipIntro = async () => {
   await settle(200)
-  document
-    .querySelector<HTMLElement>(
-      '[role="switch"][aria-label="Post an intro when added to a channel"]'
-    )
-    ?.click()
-  await settle(300)
+  await clickWhenShown((button) => button.getAttribute('role') === 'switch')
+  await settle(400)
 }
 export const panel350Intro = panel(350, builder, undefined, false, true)
 export const panel350IntroOff = panel(350, quiet, undefined, false, true)

@@ -1,4 +1,4 @@
-// "Post an intro when added to a channel": whether the bot says how to ask it in a Slack channel a
+// "Intro when added to a channel": whether the bot says how to ask it in a Slack channel a
 // person adds it to. One switch for the bot, so every workspace's page shows the same one. Hidden
 // while the bot's host's Orca Cloud doesn't honour it, since there the intro posts whatever it says.
 import React from 'react'
@@ -19,7 +19,7 @@ export function BotSlackChannelIntro({ bot }: { bot: Bot }): React.JSX.Element |
     return null
   }
   const on = bot.slackChannelHello !== false
-  const title = t('bots.slack.channelIntro.title', 'Post an intro when added to a channel')
+  const title = t('bots.slack.channelIntro.title', 'Intro when added to a channel')
   const detail =
     botSlackApps(bot).length > 1
       ? t(

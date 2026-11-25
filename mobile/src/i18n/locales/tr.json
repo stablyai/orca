@@ -6252,7 +6252,7 @@
       },
       "channelIntro": {
         "caption": "Kanallarda",
-        "title": "Bir kanala eklenince tanıtım mesajı paylaş",
+        "title": "Kanala eklenince tanıtım",
         "detail": "Biri {{name}} adlı botu bir kanala eklediğinde, ona nasıl soru sorulacağını anlatır.",
         "detailEvery": "Biri {{name}} adlı botu bir kanala eklediğinde, ona nasıl soru sorulacağını anlatır. {{name}} adlı botun bulunduğu her Slack çalışma alanında geçerlidir."
       }
