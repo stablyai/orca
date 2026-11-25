@@ -48,7 +48,8 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     private readonly inherit?: (
       cuts: AcpInheritedCut[],
       overflow: boolean,
-      savedThrough: number
+      savedThrough: number,
+      openChildren: readonly string[]
     ) => void
   ) {}
 
@@ -124,7 +125,9 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     const children = this.childSessions ? (result.openWork?.subagent ?? []) : []
     this.resumable = { prompt: cut.length > 0, children: new Set(children.map((key) => key[0])) }
     const overflow = this.cutKeys?.has(RELAY_CUT_KEYS_OVERFLOW) === true
-    this.inherit?.(this.stillCut(), overflow, result.savedThrough ?? 0)
+    this.inherit?.(this.stillCut(), overflow, result.savedThrough ?? 0, [
+      ...this.resumable.children
+    ])
     const open = [
       ...cut.map((request) => JSON.stringify(request.id)),
       ...children.map((key) => JSON.stringify(key))

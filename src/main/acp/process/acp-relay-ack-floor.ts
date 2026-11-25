@@ -1,9 +1,5 @@
 import type { ProviderRelayAckFloor } from '../../provider-relay/relayed-provider-output'
-import {
-  RELAY_CUT_KEY_MAX_CHARS,
-  RELAY_CUT_KEYS_MAX,
-  RELAY_CUT_KEYS_OVERFLOW
-} from '../../daemon/protocol/daemon-provider-relay-protocol'
+import { acpCutKeyNames, CONTINUED_ID, type AcpRelayItem as Item } from './acp-relay-cut-key-names'
 import {
   ACP_MESSAGE_BOUNDARIES,
   ACP_MESSAGE_CHUNKS,
@@ -15,10 +11,6 @@ const MAX_OPEN_ITEMS = 256
 
 /** A message an earlier attach's cut split, as its continuation names it. */
 export type AcpInheritedCut = { session: string; id: string; child: boolean; resumes: boolean }
-/** `last`: its latest chunk's seq, so the ones streamed last are kept and named. */
-type Item = { session?: string; child: boolean; last?: number }
-/** The tag a continuation puts before a moved message's id (`relay:<relay>:<seq>:`). */
-const CONTINUED_ID = /^relay:[^:]*:\d+:/
 
 function moveSession(
   from: Map<string, Item>,
@@ -84,6 +76,8 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
   private wakeAck: (() => void) | null = null
   /** An earlier cut named fewer than it split: this attach's cuts say so too. */
   private carriedOverflow = false
+  /** Child sessions open at that cut: their unnamed messages may resume past the prompt's end. */
+  private readonly overflowChildren = new Set<string>()
   /** Per session, the message its latest chunk named: only a new one ends the others. */
   private readonly current = new Map<string | undefined, string>()
 
@@ -106,6 +100,9 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
     const session = update.sessionId
     if (ACP_MESSAGE_ENDS.has(kind)) {
       this.closeMessages(session)
+      if (update.child && session !== undefined) {
+        this.overflowChildren.delete(session)
+      }
     }
     if (ACP_MESSAGE_BOUNDARIES.has(kind)) {
       this.pastBoundary.add(session)
@@ -219,7 +216,8 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
   cutKeys(through?: number): string[] {
     const named: [string, Item][] = [...this.cutMessages, ...this.pausedCuts]
     for (const [id, item] of this.messages) {
-      if (through !== undefined && item.seq <= through) {
+      // A held continuation too: unnamed, its replay would land on the original's row.
+      if ((through !== undefined && item.seq <= through) || CONTINUED_ID.test(id)) {
         named.push([id, item])
       }
     }
@@ -236,33 +234,17 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
         this.ended.delete(id)
       }
     }
-    // Only a session's latest few can resume, so those streamed last are named, within the cap.
-    const last = ([, item]: [string, Item & { seq?: number }]) => item.last ?? item.seq ?? 0
-    named.sort((a, b) => last(b) - last(a))
-    const keys = new Set<string>()
-    const perSession = new Map<string | undefined, number>()
-    let overflow = false
-    // One that can't be named still may resume: the reattach then moves all it meets.
-    for (const [id, item] of named) {
-      const count = perSession.get(item.session) ?? 0
-      if (count >= HELD_PER_SESSION || keys.size >= RELAY_CUT_KEYS_MAX - 1) {
-        overflow = true
-        continue
-      }
-      const key = JSON.stringify([item.session, id.replace(CONTINUED_ID, '')])
-      if (key.length > RELAY_CUT_KEY_MAX_CHARS) {
-        overflow = true
-      } else if (!keys.has(key)) {
-        perSession.set(item.session, count + 1)
-        keys.add(key)
-      }
-    }
-    return overflow || this.carriedOverflow ? [...keys, RELAY_CUT_KEYS_OVERFLOW] : [...keys]
+    return acpCutKeyNames(named, HELD_PER_SESSION, this.carriedOverflow)
   }
 
   /** What an earlier attach's cut split and may still resume: cut here too, so a later cut of
    *  this attach names it again instead of dropping it from the daemon's record. */
-  inheritCuts(cuts: readonly AcpInheritedCut[], overflow: boolean, savedThrough: number): void {
+  inheritCuts(
+    cuts: readonly AcpInheritedCut[],
+    overflow: boolean,
+    savedThrough: number,
+    openChildren: readonly string[] = []
+  ): void {
     for (const { session, id, child, resumes } of cuts) {
       const known = this.messages.has(id) || this.cutMessages.has(id) || this.pausedCuts.has(id)
       if (known) {
@@ -276,6 +258,11 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
       }
     }
     this.carriedOverflow ||= overflow
+    for (const child of overflow ? openChildren : []) {
+      if (this.overflowChildren.size < MAX_OPEN_ITEMS) {
+        this.overflowChildren.add(child)
+      }
+    }
   }
 
   private retire(id: string, item: Item): void {
@@ -327,6 +314,9 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
     this.pastBoundary.clear()
     this.current.clear()
     this.endedByTurn = new Set()
+    // An earlier cut's unnamed messages can resume no more once its prompt ended, but a child's can.
+    const cuts = [...this.cutMessages.values(), ...this.pausedCuts.values()]
+    this.carriedOverflow &&= this.overflowChildren.size > 0 || cuts.some((item) => item.child)
     this.turnStart = null
     this.turnPending = false
     this.numbered = false

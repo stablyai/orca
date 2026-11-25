@@ -41,8 +41,9 @@ export class AcpRelayTurns {
   readonly inheritCuts = (
     cuts: readonly AcpInheritedCut[],
     overflow: boolean,
-    savedThrough: number
-  ): void => this.current?.inheritCuts(cuts, overflow, savedThrough)
+    savedThrough: number,
+    openChildren?: readonly string[]
+  ): void => this.current?.inheritCuts(cuts, overflow, savedThrough, openChildren)
 
   /** The agent's own turn ended (it has no prompt to answer): its messages no longer hold acks,
    *  so a reattach doesn't replay them into a turn of their own again. */

@@ -9,9 +9,10 @@ import { RelayedProviderOutput } from '../../../provider-relay/relayed-provider-
 import { acpRelayFloors } from '../acp-relay-turns'
 
 // Seeded orderings of an OpenCode-like agent's output (messages that resume their id after others,
-// reasoning, calls, child sessions, prompt answers) against acks, forced cuts and graceful
-// restarts, through the real floor, output and continuation. Invariant: every message's saved rows
-// join to exactly the agent's text: none lost, none repeated, none on another message's row.
+// reasoning, calls, child sessions, prompt answers) against acks, lazily saved streamed text, forced
+// cuts, graceful restarts and crashes, through the real floor, output and continuation. Invariant:
+// every message's saved rows join to exactly the agent's text (none lost, none repeated, none on
+// another message's row); after a crash a line may show twice, but none is lost.
 
 const SEEDS = Number(process.env.ACP_ORDERING_SEEDS ?? 3000)
 const STEPS = 160
@@ -139,7 +140,11 @@ class Daemon {
   acked = 0
   readonly cut = new ProviderRelayCut()
 
-  ack(seq: number, keepFrom?: number, flags: { cut?: true; cutKeys?: string[] } = {}) {
+  ack(
+    seq: number,
+    keepFrom?: number,
+    flags: { cut?: true; cutKeys?: string[]; savedThrough?: number } = {}
+  ) {
     this.cut.record(seq, keepFrom, flags)
     const through = keepFrom === undefined ? seq : Math.min(seq, keepFrom - 1)
     this.acked = Math.max(this.acked, through)
@@ -160,8 +165,18 @@ const ChunkLine = z.object({
 
 /** Saved rows: each attach's text for a key replaces its row, as the journal does mid-turn. */
 class Journal {
-  readonly rows = new Map<string, string>()
+  rows = new Map<string, string>()
   private attachText = new Map<string, string>()
+  /** What a crash leaves: rows as of the last save (streamed text is saved only at a barrier). */
+  private saved = new Map<string, string>()
+
+  save(): void {
+    this.saved = new Map(this.rows)
+  }
+
+  crash(): void {
+    this.rows = new Map(this.saved)
+  }
 
   reattach(): void {
     this.attachText = new Map()
@@ -191,8 +206,10 @@ class Journal {
 }
 
 async function run(
-  seed: number
-): Promise<{ expected: Map<string, string>; saved: Map<string, string> }> {
+  seed: number,
+  crashes: boolean
+): Promise<{ expected: Map<string, string>; saved: Map<string, string>; crashed: boolean }> {
+  let crashed = false
   const rand = random(seed)
   const agent = new Agent(rand)
   const daemon = new Daemon()
@@ -219,7 +236,14 @@ async function run(
     const output = new RelayedProviderOutput({
       stdout,
       ackFloor: new ProviderRelayCarriedWork([]).withFloor(ackFloor()),
-      durable: async () => true,
+      // Streamed text is saved when the daemon asks (forced) or at some barriers, else still live.
+      durable: async (force) => {
+        if (force || rand() < 0.5) {
+          journal.save()
+          return true
+        }
+        return false
+      },
       ack: async (seq, keepFrom, flags) => daemon.ack(seq, keepFrom, flags),
       scheduleAck: () => () => {}
     })
@@ -300,9 +324,20 @@ async function run(
       await app.output.settle()
     } else if (roll < 0.88) {
       await app.output.settle(true, agent.lines.length)
-    } else {
+    } else if (roll < 0.96 || !crashes) {
       await app.output.flush(0)
       app.output.stop()
+      // Closed: the agent goes on, its output spooled.
+      for (let closed = Math.floor(rand() * 12); closed > 0; closed -= 1) {
+        agent.step()
+      }
+      app = attach()
+      continue
+    } else {
+      // A crash: no last save, no last ack; unsaved streamed text is gone.
+      app.output.stop()
+      journal.crash()
+      crashed = true
       // Closed: the agent goes on, its output spooled.
       for (let closed = Math.floor(rand() * 12); closed > 0; closed -= 1) {
         agent.step()
@@ -315,7 +350,7 @@ async function run(
   agent.finish()
   app.deliver()
   await app.output.settle()
-  return { expected: agent.text, saved: journal.joined() }
+  return { expected: agent.text, saved: journal.joined(), crashed }
 }
 
 describe('ACP relay orderings', () => {
@@ -323,10 +358,13 @@ describe('ACP relay orderings', () => {
   it('saves every message whole across seeded orderings of output, acks, cuts and restarts', async () => {
     const failures: string[] = []
     for (let seed = 1; seed <= SEEDS && failures.length < 5; seed += 1) {
-      const { expected, saved } = await run(seed)
+      // Odd seeds also crash: then a line saved twice may show twice, but none may be lost.
+      const { expected, saved, crashed } = await run(seed, seed % 2 === 1)
       for (const [key, text] of expected) {
-        if (saved.get(key) !== text) {
-          failures.push(`seed ${seed} ${key}: saved ${saved.get(key)} want ${text}`)
+        const got = saved.get(key) ?? ''
+        const lost = text.split('|').filter((token) => token && !got.includes(`${token}|`))
+        if (crashed ? lost.length > 0 : got !== text) {
+          failures.push(`seed ${seed} ${key}: saved ${got} want ${text}`)
         }
       }
       for (const key of saved.keys()) {
