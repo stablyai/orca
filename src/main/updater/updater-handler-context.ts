@@ -1,6 +1,5 @@
 import type { UpdateStatus } from '../../shared/updater/update-status-types'
 import type { ElectronAutoUpdater } from './electron-updater-loader'
-import type { DownloadStatusOptions } from './lifecycle/updater-state'
 
 export type UpdaterHandlerContext = {
   autoUpdater: ElectronAutoUpdater
@@ -44,7 +43,7 @@ export type UpdaterHandlerContext = {
     sourceError?: unknown
   ) => Promise<void>
   sendErrorStatus: (message: string, userInitiated?: boolean) => void
-  sendStatus: (status: UpdateStatus, options?: DownloadStatusOptions) => void
+  sendStatus: (status: UpdateStatus) => void
   publishUpdateOffer: (
     status: UpdateStatus,
     options: { eligible: boolean; backgroundCheck: boolean }

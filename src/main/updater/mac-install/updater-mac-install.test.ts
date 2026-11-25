@@ -33,17 +33,20 @@ vi.mock('../releases/updater-prerelease-feed', () => ({
 vi.mock('../releases/updater-changelog', () => ({ fetchChangelog: async () => null }))
 
 const version = '1.4.273'
+// The version the feed offers; an explicit older pin changes it for one test.
+let offeredVersion = version
 const jsUpdater = Object.assign(new EventEmitter(), {
   setFeedURL: vi.fn((_options: { url?: string }) => {}),
   checkForUpdates: async () => {
     jsUpdater.emit('checking-for-update')
-    jsUpdater.emit('update-available', { version })
+    jsUpdater.emit('update-available', { version: offeredVersion })
   },
   downloadUpdate: vi.fn(async (): Promise<string[]> => []),
   quitAndInstall: vi.fn()
 })
 
 afterEach(() => {
+  offeredVersion = version
   vi.mocked(app.quit).mockClear()
   jsUpdater.setFeedURL.mockClear()
   jsUpdater.quitAndInstall.mockClear()
@@ -193,10 +196,13 @@ function requestQuit(): { preventDefault: ReturnType<typeof vi.fn>; defaultPreve
 const pinnedFeedCalls = (): unknown[] =>
   jsUpdater.setFeedURL.mock.calls.filter(([options]) => options.url?.includes('v1.4.274'))
 
-it.runIf(process.platform === 'darwin')(
-  'shows the ready update without an automatic install when readiness ends a held Quit a window vetoes',
-  async () => {
-    const updater = await startStaging({ automatic: true })
+// The ready status that continues a held Quit is marked, so neither the automatic publisher nor an earlier Update click installs.
+describe.runIf(process.platform === 'darwin').each([
+  { mode: 'automatic updates on', automatic: true },
+  { mode: 'manual updates', automatic: false }
+])('readiness ending a held Quit a window vetoes ($mode)', ({ automatic }) => {
+  it('shows the ready update and starts no install', async () => {
+    const updater = await startStaging({ automatic })
     vi.advanceTimersByTime(899_000)
     expect(requestQuit().preventDefault).toHaveBeenCalledOnce()
     vi.advanceTimersByTime(1_000)
@@ -207,7 +213,12 @@ it.runIf(process.platform === 'darwin')(
     // The mocked app.quit stands in for a Quit whose window close was vetoed: the app keeps running.
     expect(app.quit).toHaveBeenCalledOnce()
     const ready = updater.getUpdateStatus()
-    expect(ready).toMatchObject({ state: 'downloaded', version, installOnQuit: true })
+    expect(ready).toMatchObject({
+      state: 'downloaded',
+      version,
+      installOnQuit: true,
+      heldQuitContinued: true
+    })
     expect(ready).not.toHaveProperty('installing')
     // No install preflight was queued, so the continued Quit is not vetoed.
     expect(requestQuit().preventDefault).not.toHaveBeenCalled()
@@ -218,8 +229,8 @@ it.runIf(process.platform === 'darwin')(
     updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.4.274' })
     await vi.advanceTimersByTimeAsync(0)
     expect(pinnedFeedCalls()).toHaveLength(1)
-  }
-)
+  })
+})
 
 it.runIf(process.platform === 'darwin')(
   'still installs automatically on readiness when no Quit is held',
@@ -227,11 +238,72 @@ it.runIf(process.platform === 'darwin')(
     const updater = await startStaging({ automatic: true })
     vi.advanceTimersByTime(901_000)
     autoUpdater.emit('update-downloaded')
-    expect(updater.getUpdateStatus()).toMatchObject({
-      state: 'downloaded',
-      version,
-      installing: true
+    const ready = updater.getUpdateStatus()
+    expect(ready).toMatchObject({ state: 'downloaded', version, installing: true })
+    expect(ready).not.toHaveProperty('heldQuitContinued')
+  }
+)
+
+// An explicitly selected older build stays admitted after Squirrel fails, so the card's Retry Download reaches it.
+describe.runIf(process.platform === 'darwin').each([
+  { when: 'before the deadline', failAt: 300_000 },
+  { when: 'after the deadline', failAt: 902_000 }
+])('an older pinned build whose staging fails $when', ({ failAt }) => {
+  const olderVersion = '1.4.271'
+
+  async function stageOlderPin(): Promise<UpdaterSetup> {
+    vi.useFakeTimers({ now: 0 })
+    const updater = new UpdaterSetup()
+    updater.setupAutoUpdater(null, { getLastUpdateCheckAt: () => Date.now() })
+    offeredVersion = olderVersion
+    updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: `v${olderVersion}` })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(updater.getUpdateStatus()).toMatchObject({ state: 'available', version: olderVersion })
+    updater.downloadUpdate()
+    jsUpdater.emit('update-downloaded', { version: olderVersion })
+    vi.advanceTimersByTime(failAt)
+    failNativeStaging('Could not locate update bundle')
+    // A versioned, retryable download failure: the update card offers Retry Download, which calls download.
+    expect(updater.getUpdateStatus()).toEqual({
+      state: 'error',
+      failurePhase: 'download',
+      version: olderVersion,
+      message: 'Could not locate update bundle'
     })
+    return updater
+  }
+
+  it('admits Retry Download for the same target', async () => {
+    const updater = await stageOlderPin()
+    jsUpdater.downloadUpdate.mockClear()
+    updater.downloadUpdate()
+    expect(updater.getUpdateStatus()).toEqual({
+      state: 'downloading',
+      version: olderVersion,
+      percent: 0
+    })
+    expect(jsUpdater.downloadUpdate).toHaveBeenCalledOnce()
+  })
+
+  it('returns a routine Check to the newer-only release feed', async () => {
+    const updater = await stageOlderPin()
+    updater.checkForUpdatesFromMenu()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(Reflect.get(jsUpdater, 'allowDowngrade')).toBe(false)
+    expect(updater.getUpdateStatus()).not.toMatchObject({ state: 'available' })
+  })
+})
+
+it.runIf(process.platform === 'darwin')(
+  'retries a routine release download after Squirrel fails',
+  async () => {
+    const updater = await startStaging()
+    vi.advanceTimersByTime(902_000)
+    failNativeStaging('Could not locate update bundle')
+    jsUpdater.downloadUpdate.mockClear()
+    updater.downloadUpdate()
+    expect(updater.getUpdateStatus()).toEqual({ state: 'downloading', version, percent: 0 })
+    expect(jsUpdater.downloadUpdate).toHaveBeenCalledOnce()
   }
 )
 

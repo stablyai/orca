@@ -115,6 +115,8 @@ export type UpdateStatus = (
       activeNudgeId?: string
       /** Install preparation is in progress; older clients can still render downloaded. */
       installing?: boolean
+      /** Readiness continued a Quit the user already asked for: no install may start from it, not even an earlier Update click. */
+      heldQuitContinued?: true
       teamRestart?: TeamUpdateRestart
     }
   | {

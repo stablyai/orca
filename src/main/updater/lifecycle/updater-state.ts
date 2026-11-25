@@ -31,8 +31,6 @@ export const MAC_DEFERRED_STAGING_TIMEOUT_MS = 120_000
 export const MAC_INTERACTIVE_STAGING_TIMEOUT_MS = 15 * 60 * 1000
 
 export type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
-// allowAutomaticInstall false: a held ordinary Quit continues after readiness and must not race an automatic install.
-export type DownloadStatusOptions = { allowAutomaticInstall?: boolean }
 export type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
 export type ReleaseFeedPreflightFailure = 'manifest-unavailable' | 'release-not-ready'
 export type ReleaseFeedPreflightResult = 'ready' | 'not-available'

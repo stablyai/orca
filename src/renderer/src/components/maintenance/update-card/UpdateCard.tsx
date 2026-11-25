@@ -102,7 +102,13 @@ export function UpdateCard(): React.JSX.Element | null {
       return
     }
     hasStartedDownload.current = false
-    if (!status.installing && !status.automaticDownload && !status.requiredByTeam) {
+    // A ready status that continues the user's Quit must not turn the earlier Update click into a Restart.
+    if (
+      !status.installing &&
+      !status.automaticDownload &&
+      !status.requiredByTeam &&
+      !status.heldQuitContinued
+    ) {
       requestInstall(installTarget)
     }
   }, [status, installTarget, requestInstall])

@@ -125,7 +125,10 @@ export function UpdateCardStateContent({
         />
       )
     }
-    return hasStartedDownload && !status.automaticDownload && !status.requiredByTeam ? (
+    return hasStartedDownload &&
+      !status.automaticDownload &&
+      !status.requiredByTeam &&
+      !status.heldQuitContinued ? (
       <div className="p-4">
         <p className="text-sm">{t('auto.components.UpdateCard.09a55c39b5', 'Installing...')}</p>
       </div>

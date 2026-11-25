@@ -20,7 +20,7 @@ import {
 } from './updater-state'
 import { UpdaterRequiredRestart } from './updater-required-restart'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
-import type { DownloadStatusOptions, UpdateInstallTrigger } from './updater-state'
+import type { UpdateInstallTrigger } from './updater-state'
 
 export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
   private macStagingTimer: ReturnType<typeof setTimeout> | null = null
@@ -142,10 +142,9 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
         if (this.activeUpdateSource === 'local') {
           this.sendLocalBuildErrorAndRestore(message)
         } else {
+          // An explicit pin keeps its admission so Retry Download can fetch the same (possibly older) target;
+          // a routine Check still restores the release feed and its newer-only rule.
           this.sendStatus({ state: 'error', failurePhase: 'download', version, message })
-          if (this.isPinnedBuildActive) {
-            this.restoreReleaseUpdateSource()
-          }
         }
       }
       if (resumeQuit) {
@@ -174,7 +173,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     return version
   }
 
-  protected publishDownloadStatus(status: UpdateStatus, options?: DownloadStatusOptions): void {
+  protected publishDownloadStatus(status: UpdateStatus): void {
     if (status.state === 'downloading' && this.isRequiredTeamUpdate(status.version)) {
       this.sendStatus({ ...status, ...this.requiredUpdateStatusFields() })
       return
@@ -196,8 +195,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     if (this.pendingQuitAndInstallTimer || this.quitAndInstallInProgress) {
       return
     }
-    const automatic =
-      this.getAutomaticUpdates?.() === true && options?.allowAutomaticInstall !== false
+    const automatic = this.getAutomaticUpdates?.() === true && !status.heldQuitContinued
     this.sendStatus(automatic ? { ...status, installing: true } : status, { force: true })
     if (automatic) {
       this.quitAndInstall('automatic')

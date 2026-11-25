@@ -1,7 +1,6 @@
 import { app, autoUpdater as nativeUpdater } from 'electron'
 import { homedir } from 'node:os'
 import type { UpdateStatus } from '../../../shared/updater/update-status-types'
-import type { DownloadStatusOptions } from '../lifecycle/updater-state'
 import { macCoordinationRoot } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { commitServeSupervisorParkOnQuit } from '../lifecycle/serve-supervisor-install-park'
@@ -31,7 +30,7 @@ export function registerMacUpdaterEvents({
   failMacStaging: (error: unknown) => void
   isAwaitingMacStaging: () => boolean
   shouldDeferMacQuitForInstall: () => boolean
-  sendStatus: (status: UpdateStatus, options?: DownloadStatusOptions) => void
+  sendStatus: (status: UpdateStatus) => void
 }): void {
   if (process.platform === 'darwin') {
     nativeUpdater.on('error', failMacStaging)
@@ -49,15 +48,13 @@ export function registerMacUpdaterEvents({
         stagingVersion,
         hasInstallableVersion,
         performQuitAndInstall,
-        (allowAutomaticInstall) => {
-          sendStatus(
-            {
-              state: 'downloaded',
-              version: stagingVersion ?? getPendingInstallVersion(),
-              releaseUrl: getKnownReleaseUrl()
-            },
-            { allowAutomaticInstall }
-          )
+        (continuesHeldQuit) => {
+          sendStatus({
+            state: 'downloaded',
+            version: stagingVersion ?? getPendingInstallVersion(),
+            releaseUrl: getKnownReleaseUrl(),
+            ...(continuesHeldQuit ? { heldQuitContinued: true } : {})
+          })
         }
       )
     })
@@ -263,7 +260,7 @@ function handleMacInstallerReady(
   version: string | null,
   hasNewerDownloadedVersion: boolean,
   onReadyToInstall: () => void | Promise<void>,
-  onReadyToReportDownloaded: (allowAutomaticInstall: boolean) => void
+  onReadyToReportDownloaded: (continuesHeldQuit: boolean) => void
 ): void {
   macInstallerReady = { version }
   clearPendingInstallTimeout()
@@ -294,8 +291,8 @@ function handleMacInstallerReady(
   requestedActionAfterSquirrelReady = null
   if (hasNewerDownloadedVersion) {
     // A window can still veto the held Quit; it must then show the ready update. The Quit itself is the
-    // continuation, so it must not also start an automatic install that would veto that Quit.
-    onReadyToReportDownloaded(!quitWasHeld)
+    // continuation, so the status is marked: neither the automatic publisher nor an earlier Update click may install.
+    onReadyToReportDownloaded(quitWasHeld)
   }
   if (quitWasHeld) {
     app.quit()

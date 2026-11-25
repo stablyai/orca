@@ -278,7 +278,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       sendCheckFailureStatus: (message, userInitiated, source, sourceError) =>
         this.sendCheckFailureStatus(message, userInitiated, source, sourceError),
       sendErrorStatus: (message, userInitiated) => this.sendErrorStatus(message, userInitiated),
-      sendStatus: (status, options) => this.publishDownloadStatus(status, options),
+      sendStatus: (status) => this.publishDownloadStatus(status),
       publishUpdateOffer: (status, options) => this.publishUpdateOffer(status, options),
       scheduleAutomaticUpdateCheck: (delayMs) => this.scheduleAutomaticUpdateCheck(delayMs),
       shouldSuppressMissingManifestPrereleaseFallbackEvent: (message, error) =>
